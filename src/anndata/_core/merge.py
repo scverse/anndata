@@ -29,6 +29,7 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    SpArray,
     _map_cat_to_str,
 )
 from ..utils import asarray, axis_len, warn_once
@@ -166,7 +167,7 @@ def equal_series(a, b) -> bool:
 
 
 @equal.register(sparse.spmatrix)
-@equal.register(CSArray)
+@equal.register(SpArray)
 @equal.register(CupySparseMatrix)
 def equal_sparse(a, b) -> bool:
     # It's a weird api, don't blame me

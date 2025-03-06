@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse, spmatrix
 
-from ..compat import AwkArray, CSArray, DaskArray
+from ..compat import AwkArray, CSArray, DaskArray, SpArray
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
@@ -181,7 +181,7 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 
 
 @_subset.register(spmatrix)
-@_subset.register(CSArray)
+@_subset.register(SpArray)
 def _subset_sparse(a: spmatrix | CSArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
