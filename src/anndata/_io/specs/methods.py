@@ -1227,7 +1227,7 @@ def write_scalar_zarr(
                 filters, dtype = [VLenUTF8()], object
             case 3, str():
                 filters, dtype = None, str
-            case 2, _:
+            case _, _:
                 filters, dtype = None, np.array(value).dtype
         a = f.create_array(
             key,
