@@ -484,7 +484,8 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
-    return elem[()]
+    res = elem[()]
+    return res
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
@@ -517,6 +518,7 @@ def read_string_array_partial(d, items=None, indices=slice(None)):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_vlen_string_array(
     f: H5Group,
@@ -539,6 +541,7 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
