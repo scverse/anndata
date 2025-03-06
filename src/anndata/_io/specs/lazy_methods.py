@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._compat import DataArray, Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ...compat import CSArray, H5File
-    from .registry import DaskReader, LazyDataStructures, LazyReader
+    from ...compat import CSArray, CSMatrix, H5File
+    from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
         Literal[None],
@@ -76,7 +76,7 @@ def make_dask_chunk(
     path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,
-) -> sparse.csr_matrix | sparse.csc_matrix | CSArray:
+) -> CSMatrix | CSArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
@@ -106,7 +106,7 @@ def get_chunksize(obj) -> tuple[int, ...]:
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
     *,
-    _reader: DaskReader,
+    _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
 ) -> DaskArray:
     import dask.array as da

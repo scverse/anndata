@@ -569,8 +569,10 @@ def write_vlen_string_array_zarr(
         from numcodecs import VLenUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
-        if "compressor" in dataset_kwargs:
-            dataset_kwargs.pop("compressor")
+        compressor = None
+        if ad.settings.zarr_write_format == 2:
+            compressor = dataset_kwargs.pop("compressor", None)
+
         filters, dtype = (
             ([VLenUTF8()], object)
             if ad.settings.zarr_write_format == 2
@@ -581,6 +583,7 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
+            compressor=compressor,
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -1227,7 +1230,7 @@ def write_scalar_zarr(
                 filters, dtype = [VLenUTF8()], object
             case 3, str():
                 filters, dtype = None, str
-            case 2, _:
+            case _, _:
                 filters, dtype = None, np.array(value).dtype
         a = f.create_array(
             key,

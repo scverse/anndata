@@ -1181,6 +1181,26 @@ else:
             return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
+
+
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
     return pd.DataFrame(
         np.random.rand(shape[0], shape[1]),

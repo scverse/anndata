@@ -24,6 +24,7 @@ from anndata.compat import (
     CSArray,
     CSMatrix,
     DaskArray,
+    ZarrArray,
     ZarrGroup,
     _read_attr,
     is_zarr_v2,
@@ -364,13 +365,20 @@ def test_zarr_compression(tmp_path):
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(value, key):
-        if value.shape != ():
-            if value.compressor != compressor:
-                not_compressed.append(key)
+        if isinstance(value, ZarrArray):
+            if value.shape != ():
+                (read_compressor,) = value.compressors
+                print(read_compressor, key)
+                if read_compressor != compressor:
+                    not_compressed.append(key)
 
-    f = zarr.open(str(pth), mode="r")
-    for key in f.array_keys():
-        check_compressed(f[key], key)
+    if is_zarr_v2():
+        with zarr.open(str(pth), "r") as f:
+            f.visititems(check_compressed)
+    else:
+        f = zarr.open(str(pth), mode="r")
+        for key, value in f.members(max_depth=None):
+            check_compressed(value, key)
 
     if not_compressed:
         sep = "\n\t"

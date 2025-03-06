@@ -209,7 +209,7 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, *, use_sparse_array=False):
+def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
     if not isinstance(x, CSMatrix | CSArray):
         in_memory_array_class = (
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
@@ -965,7 +965,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
 
 def missing_element(
     n: int,
-    els: list[CSArray | sparse.csr_matrix | sparse.csc_matrix | np.ndarray | DaskArray],
+    els: list[CSArray | CSMatrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
     fill_value: Any | None = None,
     off_axis_size: int = 0,
