@@ -322,7 +322,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, DeprecationWarning)
+            warnings.warn(msg, FutureWarning)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."
@@ -387,18 +387,20 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+V = TypeVar("V")
 
 
-def validate_bool(val: Any) -> None:
-    if not isinstance(val, bool):
-        msg = f"{val} not valid boolean"
-        raise TypeError(msg)
+def gen_validator(_type: type[V]) -> Callable[[V], None]:
+    def validate_type(val: V) -> None:
+        if not isinstance(val, _type):
+            msg = f"{val} not valid {_type}"
+            raise TypeError(msg)
+
+    return validate_type
 
 
-def validate_int(val: Any) -> None:
-    if not isinstance(val, int) or isinstance(val, bool):
-        msg = f"{val} not valid integer"
-        raise TypeError(msg)
+validate_bool = gen_validator(bool)
+validate_int = gen_validator(int)
 
 
 settings.register(
@@ -426,6 +428,31 @@ settings.register(
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
+
+
+def validate_zarr_write_format(format: int):
+    validate_int(format)
+    if format != 2:
+        msg = "non-v2 zarr on-disk format not supported"
+        raise ValueError(msg)
+
+
+settings.register(
+    "zarr_write_format",
+    default_value=2,
+    description="Which version of zarr to write to.",
+    validate=validate_zarr_write_format,
+    get_from_env=lambda name, default: check_and_get_environ_var(
+        f"ANNDATA_{name.upper()}",
+        str(default),
+        ["2"],
+        lambda x: int(x),
+    ),
+)
+
+
+def validate_sparse_settings(val: Any) -> None:
+    validate_bool(val)
 
 
 settings.register(

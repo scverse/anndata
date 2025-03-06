@@ -22,7 +22,7 @@ sys.path[:0] = [str(_extension_dir)]
 # General information
 project = "anndata"
 author = f"{project} developers"
-copyright = f"{datetime.now():%Y}, {author}"
+copyright = f"{datetime.now():%Y}, scverse"
 release = version = metadata.version("anndata")
 
 # default settings
@@ -111,8 +111,8 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/stable/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/v2.18.4/", None),
 )
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
@@ -128,6 +128,8 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "zarr.core.array.Array": "zarr.Array",
+    "zarr.core.group.Group": "zarr.Group",
     "anndata.compat.DaskArray": "dask.array.Array",
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",

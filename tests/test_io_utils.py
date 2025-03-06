@@ -4,6 +4,7 @@ from contextlib import AbstractContextManager, suppress
 from typing import TYPE_CHECKING
 
 import h5py
+import numpy as np
 import pandas as pd
 import pytest
 import zarr
@@ -45,7 +46,7 @@ def test_key_error(
             path = "/nested"
         else:
             path = "/"
-        group["X"] = [1, 2, 3]
+        group["X"] = np.array([1, 2, 3])
         group.create_group("group")
 
         with pytest.raises(
