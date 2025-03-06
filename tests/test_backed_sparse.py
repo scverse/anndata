@@ -14,6 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
+from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
@@ -27,7 +28,6 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
 
-    from anndata.abc import CSCDataset, CSRDataset
     from anndata.compat import ZarrGroup
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
@@ -319,7 +319,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
+    sparse_format: type[CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -334,6 +334,9 @@ def test_read_array(
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
+    assert isinstance(
+        diskmtx, CSCDataset if sparse_format.format == "csc" else CSRDataset
+    )
     ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False

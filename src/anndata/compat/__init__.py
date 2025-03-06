@@ -12,7 +12,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
-import scipy
+import scipy.sparse
 from packaging.version import Version
 
 if TYPE_CHECKING:
