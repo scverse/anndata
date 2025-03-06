@@ -639,6 +639,10 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
+abc.CSRDataset.register(_CSRDataset)
+abc.CSCDataset.register(_CSCDataset)
+
+
 def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
