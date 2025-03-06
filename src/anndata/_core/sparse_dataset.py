@@ -30,7 +30,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
-from ..compat import CSArray, CSMatrix, H5Group, ZarrArray, ZarrGroup, _read_attr
+from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
-    from ..compat import H5Array
+    from ..compat import CSArray, CSMatrix, H5Array
     from .index import Index, Index1D
 else:
     from scipy.sparse import spmatrix as _cs_matrix
@@ -327,9 +327,9 @@ def get_memory_class(
 ) -> type[_cs_matrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(memory_class, CSArray):
+            if use_sparray_in_io and issubclass(memory_class, SpArray):
                 return memory_class
-            elif not use_sparray_in_io and issubclass(memory_class, CSMatrix):
+            elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
                 return memory_class
     msg = f"Format string {format} is not supported."
     raise ValueError(msg)
@@ -340,9 +340,9 @@ def get_backed_class(
 ) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(backed_class, CSArray):
+            if use_sparray_in_io and issubclass(backed_class, SpArray):
                 return backed_class
-            elif not use_sparray_in_io and issubclass(backed_class, CSMatrix):
+            elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
                 return backed_class
     msg = f"Format string {format} is not supported."
     raise ValueError(msg)
@@ -464,8 +464,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx_fmt = get_memory_class(
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
-        must_convert_to_array = issubclass(mtx_fmt, CSArray) and not isinstance(
-            sub, CSArray
+        must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
+            sub, SpArray
         )
         if isinstance(sub, BackedSparseMatrix) or must_convert_to_array:
             return mtx_fmt(sub)

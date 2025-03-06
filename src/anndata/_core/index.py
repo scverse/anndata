@@ -10,10 +10,10 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse, spmatrix
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, SpArray
+from ..compat import AwkArray, DaskArray, SpArray
 
 if TYPE_CHECKING:
-    from ..compat import Index, Index1D
+    from ..compat import CSArray, CSMatrix, Index, Index1D
 
 
 def _normalize_indices(
@@ -69,13 +69,13 @@ def _normalize_index(
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
+        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, CSMatrix | CSArray):
+            if isinstance(indexer, spmatrix | SpArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, np.ndarray | pd.Index):
