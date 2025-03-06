@@ -10,7 +10,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import SpArray
+from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     as_dense_dask_array,
@@ -200,8 +200,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     var_idx = subset_func2(mem_adata.var_names)
     if (
         array_type is asarray
-        and isinstance(obs_idx, list | np.ndarray | sparse.spmatrix | SpArray)
-        and isinstance(var_idx, list | np.ndarray | sparse.spmatrix | SpArray)
+        and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
+        and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
     ):
         pytest.xfail(
             "Fancy indexing does not work with multiple arrays on a h5py.Dataset"

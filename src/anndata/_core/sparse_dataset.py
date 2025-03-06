@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
-    from ..compat import H5Array
+    from ..compat import CSArray, CSMatrix, H5Array
     from .index import Index, Index1D
 else:
     from scipy.sparse import spmatrix as _cs_matrix
@@ -67,7 +67,7 @@ class BackedSparseMatrix(_cs_matrix):
     indices: GroupStorageType
     indptr: np.ndarray
 
-    def copy(self) -> ss.csr_matrix | ss.csc_matrix:
+    def copy(self) -> CSMatrix:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
         if isinstance(self.data, ZarrArray):
@@ -433,9 +433,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         name = type(self).__name__.removeprefix("_")
         return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(
-        self, index: Index | tuple[()]
-    ) -> float | ss.csr_matrix | ss.csc_matrix | SpArray:
+    def __getitem__(self, index: Index | tuple[()]) -> float | CSMatrix | CSArray:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -494,7 +492,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.csr_matrix | ss.csc_matrix | SpArray) -> None:
+    def append(self, sparse_matrix: CSMatrix | CSArray) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
@@ -620,7 +618,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indptr = self._indptr
         return mtx
 
-    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
+    def to_memory(self) -> CSMatrix | CSArray:
         format_class = get_memory_class(
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
+    from ..compat import CSMatrix
 
 T = TypeVar("T")
 
@@ -115,7 +116,7 @@ def write_h5ad(
 def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
-    value: sparse.spmatrix | BaseCompressedSparseDataset,
+    value: CSMatrix | BaseCompressedSparseDataset,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
@@ -172,7 +173,7 @@ def read_h5ad(
     backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: type[sparse.spmatrix] = sparse.csr_matrix,
+    as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -273,7 +274,7 @@ def read_h5ad(
 def _read_raw(
     f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
-    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] | None = None,
+    rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
@@ -346,7 +347,7 @@ def read_dataset(dataset: h5py.Dataset):
 
 @report_read_key_on_error
 def read_dense_as_sparse(
-    dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
+    dataset: h5py.Dataset, sparse_format: CSMatrix, axis_chunk: int
 ):
     if sparse_format == sparse.csr_matrix:
         return read_dense_as_csr(dataset, axis_chunk)
