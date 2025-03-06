@@ -100,12 +100,18 @@ if TYPE_CHECKING:
     from dask.array.core import Array as DaskArray
 elif find_spec("dask"):
     from dask.array import Array as DaskArray
+    from dask.dataframe import DataFrame as DaskDataFrame
 else:
 
     class DaskArray:
         @staticmethod
         def __repr__():
             return "mock dask.array.core.Array"
+
+    class DaskDataFrame:
+        @staticmethod
+        def __repr__():
+            return "mock dask.dataframe.dask_expr._collection.DataFrame"
 
 
 # https://github.com/scverse/anndata/issues/1749
