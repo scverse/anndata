@@ -207,7 +207,7 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, use_sparse_array: bool = False) -> CSMatrix | CSArray:
+def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
     if not isinstance(x, spmatrix | SpArray):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
