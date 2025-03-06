@@ -34,6 +34,14 @@ def get_index_dim(ds: xr.DataArray) -> Hashable:
 
 
 class Dataset2D(Dataset):
+    """
+    A wrapper class meant to enable working with lazy dataframe data.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.Dataset` and the `to_memory` function, a thin wrapper
+    around :meth:`xarray.Dataset.to_dataframe` to ensure roundtrip
+    compatibility here.
+    """
+
     __slots__ = ()
 
     @property
@@ -80,6 +88,14 @@ class Dataset2D(Dataset):
                 return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)
+
+    def to_memory(self, *, copy=False) -> pd.DataFrame:
+        df = self.to_dataframe()
+        index_key = self.attrs.get("indexing_key", None)
+        if df.index.name != index_key and index_key is not None:
+            df = df.set_index(index_key)
+        df.index.name = None  # matches old AnnData object
+        return df
 
     @property
     def columns(self) -> pd.Index:
@@ -128,10 +144,5 @@ def _remove_unused_categories_xr(
 
 
 @to_memory.register(Dataset2D)
-def to_memory(ds: Dataset2D, *, copy=False):
-    df = ds.to_dataframe()
-    index_key = ds.attrs.get("indexing_key", None)
-    if df.index.name != index_key and index_key is not None:
-        df = df.set_index(index_key)
-    df.index.name = None  # matches old AnnData object
-    return df
+def to_memory(ds: Dataset2D, *, copy=False) -> pd.DataFrame:
+    return ds.to_memory(copy=copy)
