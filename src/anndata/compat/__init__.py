@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 
 CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
 
-if not CAN_USE_SPARSE_ARRAY:
+if TYPE_CHECKING or CAN_USE_SPARSE_ARRAY:
+    CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
+else:
 
-    class SpArray:
+    class CSArray:
         @staticmethod
         def __repr__():
-            return "mock scipy.sparse.sparray"
-else:
-    SpArray = scipy.sparse.sparray
+            return "mock scipy.sparse._cs_array"
 
 
 class Empty:
@@ -57,7 +57,7 @@ Index = (
     | tuple[EllipsisType, Index1D, Index1D]
     | tuple[Index1D, EllipsisType, Index1D]
     | scipy.sparse.spmatrix
-    | SpArray
+    | CSArray
 )
 H5Group = h5py.Group
 H5Array = h5py.Dataset

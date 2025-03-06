@@ -20,7 +20,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray
+from anndata.compat import AwkArray, CSArray, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -69,7 +69,7 @@ def _filled_sparse(a, fill_value=None):
         return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
 
 
-@filled_like.register(SpArray)
+@filled_like.register(CSArray)
 def _filled_sparse_array(a, fill_value=None):
     return sparse.csr_array(filled_like(sparse.csr_matrix(a)))
 
@@ -197,8 +197,8 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     assert_equal(result[orig.obs_names].copy(), orig)
     base_type = type(orig.X)
     if sparse.issparse(orig.X):
-        if isinstance(orig.X, SpArray):
-            base_type = SpArray
+        if isinstance(orig.X, CSArray):
+            base_type = CSArray
         else:
             base_type = sparse.spmatrix
     if isinstance(orig.X, CupySparseMatrix):

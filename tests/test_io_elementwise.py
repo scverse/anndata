@@ -22,7 +22,7 @@ from anndata._io.specs import (
     get_spec,
 )
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray, ZarrGroup, _read_attr
+from anndata.compat import CAN_USE_SPARSE_ARRAY, CSArray, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_as_dask
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -630,4 +630,4 @@ def test_read_sparse_array(
         pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
-    assert issubclass(type(mtx), SpArray)
+    assert issubclass(type(mtx), CSArray)

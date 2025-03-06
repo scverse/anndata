@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_as_dask
-from anndata.compat import CAN_USE_SPARSE_ARRAY, DaskArray, SpArray
+from anndata.compat import CAN_USE_SPARSE_ARRAY, CSArray, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -337,7 +337,7 @@ def test_read_array(
     if not CAN_USE_SPARSE_ARRAY:
         pytest.skip("scipy.sparse.cs{r,c}array not available")
     ad.settings.use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
     assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
 

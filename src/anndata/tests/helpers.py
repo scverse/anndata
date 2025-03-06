@@ -26,12 +26,12 @@ from anndata._core.views import ArrayView
 from anndata.compat import (
     CAN_USE_SPARSE_ARRAY,
     AwkArray,
+    CSArray,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    SpArray,
     ZarrArray,
 )
 from anndata.utils import asarray
@@ -603,7 +603,7 @@ def assert_equal_sparse(a, b, exact=False, elem_name=None):
     assert_equal(b, a, exact, elem_name=elem_name)
 
 
-@assert_equal.register(SpArray)
+@assert_equal.register(CSArray)
 def assert_equal_sparse_array(a, b, exact=False, elem_name=None):
     return assert_equal_sparse(a, b, exact, elem_name)
 
@@ -808,7 +808,7 @@ def _(a):
     return da.from_array(a, _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(SpArray)
+@as_sparse_dask_array.register(CSArray)
 def _(a):
     import dask.array as da
 

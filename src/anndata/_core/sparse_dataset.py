@@ -30,7 +30,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
-from ..compat import H5Group, SpArray, ZarrArray, ZarrGroup, _read_attr
+from ..compat import CSArray, H5Group, ZarrArray, ZarrGroup, _read_attr
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -327,7 +327,7 @@ def get_memory_class(
 ) -> type[_cs_matrix]:
     for fmt, _, memory_class in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(memory_class, SpArray):
+            if use_sparray_in_io and issubclass(memory_class, CSArray):
                 return memory_class
             elif not use_sparray_in_io and issubclass(memory_class, ss.spmatrix):
                 return memory_class
@@ -340,7 +340,7 @@ def get_backed_class(
 ) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
         if format == fmt:
-            if use_sparray_in_io and issubclass(backed_class, SpArray):
+            if use_sparray_in_io and issubclass(backed_class, CSArray):
                 return backed_class
             elif not use_sparray_in_io and issubclass(backed_class, ss.spmatrix):
                 return backed_class
@@ -435,7 +435,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     def __getitem__(
         self, index: Index | tuple[()]
-    ) -> float | ss.csr_matrix | ss.csc_matrix | SpArray:
+    ) -> float | ss.csr_matrix | ss.csc_matrix | CSArray:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -466,8 +466,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx_fmt = get_memory_class(
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )
-        must_convert_to_array = issubclass(mtx_fmt, SpArray) and not isinstance(
-            sub, SpArray
+        must_convert_to_array = issubclass(mtx_fmt, CSArray) and not isinstance(
+            sub, CSArray
         )
         if isinstance(sub, BackedSparseMatrix) or must_convert_to_array:
             return mtx_fmt(sub)
@@ -494,7 +494,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: ss.csr_matrix | ss.csc_matrix | SpArray) -> None:
+    def append(self, sparse_matrix: ss.csr_matrix | ss.csc_matrix | CSArray) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
@@ -620,7 +620,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indptr = self._indptr
         return mtx
 
-    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | SpArray:
+    def to_memory(self) -> ss.csr_matrix | ss.csc_matrix | CSArray:
         format_class = get_memory_class(
             self.format, use_sparray_in_io=settings.use_sparse_array_on_read
         )

@@ -11,11 +11,11 @@ from . import abc
 from ._core.anndata import AnnData
 from .compat import (
     AwkArray,
+    CSArray,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     H5Array,
-    SpArray,
     ZappyArray,
     ZarrArray,
 )
@@ -37,7 +37,7 @@ ArrayDataStructureType: TypeAlias = (
     | ma.MaskedArray
     | sparse.csr_matrix
     | sparse.csc_matrix
-    | SpArray
+    | CSArray
     | AwkArray
     | H5Array
     | ZarrArray

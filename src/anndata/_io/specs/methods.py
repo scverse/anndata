@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from anndata._types import ArrayStorageType, GroupStorageType
-    from anndata.compat import SpArray
+    from anndata.compat import CSArray
     from anndata.typing import AxisStorable, InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
@@ -127,7 +127,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
     elem: H5File | H5Group | H5Array, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | CSArray:
     from anndata._io import h5ad
 
     warn(
@@ -149,7 +149,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: ZarrGroup | ZarrArray, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | SpArray:
+) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | sparse.spmatrix | CSArray:
     from anndata._io import zarr
 
     warn(
@@ -590,7 +590,7 @@ def write_recarray_zarr(
 def write_sparse_compressed(
     f: GroupStorageType,
     key: str,
-    value: sparse.spmatrix | SpArray,
+    value: sparse.spmatrix | CSArray,
     *,
     _writer: Writer,
     fmt: Literal["csr", "csc"],
@@ -758,7 +758,7 @@ def write_dask_sparse(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse(
     elem: GroupStorageType, *, _reader: Reader
-) -> sparse.spmatrix | SpArray:
+) -> sparse.spmatrix | CSArray:
     return sparse_dataset(elem).to_memory()
 
 
