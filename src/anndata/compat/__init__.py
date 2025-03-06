@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 # scipy sparse array comapt #
 #############################
 
+CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
 
 CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
 
@@ -62,7 +63,7 @@ Index = (
     | tuple[Index1D, Index1D, EllipsisType]
     | tuple[EllipsisType, Index1D, Index1D]
     | tuple[Index1D, EllipsisType, Index1D]
-    | scipy.sparse.spmatrix
+    | CSMatrix
     | CSArray
 )
 H5Group = h5py.Group

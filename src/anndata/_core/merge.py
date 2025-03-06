@@ -25,6 +25,7 @@ from ..compat import (
     CAN_USE_SPARSE_ARRAY,
     AwkArray,
     CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
@@ -175,7 +176,7 @@ def equal_sparse(a, b) -> bool:
 
     xp = array_api_compat.array_namespace(a.data)
 
-    if isinstance(b, CupySparseMatrix | sparse.spmatrix | CSArray):
+    if isinstance(b, CupySparseMatrix | CSMatrix | CSArray):
         if isinstance(a, CupySparseMatrix):
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
@@ -206,8 +207,8 @@ def equal_awkward(a, b) -> bool:
     return ak.almost_equal(a, b)
 
 
-def as_sparse(x, use_sparse_array=False):
-    if not isinstance(x, sparse.spmatrix | CSArray):
+def as_sparse(x, use_sparse_array: bool = False) -> CSMatrix | CSArray:
+    if not isinstance(x, CSMatrix | CSArray):
         if CAN_USE_SPARSE_ARRAY and use_sparse_array:
             return sparse.csr_array(x)
         return sparse.csr_matrix(x)
@@ -538,7 +539,7 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame):
             return self._apply_to_df(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, sparse.spmatrix | CSArray | CupySparseMatrix):
+        elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -616,7 +617,7 @@ class Reindexer:
         )
 
     def _apply_to_sparse(
-        self, el: sparse.spmatrix | CSArray, *, axis, fill_value=None
+        self, el: CSMatrix | CSArray, *, axis, fill_value=None
     ) -> spmatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
@@ -731,11 +732,8 @@ def default_fill_value(els):
     This is largely due to backwards compat, and might not be the ideal solution.
     """
     if any(
-        isinstance(el, sparse.spmatrix | CSArray)
-        or (
-            isinstance(el, DaskArray)
-            and isinstance(el._meta, sparse.spmatrix | CSArray)
-        )
+        isinstance(el, CSMatrix | CSArray)
+        or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
         for el in els
     ):
         return 0
@@ -831,7 +829,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
             ],
             axis=axis,
         )
-    elif any(isinstance(a, sparse.spmatrix | CSArray) for a in arrays):
+    elif any(isinstance(a, CSMatrix | CSArray) for a in arrays):
         sparse_stack = (sparse.vstack, sparse.hstack)[axis]
         use_sparse_array = any(issubclass(type(a), CSArray) for a in arrays)
         return sparse_stack(
