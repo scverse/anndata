@@ -22,11 +22,13 @@ from anndata._io.specs import (
     get_spec,
 )
 from anndata._io.specs.registry import IORegistryError
+from anndata._io.zarr import open_write_group
 from anndata.compat import (
     CSArray,
     CSMatrix,
     ZarrGroup,
     _read_attr,
+    is_zarr_v2,
 )
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -58,7 +60,7 @@ def store(request, tmp_path) -> H5Group | ZarrGroup:
         file = h5py.File(tmp_path / "test.h5", "w")
         store = file["/"]
     elif request.param == "zarr":
-        store = zarr.open(tmp_path / "test.zarr", "w")
+        store = open_write_group(tmp_path / "test.zarr")
     else:
         pytest.fail(f"Unknown store type: {request.param}")
 
@@ -436,6 +438,9 @@ def test_write_anndata_to_root(store):
     adata = gen_adata((3, 2))
 
     write_elem(store, "/", adata)
+    # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
+    if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        store = zarr.open(store.store)
     from_disk = read_elem(store)
 
     assert "anndata" == _read_attr(store.attrs, "encoding-type")
@@ -552,6 +557,9 @@ def test_write_to_root(store, value):
     Test that elements which are written as groups can we written to the root group.
     """
     write_elem(store, "/", value)
+    # See: https://github.com/zarr-developers/zarr-python/issues/2716
+    if isinstance(store, ZarrGroup) and not is_zarr_v2():
+        store = zarr.open(store.store)
     result = read_elem(store)
 
     assert_equal(result, value)
@@ -563,19 +571,19 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     pth = tmp_path / "test.zarr"
     adata = gen_adata((3, 2))
 
-    with zarr.open(pth, mode="w") as z:
-        write_elem(z, "table/table", adata)
+    z = open_write_group(pth)
+    write_elem(z, "table/table", adata)
 
-        if consolidated:
-            zarr.convenience.consolidate_metadata(z.store)
+    if consolidated:
+        zarr.consolidate_metadata(z.store)
 
     if consolidated:
         read_func = zarr.open_consolidated
     else:
         read_func = zarr.open
 
-    with read_func(pth) as z:
-        expected = ad.read_zarr(z["table/table"])
+    z = read_func(pth)
+    expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 
 
@@ -628,7 +636,7 @@ def test_read_sparse_array(
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)

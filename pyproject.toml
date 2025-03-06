@@ -47,6 +47,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
+    "zarr >=2.15.0, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3",
 ]
 dynamic = ["version"]
 
@@ -72,7 +73,6 @@ doc = [
     "sphinxext.opengraph",
     "nbsphinx",
     "scanpydoc[theme,typehints] >=0.15.1",
-    "zarr<3",
     "awkward>=2.3",
     "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
@@ -88,7 +88,6 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov>=2.10",
-    "zarr<3",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -108,7 +107,7 @@ gpu = ["cupy"]
 cu12 = ["cupy-cuda12x"]
 cu11 = ["cupy-cuda11x"]
 # requests and aiohttp needed for zarr v2 remote data
-lazy = ["xarray>=2024.06.0", "aiohttp", "requests", "zarr<3.0.0a0", "anndata[dask]"]
+lazy = ["xarray>=2024.06.0", "aiohttp", "requests", "zarr", "anndata[dask]"]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = ["dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0"]
@@ -152,6 +151,7 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
+    "default:anndata will no longer support zarr v2:DeprecationWarning"
 ]
 python_files = "test_*.py"
 testpaths = [

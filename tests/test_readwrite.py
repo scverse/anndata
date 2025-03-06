@@ -19,7 +19,15 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
+from anndata._io.zarr import open_write_group
+from anndata.compat import (
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    ZarrGroup,
+    _read_attr,
+    is_zarr_v2,
+)
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
@@ -140,7 +148,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
-        adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
+        adata_src.write_zarr(tmp_path / "test_zarr_dir")
         adata = ad.read_zarr(tmp_path / "test_zarr_dir")
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
@@ -254,7 +262,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 @contextmanager
 def store_context(path: Path):
     if path.suffix == ".zarr":
-        store = zarr.open(path, "r+")
+        store = open_write_group(path, mode="r+")
     else:
         file = h5py.File(path, "r+")
         store = file["/"]
@@ -275,7 +283,18 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        store["obs"].attrs["encoding-type"] = "invalid"
+        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+            # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
+            # with re-opening without syncing attributes explicitly
+            # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
+            # See https://github.com/zarr-developers/zarr-python/pull/2870
+            store["obs"].update_attributes(
+                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
+            )
+            zarr.consolidate_metadata(store.store)
+        else:
+            store["obs"].attrs["encoding-type"] = "invalid"
+
     with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
@@ -344,13 +363,14 @@ def test_zarr_compression(tmp_path):
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
-    def check_compressed(key, value):
-        if isinstance(value, zarr.Array) and value.shape != ():
+    def check_compressed(value, key):
+        if value.shape != ():
             if value.compressor != compressor:
                 not_compressed.append(key)
 
-    with zarr.open(str(pth), "r") as f:
-        f.visititems(check_compressed)
+    f = zarr.open(str(pth), mode="r")
+    for key in f.array_keys():
+        check_compressed(f[key], key)
 
     if not_compressed:
         sep = "\n\t"

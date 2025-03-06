@@ -9,10 +9,10 @@ import pandas as pd
 import zarr
 from scipy import sparse
 
-from anndata._warnings import OldFormatWarning
-
 from .._core.anndata import AnnData
-from ..compat import _clean_uns, _from_fixed_length_strings
+from .._settings import settings
+from .._warnings import OldFormatWarning
+from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
 from .utils import _read_legacy_raw, report_read_key_on_error
@@ -20,11 +20,14 @@ from .utils import _read_legacy_raw, report_read_key_on_error
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from zarr.core.common import AccessModeLiteral
+    from zarr.storage import StoreLike
+
 T = TypeVar("T")
 
 
 def write_zarr(
-    store: MutableMapping | str | Path,
+    store: StoreLike,
     adata: AnnData,
     *,
     chunks: tuple[int, ...] | None = None,
@@ -38,17 +41,24 @@ def write_zarr(
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
     # TODO: Use spec writing system for this
-    f = zarr.open(store, mode="w")
+    f = open_write_group(store)
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k, elem, dataset_kwargs, iospec):
-        if chunks is not None and not isinstance(elem, sparse.spmatrix) and k == "/X":
+    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+        if (
+            chunks is not None
+            and not isinstance(elem, sparse.spmatrix)
+            and k.lstrip("/") == "X"
+        ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-    zarr.convenience.consolidate_metadata(f.store)
+    if is_zarr_v2():
+        zarr.convenience.consolidate_metadata(f.store)
+    else:
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
@@ -74,7 +84,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
             return AnnData(
                 **{
                     k: read_dispatched(v, callback)
-                    for k, v in elem.items()
+                    for k, v in dict(elem).items()
                     if not k.startswith("raw.")
                 }
             )
@@ -141,3 +151,15 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
+
+
+def open_write_group(
+    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
+) -> zarr.Group:
+    if len({"zarr_version", "zarr_format"}.intersection(kwargs.keys())):
+        msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
+        raise ValueError(msg)
+    kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
+        settings.zarr_write_format
+    )
+    return zarr.open_group(store, mode=mode, **kwargs)

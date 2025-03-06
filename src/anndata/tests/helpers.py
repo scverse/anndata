@@ -33,12 +33,16 @@ from anndata.compat import (
     CupySparseMatrix,
     DaskArray,
     ZarrArray,
+    is_zarr_v2,
 )
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
+
+    from zarr.abc.store import ByteRequest
+    from zarr.core.buffer import BufferPrototype
 
     from .._types import ArrayStorageType
 
@@ -1088,17 +1092,21 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 if find_spec("zarr") or TYPE_CHECKING:
-    from zarr import DirectoryStore
+    if is_zarr_v2():
+        from zarr.storage import DirectoryStore as LocalStore
+    else:
+        from zarr.storage import LocalStore
+
 else:
 
-    class DirectoryStore:
+    class LocalStore:
         def __init__(self, *_args, **_kwargs) -> None:
             cls_name = type(self).__name__
             msg = f"zarr must be imported to create a {cls_name} instance."
             raise ImportError(msg)
 
 
-class AccessTrackingStore(DirectoryStore):
+class AccessTrackingStoreBase(LocalStore):
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
@@ -1109,13 +1117,12 @@ class AccessTrackingStore(DirectoryStore):
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-    def __getitem__(self, key: str) -> object:
+    def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
                 self._accessed[tracked].add(key)
                 self._accessed_keys[tracked] += [key]
-        return super().__getitem__(key)
 
     def get_access_count(self, key: str) -> int:
         # access defaultdict when value is not there causes key to be there,
@@ -1152,6 +1159,26 @@ class AccessTrackingStore(DirectoryStore):
         assert self.get_access_count(key) == count, (
             f"Found {access_count} accesses at {keys_accessed}"
         )
+
+
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
