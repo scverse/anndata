@@ -20,7 +20,14 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
+from anndata.compat import (
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    ZarrArray,
+    _read_attr,
+    is_zarr_v2,
+)
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
@@ -345,13 +352,31 @@ def test_zarr_compression(tmp_path, zarr_write_format):
         ad.io.write_zarr(pth, adata, compressor=compressor)
 
         def check_compressed(value, key):
-            if value.shape != ():
-                if value.compressor != compressor:
-                    not_compressed.append(key)
+            if isinstance(value, ZarrArray):
+                if value.shape != ():
+                    (read_compressor,) = value.compressors
+                    if zarr_write_format == 2:
+                        if read_compressor != compressor:
+                            not_compressed.append(key)
+                    else:
+                        if not isinstance(read_compressor, BloscCodec) or (
+                            any(
+                                getattr(read_compressor, attr)
+                                != getattr(compressor, attr)
+                                for attr in ["clevel", "cname", "shuffle", "blocksize"]
+                            )
+                            and compressor.typesize is None
+                            and isinstance(read_compressor.typesize, int)
+                        ):
+                            not_compressed.append(key)
 
-        f = zarr.open(str(pth), mode="r")
-        for key in f.array_keys():
-            check_compressed(f[key], key)
+        if is_zarr_v2():
+            with zarr.open(str(pth), "r") as f:
+                f.visititems(check_compressed)
+        else:
+            f = zarr.open(str(pth), mode="r")
+            for key, value in f.members(max_depth=None):
+                check_compressed(value, key)
 
         if not_compressed:
             sep = "\n\t"
