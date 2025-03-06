@@ -30,13 +30,14 @@ def test_read_partial_X(tmp_path, typ, accessor):
 
     WRITER[accessor](path, adata)
 
-    with READER[accessor](path, mode="r") as store:
-        if accessor == "zarr":
-            X_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
-        else:
-            # h5py doesn't allow fancy indexing across multiple dimensions
-            X_part = read_elem_partial(store["X"], indices=([1, 2],))
-            X_part = X_part[:, [0, 1]]
+    store = READER[accessor](path, mode="r")
+    if accessor == "zarr":
+        X_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
+    else:
+        # h5py doesn't allow fancy indexing across multiple dimensions
+        X_part = read_elem_partial(store["X"], indices=([1, 2],))
+        X_part = X_part[:, [0, 1]]
+        store.close()
 
     assert np.all(X_check == X_part)
 
