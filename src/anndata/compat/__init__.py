@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping
-from functools import partial, singledispatch, wraps
+from functools import cache, partial, singledispatch, wraps
 from importlib.util import find_spec
 from inspect import Parameter, signature
 from types import EllipsisType
@@ -51,27 +51,33 @@ H5File = h5py.File
 #############################
 # Optional deps
 #############################
+@cache
+def is_zarr_v2() -> bool:
+    import zarr
+    from packaging.version import Version
+
+    return Version(zarr.__version__) < Version("3.0.0")
+
 
 if find_spec("zarr") or TYPE_CHECKING:
-    import zarr
+    from zarr import Array as ZarrArray
+    from zarr import Group as ZarrGroup
 
-    if Version(zarr.__version__).major > 2:
-        msg = "zarr-python major version > 2 is not supported"
-        raise ImportError(msg)
+    if is_zarr_v2():
+        msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
+        warn(msg, DeprecationWarning)
 
-    from zarr.core import Array as ZarrArray
-    from zarr.hierarchy import Group as ZarrGroup
 else:
 
     class ZarrArray:
         @staticmethod
         def __repr__():
-            return "mock zarr.core.Array"
+            return "mock zarr.Array"
 
     class ZarrGroup:
         @staticmethod
         def __repr__():
-            return "mock zarr.core.Group"
+            return "mock zarr.Group"
 
 
 if find_spec("awkward") or TYPE_CHECKING:
