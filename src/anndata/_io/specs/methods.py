@@ -427,6 +427,7 @@ def write_basic(
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
+        # see https://github.com/zarr-developers/zarr-python/discussions/2712
         if isinstance(elem, ZarrArray):
             f[k][...] = elem[...]
         else:
