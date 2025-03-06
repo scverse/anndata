@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata.compat import CSArray
+from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
 from ..utils import (
@@ -44,8 +44,8 @@ def coerce_array(
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))
         for base, csr_c_format in [
-            (sparse.spmatrix, sparse.csr_matrix | sparse.csc_matrix),
-            (CSArray, sparse.csr_array | sparse.csc_array),
+            (sparse.spmatrix, CSMatrix),
+            (sparse.sparray, CSArray),
         ]
     )
     if any(is_non_csc_r_array_or_matrix):
