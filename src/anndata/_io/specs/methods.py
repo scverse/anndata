@@ -51,13 +51,9 @@ if TYPE_CHECKING:
     from numpy import typing as npt
     from numpy.typing import NDArray
 
-    from anndata._types import ArrayStorageType, GroupStorageType
-    from anndata.compat import (
-        CSArray,
-        CSMatrix,
-    )
-    from anndata.typing import AxisStorable, InMemoryArrayOrScalarType
-
+    from ..._types import ArrayStorageType, GroupStorageType
+    from ...compat import CSArray, CSMatrix
+    from ...typing import AxisStorable, InMemoryArrayOrScalarType
     from .registry import Reader, Writer
 
 ####################

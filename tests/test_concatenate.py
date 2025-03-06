@@ -204,10 +204,7 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     assert_equal(result[orig.obs_names].copy(), orig)
     base_type = type(orig.X)
     if sparse.issparse(orig.X):
-        if isinstance(orig.X, CSArray):
-            base_type = CSArray
-        else:
-            base_type = CSMatrix
+        base_type = CSArray if isinstance(orig.X, CSArray) else CSMatrix
     if isinstance(orig.X, CupySparseMatrix):
         base_type = CupySparseMatrix
     assert isinstance(result.X, base_type)
