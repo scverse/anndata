@@ -26,6 +26,17 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+def _check_rec_array(adata):
+    if settings.zarr_write_format == 3:
+        if any(
+            isinstance(adata.uns[k], np.recarray)
+            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+            for k in adata.uns.keys()
+        ):
+            msg = "zarr v3 does not support structured dtypes"
+            raise NotImplementedError(msg)
+
+
 def write_zarr(
     store: StoreLike,
     adata: AnnData,
@@ -34,6 +45,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    _check_rec_array(adata)
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
