@@ -584,7 +584,7 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
-            compressor=compressor,
+            compressors=compressor if isinstance(compressor, list) else [compressor],
             **dataset_kwargs,
         )
         f[k][:] = elem
