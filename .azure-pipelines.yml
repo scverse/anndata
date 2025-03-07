@@ -68,15 +68,15 @@ jobs:
       - script: uv pip list
         displayName: "Display installed versions"
 
-      - script: pytest
+      - script: pytest -n auto
         displayName: "PyTest"
         condition: eq(variables['TEST_TYPE'], 'standard')
 
-      - script: pytest --cov --cov-report=xml --cov-context=test
+      - script: pytest --cov --cov-report=xml --cov-context=test -n auto
         displayName: "PyTest (coverage)"
         condition: eq(variables['TEST_TYPE'], 'coverage')
 
-      - script: pytest --strict-warnings
+      - script: pytest --strict-warnings -n auto
         displayName: "PyTest (treat warnings as errors)"
         condition: eq(variables['TEST_TYPE'], 'strict-warning')
 
