@@ -71,7 +71,7 @@ doc = [
     "sphinx-copybutton",
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
-    "nbsphinx",
+    "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.1",
     "zarr<3",
     "awkward>=2.3",
