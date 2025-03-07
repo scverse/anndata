@@ -66,6 +66,7 @@ extensions = [
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
+    "colon_fence",
     "dollarmath",
 ]
 myst_heading_anchors = 3
