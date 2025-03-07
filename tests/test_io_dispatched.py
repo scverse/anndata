@@ -51,7 +51,7 @@ def test_read_dispatched_dask(tmp_path: Path):
             "awkward-array",
         }:
             # Preventing recursing inside of these types
-            return ad.io.read_elem(elem)
+            return func(elem)
         elif iospec.encoding_type == "array":
             return da.from_zarr(elem)
         else:
