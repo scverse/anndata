@@ -462,7 +462,7 @@ settings.register(
     "use_sparse_array_on_read",
     default_value=False,
     description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
-    validate=validate_bool,
+    validate=validate_sparse_settings,
     get_from_env=check_and_get_bool,
 )
 
