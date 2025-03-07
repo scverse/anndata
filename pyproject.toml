@@ -74,7 +74,7 @@ doc = [
     "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.1",
     "awkward>=2.3",
-    "IPython",                             # For syntax highlighting in notebooks
+    "IPython",                          # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
@@ -92,7 +92,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",              # For data downloading
+    "httpx", # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -124,7 +124,9 @@ output = "test-data/coverage.xml"
 source = ["./src", "**/site-packages"]
 
 [tool.coverage.report]
-exclude_also = ["if TYPE_CHECKING:"]
+exclude_also = [
+    "if TYPE_CHECKING:",
+]
 
 [tool.pytest.ini_options]
 addopts = [
@@ -145,13 +147,13 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default:anndata will no longer support zarr v2:DeprecationWarning",
+    "default:anndata will no longer support zarr v2:DeprecationWarning"
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata",                  # docstrings (module name due to --pyargs)
-    "./tests",                  # unit tests
-    "./ci/scripts",             # CI script tests
+    "anndata", # docstrings (module name due to --pyargs)
+    "./tests", # unit tests
+    "./ci/scripts", # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
