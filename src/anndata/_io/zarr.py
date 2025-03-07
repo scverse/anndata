@@ -55,6 +55,10 @@ def write_zarr(
         func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    if is_zarr_v2():
+        zarr.convenience.consolidate_metadata(f.store)
+    else:
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:

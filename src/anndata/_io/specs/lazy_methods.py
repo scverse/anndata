@@ -1,27 +1,31 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from functools import partial
+from functools import partial, singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 import anndata as ad
+from anndata._core.file_backing import filename, get_elem_name
 from anndata.abc import CSCDataset, CSRDataset
+from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
 
-from ..._core.file_backing import filename, get_elem_name
-from ...compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from ...compat import CSArray, CSMatrix, DaskArray, H5File
-    from .registry import DaskReader
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
+    from ...compat import CSArray, CSMatrix, H5File
+    from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
         Literal[None],
@@ -58,11 +62,11 @@ def maybe_open_h5(
 _DEFAULT_STRIDE = 1000
 
 
-def compute_chunk_layout_for_axis_shape(
-    chunk_axis_shape: int, full_axis_shape: int
+def compute_chunk_layout_for_axis_size(
+    chunk_axis_size: int, full_axis_size: int
 ) -> tuple[int, ...]:
-    n_strides, rest = np.divmod(full_axis_shape, chunk_axis_shape)
-    chunk = (chunk_axis_shape,) * n_strides
+    n_strides, rest = np.divmod(full_axis_size, chunk_axis_size)
+    chunk = (chunk_axis_size,) * n_strides
     if rest > 0:
         chunk += (rest,)
     return chunk
@@ -87,6 +91,14 @@ def make_dask_chunk(
     return chunk
 
 
+@singledispatch
+def get_chunksize(obj) -> tuple[int, ...]:
+    if hasattr(obj, "chunks"):
+        return obj.chunks
+    msg = "object of type {type(obj)} has no recognized chunks"
+    raise ValueError(msg)
+
+
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
@@ -94,7 +106,7 @@ def make_dask_chunk(
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
     *,
-    _reader: DaskReader,
+    _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
 ) -> DaskArray:
     import dask.array as da
@@ -131,7 +143,7 @@ def read_sparse_as_dask(
         )
 
     shape_minor, shape_major = shape if is_csc else shape[::-1]
-    chunks_major = compute_chunk_layout_for_axis_shape(stride, shape_major)
+    chunks_major = compute_chunk_layout_for_axis_size(stride, shape_major)
     chunks_minor = (shape_minor,)
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
@@ -147,9 +159,26 @@ def read_sparse_as_dask(
     return da_mtx
 
 
+@_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+def read_h5_string_array(
+    elem: H5Array,
+    *,
+    _reader: LazyReader,
+    chunks: tuple[int, int] | None = None,
+) -> DaskArray:
+    import dask.array as da
+
+    from anndata._io.h5ad import read_dataset
+
+    return da.from_array(
+        read_dataset(elem),
+        chunks=chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(elem.shape),
+    )
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem: H5Array, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: H5Array, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     import dask.array as da
 
@@ -166,7 +195,7 @@ def read_h5_array(
     )
 
     chunk_layout = tuple(
-        compute_chunk_layout_for_axis_shape(chunks[i], shape[i])
+        compute_chunk_layout_for_axis_size(chunks[i], shape[i])
         for i in range(len(shape))
     )
 
@@ -176,11 +205,142 @@ def read_h5_array(
     )
 
 
+@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 @_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem: ZarrArray, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
+    elem: ZarrArray, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
 
     return da.from_zarr(elem, chunks=chunks)
+
+
+def _gen_xarray_dict_iterator_from_elems(
+    elem_dict: dict[str, LazyDataStructures],
+    dim_name: str,
+    index: np.NDArray,
+) -> Generator[tuple[str, DataArray], None, None]:
+    from anndata.experimental.backed._compat import DataArray
+    from anndata.experimental.backed._compat import xarray as xr
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
+    for k, v in elem_dict.items():
+        if isinstance(v, DaskArray) and k != dim_name:
+            data_array = DataArray(v, coords=[index], dims=[dim_name], name=k)
+        elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
+            variable = xr.Variable(
+                data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
+            )
+            data_array = DataArray(
+                variable,
+                coords=[index],
+                dims=[dim_name],
+                name=k,
+                attrs={
+                    "base_path_or_zarr_group": v.base_path_or_zarr_group,
+                    "elem_name": v.elem_name,
+                },
+            )
+        elif k == dim_name:
+            data_array = DataArray(
+                index, coords=[index], dims=[dim_name], name=dim_name
+            )
+        else:
+            msg = f"Could not read {k}: {v} from into xarray Dataset2D"
+            raise ValueError(msg)
+        yield k, data_array
+
+
+DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
+
+
+@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_LAZY_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
+def read_dataframe(
+    elem: H5Group | ZarrGroup,
+    *,
+    _reader: LazyReader,
+    use_range_index: bool = False,
+) -> Dataset2D:
+    from anndata.experimental.backed._compat import DataArray, Dataset2D
+
+    elem_dict = {
+        k: _reader.read_elem(elem[k])
+        for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
+    }
+    # If we use a range index, the coord axis needs to have the special dim name
+    # which is used below as well.
+    if not use_range_index:
+        dim_name = elem.attrs["_index"]
+        # no sense in reading this in multiple times
+        index = elem_dict[dim_name].compute()
+    else:
+        dim_name = DUMMY_RANGE_INDEX_KEY
+        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
+    elem_xarray_dict = dict(
+        _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
+    )
+    if use_range_index:
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = DataArray(
+            index,
+            coords=[index],
+            dims=[DUMMY_RANGE_INDEX_KEY],
+            name=DUMMY_RANGE_INDEX_KEY,
+        )
+    # We ensure the indexing_key attr always points to the true index
+    # so that the roundtrip works even for the `use_range_index` `True` case
+    ds = Dataset2D(elem_xarray_dict, attrs={"indexing_key": elem.attrs["_index"]})
+    return ds
+
+
+@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_LAZY_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
+def read_categorical(
+    elem: H5Group | ZarrGroup,
+    *,
+    _reader: LazyReader,
+) -> CategoricalArray:
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+    base_path_or_zarr_group = (
+        Path(filename(elem)) if isinstance(elem, H5Group) else elem
+    )
+    elem_name = get_elem_name(elem)
+    return CategoricalArray(
+        codes=elem["codes"],
+        categories=elem["categories"],
+        ordered=elem.attrs["ordered"],
+        base_path_or_zarr_group=base_path_or_zarr_group,
+        elem_name=elem_name,
+    )
+
+
+def read_nullable(
+    elem: H5Group | ZarrGroup,
+    *,
+    encoding_type: Literal[
+        "nullable-integer", "nullable-boolean", "nullable-string-array"
+    ],
+    _reader: LazyReader,
+) -> MaskedArray:
+    from anndata.experimental.backed._lazy_arrays import MaskedArray
+
+    base_path_or_zarr_group = (
+        Path(filename(elem)) if isinstance(elem, H5Group) else elem
+    )
+    elem_name = get_elem_name(elem)
+    return MaskedArray(
+        values=elem["values"],
+        mask=elem["mask"] if "mask" in elem else None,
+        dtype_str=encoding_type,
+        base_path_or_zarr_group=base_path_or_zarr_group,
+        elem_name=elem_name,
+    )
+
+
+for dtype in ["integer", "boolean", "string-array"]:
+    for group_type in [ZarrGroup, H5Group]:
+        _LAZY_REGISTRY.register_read(group_type, IOSpec(f"nullable-{dtype}", "0.1.0"))(
+            partial(read_nullable, encoding_type=f"nullable-{dtype}")
+        )

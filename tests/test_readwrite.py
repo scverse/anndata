@@ -25,6 +25,7 @@ from anndata.compat import (
     CSMatrix,
     DaskArray,
     ZarrArray,
+    ZarrGroup,
     _read_attr,
     is_zarr_v2,
 )
@@ -283,7 +284,18 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        store["obs"].attrs["encoding-type"] = "invalid"
+        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+            # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
+            # with re-opening without syncing attributes explicitly
+            # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
+            # See https://github.com/zarr-developers/zarr-python/pull/2870
+            store["obs"].update_attributes(
+                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
+            )
+            zarr.consolidate_metadata(store.store)
+        else:
+            store["obs"].attrs["encoding-type"] = "invalid"
+
     with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
@@ -888,3 +900,11 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.skipif(
+    find_spec("xarray"), reason="Xarray is installed so `read_lazy` will not error"
+)
+def test_read_lazy_import_error():
+    with pytest.raises(ImportError, match="xarray"):
+        ad.experimental.read_lazy("test.zarr")
