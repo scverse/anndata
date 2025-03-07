@@ -125,6 +125,8 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
                 ad.io.write_elem(g, "", orig)
             return
         ad.io.write_elem(g, "", orig)
+        # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
+        g = as_group(pth, mode="r")
         curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
