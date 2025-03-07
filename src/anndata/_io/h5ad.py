@@ -194,7 +194,7 @@ def read_h5ad(
         `backed` mode. If you would like save changes made to these slots
         of a `backed` :class:`~anndata.AnnData`, write them to a new file
         (see :meth:`~anndata.AnnData.write`). For an example, see
-        `here`_.
+        :ref:`read-partial`.
     as_sparse
         If an array was saved as dense, passing its name here will read it as
         a sparse_matrix, by chunk of size `chunk_size`.
@@ -206,8 +206,6 @@ def read_h5ad(
         until it reads the whole dataset.
         Higher size means higher memory consumption and higher (to a point)
         loading speed.
-
-    .. _here: https://anndata.readthedocs.io/en/0.10.x/tutorials/notebooks/getting-started.html#Partial-reading-of-large-data
     """
     if backed not in {None, False}:
         mode = backed

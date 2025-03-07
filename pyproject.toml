@@ -70,11 +70,11 @@ doc = [
     "sphinx-copybutton",
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
-    "nbsphinx",
+    "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.1",
     "zarr<3",
     "awkward>=2.3",
-    "IPython",                          # For syntax highlighting in notebooks
+    "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
@@ -93,7 +93,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.9.8",
-    "httpx", # For data downloading
+    "httpx",              # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -125,9 +125,7 @@ output = "test-data/coverage.xml"
 source = ["./src", "**/site-packages"]
 
 [tool.coverage.report]
-exclude_also = [
-    "if TYPE_CHECKING:",
-]
+exclude_also = ["if TYPE_CHECKING:"]
 
 [tool.pytest.ini_options]
 addopts = [
@@ -151,9 +149,9 @@ filterwarnings_when_strict = [
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # docstrings (module name due to --pyargs)
-    "./tests", # unit tests
-    "./ci/scripts", # CI script tests
+    "anndata",                  # docstrings (module name due to --pyargs)
+    "./tests",                  # unit tests
+    "./ci/scripts",             # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
