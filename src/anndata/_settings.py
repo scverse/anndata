@@ -126,6 +126,15 @@ def check_and_get_bool(option, default_value):
     )
 
 
+def check_and_get_int(option, default_value):
+    return check_and_get_environ_var(
+        f"ANNDATA_{option.upper()}",
+        str(int(default_value)),
+        None,
+        lambda x: int(x),
+    )
+
+
 _docstring = """
 This manager allows users to customize settings for the anndata package.
 Settings here will generally be for advanced use-cases and should be used with caution.
@@ -396,11 +405,20 @@ settings = SettingsManager()
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
 
+V = TypeVar("V")
 
-def validate_bool(val: Any) -> None:
-    if not isinstance(val, bool):
-        msg = f"{val} not valid boolean"
-        raise TypeError(msg)
+
+def gen_validator(_type: type[V]) -> Callable[[V], None]:
+    def validate_type(val: V) -> None:
+        if not isinstance(val, _type):
+            msg = f"{val} not valid {_type}"
+            raise TypeError(msg)
+
+    return validate_type
+
+
+validate_bool = gen_validator(bool)
+validate_int = gen_validator(int)
 
 
 settings.register(
@@ -444,9 +462,18 @@ settings.register(
     "use_sparse_array_on_read",
     default_value=False,
     description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
-    validate=validate_sparse_settings,
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
+
+settings.register(
+    "min_rows_for_chunked_h5_copy",
+    default_value=1000,
+    description="Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
 
 ##################################################################################
 ##################################################################################
