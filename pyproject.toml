@@ -147,7 +147,8 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default:anndata will no longer support zarr v2:DeprecationWarning"
+    "default:anndata will no longer support zarr v2:DeprecationWarning",
+    "default:The codec `vlen-utf8:UserWarning"
 ]
 python_files = "test_*.py"
 testpaths = [

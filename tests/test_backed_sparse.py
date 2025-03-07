@@ -42,16 +42,18 @@ if TYPE_CHECKING:
 subset_func2 = subset_func
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 M = 50
 N = 50
 
-zarr_metadata_key = ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
-zarr_separator = "" if ad.settings.zarr_write_format == 2 else "/c"
+
+@pytest.fixture
+def zarr_metadata_key():
+    return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+
+
+@pytest.fixture
+def zarr_separator():
+    return "" if ad.settings.zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
@@ -388,8 +390,7 @@ def test_dataset_append_disk(
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 def test_lazy_array_cache(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
+    tmp_path: Path, sparse_format: Callable[[ArrayLike], CSMatrix], zarr_metadata_key
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -465,21 +466,21 @@ def width_idx_kinds(
         (
             [0],
             slice(None, None),
-            [f"X/data/{zarr_metadata_key}", f"X/data{zarr_separator}/0"],
+            ["X/data/{zarr_metadata_key}", "X/data{zarr_separator}/0"],
         ),
         (
             [0],
             slice(None, 3),
-            [f"X/data/{zarr_metadata_key}", f"X/data{zarr_separator}/0"],
+            ["X/data/{zarr_metadata_key}", "X/data{zarr_separator}/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
             [
-                f"X/data/{zarr_metadata_key}",
-                f"X/data{zarr_separator}/3",
-                f"X/data{zarr_separator}/4",
-                f"X/data{zarr_separator}/5",
+                "X/data/{zarr_metadata_key}",
+                "X/data{zarr_separator}/3",
+                "X/data{zarr_separator}/4",
+                "X/data{zarr_separator}/5",
             ],
         ),
         l=10,
@@ -502,7 +503,13 @@ def test_data_access(
     idx_min: Idx,
     exp: list[str],
     open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
+    zarr_metadata_key,
+    zarr_separator,
 ):
+    exp = [
+        e.format(zarr_metadata_key=zarr_metadata_key, zarr_separator=zarr_separator)
+        for e in exp
+    ]
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
     f = open_write_group(path, mode="a")
@@ -570,7 +577,7 @@ def test_wrong_shape(
         a_disk.append(b_disk)
 
 
-def test_reset_group(tmp_path: Path):
+def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / "test.zarr"
     base = sparse.random(100, 100, format="csr")
 
