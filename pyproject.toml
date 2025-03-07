@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "hatch-vcs"]
+requires = [ "hatchling", "hatch-vcs" ]
 
 [project]
 name = "anndata"
@@ -49,7 +49,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
 ]
-dynamic = ["version"]
+dynamic = [ "version" ]
 
 [project.urls]
 Documentation = "https://anndata.readthedocs.io/"
@@ -75,14 +75,14 @@ doc = [
     "scanpydoc[theme,typehints] >=0.15.1",
     "zarr<3",
     "awkward>=2.3",
-    "IPython",                          # For syntax highlighting in notebooks
+    "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
     # for unreleased changes
     "anndata[dev-doc]",
 ]
-dev-doc = ["towncrier>=24.8.0"] # release notes tool
+dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
@@ -94,7 +94,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.9.8",
-    "httpx", # For data downloading
+    "httpx",              # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -102,28 +102,28 @@ test = [
     "pytest-mock",
     "anndata[dask]",
 ]
-dev-test = ["pytest-xdist"] # local test speedups
-gpu = ["cupy"]
-cu12 = ["cupy-cuda12x"]
-cu11 = ["cupy-cuda11x"]
+dev-test = [ "pytest-xdist" ] # local test speedups
+gpu = [ "cupy" ]
+cu12 = [ "cupy-cuda12x" ]
+cu11 = [ "cupy-cuda11x" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
-dask = ["dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*,<2025.2.0"]
+dask = [ "dask[array]>=2022.09.2,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
 
 [tool.hatch.version]
 source = "vcs"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
-packages = ["src/anndata", "src/testing"]
+packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
 data_file = "test-data/coverage"
-source_pkgs = ["anndata"]
-omit = ["src/anndata/_version.py", "**/test_*.py"]
+source_pkgs = [ "anndata" ]
+omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
-source = ["./src", "**/site-packages"]
+source = [ "./src", "**/site-packages" ]
 
 [tool.coverage.report]
 exclude_also = [
@@ -152,17 +152,17 @@ filterwarnings_when_strict = [
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # docstrings (module name due to --pyargs)
-    "./tests", # unit tests
-    "./ci/scripts", # CI script tests
+    "anndata",                  # docstrings (module name due to --pyargs)
+    "./tests",                  # unit tests
+    "./ci/scripts",             # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
-markers = ["gpu: mark test to run on GPU"]
+markers = [ "gpu: mark test to run on GPU" ]
 
 [tool.ruff]
-src = ["src"]
+src = [ "src" ]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -197,16 +197,16 @@ ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"tests/test_readwrite.py" = ["E721"]
+"tests/test_readwrite.py" = [ "E721" ]
 [tool.ruff.lint.isort]
-known-first-party = ["anndata"]
-required-imports = ["from __future__ import annotations"]
+known-first-party = [ "anndata" ]
+required-imports = [ "from __future__ import annotations" ]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 [tool.ruff.lint.flake8-type-checking]
-exempt-modules = []
+exempt-modules = [  ]
 strict = true
 
 [tool.codespell]
