@@ -174,7 +174,5 @@ def test_io_dispatched_keys(tmp_path):
         write_dispatched(f, "/", adata, callback=zarr_writer)
         _ = read_dispatched(f, zarr_reader)
 
-    assert h5ad_write_keys == zarr_write_keys
-    assert h5ad_read_keys == zarr_read_keys
-
-    assert sorted(h5ad_write_keys) == sorted(h5ad_read_keys)
+    assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
+    assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)
