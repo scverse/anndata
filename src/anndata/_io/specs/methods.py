@@ -492,6 +492,8 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 async def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
+    if not is_zarr_v2() and isinstance(elem, ZarrArray):
+        return await elem._async_array.getitem(())
     return elem[()]
 
 
@@ -603,7 +605,10 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 async def read_recarray(
     d: ArrayStorageType, *, _reader: Reader
 ) -> np.recarray | npt.NDArray:
-    value = d[()]
+    if not is_zarr_v2() and isinstance(d, ZarrArray):
+        value = await d._async_array.getitem(())
+    else:
+        value = d[()]
     dtype = value.dtype
     value = _from_fixed_length_strings(value)
     if H5PY_V3:
@@ -1160,6 +1165,8 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
 async def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     # TODO: `item` ensures the return is in fact a scalar (needed after zarr v3 which now returns a 1 elem array)
     # https://github.com/zarr-developers/zarr-python/issues/2713
+    if not is_zarr_v2() and isinstance(elem, ZarrArray):
+        return (await elem._async_array.getitem(())).item()
     return elem[()].item()
 
 
@@ -1252,6 +1259,8 @@ async def read_hdf5_string(elem: H5Array, *, _reader: Reader) -> str:
 
 @_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
 async def read_zarr_string(elem: ZarrArray, *, _reader: Reader) -> str:
+    if not is_zarr_v2() and isinstance(elem, ZarrArray):
+        return str(await elem._async_array.getitem(()))
     return str(elem[()])
 
 
