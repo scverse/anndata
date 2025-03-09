@@ -27,6 +27,7 @@ __all__ = [
     "StorageType",
     "_ReadInternal",
     "_ReadDaskInternal",
+    "_ReadAsyncInternal",
     "_WriteInternal",
 ]
 
@@ -47,6 +48,10 @@ class _ReadInternal(Protocol[SCon, CovariantRWAble]):
     def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
+class _ReadAsyncInternal(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
+
+
 class _ReadDaskInternal(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
@@ -56,6 +61,21 @@ class _ReadDaskInternal(Protocol[SCon]):
 class Read(Protocol[SCon, CovariantRWAble]):
     def __call__(self, elem: SCon) -> CovariantRWAble:
         """Low-level reading function for an element.
+
+        Parameters
+        ----------
+        elem
+            The element to read from.
+        Returns
+        -------
+            The element read from the store.
+        """
+        ...
+
+
+class ReadAsync(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon) -> CovariantRWAble:
+        """Low-level reading function for an element asynchronously.
 
         Parameters
         ----------
@@ -125,10 +145,41 @@ class Write(Protocol[ContravariantRWAble]):
 
 
 class ReadCallback(Protocol[SCo, InvariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         /,
         read_func: Read[SCo, InvariantRWAble],
+        elem_name: str,
+        elem: StorageType,
+        *,
+        iospec: IOSpec,
+    ) -> InvariantRWAble:
+        """
+        Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
+
+        Params
+        ------
+        read_func
+            :func:`anndata.io.read_elem` function to call to read the current element given the ``iospec``.
+        elem_name
+            The key to read in from the group.
+        elem
+            The element to read from.
+        iospec
+            Internal AnnData encoding specification for the element.
+
+        Returns
+        -------
+            The element read from the store.
+        """
+        ...
+
+
+class ReadAsyncCallback(Protocol[SCo, InvariantRWAble]):
+    async def __call__(
+        self,
+        /,
+        read_func: ReadAsync[SCo, InvariantRWAble],
         elem_name: str,
         elem: StorageType,
         *,

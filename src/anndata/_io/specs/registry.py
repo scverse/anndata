@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -8,7 +9,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
+from anndata._types import (
+    Read,
+    ReadAsync,
+    ReadDask,
+    _ReadAsyncInternal,
+    _ReadDaskInternal,
+    _ReadInternal,
+)
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
@@ -17,6 +25,7 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
+        ReadAsyncCallback,
         ReadCallback,
         StorageType,
         Write,
@@ -78,8 +87,8 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadDaskInternal)
-R = TypeVar("R", Read, ReadDask)
+_R = TypeVar("_R", _ReadInternal, _ReadAsyncInternal, _ReadDaskInternal)
+R = TypeVar("R", Read, ReadAsync, ReadDask)
 
 
 class IORegistry(Generic[_R, R]):
@@ -166,6 +175,20 @@ class IORegistry(Generic[_R, R]):
         *,
         reader: Reader,
     ) -> R:
+        return lambda *args, **kwargs: asyncio.run(
+            self.get_read_async(
+                src_type=src_type, spec=spec, modifiers=modifiers, reader=reader
+            )(*args, **kwargs)
+        )
+
+    def get_read_async(
+        self,
+        src_type: type,
+        spec: IOSpec,
+        modifiers: frozenset[str] = frozenset(),
+        *,
+        reader: Reader,
+    ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
         internal = self.read[(src_type, spec, modifiers)]
@@ -186,7 +209,9 @@ class IORegistry(Generic[_R, R]):
         return self.write_specs[type(elem)]
 
 
-_REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
+_REGISTRY: IORegistry[_ReadInternal | _ReadAsyncInternal, Read | ReadAsync] = (
+    IORegistry()
+)
 _LAZY_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
 
 
@@ -235,7 +260,9 @@ def _iter_patterns(
 
 class Reader:
     def __init__(
-        self, registry: IORegistry, callback: ReadCallback | None = None
+        self,
+        registry: IORegistry,
+        callback: ReadCallback | ReadAsyncCallback | None = None,
     ) -> None:
         self.registry = registry
         self.callback = callback
@@ -247,7 +274,6 @@ class Reader:
         modifiers: frozenset[str] = frozenset(),
     ) -> RWAble:
         """Read an element from a store. See exported function for more details."""
-
         iospec = get_spec(elem)
         read_func: Read = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
@@ -255,6 +281,21 @@ class Reader:
         if self.callback is None:
             return read_func(elem)
         return self.callback(read_func, elem.name, elem, iospec=iospec)
+
+    async def read_elem_async(
+        self,
+        elem: StorageType,
+        modifiers: frozenset[str] = frozenset(),
+    ) -> RWAble:
+        """Read an element from a store. See exported function for more details."""
+
+        iospec = get_spec(elem)
+        read_func: ReadAsync = self.registry.get_read_async(
+            type(elem), iospec, modifiers, reader=self
+        )
+        if self.callback is None:
+            return await read_func(elem)
+        return await self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
 class DaskReader(Reader):
@@ -322,8 +363,6 @@ class Writer:
 
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
-                import asyncio
-
                 asyncio.run(store.store.clear())
             else:
                 store.clear()
@@ -357,6 +396,21 @@ def read_elem(elem: StorageType) -> RWAble:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+async def read_elem_async(elem: StorageType) -> RWAble:
+    """
+    Read an element from a store asynchronously.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+    Params
+    ------
+    elem
+        The stored element.
+    """
+    return await Reader(_REGISTRY).read_elem_async(elem)
 
 
 def read_elem_as_dask(

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
+        ReadAsyncCallback,
         ReadCallback,
         StorageType,
         WriteCallback,
@@ -40,6 +41,32 @@ def read_dispatched(
     reader = Reader(_REGISTRY, callback=callback)
 
     return reader.read_elem(elem)
+
+
+async def read_dispatched_async(
+    elem: StorageType,
+    callback: ReadAsyncCallback,
+) -> RWAble:
+    """
+    Read elem, calling the callback at each sub-element.
+
+    Params
+    ------
+    elem
+        Storage container (e.g. `h5py.Group`, `zarr.Group`).
+        This must have anndata element specifications.
+    callback
+        Function to call at each anndata encoded element.
+
+    See Also
+    --------
+    :doc:`/tutorials/notebooks/{read,write}_dispatched`
+    """
+    from anndata._io.specs import _REGISTRY, Reader
+
+    reader = Reader(_REGISTRY, callback=callback)
+
+    return await reader.read_elem_async(elem)
 
 
 def write_dispatched(
