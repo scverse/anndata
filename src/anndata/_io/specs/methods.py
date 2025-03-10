@@ -651,11 +651,8 @@ def write_sparse_compressed(
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
-        _writer.write_elem(
-            g,
-            attr_name,
-            attr,
-            dataset_kwargs={"dtype": dtype, **dataset_kwargs},
+        g.create_dataset(
+            attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
         )
 
 
