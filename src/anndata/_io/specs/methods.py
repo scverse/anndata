@@ -651,16 +651,9 @@ def write_sparse_compressed(
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
-        if isinstance(f, H5Group) or is_zarr_v2():
-            g.create_dataset(
-                attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
-            )
-        else:
-            arr = g.create_array(
-                attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
-            )
-            # see https://github.com/zarr-developers/zarr-python/discussions/2712
-            arr[...] = attr[...]
+        g.create_dataset(
+            attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
+        )
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
