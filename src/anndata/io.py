@@ -14,7 +14,7 @@ from ._io.read import (
     read_text,
     read_umi_tools,
 )
-from ._io.specs import read_elem, write_elem
+from ._io.specs import read_elem, read_elem_async, write_elem
 from ._io.write import write_csvs, write_loom
 
 if find_spec("zarr") or TYPE_CHECKING:
@@ -46,5 +46,6 @@ __all__ = [
     "write_zarr",
     "write_elem",
     "read_elem",
+    "read_elem_async",
     "sparse_dataset",
 ]

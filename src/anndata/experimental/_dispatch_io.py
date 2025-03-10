@@ -9,16 +9,16 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        ReadCallback,
+        ReadAsyncCallback,
         StorageType,
         WriteCallback,
     )
     from anndata.typing import RWAble
 
 
-def read_dispatched(
+async def read_dispatched(
     elem: StorageType,
-    callback: ReadCallback,
+    callback: ReadAsyncCallback,
 ) -> RWAble:
     """
     Read elem, calling the callback at each sub-element.
@@ -39,7 +39,7 @@ def read_dispatched(
 
     reader = Reader(_REGISTRY, callback=callback)
 
-    return reader.read_elem(elem)
+    return await reader.read_elem_async(elem)
 
 
 def write_dispatched(

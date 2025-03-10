@@ -263,7 +263,7 @@ def report_write_key_on_error(func):
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(
+async def _read_legacy_raw(
     f: ZarrGroup | H5Group,
     modern_raw,  # TODO: type
     read_df: Callable,
@@ -284,11 +284,11 @@ def _read_legacy_raw(
 
     raw = {}
     if "X" in attrs and "raw.X" in f:
-        raw["X"] = read_attr(f["raw.X"])
+        raw["X"] = await read_attr(f["raw.X"])
     if "var" in attrs and "raw.var" in f:
-        raw["var"] = read_df(f["raw.var"])  # Backwards compat
+        raw["var"] = await read_df(f["raw.var"])  # Backwards compat
     if "varm" in attrs and "raw.varm" in f:
-        raw["varm"] = read_attr(f["raw.varm"])
+        raw["varm"] = await read_attr(f["raw.varm"])
     return raw
 
 
