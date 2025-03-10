@@ -14,7 +14,7 @@ from .._core.anndata import AnnData
 from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
-from ..experimental import read_dispatched_async, write_dispatched
+from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem_async
 from .specs.methods import sync_async_to_async
 from .utils import _read_legacy_raw, report_read_key_on_error
@@ -84,7 +84,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
                     *(
                         # This is covering up backwards compat in the anndata initializer
                         # In most cases we should be able to call `func(elen[k])` instead
-                        sync_async_to_async(k, read_dispatched_async(elem[k], callback))
+                        sync_async_to_async(k, read_dispatched(elem[k], callback))
                         for k in elem.keys()
                         if not k.startswith("raw.")
                     )
@@ -102,7 +102,7 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
             )
         return await func(elem)
 
-    adata = asyncio.run(read_dispatched_async(f, callback=callback))
+    adata = asyncio.run(read_dispatched(f, callback=callback))
 
     # Backwards compat (should figure out which version)
     if "raw.X" in f:

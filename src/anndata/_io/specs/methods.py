@@ -313,12 +313,6 @@ def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 async def read_mapping(
     elem: GroupStorageType, *, _reader: Reader
 ) -> dict[str, AxisStorable]:
-    print(
-        (
-            sync_async_to_async(k, _reader.read_elem_async(v))
-            for k, v in dict(elem).items()
-        )
-    )
     return dict(
         await asyncio.gather(
             *(

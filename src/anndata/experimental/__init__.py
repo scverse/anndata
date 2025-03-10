@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .._io.specs import IOSpec, read_elem_as_dask
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ..utils import module_get_attr_redirect
-from ._dispatch_io import read_dispatched, read_dispatched_async, write_dispatched
+from ._dispatch_io import read_dispatched, write_dispatched
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
 from .pytorch import AnnLoader
@@ -43,7 +43,6 @@ __all__ = [
     "AnnLoader",
     "read_elem_as_dask",
     "read_dispatched",
-    "read_dispatched_async",
     "write_dispatched",
     "IOSpec",
     "concat_on_disk",

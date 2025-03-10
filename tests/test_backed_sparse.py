@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING, Literal, get_args
@@ -84,19 +85,12 @@ def ondisk_equivalent_adata(
             f = zarr.open(path, mode="r")
 
             # Read with handling for backwards compat
-            def callback(func, elem_name, elem, iospec):
-                if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                    return AnnData(
-                        **{
-                            k: read_dispatched(v, callback)
-                            for k, v in dict(elem).items()
-                        }
-                    )
+            async def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem)
-                return func(elem)
+                return await func(elem)
 
-            adata = read_dispatched(f, callback=callback)
+            adata = asyncio.run(read_dispatched(f, callback=callback))
 
             return adata
 

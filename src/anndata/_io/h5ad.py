@@ -24,7 +24,7 @@ from ..compat import (
     _decode_structured_array,
     _from_fixed_length_strings,
 )
-from ..experimental import read_dispatched_async
+from ..experimental import read_dispatched
 from .specs import write_elem
 from .specs.methods import sync_async_to_async
 from .specs.registry import IOSpec, read_elem_async, write_spec
@@ -243,9 +243,7 @@ def read_h5ad(
                         *(
                             # This is covering up backwards compat in the anndata initializer
                             # In most cases we should be able to call `func(elen[k])` instead
-                            sync_async_to_async(
-                                k, read_dispatched_async(elem[k], callback)
-                            )
+                            sync_async_to_async(k, read_dispatched(elem[k], callback))
                             for k in elem.keys()
                             if not k.startswith("raw.")
                         )
@@ -263,7 +261,7 @@ def read_h5ad(
                 return await read_dataframe(elem)
             return await func(elem)
 
-        adata = asyncio.run(read_dispatched_async(f, callback=callback))
+        adata = asyncio.run(read_dispatched(f, callback=callback))
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:

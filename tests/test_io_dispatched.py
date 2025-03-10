@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import TYPE_CHECKING
 
@@ -18,11 +19,11 @@ if TYPE_CHECKING:
 
 
 def test_read_dispatched_w_regex(tmp_path: Path):
-    def read_only_axis_dfs(func, elem_name: str, elem, iospec):
+    async def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata":
-            return func(elem)
+            return await func(elem)
         elif re.match(r"^/((obs)|(var))?(/.*)?$", elem_name):
-            return func(elem)
+            return await func(elem)
         else:
             return None
 
@@ -35,7 +36,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
         z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
-    actual = read_dispatched(z, read_only_axis_dfs)
+    actual = asyncio.run(read_dispatched(z, read_only_axis_dfs))
 
     assert_equal(expected, actual)
 
@@ -43,7 +44,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
 def test_read_dispatched_dask(tmp_path: Path):
     import dask.array as da
 
-    def read_as_dask_array(func, elem_name: str, elem, iospec):
+    async def read_as_dask_array(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in {
             "dataframe",
             "csr_matrix",
@@ -51,11 +52,11 @@ def test_read_dispatched_dask(tmp_path: Path):
             "awkward-array",
         }:
             # Preventing recursing inside of these types
-            return func(elem)
+            return await func(elem)
         elif iospec.encoding_type == "array":
             return da.from_zarr(elem)
         else:
-            return func(elem)
+            return await func(elem)
 
     adata = gen_adata((1000, 100))
     z = open_write_group(tmp_path)
@@ -64,7 +65,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
-    dask_adata = read_dispatched(z, read_as_dask_array)
+    dask_adata = asyncio.run(read_dispatched(z, read_as_dask_array))
 
     assert isinstance(dask_adata.layers["array"], da.Array)
     assert isinstance(dask_adata.obsm["array"], da.Array)
@@ -84,7 +85,11 @@ def test_read_dispatched_null_case(tmp_path: Path):
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
     expected = ad.io.read_elem(z)
-    actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
+
+    async def callback(_, __, x, **___):
+        return await ad.io.read_elem_async(x)
+
+    actual = asyncio.run(read_dispatched(z, callback))
 
     assert_equal(expected, actual)
 
@@ -186,11 +191,11 @@ def test_io_dispatched_keys(tmp_path: Path):
         )
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def h5ad_reader(func, elem_name: str, elem, iospec):
+    async def h5ad_reader(func, elem_name: str, elem, iospec):
         h5ad_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
         return func(elem)
 
-    def zarr_reader(func, elem_name: str, elem, iospec):
+    async def zarr_reader(func, elem_name: str, elem, iospec):
         zarr_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
         return func(elem)
 
@@ -198,11 +203,11 @@ def test_io_dispatched_keys(tmp_path: Path):
 
     with h5py.File(h5ad_path, "w") as f:
         write_dispatched(f, "/", adata, callback=h5ad_writer)
-        _ = read_dispatched(f, h5ad_reader)
+        _ = asyncio.run(read_dispatched(f, h5ad_reader))
 
     f = open_write_group(zarr_path)
     write_dispatched(f, "/", adata, callback=zarr_writer)
-    _ = read_dispatched(f, zarr_reader)
+    _ = asyncio.run(read_dispatched(f, zarr_reader))
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
     assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)
