@@ -12,6 +12,7 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
+import asyncio
 import warnings
 from abc import ABC
 from collections.abc import Iterable
@@ -660,6 +661,31 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
         return mtx
+
+    async def to_memory_async(self) -> CSMatrix | CSArray:
+        format_class = get_memory_class(
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
+        )
+        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx.indptr = self._indptr
+        if isinstance(self._data, ZarrArray):
+            await asyncio.gather(
+                *(
+                    self.set_memory_async_from_zarr(mtx, attr)
+                    for attr in ["data", "indices"]
+                )
+            )
+        else:
+            mtx.data = self._data[...]
+            mtx.indices = self._indices[...]
+        return mtx
+
+    async def set_memory_async_from_zarr(
+        self, mtx: CSMatrix | CSArray, attr: Literal["indptr", "data", "indices"]
+    ) -> None:
+        setattr(
+            mtx, attr, await getattr(self, f"_{attr}")._async_array.getitem(())
+        )  # TODO: better way to asyncify
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):

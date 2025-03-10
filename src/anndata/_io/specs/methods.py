@@ -831,7 +831,7 @@ def write_dask_sparse(
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 async def read_sparse(elem: GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
-    return sparse_dataset(elem).to_memory()
+    return await sparse_dataset(elem).to_memory_async()
 
 
 #################
