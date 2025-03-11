@@ -69,15 +69,15 @@ jobs:
       - name: Display installed versions
         run: uv pip list
 
-      - name: Run PyTest
+      - name: Run Pytest
         if: matrix.test-type == 'standard'
         run: pytest -n auto
 
-      - name: Run PyTest (coverage)
+      - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
         run: pytest --cov --cov-report=xml --cov-context=test -n auto
 
-      - name: Run PyTest (treat warnings as errors)
+      - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
         run: pytest --strict-warnings -n auto
 
