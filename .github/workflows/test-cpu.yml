@@ -81,7 +81,7 @@ jobs:
         if: matrix.test-type == 'strict-warning'
         run: pytest --strict-warnings -n auto
 
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v4
         if: matrix.test-type == 'coverage'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
