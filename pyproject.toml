@@ -100,7 +100,7 @@ test = [
     "pytest-mock",
     "anndata[dask]",
 ]
-dev-test = [ "pytest-xdist", "pytest-timeout" ] # local test speedups
+dev-test = [ "pytest-xdist" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
