@@ -34,6 +34,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
         with:
