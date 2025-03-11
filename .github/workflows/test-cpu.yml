@@ -80,7 +80,7 @@ jobs:
           coverage report
           # https://github.com/codecov/codecov-cli/issues/648
           coverage xml
-          rm test-data/.coverage
+          rm test-data/coverage
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
