@@ -1,51 +1,113 @@
-name: CPU
+name: Python application
 
 on:
   push:
-    branches: [main, "[0-9]+.[0-9]+.x"]
+    branches:
+      - main
+      - "*.*.x"
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - "*.*.x"
 
-# Cancel the job if new commits are pushed
-# https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-# There are two jobs:
-# 1. `check` determines if the second job (`test`) will be run (through a job dependency).
-# 2. `test` runs on an AWS runner and executes the GPU tests.
 jobs:
-  # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
-  test:
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0} # -e to fail on error, -l for mamba
-
+  pytest:
+    runs-on: ubuntu-22.04
     strategy:
-      fail-fast: false
       matrix:
-        python: ["3.13"]
-        os: [ubuntu-latest]
-
+        python-version: [3.13, 3.11]
+        include:
+          - python-version: 3.13
+            run-coverage: yes
+            test-type: coverage
+          - python-version: 3.11
+            run-coverage: no
+            test-type: standard
+          - python-version: 3.13
+            dependencies-version: pre-release
+            test-type: strict-warning
+          - python-version: 3.11
+            dependencies-version: minimum
+            test-type: coverage
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
-      - name: Install Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade uv
+          echo "uv_cache_dir=$(uv cache dir)" >> $GITHUB_ENV
 
       - name: Install UV
         uses: hynek/setup-cached-uv@v2
         with:
           cache-dependency-path: pyproject.toml
 
-      - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test]" -c ci/constraints.txt
+      - name: Install dependencies
+        if: matrix.dependencies-version == 'latest' || matrix.dependencies-version == null
+        run: uv pip install --system --compile "anndata[dev,test] @ ." -c ci/constraints.txt
 
-      - name: Run test
+      - name: Install minimum dependencies
+        if: matrix.dependencies-version == 'minimum'
+        run: |
+          uv pip install --system --compile tomli packaging
+
+          deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extra dev test)
+          uv pip install --system --compile $deps pytest-cov "anndata @ ."
+
+      - name: Install dependencies release candidates
+        if: matrix.dependencies-version == 'pre-release'
+        run: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c ci/constraints.txt
+
+      - name: Display installed versions
+        run: uv pip list
+
+      - name: Run PyTest
+        if: matrix.test-type == 'standard'
         run: pytest
+
+      - name: Run PyTest (coverage)
+        if: matrix.test-type == 'coverage'
+        run: pytest --cov --cov-report=xml --cov-context=test
+
+      - name: Run PyTest (treat warnings as errors)
+        if: matrix.test-type == 'strict-warning'
+        run: pytest --strict-warnings
+
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+
+  check-build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.13
+
+      - name: Install build tools and requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Display installed versions
+        run: pip list
+
+      - name: Build & Twine check
+        run: |
+          python -m build --sdist --wheel .
+          twine check dist/*
+
+      - name: Check runtime version
+        run: |
+          pip install dist/*.whl
+          python -c 'import anndata; print(anndata.__version__)'
