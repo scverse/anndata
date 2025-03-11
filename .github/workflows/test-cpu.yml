@@ -48,4 +48,4 @@ jobs:
         run: uv pip install --system -e ".[dev,test]" -c ci/constraints.txt
 
       - name: Run test
-        run: pytest --timeout 40
+        run: pytest -n auto
