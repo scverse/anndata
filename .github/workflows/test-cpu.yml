@@ -46,18 +46,18 @@ jobs:
 
       - name: Install dependencies
         if: matrix.dependencies-version == null
-        run: uv pip install --system --compile -e ".[dev,test]" -c ci/constraints.txt
+        run: uv pip install --system -e ".[dev,test]" -c ci/constraints.txt
 
       - name: Install minimum dependencies
         if: matrix.dependencies-version == 'minimum'
         run: |
-          uv pip install --system --compile tomli packaging
+          uv pip install --system tomli packaging
           deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extra dev test)
-          uv pip install --system --compile $deps pytest-cov "."
+          uv pip install --system $deps pytest-cov "."
 
       - name: Install dependencies release candidates
         if: matrix.dependencies-version == 'pre-release'
-        run: uv pip install -v --system --compile --pre -e ".[dev,test]" -c ci/constraints.txt
+        run: uv pip install -v --system --pre -e ".[dev,test]" -c ci/constraints.txt
 
       - name: Display installed versions
         run: uv pip list
