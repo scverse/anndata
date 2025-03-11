@@ -21,14 +21,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - python-version: 3.13
+          - python-version: '3.13'
             test-type: coverage
-          - python-version: 3.11
+          - python-version: '3.11'
             test-type: standard
-          - python-version: 3.13
+          - python-version: '3.13'
             dependencies-version: pre-release
             test-type: strict-warning
-          - python-version: 3.11
+          - python-version: '3.11'
             dependencies-version: minimum
             test-type: coverage
     defaults:
