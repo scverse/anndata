@@ -46,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         if: matrix.dependencies-version == null
-        run: uv pip install --system --compile "anndata[dev,test] @ ." -c ci/constraints.txt
+        run: uv pip install --system --compile -e "anndata[dev,test] @ ." -c ci/constraints.txt
 
       - name: Install minimum dependencies
         if: matrix.dependencies-version == 'minimum'
@@ -54,26 +54,26 @@ jobs:
           uv pip install --system --compile tomli packaging
 
           deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extra dev test)
-          uv pip install --system --compile $deps pytest-cov "anndata @ ."
+          uv pip install --system --compile -e $deps pytest-cov "anndata @ ."
 
       - name: Install dependencies release candidates
         if: matrix.dependencies-version == 'pre-release'
-        run: uv pip install -v --system --compile --pre "anndata[dev,test] @ ." -c ci/constraints.txt
+        run: uv pip install -v --system --compile --pre -e "anndata[dev,test] @ ." -c ci/constraints.txt
 
       - name: Display installed versions
         run: uv pip list
 
       - name: Run PyTest
         if: matrix.test-type == 'standard'
-        run: pytest
+        run: pytest -n auto
 
       - name: Run PyTest (coverage)
         if: matrix.test-type == 'coverage'
-        run: pytest --cov --cov-report=xml --cov-context=test
+        run: pytest --cov --cov-report=xml --cov-context=test -n auto
 
       - name: Run PyTest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
-        run: pytest --strict-warnings
+        run: pytest --strict-warnings -n auto
 
       - uses: codecov/codecov-action@v4
         with:
