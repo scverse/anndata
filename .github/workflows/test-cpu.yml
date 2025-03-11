@@ -31,6 +31,10 @@ jobs:
           - python-version: 3.11
             dependencies-version: minimum
             test-type: coverage
+
+    defaults:
+      run:
+        shell: bash -el {0}
     steps:
       - uses: actions/checkout@v3
 
