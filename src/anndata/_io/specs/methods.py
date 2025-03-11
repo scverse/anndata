@@ -45,7 +45,7 @@ from ...compat import is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -405,13 +405,12 @@ def write_list(
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_basic(
     f: GroupStorageType,
@@ -422,13 +421,62 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
+    dataset_kwargs = dataset_kwargs.copy()
+    dtype = dataset_kwargs.pop("dtype", elem.dtype)
     if isinstance(f, H5Group) or is_zarr_v2():
-        f.create_dataset(
-            k, data=elem, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs
-        )
+        f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
-        f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-        f[k][...] = elem
+        f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
+        # see https://github.com/zarr-developers/zarr-python/discussions/2712
+        if isinstance(elem, ZarrArray):
+            f[k][...] = elem[...]
+        else:
+            f[k][...] = elem
+
+
+def _iter_chunks_for_copy(
+    elem: ArrayStorageType, dest: ArrayStorageType
+) -> Iterator[slice | tuple[list[slice]]]:
+    """
+    Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
+
+    * If `dest` has chunks, it will return the chunks of `dest`.
+    * If `dest` is not chunked, we write it in ~100MB chunks or 1000 rows, whichever is larger.
+    """
+    if dest.chunks and hasattr(dest, "iter_chunks"):
+        return dest.iter_chunks()
+    else:
+        shape = elem.shape
+        # Number of rows that works out to
+        n_rows = max(
+            ad.settings.min_rows_for_chunked_h5_copy,
+            elem.chunks[0] if elem.chunks is not None else 1,
+        )
+        return (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows))
+
+
+@_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
+def write_chunked_dense_array_to_group(
+    f: GroupStorageType,
+    k: str,
+    elem: ArrayStorageType,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write to a h5py.Dataset in chunks.
+
+    `h5py.Group.create_dataset(..., data: h5py.Dataset)` will load all of `data` into memory
+    before writing. Instead, we will write in chunks to avoid this. We don't need to do this for
+    zarr since zarr handles this automatically.
+    """
+    dtype = dataset_kwargs.get("dtype", elem.dtype)
+    kwargs = {**dataset_kwargs, "dtype": dtype}
+    dest = f.create_dataset(k, shape=elem.shape, **kwargs)
+
+    for chunk in _iter_chunks_for_copy(elem, dest):
+        dest[chunk] = elem[chunk]
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
