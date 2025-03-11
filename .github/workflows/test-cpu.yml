@@ -75,7 +75,12 @@ jobs:
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: pytest --cov --cov-report=xml --cov-context=test -n auto
+        run: |
+          coverage run -m pytest -n auto
+          coverage report
+          # https://github.com/codecov/codecov-cli/issues/648
+          coverage xml
+          rm test-data/.coverage
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
