@@ -21,14 +21,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - python-version: 3.13
+          - python-version: '3.13'
             test-type: coverage
-          - python-version: 3.11
+          - python-version: '3.11'
             test-type: standard
-          - python-version: 3.13
+          - python-version: '3.13'
             dependencies-version: pre-release
             test-type: strict-warning
-          - python-version: 3.11
+          - python-version: '3.11'
             dependencies-version: minimum
             test-type: coverage
     defaults:
@@ -38,6 +38,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -68,15 +69,15 @@ jobs:
       - name: Display installed versions
         run: uv pip list
 
-      - name: Run PyTest
+      - name: Run Pytest
         if: matrix.test-type == 'standard'
         run: pytest -n auto
 
-      - name: Run PyTest (coverage)
+      - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
         run: pytest --cov --cov-report=xml --cov-context=test -n auto
 
-      - name: Run PyTest (treat warnings as errors)
+      - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
         run: pytest --strict-warnings -n auto
 
@@ -96,7 +97,7 @@ jobs:
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: 3.13
+          python-version: '3.13'
 
       - name: Install build tools and requirements
         run: |
