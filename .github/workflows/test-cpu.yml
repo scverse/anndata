@@ -76,7 +76,7 @@ jobs:
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
         run: |
-          coverage run -m pytest -n auto
+          coverage run -m pytest
           coverage report
           # https://github.com/codecov/codecov-cli/issues/648
           coverage xml
