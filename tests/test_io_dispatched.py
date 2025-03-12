@@ -103,7 +103,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     adata = gen_adata((1000, 100))
 
-    def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
+    async def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
         M, N = 13, 42
 
         def set_copy(d, **kwargs):
@@ -128,7 +128,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
                 chunks = (N,)
             else:
                 chunks = dataset_kwargs.get("chunks", ())
-            func(
+            await func(
                 store,
                 k,
                 elem,
@@ -137,11 +137,11 @@ def test_write_dispatched_chunks(tmp_path: Path):
                 ),
             )
         else:
-            func(store, k, elem, dataset_kwargs=dataset_kwargs)
+            await func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     z = open_write_group(tmp_path)
 
-    write_dispatched(z, "/", adata, callback=write_chunked)
+    asyncio.run(write_dispatched(z, "/", adata, callback=write_chunked))
 
     def check_chunking(k: str, v: ZarrGroup | zarr.Array):
         if (
@@ -181,15 +181,15 @@ def test_io_dispatched_keys(tmp_path: Path):
     h5ad_path = tmp_path / "test.h5ad"
     zarr_path = tmp_path / "test.zarr"
 
-    def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
+    async def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
         h5ad_write_keys.append(k if is_zarr_v2() else k.strip("/"))
-        func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        await func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
+    async def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
         zarr_write_keys.append(
             k if is_zarr_v2() else f"{store.name.strip('/')}/{k.strip('/')}".strip("/")
         )
-        func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        await func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     async def h5ad_reader(func, elem_name: str, elem, iospec):
         h5ad_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
@@ -202,11 +202,11 @@ def test_io_dispatched_keys(tmp_path: Path):
     adata = gen_adata((50, 100))
 
     with h5py.File(h5ad_path, "w") as f:
-        write_dispatched(f, "/", adata, callback=h5ad_writer)
+        asyncio.run(write_dispatched(f, "/", adata, callback=h5ad_writer))
         _ = asyncio.run(read_dispatched(f, h5ad_reader))
 
     f = open_write_group(zarr_path)
-    write_dispatched(f, "/", adata, callback=zarr_writer)
+    asyncio.run(write_dispatched(f, "/", adata, callback=zarr_writer))
     _ = asyncio.run(read_dispatched(f, zarr_reader))
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)

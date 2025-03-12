@@ -205,7 +205,7 @@ def read_indices(group):
 
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
-def write_anndata(
+async def write_anndata(
     f: GroupStorageType,
     k: str,
     adata: AnnData,
@@ -214,16 +214,30 @@ def write_anndata(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+    await asyncio.gather(
+        _writer.write_elem_async(g, "X", adata.X, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(g, "var", adata.var, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(
+            g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(
+            g, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(
+            g, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(
+            g, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(
+            g, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(
+            g, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs
+        ),
+        _writer.write_elem_async(g, "raw", adata.raw, dataset_kwargs=dataset_kwargs),
+    )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))
@@ -259,7 +273,7 @@ async def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> A
 
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
-def write_raw(
+async def write_raw(
     f: GroupStorageType,
     k: str,
     raw: Raw,
@@ -268,9 +282,13 @@ def write_raw(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    _writer.write_elem(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+    await asyncio.gather(
+        _writer.write_elem_async(g, "X", raw.X, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(g, "var", raw.var, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(
+            g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs
+        ),
+    )
 
 
 ########
@@ -285,12 +303,12 @@ async def read_null(_elem, _reader) -> None:
 
 
 @_REGISTRY.register_write(H5Group, type(None), IOSpec("null", "0.1.0"))
-def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+async def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     f.create_dataset(k, data=h5py.Empty("f"), **dataset_kwargs)
 
 
 @_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
-def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+async def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     # zarr has no first-class null dataset
     if is_zarr_v2():
         import zarr
@@ -325,7 +343,7 @@ async def read_mapping(
 
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
-def write_mapping(
+async def write_mapping(
     f: GroupStorageType,
     k: str,
     v: dict[str, AxisStorable],
@@ -334,8 +352,12 @@ def write_mapping(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    for sub_k, sub_v in v.items():
-        _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+    await asyncio.gather(
+        *[
+            _writer.write_elem_async(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+            for sub_k, sub_v in v.items()
+        ]
+    )
 
 
 ##############
@@ -345,7 +367,7 @@ def write_mapping(
 
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
-def write_list(
+async def write_list(
     f: GroupStorageType,
     k: str,
     elem: list[AxisStorable],
@@ -353,7 +375,7 @@ def write_list(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    _writer.write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
+    await _writer.write_elem_async(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
 
 
 # TODO: Is this the right behavior for MaskedArrays?
@@ -367,7 +389,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
 @zero_dim_array_as_scalar
-def write_basic(
+async def write_basic(
     f: GroupStorageType,
     k: str,
     elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | ZarrArray,
@@ -384,7 +406,7 @@ def write_basic(
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
         if isinstance(elem, ZarrArray):
-            f[k][...] = elem[...]
+            await f[k]._async_array.setitem(Ellipsis, elem[...])
         else:
             f[k][...] = elem
 
@@ -412,7 +434,7 @@ def _iter_chunks_for_copy(
 
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
-def write_chunked_dense_array_to_group(
+async def write_chunked_dense_array_to_group(
     f: GroupStorageType,
     k: str,
     elem: ArrayStorageType,
@@ -429,9 +451,17 @@ def write_chunked_dense_array_to_group(
     dtype = dataset_kwargs.get("dtype", elem.dtype)
     kwargs = {**dataset_kwargs, "dtype": dtype}
     dest = f.create_dataset(k, shape=elem.shape, **kwargs)
-
-    for chunk in _iter_chunks_for_copy(elem, dest):
-        dest[chunk] = elem[chunk]
+    chunk_iter = _iter_chunks_for_copy(elem, dest)
+    if isinstance(dest, ZarrArray) and not is_zarr_v2():
+        await asyncio.gather(
+            *(
+                dest._async_array.setitem(chunk, elem[chunk])
+                for chunk in _iter_chunks_for_copy(elem, dest)
+            )
+        )
+    else:
+        for chunk in chunk_iter:
+            dest[chunk] = elem[chunk]
 
 
 _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
@@ -443,7 +473,7 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 
 
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_zarr(
+async def write_basic_dask_zarr(
     f: ZarrGroup,
     k: str,
     elem: DaskArray,
@@ -463,7 +493,7 @@ def write_basic_dask_zarr(
 # Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_h5(
+async def write_basic_dask_h5(
     f: H5Group,
     k: str,
     elem: DaskArray,
@@ -506,7 +536,7 @@ async def read_string_array(d: H5Array, *, _reader: Reader):
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
-def write_vlen_string_array(
+async def write_vlen_string_array(
     f: H5Group,
     k: str,
     elem: np.ndarray,
@@ -528,7 +558,7 @@ def write_vlen_string_array(
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
-def write_vlen_string_array_zarr(
+async def write_vlen_string_array_zarr(
     f: ZarrGroup,
     k: str,
     elem: np.ndarray,
@@ -575,7 +605,7 @@ def write_vlen_string_array_zarr(
             compressor=compressor,
             **dataset_kwargs,
         )
-        f[k][:] = elem
+        await f[k]._async_array.setitem(slice(None), elem)
 
 
 ###############
@@ -612,7 +642,7 @@ async def read_recarray(
 
 @_REGISTRY.register_write(H5Group, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, np.recarray, IOSpec("rec-array", "0.2.0"))
-def write_recarray(
+async def write_recarray(
     f: H5Group,
     k: str,
     elem: np.ndarray | np.recarray,
@@ -625,7 +655,7 @@ def write_recarray(
 
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, np.recarray, IOSpec("rec-array", "0.2.0"))
-def write_recarray_zarr(
+async def write_recarray_zarr(
     f: ZarrGroup,
     k: str,
     elem: np.ndarray | np.recarray,
@@ -641,7 +671,7 @@ def write_recarray_zarr(
     else:
         # TODO: zarr’s on-disk format v3 doesn’t support this dtype
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-        f[k][...] = elem
+        await f[k]._async_array.setitem(Ellipsis, elem)
 
 
 #################
@@ -649,7 +679,7 @@ def write_recarray_zarr(
 #################
 
 
-def write_sparse_compressed(
+async def write_sparse_compressed(
     f: GroupStorageType,
     key: str,
     value: CSMatrix | CSArray,
@@ -666,16 +696,19 @@ def write_sparse_compressed(
     # Allow resizing for hdf5
     if isinstance(f, H5Group):
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
-
+    awaitables = []
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
-        _writer.write_elem(
-            g,
-            attr_name,
-            attr,
-            dataset_kwargs={"dtype": dtype, **dataset_kwargs},
+        awaitables.append(
+            _writer.write_elem_async(
+                g,
+                attr_name,
+                attr,
+                dataset_kwargs={"dtype": dtype, **dataset_kwargs},
+            )
         )
+    await asyncio.gather(*awaitables)
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")
@@ -716,7 +749,7 @@ for store_type, (cls, spec, func) in product(
 @_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("", "0.1.0"))
-def write_sparse_dataset(
+async def write_sparse_dataset(
     f: GroupStorageType,
     k: str,
     elem: _CSCDataset | _CSRDataset,
@@ -724,7 +757,7 @@ def write_sparse_dataset(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    write_sparse_compressed(
+    await write_sparse_compressed(
         f,
         k,
         elem._to_backed(),
@@ -751,8 +784,10 @@ def write_sparse_dataset(
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
 )
-def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
-    _writer.write_elem(
+async def write_cupy_dask_sparse(
+    f, k, elem, _writer, dataset_kwargs=MappingProxyType({})
+):
+    await _writer.write_elem_async(
         f,
         k,
         elem.map_blocks(lambda x: x.get(), dtype=elem.dtype, meta=elem._meta.get()),
@@ -772,7 +807,7 @@ def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType(
 @_REGISTRY.register_write(
     ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
 )
-def write_dask_sparse(
+async def write_dask_sparse(
     f: GroupStorageType,
     k: str,
     elem: DaskArray,
@@ -804,7 +839,7 @@ def write_dask_sparse(
     chunk_start = 0
     chunk_stop = axis_chunks[0]
 
-    _writer.write_elem(
+    await _writer.write_elem_async(
         f,
         k,
         as_int64_indices(elem[chunk_slice(chunk_start, chunk_stop)].compute()),
@@ -841,7 +876,7 @@ async def read_sparse(elem: GroupStorageType, *, _reader: Reader) -> CSMatrix | 
 @_REGISTRY.register_write(
     ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
-def write_awkward(
+async def write_awkward(
     f: GroupStorageType,
     k: str,
     v: views.AwkwardArrayView | AwkArray,
@@ -858,8 +893,12 @@ def write_awkward(
     form, length, container = ak.to_buffers(ak.to_packed(v))
     group.attrs["length"] = length
     group.attrs["form"] = form.to_json()
-    for k, v in container.items():
-        _writer.write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
+    await asyncio.gather(
+        *[
+            _writer.write_elem_async(group, k, v, dataset_kwargs=dataset_kwargs)
+            for k, v in container.items()
+        ]
+    )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
@@ -890,7 +929,7 @@ async def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
 @_REGISTRY.register_write(H5Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-def write_dataframe(
+async def write_dataframe(
     f: GroupStorageType,
     key: str,
     df: views.DataFrameView | pd.DataFrame,
@@ -929,14 +968,19 @@ def write_dataframe(
     # ._values is "the best" array representation. It's the true array backing the
     # object, where `.values` is always a np.ndarray and .array is always a pandas
     # array.
-    _writer.write_elem(
-        group, index_name, df.index._values, dataset_kwargs=dataset_kwargs
-    )
-    for colname, series in df.items():
-        # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
-        _writer.write_elem(
+    awaitables = [
+        _writer.write_elem_async(
+            group, index_name, df.index._values, dataset_kwargs=dataset_kwargs
+        )
+    ]
+    # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
+    awaitables += [
+        _writer.write_elem_async(
             group, colname, series._values, dataset_kwargs=dataset_kwargs
         )
+        for colname, series in df.items()
+    ]
+    await asyncio.gather(*awaitables)
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
@@ -1020,7 +1064,7 @@ async def read_series(
 
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
-def write_categorical(
+async def write_categorical(
     f: GroupStorageType,
     k: str,
     v: pd.Categorical,
@@ -1031,9 +1075,11 @@ def write_categorical(
     g = f.require_group(k)
     g.attrs["ordered"] = bool(v.ordered)
 
-    _writer.write_elem(g, "codes", v.codes, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(
-        g, "categories", v.categories._values, dataset_kwargs=dataset_kwargs
+    await asyncio.gather(
+        _writer.write_elem_async(g, "codes", v.codes, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(
+            g, "categories", v.categories._values, dataset_kwargs=dataset_kwargs
+        ),
     )
 
 
@@ -1074,7 +1120,7 @@ async def read_categorical(
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
-def write_nullable(
+async def write_nullable(
     f: GroupStorageType,
     k: str,
     v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
@@ -1099,8 +1145,10 @@ def write_nullable(
         if isinstance(v, pd.arrays.StringArray)
         else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
     )
-    _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
+    await asyncio.gather(
+        _writer.write_elem_async(g, "values", values, dataset_kwargs=dataset_kwargs),
+        _writer.write_elem_async(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs),
+    )
 
 
 async def _read_nullable(
@@ -1180,7 +1228,7 @@ def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
     return dataset_kwargs
 
 
-def write_scalar_zarr(
+async def write_scalar_zarr(
     f: ZarrGroup,
     key: str,
     value,
@@ -1213,7 +1261,7 @@ def write_scalar_zarr(
         a[...] = np.array(value)
 
 
-def write_hdf5_scalar(
+async def write_hdf5_scalar(
     f: H5Group,
     key: str,
     value,
@@ -1264,7 +1312,7 @@ _REGISTRY.register_read(ZarrArray, IOSpec("bytes", "0.2.0"))(read_scalar)
 
 @_REGISTRY.register_write(H5Group, np.str_, IOSpec("string", "0.2.0"))
 @_REGISTRY.register_write(H5Group, str, IOSpec("string", "0.2.0"))
-def write_string(
+async def write_string(
     f: H5Group,
     k: str,
     v: np.str_ | str,
@@ -1282,7 +1330,7 @@ def write_string(
 
 # @_REGISTRY.register_write(np.bytes_, IOSpec("bytes", "0.2.0"))
 # @_REGISTRY.register_write(bytes, IOSpec("bytes", "0.2.0"))
-# def write_string(f, k, v, dataset_kwargs):
+# async def write_string(f, k, v, dataset_kwargs):
 #     if "compression" in dataset_kwargs:
 #         dataset_kwargs = dict(dataset_kwargs)
 #         dataset_kwargs.pop("compression")

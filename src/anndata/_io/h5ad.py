@@ -25,9 +25,8 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
-from .specs import write_elem
 from .specs.methods import sync_async_to_async
-from .specs.registry import IOSpec, read_elem_async, write_spec
+from .specs.registry import IOSpec, read_elem_async, write_elem_async, write_spec
 from .utils import (
     H5PY_V3,
     _read_legacy_raw,
@@ -83,39 +82,76 @@ def write_h5ad(
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
-
         if "X" in as_dense and isinstance(
             adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            )
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_elem_async(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            )
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+            asyncio.run(
+                write_sparse_as_dense(
+                    f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+                )
             )
-            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(
-                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+            asyncio.run(
+                write_elem_async(
+                    f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs
+                )
+            )
+            asyncio.run(
+                write_elem_async(
+                    f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+                )
             )
         elif adata.raw is not None:
-            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_elem_async(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+            )
+
+        async def gather():
+            await asyncio.gather(
+                *[
+                    write_elem_async(
+                        f, "obs", adata.obs, dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "var", adata.var, dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs
+                    ),
+                ]
+            )
+
+        asyncio.run(gather())
 
 
 @report_write_key_on_error
 @write_spec(IOSpec("array", "0.2.0"))
-def write_sparse_as_dense(
+async def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
     value: CSMatrix | BaseCompressedSparseDataset,

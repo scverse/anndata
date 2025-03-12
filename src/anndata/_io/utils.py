@@ -298,7 +298,7 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     """
 
     @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
-    def func_wrapper(
+    async def func_wrapper(
         f: StorageType,
         k: str,
         elem: ContravariantRWAble,
@@ -307,8 +307,10 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
         dataset_kwargs: Mapping[str, Any],
     ):
         if elem.shape == ():
-            _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+            await _writer.write_elem_async(
+                f, k, elem[()], dataset_kwargs=dataset_kwargs
+            )
         else:
-            func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
+            await func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
 
     return func_wrapper

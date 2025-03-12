@@ -6,12 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .typing import RWAble
 
 if TYPE_CHECKING:
@@ -207,7 +202,7 @@ class ReadAsyncCallback(Protocol[SCo, InvariantRWAble]):
 
 
 class WriteCallback(Protocol[InvariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         /,
         write_func: Write[InvariantRWAble],

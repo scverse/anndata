@@ -47,16 +47,18 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+    async def callback(func, s, k: str, elem, dataset_kwargs, iospec):
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
             and k.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
-        func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        await func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
-    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    asyncio.run(
+        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    )
 
 
 def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:

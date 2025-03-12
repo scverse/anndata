@@ -42,7 +42,7 @@ async def read_dispatched(
     return await reader.read_elem_async(elem)
 
 
-def write_dispatched(
+async def write_dispatched(
     store: GroupStorageType,
     key: str,
     elem: RWAble,
@@ -74,4 +74,4 @@ def write_dispatched(
 
     writer = Writer(_REGISTRY, callback=callback)
 
-    writer.write_elem(store, key, elem, dataset_kwargs=dataset_kwargs)
+    await writer.write_elem_async(store, key, elem, dataset_kwargs=dataset_kwargs)

@@ -76,8 +76,10 @@ class IORegistryError(Exception):
 def write_spec(spec: IOSpec):
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
-            result = func(g, k, *args, **kwargs)
+        async def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
+            result = await func(g, k, *args, **kwargs)
+            if k not in g and isinstance(g, ZarrGroup) and not is_zarr_v2():
+                g.require_group(k)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
             return result
@@ -306,7 +308,7 @@ class Writer:
         return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
     @report_write_key_on_error
-    def write_elem(
+    async def write_elem_async(
         self,
         store: GroupStorageType,
         k: str,
@@ -334,7 +336,7 @@ class Writer:
 
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
-                asyncio.run(store.store.clear())
+                await store.store.clear()
             else:
                 store.clear()
         elif k in store:
@@ -343,8 +345,8 @@ class Writer:
         write_func = self.find_write_func(dest_type, elem, modifiers)
 
         if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
+            return await write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        return await self.callback(
             write_func,
             store,
             k,
@@ -366,7 +368,7 @@ def read_elem(elem: StorageType) -> RWAble:
     elem
         The stored element.
     """
-    return asyncio.run(Reader(_REGISTRY).read_elem_async(elem))
+    return asyncio.run(read_elem_async(elem))
 
 
 async def read_elem_async(elem: StorageType) -> RWAble:
@@ -491,4 +493,33 @@ def write_elem(
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
     """
-    Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
+    return asyncio.run(write_elem_async(store, k, elem, dataset_kwargs=dataset_kwargs))
+
+
+async def write_elem_async(
+    store: GroupStorageType,
+    k: str,
+    elem: RWAble,
+    *,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> None:
+    """
+    Write an element to a storage group using anndata encoding.
+
+    Params
+    ------
+    store
+        The group to write to.
+    k
+        The key to write to in the group. Note that absolute paths will be written
+        from the root.
+    elem
+        The element to write. Typically an in-memory object, e.g. an AnnData, pandas
+        dataframe, scipy sparse matrix, etc.
+    dataset_kwargs
+        Keyword arguments to pass to the stores dataset creation function.
+        E.g. for zarr this would be `chunks`, `compressor`.
+    """
+    return await Writer(_REGISTRY).write_elem_async(
+        store, k, elem, dataset_kwargs=dataset_kwargs
+    )
