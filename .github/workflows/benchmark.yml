@@ -6,12 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+defaults:
+  run:
+    shell: bash -el {0}
+
 jobs:
   benchmark:
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0} # -e to fail on error, -l for mamba
 
     strategy:
       fail-fast: false

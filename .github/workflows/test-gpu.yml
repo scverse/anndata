@@ -9,6 +9,10 @@ on:
       - opened
       - synchronize
 
+defaults:
+  run:
+    shell: bash -el {0}
+
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
@@ -38,10 +42,6 @@ jobs:
     # Setting a timeout of 30 minutes, as the AWS costs money
     # At time of writing, a typical run takes about 5 minutes
     timeout-minutes: 30
-
-    defaults:
-      run:
-        shell: bash -el {0}
 
     steps:
       - uses: actions/checkout@v4
