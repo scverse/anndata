@@ -1,4 +1,4 @@
-name: Python application
+name: CI
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
       - main
       - "*.*.x"
   pull_request:
+
+env:
+  PYTEST_ADDOPTS: "-v --color=yes"
+  FORCE_COLOR: "1"
 
 defaults:
   run:

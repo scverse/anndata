@@ -9,6 +9,10 @@ on:
       - opened
       - synchronize
 
+env:
+  PYTEST_ADDOPTS: "-v --color=yes"
+  FORCE_COLOR: "1"
+
 defaults:
   run:
     shell: bash -el {0}
