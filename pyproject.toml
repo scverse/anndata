@@ -85,7 +85,6 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "coverage-enable-subprocess",
     "coverage[toml]",
     "matplotlib",
     "scikit-learn",
@@ -93,7 +92,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",                      # For data downloading
+    "httpx",              # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -119,7 +118,6 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
-concurrency = [ "multiprocessing" ]
 parallel = "true"
 
 [tool.coverage.xml]
