@@ -85,14 +85,15 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "coverage",
+    "coverage-enable-subprocess",
+    "coverage[toml]",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",              # For data downloading
+    "httpx",                      # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -100,7 +101,7 @@ test = [
     "pytest-mock",
     "anndata[dask]",
 ]
-dev-test = [ "pytest-xdist" ] # local test speedups
+dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
