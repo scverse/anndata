@@ -118,6 +118,9 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
+concurrency = [ "multiprocessing" ]
+parallel = "true"
+
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
