@@ -85,14 +85,14 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "coverage-enable-subprocess",
+    "pytest-cov>=2.10",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",                      # For data downloading
+    "httpx",              # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
