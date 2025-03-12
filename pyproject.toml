@@ -85,6 +85,7 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
+    "coverage",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
