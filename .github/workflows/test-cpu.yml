@@ -75,7 +75,10 @@ jobs:
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: coverage run -m pytest --cov-report=xml --cov-context=test -n auto
+        run: |
+          coverage run -m pytest -n auto
+          coverage report
+          coverage xml
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
@@ -86,12 +89,15 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          verbose: true
+          files: test-data/coverage.xml
 
   check-build:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5

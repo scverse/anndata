@@ -47,6 +47,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
@@ -79,13 +80,16 @@ jobs:
         run: pip list
 
       - name: Run test
-        run: pytest -m gpu --cov --cov-report=xml --cov-context=test
+        run: |
+          coverage run -m pytest -m gpu
+          coverage report
+          coverage xml
 
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          verbose: true
+          files: test-data/coverage.xml
 
       - name: Remove 'run-gpu-ci' Label
         if: always()

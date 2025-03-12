@@ -85,14 +85,14 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "pytest-cov>=2.10",
+    "coverage-enable-subprocess",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",              # For data downloading
+    "httpx",                      # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
@@ -140,8 +140,8 @@ addopts = [
     "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
-    # all `ignore::anndata.*` entries are in `conftest.py`
-    # See: https://github.com/pytest-dev/pytest-cov/issues/437
+    "ignore::anndata._warnings.OldFormatWarning",
+    "ignore::anndata._warnings.ExperimentalFeatureWarning",
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
