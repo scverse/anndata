@@ -75,7 +75,7 @@ jobs:
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: pytest --cov --cov-report=xml --cov-context=test -n auto
+        run: coverage run -m pytest --cov-report=xml --cov-context=test -n auto
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
