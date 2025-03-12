@@ -175,20 +175,6 @@ class IORegistry(Generic[_R, R]):
         *,
         reader: Reader,
     ) -> R:
-        return lambda *args, **kwargs: asyncio.run(
-            self.get_read_async(
-                src_type=src_type, spec=spec, modifiers=modifiers, reader=reader
-            )(*args, **kwargs)
-        )
-
-    def get_read_async(
-        self,
-        src_type: type,
-        spec: IOSpec,
-        modifiers: frozenset[str] = frozenset(),
-        *,
-        reader: Reader,
-    ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
         internal = self.read[(src_type, spec, modifiers)]
@@ -267,21 +253,6 @@ class Reader:
         self.registry = registry
         self.callback = callback
 
-    @report_read_key_on_error
-    def read_elem(
-        self,
-        elem: StorageType,
-        modifiers: frozenset[str] = frozenset(),
-    ) -> RWAble:
-        """Read an element from a store. See exported function for more details."""
-        iospec = get_spec(elem)
-        read_func: Read = self.registry.get_read(
-            type(elem), iospec, modifiers, reader=self
-        )
-        if self.callback is None:
-            return read_func(elem)
-        return self.callback(read_func, elem.name, elem, iospec=iospec)
-
     async def read_elem_async(
         self,
         elem: StorageType,
@@ -290,7 +261,7 @@ class Reader:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: ReadAsync = self.registry.get_read_async(
+        read_func: ReadAsync = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is None:
@@ -395,7 +366,7 @@ def read_elem(elem: StorageType) -> RWAble:
     elem
         The stored element.
     """
-    return Reader(_REGISTRY).read_elem(elem)
+    return asyncio.run(Reader(_REGISTRY).read_elem_async(elem))
 
 
 async def read_elem_async(elem: StorageType) -> RWAble:
