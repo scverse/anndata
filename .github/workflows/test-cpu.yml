@@ -75,12 +75,7 @@ jobs:
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: |
-          coverage run -m pytest
-          coverage report
-          # https://github.com/codecov/codecov-cli/issues/648
-          coverage xml
-          rm test-data/coverage
+        run: pytest --cov --cov-report=xml --cov-context=test
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
@@ -92,7 +87,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
-          files: test-data/coverage.xml
 
   check-build:
     runs-on: ubuntu-22.04
