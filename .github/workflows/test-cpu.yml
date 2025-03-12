@@ -49,9 +49,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install UV
-        uses: hynek/setup-cached-uv@v2
+        uses: astral-sh/setup-uv@v5
         with:
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
 
       - name: Install dependencies
         if: matrix.dependencies-version == null
