@@ -79,10 +79,7 @@ jobs:
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: |
-          coverage run -m pytest -n auto
-          coverage report
-          coverage xml
+        run: coverage run -m pytest -n auto --cov --cov-report=xml
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'

@@ -85,10 +85,7 @@ jobs:
         run: pip list
 
       - name: Run test
-        run: |
-          coverage run -m pytest -m gpu
-          coverage report
-          coverage xml
+        run: coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
 
       - uses: codecov/codecov-action@v4
         with:
