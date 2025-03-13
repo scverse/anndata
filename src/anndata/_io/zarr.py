@@ -126,9 +126,12 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
 
 
 @report_read_key_on_error
-def read_dataset(dataset: zarr.Array):
+async def read_dataset(dataset: zarr.Array):
     """Legacy method for reading datasets without encoding_type."""
-    value = dataset[...]
+    if is_zarr_v2():
+        value = dataset[...]
+    else:
+        value = await dataset._async_array.getitem(())
     if not hasattr(value, "dtype"):
         return value
     elif isinstance(value.dtype, str):
@@ -144,7 +147,7 @@ def read_dataset(dataset: zarr.Array):
 
 
 @report_read_key_on_error
-def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
+async def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     warn(
@@ -152,7 +155,11 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         "Consider rewriting it.",
         OldFormatWarning,
     )
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    if is_zarr_v2():
+        data = dataset[...]
+    else:
+        data = await dataset._async_array.getitem(())
+    df = pd.DataFrame(_from_fixed_length_strings(data))
     df.set_index(df.columns[0], inplace=True)
     return df
 
@@ -161,7 +168,7 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 async def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
     # Fast paths
     if isinstance(group, zarr.Array):
-        return read_dataframe_legacy(group)
+        return await read_dataframe_legacy(group)
     else:
         return await read_elem_async(group)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, cast
@@ -198,25 +199,46 @@ def report_read_key_on_error(func):
     >>> z["X"] = np.array([1, 2, 3])
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
+    if inspect.iscoroutinefunction(func):
 
-    @wraps(func)
-    def func_wrapper(*args, **kwargs):
-        from anndata._io.specs import Reader
+        @wraps(func)
+        async def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import Reader
 
-        # Figure out signature (method vs function) by going through args
-        for arg in args:
-            if not isinstance(arg, Reader):
-                store = cast("Storage", arg)
-                break
-        else:
-            msg = "No element found in args."
-            raise ValueError(msg)
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            path, key = _get_display_path(store).rsplit("/", 1)
-            add_key_note(e, store, path or "/", key, "read")
-            raise
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, Reader):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
+    else:
+
+        @wraps(func)
+        def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import Reader
+
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, Reader):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
 
     return func_wrapper
 
@@ -237,7 +259,7 @@ def report_write_key_on_error(func):
     """
 
     @wraps(func)
-    def func_wrapper(*args, **kwargs):
+    async def func_wrapper(*args, **kwargs):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
@@ -249,7 +271,7 @@ def report_write_key_on_error(func):
             msg = "No element found in args."
             raise ValueError(msg)
         try:
-            return func(*args, **kwargs)
+            return await func(*args, **kwargs)
         except Exception as e:
             path = _get_display_path(store)
             add_key_note(e, store, path, key, "writ")

@@ -185,7 +185,7 @@ async def read_basic_zarr(
             )
         )
     elif isinstance(elem, ZarrArray):
-        return zarr.read_dataset(elem)  # TODO: Handle legacy
+        return await zarr.read_dataset(elem)  # TODO: Handle legacy
 
 
 ###########

@@ -54,7 +54,7 @@ class _ReadDaskInternal(Protocol[SCon]):
 
 
 class Read(Protocol[SCon, CovariantRWAble]):
-    def __call__(self, elem: SCon) -> CovariantRWAble:
+    async def __call__(self, elem: SCon) -> CovariantRWAble:
         """Low-level reading function for an element.
 
         Parameters
