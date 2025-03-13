@@ -140,14 +140,10 @@ class H5ADWriteSuite:
     param_names = ["input_data"]
     write_func_str = "write_h5ad"
 
-    @property
-    def read_func(self):
-        return anndata.read_h5ad
-
     def setup(self, input_data: str):
         mem_recording, adata = memory_usage(
             (
-                sedate(self.read_func, 0.005),
+                sedate(anndata.read_h5ad, 0.005),
                 (pooch.retrieve(self._urls[input_data], known_hash=None),),
             ),
             retval=True,
@@ -156,9 +152,7 @@ class H5ADWriteSuite:
         self.adata = adata
         self.base_size = mem_recording[-1] - mem_recording[0]
         self.tmpdir = tempfile.TemporaryDirectory()
-        self.writepth = Path(self.tmpdir.name) / (
-            "out.h5ad" if self.write_func_str == "write_h5ad" else "out.zarr"
-        )
+        self.writepth = Path(self.tmpdir.name) / "out.h5ad"
 
     def teardown(self, *_):
         self.tmpdir.cleanup()
@@ -193,9 +187,23 @@ class H5ADWriteSuite:
 class ZarrWriteSizeSuite(H5ADWriteSuite):
     write_func_str = "write_zarr"
 
-    @property
-    def read_func(self):
-        return anndata.read_zarr
+    def setup(self, input_data: str):
+        h5_path = Path(pooch.retrieve(self._urls[input_data], known_hash=None))
+        zarr_path = h5_path.with_suffix(".zarr")
+        anndata.read_h5ad(h5_path).write_zarr(zarr_path)
+
+        mem_recording, adata = memory_usage(
+            (
+                sedate(anndata.read_h5ad, 0.005),
+                (zarr_path,),
+            ),
+            retval=True,
+            interval=0.001,
+        )
+        self.adata = adata
+        self.base_size = mem_recording[-1] - mem_recording[0]
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.writepth = Path(self.tmpdir.name) / "out.zarr"
 
 
 class BackedH5ADWriteSuite(H5ADWriteSuite):
@@ -212,6 +220,4 @@ class BackedH5ADWriteSuite(H5ADWriteSuite):
         self.adata = adata
         self.base_size = mem_recording[-1] - mem_recording[0]
         self.tmpdir = tempfile.TemporaryDirectory()
-        self.writepth = Path(self.tmpdir.name) / (
-            "out.h5ad" if self.write_func_str == "write_h5ad" else "out.zarr"
-        )
+        self.writepth = Path(self.tmpdir.name) / "out.h5ad"
