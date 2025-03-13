@@ -102,7 +102,7 @@ test = [
     "pytest-mock",
     "anndata[dask]",
 ]
-dev-test = [ "pytest-xdist" ] # local test speedups
+dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -120,6 +120,9 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
+concurrency = [ "multiprocessing" ]
+parallel = "true"
+
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
@@ -139,8 +142,8 @@ addopts = [
     "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
-    # all `ignore::anndata.*` entries are in `conftest.py`
-    # See: https://github.com/pytest-dev/pytest-cov/issues/437
+    "ignore::anndata._warnings.OldFormatWarning",
+    "ignore::anndata._warnings.ExperimentalFeatureWarning",
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
