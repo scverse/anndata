@@ -205,6 +205,15 @@ class ZarrWriteSizeSuite(H5ADWriteSuite):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.writepth = Path(self.tmpdir.name) / "out.zarr"
 
+    def track_peakmem_write_compressed(self, *_):
+        return get_peak_mem(
+            (
+                sedate((anndata.read_zarr, self.write_func_str)),
+                (self.writepth,),
+                {"compression": "gzip"},
+            )
+        )
+
 
 class BackedH5ADWriteSuite(H5ADWriteSuite):
     def setup(self, input_data):
