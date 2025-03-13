@@ -44,10 +44,14 @@ def _normalize_index(
     | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
-    if not isinstance(index, pd.RangeIndex):
-        msg = "Don’t call _normalize_index with non-categorical/string names"
-        assert index.dtype != float, msg
-        assert index.dtype != int, msg
+    from ..experimental.backed._compat import DataArray
+
+    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    if not isinstance(index, pd.RangeIndex) and (
+        index.dtype == float or index.dtype == int
+    ):
+        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
+        raise TypeError(msg)
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
@@ -110,8 +114,12 @@ def _normalize_index(
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
+    elif isinstance(indexer, DataArray):
+        if isinstance(indexer.data, DaskArray):
+            return indexer.data.compute()
+        return indexer.data
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError(msg)
+    raise IndexError()
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
