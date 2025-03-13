@@ -126,6 +126,8 @@ qualname_overrides = {
         for cls in "Layers AxisArrays PairwiseArrays".split()
         for kind in ["", "View"]
     },
+    "anndata._types.ReadAsyncCallback": "anndata.experimental.ReadAsyncCallback",
+    "anndata._types.WriteAsyncCallback": "anndata.experimental.WriteAsyncCallback",
     "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",

@@ -145,7 +145,7 @@ class Write(Protocol[ContravariantRWAble]):
 
 
 class ReadCallback(Protocol[SCo, InvariantRWAble]):
-    async def __call__(
+    def __call__(
         self,
         /,
         read_func: Read[SCo, InvariantRWAble],
