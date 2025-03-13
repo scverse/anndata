@@ -194,7 +194,7 @@ class ZarrWriteSizeSuite(H5ADWriteSuite):
 
         mem_recording, adata = memory_usage(
             (
-                sedate(anndata.read_h5ad, 0.005),
+                sedate(anndata.read_zarr, 0.005),
                 (zarr_path,),
             ),
             retval=True,
@@ -210,7 +210,7 @@ class BackedH5ADWriteSuite(H5ADWriteSuite):
     def setup(self, input_data):
         mem_recording, adata = memory_usage(
             (
-                sedate(self.read_func, 0.005),
+                sedate(anndata.read_h5ad, 0.005),
                 (pooch.retrieve(self._urls[input_data], known_hash=None),),
                 {"backed": "r"},
             ),
