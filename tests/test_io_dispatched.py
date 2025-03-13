@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import TYPE_CHECKING
 
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_read_dispatched_w_regex(tmp_path: Path):
+async def test_read_dispatched_w_regex(tmp_path: Path):
     async def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata":
             return await func(elem)
@@ -36,12 +35,12 @@ def test_read_dispatched_w_regex(tmp_path: Path):
         z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
-    actual = asyncio.run(read_dispatched(z, read_only_axis_dfs))
+    actual = await read_dispatched(z, read_only_axis_dfs)
 
     assert_equal(expected, actual)
 
 
-def test_read_dispatched_dask(tmp_path: Path):
+async def test_read_dispatched_dask(tmp_path: Path):
     import dask.array as da
 
     async def read_as_dask_array(func, elem_name: str, elem, iospec):
@@ -65,7 +64,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
-    dask_adata = asyncio.run(read_dispatched(z, read_as_dask_array))
+    dask_adata = await read_dispatched(z, read_as_dask_array)
 
     assert isinstance(dask_adata.layers["array"], da.Array)
     assert isinstance(dask_adata.obsm["array"], da.Array)
@@ -77,7 +76,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     assert_equal(expected, actual)
 
 
-def test_read_dispatched_null_case(tmp_path: Path):
+async def test_read_dispatched_null_case(tmp_path: Path):
     adata = gen_adata((100, 100))
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
@@ -89,12 +88,12 @@ def test_read_dispatched_null_case(tmp_path: Path):
     async def callback(_, __, x, **___):
         return await ad.io.read_elem_async(x)
 
-    actual = asyncio.run(read_dispatched(z, callback))
+    actual = await read_dispatched(z, callback)
 
     assert_equal(expected, actual)
 
 
-def test_write_dispatched_chunks(tmp_path: Path):
+async def test_write_dispatched_chunks(tmp_path: Path):
     from itertools import chain, repeat
 
     def determine_chunks(elem_shape, specified_chunks):
@@ -141,7 +140,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     z = open_write_group(tmp_path)
 
-    asyncio.run(write_dispatched(z, "/", adata, callback=write_chunked))
+    await write_dispatched(z, "/", adata, callback=write_chunked)
 
     def check_chunking(k: str, v: ZarrGroup | zarr.Array):
         if (
@@ -172,7 +171,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         visititems(z, check_chunking)
 
 
-def test_io_dispatched_keys(tmp_path: Path):
+async def test_io_dispatched_keys(tmp_path: Path):
     h5ad_write_keys = []
     zarr_write_keys = []
     h5ad_read_keys = []
@@ -202,12 +201,12 @@ def test_io_dispatched_keys(tmp_path: Path):
     adata = gen_adata((50, 100))
 
     with h5py.File(h5ad_path, "w") as f:
-        asyncio.run(write_dispatched(f, "/", adata, callback=h5ad_writer))
-        _ = asyncio.run(read_dispatched(f, h5ad_reader))
+        await write_dispatched(f, "/", adata, callback=h5ad_writer)
+        _ = await read_dispatched(f, h5ad_reader)
 
     f = open_write_group(zarr_path)
-    asyncio.run(write_dispatched(f, "/", adata, callback=zarr_writer))
-    _ = asyncio.run(read_dispatched(f, zarr_reader))
+    await write_dispatched(f, "/", adata, callback=zarr_writer)
+    _ = await read_dispatched(f, zarr_reader)
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
     assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)

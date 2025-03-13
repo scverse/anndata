@@ -136,6 +136,7 @@ addopts = [
     "--pyargs",
     "-ptesting.anndata._pytest",
 ]
+asyncio_mode = "auto"
 filterwarnings = [
     # all `ignore::anndata.*` entries are in `conftest.py`
     # See: https://github.com/pytest-dev/pytest-cov/issues/437
