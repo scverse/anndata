@@ -4,7 +4,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from .._io.specs import IOSpec, read_elem_lazy
-from .._types import Read, ReadAsync, ReadCallback, StorageType, WriteCallback
+from .._types import Read, ReadAsync, ReadCallback, StorageType, Write, WriteCallback
 from ..utils import module_get_attr_redirect
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_lazy
