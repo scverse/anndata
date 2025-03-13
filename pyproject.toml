@@ -79,9 +79,11 @@ doc = [
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
     # for unreleased changes
-    "anndata[dev-doc]",
+    "anndata[dev-doc,dask]",
+    "awkward>=2.3",
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+test-full = [ "anndata[test,lazy]" ]
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
@@ -104,6 +106,8 @@ dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
+# requests and aiohttp needed for zarr v2 remote data
+lazy = [ "xarray>=2024.06.0", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
