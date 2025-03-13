@@ -155,7 +155,9 @@ Types used by the former:
    experimental.Read
    experimental.Write
    experimental.ReadCallback
+   experimental.ReadAsyncCallback
    experimental.WriteCallback
+   experimental.WriteAsyncCallback
    experimental.StorageType
    experimental.backed._lazy_arrays.MaskedArray
    experimental.backed._lazy_arrays.CategoricalArray
