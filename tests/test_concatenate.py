@@ -1447,7 +1447,10 @@ def test_concat_outer_aligned_mapping(elem, axis):
     concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis)
 
     mask = getattr(concated, axis)["group"] == "b"
-    result = getattr(concated[(mask, slice(None)) if axis == "obs" else (slice(None), mask)], f"{axis}m")[elem]
+    result = getattr(
+        concated[(mask, slice(None)) if axis == "obs" else (slice(None), mask)],
+        f"{axis}m",
+    )[elem]
 
     check_filled_like(result, elem_name=f"{axis}m/{elem}")
 

@@ -858,7 +858,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
         )
 
 
-def inner_concat_aligned_mapping(mappings, *, reindexers=None, index=None, axis=0, concat_axis=None):
+def inner_concat_aligned_mapping(
+    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None
+):
     if concat_axis is None:
         concat_axis = axis
     result = {}
@@ -866,7 +868,9 @@ def inner_concat_aligned_mapping(mappings, *, reindexers=None, index=None, axis=
     for k in intersect_keys(mappings):
         els = [m[k] for m in mappings]
         if reindexers is None:
-            cur_reindexers = gen_inner_reindexers(els, new_index=index, axis=concat_axis)
+            cur_reindexers = gen_inner_reindexers(
+                els, new_index=index, axis=concat_axis
+            )
         else:
             cur_reindexers = reindexers
 
@@ -976,7 +980,9 @@ def outer_concat_aligned_mapping(
     for k in union_keys(mappings):
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
-            cur_reindexers = gen_outer_reindexers(els, ns, new_index=index, axis=concat_axis)
+            cur_reindexers = gen_outer_reindexers(
+                els, ns, new_index=index, axis=concat_axis
+            )
         else:
             cur_reindexers = reindexers
 
@@ -1377,7 +1383,10 @@ def concat(
         [a.layers for a in adatas], axis=axis, reindexers=reindexers
     )
     concat_mapping = concat_aligned_mapping(
-        [getattr(a, f"{axis_name}m") for a in adatas], axis=axis, concat_axis=0, index=concat_indices
+        [getattr(a, f"{axis_name}m") for a in adatas],
+        axis=axis,
+        concat_axis=0,
+        index=concat_indices,
     )
     if pairwise:
         concat_pairwise = concat_pairwise_mapping(
