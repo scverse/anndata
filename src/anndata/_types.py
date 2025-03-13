@@ -120,7 +120,7 @@ class _WriteInternal(Protocol[ContravariantRWAble]):
 
 
 class Write(Protocol[ContravariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         f: StorageType,
         k: str,
