@@ -210,7 +210,7 @@ class ZarrWriteSizeSuite(H5ADWriteSuite):
     def track_peakmem_write_compressed(self, *_):
         return get_peak_mem(
             (
-                sedate(anndata.write_zarr),
+                sedate(getattr(self.adata, "write_zarr")),
                 (self.writepth,),
                 {"compression": "gzip"},
             )
