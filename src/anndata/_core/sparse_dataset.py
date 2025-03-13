@@ -668,7 +668,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
         mtx = format_class(self.shape, dtype=self.dtype)
         mtx.indptr = self._indptr
-        if isinstance(self._data, ZarrArray):
+        if isinstance(self._data, ZarrArray) and not is_zarr_v2():
             await asyncio.gather(
                 *(
                     self.set_memory_async_from_zarr(mtx, attr)
