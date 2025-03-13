@@ -249,7 +249,7 @@ def read_h5ad(
         mode = backed
         if mode is True:
             mode = "r+"
-        assert mode in {"r", "r+"}
+        assert mode in {"r", "r+"}, mode
         return asyncio.run(read_h5ad_backed(filename, mode))
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):

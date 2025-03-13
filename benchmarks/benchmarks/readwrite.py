@@ -52,7 +52,7 @@ class TestSuite:
     params = _urls.keys()
     param_names = ["input_data"]
     filepath: Path
-    read_func: Callable[[str], anndata.AnnData]
+    read_func: Callable[[Path | str], anndata.AnnData]
 
     def setup(self, input_data: str):
         self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
