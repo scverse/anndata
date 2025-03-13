@@ -11,7 +11,7 @@ from ._io.read import (
     read_text,
     read_umi_tools,
 )
-from ._io.specs import read_elem, read_elem_async, write_elem
+from ._io.specs import read_elem, read_elem_async, write_elem, write_elem_async
 from ._io.write import write_csvs, write_loom
 from ._io.zarr import read_zarr, write_zarr
 
@@ -30,6 +30,7 @@ __all__ = [
     "write_loom",
     "write_zarr",
     "write_elem",
+    "write_elem_async",
     "read_elem",
     "read_elem_async",
     "sparse_dataset",
