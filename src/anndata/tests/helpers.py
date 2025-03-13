@@ -4,11 +4,10 @@ import itertools
 import random
 import re
 import warnings
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
-from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -160,7 +159,7 @@ def gen_random_column(
         )
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
-        array = np.array(np.random.choice(letters, n), dtype=dtype)
+        array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
         array[np.random.randint(0, 2, size=n, dtype=bool)] = pd.NA
         return "string", array
     # if issubdtype(dtype, pd.DatetimeTZDtype):
@@ -1096,49 +1095,85 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if find_spec("zarr") or TYPE_CHECKING:
-    if is_zarr_v2():
-        from zarr.storage import DirectoryStore as LocalStore
-    else:
-        from zarr.storage import LocalStore
-
+if is_zarr_v2():
+    from zarr.storage import DirectoryStore as LocalStore
 else:
-
-    class LocalStore:
-        def __init__(self, *_args, **_kwargs) -> None:
-            cls_name = type(self).__name__
-            msg = f"zarr must be imported to create a {cls_name} instance."
-            raise ImportError(msg)
+    from zarr.storage import LocalStore
 
 
 class AccessTrackingStoreBase(LocalStore):
     _access_count: Counter[str]
-    _accessed_keys: dict[str, list[str]]
+    _accessed: defaultdict[str, set]
+    _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
-        self._accessed_keys = {}
+        self._accessed = defaultdict(set)
+        self._accessed_keys = defaultdict(list)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
+                self._accessed[tracked].add(key)
                 self._accessed_keys[tracked] += [key]
 
     def get_access_count(self, key: str) -> int:
+        # access defaultdict when value is not there causes key to be there,
+        # which causes it to be tracked
+        if key not in self._access_count:
+            msg = f"{key} not found among access count"
+            raise KeyError(msg)
         return self._access_count[key]
 
+    def get_subkeys_accessed(self, key: str) -> set[str]:
+        if key not in self._accessed:
+            msg = f"{key} not found among accessed"
+            raise KeyError(msg)
+        return self._accessed[key]
+
     def get_accessed_keys(self, key: str) -> list[str]:
+        if key not in self._accessed_keys:
+            msg = f"{key} not found among accessed keys"
+            raise KeyError(msg)
         return self._accessed_keys[key]
 
     def initialize_key_trackers(self, keys_to_track: Iterable[str]) -> None:
         for k in keys_to_track:
             self._access_count[k] = 0
             self._accessed_keys[k] = []
+            self._accessed[k] = set()
 
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
+
+    def assert_access_count(self, key: str, count: int):
+        keys_accessed = self.get_subkeys_accessed(key)
+        access_count = self.get_access_count(key)
+        assert self.get_access_count(key) == count, (
+            f"Found {access_count} accesses at {keys_accessed}"
+        )
+
+
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 if is_zarr_v2():

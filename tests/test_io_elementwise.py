@@ -30,7 +30,7 @@ from anndata.compat import (
     _read_attr,
     is_zarr_v2,
 )
-from anndata.experimental import read_elem_as_dask
+from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
     as_cupy,
@@ -298,7 +298,7 @@ def test_dask_write_sparse(sparse_format, store):
 
 def test_read_lazy_2d_dask(sparse_format, store):
     arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -337,7 +337,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+    X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
@@ -355,7 +355,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
     with h5py.File(tmp_path / "test.h5", "w") as file:
         store = file["/"]
         arr_store = create_sparse_store(sparse_format, store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+        X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
     with (
         dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
@@ -367,7 +367,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
 def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
     shape = (3000, 50)
     arr_store = create_dense_store(store, shape=shape)
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
     assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
     assert X_dask_from_disk.shape == shape
 
@@ -398,10 +398,10 @@ def test_read_lazy_2d_chunk_kwargs(
 ):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     else:
         arr_store = create_sparse_store(arr_type, store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     assert X_dask_from_disk.chunksize == expected_chunksize
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -415,9 +415,9 @@ def test_read_lazy_bad_chunk_kwargs(tmp_path):
         with pytest.raises(
             ValueError, match=r"`chunks` must be a tuple of two integers"
         ):
-            read_elem_as_dask(arr_store["X"], chunks=(SIZE,))
+            read_elem_lazy(arr_store["X"], chunks=(SIZE,))
         with pytest.raises(ValueError, match=r"Only the major axis can be chunked"):
-            read_elem_as_dask(arr_store["X"], chunks=(SIZE, 10))
+            read_elem_lazy(arr_store["X"], chunks=(SIZE, 10))
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
