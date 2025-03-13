@@ -700,15 +700,18 @@ async def write_sparse_compressed(
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
-        awaitables.append(
-            _writer.write_elem_async(
-                g,
-                attr_name,
-                attr,
-                dataset_kwargs={"dtype": dtype, **dataset_kwargs},
+        if isinstance(f, H5Group) or is_zarr_v2():
+            g.create_dataset(
+                attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
-        )
-    await asyncio.gather(*awaitables)
+        else:
+            arr = g.create_array(
+                attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
+            )
+            # see https://github.com/zarr-developers/zarr-python/discussions/2712
+            awaitables.append(arr._async_array.setitem(Ellipsis, attr[...]))
+    if len(awaitables) > 0:
+        await asyncio.gather(*awaitables)
 
 
 write_csr = partial(write_sparse_compressed, fmt="csr")

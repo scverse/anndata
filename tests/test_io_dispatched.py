@@ -210,3 +210,6 @@ async def test_io_dispatched_keys(tmp_path: Path):
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
     assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)
+    for sub_sparse_key in ["data", "indices", "indptr"]:
+        assert f"/X/{sub_sparse_key}" not in h5ad_read_keys
+        assert f"/X/{sub_sparse_key}" not in h5ad_write_keys
