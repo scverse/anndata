@@ -255,6 +255,7 @@ class Reader:
         self.registry = registry
         self.callback = callback
 
+    @report_read_key_on_error
     async def read_elem_async(
         self,
         elem: StorageType,
