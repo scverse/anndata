@@ -131,7 +131,6 @@ qualname_overrides = {
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
     "anndata._types.ReadAsync": "anndata.experimental.ReadAsync",
-    "anndata._types.WriteAsync": "anndata.experimental.WriteAsync",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
     "anndata.compat.DaskArray": "dask.array.Array",

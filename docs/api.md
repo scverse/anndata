@@ -155,7 +155,6 @@ Types used by the former:
    experimental.Read
    experimental.Write
    experimental.ReadAsync
-   experimental.WriteAsync
    experimental.ReadCallback
    experimental.WriteCallback
    experimental.StorageType
