@@ -51,21 +51,23 @@ class TestSuite:
     _urls = dict(pbmc3k=PBMC_3K_URL)
     params = _urls.keys()
     param_names = ["input_data"]
-    filepath: str
+    filepath: Path
     read_func: Callable[[str], anndata.AnnData]
 
     def setup(self, input_data: str):
-        self._download_filepath = pooch.retrieve(
-            url=self._urls[input_data], known_hash=None
-        )
+        self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
+
+
+class ZarrMixin(TestSuite):
+    def setup(self, input_data: str):
+        super().setup(input_data)
+        zarr_path = self.filepath.with_suffix(".zarr")
+        anndata.read_h5ad(self.filepath).write_zarr(self.filepath.with_suffix(".zarr"))
+        self.filepath = zarr_path
 
 
 class H5ADInMemorySizeSuite(TestSuite):
     read_func = anndata.read_h5ad
-
-    def setup(self, input_data: str):
-        super().setup(input_data)
-        self.filepath = self._download_filepath
 
     def track_in_memory_size(self, *_):
         adata = self.read_func(self.filepath)
@@ -80,14 +82,8 @@ class H5ADInMemorySizeSuite(TestSuite):
         return adata_size
 
 
-class ZarrInMemorySizeSuite(H5ADInMemorySizeSuite):
+class ZarrInMemorySizeSuite(ZarrMixin, H5ADInMemorySizeSuite):
     read_func = anndata.read_zarr
-
-    def setup(self, input_data: str):
-        super().setup(input_data)
-        zarr_path = self.filepath.with_suffix(".zarr")
-        anndata.read_h5ad(self.filepath).write_zarr(self.filepath.with_suffix(".zarr"))
-        self.filepath = zarr_path
 
 
 class H5ADReadSuite(TestSuite):
@@ -120,7 +116,7 @@ class H5ADReadSuite(TestSuite):
     #     return self.read_func(self.filepath, backed="r")
 
 
-class ZarrReadSuite(H5ADReadSuite):
+class ZarrReadSuite(ZarrMixin, H5ADReadSuite):
     read_func = anndata.read_zarr
 
 
@@ -182,7 +178,7 @@ class ZarrWriteSizeSuite(H5ADWriteSuite):
     write_func_str = "write_zarr"
 
 
-class BackedWriteSuite(H5ADWriteSuite):
+class BackedH5ADWriteSuite(H5ADWriteSuite):
     def setup(self, input_data):
         mem_recording, adata = memory_usage(
             (
@@ -199,3 +195,8 @@ class BackedWriteSuite(H5ADWriteSuite):
         self.writepth = Path(self.tmpdir.name) / (
             "out.h5ad" if self.write_func_str == "write_h5ad" else "out.zarr"
         )
+
+
+class BackedZarrWriteSuite(BackedH5ADWriteSuite):
+    read_func = anndata.read_zarr
+    write_func_str = "write_zarr"
