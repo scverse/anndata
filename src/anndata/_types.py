@@ -6,12 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .typing import RWAble
 
 if TYPE_CHECKING:
@@ -31,6 +26,7 @@ __all__ = [
     "GroupStorageType",
     "StorageType",
     "_ReadInternal",
+    "_ReadAsyncInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
 ]
@@ -52,6 +48,10 @@ class _ReadInternal(Protocol[SCon, CovariantRWAble]):
     def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
+class _ReadAsyncInternal(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
+
+
 class _ReadLazyInternal(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
@@ -59,7 +59,7 @@ class _ReadLazyInternal(Protocol[SCon]):
 
 
 class Read(Protocol[SCon, CovariantRWAble]):
-    def __call__(self, elem: SCon) -> CovariantRWAble:
+    async def __call__(self, elem: SCon) -> CovariantRWAble:
         """Low-level reading function for an element.
 
         Parameters
@@ -69,6 +69,21 @@ class Read(Protocol[SCon, CovariantRWAble]):
         Returns
         -------
         The element read from the store.
+        """
+        ...
+
+
+class ReadAsync(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon) -> CovariantRWAble:
+        """Low-level reading function for an element asynchronously.
+
+        Parameters
+        ----------
+        elem
+            The element to read from.
+        Returns
+        -------
+            The element read from the store.
         """
         ...
 
@@ -105,7 +120,7 @@ class _WriteInternal(Protocol[ContravariantRWAble]):
 
 
 class Write(Protocol[ContravariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         f: StorageType,
         k: str,
@@ -130,10 +145,10 @@ class Write(Protocol[ContravariantRWAble]):
 
 
 class ReadCallback(Protocol[SCo, InvariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         /,
-        read_func: Read[SCo, InvariantRWAble],
+        read_func: ReadAsync[SCo, InvariantRWAble],
         elem_name: str,
         elem: StorageType,
         *,
@@ -155,13 +170,13 @@ class ReadCallback(Protocol[SCo, InvariantRWAble]):
 
         Returns
         -------
-        The element read from the store.
+            The element read from the store.
         """
         ...
 
 
 class WriteCallback(Protocol[InvariantRWAble]):
-    def __call__(
+    async def __call__(
         self,
         /,
         write_func: Write[InvariantRWAble],

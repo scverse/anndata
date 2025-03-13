@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -14,7 +15,8 @@ from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
-from .specs import read_elem
+from .specs import read_elem_async
+from .specs.methods import sync_async_to_async
 from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
@@ -45,16 +47,18 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+    async def callback(func, s, k: str, elem, dataset_kwargs, iospec):
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
             and k.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
-        func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        await func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
-    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    asyncio.run(
+        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    )
     if is_zarr_v2():
         zarr.convenience.consolidate_metadata(f.store)
     else:
@@ -79,29 +83,42 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
         f = zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
-    def callback(func, elem_name: str, elem, iospec):
+    async def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(
-                **{
-                    k: read_dispatched(v, callback)
-                    for k, v in dict(elem).items()
-                    if not k.startswith("raw.")
-                }
+            args = dict(
+                await asyncio.gather(
+                    *(
+                        # This is covering up backwards compat in the anndata initializer
+                        # In most cases we should be able to call `func(elen[k])` instead
+                        sync_async_to_async(k, read_dispatched(elem[k], callback))
+                        for k in elem.keys()
+                        if not k.startswith("raw.")
+                    )
+                )
             )
+            return AnnData(**args)
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:
-            return read_dataframe(elem)
+            return await read_dataframe(elem)
         elif elem_name == "/raw":
             # Backwards compat
-            return _read_legacy_raw(f, func(elem), read_dataframe, func)
-        return func(elem)
+            return await _read_legacy_raw(
+                f, await func(elem), read_dataframe, read_elem_async
+            )
+        return await func(elem)
 
-    adata = read_dispatched(f, callback=callback)
+    adata = asyncio.run(read_dispatched(f, callback=callback))
 
     # Backwards compat (should figure out which version)
     if "raw.X" in f:
-        raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+        raw = AnnData(
+            **asyncio.run(
+                asyncio.gather(
+                    _read_legacy_raw(f, adata.raw, read_dataframe, read_elem_async)
+                )
+            )
+        )
         raw.obs_names = adata.obs_names
         adata.raw = raw
 
@@ -113,9 +130,12 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
 
 
 @report_read_key_on_error
-def read_dataset(dataset: zarr.Array):
+async def read_dataset(dataset: zarr.Array):
     """Legacy method for reading datasets without encoding_type."""
-    value = dataset[...]
+    if is_zarr_v2():
+        value = dataset[...]
+    else:
+        value = await dataset._async_array.getitem(())
     if not hasattr(value, "dtype"):
         return value
     elif isinstance(value.dtype, str):
@@ -131,7 +151,7 @@ def read_dataset(dataset: zarr.Array):
 
 
 @report_read_key_on_error
-def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
+async def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     warn(
@@ -139,18 +159,22 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         "Consider rewriting it.",
         OldFormatWarning,
     )
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    if is_zarr_v2():
+        data = dataset[...]
+    else:
+        data = await dataset._async_array.getitem(())
+    df = pd.DataFrame(_from_fixed_length_strings(data))
     df.set_index(df.columns[0], inplace=True)
     return df
 
 
 @report_read_key_on_error
-def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
+async def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
     # Fast paths
     if isinstance(group, zarr.Array):
-        return read_dataframe_legacy(group)
+        return await read_dataframe_legacy(group)
     else:
-        return read_elem(group)
+        return await read_elem_async(group)
 
 
 def open_write_group(

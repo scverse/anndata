@@ -12,6 +12,7 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
+import asyncio
 import warnings
 from abc import ABC
 from collections.abc import Iterable
@@ -586,7 +587,12 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
         if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            data[orig_data_size:] = append_data[...]
+            from .._io.specs.methods import _iter_chunks_for_copy
+
+            for chunk in _iter_chunks_for_copy(append_data, data):
+                data[(chunk.start + orig_data_size) : (chunk.stop + orig_data_size)] = (
+                    append_data[chunk]
+                )
         else:
             data[orig_data_size:] = append_data
         # indptr
@@ -598,12 +604,16 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
 
         # indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
-        indices[orig_data_size:] = append_indices
+        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+            for chunk in _iter_chunks_for_copy(append_indices, indices):
+                indices[
+                    (chunk.start + orig_data_size) : (chunk.stop + orig_data_size)
+                ] = append_indices[chunk]
+        else:
+            indices[orig_data_size:] = append_indices
 
         # Clear cached property
         for attr in ["_indptr", "_indices", "_data"]:
@@ -651,6 +661,31 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
         return mtx
+
+    async def to_memory_async(self) -> CSMatrix | CSArray:
+        format_class = get_memory_class(
+            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
+        )
+        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx.indptr = self._indptr
+        if isinstance(self._data, ZarrArray) and not is_zarr_v2():
+            await asyncio.gather(
+                *(
+                    self.set_memory_async_from_zarr(mtx, attr)
+                    for attr in ["data", "indices"]
+                )
+            )
+        else:
+            mtx.data = self._data[...]
+            mtx.indices = self._indices[...]
+        return mtx
+
+    async def set_memory_async_from_zarr(
+        self, mtx: CSMatrix | CSArray, attr: Literal["indptr", "data", "indices"]
+    ) -> None:
+        setattr(
+            mtx, attr, await getattr(self, f"_{attr}")._async_array.getitem(())
+        )  # TODO: better way to asyncify
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):

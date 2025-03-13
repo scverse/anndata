@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import typing
 import warnings
 from pathlib import Path
@@ -7,7 +8,8 @@ from typing import TYPE_CHECKING
 
 import h5py
 
-from anndata._io.specs.registry import read_elem_lazy
+from anndata._io.specs.methods import sync_async_to_async
+from anndata._io.specs.registry import read_elem_async, read_elem_lazy
 from anndata._types import AnnDataElem
 from testing.anndata._doctest import doctest_needs
 
@@ -114,7 +116,9 @@ def read_lazy(
         else:
             f = h5py.File(store, mode="r")
 
-    def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
+    async def callback(
+        func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec
+    ):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
             iter_object = (
                 dict(elem).items()
@@ -128,7 +132,15 @@ def read_lazy(
                     is not None  # need to do this instead of `k in elem` to prevent unnecessary metadata accesses
                 )
             )
-            return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
+            args = dict(
+                await asyncio.gather(
+                    *(
+                        sync_async_to_async(k, read_dispatched(v, callback=callback))
+                        for k, v in iter_object
+                    )
+                )
+            )
+            return AnnData(**args)
         elif (
             iospec.encoding_type
             in {
@@ -145,14 +157,19 @@ def read_lazy(
                 return read_elem_lazy(elem, use_range_index=not load_annotation_index)
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
-            return read_dispatched(elem, None)
+            return await read_elem_async(elem)
         elif iospec.encoding_type == "dict":
-            return {
-                k: read_dispatched(v, callback=callback) for k, v in dict(elem).items()
-            }
-        return func(elem)
+            return dict(
+                await asyncio.gather(
+                    *(
+                        sync_async_to_async(k, read_dispatched(v, callback=callback))
+                        for k, v in dict(elem).items()
+                    )
+                )
+            )
+        return await func(elem)
 
     with settings.override(check_uniqueness=load_annotation_index):
-        adata = read_dispatched(f, callback=callback)
+        adata = asyncio.run(read_dispatched(f, callback=callback))
 
     return adata
