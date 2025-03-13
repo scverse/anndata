@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        ReadAsyncCallback,
         ReadCallback,
         StorageType,
         Write,
@@ -254,7 +253,7 @@ class Reader:
     def __init__(
         self,
         registry: IORegistry,
-        callback: ReadCallback | ReadAsyncCallback | None = None,
+        callback: ReadCallback | None = None,
     ) -> None:
         self.registry = registry
         self.callback = callback

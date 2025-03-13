@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
     from anndata._types import (
         GroupStorageType,
-        ReadAsyncCallback,
+        ReadCallback,
         StorageType,
         WriteCallback,
     )
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 async def read_dispatched(
     elem: StorageType,
-    callback: ReadAsyncCallback,
+    callback: ReadCallback,
 ) -> RWAble:
     """
     Read elem, calling the callback at each sub-element.

@@ -145,37 +145,6 @@ class Write(Protocol[ContravariantRWAble]):
 
 
 class ReadCallback(Protocol[SCo, InvariantRWAble]):
-    def __call__(
-        self,
-        /,
-        read_func: Read[SCo, InvariantRWAble],
-        elem_name: str,
-        elem: StorageType,
-        *,
-        iospec: IOSpec,
-    ) -> InvariantRWAble:
-        """
-        Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
-
-        Params
-        ------
-        read_func
-            :func:`anndata.io.read_elem` function to call to read the current element given the ``iospec``.
-        elem_name
-            The key to read in from the group.
-        elem
-            The element to read from.
-        iospec
-            Internal AnnData encoding specification for the element.
-
-        Returns
-        -------
-        The element read from the store.
-        """
-        ...
-
-
-class ReadAsyncCallback(Protocol[SCo, InvariantRWAble]):
     async def __call__(
         self,
         /,
