@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
 import warnings
 from collections.abc import Mapping
@@ -8,6 +7,8 @@ from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
+
+import anyio
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._types import (
@@ -383,7 +384,7 @@ def read_elem(elem: StorageType) -> RWAble:
     elem
         The stored element.
     """
-    return asyncio.run(read_elem_async(elem))
+    return anyio.run(read_elem_async(elem))
 
 
 async def read_elem_async(elem: StorageType) -> RWAble:
@@ -504,7 +505,7 @@ def write_elem(
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
     """
-    return asyncio.run(write_elem_async(store, k, elem, dataset_kwargs=dataset_kwargs))
+    return anyio.run(write_elem_async(store, k, elem, dataset_kwargs=dataset_kwargs))
 
 
 async def write_elem_async(

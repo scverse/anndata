@@ -8,6 +8,7 @@ from functools import singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import anyio
 import numpy as np
 import pandas as pd
 from scipy.sparse import csc_matrix, csr_matrix
@@ -164,7 +165,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         else:
             return await func(elem)
 
-    return asyncio.run(read_dispatched(group, callback=callback))
+    return anyio.run(read_dispatched(group, callback=callback))
 
 
 def _df_index(df: ZarrGroup | H5Group) -> pd.Index:

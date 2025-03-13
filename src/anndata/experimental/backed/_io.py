@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import anyio
 import h5py
 
 from anndata._io.specs.methods import sync_async_to_async
@@ -170,6 +171,6 @@ def read_lazy(
         return await func(elem)
 
     with settings.override(check_uniqueness=load_annotation_index):
-        adata = asyncio.run(read_dispatched(f, callback=callback))
+        adata = anyio.run(read_dispatched(f, callback=callback))
 
     return adata
