@@ -140,7 +140,10 @@ class H5ADWriteSuite:
     _urls = dict(pbmc3k=PBMC_3K_URL)
     params = _urls.keys()
     param_names = ["input_data"]
-    write_func_str = "write_h5ad"
+
+    @property
+    def write_func(self):
+        return anndata.write_h5ad
 
     def setup(self, input_data: str):
         mem_recording, adata = memory_usage(
@@ -160,27 +163,25 @@ class H5ADWriteSuite:
         self.tmpdir.cleanup()
 
     def time_write_full(self, *_):
-        getattr(self.adata, self.write_func_str)(self.writepth, compression=None)
+        self.write_func(self.writepth, compression=None)
 
     def peakmem_write_full(self, *_):
-        getattr(self.adata, self.write_func_str)(self.writepth)
+        self.write_func(self.writepth)
 
     def track_peakmem_write_full(self, *_):
-        return get_peak_mem(
-            (sedate(getattr(self.adata, self.write_func_str)), (self.writepth,))
-        )
+        return get_peak_mem((sedate(self.write_func), (self.writepth, self.adata)))
 
     def time_write_compressed(self, *_):
-        getattr(self.adata, self.write_func_str)(self.writepth, compression="gzip")
+        self.write_func(self.adata, self.writepth, compression="gzip")
 
     def peakmem_write_compressed(self, *_):
-        getattr(self.adata, self.write_func_str)(self.writepth, compression="gzip")
+        self.write_func(self.adata, self.writepth, compression="gzip")
 
     def track_peakmem_write_compressed(self, *_):
         return get_peak_mem(
             (
-                sedate(getattr(self.adata, self.write_func_str)),
-                (self.writepth,),
+                sedate(self.write_func),
+                (self.writepth, self.adata),
                 {"compression": "gzip"},
             )
         )
@@ -188,6 +189,10 @@ class H5ADWriteSuite:
 
 class ZarrWriteSizeSuite(H5ADWriteSuite):
     write_func_str = "write_zarr"
+
+    @property
+    def write_func(self):
+        return anndata.write_zarr
 
     def setup(self, input_data: str):
         h5_path = Path(pooch.retrieve(self._urls[input_data], known_hash=None))
@@ -210,8 +215,8 @@ class ZarrWriteSizeSuite(H5ADWriteSuite):
     def track_peakmem_write_compressed(self, *_):
         return get_peak_mem(
             (
-                sedate(anndata.write_zarr, self.adata),
-                (self.writepth,),
+                sedate(self.write_func),
+                (self.writepth, self.adata),
                 {"compression": "gzip"},
             )
         )
