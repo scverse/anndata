@@ -7,6 +7,7 @@ __pycache__/
 /*cache/
 /node_modules/
 /data/
+/venv/
 
 # Distribution / packaging
 /dist/

@@ -59,6 +59,10 @@ def write_zarr(
     asyncio.run(
         write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
     )
+    if is_zarr_v2():
+        zarr.convenience.consolidate_metadata(f.store)
+    else:
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:

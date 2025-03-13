@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import scipy
 from packaging.version import Version
+from zarr import Array as ZarrArray  # noqa: F401
+from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
     from typing import Any
@@ -59,25 +61,9 @@ def is_zarr_v2() -> bool:
     return Version(zarr.__version__) < Version("3.0.0")
 
 
-if find_spec("zarr") or TYPE_CHECKING:
-    from zarr import Array as ZarrArray
-    from zarr import Group as ZarrGroup
-
-    if is_zarr_v2():
-        msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-        warn(msg, DeprecationWarning)
-
-else:
-
-    class ZarrArray:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.Array"
-
-    class ZarrGroup:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.Group"
+if is_zarr_v2():
+    msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
+    warn(msg, DeprecationWarning)
 
 
 if find_spec("awkward") or TYPE_CHECKING:

@@ -1173,7 +1173,7 @@ def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
-    arr = pd.array(values, dtype="string")
+    arr = pd.array(values, dtype=pd.StringDtype())
     arr[mask] = pd.NA
     return arr
 
