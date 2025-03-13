@@ -20,11 +20,6 @@ def archive_dir(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 def test_backwards_compat_files(archive_dir):
     with pytest.warns(ad.OldFormatWarning):
         from_h5ad = ad.read_h5ad(archive_dir / "adata.h5ad")

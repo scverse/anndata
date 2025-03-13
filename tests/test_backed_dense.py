@@ -19,11 +19,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def file(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | zarr.Group:
     path = tmp_path / f"test.{diskfmt}"

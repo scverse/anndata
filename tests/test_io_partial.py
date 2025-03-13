@@ -10,6 +10,7 @@ import pytest
 import zarr
 from scipy.sparse import csr_matrix
 
+import anndata
 from anndata import AnnData
 from anndata._io.specs.registry import read_elem_partial
 from anndata.io import read_elem, write_h5ad, write_zarr
@@ -22,16 +23,15 @@ READER = dict(h5ad=h5py.File, zarr=zarr.open)
 
 
 @pytest.mark.parametrize("typ", [np.asarray, csr_matrix])
-@pytest.mark.parametrize("accessor", ["h5ad", "zarr"])
-def test_read_partial_X(tmp_path, typ, accessor):
+def test_read_partial_X(tmp_path, typ, diskfmt):
     adata = AnnData(X=typ(X))
 
-    path = Path(tmp_path) / ("test_tp_X." + accessor)
+    path = Path(tmp_path) / ("test_tp_X." + diskfmt)
 
-    WRITER[accessor](path, adata)
+    WRITER[diskfmt](path, adata)
 
-    store = READER[accessor](path, mode="r")
-    if accessor == "zarr":
+    store = READER[diskfmt](path, mode="r")
+    if diskfmt == "zarr":
         X_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
     else:
         # h5py doesn't allow fancy indexing across multiple dimensions
@@ -43,8 +43,7 @@ def test_read_partial_X(tmp_path, typ, accessor):
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-@pytest.mark.parametrize("accessor", ["h5ad", "zarr"])
-def test_read_partial_adata(tmp_path, accessor):
+def test_read_partial_adata(tmp_path, diskfmt):
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", message=r"Importing read_.* from `anndata` is deprecated"
@@ -52,18 +51,23 @@ def test_read_partial_adata(tmp_path, accessor):
         import scanpy as sc
 
     adata = sc.datasets.pbmc68k_reduced()
+    # zarr v3 can't write recarray
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    if anndata.settings.zarr_write_format == 3 and isinstance(adata, AnnData):
+        del adata.uns["rank_genes_groups"]["scores"]
+        del adata.uns["rank_genes_groups"]["names"]
 
-    path = Path(tmp_path) / ("test_rp." + accessor)
+    path = Path(tmp_path) / ("test_rp." + diskfmt)
 
-    WRITER[accessor](path, adata)
+    WRITER[diskfmt](path, adata)
 
-    storage = READER[accessor](path, mode="r")
+    storage = READER[diskfmt](path, mode="r")
 
     obs_idx = [1, 2]
     var_idx = [0, 3]
     adata_sbs = adata[obs_idx, var_idx]
 
-    if accessor == "zarr":
+    if diskfmt == "zarr":
         part = read_elem_partial(storage["X"], indices=(obs_idx, var_idx))
     else:
         # h5py doesn't allow fancy indexing across multiple dimensions
