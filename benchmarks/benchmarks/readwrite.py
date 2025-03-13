@@ -55,19 +55,27 @@ class TestSuite:
     read_func: Callable[[Path | str], anndata.AnnData]
 
     def setup(self, input_data: str):
-        self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
+        self.filepath = Path(
+            pooch.retrieve(url=self._urls[input_data], known_hash=None)
+        )
 
 
 class ZarrMixin(TestSuite):
     def setup(self, input_data: str):
         super().setup(input_data)
         zarr_path = self.filepath.with_suffix(".zarr")
-        anndata.read_h5ad(self.filepath).write_zarr(self.filepath.with_suffix(".zarr"))
+        anndata.read_h5ad(self.filepath).write_zarr(zarr_path)
         self.filepath = zarr_path
+
+    @property
+    def read_func(self):
+        return anndata.read_zarr
 
 
 class H5ADInMemorySizeSuite(TestSuite):
-    read_func = anndata.read_h5ad
+    @property
+    def read_func(self):
+        return anndata.read_h5ad
 
     def track_in_memory_size(self, *_):
         adata = self.read_func(self.filepath)
@@ -83,11 +91,15 @@ class H5ADInMemorySizeSuite(TestSuite):
 
 
 class ZarrInMemorySizeSuite(ZarrMixin, H5ADInMemorySizeSuite):
-    read_func = anndata.read_zarr
+    @property
+    def read_func(self):
+        return anndata.read_zarr
 
 
 class H5ADReadSuite(TestSuite):
-    read_func = anndata.read_h5ad
+    @property
+    def read_func(self):
+        return anndata.read_h5ad
 
     def time_read_full(self, *_):
         self.read_func(self.filepath)
@@ -117,15 +129,20 @@ class H5ADReadSuite(TestSuite):
 
 
 class ZarrReadSuite(ZarrMixin, H5ADReadSuite):
-    read_func = anndata.read_zarr
+    @property
+    def read_func(self):
+        return anndata.read_zarr
 
 
 class H5ADWriteSuite:
     _urls = dict(pbmc3k=PBMC_3K_URL)
     params = _urls.keys()
     param_names = ["input_data"]
-    read_func = anndata.read_h5ad
     write_func_str = "write_h5ad"
+
+    @property
+    def read_func(self):
+        return anndata.read_h5ad
 
     def setup(self, input_data: str):
         mem_recording, adata = memory_usage(
@@ -174,8 +191,11 @@ class H5ADWriteSuite:
 
 
 class ZarrWriteSizeSuite(H5ADWriteSuite):
-    read_func = anndata.read_zarr
     write_func_str = "write_zarr"
+
+    @property
+    def read_func(self):
+        return anndata.read_zarr
 
 
 class BackedH5ADWriteSuite(H5ADWriteSuite):
@@ -195,8 +215,3 @@ class BackedH5ADWriteSuite(H5ADWriteSuite):
         self.writepth = Path(self.tmpdir.name) / (
             "out.h5ad" if self.write_func_str == "write_h5ad" else "out.zarr"
         )
-
-
-class BackedZarrWriteSuite(BackedH5ADWriteSuite):
-    read_func = anndata.read_zarr
-    write_func_str = "write_zarr"
