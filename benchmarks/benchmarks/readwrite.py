@@ -120,12 +120,14 @@ class H5ADReadSuite(TestSuite):
         print(base_size)
         return (np.max(mem_recording) - np.min(mem_recording)) / base_size
 
-    def peakmem_read_backed(self, *_):
-        self.read_func(self.filepath, backed="r")
-
     # causes benchmarking to break from: https://github.com/pympler/pympler/issues/151
     # def mem_read_backed_object(self, *_):
     #     return self.read_func(self.filepath, backed="r")
+
+
+class BackedH5ADSuite(TestSuite):
+    def peakmem_read_backed(self, *_):
+        anndata.read_h5ad(self.filepath, backed="r")
 
 
 class ZarrReadSuite(ZarrMixin, H5ADReadSuite):
