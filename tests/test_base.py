@@ -140,6 +140,13 @@ def test_create_from_sparse_df():
     assert issparse(a.X)
 
 
+def test_create_df_from_np():
+    s = sp.random(20, 30, density=0.2, format="csr")
+    x = np.random.random((20, 10))
+    a = AnnData(X=s, obs=x)
+    assert (a.obs.to_numpy() == x).all()
+
+
 def test_create_from_df_with_obs_and_var():
     df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
     obs = pd.DataFrame(np.ones((3, 1)), index=df.index, columns=["C"])
