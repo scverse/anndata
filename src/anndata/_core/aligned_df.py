@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_string_dtype
 
@@ -13,6 +14,10 @@ from .._warnings import ImplicitModificationWarning
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import Any, Literal
+
+
+def mk_index(l: int) -> pd.Index:
+    return pd.RangeIndex(0, l, name=None).astype(str)
 
 
 @singledispatch
@@ -24,8 +29,25 @@ def _gen_dataframe(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ) -> pd.DataFrame:  # pragma: no cover
+    if isinstance(anno, np.ndarray):
+        return _default_to_dataframe(anno, source=source, attr=attr, length=length)
     msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
     raise ValueError(msg)
+
+
+def _default_to_dataframe(
+    anno: Any,
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+) -> pd.DataFrame:  # pragma: no cover
+    df = pd.DataFrame(
+        anno,
+        index=None if length is None else mk_index(length),
+        columns=None if len(anno) else [],
+    )
+    return _handle_index(df, source=source, attr=attr, length=length)
 
 
 @_gen_dataframe.register(Mapping)
@@ -41,9 +63,6 @@ def _gen_dataframe_mapping(
     if anno is None or len(anno) == 0:
         anno = {}
 
-    def mk_index(l: int) -> pd.Index:
-        return pd.RangeIndex(0, l, name=None).astype(str)
-
     for index_name in index_names:
         if index_name not in anno:
             continue
@@ -52,14 +71,17 @@ def _gen_dataframe_mapping(
             index=anno[index_name],
             columns=[k for k in anno.keys() if k != index_name],
         )
-        break
-    else:
-        df = pd.DataFrame(
-            anno,
-            index=None if length is None else mk_index(length),
-            columns=None if len(anno) else [],
-        )
+        return _handle_index(df, source=source, attr=attr, length=length)
+    return _default_to_dataframe(anno, source=source, attr=attr, length=length)
 
+
+def _handle_index(
+    df: pd.DataFrame,
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+) -> pd.DataFrame:
     if length is None:
         df.index = mk_index(len(df))
     elif length != len(df):
