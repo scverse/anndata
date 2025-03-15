@@ -8,13 +8,21 @@ from warnings import warn
 import h5py
 from packaging.version import Version
 
-from .._core.sparse_dataset import BaseCompressedSparseDataset
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
 
-    from .._types import ContravariantRWAble, StorageType, _WriteInternal
+    import numpy as np
+
+    from anndata._types import GroupStorageType
+
+    from .._core.sparse_dataset import BaseCompressedSparseDataset
+    from .._types import (
+        ArrayStorageType,
+        ContravariantRWAble,
+        StorageType,
+        _WriteInternal,
+    )
     from ..compat import H5Group, ZarrGroup
     from .specs.registry import Writer
 
@@ -162,6 +170,8 @@ class AnnDataReadError(OSError):
 
 
 def _get_display_path(store: Storage) -> str:
+    from .._core.sparse_dataset import BaseCompressedSparseDataset
+
     """Return an absolute path of an element (always starts with “/”)."""
     if isinstance(store, BaseCompressedSparseDataset):
         store = store.group
@@ -312,3 +322,19 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
             func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
 
     return func_wrapper
+
+
+async def index_array(elem: ArrayStorageType | np.ndarray, selection) -> np.ndarray:
+    from ..compat import ZarrAsyncArray
+
+    if isinstance(elem, ZarrAsyncArray):
+        return await elem.getitem(selection)
+    return elem[selection]
+
+
+async def get(elem: GroupStorageType, key) -> ArrayStorageType | GroupStorageType:
+    from ..compat import ZarrAsyncGroup
+
+    if isinstance(elem, ZarrAsyncGroup):
+        return await elem.get(key)
+    return elem[key]

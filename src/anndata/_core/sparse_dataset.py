@@ -12,6 +12,7 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
+import asyncio
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -28,12 +29,15 @@ import scipy.sparse as ss
 from packaging.version import Version
 
 from .. import abc
+from .._io.utils import get, index_array
 from .._settings import settings
 from ..compat import CSArray, H5Group, ZarrArray, ZarrGroup, _read_attr, is_zarr_v2
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
     from typing import Any, Literal
+
+    from anndata._types import ArrayStorageType
 
     from .._types import GroupStorageType
     from ..compat import CSMatrix, H5Array
@@ -60,6 +64,10 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+async def select_many(arr: ArrayStorageType, slices) -> np.ndarray:
+    return np.concatenate(await asyncio.gather(*[index_array(arr, s) for s in slices]))
+
+
 @dataclass
 class BackedSparseMatrix:
     """\
@@ -69,8 +77,8 @@ class BackedSparseMatrix:
     since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
-    data: GroupStorageType
-    indices: GroupStorageType
+    data: ArrayStorageType
+    indices: ArrayStorageType
     indptr: np.ndarray
     format: Literal["csr", "csc"]
     shape: tuple[int, int]
@@ -122,39 +130,45 @@ class BackedSparseMatrix:
         msg = f"Unsupported array types {type(self.data)}"
         raise ValueError(msg)
 
-    def _get_contiguous_compressed_slice(self, s: slice) -> CompressedVectors:
+    async def _get_contiguous_compressed_slice(self, s: slice) -> CompressedVectors:
         new_indptr: np.ndarray = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
 
-        new_indptr -= start
+        new_data, new_indices = await asyncio.gather(
+            index_array(self.data, slice(start, stop)),
+            index_array(self.indices, slice(start, stop)),
+        )
 
-        new_data: np.ndarray = self.data[start:stop]
-        new_indices: np.ndarray = self.indices[start:stop]
+        new_indptr -= start
 
         return CompressedVectors(new_data, new_indices, new_indptr)
 
-    def get_compressed_vectors(self, row_idxs: Iterable[int]) -> CompressedVectors:
+    async def get_compressed_vectors(
+        self, row_idxs: Iterable[int]
+    ) -> CompressedVectors:
         indptr_slices = [slice(*(self.indptr[i : i + 2])) for i in row_idxs]
         # HDF5 cannot handle out-of-order integer indexing
         if isinstance(self.data, ZarrArray):
             as_np_indptr = np.concatenate(
                 [np.arange(s.start, s.stop) for s in indptr_slices]
             )
-            data: np.ndarray = self.data[as_np_indptr]
-            indices: np.ndarray = self.indices[as_np_indptr]
+            data, indices = await asyncio.gather(
+                index_array(self.data, as_np_indptr),
+                index_array(self.indices, as_np_indptr),
+            )
         else:
-            data: np.ndarray = np.concatenate([self.data[s] for s in indptr_slices])
-            indices: np.ndarray = np.concatenate(
-                [self.indices[s] for s in indptr_slices]
+            data, indices = await asyncio.gather(
+                select_many(self.data, indptr_slices),
+                select_many(self.indices, indptr_slices),
             )
         indptr = np.array(
             list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
         )
         return CompressedVectors(data, indices, indptr)
 
-    def get_compressed_vectors_for_slices(
+    async def get_compressed_vectors_for_slices(
         self, slices: Iterable[slice]
     ) -> CompressedVectors:
         indptr_indices = [self.indptr[slice(s.start, s.stop + 1)] for s in slices]
@@ -164,11 +178,15 @@ class BackedSparseMatrix:
             indptr_int = np.concatenate(
                 [np.arange(s.start, s.stop) for s in indptr_limits]
             )
-            data: np.ndarray = self.data[indptr_int]
-            indices: np.ndarray = self.indices[indptr_int]
+            data, indices = await asyncio.gather(
+                index_array(self.data, indptr_int),
+                index_array(self.indices, indptr_int),
+            )
         else:
-            data = np.concatenate([self.data[s] for s in indptr_limits])
-            indices = np.concatenate([self.indices[s] for s in indptr_limits])
+            data, indices = await asyncio.gather(
+                select_many(self.data, indptr_limits),
+                select_many(self.indices, indptr_limits),
+            )
         # Need to track the size of the gaps in the slices to each indptr subselection
         gaps = (s1.start - s0.stop for s0, s1 in pairwise(indptr_limits))
         offsets = accumulate(chain([indptr_limits[0].start], gaps))
@@ -181,25 +199,22 @@ class BackedSparseMatrix:
         indptr = np.concatenate([start_indptr, end_indptr])
         return CompressedVectors(data, indices, indptr)
 
-    def get_compressed_vector(self, idx: int) -> CompressedVectors:
+    async def get_compressed_vector(self, idx: int) -> CompressedVectors:
         s = slice(*(self.indptr[idx : idx + 2]))
-        data: np.ndarray = self.data[s]
-        indices: np.ndarray = self.indices[s]
+        data, indices = await asyncio.gather(
+            index_array(self.data, s), index_array(self.indices, s)
+        )
         indptr: np.ndarray = [0, len(data)]
         return CompressedVectors(data, indices, indptr)
 
-    def __getitem__(self, key):
+    async def getitem(self, key):
         if isinstance(key, tuple):
             row, col = key
         else:
             row = key
             col = slice(None)
         major_index, minor_index = (row, col) if self.format == "csr" else (col, row)
-        if isinstance(minor_index, slice):
-            return self._get(major_index, minor_index)
-        return self.memory_format(
-            (self.data[...], self.indices[...], self.indptr[...])
-        )[key]
+        return await self._get(major_index, minor_index)
 
     def _gen_index(self, major_index: Any, minor_index: Any):
         return (
@@ -209,22 +224,29 @@ class BackedSparseMatrix:
         )
 
     @singledispatchmethod
-    def _get(self, major_index: Any, minor_index: slice) -> ss.csr_matrix:
-        return self.memory_format(
-            (self.data[...], self.indices[...], self.indptr[...])
-        )[self._gen_index(major_index, minor_index)]
+    async def _get(self, major_index: Any, minor_index: slice) -> CSMatrix | CSArray:
+        indices, data = await asyncio.gather(
+            index_array(self.indices, Ellipsis), index_array(self.data, Ellipsis)
+        )
+        return self.memory_format((data, indices, self.indptr))[
+            self._gen_index(major_index, minor_index)
+        ]
 
     @_get.register
-    def _get_intXslice(self, major_index: int, minor_index: slice) -> ss.csr_matrix:
+    async def _get_intXslice(
+        self, major_index: int, minor_index: slice
+    ) -> ss.csr_matrix:
         return self.memory_format(
-            self.get_compressed_vector(major_index),
+            await self.get_compressed_vector(major_index),
             shape=(1, self.minor_axis_size)
             if self.format == "csr"
             else (self.minor_axis_size, 1),
         )[self._gen_index(slice(None), minor_index)]
 
     @_get.register
-    def _get_sliceXslice(self, major_index: slice, minor_index: slice) -> ss.csr_matrix:
+    async def _get_sliceXslice(
+        self, major_index: slice, minor_index: slice
+    ) -> ss.csr_matrix:
         major_index = _fix_slice_bounds(major_index, self.shape[self.major_axis])
         minor_index = _fix_slice_bounds(minor_index, self.shape[self.minor_axis])
 
@@ -237,15 +259,15 @@ class BackedSparseMatrix:
             else (minor_index_size, major_index_size)
         )
         if out_shape[self.major_axis] == 1:
-            return self._get_intXslice(
+            return await self._get_intXslice(
                 slice_as_int(major_index, self.shape[self.major_axis]), minor_index
             )
         if major_index.step != 1:
-            return self._get_arrayXslice(
+            return await self._get_arrayXslice(
                 np.arange(*major_index.indices(self.shape[self.major_axis])),
                 minor_index,
             )
-        compressed_vectors = self._get_contiguous_compressed_slice(major_index)
+        compressed_vectors = await self._get_contiguous_compressed_slice(major_index)
         return self.memory_format(
             compressed_vectors,
             shape=(out_shape[self.major_axis], self.minor_axis_size)
@@ -254,7 +276,7 @@ class BackedSparseMatrix:
         )[self._gen_index(slice(None), minor_index)]
 
     @_get.register
-    def _get_arrayXslice(
+    async def _get_arrayXslice(
         self, major_index: Sequence | np.ndarray, minor_index: slice
     ) -> ss.csr_matrix:
         idxs = np.asarray(major_index)
@@ -271,11 +293,11 @@ class BackedSparseMatrix:
             if self.format == "csr"
             else (self.minor_axis_size, len(idxs))
         )
-        return self.memory_format(self.get_compressed_vectors(idxs), shape=out_shape)[
-            self._gen_index(slice(None), minor_index)
-        ]
+        return self.memory_format(
+            await self.get_compressed_vectors(idxs), shape=out_shape
+        )[self._gen_index(slice(None), minor_index)]
 
-    def subset_by_major_axis_mask(
+    async def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         slices = np.ma.extras._ezclump(mask)
@@ -286,9 +308,9 @@ class BackedSparseMatrix:
         # heuristic for whether slicing should be optimized
         if len(slices) > 0:
             if mean_slice_length(slices) <= 7:
-                return self.get_compressed_vectors(np.where(mask)[0])
+                return await self.get_compressed_vectors(np.where(mask)[0])
             else:
-                return self.get_compressed_vectors_for_slices(slices)
+                return await self.get_compressed_vectors_for_slices(slices)
         return [], [], [0]
 
 
@@ -370,25 +392,27 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         name = type(self).__name__.removeprefix("_")
         return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | CSMatrix | CSArray:
+    async def getitem(self, index: Index) -> float | CSMatrix | CSArray:
         indices = self._normalize_index(index)
         row, col = indices
-        mtx = self._to_backed()
+        mtx = await self._to_backed_async()
 
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
             sub = ss.csr_matrix(
-                mtx.subset_by_major_axis_mask(row), shape=(row.sum(), mtx.shape[1])
+                await mtx.subset_by_major_axis_mask(row),
+                shape=(row.sum(), mtx.shape[1]),
             )[:, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
             sub = ss.csc_matrix(
-                mtx.subset_by_major_axis_mask(col), shape=(mtx.shape[0], col.sum())
+                await mtx.subset_by_major_axis_mask(col),
+                shape=(mtx.shape[0], col.sum()),
             )[row, :]
         # read into memory data if we do not override access methods
         elif not is_sparse_indexing_overridden(self.format, row, col):
-            sub = self.to_memory()[row, col]
+            sub = await mtx.getitem((slice(None), slice(None)))[row, col]
         else:
-            sub = mtx[row, col]
+            sub = await mtx.getitem((row, col))
 
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
@@ -401,6 +425,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             return mtx_fmt(sub)
         else:
             return sub
+
+    def __getitem__(self, index: Index) -> float | CSArray:
+        return asyncio.run(self.getitem(index))
 
     def _normalize_index(
         self, index: Index | tuple[()]
@@ -526,6 +553,41 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         arr = self.group["indptr"][...]
         return arr
 
+    async def _indptr_async(self) -> np.ndarray:
+        """\
+        Other than `data` and `indices`, this is only as long as the major axis
+
+        It should therefore fit into memory, so we cache it for faster access.
+        """
+        if not hasattr(self, "_indptr_cache_async") or self._indptr_cache_async is None:
+            self._indptr_cache_async = await index_array(
+                await get(self.group, "indptr"), Ellipsis
+            )
+        return self._indptr_cache_async
+
+    async def _indices_async(self) -> ArrayStorageType:
+        """\
+        Other than `data` and `indices`, this is only as long as the major axis
+
+        It should therefore fit into memory, so we cache it for faster access.
+        """
+        if (
+            not hasattr(self, "_indices_cache_async")
+            or self._indices_cache_async is None
+        ):
+            self._indices_cache_async = await get(self.group, "indices")
+        return self._indices_cache_async
+
+    async def _data_async(self) -> ArrayStorageType:
+        """\
+        Other than `data` and `indices`, this is only as long as the major axis
+
+        It should therefore fit into memory, so we cache it for faster access.
+        """
+        if not hasattr(self, "_data_cache_async") or self._data_cache_async is None:
+            self._data_cache_async = await get(self.group, "data")
+        return self._data_cache_async
+
     @cached_property
     def _indices(self) -> H5Array | ZarrArray:
         """\
@@ -546,6 +608,19 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             data=self._data,
             indices=self._indices,
             indptr=self._indptr,
+            shape=self.shape,
+        )
+        return mtx
+
+    async def _to_backed_async(self) -> BackedSparseMatrix:
+        indptr, indices, data = await asyncio.gather(
+            self._indptr_async(), self._indices_async(), self._data_async()
+        )
+        mtx = BackedSparseMatrix(
+            format=self.format,
+            data=data,
+            indices=indices,
+            indptr=indptr,
             shape=self.shape,
         )
         return mtx
