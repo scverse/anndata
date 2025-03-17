@@ -129,6 +129,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "zarr._storage.store.BaseStore": "zarr.storage.MemoryStore",
     "anndata.compat.DaskArray": "dask.array.Array",
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",

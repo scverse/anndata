@@ -54,6 +54,8 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
+    from zarr.storage import StoreLike
+
     from ..compat import Index1D
     from ..typing import ArrayDataStructureType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -205,7 +207,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
         *,
@@ -947,7 +949,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.file.filename
 
     @filename.setter
-    def filename(self, filename: PathLike | None):
+    def filename(self, filename: PathLike[str] | str | None):
         # convert early for later comparison
         filename = None if filename is None else Path(filename)
         # change from backing-mode back to full loading into memory
@@ -1423,7 +1425,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         return AnnData(**new)
 
-    def copy(self, filename: PathLike | None = None) -> AnnData:
+    def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
             if self.is_view and self._has_X():
@@ -1787,10 +1789,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_h5ad(
         self,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | Any = None,
         as_dense: Sequence[str] = (),
+        *,
+        convert_strings_to_categoricals: bool = True,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1811,6 +1815,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ----------
         filename
             Filename of data file. Defaults to backing file.
+        convert_strings_to_categoricals
+            Convert string columns to categorical.
         compression
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
 
@@ -1865,6 +1871,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         write_h5ad(
             Path(filename),
             self,
+            convert_strings_to_categoricals=convert_strings_to_categoricals,
             compression=compression,
             compression_opts=compression_opts,
             as_dense=as_dense,
@@ -1875,7 +1882,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     write = write_h5ad  # a shortcut and backwards compat
 
-    def write_csvs(self, dirname: PathLike, skip_data: bool = True, sep: str = ","):
+    def write_csvs(
+        self, dirname: PathLike[str] | str, skip_data: bool = True, sep: str = ","
+    ):
         """\
         Write annotation to `.csv` files.
 
@@ -1895,7 +1904,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
-    def write_loom(self, filename: PathLike, write_obsm_varm: bool = False):
+    def write_loom(self, filename: PathLike[str] | str, write_obsm_varm: bool = False):
         """\
         Write `.loom`-formatted hdf5 file.
 
@@ -1910,8 +1919,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def write_zarr(
         self,
-        store: MutableMapping | PathLike,
+        store: StoreLike,
         chunks: bool | int | tuple[int, ...] | None = None,
+        *,
+        convert_strings_to_categoricals: bool = True,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1922,10 +1933,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
+        convert_strings_to_categoricals
+            Convert string columns to categorical.
         """
         from ..io import write_zarr
 
-        write_zarr(store, self, chunks=chunks)
+        write_zarr(
+            store,
+            self,
+            chunks=chunks,
+            convert_strings_to_categoricals=convert_strings_to_categoricals,
+        )
 
     def chunked_X(self, chunk_size: int | None = None):
         """\
@@ -2064,10 +2082,10 @@ def _infer_shape_for_axis(
             return elem.shape[0]
     for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
         if elem is not None:
-            elem = cast(Mapping, elem)
+            elem = cast("Mapping", elem)
             for sub_elem in elem.values():
                 if hasattr(sub_elem, "shape"):
-                    size = cast(int, sub_elem.shape[axis if id == "layers" else 0])
+                    size = cast("int", sub_elem.shape[axis if id == "layers" else 0])
                     return size
     return None
 

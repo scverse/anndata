@@ -19,6 +19,7 @@ from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from os import PathLike
 
 T = TypeVar("T")
 
@@ -31,6 +32,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_zarr`."""
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
@@ -50,7 +52,7 @@ def write_zarr(
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
 
 
-def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 

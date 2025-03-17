@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 import shutil
 from collections.abc import Mapping
 from functools import singledispatch
+from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -105,9 +105,9 @@ def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
     raise NotImplementedError(msg)
 
 
-@as_group.register(os.PathLike)
+@as_group.register(PathLike)
 @as_group.register(str)
-def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+def _(store: PathLike[str] | str, *args, **kwargs) -> ZarrGroup | H5Group:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
@@ -403,8 +403,8 @@ def _write_axis_annot(
 
 
 def concat_on_disk(
-    in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
-    out_file: str | os.PathLike,
+    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
+    out_file: PathLike[str] | str,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
