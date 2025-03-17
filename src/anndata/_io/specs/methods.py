@@ -193,7 +193,7 @@ def read_indices(group):
 
 
 def read_partial(
-    pth: PathLike,
+    pth: PathLike[str] | str,
     *,
     obs_idx=slice(None),
     var_idx=slice(None),
