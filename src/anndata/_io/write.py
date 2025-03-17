@@ -84,7 +84,8 @@ def write_csvs(
 @old_positionals("write_obsm_varm")
 def write_loom(
     filename: PathLike[str] | str, adata: AnnData, *, write_obsm_varm: bool = False
-):
+) -> None:
+    """See :meth:`~anndata.AnnData.write_loom`."""
     filename = Path(filename)
     row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
     row_names = adata.var_names

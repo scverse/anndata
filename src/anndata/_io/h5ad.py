@@ -53,6 +53,7 @@ def write_h5ad(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_h5ad`."""
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:

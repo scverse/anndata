@@ -35,6 +35,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_zarr`."""
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
