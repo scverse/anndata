@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 import scipy
 from boltons.iterutils import default_exit, remap, research
+from fast_array_utils.conv import to_dense
 from numpy import ma
 from packaging.version import Version
 from scipy import sparse
@@ -24,21 +25,32 @@ from anndata._core.index import _subset
 from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
-    BASE_MATRIX_PARAMS,
-    CUPY_MATRIX_PARAMS,
-    DASK_MATRIX_PARAMS,
     DEFAULT_COL_TYPES,
     GEN_ADATA_DASK_ARGS,
-    as_dense_dask_array,
     assert_equal,
     gen_adata,
     gen_vstr_recarray,
 )
-from anndata.utils import asarray
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any, Literal
+
+    from testing.fast_array_utils import ArrayType
+
+
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
+GPU_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Gpu and at.flags & Flags.Dask
+}
+SPARSE_GPU = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Gpu
+}
+SPARSE_GPU_DASK = SPARSE_GPU | SPARSE_DASK | GPU_DASK
+
 
 mark_legacy_concatenate = pytest.mark.filterwarnings(
     r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"
@@ -59,7 +71,7 @@ def _filled_array_np(a, fill_value=None):
 
 @filled_like.register(DaskArray)
 def _filled_array(a, fill_value=None):
-    return as_dense_dask_array(_filled_array_np(a, fill_value))
+    return as_dense_dask_array(_filled_array_np(a, fill_value))  # noqa: F821
 
 
 @filled_like.register(CSMatrix)
@@ -92,18 +104,6 @@ def make_idx_tuple(idx, axis):
     tup = [slice(None), slice(None)]
     tup[axis] = idx
     return tuple(tup)
-
-
-# Will call func(sparse_matrix) so these types should be sparse compatible
-# See array_type if only dense arrays are expected as input.
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
-def array_type(request):
-    return request.param
-
-
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
-def cpu_array_type(request):
-    return request.param
 
 
 @pytest.fixture(params=["inner", "outer"])
@@ -174,6 +174,7 @@ def test_concat_interface_errors():
 
 
 @mark_legacy_concatenate
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_DASK})
 @pytest.mark.parametrize(
     ("concat_func", "backwards_compat"),
     [
@@ -181,7 +182,9 @@ def test_concat_interface_errors():
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
     ],
 )
-def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
+def test_concatenate_roundtrip(
+    join_type, array_type: ArrayType, concat_func, backwards_compat
+) -> None:
     adata = gen_adata((100, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
 
     remaining = adata.obs_names
@@ -285,10 +288,11 @@ def test_concatenate_dense():
 
 
 @mark_legacy_concatenate
-def test_concatenate_layers(array_type, join_type):
+@pytest.mark.array_type(skip=Flags.Disk)
+def test_concatenate_layers(array_type: ArrayType, join_type) -> None:
     adatas = []
     for _ in range(5):
-        a = array_type(sparse.random(100, 200, format="csr"))
+        a = array_type(sparse.random(100, 200, format="csr").toarray())
         adatas.append(AnnData(X=a, layers={"a": a}))
 
     merged = adatas[0].concatenate(adatas[1:], join=join_type)
@@ -455,10 +459,11 @@ def test_concat_annot_join(obsm_adatas, join_type):
 
 
 @mark_legacy_concatenate
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_DASK})
 def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
     for _ in range(5):
-        a = array_type(sparse.random(100, 200, format="csr"))
+        a = array_type(sparse.random(100, 200, format="csr").toarray())
         adata = AnnData(X=a, layers={"a": a})
         adatas.append(
             adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
@@ -469,18 +474,19 @@ def test_concatenate_layers_misaligned(array_type, join_type):
 
 
 @mark_legacy_concatenate
+@pytest.mark.array_type(skip={Flags.Disk | Flags.Gpu, *SPARSE_DASK})
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
     a = AnnData(
         X=np.ones((10, 20)),
-        layers={"a": array_type(sparse.random(10, 20, format="csr"))},
+        layers={"a": array_type(sparse.random(10, 20, format="csr").toarray())},
     )
     b = AnnData(X=np.ones((10, 20)))
 
     c = a.concatenate(b, join="outer", fill_value=fill_val, batch_categories=["a", "b"])
 
     np.testing.assert_array_equal(
-        asarray(c[c.obs["batch"] == "b"].layers["a"]), fill_val
+        to_dense(c[c.obs["batch"] == "b"].layers["a"]), fill_val
     )
 
 
@@ -526,7 +532,7 @@ def test_concatenate_fill_value(fill_val):
         for k, cur_v in cur_els.items():
             orig_v = orig_els.get(k, sparse.csr_matrix((orig.n_obs, 0)))
             assert_equal(cur_v[:, : orig_v.shape[1]], orig_v)
-            np.testing.assert_equal(asarray(cur_v[:, orig_v.shape[1] :]), fill_val)
+            np.testing.assert_equal(to_dense(cur_v[:, orig_v.shape[1] :]), fill_val)
         ptr += orig.n_obs
 
 
@@ -836,7 +842,8 @@ def test_awkward_does_not_mix(join_type, other):
         concat([adata_a, adata_b], join=join_type)
 
 
-def test_pairwise_concat(axis_name, array_type):
+@pytest.mark.array_type(skip=Flags.Disk | Flags.Gpu)
+def test_pairwise_concat(axis_name, array_type: ArrayType) -> None:
     axis, axis_name = merge._resolve_axis(axis_name)
     _, alt_axis_name = merge._resolve_axis(1 - axis)
     axis_sizes = [[100, 200, 50], [50, 50, 50]]
@@ -847,7 +854,7 @@ def test_pairwise_concat(axis_name, array_type):
     alt_attr = f"{alt_axis_name}p"
 
     def gen_axis_array(m):
-        return array_type(sparse.random(m, m, format="csr", density=0.1))
+        return array_type(sparse.random(m, m, format="csr", density=0.1).toarray())
 
     adatas = {
         k: AnnData(
@@ -894,14 +901,15 @@ def test_pairwise_concat(axis_name, array_type):
     )
 
 
-def test_nan_merge(axis_name, join_type, array_type):
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_GPU_DASK})
+def test_nan_merge(axis_name, join_type, array_type: ArrayType) -> None:
     axis, _ = merge._resolve_axis(axis_name)
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
 
     arr = array_type(
-        sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
+        sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr").toarray()
     )
     arr_nan = arr.copy()
     with warnings.catch_warnings():
@@ -1161,6 +1169,7 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     assert_equal(merged, result, elem_name="uns")
 
 
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_DASK})
 def test_transposed_concat(array_type, axis_name, join_type, merge_strategy):
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
@@ -1478,16 +1487,18 @@ def test_concat_null_X():
     assert_equal(no_X, orig)
 
 
-# https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_DASK, *SPARSE_GPU})
 @pytest.mark.parametrize("sparse_indexer_type", [np.int64, np.int32])
-def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
+def test_concat_X_dtype(
+    array_type: ArrayType, sparse_indexer_type: type[np.int64 | np.int32]
+) -> None:
+    """See <https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744>"""
     adatas_orig = {
-        k: AnnData(cpu_array_type(np.ones((20, 10), dtype=np.int8)))
-        for k in list("abc")
+        k: AnnData(array_type(np.ones((20, 10), dtype=np.int8))) for k in list("abc")
     }
     for adata in adatas_orig.values():
-        adata.raw = AnnData(cpu_array_type(np.ones((20, 30), dtype=np.float64)))
-        if sparse.issparse(adata.X):
+        adata.raw = AnnData(array_type(np.ones((20, 30), dtype=np.float64)))
+        if isinstance(adata.X, CSArray | CSMatrix):
             adata.X.indptr = adata.X.indptr.astype(sparse_indexer_type)
             adata.X.indices = adata.X.indices.astype(sparse_indexer_type)
 
@@ -1495,14 +1506,14 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
 
     assert result.X.dtype == np.int8
     assert result.raw.X.dtype == np.float64
-    if sparse.issparse(result.X):
+    if isinstance(result.X, CSArray | CSMatrix):
         # https://github.com/scipy/scipy/issues/20389 was merged in 1.15 but is still an issue with matrix
         if sparse_indexer_type == np.int64 and (
             (
-                (issubclass(cpu_array_type, CSArray) or adata.X.format == "csc")
+                (issubclass(array_type.cls, CSArray) or adata.X.format == "csc")
                 and Version(scipy.__version__) < Version("1.15.0")
             )
-            or issubclass(cpu_array_type, CSMatrix)
+            or issubclass(array_type.cls, CSMatrix)
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
@@ -1518,7 +1529,8 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
 
 
 # Tests how dask plays with other types on concatenation.
-def test_concat_different_types_dask(merge_strategy, array_type):
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_GPU_DASK})
+def test_concat_different_types_dask(merge_strategy, array_type: ArrayType) -> None:
     import dask.array as da
     from scipy import sparse
 
@@ -1527,7 +1539,9 @@ def test_concat_different_types_dask(merge_strategy, array_type):
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
     ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
-    ad1_other = ad.AnnData(X=np.ones((5, 5)), varm={"a": array_type(varm_array)})
+    ad1_other = ad.AnnData(
+        X=np.ones((5, 5)), varm={"a": array_type(varm_array.toarray())}
+    )
     ad2 = ad.AnnData(X=np.zeros((5, 5)), varm={"a": da.ones(5, 20)})
 
     result1 = ad.concat([ad1, ad2], merge=merge_strategy)
@@ -1655,7 +1669,8 @@ def test_error_on_mixed_device():
         concat(p)
 
 
-def test_concat_on_var_outer_join(array_type):
+@pytest.mark.array_type(skip={Flags.Disk, *SPARSE_DASK, *GPU_DASK})
+def test_concat_on_var_outer_join(array_type: ArrayType) -> None:
     # https://github.com/scverse/anndata/issues/1286
     a = AnnData(
         obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),

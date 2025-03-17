@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData, settings
@@ -15,7 +14,6 @@ from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     DEFAULT_COL_TYPES,
     AccessTrackingStore,
-    as_dense_dask_array,
     gen_adata,
     gen_typed_df,
 )
@@ -39,15 +37,6 @@ def _write_nullable():
 def _write_nullable_():
     settings.allow_write_nullable_strings = True
     pass
-
-
-@pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
-    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
-    scope="session",
-)
-def mtx_format(request):
-    return request.param
 
 
 @pytest.fixture(

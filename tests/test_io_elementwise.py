@@ -32,13 +32,7 @@ from anndata.compat import (
 )
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import (
-    as_cupy,
-    as_cupy_sparse_dask_array,
-    as_dense_cupy_dask_array,
-    assert_equal,
-    gen_adata,
-)
+from anndata.tests.helpers import assert_equal, gen_adata
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -265,18 +259,18 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
         if isinstance(value, CSMatrix):
-            value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
+            value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])  # noqa: F821
         else:
-            value = as_dense_cupy_dask_array(value)
+            value = as_dense_cupy_dask_array(value)  # noqa: F821
     else:
-        value = as_cupy(value)
+        value = as_cupy(value)  # noqa: F821
 
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
 
     assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-    from_disk = as_cupy(read_elem(store[key]))
+    from_disk = as_cupy(read_elem(store[key]))  # noqa: F821
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 

@@ -85,14 +85,15 @@ doc = [
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-full = [ "anndata[test,lazy]" ]
 test = [
-    "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "fast-array-utils",
     "matplotlib",
     "scikit-learn",
+    "loompy>=3.0.5",
     "openpyxl",
     "joblib",
     "boltons",

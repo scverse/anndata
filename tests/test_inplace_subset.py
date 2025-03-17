@@ -1,37 +1,20 @@
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING
+
 import pytest
-from scipy import sparse
+from fast_array_utils.conv import to_dense
 
-from anndata.tests.helpers import (
-    as_dense_dask_array,
-    assert_equal,
-    gen_adata,
-)
-from anndata.utils import asarray
+from anndata.tests.helpers import assert_equal, gen_adata
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
+
+if TYPE_CHECKING:
+    from testing.fast_array_utils import ArrayType
 
 
-@pytest.fixture(
-    params=[
-        np.array,
-        sparse.csr_matrix,
-        sparse.csc_matrix,
-        sparse.csr_array,
-        sparse.csc_array,
-        as_dense_dask_array,
-    ],
-    ids=[
-        "np_array",
-        "scipy_csr",
-        "scipy_csc",
-        "scipy_csr_array",
-        "scipy_csc_array",
-        "dask_array",
-    ],
-)
-def matrix_type(request):
-    return request.param
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
 
 
 def subset_dim(adata, *, obs=slice(None), var=slice(None)):
@@ -41,16 +24,17 @@ def subset_dim(adata, *, obs=slice(None), var=slice(None)):
     return _subset(adata, (obs, var))
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 # TODO: Test values of .uns
-def test_inplace_subset_var(matrix_type, subset_func):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+def test_inplace_subset_var(array_type: ArrayType, subset_func) -> None:
+    orig = gen_adata((30, 30), X_type=array_type)
     subset_idx = subset_func(orig.var_names)
 
     modified = orig.copy()
     from_view = orig[:, subset_idx].copy()
     modified._inplace_subset_var(subset_idx)
 
-    assert_equal(asarray(from_view.X), asarray(modified.X), exact=True)
+    assert_equal(to_dense(from_view.X), to_dense(modified.X), exact=True)
     assert_equal(from_view.obs, modified.obs, exact=True)
     assert_equal(from_view.var, modified.var, exact=True)
     for k in from_view.obsm:
@@ -62,15 +46,16 @@ def test_inplace_subset_var(matrix_type, subset_func):
         assert_equal(from_view.layers[k], modified.layers[k], exact=True)
 
 
-def test_inplace_subset_obs(matrix_type, subset_func):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_inplace_subset_obs(array_type: ArrayType, subset_func) -> None:
+    orig = gen_adata((30, 30), X_type=array_type)
     subset_idx = subset_func(orig.obs_names)
 
     modified = orig.copy()
     from_view = orig[subset_idx, :].copy()
     modified._inplace_subset_obs(subset_idx)
 
-    assert_equal(asarray(from_view.X), asarray(modified.X), exact=True)
+    assert_equal(to_dense(from_view.X), to_dense(modified.X), exact=True)
     assert_equal(from_view.obs, modified.obs, exact=True)
     assert_equal(from_view.var, modified.var, exact=True)
     for k in from_view.obsm:

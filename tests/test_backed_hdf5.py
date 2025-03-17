@@ -3,22 +3,32 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
 import pytest
+from fast_array_utils.conv import to_dense
 from scipy import sparse
 
 import anndata as ad
 from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
-    as_dense_dask_array,
     assert_equal,
     gen_adata,
     subset_func,
 )
-from anndata.utils import asarray
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
+
+if TYPE_CHECKING:
+    from testing.fast_array_utils import ArrayType
+
+
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
+
 
 subset_func2 = subset_func
 
@@ -57,14 +67,6 @@ def adata():
     )
 
 
-@pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
-    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
-)
-def mtx_format(request):
-    return request.param
-
-
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
 def sparse_format(request):
     return request.param
@@ -89,12 +91,13 @@ def as_dense(request):
 @pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
-def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_read_write_X(tmp_path, array_type: ArrayType, backed_mode, as_dense):
     base_pth = Path(tmp_path)
     orig_pth = base_pth / "orig.h5ad"
     backed_pth = base_pth / "backed.h5ad"
 
-    orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
+    orig = ad.AnnData(array_type(to_dense(sparse.random(10, 10, format="csr"))))
     orig.write(orig_pth)
 
     backed = ad.read_h5ad(orig_pth, backed=backed_mode)
@@ -102,7 +105,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     backed.file.close()
 
     from_backed = ad.read_h5ad(backed_pth)
-    assert np.all(asarray(orig.X) == asarray(from_backed.X))
+    assert np.all(to_dense(orig.X) == to_dense(from_backed.X))
 
 
 # this is very similar to the views test
@@ -185,15 +188,13 @@ def test_backed_raw(tmp_path):
     assert_equal(final_adata, mem_adata)
 
 
-@pytest.mark.parametrize(
-    "array_type",
-    [
-        pytest.param(asarray, id="dense_array"),
-        pytest.param(sparse.csr_matrix, id="csr_matrix"),
-        pytest.param(sparse.csr_array, id="csr_array"),
-    ],
-)
-def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
+@pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk | Flags.Dask)
+def test_backed_raw_subset(
+    tmp_path: Path,
+    array_type: ArrayType[np.ndarray | CSMatrix | CSArray],
+    subset_func,
+    subset_func2,
+) -> None:
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10), X_type=array_type)
@@ -201,7 +202,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
     if (
-        array_type is asarray
+        array_type.cls is np.ndarray
         and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
         and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
     ):
@@ -231,15 +232,10 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
 
 
-@pytest.mark.parametrize(
-    "array_type",
-    [
-        pytest.param(asarray, id="dense_array"),
-        pytest.param(sparse.csr_matrix, id="csr_matrix"),
-        pytest.param(as_dense_dask_array, id="dask_array"),
-    ],
-)
-def test_to_memory_full(tmp_path, array_type):
+@pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk | Flags.Dask)
+def test_to_memory_full(
+    tmp_path: Path, array_type: ArrayType[np.ndarray | CSMatrix | CSArray]
+) -> None:
     backed_pth = tmp_path / "backed.h5ad"
     mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
