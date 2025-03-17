@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 from collections.abc import Mapping
@@ -26,6 +27,8 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
+from .._io.specs.methods import sync_async_to_async
+from .._io.specs.registry import read_elem_async
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
 from . import read_dispatched
 
@@ -142,19 +145,26 @@ def read_as_backed(group: ZarrGroup | H5Group):
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
     """
 
-    def callback(func, elem_name: str, elem, iospec):
+    async def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type in SPARSE_MATRIX:
             return sparse_dataset(elem)
         elif iospec.encoding_type in EAGER_TYPES:
-            return read_elem(elem)
+            return await read_elem_async(elem)
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in dict(elem).items()}
+            return dict(
+                await asyncio.gather(
+                    *(
+                        sync_async_to_async(k, read_dispatched(v, callback=callback))
+                        for k, v in dict(elem).items()
+                    )
+                )
+            )
         else:
-            return func(elem)
+            return await func(elem)
 
-    return read_dispatched(group, callback=callback)
+    return asyncio.run(read_dispatched(group, callback=callback))
 
 
 def _df_index(df: ZarrGroup | H5Group) -> pd.Index:

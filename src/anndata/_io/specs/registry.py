@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import warnings
 from collections.abc import Mapping
@@ -9,7 +10,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._types import (
+    Read,
+    ReadAsync,
+    ReadLazy,
+    _ReadAsyncInternal,
+    _ReadInternal,
+    _ReadLazyInternal,
+)
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
@@ -71,8 +79,10 @@ class IORegistryError(Exception):
 def write_spec(spec: IOSpec):
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
-            result = func(g, k, *args, **kwargs)
+        async def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
+            result = await func(g, k, *args, **kwargs)
+            if k not in g and isinstance(g, ZarrGroup) and not is_zarr_v2():
+                g.require_group(k)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
             return result
@@ -82,14 +92,13 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadLazyInternal)
-R = TypeVar("R", Read, ReadLazy)
+_R = TypeVar("_R", _ReadInternal, _ReadAsyncInternal, _ReadLazyInternal)
+R = TypeVar("R", Read, ReadAsync, ReadLazy)
 
 
 class IORegistry(Generic[_R, R]):
     def __init__(self):
         self.read: dict[tuple[type, IOSpec, frozenset[str]], _R] = {}
-        self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
         ] = {}
@@ -181,29 +190,6 @@ class IORegistry(Generic[_R, R]):
     ) -> bool:
         return (src_type, spec, modifiers) in self.read
 
-    def register_read_partial(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
-    ):
-        spec = proc_spec(spec)
-        modifiers = frozenset(modifiers)
-
-        def _register(func):
-            self.read_partial[(src_type, spec, modifiers)] = func
-            return func
-
-        return _register
-
-    def get_partial_read(
-        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
-        if (src_type, spec, modifiers) in self.read_partial:
-            return self.read_partial[(src_type, spec, modifiers)]
-        name = "read_partial"
-        raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
-
     def get_spec(self, elem: Any) -> IOSpec:
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
@@ -214,7 +200,9 @@ class IORegistry(Generic[_R, R]):
         return self.write_specs[type(elem)]
 
 
-_REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
+_REGISTRY: IORegistry[_ReadInternal | _ReadAsyncInternal, Read | ReadAsync] = (
+    IORegistry()
+)
 _LAZY_REGISTRY: IORegistry[_ReadLazyInternal, ReadLazy] = IORegistry()
 
 
@@ -263,13 +251,15 @@ def _iter_patterns(
 
 class Reader:
     def __init__(
-        self, registry: IORegistry, callback: ReadCallback | None = None
+        self,
+        registry: IORegistry,
+        callback: ReadCallback | None = None,
     ) -> None:
         self.registry = registry
         self.callback = callback
 
     @report_read_key_on_error
-    def read_elem(
+    async def read_elem_async(
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
@@ -277,12 +267,12 @@ class Reader:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: Read = self.registry.get_read(
+        read_func: ReadAsync = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is None:
-            return read_func(elem)
-        return self.callback(read_func, elem.name, elem, iospec=iospec)
+            return await read_func(elem)
+        return await self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
 class LazyReader(Reader):
@@ -333,7 +323,7 @@ class Writer:
         return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
     @report_write_key_on_error
-    def write_elem(
+    async def write_elem_async(
         self,
         store: GroupStorageType,
         k: str,
@@ -361,9 +351,7 @@ class Writer:
 
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
-                import asyncio
-
-                asyncio.run(store.store.clear())
+                await store.store.clear()
             else:
                 store.clear()
         elif k in store:
@@ -372,8 +360,8 @@ class Writer:
         write_func = self.find_write_func(dest_type, elem, modifiers)
 
         if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
+            return await write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        return await self.callback(
             write_func,
             store,
             k,
@@ -395,7 +383,22 @@ def read_elem(elem: StorageType) -> RWAble:
     elem
         The stored element.
     """
-    return Reader(_REGISTRY).read_elem(elem)
+    return asyncio.run(read_elem_async(elem))
+
+
+async def read_elem_async(elem: StorageType) -> RWAble:
+    """
+    Read an element from a store asynchronously.
+
+    Assumes that the element is encoded using the anndata encoding. This function will
+    determine the encoded type using the encoding metadata stored in elem's attributes.
+
+    Params
+    ------
+    elem
+        The stored element.
+    """
+    return await Reader(_REGISTRY).read_elem_async(elem)
 
 
 def read_elem_lazy(
@@ -501,19 +504,33 @@ def write_elem(
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
     """
-    Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
+    return asyncio.run(write_elem_async(store, k, elem, dataset_kwargs=dataset_kwargs))
 
 
-# TODO: If all items would be read, just call normal read method
-def read_elem_partial(
-    elem,
+async def write_elem_async(
+    store: GroupStorageType,
+    k: str,
+    elem: RWAble,
     *,
-    items=None,
-    indices=(slice(None), slice(None)),
-    modifiers: frozenset[str] = frozenset(),
-):
-    """Read part of an element from an on disk store."""
-    read_partial = _REGISTRY.get_partial_read(
-        type(elem), get_spec(elem), frozenset(modifiers)
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> None:
+    """
+    Write an element to a storage group using anndata encoding.
+
+    Params
+    ------
+    store
+        The group to write to.
+    k
+        The key to write to in the group. Note that absolute paths will be written
+        from the root.
+    elem
+        The element to write. Typically an in-memory object, e.g. an AnnData, pandas
+        dataframe, scipy sparse matrix, etc.
+    dataset_kwargs
+        Keyword arguments to pass to the stores dataset creation function.
+        E.g. for zarr this would be `chunks`, `compressor`.
+    """
+    return await Writer(_REGISTRY).write_elem_async(
+        store, k, elem, dataset_kwargs=dataset_kwargs
     )
-    return read_partial(elem, items=items, indices=indices)

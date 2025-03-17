@@ -154,6 +154,7 @@ Types used by the former:
    experimental.IOSpec
    experimental.Read
    experimental.Write
+   experimental.ReadAsync
    experimental.ReadCallback
    experimental.WriteCallback
    experimental.StorageType

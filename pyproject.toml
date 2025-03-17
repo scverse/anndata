@@ -87,6 +87,7 @@ test-full = [ "anndata[test,lazy]" ]
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
+    "pytest-asyncio",
     "pytest-cov",
     "pytest-randomly",
     "pytest-memray",
@@ -144,6 +145,7 @@ addopts = [
     "--pyargs",
     "-ptesting.anndata._pytest",
 ]
+asyncio_mode = "auto"
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",

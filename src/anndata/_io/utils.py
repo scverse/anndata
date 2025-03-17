@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, cast
@@ -198,25 +199,46 @@ def report_read_key_on_error(func):
     >>> z["X"] = np.array([1, 2, 3])
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
+    if inspect.iscoroutinefunction(func):
 
-    @wraps(func)
-    def func_wrapper(*args, **kwargs):
-        from anndata._io.specs import Reader
+        @wraps(func)
+        async def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import Reader
 
-        # Figure out signature (method vs function) by going through args
-        for arg in args:
-            if not isinstance(arg, Reader):
-                store = cast("Storage", arg)
-                break
-        else:
-            msg = "No element found in args."
-            raise ValueError(msg)
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            path, key = _get_display_path(store).rsplit("/", 1)
-            add_key_note(e, store, path or "/", key, "read")
-            raise
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, Reader):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
+    else:
+
+        @wraps(func)
+        def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import Reader
+
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, Reader):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
 
     return func_wrapper
 
@@ -237,7 +259,7 @@ def report_write_key_on_error(func):
     """
 
     @wraps(func)
-    def func_wrapper(*args, **kwargs):
+    async def func_wrapper(*args, **kwargs):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
@@ -249,7 +271,7 @@ def report_write_key_on_error(func):
             msg = "No element found in args."
             raise ValueError(msg)
         try:
-            return func(*args, **kwargs)
+            return await func(*args, **kwargs)
         except Exception as e:
             path = _get_display_path(store)
             add_key_note(e, store, path, key, "writ")
@@ -263,7 +285,7 @@ def report_write_key_on_error(func):
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(
+async def _read_legacy_raw(
     f: ZarrGroup | H5Group,
     modern_raw,  # TODO: type
     read_df: Callable,
@@ -284,11 +306,11 @@ def _read_legacy_raw(
 
     raw = {}
     if "X" in attrs and "raw.X" in f:
-        raw["X"] = read_attr(f["raw.X"])
+        raw["X"] = await read_attr(f["raw.X"])
     if "var" in attrs and "raw.var" in f:
-        raw["var"] = read_df(f["raw.var"])  # Backwards compat
+        raw["var"] = await read_df(f["raw.var"])  # Backwards compat
     if "varm" in attrs and "raw.varm" in f:
-        raw["varm"] = read_attr(f["raw.varm"])
+        raw["varm"] = await read_attr(f["raw.varm"])
     return raw
 
 
@@ -298,7 +320,7 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     """
 
     @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
-    def func_wrapper(
+    async def func_wrapper(
         f: StorageType,
         k: str,
         elem: ContravariantRWAble,
@@ -307,8 +329,10 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
         dataset_kwargs: Mapping[str, Any],
     ):
         if elem.shape == ():
-            _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+            await _writer.write_elem_async(
+                f, k, elem[()], dataset_kwargs=dataset_kwargs
+            )
         else:
-            func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
+            await func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
 
     return func_wrapper
