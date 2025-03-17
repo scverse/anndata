@@ -410,7 +410,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             )[row, :]
         # read into memory data if we do not override access methods
         elif not is_sparse_indexing_overridden(self.format, row, col):
-            sub = await mtx.getitem((slice(None), slice(None)))[row, col]
+            sub = (await mtx.getitem((slice(None), slice(None))))[row, col]
         else:
             sub = await mtx.getitem((row, col))
 
