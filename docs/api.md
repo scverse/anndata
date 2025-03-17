@@ -69,13 +69,28 @@ You might have more success by assembling the {class}`AnnData` object yourself f
 ## Writing
 
 Writing a complete {class}`AnnData` object to disk in anndata’s native formats `.h5ad` and `zarr`.
+(These functions are also exported as {func}`io.write_h5ad` and {func}`io.write_zarr`.)
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   AnnData.write
+   AnnData.write_h5ad
    AnnData.write_zarr
+
+
+..
+    .. autosummary::
+       :toctree: generated/
+
+       io.write_h5ad
+       io.write_zarr
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.io.write_h5ad
+   generated/anndata.io.write_zarr
 ```
 
 Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.

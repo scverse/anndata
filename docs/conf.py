@@ -129,6 +129,9 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    # Buffer is not yet exported, so the buffer class registry is the closest thing
+    "zarr.core.buffer.core.Buffer": "zarr.registry.Registry",
+    "zarr.storage._common.StorePath": "zarr.storage.StorePath",
     "anndata.compat.DaskArray": "dask.array.Array",
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
