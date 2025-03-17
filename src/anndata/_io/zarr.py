@@ -19,6 +19,7 @@ from .utils import _read_legacy_raw, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from os import PathLike
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
@@ -61,7 +62,7 @@ def write_zarr(
         zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 

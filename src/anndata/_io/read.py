@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def read_csv(
-    filename: PathLike | Iterator[str],
+    filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = ",",
     first_column_names: bool | None = None,
     dtype: str = "float32",
@@ -49,7 +49,9 @@ def read_csv(
     return read_text(filename, delimiter, first_column_names, dtype)
 
 
-def read_excel(filename: PathLike, sheet: str | int, dtype: str = "float32") -> AnnData:
+def read_excel(
+    filename: PathLike[str] | str, sheet: str | int, dtype: str = "float32"
+) -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
 
@@ -73,7 +75,7 @@ def read_excel(filename: PathLike, sheet: str | int, dtype: str = "float32") -> 
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
+def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -96,7 +98,7 @@ def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
     return AnnData(X=X, obs=obs, var=var)
 
 
-def read_hdf(filename: PathLike, key: str) -> AnnData:
+def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
     """\
     Read `.h5` (hdf5) file.
 
@@ -152,7 +154,7 @@ def _fmt_loom_axis_attrs(
 
 @_deprecate_positional_args(version="0.9")
 def read_loom(
-    filename: PathLike,
+    filename: PathLike[str] | str,
     *,
     sparse: bool = True,
     cleanup: bool = False,
@@ -295,7 +297,7 @@ def read_loom(
     return adata
 
 
-def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
+def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     """\
     Read `.mtx` file.
 
@@ -317,7 +319,7 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
 
 
 def read_text(
-    filename: PathLike | Iterator[str],
+    filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = None,
     first_column_names: bool | None = None,
     dtype: str = "float32",

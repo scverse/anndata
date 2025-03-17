@@ -32,7 +32,6 @@ from anndata.compat import (
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
-    from os import PathLike
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -541,7 +540,7 @@ def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
-    def md5_path(pth: PathLike) -> bytes:
+    def md5_path(pth: Path) -> bytes:
         checksum = hashlib.md5()
         with pth.open("rb") as f:
             while True:

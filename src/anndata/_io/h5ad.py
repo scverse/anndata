@@ -36,6 +36,7 @@ from .utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Mapping, Sequence
+    from os import PathLike
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
@@ -44,7 +45,7 @@ T = TypeVar("T")
 
 
 def write_h5ad(
-    filepath: Path | str,
+    filepath: PathLike[str] | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
@@ -140,7 +141,9 @@ def write_sparse_as_dense(
         del f[key]
 
 
-def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
+def read_h5ad_backed(
+    filename: str | PathLike[str], mode: Literal["r", "r+"]
+) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -169,7 +172,7 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
 
 
 def read_h5ad(
-    filename: str | Path,
+    filename: PathLike[str] | str,
     backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
