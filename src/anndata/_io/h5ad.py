@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from functools import partial
 from pathlib import Path
@@ -24,8 +25,8 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
-from .specs import read_elem, write_elem
-from .specs.registry import IOSpec, write_spec
+from .specs.methods import sync_async_to_async
+from .specs.registry import IOSpec, read_elem_async, write_elem_async, write_spec
 from .utils import (
     H5PY_V3,
     _read_legacy_raw,
@@ -81,39 +82,76 @@ def write_h5ad(
         f = f["/"]
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
-
         if "X" in as_dense and isinstance(
             adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            )
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_elem_async(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            )
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+            asyncio.run(
+                write_sparse_as_dense(
+                    f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
+                )
             )
-            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(
-                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+            asyncio.run(
+                write_elem_async(
+                    f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs
+                )
+            )
+            asyncio.run(
+                write_elem_async(
+                    f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
+                )
             )
         elif adata.raw is not None:
-            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-        write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+            asyncio.run(
+                write_elem_async(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+            )
+
+        async def gather():
+            await asyncio.gather(
+                *[
+                    write_elem_async(
+                        f, "obs", adata.obs, dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "var", adata.var, dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs
+                    ),
+                    write_elem_async(
+                        f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs
+                    ),
+                ]
+            )
+
+        asyncio.run(gather())
 
 
 @report_write_key_on_error
 @write_spec(IOSpec("array", "0.2.0"))
-def write_sparse_as_dense(
+async def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
     value: CSMatrix | BaseCompressedSparseDataset,
@@ -140,7 +178,7 @@ def write_sparse_as_dense(
         del f[key]
 
 
-def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
+async def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -153,11 +191,11 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
     else:
         for k in df_attributes:
             if k in f:  # Backwards compat
-                d[k] = read_dataframe(f[k])
+                d[k] = await read_dataframe(f[k])
 
-    d.update({k: read_elem(f[k]) for k in attributes if k in f})
+    d.update({k: await read_elem_async(f[k]) for k in attributes if k in f})
 
-    d["raw"] = _read_raw(f, attrs={"var", "varm"})
+    d["raw"] = await _read_raw(f, attrs={"var", "varm"})
 
     adata = AnnData(**d)
 
@@ -211,8 +249,8 @@ def read_h5ad(
         mode = backed
         if mode is True:
             mode = "r+"
-        assert mode in {"r", "r+"}
-        return read_h5ad_backed(filename, mode)
+        assert mode in {"r", "r+"}, mode
+        return asyncio.run(read_h5ad_backed(filename, mode))
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
         msg = "Dense formats can only be read to CSR or CSC matrices at this time."
@@ -234,33 +272,36 @@ def read_h5ad(
 
     with h5py.File(filename, "r") as f:
 
-        def callback(func, elem_name: str, elem, iospec):
+        async def callback(func, elem_name: str, elem, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(
-                    **{
-                        # This is covering up backwards compat in the anndata initializer
-                        # In most cases we should be able to call `func(elen[k])` instead
-                        k: read_dispatched(elem[k], callback)
-                        for k in elem.keys()
-                        if not k.startswith("raw.")
-                    }
+                args = dict(
+                    await asyncio.gather(
+                        *(
+                            # This is covering up backwards compat in the anndata initializer
+                            # In most cases we should be able to call `func(elen[k])` instead
+                            sync_async_to_async(k, read_dispatched(elem[k], callback))
+                            for k in elem.keys()
+                            if not k.startswith("raw.")
+                        )
+                    )
                 )
+                return AnnData(**args)
             elif elem_name.startswith("/raw."):
                 return None
             elif elem_name == "/X" and "X" in as_sparse:
                 return rdasp(elem)
             elif elem_name == "/raw":
-                return _read_raw(f, as_sparse, rdasp)
+                return await _read_raw(f, as_sparse, rdasp)
             elif elem_name in {"/obs", "/var"}:
                 # Backwards compat
-                return read_dataframe(elem)
-            return func(elem)
+                return await read_dataframe(elem)
+            return await func(elem)
 
-        adata = read_dispatched(f, callback=callback)
+        adata = asyncio.run(read_dispatched(f, callback=callback))
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**_read_raw(f, as_sparse, rdasp))
+            raw = AnnData(**asyncio.run(_read_raw(f, as_sparse, rdasp)))
             raw.obs_names = adata.obs_names
             adata.raw = raw
 
@@ -271,7 +312,7 @@ def read_h5ad(
     return adata
 
 
-def _read_raw(
+async def _read_raw(
     f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
     rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
@@ -282,12 +323,15 @@ def _read_raw(
         assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
     raw = {}
     if "X" in attrs and "raw/X" in f:
-        read_x = rdasp if "raw/X" in as_sparse else read_elem
-        raw["X"] = read_x(f["raw/X"])
+        raw["X"] = (
+            (await read_elem_async(f["raw/X"]))
+            if "raw/X" not in as_sparse
+            else rdasp(f["raw/X"])
+        )
     for v in ("var", "varm"):
         if v in attrs and f"raw/{v}" in f:
-            raw[v] = read_elem(f[f"raw/{v}"])
-    return _read_legacy_raw(f, raw, read_dataframe, read_elem, attrs=attrs)
+            raw[v] = await read_elem_async(f[f"raw/{v}"])
+    return await _read_legacy_raw(f, raw, read_dataframe, read_elem_async, attrs=attrs)
 
 
 @report_read_key_on_error
@@ -310,12 +354,12 @@ def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
     return df
 
 
-def read_dataframe(group: h5py.Group | h5py.Dataset) -> pd.DataFrame:
+async def read_dataframe(group: h5py.Group | h5py.Dataset) -> pd.DataFrame:
     """Backwards compat function"""
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
     else:
-        return read_elem(group)
+        return await read_elem_async(group)
 
 
 @report_read_key_on_error

@@ -13,7 +13,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata._io.specs.registry import read_elem_lazy
+from anndata._io.specs.registry import read_elem_lazy, write_elem_async
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
@@ -49,54 +49,62 @@ zarr_separator = "" if ad.settings.zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
-def ondisk_equivalent_adata(
+async def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
     csr_path = tmp_path / f"csr.{diskfmt}"
     csc_path = tmp_path / f"csc.{diskfmt}"
     dense_path = tmp_path / f"dense.{diskfmt}"
 
-    write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
-
     csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
-    write(csr_mem, csr_path)
-    write(csc_mem, csc_path)
+    await write_elem_async(
+        open_write_group(csr_path)
+        if diskfmt == "zarr"
+        else h5py.File(csr_path, mode="w"),
+        "/",
+        csr_mem,
+    )
+    await write_elem_async(
+        open_write_group(csc_path)
+        if diskfmt == "zarr"
+        else h5py.File(csc_path, mode="w"),
+        "/",
+        csc_mem,
+    )
     # write(csr_mem, dense_path, as_dense="X")
-    write(dense_mem, dense_path)
-    if diskfmt == "h5ad":
-        csr_disk = ad.read_h5ad(csr_path, backed="r")
-        csc_disk = ad.read_h5ad(csc_path, backed="r")
-        dense_disk = ad.read_h5ad(dense_path, backed="r")
-    else:
+    await write_elem_async(
+        open_write_group(dense_path)
+        if diskfmt == "zarr"
+        else h5py.File(dense_path, mode="w"),
+        "/",
+        dense_mem,
+    )
 
-        def read_zarr_backed(path):
-            path = str(path)
+    async def read_backed(path):
+        path = str(path)
 
-            f = zarr.open(path, mode="r")
+        f = (
+            h5py.File(path, mode="r")
+            if diskfmt == "h5ad"
+            else zarr.open(path, mode="r")
+        )
 
-            # Read with handling for backwards compat
-            def callback(func, elem_name, elem, iospec):
-                if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                    return AnnData(
-                        **{
-                            k: read_dispatched(v, callback)
-                            for k, v in dict(elem).items()
-                        }
-                    )
-                if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
-                    return sparse_dataset(elem)
-                return func(elem)
+        # Read with handling for backwards compat
+        async def callback(func, elem_name, elem, iospec):
+            if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
+                return sparse_dataset(elem)
+            return await func(elem)
 
-            adata = read_dispatched(f, callback=callback)
+        adata = await read_dispatched(f, callback=callback)
 
-            return adata
+        return adata
 
-        csr_disk = read_zarr_backed(csr_path)
-        csc_disk = read_zarr_backed(csc_path)
-        dense_disk = read_zarr_backed(dense_path)
+    csr_disk = await read_backed(csr_path)
+    csc_disk = await read_backed(csc_path)
+    dense_disk = await read_backed(dense_path)
 
     return csr_mem, csr_disk, csc_disk, dense_disk
 
@@ -104,7 +112,7 @@ def ondisk_equivalent_adata(
 @pytest.mark.parametrize(
     "empty_mask", [[], np.zeros(M, dtype=bool)], ids=["empty_list", "empty_bool_mask"]
 )
-def test_empty_backed_indexing(
+async def test_empty_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     empty_mask,
 ):
@@ -120,7 +128,7 @@ def test_empty_backed_indexing(
     # assert_equal(csr_mem.X[empty_mask, empty_mask], csc_disk.X[empty_mask, empty_mask])
 
 
-def test_backed_indexing(
+async def test_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     subset_func,
     subset_func2,
@@ -138,7 +146,7 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
-def test_backed_ellipsis_indexing(
+async def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
     equivalent_ellipsis_index: tuple[slice, slice],
@@ -194,7 +202,7 @@ def make_one_elem_mask(size: int) -> np.ndarray:
     ],
     ids=["randomized", "alternating_15", "alternating_5", "one_group", "one_elem"],
 )
-def test_consecutive_bool(
+async def test_consecutive_bool(
     mocker: MockerFixture,
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     make_bool_mask: Callable[[int], np.ndarray],
@@ -629,7 +637,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     assert_equal(adata.X, base)
 
 
-def test_backed_sizeof(
+async def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata

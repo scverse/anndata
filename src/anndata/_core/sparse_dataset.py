@@ -519,7 +519,12 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
         if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            data[orig_data_size:] = append_data[...]
+            from .._io.specs.methods import _iter_chunks_for_copy
+
+            for chunk in _iter_chunks_for_copy(append_data, data):
+                data[(chunk.start + orig_data_size) : (chunk.stop + orig_data_size)] = (
+                    append_data[chunk]
+                )
         else:
             data[orig_data_size:] = append_data
         # indptr
@@ -531,12 +536,16 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
 
         # indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
-            append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
-        indices[orig_data_size:] = append_indices
+        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+            for chunk in _iter_chunks_for_copy(append_indices, indices):
+                indices[
+                    (chunk.start + orig_data_size) : (chunk.stop + orig_data_size)
+                ] = append_indices[chunk]
+        else:
+            indices[orig_data_size:] = append_indices
 
         # Clear cached property
         for attr in ["_indptr", "_indices", "_data"]:
@@ -638,6 +647,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
         return mtx
+
+    async def to_memory_async(self) -> CSMatrix | CSArray:
+        return await self.getitem(())
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
