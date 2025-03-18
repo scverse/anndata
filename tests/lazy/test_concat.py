@@ -215,14 +215,11 @@ def test_concat_to_memory_var(
 
 
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData, join: Join_T, *, load_annotation_index: bool
-):
+    adata_remote: AnnData, join: Join_T, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster),
-    ):
+    with dd.Client(local_cluster_addr):
         ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 

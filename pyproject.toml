@@ -91,6 +91,7 @@ test = [
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "filelock",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
