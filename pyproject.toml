@@ -91,6 +91,7 @@ test = [
     "pytest-memray",
     "pytest-mock",
     "fast-array-utils",
+    "filelock",
     "matplotlib",
     "scikit-learn",
     "loompy>=3.0.5",

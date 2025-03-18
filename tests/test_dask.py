@@ -26,6 +26,11 @@ CUPY_SPARSE = {
     at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Gpu
 }
 
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
+
+
 pytest.importorskip("dask.array")
 
 
@@ -107,7 +112,12 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_distributed_write(adata, tmp_path, diskfmt):
+def test_dask_distributed_write(
+    adata: AnnData,
+    tmp_path: Path,
+    diskfmt: Literal["h5ad", "zarr"],
+    local_cluster_addr: str,
+) -> None:
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
@@ -115,10 +125,7 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
 
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster,
-        dd.Client(cluster),
-    ):
+    with dd.Client(local_cluster_addr):
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))
