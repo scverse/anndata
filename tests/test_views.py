@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import joblib
 import numpy as np
@@ -32,7 +32,7 @@ from anndata.tests.helpers import (
     slice_subset,
     subset_func,
 )
-from testing.fast_array_utils import Flags
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
 if TYPE_CHECKING:
     from types import EllipsisType
@@ -40,6 +40,15 @@ if TYPE_CHECKING:
 
     from testing.fast_array_utils import ArrayType
 
+
+DASK_SPARRAY = {
+    at
+    for at in SUPPORTED_TYPES
+    if at.flags & Flags.Sparse and at.flags & Flags.Dask and not at.flags & Flags.Matrix
+}
+CUPY_SPARSE = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Gpu
+}
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -80,7 +89,7 @@ def adata():
 
 
 @pytest.fixture(params=["layers", "obsm", "varm"])
-def mapping_name(request):
+def mapping_name(request: pytest.FixtureRequest) -> Literal["layers", "obsm", "varm"]:
     return request.param
 
 
@@ -140,14 +149,17 @@ def test_view_subset_shapes():
     assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
 
 
-def test_modify_view_component(matrix_type, mapping_name, request):
-    adata = ad.AnnData(
-        np.zeros((10, 10)),
-        **{mapping_name: dict(m=matrix_type(to_dense(sparse.random(10, 10))))},
-    )
+@pytest.mark.array_type(skip={Flags.Disk, *CUPY_SPARSE})
+def test_modify_view_component(
+    array_type: ArrayType,
+    mapping_name: Literal["layers", "obsm", "varm"],
+    request: pytest.FixtureRequest,
+) -> None:
+    m = array_type(to_dense(sparse.random(10, 10, format="csr")))
+    adata = ad.AnnData(np.zeros((10, 10)), **{mapping_name: dict(m=m)})
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
-    if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
+    if isinstance(array_type(np.zeros((1, 1))), DaskArray):
         hash_func = tokenize
     else:
         hash_func = joblib.hash
@@ -296,8 +308,9 @@ def test_set_varm(adata):
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_not_set_subset_X(matrix_type_base, subset_func):
-    adata = ad.AnnData(matrix_type_base(to_dense(sparse.random(20, 20))))
+@pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk | Flags.Dask)
+def test_not_set_subset_X(array_type: ArrayType, subset_func) -> None:
+    adata = ad.AnnData(array_type(to_dense(sparse.random(20, 20, format="csr"))))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -324,8 +337,9 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
-    adata = ad.AnnData(matrix_type_no_gpu(to_dense(sparse.random(20, 20))))
+@pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk)
+def test_not_set_subset_X_dask(array_type: ArrayType, subset_func) -> None:
+    adata = ad.AnnData(array_type(to_dense(sparse.random(20, 20, format="csr"))))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -350,8 +364,9 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
 
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_set_scalar_subset_X(matrix_type, subset_func):
-    adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
+@pytest.mark.array_type(skip={Flags.Disk, *CUPY_SPARSE, *DASK_SPARRAY})
+def test_set_scalar_subset_X(array_type: ArrayType, subset_func):
+    adata = ad.AnnData(array_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)
 
@@ -512,8 +527,9 @@ def test_layers_view():
 
 
 # TODO: This can be flaky. Make that stop
-def test_view_of_view(matrix_type, subset_func, subset_func2):
-    adata = gen_adata((30, 15), X_type=matrix_type)
+@pytest.mark.array_type(skip={Flags.Disk, *DASK_SPARRAY, *CUPY_SPARSE})
+def test_view_of_view(array_type: ArrayType, subset_func, subset_func2) -> None:
+    adata = gen_adata((30, 15), X_type=array_type)
     adata.raw = adata.copy()
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
@@ -565,8 +581,9 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(v1.var == v2.var)
 
 
-def test_view_different_type_indices(matrix_type):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+@pytest.mark.array_type(skip={Flags.Disk, *CUPY_SPARSE, *DASK_SPARRAY})
+def test_view_different_type_indices(array_type: ArrayType) -> None:
+    orig = gen_adata((30, 30), X_type=array_type)
     boolean_array_mask = np.random.randint(0, 2, 30).astype("bool")
     boolean_list_mask = boolean_array_mask.tolist()
     integer_array_mask = np.where(boolean_array_mask)[0]
@@ -769,12 +786,13 @@ def test_dataframe_view_index_setting():
     assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
+@pytest.mark.array_type(skip=Flags.Disk)
 def test_ellipsis_index(
     ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
     equivalent_ellipsis_index: tuple[slice, slice],
-    matrix_type,
+    array_type: ArrayType,
 ):
-    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
+    adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     subset_ellipsis = adata[ellipsis_index]
     subset = adata[equivalent_ellipsis_index]
     assert_equal(subset_ellipsis, subset)
