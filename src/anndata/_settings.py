@@ -450,7 +450,7 @@ settings.register(
 
 def validate_sparse_settings(val: Any) -> None:
     validate_bool(val)
-    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
+    if not CAN_USE_SPARSE_ARRAY and cast("bool", val):
         msg = (
             "scipy.sparse.cs{r,c}array is not available in current scipy version. "
             "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
