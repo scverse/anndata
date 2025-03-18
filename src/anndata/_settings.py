@@ -283,7 +283,7 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast(str, self.override.__doc__)
+        doc = cast("str", self.override.__doc__)
         insert_index = doc.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
             self.describe(option, should_print_description=False).splitlines(
@@ -450,7 +450,7 @@ settings.register(
 
 def validate_sparse_settings(val: Any) -> None:
     validate_bool(val)
-    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
+    if not CAN_USE_SPARSE_ARRAY and cast("bool", val):
         msg = (
             "scipy.sparse.cs{r,c}array is not available in current scipy version. "
             "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
