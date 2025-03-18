@@ -17,11 +17,15 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_typed_df,
 )
+from testing.fast_array_utils import Flags
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from typing import Literal
+
+    from testing.fast_array_utils import ArrayType
+
 
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
@@ -76,11 +80,12 @@ def simple_subset_func(request):
     return request.param
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
+@pytest.mark.array_type(skip=Flags.Disk)  # TODO: doesn’t work, figure this out
 def adata_remote_orig_with_path(
-    tmp_path_factory,
+    tmp_path_factory: pytest.TempPathFactory,
     diskfmt: str,
-    mtx_format,
+    array_type: ArrayType,
     worker_id: str = "serial",
 ) -> tuple[Path, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
@@ -91,7 +96,7 @@ def adata_remote_orig_with_path(
         orig_path = tmp_path_factory.mktemp(file_name)
     orig = gen_adata(
         (1000, 1100),
-        mtx_format,
+        array_type,
         obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
         var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
     )
@@ -116,10 +121,11 @@ def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
     return orig
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
+@pytest.mark.array_type(skip=Flags.Disk)  # TODO: doesn’t work, figure this out
 def adata_remote_with_store_tall_skinny_path(
     tmp_path_factory,
-    mtx_format,
+    array_type: ArrayType,
     worker_id: str = "serial",
 ) -> Path:
     orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
@@ -132,7 +138,7 @@ def adata_remote_with_store_tall_skinny_path(
     orig = AnnData(
         obs=obs,
         var=var,
-        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
+        X=array_type(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
     )
     orig.raw = orig.copy()
     orig.write_zarr(orig_path)

@@ -40,6 +40,13 @@ if TYPE_CHECKING:
     from testing.fast_array_utils import ArrayType
 
 
+AT_DENSE_DASK = next(
+    at
+    for at in SUPPORTED_TYPES
+    if at.flags & Flags.Dask and not at.flags & (Flags.Sparse | Flags.Gpu)
+)
+
+
 SPARSE_DASK = {
     at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
 }
@@ -71,7 +78,7 @@ def _filled_array_np(a, fill_value=None):
 
 @filled_like.register(DaskArray)
 def _filled_array(a, fill_value=None):
-    return as_dense_dask_array(_filled_array_np(a, fill_value))  # noqa: F821
+    return AT_DENSE_DASK(_filled_array_np(a, fill_value))  # noqa: F821
 
 
 @filled_like.register(CSMatrix)

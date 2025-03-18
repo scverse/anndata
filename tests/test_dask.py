@@ -303,11 +303,12 @@ def test_dask_to_memory_unbacked(
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
-def test_dask_to_memory_copy_unbacked():
+@pytest.mark.array_type(select=Flags.Dask, skip=Flags.Sparse | Flags.Gpu)
+def test_dask_to_memory_copy_unbacked(array_type: ArrayType[DaskArray]) -> None:
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)  # noqa: F821
-    orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}  # noqa: F821
+    orig = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)  # noqa: F821
+    orig.uns = {"da": {"da": array_type(np.ones(12))}}  # noqa: F821
 
     curr = orig.to_memory(copy=True)
 
