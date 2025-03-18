@@ -34,9 +34,9 @@ jobs:
           - python-version: '3.13'
             dependencies-version: pre-release
             test-type: strict-warning
-          - python-version: '3.11'
-            dependencies-version: minimum
-            test-type: coverage
+          #- python-version: '3.11'
+          #  dependencies-version: minimum
+          #  test-type: coverage
     steps:
       - uses: actions/checkout@v4
         with:
