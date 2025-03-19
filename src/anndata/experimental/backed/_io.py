@@ -171,6 +171,6 @@ def read_lazy(
         return await func(elem)
 
     with settings.override(check_uniqueness=load_annotation_index):
-        adata = anyio.run(read_dispatched(f, callback=callback))
+        adata = anyio.run(read_dispatched, f, callback)
 
     return adata

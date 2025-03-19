@@ -384,7 +384,7 @@ def read_elem(elem: StorageType) -> RWAble:
     elem
         The stored element.
     """
-    return anyio.run(read_elem_async(elem))
+    return anyio.run(read_elem_async, elem)
 
 
 async def read_elem_async(elem: StorageType) -> RWAble:
@@ -505,7 +505,9 @@ def write_elem(
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
     """
-    return anyio.run(write_elem_async(store, k, elem, dataset_kwargs=dataset_kwargs))
+    return anyio.run(
+        partial(write_elem_async, dataset_kwargs=dataset_kwargs), store, k, elem
+    )
 
 
 async def write_elem_async(

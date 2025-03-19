@@ -22,6 +22,7 @@ from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
+import anyio
 import h5py
 import numpy as np
 import scipy
@@ -32,7 +33,7 @@ from .. import abc
 from .._io.utils import get, index_array
 from .._settings import settings
 from ..compat import CSArray, H5Group, ZarrArray, ZarrGroup, _read_attr, is_zarr_v2
-from .index import _fix_slice_bounds, _subset, unpack_index
+from .index import _fix_slice_bounds, _subset, _subset_async, unpack_index
 
 if TYPE_CHECKING:
     from typing import Any, Literal
@@ -427,7 +428,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             return sub
 
     def __getitem__(self, index: Index) -> float | CSArray:
-        return asyncio.run(self.getitem(index))
+        return anyio.run(self.getitem, index)
 
     def _normalize_index(
         self, index: Index | tuple[()]
@@ -723,3 +724,8 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(d, subset_idx):
     return d[subset_idx]
+
+
+@_subset_async.register(BaseCompressedSparseDataset)
+async def _(d, subset_idx):
+    return await d.getitem(subset_idx)

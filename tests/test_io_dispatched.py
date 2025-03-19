@@ -79,7 +79,7 @@ async def test_read_dispatched_dask(tmp_path: Path):
 async def test_read_dispatched_null_case(tmp_path: Path):
     adata = gen_adata((100, 100))
     z = open_write_group(tmp_path)
-    ad.io.write_elem(z, "/", adata)
+    await ad.io.write_elem_async(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if not is_zarr_v2() and isinstance(z, ZarrGroup):
         z = zarr.open(z.store)

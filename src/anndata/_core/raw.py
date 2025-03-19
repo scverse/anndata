@@ -10,7 +10,7 @@ from scipy.sparse import issparse
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays
-from .index import _normalize_index, _subset, get_vector, unpack_index
+from .index import _normalize_index, _subset, _subset_async, get_vector, unpack_index
 from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
@@ -92,6 +92,29 @@ class Raw:
             return _subset(X, (self._adata._oidx, slice(None)))
         else:
             return X
+
+    async def get_X(self):
+        # TODO: Handle unsorted array of integer indices for h5py.Datasets
+        if not self._adata.isbacked:
+            return self._X
+        if not self._adata.file.is_open:
+            self._adata.file.open()
+        # Handle legacy file formats:
+        if "raw/X" in self._adata.file:
+            X = self._adata.file["raw/X"]
+        elif "raw.X" in self._adata.file:
+            X = self._adata.file["raw.X"]  # Backwards compat
+        else:
+            msg = (
+                f"Could not find dataset for raw X in file: "
+                f"{self._adata.file.filename}."
+            )
+            raise AttributeError(msg)
+        if isinstance(X, h5py.Group):
+            X = sparse_dataset(X)
+        if self._adata.is_view:
+            return await _subset_async(X, (self._adata._oidx, slice(None)))
+        return X
 
     @property
     def shape(self) -> tuple[int, int]:

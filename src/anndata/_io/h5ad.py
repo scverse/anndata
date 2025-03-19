@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
+import anyio
 import h5py
 import numpy as np
 import pandas as pd
@@ -85,35 +86,47 @@ def write_h5ad(
         if "X" in as_dense and isinstance(
             adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            asyncio.run(
-                write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            anyio.run(
+                partial(write_sparse_as_dense, dataset_kwargs=dataset_kwargs),
+                f,
+                "X",
+                adata.X,
             )
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
-            asyncio.run(
-                write_elem_async(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+            anyio.run(
+                partial(write_elem_async, dataset_kwargs=dataset_kwargs),
+                f,
+                "X",
+                adata.X,
             )
         if "raw/X" in as_dense and isinstance(
             adata.raw.X, CSMatrix | BaseCompressedSparseDataset
         ):
-            asyncio.run(
-                write_sparse_as_dense(
-                    f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-                )
+            anyio.run(
+                partial(write_sparse_as_dense, dataset_kwargs=dataset_kwargs),
+                f,
+                "raw/X",
+                adata.raw.X,
             )
-            asyncio.run(
-                write_elem_async(
-                    f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs
-                )
+            anyio.run(
+                partial(write_elem_async, dataset_kwargs=dataset_kwargs),
+                f,
+                "raw/var",
+                adata.raw.var,
             )
-            asyncio.run(
-                write_elem_async(
-                    f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
-                )
+            anyio.run(
+                partial(write_elem_async, dataset_kwargs=dataset_kwargs),
+                f,
+                "raw/varm",
+                dict(adata.raw.varm),
             )
         elif adata.raw is not None:
-            asyncio.run(
-                write_elem_async(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+            anyio.run(
+                partial(write_elem_async, dataset_kwargs=dataset_kwargs),
+                f,
+                "raw",
+                adata.raw,
             )
 
         async def gather():
@@ -146,7 +159,7 @@ def write_h5ad(
                 ]
             )
 
-        asyncio.run(gather())
+        anyio.run(gather)
 
 
 @report_write_key_on_error
@@ -171,7 +184,10 @@ async def write_sparse_as_dense(
     dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
-        dset[idx] = value[idx].toarray()
+        if isinstance(value, BaseCompressedSparseDataset):
+            dset[idx] = (await value.getitem(idx)).toarray()
+        else:
+            dset[idx] = value[idx].toarray()
     if real_key is not None:
         del f[real_key]
         f[real_key] = f[key]
@@ -250,7 +266,7 @@ def read_h5ad(
         if mode is True:
             mode = "r+"
         assert mode in {"r", "r+"}, mode
-        return asyncio.run(read_h5ad_backed(filename, mode))
+        return anyio.run(read_h5ad_backed, filename, mode)
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
         msg = "Dense formats can only be read to CSR or CSC matrices at this time."
@@ -297,11 +313,11 @@ def read_h5ad(
                 return await read_dataframe(elem)
             return await func(elem)
 
-        adata = asyncio.run(read_dispatched(f, callback=callback))
+        adata = anyio.run(read_dispatched, f, callback)
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**asyncio.run(_read_raw(f, as_sparse, rdasp)))
+            raw = AnnData(**anyio.run(_read_raw, f, as_sparse, rdasp))
             raw.obs_names = adata.obs_names
             adata.raw = raw
 

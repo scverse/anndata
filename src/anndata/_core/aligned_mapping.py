@@ -20,7 +20,7 @@ from ..utils import (
     warn_once,
 )
 from .access import ElementRef
-from .index import _subset
+from .index import _subset, _subset_async
 from .storage import coerce_array
 from .views import as_view, view_update
 
@@ -158,6 +158,12 @@ class AlignedView(AlignedMappingBase, Generic[P, I]):
     def __getitem__(self, key: str) -> Value:
         return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
+            ElementRef(self.parent, self.attrname, (key,)),
+        )
+
+    async def getitem(self, key: str) -> Value:
+        return as_view(
+            await _subset_async(self.parent_mapping[key], self.subset_idx),
             ElementRef(self.parent, self.attrname, (key,)),
         )
 

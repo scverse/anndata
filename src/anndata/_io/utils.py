@@ -10,7 +10,7 @@ import h5py
 from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from typing import Any, Literal
 
     import numpy as np
@@ -362,3 +362,23 @@ async def get(elem: GroupStorageType, key) -> ArrayStorageType | GroupStorageTyp
     if isinstance(elem, ZarrAsyncGroup):
         return await elem.get(key)
     return elem[key]
+
+
+async def items(
+    elem: GroupStorageType,
+) -> Iterable[(str, ArrayStorageType | GroupStorageType)]:
+    from ..compat import ZarrAsyncGroup
+
+    if isinstance(elem, ZarrAsyncGroup):
+        return await elem.members()
+    return dict(elem).items()
+
+
+async def require_group(elem: GroupStorageType, k: str) -> GroupStorageType:
+    from ..compat import ZarrAsyncGroup
+
+    g = elem.require_group(k)
+
+    if isinstance(elem, ZarrAsyncGroup):
+        return await g
+    return g

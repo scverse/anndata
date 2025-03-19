@@ -118,8 +118,10 @@ async def test_empty_backed_indexing(
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
 
-    assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
-    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+    assert_equal(csr_mem.X[empty_mask], await csr_disk.X.getitem(empty_mask))
+    assert_equal(
+        csr_mem.X[:, empty_mask], await csc_disk.X.getitem((slice(None), empty_mask))
+    )
 
     # The following do not work because of https://github.com/scipy/scipy/issues/19919
     # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
@@ -138,11 +140,17 @@ async def test_backed_indexing(
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
 
-    assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
-    assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
-    assert_equal(csr_mem.X[...], csc_disk.X[...])
+    assert_equal(
+        csr_mem[obs_idx, var_idx].X,
+        await csr_disk[obs_idx, var_idx].get_X(),
+    )
+    assert_equal(
+        csr_mem[obs_idx, var_idx].X,
+        await csc_disk[obs_idx, var_idx].get_X(),
+    )
+    assert_equal(csr_mem.X[...], await csc_disk.X.getitem(Ellipsis))
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
-    assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
+    assert_equal(csr_mem[obs_idx].X, await csr_disk[obs_idx].get_X())
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
@@ -230,23 +238,31 @@ async def test_consecutive_bool(
     from anndata._core.sparse_dataset import BackedSparseMatrix
 
     spy = mocker.spy(BackedSparseMatrix, "get_compressed_vectors_for_slices")
-    assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
+    assert_equal(
+        await csr_disk.X.getitem((mask, slice(None))),
+        await csr_disk.X.getitem(np.where(mask)),
+    )
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 1 if should_trigger_optimization else not spy.call_count
         )
-    assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
+    assert_equal(
+        csc_disk.X.getitem((slice(None), mask)),
+        csc_disk.X.getitem((slice(None), np.where(mask)[0])),
+    )
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 2 if should_trigger_optimization else not spy.call_count
         )
-    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    assert_equal(
+        await csr_disk[mask, :].get_X(), await csr_disk[np.where(mask)].get_X()
+    )
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 3 if should_trigger_optimization else not spy.call_count
         )
-    subset = csc_disk[:, mask]
-    assert_equal(subset, csc_disk[:, np.where(mask)[0]])
+    subset = await csc_disk[:, mask].get_X()
+    assert_equal(subset, await csc_disk[:, np.where(mask)[0]].get_X())
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 4 if should_trigger_optimization else not spy.call_count
@@ -259,7 +275,8 @@ async def test_consecutive_bool(
         else:
             subset_subset_mask = make_one_elem_mask(size)
         assert_equal(
-            subset[:, subset_subset_mask], subset[:, np.where(subset_subset_mask)[0]]
+            await subset[:, subset_subset_mask].get_X(),
+            await subset[:, np.where(subset_subset_mask)[0]].get_X(),
         )
         assert (
             spy.call_count == 5 if should_trigger_optimization else not spy.call_count

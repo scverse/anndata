@@ -13,6 +13,8 @@ from scipy.sparse import issparse
 from ..compat import AwkArray, CSArray, CSMatrix, DaskArray
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from ..compat import Index, Index1D
 
 
@@ -177,6 +179,11 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
+
+
+@singledispatch
+async def _subset_async(a: Any, subset_idx: Index):
+    return _subset(a, subset_idx)
 
 
 @_subset.register(DaskArray)

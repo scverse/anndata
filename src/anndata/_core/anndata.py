@@ -38,15 +38,11 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, _subset_async, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
-from .views import (
-    DictView,
-    _resolve_idxs,
-    as_view,
-)
+from .views import DictView, _resolve_idxs, as_view
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -561,13 +557,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             X = self._X
         return X
-        # if self.n_obs == 1 and self.n_vars == 1:
-        #     return X[0, 0]
-        # elif self.n_obs == 1 or self.n_vars == 1:
-        #     if issparse(X): X = X.toarray()
-        #     return X.flatten()
-        # else:
-        #     return X
+
+    async def get_X(self):
+        if (
+            self.is_view
+            and self._adata_ref.X is not None
+            and isinstance(self._adata_ref.X, BaseCompressedSparseDataset)
+        ):
+            return await _subset_async(self._adata_ref.X, (self._oidx, self._vidx))
+        if self.isbacked:
+            if not self.file.is_open:
+                self.file.open()
+            X = self.file["X"]
+            if isinstance(X, h5py.Group):
+                X = sparse_dataset(X)
+            return await _subset_async(X, (self._oidx, self._vidx))
+        return self.X
 
     @X.setter
     def X(self, value: XDataType | None):
@@ -2090,10 +2095,10 @@ def _infer_shape_for_axis(
             return elem.shape[0]
     for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
         if elem is not None:
-            elem = cast(Mapping, elem)
+            elem = cast("Mapping", elem)
             for sub_elem in elem.values():
                 if hasattr(sub_elem, "shape"):
-                    size = cast(int, sub_elem.shape[axis if id == "layers" else 0])
+                    size = cast("int", sub_elem.shape[axis if id == "layers" else 0])
                     return size
     return None
 

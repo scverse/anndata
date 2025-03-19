@@ -165,7 +165,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         else:
             return await func(elem)
 
-    return anyio.run(read_dispatched(group, callback=callback))
+    return anyio.run(read_dispatched, group, callback)
 
 
 def _df_index(df: ZarrGroup | H5Group) -> pd.Index:

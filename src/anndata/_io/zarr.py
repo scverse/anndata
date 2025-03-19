@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
+import anyio
 import numpy as np
 import pandas as pd
 import zarr
@@ -13,7 +15,7 @@ from scipy import sparse
 from .._core.anndata import AnnData
 from .._settings import settings
 from .._warnings import OldFormatWarning
-from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
+from ..compat import ZarrAsyncArray, _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem_async
 from .specs.methods import sync_async_to_async
@@ -56,8 +58,8 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         await func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
-    asyncio.run(
-        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    anyio.run(
+        partial(write_dispatched, dataset_kwargs=ds_kwargs), f, "/", adata, callback
     )
     if is_zarr_v2():
         zarr.convenience.consolidate_metadata(f.store)
@@ -108,17 +110,16 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
             )
         return await func(elem)
 
-    adata = asyncio.run(read_dispatched(f, callback=callback))
+    adata = anyio.run(read_dispatched, f, callback)
+
+    async def gather():
+        return await asyncio.gather(
+            _read_legacy_raw(f, adata.raw, read_dataframe, read_elem_async)
+        )
 
     # Backwards compat (should figure out which version)
     if "raw.X" in f:
-        raw = AnnData(
-            **asyncio.run(
-                asyncio.gather(
-                    _read_legacy_raw(f, adata.raw, read_dataframe, read_elem_async)
-                )
-            )
-        )
+        raw = AnnData(**anyio.run(gather))
         raw.obs_names = adata.obs_names
         adata.raw = raw
 
@@ -135,7 +136,10 @@ async def read_dataset(dataset: zarr.Array):
     if is_zarr_v2():
         value = dataset[...]
     else:
-        value = await dataset._async_array.getitem(())
+        if isinstance(dataset, ZarrAsyncArray):
+            value = await dataset.getitem(())
+        else:
+            value = dataset[()]
     if not hasattr(value, "dtype"):
         return value
     elif isinstance(value.dtype, str):

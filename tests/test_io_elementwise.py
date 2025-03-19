@@ -16,20 +16,10 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-)
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    ZarrGroup,
-    _read_attr,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
