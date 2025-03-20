@@ -54,6 +54,6 @@ def test_get_with_zarr_gpu(tmp_path: Path):
     zarr_path = tmp_path / "gpu_adata.zarr"
     adata.write_zarr(zarr_path)
     g = zarr.open_group(zarr_path, mode="r")
-    adata = AnnData(X=sparse_dataset(g))
+    adata = AnnData(X=sparse_dataset(g["X"]))
     with zarr.config.enable_gpu():
         assert isinstance(adata.X[...], CupyCSRMatrix)
