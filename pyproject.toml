@@ -91,6 +91,7 @@ test = [
     "pytest-memray",
     "pytest-mock",
     "zarr<3",
+    "filelock",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
