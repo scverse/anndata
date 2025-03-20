@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -77,7 +78,7 @@ DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
 @pytest.fixture(params=sparse_formats)
-def sparse_format(request):
+def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
     return request.param
 
 
@@ -195,6 +196,18 @@ def create_sparse_store(
         ),
         pytest.param(
             pd.array([True, False, True, True]), "nullable-boolean", id="pd_arr_bool"
+        ),
+        pytest.param(
+            zarr.ones((100, 100), chunks=(10, 10)),
+            "array",
+            id="zarr_dense_array",
+        ),
+        pytest.param(
+            create_dense_store(
+                h5py.File("test1.h5", mode="w", driver="core", backing_store=False)
+            )["X"],
+            "array",
+            id="h5_dense_array",
         ),
         # pytest.param(bytes, b"some bytes", "bytes", id="py_bytes"), # Does not work for zarr
         # TODO consider how specific encodings should be. Should we be fully describing the written type?
@@ -334,7 +347,9 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
-def test_read_lazy_h5_cluster(sparse_format, tmp_path):
+def test_read_lazy_h5_cluster(
+    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
     with h5py.File(tmp_path / "test.h5", "w") as file:
@@ -342,10 +357,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         arr_store = create_sparse_store(sparse_format, store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster) as _client,
-    ):
+    with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 

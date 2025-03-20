@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 import warnings
+from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 @doctest_needs("xarray")
 def read_lazy(
-    store: str | Path | MutableMapping | ZarrGroup | h5py.Dataset,
+    store: PathLike[str] | str | MutableMapping | ZarrGroup | h5py.Dataset,
     *,
     load_annotation_index: bool = True,
 ) -> AnnData:
@@ -89,7 +90,7 @@ def read_lazy(
         raise ImportError(msg)
     is_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
     is_h5 = (
-        isinstance(store, Path | str) and Path(store).suffix == ".h5ad"
+        isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad"
     ) or is_h5_store
 
     has_keys = True  # true if consolidated or h5ad

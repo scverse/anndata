@@ -19,6 +19,7 @@ from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_err
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from os import PathLike
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
@@ -35,6 +36,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_zarr`."""
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
@@ -62,7 +64,7 @@ def write_zarr(
         zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 

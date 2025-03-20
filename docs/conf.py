@@ -28,7 +28,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 master_doc = "index"
 default_role = "literal"
 exclude_patterns = [
@@ -44,7 +44,7 @@ exclude_patterns = [
 pygments_style = "sphinx"
 
 extensions = [
-    "myst_parser",
+    "myst_nb",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
@@ -60,15 +60,17 @@ extensions = [
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
-    "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_toolbox.more_autodoc.autoprotocol",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
+    "colon_fence",
+    "dollarmath",
 ]
 myst_heading_anchors = 3
+nb_execution_mode = "off"
 
 # Generate the API documentation when building
 autosummary_generate = True
@@ -130,6 +132,9 @@ qualname_overrides = {
     "anndata._types.Write": "anndata.experimental.Write",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
+    # Buffer is not yet exported, so the buffer class registry is the closest thing
+    "zarr.core.buffer.core.Buffer": "zarr.registry.Registry",
+    "zarr.storage._common.StorePath": "zarr.storage.StorePath",
     "anndata.compat.DaskArray": "dask.array.Array",
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
