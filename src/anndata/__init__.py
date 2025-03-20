@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-
 from ._core.anndata import AnnData
 from ._core.merge import concat
 from ._core.raw import Raw
@@ -19,7 +18,7 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
-from .io import read_h5ad, read_zarr
+from .io import read_h5ad, read_zarr, read_zarr_async
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
@@ -59,6 +58,7 @@ __all__ = [
     # Functions
     "concat",
     "read_zarr",
+    "read_zarr_async",
     "read_h5ad",
     # Warnings
     "OldFormatWarning",

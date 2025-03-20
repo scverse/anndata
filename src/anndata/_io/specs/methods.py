@@ -13,6 +13,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from packaging.version import Version
 from scipy import sparse
 
@@ -298,9 +299,15 @@ async def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> A
         child = await get(e, k)
         return await _reader.read_elem_async(child)
 
+    k_v = await items(elem)
+    elem_keys = [k for k, _ in k_v]
     d = dict(
         await asyncio.gather(
-            *(sync_async_to_async(k, read_async(elem, k)) for k in elems if k in elem)
+            *(
+                sync_async_to_async(k, read_async(elem, k))
+                for k in elems
+                if k in elem_keys
+            )
         )
     )
     return AnnData(**d)
@@ -371,6 +378,7 @@ async def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})
 async def read_mapping(
     elem: GroupStorageType, *, _reader: Reader
 ) -> dict[str, AxisStorable]:
+    print(elem)
     k_v = await items(elem)
     return dict(
         await asyncio.gather(
@@ -1142,14 +1150,18 @@ async def read_series(
 ) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
     if "categories" in dataset.attrs:
-        if isinstance(dataset, ZarrArray):
-            import zarr
-
+        if isinstance(dataset, ZarrAsyncArray):
             parent_name = dataset.name.rstrip(dataset.basename).strip("/")
-            parent = zarr.open(dataset.store, mode="r")[parent_name]
+            group = await zarr.api.asynchronous.open(store=dataset.store, mode="r")
+            parent = await group.get(parent_name)
+            categories_dset = await parent.get(_read_attr(dataset.attrs, "categories"))
         else:
-            parent = dataset.parent
-        categories_dset = parent[_read_attr(dataset.attrs, "categories")]
+            if isinstance(dataset, ZarrArray):
+                parent_name = dataset.name.rstrip(dataset.basename).strip("/")
+                parent = zarr.open(dataset.store, mode="r")[parent_name]
+            else:
+                parent = dataset.parent
+            categories_dset = parent[_read_attr(dataset.attrs, "categories")]
         categories, codes = await asyncio.gather(
             *(
                 _reader.read_elem_async(categories_dset),
@@ -1193,6 +1205,7 @@ async def write_categorical(
 
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_read(ZarrAsyncGroup, IOSpec("categorical", "0.2.0"))
 async def read_categorical(
     elem: GroupStorageType, *, _reader: Reader
 ) -> pd.Categorical:
@@ -1218,16 +1231,25 @@ async def read_categorical(
     ZarrGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
 )
 @_REGISTRY.register_write(
+    ZarrAsyncGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+)
+@_REGISTRY.register_write(
     H5Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 @_REGISTRY.register_write(
+    ZarrAsyncGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+)
+@_REGISTRY.register_write(
     H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrAsyncGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
 )
 async def write_nullable(
     f: GroupStorageType,
@@ -1289,21 +1311,27 @@ _REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
 _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
     read_nullable_integer
 )
-
+_REGISTRY.register_read(ZarrAsyncGroup, IOSpec("nullable-integer", "0.1.0"))(
+    read_nullable_integer
+)
 _REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean := partial(_read_nullable, array_type=pd.arrays.BooleanArray)
 )
 _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean
 )
-
+_REGISTRY.register_read(ZarrAsyncGroup, IOSpec("nullable-boolean", "0.1.0"))(
+    read_nullable_boolean
+)
 _REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))(
     read_nullable_string := partial(_read_nullable, array_type=_string_array)
 )
 _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
     read_nullable_string
 )
-
+_REGISTRY.register_read(ZarrAsyncGroup, IOSpec("nullable-string-array", "0.1.0"))(
+    read_nullable_string
+)
 
 ###########
 # Scalars #
@@ -1312,6 +1340,7 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
+@_REGISTRY.register_read(ZarrAsyncArray, IOSpec("numeric-scalar", "0.2.0"))
 async def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
     # TODO: `item` ensures the return is in fact a scalar (needed after zarr v3 which now returns a 1 elem array)
     # https://github.com/zarr-developers/zarr-python/issues/2713

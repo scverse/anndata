@@ -64,6 +64,8 @@ def is_zarr_v2() -> bool:
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
     warn(msg, DeprecationWarning)
+    ZarrAsyncGroup = None
+    ZarrAsyncArray = None
 else:
     from zarr import AsyncArray as ZarrAsyncArray  # noqa: F401
     from zarr import AsyncGroup as ZarrAsyncGroup  # noqa: F401
@@ -167,7 +169,7 @@ def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:
         return attrs[name]
     else:
-        return attrs.get(name, default=default)
+        return attrs.get(name, default)
 
 
 @_read_attr.register(h5py.AttributeManager)

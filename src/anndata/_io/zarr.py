@@ -19,7 +19,7 @@ from ..compat import ZarrAsyncArray, _clean_uns, _from_fixed_length_strings, is_
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem_async
 from .specs.methods import sync_async_to_async
-from .utils import _read_legacy_raw, report_read_key_on_error
+from .utils import _read_legacy_raw, contains, get, items, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -68,6 +68,10 @@ def write_zarr(
 
 
 def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+    return anyio.run(read_zarr_async, store)
+
+
+async def read_zarr_async(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 
@@ -82,18 +86,22 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
     if isinstance(store, zarr.Group):
         f = store
     else:
-        f = zarr.open(store, mode="r")
+        if is_zarr_v2():
+            f = zarr.open(store, mode="r")
+        else:
+            f = await zarr.api.asynchronous.open(store=store, mode="r")
 
     # Read with handling for backwards compat
     async def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+            k_v = await items(elem)
             args = dict(
                 await asyncio.gather(
                     *(
                         # This is covering up backwards compat in the anndata initializer
                         # In most cases we should be able to call `func(elen[k])` instead
-                        sync_async_to_async(k, read_dispatched(elem[k], callback))
-                        for k in elem.keys()
+                        sync_async_to_async(k, read_dispatched(v, callback))
+                        for k, v in k_v
                         if not k.startswith("raw.")
                     )
                 )
@@ -105,28 +113,22 @@ def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
             return await read_dataframe(elem)
         elif elem_name == "/raw":
             # Backwards compat
+            elem_in_memory = await func(elem)
             return await _read_legacy_raw(
-                f, await func(elem), read_dataframe, read_elem_async
+                f, elem_in_memory, read_dataframe, read_elem_async
             )
         return await func(elem)
 
-    adata = anyio.run(read_dispatched, f, callback)
-
-    async def gather():
-        return await asyncio.gather(
-            _read_legacy_raw(f, adata.raw, read_dataframe, read_elem_async)
-        )
-
+    adata = await read_dispatched(f, callback=callback)
     # Backwards compat (should figure out which version)
-    if "raw.X" in f:
-        raw = AnnData(**anyio.run(gather))
+    if await contains(f, "raw.X"):
+        raw_args = await _read_legacy_raw(f, adata.raw, read_dataframe, read_elem_async)
+        raw = AnnData(**raw_args)
         raw.obs_names = adata.obs_names
         adata.raw = raw
-
     # Backwards compat for <0.7
-    if isinstance(f["obs"], zarr.Array):
+    if isinstance(await get(f, "obs"), zarr.AsyncArray):
         _clean_uns(adata)
-
     return adata
 
 

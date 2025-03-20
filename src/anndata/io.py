@@ -13,7 +13,7 @@ from ._io.read import (
 )
 from ._io.specs import read_elem, read_elem_async, write_elem, write_elem_async
 from ._io.write import write_csvs, write_loom
-from ._io.zarr import read_zarr, write_zarr
+from ._io.zarr import read_zarr, read_zarr_async, write_zarr
 
 __all__ = [
     "read_csv",
@@ -29,6 +29,7 @@ __all__ = [
     "write_h5ad",
     "write_loom",
     "write_zarr",
+    "read_zarr_async",
     "write_elem",
     "write_elem_async",
     "read_elem",

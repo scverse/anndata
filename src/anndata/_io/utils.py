@@ -9,6 +9,8 @@ from warnings import warn
 import h5py
 from packaging.version import Version
 
+from ..compat import ZarrAsyncGroup
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from typing import Any, Literal
@@ -296,7 +298,7 @@ def report_write_key_on_error(func):
 
 
 async def _read_legacy_raw(
-    f: ZarrGroup | H5Group,
+    f: ZarrGroup | H5Group | ZarrAsyncGroup,
     modern_raw,  # TODO: type
     read_df: Callable,
     read_attr: Callable,
@@ -308,19 +310,30 @@ async def _read_legacy_raw(
     Makes sure that no modern raw group coexists with legacy raw.* groups.
     """
     if modern_raw:
-        if any(k.startswith("raw.") for k in f):
+        if isinstance(f, ZarrAsyncGroup):
+            keys = [k async for k in f.keys()]
+        else:
+            keys = f.keys()
+        if any(k.startswith("raw.") for k in keys):
             what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
             msg = f"{what} has both legacy and current raw formats."
             raise ValueError(msg)
         return modern_raw
 
     raw = {}
-    if "X" in attrs and "raw.X" in f:
-        raw["X"] = await read_attr(f["raw.X"])
-    if "var" in attrs and "raw.var" in f:
-        raw["var"] = await read_df(f["raw.var"])  # Backwards compat
-    if "varm" in attrs and "raw.varm" in f:
-        raw["varm"] = await read_attr(f["raw.varm"])
+    if isinstance(f, ZarrAsyncGroup):
+        raw_keys = [k async for k in f.keys()]
+    else:
+        raw_keys = f.keys()
+    if "X" in attrs and "raw.X" in raw_keys:
+        elem = await get(f, "raw.X")
+        raw["X"] = await read_attr(elem)
+    if "var" in attrs and "raw.var" in raw_keys:
+        elem = await get(f, "raw.var")
+        raw["var"] = await read_df(elem)  # Backwards compat
+    if "varm" in attrs and "raw.varm" in raw_keys:
+        elem = await get(f, "raw.varm")
+        raw["varm"] = await read_attr(elem)
     return raw
 
 
@@ -370,7 +383,7 @@ async def items(
     from ..compat import ZarrAsyncGroup
 
     if isinstance(elem, ZarrAsyncGroup):
-        return await elem.members()
+        return [k_v async for k_v in elem.members()]
     return dict(elem).items()
 
 
@@ -382,3 +395,11 @@ async def require_group(elem: GroupStorageType, k: str) -> GroupStorageType:
     if isinstance(elem, ZarrAsyncGroup):
         return await g
     return g
+
+
+async def contains(elem: GroupStorageType, k: str) -> bool:
+    from ..compat import ZarrAsyncGroup
+
+    if isinstance(elem, ZarrAsyncGroup):
+        return await elem.contains(k)
+    return k in elem
