@@ -17,7 +17,6 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_typed_df,
 )
-from testing.fast_array_utils import Flags
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -81,7 +80,6 @@ def simple_subset_func(request):
 
 
 @pytest.fixture
-@pytest.mark.array_type(skip=Flags.Disk)  # TODO: doesn’t work, figure this out
 def adata_remote_orig_with_path(
     tmp_path_factory: pytest.TempPathFactory,
     diskfmt: str,
@@ -122,9 +120,8 @@ def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
 
 
 @pytest.fixture
-@pytest.mark.array_type(skip=Flags.Disk)  # TODO: doesn’t work, figure this out
 def adata_remote_with_store_tall_skinny_path(
-    tmp_path_factory,
+    tmp_path_factory: pytest.TempPathFactory,
     array_type: ArrayType,
     worker_id: str = "serial",
 ) -> Path:
