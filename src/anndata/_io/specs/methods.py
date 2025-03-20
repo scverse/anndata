@@ -531,8 +531,7 @@ def write_basic_dask_h5(
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
-    res = elem[()]
-    return res
+    return elem[()]
 
 
 @_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
