@@ -88,6 +88,10 @@ test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
+    "pytest-randomly",
+    "pytest-memray",
+    "pytest-mock",
+    "filelock",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -98,8 +102,6 @@ test = [
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
-    "pytest_memray",
-    "pytest-mock",
     "anndata[dask]",
 ]
 dev-test = [ "pytest-xdist[psutil]" ] # local test speedups

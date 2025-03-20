@@ -116,5 +116,5 @@ def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
     if strs := config.getini(name):
         assert isinstance(strs, list)
         assert all(isinstance(item, str) for item in strs)
-        return cast(list[str], strs)
+        return cast("list[str]", strs)
     return []

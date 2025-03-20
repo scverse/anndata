@@ -19,6 +19,7 @@ pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not inst
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
     from typing import Literal
 
     from numpy.typing import NDArray
@@ -214,14 +215,11 @@ def test_concat_to_memory_var(
 
 
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData, join: Join_T, *, load_annotation_index: bool
-):
+    adata_remote: AnnData, join: Join_T, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster),
-    ):
+    with dd.Client(local_cluster_addr):
         ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 
@@ -314,7 +312,7 @@ def test_concat_df_ds_mixed_types(
     assert_equal(mixed_concatenated, in_memory_concatenated)
 
 
-def test_concat_bad_mixed_types(tmp_path: str):
+def test_concat_bad_mixed_types(tmp_path: Path):
     orig = gen_adata((100, 200), np.array)
     orig.write_zarr(tmp_path)
     remote = read_lazy(tmp_path)

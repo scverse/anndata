@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -72,7 +73,7 @@ DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
 @pytest.fixture(params=sparse_formats)
-def sparse_format(request):
+def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
     return request.param
 
 
@@ -349,7 +350,9 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
-def test_read_lazy_h5_cluster(sparse_format, tmp_path):
+def test_read_lazy_h5_cluster(
+    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
     with h5py.File(tmp_path / "test.h5", "w") as file:
@@ -357,10 +360,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         arr_store = create_sparse_store(sparse_format, store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster) as _client,
-    ):
+    with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 

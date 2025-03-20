@@ -266,7 +266,7 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast(str, self.override.__doc__)
+        doc = cast("str", self.override.__doc__)
         insert_index = doc.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
             self.describe(option, should_print_description=False).splitlines(

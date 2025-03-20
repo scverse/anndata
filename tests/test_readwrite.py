@@ -32,7 +32,6 @@ from anndata.compat import (
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
-    from os import PathLike
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -551,7 +550,7 @@ def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
-    def md5_path(pth: PathLike) -> bytes:
+    def md5_path(pth: Path) -> bytes:
         checksum = hashlib.md5()
         with pth.open("rb") as f:
             while True:
@@ -618,20 +617,24 @@ def test_read_umi_tools():
     assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
 
 
-def test_write_categorical(tmp_path, diskfmt):
+@pytest.mark.parametrize("s2c", [True, False], ids=["str2cat", "preserve"])
+def test_write_categorical(
+    *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
+) -> None:
+    ad.settings.allow_write_nullable_strings = True
     adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(
-        obs=pd.DataFrame(
-            dict(
-                cat1=["a", "a", "b", np.nan, np.nan],
-                cat2=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            )
-        ),
+    obs = dict(
+        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
     )
-    getattr(orig, f"write_{diskfmt}")(adata_pth)
-    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    orig = ad.AnnData(obs=pd.DataFrame(obs))
+    getattr(orig, f"write_{diskfmt}")(adata_pth, convert_strings_to_categoricals=s2c)
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+    assert curr.obs["str"].dtype == ("category" if s2c else "string")
+    assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
