@@ -82,7 +82,7 @@ async def read_zarr_async(store: str | Path | MutableMapping | zarr.Group) -> An
     if isinstance(store, Path):
         store = str(store)
 
-    if isinstance(store, zarr.Group):
+    if isinstance(store, zarr.Group | zarr.AsyncGroup):
         f = store
     else:
         if is_zarr_v2():
