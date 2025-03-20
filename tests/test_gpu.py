@@ -48,6 +48,7 @@ def test_raw_gpu():
     assert isinstance(araw.X, sparse.csr_matrix)
 
 
+@pytest.mark.gpu
 def test_get_with_zarr_gpu(tmp_path: Path):
     adata = AnnData(X=sparse.random(50, 100, format="csr"))
     zarr_path = tmp_path / "gpu_adata.zarr"
