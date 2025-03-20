@@ -18,7 +18,6 @@ from .._warnings import OldFormatWarning
 from ..compat import ZarrAsyncArray, _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem_async
-from .specs.methods import sync_async_to_async
 from .utils import _read_legacy_raw, contains, get, items, report_read_key_on_error
 
 if TYPE_CHECKING:
@@ -94,16 +93,18 @@ async def read_zarr_async(store: str | Path | MutableMapping | zarr.Group) -> An
     # Read with handling for backwards compat
     async def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            k_v = await items(elem)
+            k_v = [(k, v) for k, v in await items(elem) if not k.startswith("raw.")]
             args = dict(
-                await asyncio.gather(
-                    *(
-                        # This is covering up backwards compat in the anndata initializer
-                        # In most cases we should be able to call `func(elen[k])` instead
-                        sync_async_to_async(k, read_dispatched(v, callback))
-                        for k, v in k_v
-                        if not k.startswith("raw.")
-                    )
+                zip(
+                    (k for k, _ in k_v),
+                    await asyncio.gather(
+                        *(
+                            # This is covering up backwards compat in the anndata initializer
+                            # In most cases we should be able to call `func(elen[k])` instead
+                            read_dispatched(v, callback)
+                            for _, v in k_v
+                        )
+                    ),
                 )
             )
             return AnnData(**args)

@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import anyio
 import h5py
 
-from anndata._io.specs.methods import sync_async_to_async
 from anndata._io.specs.registry import read_elem_async, read_elem_lazy
 from anndata._types import AnnDataElem
 from testing.anndata._doctest import doctest_needs
@@ -134,11 +133,11 @@ def read_lazy(
                 )
             )
             args = dict(
-                await asyncio.gather(
-                    *(
-                        sync_async_to_async(k, read_dispatched(v, callback=callback))
-                        for k, v in iter_object
-                    )
+                zip(
+                    (k for k, _ in iter_object),
+                    await asyncio.gather(
+                        *(read_dispatched(v, callback=callback) for _, v in iter_object)
+                    ),
                 )
             )
             return AnnData(**args)
@@ -160,12 +159,13 @@ def read_lazy(
         elif iospec.encoding_type in {"awkward-array"}:
             return await read_elem_async(elem)
         elif iospec.encoding_type == "dict":
+            iter_kv = dict(elem).items()
             return dict(
-                await asyncio.gather(
-                    *(
-                        sync_async_to_async(k, read_dispatched(v, callback=callback))
-                        for k, v in dict(elem).items()
-                    )
+                zip(
+                    (k for k, _ in iter_kv),
+                    await asyncio.gather(
+                        *(read_dispatched(v, callback=callback) for _, v in iter_kv)
+                    ),
                 )
             )
         return await func(elem)

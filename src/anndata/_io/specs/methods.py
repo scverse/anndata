@@ -27,6 +27,7 @@ from anndata._io.utils import (
     check_key,
     get,
     items,
+    keys,
     require_group,
     zero_dim_array_as_scalar,
 )
@@ -128,12 +129,6 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-async def sync_async_to_async(
-    s: T, a: asyncio.Future[C]
-) -> asyncio.Future[tuple[T, C]]:
-    return s, await a
-
-
 ################################
 # Fallbacks / backwards compat #
 ################################
@@ -160,11 +155,11 @@ async def read_basic(
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
         return dict(
-            await asyncio.gather(
-                *(
-                    sync_async_to_async(k, _reader.read_elem_async(v))
-                    for k, v in dict(elem).items()
-                )
+            zip(
+                elem.keys(),
+                await asyncio.gather(
+                    *(_reader.read_elem_async(v) for v in elem.values())
+                ),
             )
         )
     elif isinstance(elem, h5py.Dataset):
@@ -191,8 +186,9 @@ async def read_basic_zarr(
             return sparse_dataset(elem).to_memory()
         k_v = await items(elem)
         return dict(
-            await asyncio.gather(
-                *(sync_async_to_async(k, _reader.read_elem_async(v)) for k, v in k_v)
+            zip(
+                (k for k, _ in k_v),
+                await asyncio.gather(*(_reader.read_elem_async(v) for _, v in k_v)),
             )
         )
     return await zarr.read_dataset(elem)  # TODO: Handle legacy
@@ -223,8 +219,9 @@ async def write_dict(
 ) -> None:
     if isinstance(elem, AlignedView):
         d = dict(
-            await asyncio.gather(
-                *(sync_async_to_async(k, elem.getitem(k)) for k in elem.keys())
+            zip(
+                elem.keys(),
+                await asyncio.gather(*(elem.getitem(k) for k in elem.keys())),
             )
         )
     else:
@@ -299,15 +296,12 @@ async def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> A
         child = await get(e, k)
         return await _reader.read_elem_async(child)
 
-    k_v = await items(elem)
-    elem_keys = [k for k, _ in k_v]
+    elem_keys = await keys(elem)
+    elem_keys_filtered = [k for k in elems if k in elem_keys]
     d = dict(
-        await asyncio.gather(
-            *(
-                sync_async_to_async(k, read_async(elem, k))
-                for k in elems
-                if k in elem_keys
-            )
+        zip(
+            elem_keys_filtered,
+            await asyncio.gather(*(read_async(elem, k) for k in elem_keys_filtered)),
         )
     )
     return AnnData(**d)
@@ -381,8 +375,9 @@ async def read_mapping(
     print(elem)
     k_v = await items(elem)
     return dict(
-        await asyncio.gather(
-            *(sync_async_to_async(k, _reader.read_elem_async(v)) for k, v in k_v)
+        zip(
+            (k for k, _ in k_v),
+            await asyncio.gather(*(_reader.read_elem_async(v) for _, v in k_v)),
         )
     )
 
@@ -1007,8 +1002,9 @@ async def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
     length = _read_attr(elem.attrs, "length")
     k_v = await items(elem)
     container = dict(
-        await asyncio.gather(
-            *(sync_async_to_async(k, _reader.read_elem_async(v)) for k, v in k_v)
+        zip(
+            (k for k, _ in k_v),
+            await asyncio.gather(*(_reader.read_elem_async(v) for _, v in k_v)),
         )
     )
 
@@ -1097,11 +1093,9 @@ async def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataF
     column_elems = column_and_index_elems[:-1]
     df = pd.DataFrame(
         dict(
-            await asyncio.gather(
-                *(
-                    sync_async_to_async(k, read_series(e, _reader))
-                    for k, e in zip(columns, column_elems)
-                )
+            zip(
+                columns,
+                await asyncio.gather(*(read_series(e, _reader) for e in column_elems)),
             )
         ),
         index=await _reader.read_elem_async(index_elem),
@@ -1130,11 +1124,9 @@ async def read_dataframe_0_1_0(
     column_elems = column_and_index_elems[:-1]
     df = pd.DataFrame(
         dict(
-            await asyncio.gather(
-                *(
-                    sync_async_to_async(k, read_series(e, _reader))
-                    for k, e in zip(columns, column_elems)
-                )
+            zip(
+                columns,
+                await asyncio.gather(*(read_series(e, _reader) for e in column_elems)),
             )
         ),
         index=await read_series(index_elem, _reader),

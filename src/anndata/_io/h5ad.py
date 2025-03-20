@@ -26,7 +26,6 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
-from .specs.methods import sync_async_to_async
 from .specs.registry import IOSpec, read_elem_async, write_elem_async, write_spec
 from .utils import (
     H5PY_V3,
@@ -290,15 +289,18 @@ def read_h5ad(
 
         async def callback(func, elem_name: str, elem, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+                keys = [k for k in elem.keys() if not k.startswith("raw.")]
                 args = dict(
-                    await asyncio.gather(
-                        *(
-                            # This is covering up backwards compat in the anndata initializer
-                            # In most cases we should be able to call `func(elen[k])` instead
-                            sync_async_to_async(k, read_dispatched(elem[k], callback))
-                            for k in elem.keys()
-                            if not k.startswith("raw.")
-                        )
+                    zip(
+                        keys,
+                        await asyncio.gather(
+                            *(
+                                # This is covering up backwards compat in the anndata initializer
+                                # In most cases we should be able to call `func(elen[k])` instead
+                                read_dispatched(elem[k], callback)
+                                for k in keys
+                            )
+                        ),
                     )
                 )
                 return AnnData(**args)

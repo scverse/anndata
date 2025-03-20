@@ -387,6 +387,16 @@ async def items(
     return dict(elem).items()
 
 
+async def keys(
+    elem: GroupStorageType,
+) -> Iterable[(str, ArrayStorageType | GroupStorageType)]:
+    from ..compat import ZarrAsyncGroup
+
+    if isinstance(elem, ZarrAsyncGroup):
+        return [k_v async for k_v in elem.keys()]
+    return dict(elem).keys()
+
+
 async def require_group(elem: GroupStorageType, k: str) -> GroupStorageType:
     from ..compat import ZarrAsyncGroup
 

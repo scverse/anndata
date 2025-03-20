@@ -28,7 +28,6 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
-from .._io.specs.methods import sync_async_to_async
 from .._io.specs.registry import read_elem_async
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
 from . import read_dispatched
@@ -154,12 +153,16 @@ def read_as_backed(group: ZarrGroup | H5Group):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
+            d_elem = dict(elem)
             return dict(
-                await asyncio.gather(
-                    *(
-                        sync_async_to_async(k, read_dispatched(v, callback=callback))
-                        for k, v in dict(elem).items()
-                    )
+                zip(
+                    d_elem.keys(),
+                    await asyncio.gather(
+                        *(
+                            read_dispatched(v, callback=callback)
+                            for v in d_elem.values()
+                        )
+                    ),
                 )
             )
         else:
