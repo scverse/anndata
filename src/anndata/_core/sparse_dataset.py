@@ -62,12 +62,16 @@ class CompressedVectors(NamedTuple, Generic[DenseType]):
     indices: DenseType
     indptr: DenseType
 
-    def __new__(
-        cls, data: DenseType, indices: DenseType, indptr: np.ndarray, *args, **kwargs
-    ):
+    @classmethod
+    def from_buffers(
+        cls,
+        data: DenseType,
+        indices: DenseType,
+        indptr: np.ndarray,
+    ) -> CompressedVectors:
         if isinstance(data, CupyArray):
             indptr = CupyArray(indptr)
-        return NamedTuple.__new__(cls, data, indices, indptr, *args, **kwargs)
+        return CompressedVectors(data, indices, indptr)
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -163,7 +167,7 @@ class BackedSparseMatrix:
         new_data: np.ndarray = self.data[start:stop]
         new_indices: np.ndarray = self.indices[start:stop]
 
-        return CompressedVectors(new_data, new_indices, new_indptr)
+        return CompressedVectors.from_buffers(new_data, new_indices, new_indptr)
 
     def get_compressed_vectors(self, row_idxs: Iterable[int]) -> CompressedVectors:
         indptr_slices = [slice(*(self.indptr[i : i + 2])) for i in row_idxs]
@@ -182,7 +186,7 @@ class BackedSparseMatrix:
         indptr = np.array(
             list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
         )
-        return CompressedVectors(data, indices, indptr)
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
     def get_compressed_vectors_for_slices(
         self, slices: Iterable[slice]
@@ -204,19 +208,19 @@ class BackedSparseMatrix:
         offsets = accumulate(chain([indptr_limits[0].start], gaps))
         start_indptr = indptr_indices[0] - next(offsets)
         if len(slices) < 2:  # there is only one slice so no need to concatenate
-            return CompressedVectors(data, indices, start_indptr)
+            return CompressedVectors.from_buffers(data, indices, start_indptr)
         end_indptr = np.concatenate(
             [s[1:] - o for s, o in zip(indptr_indices[1:], offsets)]
         )
         indptr = np.concatenate([start_indptr, end_indptr])
-        return CompressedVectors(data, indices, indptr)
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
     def get_compressed_vector(self, idx: int) -> CompressedVectors:
         s = slice(*(self.indptr[idx : idx + 2]))
         data: np.ndarray = self.data[s]
         indices: np.ndarray = self.indices[s]
         indptr: np.ndarray = [0, len(data)]
-        return CompressedVectors(data, indices, indptr)
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
