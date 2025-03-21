@@ -621,20 +621,22 @@ def test_read_umi_tools():
 def test_write_categorical(
     *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
 ) -> None:
-    ad.settings.allow_write_nullable_strings = True
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-    obs = dict(
-        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
-        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
-    )
-    orig = ad.AnnData(obs=pd.DataFrame(obs))
-    getattr(orig, f"write_{diskfmt}")(adata_pth, convert_strings_to_categoricals=s2c)
-    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
-    assert np.all(orig.obs.notna() == curr.obs.notna())
-    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
-    assert curr.obs["str"].dtype == ("category" if s2c else "string")
-    assert curr.obs["cat"].dtype == "category"
+    with ad.settings.override(allow_write_nullable_strings=True):
+        adata_pth = tmp_path / f"adata.{diskfmt}"
+        obs = dict(
+            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+        )
+        orig = ad.AnnData(obs=pd.DataFrame(obs))
+        getattr(orig, f"write_{diskfmt}")(
+            adata_pth, convert_strings_to_categoricals=s2c
+        )
+        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+        assert np.all(orig.obs.notna() == curr.obs.notna())
+        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+        assert curr.obs["str"].dtype == ("category" if s2c else "string")
+        assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
