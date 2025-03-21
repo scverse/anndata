@@ -90,6 +90,7 @@ test = [
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "pytest-instafail",
     "fast-array-utils",
     "filelock",
     "matplotlib",

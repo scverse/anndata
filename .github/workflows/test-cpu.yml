@@ -8,7 +8,7 @@ on:
   pull_request:
 
 env:
-  PYTEST_ADDOPTS: "-v --color=yes"
+  PYTEST_ADDOPTS: "-v --color=yes -n auto --instafail"
   FORCE_COLOR: "1"
 
 defaults:
@@ -74,15 +74,15 @@ jobs:
 
       - name: Run Pytest
         if: matrix.test-type == 'standard'
-        run: pytest -n auto
+        run: pytest
 
       - name: Run Pytest (coverage)
         if: matrix.test-type == 'coverage'
-        run: coverage run -m pytest -n auto --cov --cov-report=xml
+        run: coverage run -m pytest --cov --cov-report=xml
 
       - name: Run Pytest (treat warnings as errors)
         if: matrix.test-type == 'strict-warning'
-        run: pytest --strict-warnings -n auto
+        run: pytest --strict-warnings
 
       - uses: codecov/codecov-action@v4
         if: matrix.test-type == 'coverage'
