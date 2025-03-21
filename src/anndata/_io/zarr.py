@@ -27,6 +27,17 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+def _check_rec_array(adata):
+    if settings.zarr_write_format == 3:
+        if any(
+            isinstance(adata.uns[k], np.recarray)
+            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+            for k in adata.uns.keys()
+        ):
+            msg = "zarr v3 does not support structured dtypes"
+            raise NotImplementedError(msg)
+
+
 @no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
@@ -37,6 +48,7 @@ def write_zarr(
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
+    _check_rec_array(adata)
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
@@ -159,10 +171,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
 def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
-    if len({"zarr_version", "zarr_format"}.intersection(kwargs.keys())):
-        msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
-        raise ValueError(msg)
-    kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
-        settings.zarr_write_format
-    )
+    if not is_zarr_v2() and "zarr_format" not in kwargs:
+        kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)
