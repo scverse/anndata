@@ -9,7 +9,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata import AnnData, settings
+from anndata import AnnData
 from anndata._types import AnnDataElem
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
@@ -26,19 +26,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
-
-
-# Extremely cursed, I have no idea why both of these are needed but they are
-@pytest.fixture(scope="session", autouse=True)
-def _write_nullable():
-    settings.allow_write_nullable_strings = True
-    pass
-
-
-@pytest.fixture(autouse=True)
-def _write_nullable_():
-    settings.allow_write_nullable_strings = True
-    pass
 
 
 @pytest.fixture(
@@ -58,7 +45,7 @@ def are_vars_different(request):
 
 
 @pytest.fixture(params=["zarr", "h5ad"], scope="session")
-def diskfmt(request):
+def diskfmt(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
 
@@ -101,15 +88,16 @@ def adata_remote_orig_with_path(
     else:
         orig_path = tmp_path_factory.mktemp(file_name)
     orig = gen_adata(
-        (1000, 1100),
+        (100, 110),
         mtx_format,
         obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
         var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
     )
     orig.raw = orig.copy()
-    getattr(ad.io, f"write_{diskfmt}")(
-        orig_path, orig, convert_strings_to_categoricals=False
-    )
+    with ad.settings.override(allow_write_nullable_strings=True):
+        getattr(ad.io, f"write_{diskfmt}")(
+            orig_path, orig, convert_strings_to_categoricals=False
+        )
     return orig_path, orig
 
 

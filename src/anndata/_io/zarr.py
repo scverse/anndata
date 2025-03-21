@@ -15,7 +15,7 @@ from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import _read_legacy_raw, report_read_key_on_error
+from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
     adata: AnnData,
