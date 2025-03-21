@@ -619,8 +619,10 @@ def write_vlen_string_array_zarr(
         from numcodecs import VLenUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
-        compressor = None
-        compressor = dataset_kwargs.pop("compressor", None)
+        if (
+            compressor := dataset_kwargs.get("compressor", None)
+        ) is not None and not isinstance(compressor, list):
+            dataset_kwargs["compressor"] = [compressor]
         filters, dtype = (
             ([VLenUTF8()], object)
             if ad.settings.zarr_write_format == 2
@@ -631,7 +633,6 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
-            compressors=compressor if isinstance(compressor, list) else [compressor],
             **dataset_kwargs,
         )
         f[k][:] = elem
