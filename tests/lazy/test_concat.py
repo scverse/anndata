@@ -252,8 +252,6 @@ def test_concat_data_subsetting(
     adata_orig: AnnData,
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
-    *,
-    load_annotation_index: bool,
 ):
     from anndata.experimental.backed._compat import Dataset2D
 
