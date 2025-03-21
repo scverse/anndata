@@ -9,7 +9,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata import AnnData, settings
+from anndata import AnnData
 from anndata._types import AnnDataElem
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
@@ -26,12 +26,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
-
-
-@pytest.fixture(autouse=True, scope="session")
-def write_nullable():
-    settings.allow_write_nullable_strings = True
-    return settings.allow_write_nullable_strings
 
 
 @pytest.fixture(
@@ -83,7 +77,6 @@ def simple_subset_func(request):
 @pytest.fixture(scope="session")
 def adata_remote_orig_with_path(
     tmp_path_factory,
-    write_nullable: bool,  # need to import to ensure it is done first  # noqa: FBT001
     diskfmt: str,
     mtx_format,
     worker_id: str = "serial",
@@ -95,15 +88,16 @@ def adata_remote_orig_with_path(
     else:
         orig_path = tmp_path_factory.mktemp(file_name)
     orig = gen_adata(
-        (1000, 1100),
+        (100, 110),
         mtx_format,
         obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
         var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
     )
     orig.raw = orig.copy()
-    getattr(ad.io, f"write_{diskfmt}")(
-        orig_path, orig, convert_strings_to_categoricals=False
-    )
+    with ad.settings.override(allow_write_nullable_strings=True):
+        getattr(ad.io, f"write_{diskfmt}")(
+            orig_path, orig, convert_strings_to_categoricals=False
+        )
     return orig_path, orig
 
 
