@@ -19,7 +19,7 @@ from functools import cached_property, singledispatchmethod
 from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar
 
 import h5py
 import numpy as np
@@ -33,6 +33,7 @@ from .._settings import settings
 from ..compat import (
     CSArray,
     CSMatrix,
+    CupyArray,
     CupyCSCMatrix,
     CupyCSMatrix,
     CupyCSRMatrix,
@@ -53,11 +54,20 @@ if TYPE_CHECKING:
 
 SCIPY_1_15 = Version(scipy.__version__) >= Version("1.15rc0")
 
+DenseType = TypeVar("DenseType", np.ndarray, CupyArray)
 
-class CompressedVectors(NamedTuple):
-    data: np.ndarray
-    indices: np.ndarray
-    indptr: np.ndarray
+
+class CompressedVectors(NamedTuple, Generic[DenseType]):
+    data: DenseType
+    indices: DenseType
+    indptr: DenseType
+
+    def __new__(
+        cls, data: DenseType, indices: DenseType, indptr: np.ndarray, *args, **kwargs
+    ):
+        if isinstance(data, CupyArray):
+            indptr = CupyArray(indptr)
+        return NamedTuple.__new__(cls, data, indices, indptr, *args, **kwargs)
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -546,6 +556,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         It should therefore fit into memory, so we cache it for faster access.
         """
         arr = self.group["indptr"][...]
+        if isinstance(arr, CupyArray):
+            arr = arr.get()
         return arr
 
     @cached_property
