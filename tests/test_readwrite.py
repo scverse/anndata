@@ -347,7 +347,7 @@ def test_zarr_compression(tmp_path, zarr_write_format):
     with ad.settings.override(zarr_write_format=zarr_write_format):
         pth = str(Path(tmp_path) / "adata.zarr")
         adata = gen_adata((10, 8))
-        if zarr_write_format == 2:
+        if zarr_write_format == 2 or is_zarr_v2():
             from numcodecs import Blosc
 
             compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
