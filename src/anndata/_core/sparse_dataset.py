@@ -70,7 +70,9 @@ class CompressedVectors(NamedTuple, Generic[DenseType]):
         indptr: np.ndarray,
     ) -> CompressedVectors:
         if isinstance(data, CupyArray):
-            indptr = CupyArray(indptr)
+            import cupy as cp
+
+            indptr = cp.array(indptr)
         return cls(data, indices, indptr)
 
 
