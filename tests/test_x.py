@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import pytest
+from fast_array_utils.conv import to_dense
 from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import assert_equal, gen_adata
-from anndata.utils import asarray
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
-UNLABELLED_ARRAY_TYPES = [
-    pytest.param(sparse.csr_matrix, id="csr"),
-    pytest.param(sparse.csc_matrix, id="csc"),
-    pytest.param(sparse.csr_array, id="csr_array"),
-    pytest.param(sparse.csc_array, id="csc_array"),
-    pytest.param(asarray, id="ndarray"),
-]
+if TYPE_CHECKING:
+    from anndata.compat import CSArray, CSMatrix
+    from testing.fast_array_utils import ArrayType
+
+
+NON_BASIC_FLAGS = Flags.Gpu | Flags.Disk | Flags.Dask
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
@@ -30,15 +32,21 @@ def diskfmt(request):
     return request.param
 
 
+@pytest.mark.array_type(skip=NON_BASIC_FLAGS)
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES)
-@pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
-@pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
-def test_setter_singular_dim(shape, orig_array_type, new_array_type):
+@pytest.mark.parametrize(
+    "new_array_type", [t for t in SUPPORTED_TYPES if not (t.flags & NON_BASIC_FLAGS)]
+)
+def test_setter_singular_dim(
+    shape,
+    array_type: ArrayType[np.ndarray | CSMatrix | CSArray],
+    new_array_type: ArrayType[np.ndarray | CSMatrix | CSArray],
+) -> None:
     # https://github.com/scverse/anndata/issues/500
-    adata = gen_adata(shape, X_type=orig_array_type)
+    adata = gen_adata(shape, X_type=array_type)
     to_assign = new_array_type(np.ones(shape))
     adata.X = to_assign
-    np.testing.assert_equal(asarray(adata.X), 1)
+    np.testing.assert_equal(to_dense(adata.X), 1)
     assert isinstance(adata.X, type(to_assign))
 
 
@@ -53,10 +61,15 @@ def test_repeat_indices_view():
         subset.X = mat
 
 
-@pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
-@pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
-def test_setter_view(orig_array_type, new_array_type):
-    adata = gen_adata((10, 10), X_type=orig_array_type)
+@pytest.mark.array_type(skip=NON_BASIC_FLAGS)
+@pytest.mark.parametrize(
+    "new_array_type", [t for t in SUPPORTED_TYPES if not (t.flags & NON_BASIC_FLAGS)]
+)
+def test_setter_view(
+    array_type: ArrayType[np.ndarray | CSMatrix | CSArray],
+    new_array_type: ArrayType[np.ndarray | CSMatrix | CSArray],
+) -> None:
+    adata = gen_adata((10, 10), X_type=array_type)
     orig_X = adata.X
     to_assign = new_array_type(np.ones((9, 9)))
     if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
@@ -64,7 +77,7 @@ def test_setter_view(orig_array_type, new_array_type):
         pytest.xfail("Cannot set a dense array with a sparse array")
     view = adata[:9, :9]
     view.X = to_assign
-    np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
+    np.testing.assert_equal(to_dense(view.X), np.ones((9, 9)))
     assert isinstance(view.X, type(orig_X))
 
 

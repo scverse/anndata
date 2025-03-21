@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 import zarr
 from numba.core.errors import NumbaDeprecationWarning
-from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
+from scipy.sparse import csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
@@ -29,11 +29,20 @@ from anndata.compat import (
     _read_attr,
     is_zarr_v2,
 )
-from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
 if TYPE_CHECKING:
-    from typing import Literal
+    from typing import Any, Literal
 
+    from numpy.typing import NDArray
+
+    from testing.fast_array_utils import ArrayType
+
+
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
 HERE = Path(__file__).parent
 
 
@@ -111,8 +120,8 @@ diskfmt2 = diskfmt
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_roundtrip(array_type: ArrayType, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
@@ -120,7 +129,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
     read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
 
-    adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata1 = ad.AnnData(array_type(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
     write1(adata1)
     adata2 = read1()
     write2(adata2)
@@ -132,9 +141,11 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
-    X = typ(X_list)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_kitchensink(
+    tmp_path, storage, array_type: ArrayType, backing_h5ad, dataset_kwargs
+):
+    X = array_type(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
     adata_src.raw = adata_src.copy()
@@ -178,9 +189,11 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
-    X = typ(X_list).astype("int8")
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_maintain_X_dtype(
+    array_type: ArrayType[NDArray[Any] | CSArray | CSMatrix], backing_h5ad
+):
+    X = array_type(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
@@ -211,9 +224,9 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
-    X = typ(X_list)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_h5ad_one_dimension(array_type: ArrayType, backing_h5ad):
+    X = array_type(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()
     adata_one.write(backing_h5ad)
@@ -222,9 +235,9 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_backed(typ, backing_h5ad):
-    X = typ(X_list)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_backed(array_type: ArrayType, backing_h5ad) -> None:
+    X = array_type(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
     adata_src.write()
@@ -237,15 +250,13 @@ def test_readwrite_backed(typ, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
-)
-def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, array_type: ArrayType) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
-    adata = gen_adata((M, N), X_type=typ)
+    adata = gen_adata((M, N), X_type=array_type)
     adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)

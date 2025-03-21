@@ -1,1 +1,2 @@
 numba>=0.56
+fast-array-utils @ git+https://github.com/scverse/fast-array-utils.git

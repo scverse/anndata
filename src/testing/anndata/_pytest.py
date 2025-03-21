@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from testing.fast_array_utils import ArrayType, Flags
+
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from pathlib import Path
@@ -66,6 +68,13 @@ def _doctest_env(
 
 def pytest_itemcollected(item: pytest.Item) -> None:
     """Define behavior of pytest.mark.gpu."""
+    if (
+        isinstance(item, pytest.Function)
+        and hasattr(item, "callspec")
+        and isinstance(at := item.callspec.params.get("array_type"), ArrayType)
+        and at.flags & Flags.Gpu
+    ):
+        item.add_marker(pytest.mark.gpu)
     is_gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
     if is_gpu:
         item.add_marker(
