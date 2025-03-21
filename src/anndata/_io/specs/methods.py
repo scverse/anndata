@@ -618,11 +618,6 @@ def write_vlen_string_array_zarr(
     else:
         from numcodecs import VLenUTF8
 
-        dataset_kwargs = dataset_kwargs.copy()
-        if (
-            compressor := dataset_kwargs.get("compressor", None)
-        ) is not None and not isinstance(compressor, list):
-            dataset_kwargs["compressor"] = [compressor]
         filters, dtype = (
             ([VLenUTF8()], object)
             if ad.settings.zarr_write_format == 2
