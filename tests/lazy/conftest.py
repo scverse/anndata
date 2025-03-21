@@ -28,17 +28,10 @@ if TYPE_CHECKING:
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
 
-# Extremely cursed, I have no idea why both of these are needed but they are
-@pytest.fixture(scope="session", autouse=True)
-def _write_nullable():
+@pytest.fixture(autouse=True, scope="session")
+def write_nullable():
     settings.allow_write_nullable_strings = True
-    pass
-
-
-@pytest.fixture(autouse=True)
-def _write_nullable_():
-    settings.allow_write_nullable_strings = True
-    pass
+    return settings.allow_write_nullable_strings
 
 
 @pytest.fixture(
@@ -90,6 +83,7 @@ def simple_subset_func(request):
 @pytest.fixture(scope="session")
 def adata_remote_orig_with_path(
     tmp_path_factory,
+    write_nullable: bool,  # need to import to ensure it is done first  # noqa: FBT001
     diskfmt: str,
     mtx_format,
     worker_id: str = "serial",

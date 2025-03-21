@@ -17,20 +17,10 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-)
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    ZarrGroup,
-    _read_attr,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -218,16 +208,15 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    ad.settings.allow_write_nullable_strings = True
+    with ad.settings.override(allow_write_nullable_strings=True):
+        key = f"key_for_{encoding_type}"
+        write_elem(store, key, value, dataset_kwargs={})
 
-    key = f"key_for_{encoding_type}"
-    write_elem(store, key, value, dataset_kwargs={})
+        assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
-
-    from_disk = read_elem(store[key])
-    assert_equal(value, from_disk)
-    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+        from_disk = read_elem(store[key])
+        assert_equal(value, from_disk)
+        assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 @pytest.mark.parametrize(
