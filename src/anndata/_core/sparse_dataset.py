@@ -69,9 +69,8 @@ class CompressedVectors(NamedTuple, Generic[DenseType]):
         indices: DenseType,
         indptr: np.ndarray,
     ) -> CompressedVectors:
-        if isinstance(data, CupyArray):
-            indptr = CupyArray(indptr)
-        return CompressedVectors(data, indices, indptr)
+        indptr = type(data)(indptr)
+        return cls(data, indices, indptr)
 
 
 def slice_len(s: slice, l: int) -> int:
