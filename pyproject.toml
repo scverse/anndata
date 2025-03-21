@@ -101,7 +101,7 @@ test = [
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
-    "anndata[dask,lazy]",
+    "anndata[dask]",
 ]
 dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
