@@ -6,6 +6,7 @@ import pytest
 import zarr
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.compat import CupyCSRMatrix
@@ -52,7 +53,8 @@ def test_raw_gpu():
 def test_get_with_zarr_gpu(tmp_path: Path):
     adata = AnnData(X=sparse.random(50, 100, format="csr"))
     zarr_path = tmp_path / "gpu_adata.zarr"
-    adata.write_zarr(zarr_path)
+    # compressor None because there are no GPU compressors right now
+    ad.io.write_zarr(zarr_path, adata, compressor=None)
     g = zarr.open_group(zarr_path, mode="r")
     adata = AnnData(X=sparse_dataset(g["X"]))
     with zarr.config.enable_gpu():
