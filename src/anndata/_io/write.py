@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
+from anndata._io.utils import no_write_dataset_2d
+
 from .._warnings import WriteWarning
 from ..compat import old_positionals
 from ..logging import get_logger
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@no_write_dataset_2d
 @old_positionals("skip_data", "sep")
 def write_csvs(
     dirname: PathLike[str] | str,
@@ -81,6 +84,7 @@ def write_csvs(
         )
 
 
+@no_write_dataset_2d
 @old_positionals("write_obsm_varm")
 def write_loom(
     filename: PathLike[str] | str, adata: AnnData, *, write_obsm_varm: bool = False

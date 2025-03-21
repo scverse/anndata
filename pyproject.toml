@@ -108,7 +108,7 @@ dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
-# requests and aiohttp needed for zarr v2 remote data
+# requests and aiohttp needed for zarr remote data
 lazy = [ "xarray>=2024.06.0", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
