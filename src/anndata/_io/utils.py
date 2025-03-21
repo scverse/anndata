@@ -320,7 +320,7 @@ def no_write_dataset_2d(write):
 
         if has_dataset_2d(adata):
             msg = (
-                "Writing AnnData objects with a Dataset2D not supported. "
+                "Writing AnnData objects with a Dataset2D not supported yet. "
                 "Please use `ds.to_memory` to bring the dataset into memory. "
                 "Note that if you have generated this object by concatenating several `AnnData` objects"
                 "the original types may be lost."

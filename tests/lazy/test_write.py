@@ -38,7 +38,7 @@ def test_write_error(
     noop_path = tmp_path / f"adata_noop.{fmt}"
     with pytest.raises(
         NotImplementedError,
-        match=r"Writing AnnData objects with a Dataset2D not supported. Please use `ds.to_memory`",
+        match=r"Writing AnnData objects with a Dataset2D not supported yet. Please use `ds.to_memory`",
     ):
         getattr(adata_lazy, f"write_{fmt}")(noop_path)
     assert not noop_path.exists(), (

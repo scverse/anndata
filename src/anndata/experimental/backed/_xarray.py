@@ -143,6 +143,4 @@ def _remove_unused_categories_xr(
     pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
 
-@to_memory.register(Dataset2D)
-def to_memory(ds: Dataset2D, *, copy=False) -> pd.DataFrame:
-    return ds.to_memory(copy=copy)
+to_memory.register(Dataset2D, Dataset2D.to_memory)
