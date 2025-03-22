@@ -144,6 +144,7 @@ addopts = [
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
+    "--dist=loadgroup",
 ]
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
