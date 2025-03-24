@@ -716,6 +716,12 @@ def write_sparse_compressed(
     # Allow resizing for hdf5
     if isinstance(f, H5Group):
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
+    if (
+        isinstance(f, ZarrGroup)
+        and not is_zarr_v2()
+        and (compressor := dataset_kwargs.pop("compressor", None))
+    ):
+        dataset_kwargs["compressors"] = compressor
 
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
