@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import warnings
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -18,17 +19,6 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from pathlib import Path
-
-
-# TODO: Should be done in pyproject.toml eventually
-# See https://github.com/pytest-dev/pytest-cov/issues/437
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "filterwarnings", "ignore::anndata._warnings.OldFormatWarning"
-    )
-    config.addinivalue_line(
-        "filterwarnings", "ignore::anndata._warnings.ExperimentalFeatureWarning"
-    )
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +54,10 @@ def _doctest_env(
         if warning_detail := getattr(func, "__deprecated", None):
             cat, msg, _ = warning_detail
             warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
-
+        if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
+            mod
+        ):
+            request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield
@@ -73,8 +66,6 @@ def _doctest_env(
 
 def pytest_itemcollected(item: pytest.Item) -> None:
     """Define behavior of pytest.mark.gpu."""
-    from importlib.util import find_spec
-
     is_gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
     if is_gpu:
         item.add_marker(
@@ -125,5 +116,5 @@ def _config_get_strlist(config: pytest.Config, name: str) -> list[str]:
     if strs := config.getini(name):
         assert isinstance(strs, list)
         assert all(isinstance(item, str) for item in strs)
-        return cast(list[str], strs)
+        return cast("list[str]", strs)
     return []

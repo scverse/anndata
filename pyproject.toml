@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "hatch-vcs"]
+requires = [ "hatchling", "hatch-vcs" ]
 
 [project]
 name = "anndata"
@@ -49,7 +49,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=2.15.0, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3",
 ]
-dynamic = ["version"]
+dynamic = [ "version" ]
 
 [project.urls]
 Documentation = "https://anndata.readthedocs.io/"
@@ -71,57 +71,66 @@ doc = [
     "sphinx-copybutton",
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
-    "nbsphinx",
+    "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.1",
     "awkward>=2.3",
-    "IPython",                          # For syntax highlighting in notebooks
+    "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     "readthedocs-sphinx-search",
     # for unreleased changes
-    "anndata[dev-doc]",
+    "anndata[dev-doc,dask]",
+    "awkward>=2.3",
 ]
-dev-doc = ["towncrier>=24.8.0"] # release notes tool
+dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+test-full = [ "anndata[test,lazy]" ]
 test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "pytest-cov>=2.10",
+    "pytest-cov",
+    "pytest-randomly",
+    "pytest-memray",
+    "pytest-mock",
+    "filelock",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx", # For data downloading
+    "httpx",              # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
-    "pytest_memray",
-    "pytest-mock",
     "anndata[dask]",
 ]
-dev-test = ["pytest-xdist"] # local test speedups
-gpu = ["cupy"]
-cu12 = ["cupy-cuda12x"]
-cu11 = ["cupy-cuda11x"]
+dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
+gpu = [ "cupy" ]
+cu12 = [ "cupy-cuda12x" ]
+cu11 = [ "cupy-cuda11x" ]
+# requests and aiohttp needed for zarr remote data
+lazy = [ "xarray>=2024.06.0", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
-dask = ["dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0"]
+dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
 
 [tool.hatch.version]
 source = "vcs"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
-packages = ["src/anndata", "src/testing"]
+packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
 data_file = "test-data/coverage"
-source_pkgs = ["anndata"]
-omit = ["src/anndata/_version.py", "**/test_*.py"]
+source_pkgs = [ "anndata" ]
+omit = [ "src/anndata/_version.py", "**/test_*.py" ]
+concurrency = [ "multiprocessing" ]
+parallel = "true"
+
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
-source = ["./src", "**/site-packages"]
+source = [ "./src", "**/site-packages" ]
 
 [tool.coverage.report]
 exclude_also = [
@@ -137,8 +146,8 @@ addopts = [
     "-ptesting.anndata._pytest",
 ]
 filterwarnings = [
-    # all `ignore::anndata.*` entries are in `conftest.py`
-    # See: https://github.com/pytest-dev/pytest-cov/issues/437
+    "ignore::anndata._warnings.OldFormatWarning",
+    "ignore::anndata._warnings.ExperimentalFeatureWarning",
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -147,21 +156,21 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default:anndata will no longer support zarr v2:DeprecationWarning"
+    "default:anndata will no longer support zarr v2:DeprecationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [
-    "anndata", # docstrings (module name due to --pyargs)
-    "./tests", # unit tests
-    "./ci/scripts", # CI script tests
+    "anndata",                  # docstrings (module name due to --pyargs)
+    "./tests",                  # unit tests
+    "./ci/scripts",             # CI script tests
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
-markers = ["gpu: mark test to run on GPU"]
+markers = [ "gpu: mark test to run on GPU" ]
 
 [tool.ruff]
-src = ["src"]
+src = [ "src" ]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -197,17 +206,17 @@ ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"tests/test_readwrite.py" = ["E721"]
+"tests/test_readwrite.py" = [ "E721" ]
 [tool.ruff.lint.isort]
-known-first-party = ["anndata"]
-required-imports = ["from __future__ import annotations"]
+known-first-party = [ "anndata" ]
+required-imports = [ "from __future__ import annotations" ]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 "legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
 [tool.ruff.lint.flake8-type-checking]
-exempt-modules = []
+exempt-modules = [  ]
 strict = true
 
 [tool.codespell]

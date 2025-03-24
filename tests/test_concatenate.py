@@ -153,9 +153,11 @@ def fix_known_differences(
         result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
-    for k, dtype in orig.obs.dtypes.items():
-        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
-            result.obs[k] = result.obs[k].astype(dtype)
+    for get_df in [lambda k: getattr(k, "obs"), lambda k: getattr(k, "obsm")["df"]]:
+        str_to_df_converted = get_df(result)
+        for k, dtype in get_df(orig).dtypes.items():
+            if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
+                str_to_df_converted[k] = str_to_df_converted[k].astype(dtype)
 
     return orig, result
 

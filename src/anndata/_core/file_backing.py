@@ -26,7 +26,7 @@ class AnnDataFileManager:
     def __init__(
         self,
         adata: anndata.AnnData,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
         self._adata_ref = weakref.ref(adata)
@@ -81,12 +81,12 @@ class AnnDataFileManager:
         return self._filename
 
     @filename.setter
-    def filename(self, filename: PathLike | None):
+    def filename(self, filename: PathLike[str] | str | None):
         self._filename = None if filename is None else Path(filename)
 
     def open(
         self,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
         if filename is not None:

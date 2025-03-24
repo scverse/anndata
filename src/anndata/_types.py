@@ -4,14 +4,9 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, TypeVar, runtime_checkable
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .typing import RWAble
 
 if TYPE_CHECKING:
@@ -20,15 +15,20 @@ if TYPE_CHECKING:
 
     from anndata._core.anndata import AnnData
 
-    from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
-    from .compat import DaskArray
+    from ._io.specs.registry import (
+        IOSpec,
+        LazyDataStructures,
+        LazyReader,
+        Reader,
+        Writer,
+    )
 
 __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
     "_ReadInternal",
-    "_ReadDaskInternal",
+    "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
@@ -49,10 +49,10 @@ class _ReadInternal(Protocol[SCon, CovariantRWAble]):
     def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
-class _ReadDaskInternal(Protocol[SCon]):
+class _ReadLazyInternal(Protocol[SCon]):
     def __call__(
-        self, elem: SCon, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray: ...
+        self, elem: SCon, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
+    ) -> LazyDataStructures: ...
 
 
 class Read(Protocol[SCon, CovariantRWAble]):
@@ -65,16 +65,16 @@ class Read(Protocol[SCon, CovariantRWAble]):
             The element to read from.
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 
 
-class ReadDask(Protocol[SCon]):
+class ReadLazy(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray:
-        """Low-level reading function for a dask element.
+    ) -> LazyDataStructures:
+        """Low-level reading function for a lazy element.
 
         Parameters
         ----------
@@ -84,7 +84,7 @@ class ReadDask(Protocol[SCon]):
             The chunk size to be used.
         Returns
         -------
-            The dask element read from the store.
+        The lazy element read from the store.
         """
         ...
 
@@ -152,7 +152,7 @@ class ReadCallback(Protocol[SCo, InvariantRWAble]):
 
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 
@@ -204,3 +204,19 @@ class ExtensionNamespace(Protocol):
         """
         Used to enforce the correct signature for extension namespaces.
         """
+
+
+AnnDataElem = Literal[
+    "obs",
+    "var",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "X",
+    "raw",
+    "uns",
+]
+
+Join_T = Literal["inner", "outer"]

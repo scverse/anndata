@@ -15,10 +15,11 @@ from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import _read_legacy_raw, report_read_key_on_error
+from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from os import PathLike
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
     adata: AnnData,
@@ -34,6 +36,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_zarr`."""
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
@@ -55,9 +58,13 @@ def write_zarr(
         func(s, k, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+    if is_zarr_v2():
+        zarr.convenience.consolidate_metadata(f.store)
+    else:
+        zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 

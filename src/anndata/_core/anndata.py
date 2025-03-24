@@ -8,7 +8,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from functools import partial
+from functools import partial, singledispatch
 from pathlib import Path
 from textwrap import dedent
 from typing import TYPE_CHECKING, cast
@@ -43,7 +43,6 @@ from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
 from .views import (
-    DataFrameView,
     DictView,
     _resolve_idxs,
     as_view,
@@ -54,8 +53,10 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, ClassVar, Literal
 
+    from zarr.storage import StoreLike
+
     from ..compat import Index1D
-    from ..typing import ArrayDataStructureType
+    from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
 
@@ -208,18 +209,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     )
     def __init__(
         self,
-        X: ArrayDataStructureType | pd.DataFrame | None = None,
+        X: XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, ArrayDataStructureType] | None = None,
+        layers: Mapping[str, XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
@@ -293,8 +294,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes
-        self._obs = DataFrameView(obs_sub, view_args=(self, "obs"))
-        self._var = DataFrameView(var_sub, view_args=(self, "var"))
+        self._obs = as_view(obs_sub, view_args=(self, "obs"))
+        self._var = as_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set data
@@ -542,7 +543,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> ArrayDataStructureType | None:
+    def X(self) -> XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -573,7 +574,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: ArrayDataStructureType | None):
+    def X(self, value: XDataType | None):
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -963,7 +964,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return self.file.filename
 
     @filename.setter
-    def filename(self, filename: PathLike | None):
+    def filename(self, filename: PathLike[str] | str | None):
         # convert early for later comparison
         filename = None if filename is None else Path(filename)
         # change from backing-mode back to full loading into memory
@@ -1025,8 +1026,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
+    @staticmethod
+    @singledispatch
     def _remove_unused_categories(
-        self, df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
+        df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
     ):
         for k in df_full:
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
@@ -1175,7 +1178,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | ArrayDataStructureType):
+    def __setitem__(self, index: Index, val: float | XDataType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
@@ -1440,7 +1443,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         return AnnData(**new)
 
-    def copy(self, filename: PathLike | None = None) -> AnnData:
+    def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
             if self.is_view and self._has_X():
@@ -1801,9 +1804,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 )
                 raise ValueError(msg)
 
+    @old_positionals("compression", "compression_opts", "as_dense")
     def write_h5ad(
         self,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
+        *,
+        convert_strings_to_categoricals: bool = True,
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | Any = None,
         as_dense: Sequence[str] = (),
@@ -1827,6 +1833,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         ----------
         filename
             Filename of data file. Defaults to backing file.
+        convert_strings_to_categoricals
+            Convert string columns to categorical.
         compression
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
 
@@ -1881,6 +1889,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         write_h5ad(
             Path(filename),
             self,
+            convert_strings_to_categoricals=convert_strings_to_categoricals,
             compression=compression,
             compression_opts=compression_opts,
             as_dense=as_dense,
@@ -1892,7 +1901,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     write = write_h5ad  # a shortcut and backwards compat
 
     @old_positionals("skip_data", "sep")
-    def write_csvs(self, dirname: PathLike, *, skip_data: bool = True, sep: str = ","):
+    def write_csvs(
+        self, dirname: PathLike[str] | str, *, skip_data: bool = True, sep: str = ","
+    ):
         """\
         Write annotation to `.csv` files.
 
@@ -1913,7 +1924,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     @old_positionals("write_obsm_varm")
-    def write_loom(self, filename: PathLike, *, write_obsm_varm: bool = False):
+    def write_loom(
+        self, filename: PathLike[str] | str, *, write_obsm_varm: bool = False
+    ):
         """\
         Write `.loom`-formatted hdf5 file.
 
@@ -1926,10 +1939,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
         write_loom(filename, self, write_obsm_varm=write_obsm_varm)
 
+    @old_positionals("chunks")
     def write_zarr(
         self,
-        store: MutableMapping | PathLike,
+        store: StoreLike,
+        *,
         chunks: tuple[int, ...] | None = None,
+        convert_strings_to_categoricals: bool = True,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1940,6 +1956,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
+        convert_strings_to_categoricals
+            Convert string columns to categorical.
         """
         from ..io import write_zarr
 
@@ -1950,7 +1968,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 "Please pass `write_zarr(adata)` instead."
             )
             raise ValueError(msg)
-        write_zarr(store, self, chunks=chunks)
+        write_zarr(
+            store,
+            self,
+            chunks=chunks,
+            convert_strings_to_categoricals=convert_strings_to_categoricals,
+        )
 
     def chunked_X(self, chunk_size: int | None = None):
         """\
@@ -2091,10 +2114,10 @@ def _infer_shape_for_axis(
             return elem.shape[0]
     for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
         if elem is not None:
-            elem = cast(Mapping, elem)
+            elem = cast("Mapping", elem)
             for sub_elem in elem.values():
                 if hasattr(sub_elem, "shape"):
-                    size = cast(int, sub_elem.shape[axis if id == "layers" else 0])
+                    size = cast("int", sub_elem.shape[axis if id == "layers" else 0])
                     return size
     return None
 

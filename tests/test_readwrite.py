@@ -25,13 +25,13 @@ from anndata.compat import (
     CSMatrix,
     DaskArray,
     ZarrArray,
+    ZarrGroup,
     _read_attr,
     is_zarr_v2,
 )
 from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
 
 if TYPE_CHECKING:
-    from os import PathLike
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -131,10 +131,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-needs_zarr = pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
-
-
-@pytest.mark.parametrize("storage", ["h5ad", pytest.param("zarr", marks=[needs_zarr])])
+@pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
@@ -283,7 +280,18 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        store["obs"].attrs["encoding-type"] = "invalid"
+        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+            # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
+            # with re-opening without syncing attributes explicitly
+            # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
+            # See https://github.com/zarr-developers/zarr-python/pull/2870
+            store["obs"].update_attributes(
+                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
+            )
+            zarr.consolidate_metadata(store.store)
+        else:
+            store["obs"].attrs["encoding-type"] = "invalid"
+
     with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
@@ -532,7 +540,7 @@ def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
-    def md5_path(pth: PathLike) -> bytes:
+    def md5_path(pth: Path) -> bytes:
         checksum = hashlib.md5()
         with pth.open("rb") as f:
             while True:
@@ -599,20 +607,26 @@ def test_read_umi_tools():
     assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
 
 
-def test_write_categorical(tmp_path, diskfmt):
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(
-        obs=pd.DataFrame(
-            dict(
-                cat1=["a", "a", "b", np.nan, np.nan],
-                cat2=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            )
-        ),
-    )
-    getattr(orig, f"write_{diskfmt}")(adata_pth)
-    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
-    assert np.all(orig.obs.notna() == curr.obs.notna())
-    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+@pytest.mark.parametrize("s2c", [True, False], ids=["str2cat", "preserve"])
+def test_write_categorical(
+    *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
+) -> None:
+    with ad.settings.override(allow_write_nullable_strings=True):
+        adata_pth = tmp_path / f"adata.{diskfmt}"
+        obs = dict(
+            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+        )
+        orig = ad.AnnData(obs=pd.DataFrame(obs))
+        getattr(orig, f"write_{diskfmt}")(
+            adata_pth, convert_strings_to_categoricals=s2c
+        )
+        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+        assert np.all(orig.obs.notna() == curr.obs.notna())
+        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+        assert curr.obs["str"].dtype == ("category" if s2c else "string")
+        assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -888,3 +902,11 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.skipif(
+    find_spec("xarray"), reason="Xarray is installed so `read_lazy` will not error"
+)
+def test_read_lazy_import_error():
+    with pytest.raises(ImportError, match="xarray"):
+        ad.experimental.read_lazy("test.zarr")
