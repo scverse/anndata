@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 
 import anndata as ad
 from anndata._core import extensions
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +99,7 @@ def test_accessor_namespace():
     assert dummy_obj.dummy is ns_instance
 
 
-def test_descriptor_instance_caching(dummy_namespace, adata: AnnData) -> None:
+def test_descriptor_instance_caching(dummy_namespace, adata: ad.AnnData) -> None:
     """Test that namespace instances are cached on individual AnnData objects."""
     # First access creates the instance
     ns_instance = adata.dummy
@@ -135,14 +140,9 @@ def test_register_namespace_override() -> None:
     assert adata.dummy.greet() == "world"
 
 
-def test_register_existing_attributes():
-    """
-    Test that registering an accessor with a name that is a reserved attribute of AnnData raises an attribute error.
-
-    We only test a representative sample of important attributes rather than all of them.
-    """
-    # Test a representative sample of key AnnData attributes
-    key_attributes = [
+@pytest.mark.parametrize(
+    "attr",
+    [
         "X",
         "obs",
         "var",
@@ -152,18 +152,24 @@ def test_register_existing_attributes():
         "layers",
         "copy",
         "write",
-    ]
+    ],
+)
+def test_register_existing_attributes(attr):
+    """
+    Test that registering an accessor with a name that is a reserved attribute of AnnData raises an attribute error.
 
-    for attr in key_attributes:
-        with pytest.raises(
-            AttributeError,
-            match=f"cannot override reserved attribute {attr!r}",
-        ):
+    We only test a representative sample of important attributes rather than all of them.
+    """
+    # Test a representative sample of key AnnData attributes
+    with pytest.raises(
+        AttributeError,
+        match=f"cannot override reserved attribute {attr!r}",
+    ):
 
-            @ad.register_anndata_namespace(attr)
-            class DummyNamespace:
-                def __init__(self, adata: ad.AnnData) -> None:
-                    self._adata = adata
+        @ad.register_anndata_namespace(attr)
+        class DummyNamespace:
+            def __init__(self, adata: ad.AnnData) -> None:
+                self._adata = adata
 
 
 class TestNamespaceSignatureValidation:
@@ -236,6 +242,6 @@ class TestNamespaceSignatureValidation:
                     self.info = info
 
 
-def test_register_namespace_basic(dummy_namespace, adata: AnnData) -> None:
+def test_register_namespace_basic(dummy_namespace, adata: ad.AnnData) -> None:
     """Test basic namespace registration and access."""
     assert adata.dummy.greet() == "hello"
