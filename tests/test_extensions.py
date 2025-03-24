@@ -172,74 +172,78 @@ def test_register_existing_attributes(attr):
                 self._adata = adata
 
 
-class TestNamespaceSignatureValidation:
-    def test_valid_signature(self):
-        """Test that a namespace with valid signature is accepted."""
+def test_valid_signature():
+    """Test that a namespace with valid signature is accepted."""
 
-        @ad.register_anndata_namespace("valid")
-        class ValidNamespace:
-            def __init__(self, adata: ad.AnnData) -> None:
+    @ad.register_anndata_namespace("valid")
+    class ValidNamespace:
+        def __init__(self, adata: ad.AnnData) -> None:
+            self.adata = adata
+
+
+def test_missing_param():
+    """Test that a namespace missing the second parameter is rejected."""
+    with pytest.raises(
+        TypeError,
+        match="Namespace initializer must accept an AnnData instance as the second parameter.",
+    ):
+
+        @ad.register_anndata_namespace("missing_param")
+        class MissingParamNamespace:
+            def __init__(self) -> None:
+                pass
+
+
+def test_wrong_name():
+    """Test that a namespace with wrong parameter name is rejected."""
+    with pytest.raises(
+        TypeError,
+        match="Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
+    ):
+
+        @ad.register_anndata_namespace("wrong_name")
+        class WrongNameNamespace:
+            def __init__(self, notadata: ad.AnnData) -> None:
+                self.notadata = notadata
+
+
+def test_wrong_annotation():
+    """Test that a namespace with wrong parameter annotation is rejected."""
+    with pytest.raises(
+        TypeError,
+        match="Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
+    ):
+
+        @ad.register_anndata_namespace("wrong_annotation")
+        class WrongAnnotationNamespace:
+            def __init__(self, adata: int) -> None:
                 self.adata = adata
 
-    def test_missing_param(self):
-        """Test that a namespace missing the second parameter is rejected."""
-        with pytest.raises(
-            TypeError,
-            match="Namespace initializer must accept an AnnData instance as the second parameter.",
-        ):
 
-            @ad.register_anndata_namespace("missing_param")
-            class MissingParamNamespace:
-                def __init__(self) -> None:
-                    pass
+def test_missing_annotation():
+    """Test that a namespace with missing parameter annotation is rejected."""
+    with pytest.raises(AttributeError):
 
-    def test_wrong_name(self):
-        """Test that a namespace with wrong parameter name is rejected."""
-        with pytest.raises(
-            TypeError,
-            match="Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
-        ):
+        @ad.register_anndata_namespace("missing_annotation")
+        class MissingAnnotationNamespace:
+            def __init__(self, adata) -> None:
+                self.adata = adata
 
-            @ad.register_anndata_namespace("wrong_name")
-            class WrongNameNamespace:
-                def __init__(self, notadata: ad.AnnData) -> None:
-                    self.notadata = notadata
 
-    def test_wrong_annotation(self):
-        """Test that a namespace with wrong parameter annotation is rejected."""
-        with pytest.raises(
-            TypeError,
-            match="Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
-        ):
+def test_both_wrong():
+    """Test that a namespace with both wrong name and annotation is rejected."""
+    with pytest.raises(
+        TypeError,
+        match=(
+            r"Namespace initializer's second parameter must be named 'adata', got 'info'\. "
+            r"And must be annotated as 'AnnData', got 'str'\."
+        ),
+    ):
 
-            @ad.register_anndata_namespace("wrong_annotation")
-            class WrongAnnotationNamespace:
-                def __init__(self, adata: int) -> None:
-                    self.adata = adata
-
-    def test_missing_annotation(self):
-        """Test that a namespace with missing parameter annotation is rejected."""
-        with pytest.raises(AttributeError):
-
-            @ad.register_anndata_namespace("missing_annotation")
-            class MissingAnnotationNamespace:
-                def __init__(self, adata) -> None:
-                    self.adata = adata
-
-    def test_both_wrong(self):
-        """Test that a namespace with both wrong name and annotation is rejected."""
-        with pytest.raises(
-            TypeError,
-            match=(
-                r"Namespace initializer's second parameter must be named 'adata', got 'info'\. "
-                r"And must be annotated as 'AnnData', got 'str'\."
-            ),
-        ):
-
-            @ad.register_anndata_namespace("both_wrong")
-            class BothWrongNamespace:
-                def __init__(self, info: str) -> None:
-                    self.info = info
+        @ad.register_anndata_namespace("both_wrong")
+        class BothWrongNamespace:
+            def __init__(self, info: str) -> None:
+                self.info = info
 
 
 def test_register_namespace_basic(dummy_namespace, adata: ad.AnnData) -> None:
