@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    get_type_hints,
-)
+from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints
 from warnings import warn
 
 from anndata._types import ExtensionNamespace
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
 import anndata as ad
 
 # Based off of the extension framework in Polars
@@ -28,7 +26,7 @@ def find_stacklevel() -> int:
     https://github.com/pola-rs/polars/blob/main/py-polars/polars/_utils/various.py#L447
     """
 
-    pkg_dir = str(Path(ad.__file__).parent)
+    pkg_dir = str(Path(__file__).parent.parent)
 
     # https://stackoverflow.com/questions/17407119/python-inspect-stack-is-slow
     frame = inspect.currentframe()
@@ -58,17 +56,19 @@ def find_stacklevel() -> int:
 # and all current attributes of AnnData
 _reserved_namespaces: set[str] = set(dir(ad.AnnData))
 
+NameSpT = TypeVar("NameSpT", bound=ExtensionNamespace)
 
-class AccessorNameSpace(ExtensionNamespace):
+
+class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
     """Establish property-like namespace object for user-defined functionality."""
 
-    def __init__(self, name: str, namespace: type[ExtensionNamespace]) -> None:
+    def __init__(self, name: str, namespace: type[NameSpT]) -> None:
         self._accessor = name
         self._ns = namespace
 
     def __get__(
-        self, instance: ExtensionNamespace | None, cls: type[ExtensionNamespace]
-    ) -> ExtensionNamespace | type[ExtensionNamespace]:
+        self, instance: ExtensionNamespace | None, cls: type[NameSpT]
+    ) -> ExtensionNamespace | type[NameSpT]:
         if instance is None:
             return self._ns
 
@@ -156,10 +156,10 @@ def _check_namespace_signature(ns_class: type) -> None:
 
 def _create_namespace(
     name: str, cls: type[ad.AnnData]
-) -> Callable[[type[ExtensionNamespace]], type[ExtensionNamespace]]:
+) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Register custom namespace against the underlying AnnData class."""
 
-    def namespace(ns_class: type[ExtensionNamespace]) -> type[ExtensionNamespace]:
+    def namespace(ns_class: type[NameSpT]) -> type[NameSpT]:
         _check_namespace_signature(ns_class)  # Perform the runtime signature check
         if name in _reserved_namespaces:
             msg = f"cannot override reserved attribute {name!r}"
@@ -179,7 +179,7 @@ def _create_namespace(
 
 def register_anndata_namespace(
     name: str,
-) -> Callable[[type[ExtensionNamespace]], type[ExtensionNamespace]]:
+) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Decorator for registering custom functionality with an :class:`~anndata.AnnData` object.
 
     This decorator allows you to extend AnnData objects with custom methods and properties
