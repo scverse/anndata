@@ -204,4 +204,3 @@ class ExtensionNamespace(Protocol):
         """
         Used to enforce the correct signature for extension namespaces.
         """
-        ...

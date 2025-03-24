@@ -8,7 +8,7 @@ from anndata._core import extensions
 
 
 @pytest.fixture(autouse=True)
-def cleanup_dummy():
+def _cleanup_dummy() -> Generator[None, None, None]:
     """Automatically cleanup dummy namespace after each test."""
     original = getattr(ad.AnnData, "dummy", None)
     yield
@@ -91,10 +91,10 @@ def test_accessor_namespace():
 
     # __get__ should cache the namespace instance on the object.
     # Subsequent access should return the same cached instance.
-    assert getattr(dummy_obj, "dummy") is ns_instance
+    assert dummy_obj.dummy is ns_instance
 
 
-def test_descriptor_instance_caching(cleanup_dummy, dummy_namespace, adata):
+def test_descriptor_instance_caching(dummy_namespace, adata: AnnData) -> None:
     """Test that namespace instances are cached on individual AnnData objects."""
     # First access creates the instance
     ns_instance = adata.dummy
@@ -102,7 +102,7 @@ def test_descriptor_instance_caching(cleanup_dummy, dummy_namespace, adata):
     assert adata.dummy is ns_instance
 
 
-def test_register_namespace_override(cleanup_dummy):
+def test_register_namespace_override() -> None:
     """Test namespace registration and override behavior."""
     ad.AnnData._accessors = set()
 
@@ -236,6 +236,6 @@ class TestNamespaceSignatureValidation:
                     self.info = info
 
 
-def test_register_namespace_basic(cleanup_dummy, dummy_namespace, adata):
+def test_register_namespace_basic(dummy_namespace, adata: AnnData) -> None:
     """Test basic namespace registration and access."""
     assert adata.dummy.greet() == "hello"

@@ -139,7 +139,7 @@ def _check_namespace_signature(ns_class: type) -> None:
         case (True, True):
             return  # Signature is correct.
         case (False, True):
-            msg = f"Namespace initializer's second parameter must be named 'adata', got '{param.name}'."
+            msg = f"Namespace initializer's second parameter must be named 'adata', got {param.name!r}."
             raise TypeError(msg)
         case (True, False):
             type_repr = getattr(resolved_type, "__name__", str(resolved_type))
@@ -148,8 +148,8 @@ def _check_namespace_signature(ns_class: type) -> None:
         case _:
             type_repr = getattr(resolved_type, "__name__", str(resolved_type))
             msg = (
-                f"Namespace initializer's second parameter must be named 'adata', got '{param.name}'. "
-                f"And must be annotated as 'AnnData', got '{type_repr}'."
+                f"Namespace initializer's second parameter must be named 'adata', got {param.name!r}. "
+                f"And must be annotated as 'AnnData', got {type_repr!r}."
             )
             raise TypeError(msg)
 
@@ -197,7 +197,7 @@ def register_anndata_namespace(
 
     Returns
     -------
-        A decorator that registers the decorated class as a custom namespace.
+    A decorator that registers the decorated class as a custom namespace.
 
     Notes
     -----
