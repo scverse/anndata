@@ -361,9 +361,9 @@ class Writer:
 
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
-                import asyncio
+                from zarr.core.sync import sync
 
-                asyncio.run(store.store.clear())
+                sync(store.store.clear())
             else:
                 store.clear()
         elif k in store:
