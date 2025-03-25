@@ -64,16 +64,9 @@ def is_zarr_v2() -> bool:
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
     warn(msg, DeprecationWarning)
-
-    class ZarrAsyncGroup:
-        pass
-
-    class ZarrAsyncArray:
-        pass
 else:
     from zarr import AsyncArray as ZarrAsyncArray  # noqa: F401
     from zarr import AsyncGroup as ZarrAsyncGroup  # noqa: F401
-
 
 if find_spec("awkward") or TYPE_CHECKING:
     import awkward  # noqa: F401

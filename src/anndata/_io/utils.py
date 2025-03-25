@@ -8,12 +8,11 @@ from warnings import warn
 import h5py
 from packaging.version import Version
 
-from .._core.sparse_dataset import BaseCompressedSparseDataset
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
 
+    from .._core.sparse_dataset import BaseCompressedSparseDataset
     from .._types import ContravariantRWAble, StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
     from .specs.registry import Writer
@@ -162,6 +161,8 @@ class AnnDataReadError(OSError):
 
 
 def _get_display_path(store: Storage) -> str:
+    from .._core.sparse_dataset import BaseCompressedSparseDataset
+
     """Return an absolute path of an element (always starts with “/”)."""
     if isinstance(store, BaseCompressedSparseDataset):
         store = store.group

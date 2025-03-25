@@ -15,13 +15,7 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    DaskArray,
-    ZarrGroup,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -225,9 +219,9 @@ def test_consecutive_bool(
     # indexing needs to be on `X` directly to trigger the optimization.
 
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
-    from anndata._core import sparse_dataset
+    from anndata._core.sparse_dataset import BackedSparseMatrix
 
-    spy = mocker.spy(sparse_dataset, "get_compressed_vectors_for_slices")
+    spy = mocker.spy(BackedSparseMatrix, "get_compressed_vectors_for_slices")
     assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
     if should_trigger_optimization is not None:
         assert (

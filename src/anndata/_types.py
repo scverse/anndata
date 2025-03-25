@@ -6,7 +6,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
-from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
+from .compat import (
+    H5Array,
+    H5Group,
+    ZarrArray,
+    ZarrAsyncArray,
+    ZarrAsyncGroup,
+    ZarrGroup,
+)
 from .typing import RWAble
 
 if TYPE_CHECKING:
@@ -32,8 +39,8 @@ __all__ = [
     "_WriteAsyncInternal",
 ]
 
-ArrayStorageType: TypeAlias = ZarrArray | H5Array
-GroupStorageType: TypeAlias = ZarrGroup | H5Group
+ArrayStorageType: TypeAlias = ZarrArray | H5Array | ZarrAsyncArray
+GroupStorageType: TypeAlias = ZarrGroup | H5Group | ZarrAsyncGroup
 StorageType: TypeAlias = ArrayStorageType | GroupStorageType
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
