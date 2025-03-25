@@ -13,6 +13,7 @@ if Version(dask.__version__) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
+
 from filelock import FileLock
 from scipy import sparse
 
