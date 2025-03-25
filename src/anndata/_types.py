@@ -6,12 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .typing import RWAble
 
 if TYPE_CHECKING:
@@ -31,8 +26,10 @@ __all__ = [
     "GroupStorageType",
     "StorageType",
     "_ReadInternal",
+    "_ReadAsyncInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
+    "_WriteAsyncInternal",
 ]
 
 ArrayStorageType: TypeAlias = ZarrArray | H5Array
@@ -52,10 +49,29 @@ class _ReadInternal(Protocol[SCon, CovariantRWAble]):
     def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
 
 
+class _ReadAsyncInternal(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
+
+
 class _ReadLazyInternal(Protocol[SCon]):
     def __call__(
         self, elem: SCon, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
     ) -> LazyDataStructures: ...
+
+
+class ReadAsync(Protocol[SCon, CovariantRWAble]):
+    async def __call__(self, elem: SCon) -> CovariantRWAble:
+        """Low-level reading function for an element.
+
+        Parameters
+        ----------
+        elem
+            The element to read from.
+        Returns
+        -------
+        The element read from the store.
+        """
+        ...
 
 
 class Read(Protocol[SCon, CovariantRWAble]):
@@ -94,6 +110,18 @@ class ReadLazy(Protocol[SCon]):
 
 class _WriteInternal(Protocol[ContravariantRWAble]):
     def __call__(
+        self,
+        f: StorageType,
+        k: str,
+        v: ContravariantRWAble,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ) -> None: ...
+
+
+class _WriteAsyncInternal(Protocol[ContravariantRWAble]):
+    async def __call__(
         self,
         f: StorageType,
         k: str,

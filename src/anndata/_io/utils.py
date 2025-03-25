@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import inspect
 from functools import WRAPPER_ASSIGNMENTS, wraps
-from itertools import pairwise
 from typing import TYPE_CHECKING, cast
 from warnings import warn
 
@@ -236,24 +236,46 @@ def report_write_key_on_error(func):
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
 
-    @wraps(func)
-    def func_wrapper(*args, **kwargs):
-        from anndata._io.specs import Writer
+    if inspect.iscoroutinefunction(func):
 
-        # Figure out signature (method vs function) by going through args
-        for arg, key in pairwise(args):
-            if not isinstance(arg, Writer):
-                store = cast("Storage", arg)
-                break
-        else:
-            msg = "No element found in args."
-            raise ValueError(msg)
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            path = _get_display_path(store)
-            add_key_note(e, store, path, key, "writ")
-            raise
+        @wraps(func)
+        async def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import AsyncWriter
+
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, AsyncWriter):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
+    else:
+
+        @wraps(func)
+        def func_wrapper(*args, **kwargs):
+            from anndata._io.specs import Writer
+
+            # Figure out signature (method vs function) by going through args
+            for arg in args:
+                if not isinstance(arg, Writer):
+                    store = cast("Storage", arg)
+                    break
+            else:
+                msg = "No element found in args."
+                raise ValueError(msg)
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                path, key = _get_display_path(store).rsplit("/", 1)
+                add_key_note(e, store, path or "/", key, "read")
+                raise
 
     return func_wrapper
 

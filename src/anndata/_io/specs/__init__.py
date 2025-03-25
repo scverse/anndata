@@ -4,6 +4,8 @@ from . import lazy_methods, methods
 from .registry import (
     _LAZY_REGISTRY,  # noqa: F401
     _REGISTRY,  # noqa: F401
+    AsyncReader,
+    AsyncWriter,
     IOSpec,
     Reader,
     Writer,
@@ -21,6 +23,8 @@ __all__ = [
     "read_elem",
     "read_elem_lazy",
     "Reader",
+    "AsyncReader",
     "Writer",
+    "AsyncWriter",
     "IOSpec",
 ]
