@@ -30,12 +30,14 @@ from .utils import (
     H5PY_V3,
     _read_legacy_raw,
     idx_chunks_along_axis,
+    no_write_dataset_2d,
     report_read_key_on_error,
     report_write_key_on_error,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Mapping, Sequence
+    from os import PathLike
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
@@ -43,8 +45,9 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@no_write_dataset_2d
 def write_h5ad(
-    filepath: Path | str,
+    filepath: PathLike[str] | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
@@ -52,6 +55,7 @@ def write_h5ad(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_h5ad`."""
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -140,7 +144,9 @@ def write_sparse_as_dense(
         del f[key]
 
 
-def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
+def read_h5ad_backed(
+    filename: str | PathLike[str], mode: Literal["r", "r+"]
+) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -169,7 +175,7 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
 
 
 def read_h5ad(
-    filename: str | Path,
+    filename: PathLike[str] | str,
     backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),

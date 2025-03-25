@@ -193,7 +193,7 @@ def read_indices(group):
 
 
 def read_partial(
-    pth: PathLike,
+    pth: PathLike[str] | str,
     *,
     obs_idx=slice(None),
     var_idx=slice(None),
@@ -1201,7 +1201,7 @@ def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
-    arr = pd.array(values, dtype="string")
+    arr = pd.array(values, dtype=pd.StringDtype())
     arr[mask] = pd.NA
     return arr
 

@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -16,21 +17,11 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-)
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    ZarrGroup,
-    _read_attr,
-    is_zarr_v2,
-)
-from anndata.experimental import read_elem_as_dask
+from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
     as_cupy,
@@ -77,7 +68,7 @@ DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
 @pytest.fixture(params=sparse_formats)
-def sparse_format(request):
+def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
     return request.param
 
 
@@ -217,16 +208,15 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    ad.settings.allow_write_nullable_strings = True
+    with ad.settings.override(allow_write_nullable_strings=True):
+        key = f"key_for_{encoding_type}"
+        write_elem(store, key, value, dataset_kwargs={})
 
-    key = f"key_for_{encoding_type}"
-    write_elem(store, key, value, dataset_kwargs={})
+        assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
-
-    from_disk = read_elem(store[key])
-    assert_equal(value, from_disk)
-    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+        from_disk = read_elem(store[key])
+        assert_equal(value, from_disk)
+        assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 @pytest.mark.parametrize(
@@ -295,7 +285,7 @@ def test_dask_write_sparse(sparse_format, store):
 
 def test_read_lazy_2d_dask(sparse_format, store):
     arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -334,7 +324,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+    X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
 
@@ -346,25 +336,24 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
-def test_read_lazy_h5_cluster(sparse_format, tmp_path):
+def test_read_lazy_h5_cluster(
+    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
     with h5py.File(tmp_path / "test.h5", "w") as file:
         store = file["/"]
         arr_store = create_sparse_store(sparse_format, store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+        X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster) as _client,
-    ):
+    with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
 def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
     shape = (3000, 50)
     arr_store = create_dense_store(store, shape=shape)
-    X_dask_from_disk = read_elem_as_dask(arr_store["X"])
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
     assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
     assert X_dask_from_disk.shape == shape
 
@@ -395,10 +384,10 @@ def test_read_lazy_2d_chunk_kwargs(
 ):
     if arr_type == "dense":
         arr_store = create_dense_store(store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     else:
         arr_store = create_sparse_store(arr_type, store)
-        X_dask_from_disk = read_elem_as_dask(arr_store["X"], chunks=chunks)
+        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     assert X_dask_from_disk.chunksize == expected_chunksize
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -412,9 +401,9 @@ def test_read_lazy_bad_chunk_kwargs(tmp_path):
         with pytest.raises(
             ValueError, match=r"`chunks` must be a tuple of two integers"
         ):
-            read_elem_as_dask(arr_store["X"], chunks=(SIZE,))
+            read_elem_lazy(arr_store["X"], chunks=(SIZE,))
         with pytest.raises(ValueError, match=r"Only the major axis can be chunked"):
-            read_elem_as_dask(arr_store["X"], chunks=(SIZE, 10))
+            read_elem_lazy(arr_store["X"], chunks=(SIZE, 10))
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
