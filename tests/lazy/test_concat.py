@@ -214,6 +214,7 @@ def test_concat_to_memory_var(
         stores_for_concat[store_idx].reset_key_trackers()
 
 
+@pytest.mark.xdist_group("dask")
 def test_concat_data_with_cluster_to_memory(
     adata_remote: AnnData, join: Join_T, local_cluster_addr: str
 ) -> None:
