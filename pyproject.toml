@@ -61,7 +61,7 @@ Home-page = "https://github.com/scverse/anndata"
 dev = [
     # runtime dev version generation
     "hatch-vcs",
-    "anndata[dev-doc,dev-test]",
+    "anndata[dev-doc,test]",
 ]
 doc = [
     "sphinx>=8.2.1",
@@ -91,6 +91,7 @@ test = [
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "pytest-xdist[psutil]",
     "filelock",
     "matplotlib",
     "scikit-learn",
@@ -98,13 +99,12 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",              # For data downloading
+    "httpx",                # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
     "anndata[dask]",
 ]
-dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -144,6 +144,7 @@ addopts = [
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
+    "--dist=loadgroup",
 ]
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
