@@ -654,6 +654,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indptr = self._indptr
         return mtx
 
+    async def to_memory_async(self) -> CSMatrix | CSArray:
+        return await self.getitem(())
+
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""

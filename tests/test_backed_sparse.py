@@ -520,10 +520,12 @@ def test_data_access(
         subset = a_disk[idx_min, idx_maj]
     if isinstance(subset.X, DaskArray):
         subset.X.compute(scheduler="single-threaded")
-    # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
-    # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
     if ad.settings.zarr_write_format == 2 and not is_zarr_v2():
+        # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
+        # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
         exp = exp + ["X/data/.zgroup", "X/data/.zattrs"]
+        # we also have an extra access for `dtype` in the `BaseCompressedSparseDataset`
+        exp = exp + ["X/data/.zarray", "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"
