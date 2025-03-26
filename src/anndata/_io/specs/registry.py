@@ -346,7 +346,7 @@ class Writer:
 
         import h5py
 
-        if "/" in k:
+        if "/" in k[1:]:
             msg = f"Forward slashes are not allowed in keys when writing - please remove the forward slash found at {k} on {elem}"
             raise ValueError(msg)
 
