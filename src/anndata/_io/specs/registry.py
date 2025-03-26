@@ -346,6 +346,10 @@ class Writer:
 
         import h5py
 
+        if "/" in k:
+            msg = f"Forward slashes are not allowed in keys when writing - please remove the forward slash found at {k} on {elem}"
+            raise ValueError(msg)
+
         if isinstance(store, h5py.File):
             store = store["/"]
 
