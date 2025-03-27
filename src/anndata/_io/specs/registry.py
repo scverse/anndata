@@ -346,6 +346,11 @@ class Writer:
 
         import h5py
 
+        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        if "/" in k.split(store.name)[-1][1:]:
+            msg = "Forward slashes are not allowed in keys."
+            raise ValueError(msg)
+
         if isinstance(store, h5py.File):
             store = store["/"]
 
