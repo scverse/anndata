@@ -360,23 +360,22 @@ def test_zarr_compression(tmp_path, zarr_write_format):
         ad.io.write_zarr(pth, adata, compressor=compressor)
 
         def check_compressed(value, key):
-            if isinstance(value, ZarrArray):
-                if value.shape != ():
-                    (read_compressor,) = value.compressors
-                    if zarr_write_format == 2:
-                        if read_compressor != compressor:
-                            not_compressed.append(key)
-                    else:
-                        if not isinstance(read_compressor, BloscCodec) or (
-                            any(
-                                getattr(read_compressor, attr)
-                                != getattr(compressor, attr)
-                                for attr in ["clevel", "cname", "shuffle", "blocksize"]
-                            )
-                            and compressor.typesize is None
-                            and isinstance(read_compressor.typesize, int)
-                        ):
-                            not_compressed.append(key)
+            if not isinstance(value, ZarrArray) or value.shape == ():
+                return None
+            (read_compressor,) = value.compressors
+            if zarr_write_format == 2:
+                if read_compressor != compressor:
+                    not_compressed.append(key)
+                return None
+            if not isinstance(read_compressor, BloscCodec) or (
+                any(
+                    getattr(read_compressor, attr) != getattr(compressor, attr)
+                    for attr in ["clevel", "cname", "shuffle", "blocksize"]
+                )
+                and compressor.typesize is None
+                and isinstance(read_compressor.typesize, int)
+            ):
+                not_compressed.append(key)
 
         if is_zarr_v2():
             with zarr.open(str(pth), "r") as f:
