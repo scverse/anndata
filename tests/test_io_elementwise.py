@@ -339,6 +339,7 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
+@pytest.mark.xdist_group("dask")
 def test_read_lazy_h5_cluster(
     sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
 ) -> None:
