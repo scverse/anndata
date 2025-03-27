@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
 
-
 from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
@@ -24,7 +23,7 @@ from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
-from . import abc, experimental, typing, io  # noqa: E402 isort: skip
+from . import abc, experimental, typing, io, types  # noqa: E402 isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401, E402 isort: skip
@@ -53,6 +52,7 @@ __all__ = [
     "abc",
     "experimental",
     "typing",
+    "types",
     "io",
     # Classes
     "AnnData",
