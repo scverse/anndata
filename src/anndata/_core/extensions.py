@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints
 from warnings import warn
 
-from anndata._types import ExtensionNamespace
+from anndata.types import ExtensionNamespace
 
 if TYPE_CHECKING:
     from collections.abc import Callable

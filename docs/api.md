@@ -193,7 +193,7 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   _types.ExtensionNamespace
+   types.ExtensionNamespace
 ```
 
 ## Errors and warnings
