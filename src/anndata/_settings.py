@@ -432,7 +432,7 @@ settings.register(
 
 def validate_zarr_write_format(format: int):
     validate_int(format)
-    if format not in [2, 3]:
+    if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
 
