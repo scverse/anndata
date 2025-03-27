@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from anndata._core.anndata import AnnData
+    from anndata import AnnData
 
     from ._io.specs.registry import (
         IOSpec,

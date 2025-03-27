@@ -25,13 +25,13 @@ def _cleanup_dummy() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def dummy_namespace():
+def dummy_namespace() -> type:
     """Create a basic dummy namespace class."""
     ad.AnnData._accessors = set()
 
     @ad.register_anndata_namespace("dummy")
     class DummyNamespace:
-        def __init__(self, adata: ad.AnnData):
+        def __init__(self, adata: ad.AnnData) -> None:
             self._adata = adata
 
         def greet(self) -> str:
@@ -41,13 +41,13 @@ def dummy_namespace():
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     """Create a basic AnnData object for testing."""
     rng = np.random.default_rng(42)
     return ad.AnnData(X=rng.poisson(1, size=(10, 10)))
 
 
-def test_find_stacklevel():
+def test_find_stacklevel() -> None:
     """Test that find_stacklevel returns a positive integer.
 
     This function helps determine the correct stacklevel for warnings, so
@@ -59,7 +59,7 @@ def test_find_stacklevel():
     assert level > 0
 
 
-def test_accessor_namespace():
+def test_accessor_namespace() -> None:
     """Test the behavior of the AccessorNameSpace descriptor.
 
     This test verifies that:
@@ -73,10 +73,10 @@ def test_accessor_namespace():
 
     # Define a dummy namespace class to be used via the descriptor.
     class DummyNamespace:
-        def __init__(self, adata: ad.AnnData):
+        def __init__(self, adata: ad.AnnData) -> None:
             self._adata = adata
 
-        def foo(self):
+        def foo(self) -> str:
             return "foo"
 
     class Dummy:
@@ -99,7 +99,7 @@ def test_accessor_namespace():
     assert dummy_obj.dummy is ns_instance
 
 
-def test_descriptor_instance_caching(dummy_namespace, adata: ad.AnnData) -> None:
+def test_descriptor_instance_caching(dummy_namespace: type, adata: ad.AnnData) -> None:
     """Test that namespace instances are cached on individual AnnData objects."""
     # First access creates the instance
     ns_instance = adata.dummy
@@ -114,7 +114,7 @@ def test_register_namespace_override() -> None:
     # First registration
     @ad.register_anndata_namespace("dummy")
     class DummyNamespace:
-        def __init__(self, adata: ad.AnnData):
+        def __init__(self, adata: ad.AnnData) -> None:
             self._adata = adata
 
         def greet(self) -> str:
@@ -129,7 +129,7 @@ def test_register_namespace_override() -> None:
 
         @ad.register_anndata_namespace("dummy")
         class DummyNamespaceOverride:
-            def __init__(self, adata: ad.AnnData):
+            def __init__(self, adata: ad.AnnData) -> None:
                 self._adata = adata
 
             def greet(self) -> str:
@@ -142,19 +142,9 @@ def test_register_namespace_override() -> None:
 
 @pytest.mark.parametrize(
     "attr",
-    [
-        "X",
-        "obs",
-        "var",
-        "uns",
-        "obsm",
-        "varm",
-        "layers",
-        "copy",
-        "write",
-    ],
+    ["X", "obs", "var", "uns", "obsm", "varm", "layers", "copy", "write"],
 )
-def test_register_existing_attributes(attr):
+def test_register_existing_attributes(attr: str) -> None:
     """
     Test that registering an accessor with a name that is a reserved attribute of AnnData raises an attribute error.
 
@@ -172,7 +162,7 @@ def test_register_existing_attributes(attr):
                 self._adata = adata
 
 
-def test_valid_signature():
+def test_valid_signature() -> None:
     """Test that a namespace with valid signature is accepted."""
 
     @ad.register_anndata_namespace("valid")
@@ -181,7 +171,7 @@ def test_valid_signature():
             self.adata = adata
 
 
-def test_missing_param():
+def test_missing_param() -> None:
     """Test that a namespace missing the second parameter is rejected."""
     with pytest.raises(
         TypeError,
@@ -194,7 +184,7 @@ def test_missing_param():
                 pass
 
 
-def test_wrong_name():
+def test_wrong_name() -> None:
     """Test that a namespace with wrong parameter name is rejected."""
     with pytest.raises(
         TypeError,
@@ -207,7 +197,7 @@ def test_wrong_name():
                 self.notadata = notadata
 
 
-def test_wrong_annotation():
+def test_wrong_annotation() -> None:
     """Test that a namespace with wrong parameter annotation is rejected."""
     with pytest.raises(
         TypeError,
@@ -220,7 +210,7 @@ def test_wrong_annotation():
                 self.adata = adata
 
 
-def test_missing_annotation():
+def test_missing_annotation() -> None:
     """Test that a namespace with missing parameter annotation is rejected."""
     with pytest.raises(AttributeError):
 
@@ -230,7 +220,7 @@ def test_missing_annotation():
                 self.adata = adata
 
 
-def test_both_wrong():
+def test_both_wrong() -> None:
     """Test that a namespace with both wrong name and annotation is rejected."""
     with pytest.raises(
         TypeError,
@@ -246,6 +236,6 @@ def test_both_wrong():
                 self.info = info
 
 
-def test_register_namespace_basic(dummy_namespace, adata: ad.AnnData) -> None:
+def test_register_namespace_basic(dummy_namespace: type, adata: ad.AnnData) -> None:
     """Test basic namespace registration and access."""
     assert adata.dummy.greet() == "hello"
