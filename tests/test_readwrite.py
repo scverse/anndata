@@ -131,6 +131,24 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
+def test_readwrite_roundtrip_async(tmp_path):
+    import asyncio
+
+    async def _do_test():
+        zarr_path = tmp_path / "first.zarr"
+
+        adata1 = ad.AnnData(
+            csr_matrix(X_list), obs=obs_dict, var=var_dict, uns=uns_dict
+        )
+        adata1.write_zarr(zarr_path)
+        adata2 = ad.read_zarr(zarr_path)
+
+        assert_equal(adata2, adata1)
+
+    # This test ensures our file i/o never calls `asyncio.run` internally
+    asyncio.run(_do_test())
+
+
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
@@ -902,6 +920,18 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.parametrize(
+    "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
+)
+def test_forward_slash_key(elem_key, tmp_path):
+    a = ad.AnnData(np.ones((10, 10)))
+    getattr(a, elem_key)["bad/key"] = np.ones(
+        (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    with pytest.raises(ValueError, match="Forward slashes"):
+        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
 
 
 @pytest.mark.skipif(

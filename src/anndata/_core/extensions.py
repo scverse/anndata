@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints
+from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints, overload
 from warnings import warn
 
-from anndata.types import ExtensionNamespace
+from ..types import ExtensionNamespace
+from .anndata import AnnData
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-import anndata as ad
 
 # Based off of the extension framework in Polars
 # https://github.com/pola-rs/polars/blob/main/py-polars/polars/api.py
@@ -54,9 +54,10 @@ def find_stacklevel() -> int:
 
 # Reserved namespaces include accessors built into AnnData (currently there are none)
 # and all current attributes of AnnData
-_reserved_namespaces: set[str] = set(dir(ad.AnnData))
+_reserved_namespaces: set[str] = set(dir(AnnData))
 
 NameSpT = TypeVar("NameSpT", bound=ExtensionNamespace)
+T = TypeVar("T")
 
 
 class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
@@ -66,9 +67,13 @@ class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
         self._accessor = name
         self._ns = namespace
 
-    def __get__(
-        self, instance: ExtensionNamespace | None, cls: type[NameSpT]
-    ) -> ExtensionNamespace | type[NameSpT]:
+    @overload
+    def __get__(self, instance: None, cls: type[T]) -> type[NameSpT]: ...
+
+    @overload
+    def __get__(self, instance: T, cls: type[T]) -> NameSpT: ...
+
+    def __get__(self, instance: T | None, cls: type[T]) -> NameSpT | type[NameSpT]:
         if instance is None:
             return self._ns
 
@@ -133,7 +138,7 @@ def _check_namespace_signature(ns_class: type) -> None:
         err_msg = f"Namespace initializer's second parameter must be named 'adata', got '{param.name}'."
         raise NameError(err_msg) from e
 
-    type_ok = resolved_type is ad.AnnData
+    type_ok = resolved_type is AnnData
 
     match (name_ok, type_ok):
         case (True, True):
@@ -155,7 +160,7 @@ def _check_namespace_signature(ns_class: type) -> None:
 
 
 def _create_namespace(
-    name: str, cls: type[ad.AnnData]
+    name: str, cls: type[AnnData]
 ) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Register custom namespace against the underlying AnnData class."""
 
@@ -268,4 +273,4 @@ def register_anndata_namespace(
     AnnData object with n_obs × n_vars = 100 × 2000
         layers: 'log1p', 'arcsinh'
     """
-    return _create_namespace(name, ad.AnnData)
+    return _create_namespace(name, AnnData)
