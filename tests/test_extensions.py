@@ -107,19 +107,13 @@ def test_descriptor_instance_caching(dummy_namespace: type, adata: ad.AnnData) -
     assert adata.dummy is ns_instance
 
 
-def test_register_namespace_override() -> None:
+def test_register_namespace_basic(dummy_namespace: type, adata: ad.AnnData) -> None:
+    """Test basic namespace registration and access."""
+    assert adata.dummy.greet() == "hello"
+
+
+def test_register_namespace_override(dummy_namespace: type) -> None:
     """Test namespace registration and override behavior."""
-    ad.AnnData._accessors = set()
-
-    # First registration
-    @ad.register_anndata_namespace("dummy")
-    class DummyNamespace:
-        def __init__(self, adata: ad.AnnData) -> None:
-            self._adata = adata
-
-        def greet(self) -> str:
-            return "hello"
-
     assert "dummy" in ad.AnnData._accessors
 
     # Override should warn and update the namespace
@@ -234,8 +228,3 @@ def test_both_wrong() -> None:
         class BothWrongNamespace:
             def __init__(self, info: str) -> None:
                 self.info = info
-
-
-def test_register_namespace_basic(dummy_namespace: type, adata: ad.AnnData) -> None:
-    """Test basic namespace registration and access."""
-    assert adata.dummy.greet() == "hello"
