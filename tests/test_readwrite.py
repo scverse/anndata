@@ -362,57 +362,52 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
 def test_zarr_compression(tmp_path, zarr_write_format):
-    with ad.settings.override(zarr_write_format=zarr_write_format):
-        pth = str(Path(tmp_path) / "adata.zarr")
-        adata = gen_adata((10, 8))
-        if zarr_write_format == 2 or is_zarr_v2():
-            from numcodecs import Blosc
+    ad.settings.zarr_write_format = zarr_write_format
+    pth = str(Path(tmp_path) / "adata.zarr")
+    adata = gen_adata((10, 8))
+    if zarr_write_format == 2 or is_zarr_v2():
+        from numcodecs import Blosc
 
-            compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-        else:
-            from zarr.codecs import BloscCodec
+        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    else:
+        from zarr.codecs import BloscCodec
 
-            compressor = BloscCodec(cname="zstd", clevel=3, shuffle="bitshuffle")
-        not_compressed = []
+        compressor = BloscCodec(
+            cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
+        )
+    not_compressed = []
 
-        ad.io.write_zarr(pth, adata, compressor=compressor)
+    ad.io.write_zarr(pth, adata, compressor=compressor)
 
-        def check_compressed(value, key):
-            if not isinstance(value, ZarrArray) or value.shape == ():
-                return None
-            (read_compressor,) = value.compressors
-            if zarr_write_format == 2:
-                if read_compressor != compressor:
-                    not_compressed.append(key)
-                return None
-            if not isinstance(read_compressor, BloscCodec) or (
-                any(
-                    getattr(read_compressor, attr) != getattr(compressor, attr)
-                    for attr in ["clevel", "cname", "shuffle", "blocksize"]
-                )
-                and compressor.typesize is None
-                and isinstance(read_compressor.typesize, int)
-            ):
+    def check_compressed(value, key):
+        if not isinstance(value, ZarrArray) or value.shape == ():
+            return None
+        (read_compressor,) = value.compressors
+        if zarr_write_format == 2:
+            if read_compressor != compressor:
                 not_compressed.append(key)
+            return None
+        if read_compressor.to_dict() != compressor.to_dict():
+            not_compressed.append(key)
 
-        if is_zarr_v2():
-            with zarr.open(str(pth), "r") as f:
-                f.visititems(check_compressed)
-        else:
-            f = zarr.open(str(pth), mode="r")
-            for key, value in f.members(max_depth=None):
-                check_compressed(value, key)
+    if is_zarr_v2():
+        with zarr.open(str(pth), "r") as f:
+            f.visititems(check_compressed)
+    else:
+        f = zarr.open(str(pth), mode="r")
+        for key, value in f.members(max_depth=None):
+            check_compressed(value, key)
 
-        if not_compressed:
-            sep = "\n\t"
-            msg = (
-                f"These elements were not compressed correctly:{sep}"
-                f"{sep.join(not_compressed)}"
-            )
-            raise AssertionError(msg)
+    if not_compressed:
+        sep = "\n\t"
+        msg = (
+            f"These elements were not compressed correctly:{sep}"
+            f"{sep.join(not_compressed)}"
+        )
+        raise AssertionError(msg)
 
-        expected = ad.read_zarr(pth)
-        assert_equal(adata, expected)
+    expected = ad.read_zarr(pth)
+    assert_equal(adata, expected)
 
 
 def test_changed_obs_var_names(tmp_path, diskfmt):

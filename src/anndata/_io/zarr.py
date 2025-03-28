@@ -28,14 +28,16 @@ T = TypeVar("T")
 
 
 def _check_rec_array(adata):
-    if settings.zarr_write_format == 3:
-        if any(
-            isinstance(adata.uns[k], np.recarray)
-            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+    if settings.zarr_write_format == 3 and len(
+        structured_dtype_keys := {
+            k
             for k in adata.uns.keys()
-        ):
-            msg = "zarr v3 does not support structured dtypes"
-            raise NotImplementedError(msg)
+            if isinstance(adata.uns[k], np.recarray)
+            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+        }
+    ):
+        msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
+        raise NotImplementedError(msg)
 
 
 @no_write_dataset_2d
