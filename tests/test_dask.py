@@ -45,11 +45,6 @@ def sizes(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def adata(sizes):
     import dask.array as da

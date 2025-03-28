@@ -31,6 +31,26 @@ def backing_h5ad(tmp_path):
 
 
 @pytest.fixture(
+    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)], ids=["h5ad", "zarr2", "zarr3"]
+)
+def diskfmt(request):
+    if (fmt := request.param[0]) == "h5ad":
+        yield fmt
+    else:
+        with ad.settings.override(zarr_write_format=request.param[1]):
+            yield fmt
+
+
+@pytest.fixture
+def diskfmt2(diskfmt):
+    if diskfmt == "h5ad":
+        with ad.settings.override(zarr_write_format=2):
+            yield "zarr"
+    else:
+        yield "h5ad"
+
+
+@pytest.fixture(
     params=[
         pytest.param((..., (slice(None), slice(None))), id="ellipsis"),
         pytest.param(((...,), (slice(None), slice(None))), id="ellipsis_tuple"),
