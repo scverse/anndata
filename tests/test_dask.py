@@ -47,11 +47,6 @@ def sizes(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def adata(sizes):
     import dask.array as da
@@ -112,6 +107,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
+@pytest.mark.xdist_group("dask")
 def test_dask_distributed_write(
     adata: AnnData,
     tmp_path: Path,

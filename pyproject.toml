@@ -61,7 +61,7 @@ Home-page = "https://github.com/scverse/anndata"
 dev = [
     # runtime dev version generation
     "hatch-vcs",
-    "anndata[dev-doc,dev-test]",
+    "anndata[dev-doc,test]",
 ]
 doc = [
     "sphinx>=8.2.1",
@@ -92,6 +92,7 @@ test = [
     "pytest-mock",
     "pytest-instafail",
     "fast-array-utils",
+    "pytest-xdist[psutil]",
     "filelock",
     "matplotlib",
     "scikit-learn",
@@ -100,17 +101,16 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",              # For data downloading
+    "httpx",                # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
     "anndata[dask,lazy]",
 ]
-dev-test = [ "pytest-xdist[psutil]" ] # local test speedups
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
-# requests and aiohttp needed for zarr v2 remote data
+# requests and aiohttp needed for zarr remote data
 lazy = [ "xarray>=2024.06.0", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
@@ -146,6 +146,7 @@ addopts = [
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
+    "--dist=loadgroup",
 ]
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
@@ -159,6 +160,9 @@ filterwarnings_when_strict = [
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
     "default:anndata will no longer support zarr v2:DeprecationWarning",
+    "default:The codec `vlen-utf8:UserWarning",
+    "default:The dtype `StringDType():UserWarning",
+    "default:Consolidated metadata is:UserWarning",
 ]
 python_files = "test_*.py"
 testpaths = [

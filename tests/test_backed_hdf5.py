@@ -312,7 +312,7 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.isbacked
 
     with pytest.warns(
-        PendingDeprecationWarning, match=r"__setitem__ will likely be removed"
+        FutureWarning, match=r"__setitem__ for backed sparse will be removed"
     ):
         adata.X[0, [0, 2]] = 10
         adata.X[1, [0, 2]] = [11, 12]

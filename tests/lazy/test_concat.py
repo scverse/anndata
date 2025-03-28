@@ -220,6 +220,7 @@ def test_concat_to_memory_var(
         stores_for_concat[store_idx].reset_key_trackers()
 
 
+@pytest.mark.xdist_group("dask")
 @pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_concat_data_with_cluster_to_memory(
     adata_remote: AnnData, join: Join_T, local_cluster_addr: str
@@ -235,19 +236,19 @@ def test_concat_data_with_cluster_to_memory(
     "index",
     [
         pytest.param(
-            slice(500, 1500),
+            slice(50, 150),
             id="slice",
         ),
         pytest.param(
-            np.arange(950, 1050),
+            np.arange(95, 105),
             id="consecutive integer array",
         ),
         pytest.param(
-            np.random.randint(800, 1100, 500),
+            np.random.randint(80, 110, 5),
             id="random integer array",
         ),
         pytest.param(
-            np.random.choice([True, False], 2000),
+            np.random.choice([True, False], 200),
             id="boolean array",
         ),
         pytest.param(slice(None), id="full slice"),
@@ -260,8 +261,6 @@ def test_concat_data_subsetting(
     adata_orig: AnnData,
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
-    *,
-    load_annotation_index: bool,
 ):
     from anndata.experimental.backed._compat import Dataset2D
 

@@ -93,11 +93,6 @@ def dataset_kwargs(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def rw(backing_h5ad):
     M, N = 100, 101
@@ -110,9 +105,6 @@ def rw(backing_h5ad):
 @pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
 def dtype(request):
     return request.param
-
-
-diskfmt2 = diskfmt
 
 
 # ------------------------------------------------------------------------------
@@ -138,6 +130,24 @@ def test_readwrite_roundtrip(array_type: ArrayType, tmp_path, diskfmt, diskfmt2)
     assert_equal(adata2, adata1)
     assert_equal(adata3, adata1)
     assert_equal(adata2, adata1)
+
+
+def test_readwrite_roundtrip_async(tmp_path):
+    import asyncio
+
+    async def _do_test():
+        zarr_path = tmp_path / "first.zarr"
+
+        adata1 = ad.AnnData(
+            csr_matrix(X_list), obs=obs_dict, var=var_dict, uns=uns_dict
+        )
+        adata1.write_zarr(zarr_path)
+        adata2 = ad.read_zarr(zarr_path)
+
+        assert_equal(adata2, adata1)
+
+    # This test ensures our file i/o never calls `asyncio.run` internally
+    asyncio.run(_do_test())
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
@@ -361,23 +371,39 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-def test_zarr_compression(tmp_path):
-    from numcodecs import Blosc
-
+@pytest.mark.parametrize("zarr_write_format", [2, 3])
+def test_zarr_compression(tmp_path, zarr_write_format):
+    ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8))
-    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    if zarr_write_format == 2 or is_zarr_v2():
+        from numcodecs import Blosc
+
+        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    else:
+        from zarr.codecs import BloscCodec
+
+        # Typesize is forced to be 1 so that the codecs always match on the roundtrip.
+        # Otherwise this value would vary depending on the datatype.
+        # See github.com/zarr-developers/numcodecs/pull/713 for a related issue/explanation.
+        # In practice, you would never want to set this parameter.
+        compressor = BloscCodec(
+            cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
+        )
     not_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(value, key):
-        if isinstance(value, ZarrArray):
-            if value.shape != ():
-                (read_compressor,) = value.compressors
-                print(read_compressor, key)
-                if read_compressor != compressor:
-                    not_compressed.append(key)
+        if not isinstance(value, ZarrArray) or value.shape == ():
+            return None
+        (read_compressor,) = value.compressors
+        if zarr_write_format == 2:
+            if read_compressor != compressor:
+                not_compressed.append(key)
+            return None
+        if read_compressor.to_dict() != compressor.to_dict():
+            not_compressed.append(key)
 
     if is_zarr_v2():
         with zarr.open(str(pth), "r") as f:
@@ -622,20 +648,22 @@ def test_read_umi_tools():
 def test_write_categorical(
     *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
 ) -> None:
-    ad.settings.allow_write_nullable_strings = True
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-    obs = dict(
-        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
-        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
-    )
-    orig = ad.AnnData(obs=pd.DataFrame(obs))
-    getattr(orig, f"write_{diskfmt}")(adata_pth, convert_strings_to_categoricals=s2c)
-    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
-    assert np.all(orig.obs.notna() == curr.obs.notna())
-    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
-    assert curr.obs["str"].dtype == ("category" if s2c else "string")
-    assert curr.obs["cat"].dtype == "category"
+    with ad.settings.override(allow_write_nullable_strings=True):
+        adata_pth = tmp_path / f"adata.{diskfmt}"
+        obs = dict(
+            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+        )
+        orig = ad.AnnData(obs=pd.DataFrame(obs))
+        getattr(orig, f"write_{diskfmt}")(
+            adata_pth, convert_strings_to_categoricals=s2c
+        )
+        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+        assert np.all(orig.obs.notna() == curr.obs.notna())
+        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+        assert curr.obs["str"].dtype == ("category" if s2c else "string")
+        assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -795,6 +823,11 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
+        # zarr v3 can't write recarray
+        # https://github.com/zarr-developers/zarr-python/issues/2134
+        if ad.settings.zarr_write_format == 3:
+            del pbmc.uns["rank_genes_groups"]["names"]
+            del pbmc.uns["rank_genes_groups"]["scores"]
 
     from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
     from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip
@@ -911,6 +944,18 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.parametrize(
+    "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
+)
+def test_forward_slash_key(elem_key, tmp_path):
+    a = ad.AnnData(np.ones((10, 10)))
+    getattr(a, elem_key)["bad/key"] = np.ones(
+        (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    with pytest.raises(ValueError, match="Forward slashes"):
+        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
 
 
 @pytest.mark.skipif(

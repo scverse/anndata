@@ -123,27 +123,35 @@ def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 @pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
-    subset_obs = adata_orig.obs["obs_cat"] == "a"
+    obs_cats = adata_orig.obs["obs_cat"].cat.categories
+    subset_obs = adata_orig.obs["obs_cat"] == obs_cats[0]
     assert_equal(adata_orig[subset_obs, :], adata_remote[subset_obs, :].to_memory())
 
-    subset_var = adata_orig.var["var_cat"] == "a"
+    var_cats = adata_orig.var["var_cat"].cat.categories
+    subset_var = adata_orig.var["var_cat"] == var_cats[0]
     assert_equal(adata_orig[:, subset_var], adata_remote[:, subset_var].to_memory())
 
 
 @pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
-    subset_obs = (adata_orig.obs["obs_cat"] == "a") | (adata_orig.obs["obs_cat"] == "b")
+    cats_obs = adata_orig.obs["obs_cat"].cat.categories
+    subset_obs = (adata_orig.obs["obs_cat"] == cats_obs[0]) | (
+        adata_orig.obs["obs_cat"] == cats_obs[1]
+    )
     subsetted_adata = adata_orig[subset_obs, :]
-    subset_subset_obs = subsetted_adata.obs["obs_cat"] == "b"
+    subset_subset_obs = subsetted_adata.obs["obs_cat"] == cats_obs[1]
     subsetted_subsetted_adata = subsetted_adata[subset_subset_obs, :]
     assert_equal(
         subsetted_subsetted_adata,
         adata_remote[subset_obs, :][subset_subset_obs, :].to_memory(),
     )
 
-    subset_var = (adata_orig.var["var_cat"] == "a") | (adata_orig.var["var_cat"] == "b")
+    cats_var = adata_orig.var["var_cat"].cat.categories
+    subset_var = (adata_orig.var["var_cat"] == cats_var[0]) | (
+        adata_orig.var["var_cat"] == cats_var[1]
+    )
     subsetted_adata = adata_orig[:, subset_var]
-    subset_subset_var = subsetted_adata.var["var_cat"] == "b"
+    subset_subset_var = subsetted_adata.var["var_cat"] == cats_var[1]
     subsetted_subsetted_adata = subsetted_adata[:, subset_subset_var]
     assert_equal(
         subsetted_subsetted_adata,

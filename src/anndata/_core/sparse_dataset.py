@@ -501,8 +501,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
     def __setitem__(self, index: Index | tuple[()], value) -> None:
         warnings.warn(
-            "__setitem__ will likely be removed in the near future. We do not recommend relying on its stability.",
-            PendingDeprecationWarning,
+            "__setitem__ for backed sparse will be removed in the next anndata release.",
+            FutureWarning,
         )
         row, col = self._normalize_index(index)
         mock_matrix = self._to_backed()

@@ -30,6 +30,7 @@ from .utils import (
     H5PY_V3,
     _read_legacy_raw,
     idx_chunks_along_axis,
+    no_write_dataset_2d,
     report_read_key_on_error,
     report_write_key_on_error,
 )
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@no_write_dataset_2d
 def write_h5ad(
     filepath: PathLike[str] | str,
     adata: AnnData,

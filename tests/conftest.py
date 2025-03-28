@@ -13,6 +13,7 @@ if Version(dask.__version__) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
+
 from filelock import FileLock
 from scipy import sparse
 
@@ -27,6 +28,26 @@ if TYPE_CHECKING:
 @pytest.fixture
 def backing_h5ad(tmp_path):
     return tmp_path / "test.h5ad"
+
+
+@pytest.fixture(
+    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)], ids=["h5ad", "zarr2", "zarr3"]
+)
+def diskfmt(request):
+    if (fmt := request.param[0]) == "h5ad":
+        yield fmt
+    else:
+        with ad.settings.override(zarr_write_format=request.param[1]):
+            yield fmt
+
+
+@pytest.fixture
+def diskfmt2(diskfmt):
+    if diskfmt == "h5ad":
+        with ad.settings.override(zarr_write_format=2):
+            yield "zarr"
+    else:
+        yield "h5ad"
 
 
 @pytest.fixture(

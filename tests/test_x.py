@@ -27,11 +27,6 @@ SINGULAR_SHAPES = [
 ]
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.mark.array_type(skip=NON_BASIC_FLAGS)
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES)
 @pytest.mark.parametrize(
