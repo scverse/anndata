@@ -13,6 +13,8 @@ The central class:
    AnnData
 ```
 
+(combining-api)=
+
 ## Combining
 
 Combining {class}`AnnData` objects.
@@ -24,6 +26,8 @@ See also the section on concatenation.
 
    concat
 ```
+
+(reading-api)=
 
 ## Reading
 
@@ -65,6 +69,8 @@ You might have more success by assembling the {class}`AnnData` object yourself f
    io.read_text
    io.read_umi_tools
 ```
+
+(writing-api)=
 
 ## Writing
 
@@ -173,6 +179,8 @@ Types used by the former:
    experimental.StorageType
 ```
 
+(errors-api)=
+
 ## Errors and warnings
 
 ```{eval-rst}
@@ -181,6 +189,8 @@ Types used by the former:
 
    ImplicitModificationWarning
 ```
+
+(settings-api)=
 
 ## Settings
 
@@ -191,6 +201,8 @@ Types used by the former:
    settings
    settings.override
 ```
+
+(types-api)=
 
 ## Custom Types/Classes for Readable/Writeable Elements
 
