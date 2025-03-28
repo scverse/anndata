@@ -372,6 +372,10 @@ def test_zarr_compression(tmp_path, zarr_write_format):
     else:
         from zarr.codecs import BloscCodec
 
+        # Typesize is forced to be 1 so that the codecs always match on the roundtrip.
+        # Otherwise this value would vary depending on the datatype.
+        # See github.com/zarr-developers/numcodecs/pull/713 for a related issue/explanation.
+        # In practice, you would never want to set this parameter.
         compressor = BloscCodec(
             cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
         )
