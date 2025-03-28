@@ -1,4 +1,4 @@
-[![Build Status](https://dev.azure.com/scverse/anndata/_apis/build/status/scverse.anndata?branchName=main)](https://dev.azure.com/scverse/anndata/_build)
+[![Tests](https://github.com/scverse/anndata/.github/workflows/test-cpu.yml/badge.svg)](https://github.com/scverse/anndata/.github/workflows/test-cpu.yml)
 [![Conda](https://img.shields.io/conda/vn/conda-forge/anndata.svg)](https://anaconda.org/conda-forge/anndata)
 [![Coverage](https://codecov.io/gh/scverse/anndata/branch/main/graph/badge.svg?token=IN1mJN1Wi8)](https://codecov.io/gh/scverse/anndata)
 [![Docs](https://readthedocs.com/projects/icb-anndata/badge/?version=latest)](https://anndata.readthedocs.io)
