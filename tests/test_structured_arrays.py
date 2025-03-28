@@ -45,16 +45,13 @@ def test_io(
     initial = AnnData(np.zeros((3, 3)))
     initial.uns = dict(str_rec=str_recarray, u_rec=u_recarray, s_rec=s_recarray)
 
-    def get_context(fmt: Literal["zarr", "h5ad"]):
-        return (
-            pytest.raises(
-                NotImplementedError, match=r"zarr v3 does not support structured dtypes"
-            )
-            if fmt == "zarr" and ad.settings.zarr_write_format == 3
-            else nullcontext()
+    with (
+        pytest.raises(
+            NotImplementedError, match=r"zarr v3 does not support structured dtypes"
         )
-
-    with get_context(diskfmt):
+        if diskfmt == "zarr" and ad.settings.zarr_write_format == 3
+        else nullcontext()
+    ):
         write1(initial, filepth1)
         disk_once = read1(filepth1)
         write2(disk_once, filepth2)
