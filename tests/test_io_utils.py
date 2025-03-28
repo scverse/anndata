@@ -19,11 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
