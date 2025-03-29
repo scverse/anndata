@@ -85,16 +85,18 @@ doc = [
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-full = [ "anndata[test,lazy]" ]
 test = [
-    "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "pytest-instafail",
+    "fast-array-utils",
     "pytest-xdist[psutil]",
     "filelock",
     "matplotlib",
     "scikit-learn",
+    "loompy>=3.0.5",
     "openpyxl",
     "joblib",
     "boltons",
@@ -103,7 +105,7 @@ test = [
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
-    "anndata[dask]",
+    "anndata[dask,lazy]",
 ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]

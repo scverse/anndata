@@ -7,11 +7,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from fast_array_utils.conv import to_dense
 from scipy import sparse
 
 from anndata import AnnData
 from anndata.tests.helpers import gen_typed_df_t2_size
-from anndata.utils import asarray
 
 M, N = (200, 100)
 
@@ -40,10 +40,10 @@ def test_assigmnent_dict(adata: AnnData):
     )
     adata.obsp = d_obsp
     for k, v in d_obsp.items():
-        assert np.all(asarray(adata.obsp[k]) == asarray(v))
+        assert np.all(to_dense(adata.obsp[k]) == to_dense(v))
     adata.varp = d_varp
     for k, v in d_varp.items():
-        assert np.all(asarray(adata.varp[k]) == asarray(v))
+        assert np.all(to_dense(adata.varp[k]) == to_dense(v))
 
 
 def test_setting_ndarray(adata: AnnData):

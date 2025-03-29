@@ -8,6 +8,7 @@ import pytest
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, gen_adata
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
 from .conftest import ANNDATA_ELEMS
 
@@ -17,10 +18,17 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
     from anndata._types import AnnDataElem
+    from testing.fast_array_utils import ArrayType
+
+
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 @pytest.mark.parametrize(
     ("elem_key", "sub_key"),
     [
@@ -47,6 +55,7 @@ def test_access_count_elem_access(
     remote_store_tall_skinny.assert_access_count("X", 0)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_access_count_subset(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
@@ -62,6 +71,7 @@ def test_access_count_subset(
         remote_store_tall_skinny.assert_access_count(elem_name, 0)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_access_count_subset_column_compute(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
@@ -74,6 +84,7 @@ def test_access_count_subset_column_compute(
     remote_store_tall_skinny.assert_access_count("obs/int64", 1)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_access_count_index(
     remote_store_tall_skinny: AccessTrackingStore,
 ):
@@ -85,6 +96,7 @@ def test_access_count_index(
     remote_store_tall_skinny.assert_access_count("obs/_index", 4)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_access_count_dtype(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
@@ -98,15 +110,18 @@ def test_access_count_dtype(
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_uns_uses_dask(adata_remote: AnnData):
     assert isinstance(adata_remote.uns["nested"]["nested_further"]["array"], DaskArray)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     obs_cats = adata_orig.obs["obs_cat"].cat.categories
     subset_obs = adata_orig.obs["obs_cat"] == obs_cats[0]
@@ -117,6 +132,7 @@ def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     assert_equal(adata_orig[:, subset_var], adata_remote[:, subset_var].to_memory())
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     cats_obs = adata_orig.obs["obs_cat"].cat.categories
     subset_obs = (adata_orig.obs["obs_cat"] == cats_obs[0]) | (
@@ -143,8 +159,9 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     )
 
 
-def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
+def test_unconsolidated(tmp_path: Path, array_type: ArrayType) -> None:
+    adata = gen_adata((1000, 1000), array_type)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()

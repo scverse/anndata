@@ -5,20 +5,12 @@ from string import ascii_letters
 import numpy as np
 import pandas as pd
 import pytest
+from fast_array_utils.conv import to_dense
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import CupyArray, CupyCSRMatrix, DaskArray
 from anndata.tests.helpers import (
-    BASE_MATRIX_PARAMS,
-    CUPY_MATRIX_PARAMS,
-    DASK_MATRIX_PARAMS,
     DEFAULT_COL_TYPES,
-    as_cupy,
-    as_cupy_sparse_dask_array,
-    as_dense_cupy_dask_array,
-    as_dense_dask_array,
-    asarray,
     assert_equal,
     gen_adata,
     gen_awkward,
@@ -268,61 +260,7 @@ def test_assert_equal_dask_sparse_arrays():
     from scipy import sparse
 
     x = sparse.random(10, 10, format="csr", density=0.1)
-    y = da.from_array(asarray(x))
+    y = da.from_array(to_dense(x, to_memory=True))
 
     assert_equal(x, y)
     assert_equal(y, x)
-
-
-@pytest.mark.parametrize(
-    "input_type", BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS
-)
-@pytest.mark.parametrize(
-    (
-        "as_dask_type",
-        "mem_type",
-    ),
-    [
-        pytest.param(
-            as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
-        ),
-        pytest.param(as_dense_dask_array, np.ndarray, id="numpy_dense"),
-        pytest.param(
-            as_cupy_sparse_dask_array,
-            CupyCSRMatrix,
-            id="cupy_csr",
-            marks=pytest.mark.gpu,
-        ),
-    ],
-)
-def test_as_dask_functions(input_type, as_dask_type, mem_type):
-    SHAPE = (1000, 100)
-
-    rng = np.random.default_rng(42)
-    X_source = rng.poisson(size=SHAPE).astype(np.float32)
-    X_input = input_type(X_source)
-    X_output = as_dask_type(X_input)
-    X_computed = X_output.compute()
-
-    assert isinstance(X_output, DaskArray)
-    assert X_output.shape == SHAPE
-    assert X_output.dtype == X_input.dtype
-
-    assert isinstance(X_computed, mem_type)
-
-    assert_equal(asarray(X_computed), X_source)
-
-
-@pytest.mark.parametrize(
-    "dask_matrix_type",
-    DASK_MATRIX_PARAMS,
-)
-@pytest.mark.gpu
-def test_as_cupy_dask(dask_matrix_type):
-    SHAPE = (100, 10)
-    rng = np.random.default_rng(42)
-    X_cpu = dask_matrix_type(rng.normal(size=SHAPE))
-    X_gpu_roundtripped = as_cupy(X_cpu).map_blocks(lambda x: x.get(), meta=X_cpu._meta)
-    assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
-    assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
-    assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
