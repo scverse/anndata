@@ -6,12 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .typing import RWAble
 
 if TYPE_CHECKING:

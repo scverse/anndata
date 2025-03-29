@@ -51,7 +51,7 @@ from .views import (
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, Literal
+    from typing import Any, ClassVar, Literal
 
     from zarr.storage import StoreLike
 
@@ -193,6 +193,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         obs={"obs_names", "smp_names", "row_names", "index"},
         var={"var_names", "col_names", "index"},
     )
+
+    _accessors: ClassVar[set[str]] = set()
 
     @old_positionals(
         "obsm",
