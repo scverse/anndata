@@ -1,6 +1,6 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also [allows writing of datasets in the v3](https://anndata.readthedocs.io/en/stable/generated/anndata.settings.html#anndata.settings.zarr_write_format) format, with the exception of structured arrays.  Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.  Here is a quick guide on some of our learnings so far:
+`anndata` now uses the much improved {mod}`zarr` v3 package and also [allows writing of datasets in the v3 format](https://anndata.readthedocs.io/en/stable/generated/anndata.settings.html#anndata.settings.zarr_write_format), with the exception of structured arrays.  Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.  Here is a quick guide on some of our learnings so far:
 
 ## Remote data
 
@@ -31,7 +31,7 @@ def write_sharded(group: zarr.Group, adata: ad.AnnData):
     return ad.experimental.write_dispatched(group, "/", adata, callback=callback)
 ```
 
-However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  If you wish to [speed up](https://github.com/LDeakin/zarr_benchmarks) either operation (or receive a moderate boost for reading in general), a [bridge to the `zarr` implementation in Rust](https://zarrs-python.readthedocs.io/en/latest/) can help with that:
+However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  Thus if you wish to [speed up](https://github.com/LDeakin/zarr_benchmarks) either writing, sharding, or both (or receive a modest speed-boost for reading), a [bridge to the `zarr` implementation in Rust](https://zarrs-python.readthedocs.io/en/latest/) can help with that:
 
 ```
 uv pip install zarrs
@@ -42,6 +42,8 @@ import zarr
 import zarrs
 zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 ```
+
+However, this pipeline is not compatible with all types of zarr store, especially remote stores.
 
 ## GPU i/o
 
