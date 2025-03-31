@@ -43,13 +43,15 @@ import zarrs
 zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 ```
 
-However, this pipeline is not compatible with all types of zarr store, especially remote stores and there are limitations on where rust can give a performance boost for indexing.  We therefore recommend this pipeline for writing full datasets and reading contiguous regions of data.
+However, this pipeline is not compatible with all types of zarr store, especially remote stores and there are limitations on where rust can give a performance boost for indexing.  We therefore recommend this pipeline for writing full datasets and reading contiguous regions of said written data.
 
 ## Codecs
 
 The default `zarr-python` v3 codec for `v3 file-format` is no longer `blosc` but `zstd`.  While `zstd` is more widespread, you may find its performance to not meet your old expectations.  Therefore, we recommend passing in the [`BloscCodec`](https://zarr.readthedocs.io/en/stable/api/zarr/codecs/index.html#zarr.codecs.BloscCodec) if you wish to return to the old behavior.
 
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): https://github.com/zarr-developers/numcodecs/issues/424.  The same applies to data that may eventually be written by the GPU `zstd` implementation (see below).
+There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): https://github.com/zarr-developers/numcodecs/issues/424.  Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
+
+The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
 
 ## GPU i/o
 
