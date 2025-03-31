@@ -31,7 +31,7 @@ def write_sharded(group: zarr.Group, adata: ad.AnnData):
     return ad.experimental.write_dispatched(group, "/", adata, callback=callback)
 ```
 
-However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  Thus if you wish to [speed up](https://github.com/LDeakin/zarr_benchmarks) either writing, sharding, or both (or receive a modest speed-boost for reading), a [bridge to the `zarr` implementation in Rust](https://zarrs-python.readthedocs.io/en/latest/) can help with that:
+However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  Thus if you wish to speed up either writing, sharding, or both (or receive a modest speed-boost for reading), a bridge to the `zarr` implementation in Rust: https://zarrs-python.readthedocs.io/en/latest/ can help with that (see https://github.com/LDeakin/zarr_benchmarks for benchmarks):
 
 ```
 uv pip install zarrs
