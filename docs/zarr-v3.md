@@ -10,9 +10,34 @@ There are two ways of opening remote [`zarr` stores from the `zarr-python` packa
 
 ## Local data
 
-Local data generally poses a different set of challenges.  First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.  For the "many small files" problem, `zarr` has introduced [sharding in the v3 file format](https://zarr.readthedocs.io/en/stable/user-guide/performance.html#sharding).
+Local data generally poses a different set of challenges.  First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.  For the "many small files" problem, `zarr` has introduced [sharding in the v3 file format](https://zarr.readthedocs.io/en/stable/user-guide/performance.html#sharding). Sharding requires knowledge of the array element you are writing, though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use sharding:
 
-However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  If you wish to [speed up](https://github.com/LDeakin/zarr_benchmarks) either operation (or receive a moderate boost for reading in general), a [bridge to the `zarr` implementation in Rust](https://zarrs-python.readthedocs.io/en/latest/) can help with that.
+```python
+import anndata as ad
+from collections.abc import Mapping
+from typing import Any
+import zarr
+
+ad.settings.zarr_write_format = 3 # Absolutely crucial! Sharding is only for the v3 file format!
+
+def write_sharded(group: zarr.Group, adata: ad.AnnData):
+    def callback(func: ad.experimental.Write, g: zarr.Group, k: str, elem: ad.typing.RWAble, dataset_kwargs: Mapping[str, Any], iospec: ad.experimental.IOSpec):
+        if iospec.encoding_type in { "array" }:
+            dataset_kwargs = { "shards": tuple(int(2 ** (16 / len(elem.shape))) for _ in elem.shape), **dataset_kwargs}
+            dataset_kwargs["chunks"] = tuple(i // 2 for i in dataset_kwargs["shards"])
+        elif iospec.encoding_type in { "csr_matrix", "csc_matrix" }:
+            dataset_kwargs = { "shards": (2**16,), "chunks": (2**8, ), **dataset_kwargs }
+        func(g, k, elem, dataset_kwargs=dataset_kwargs)
+    return ad.experimental.write_dispatched(group, "/", adata, callback=callback)
+```
+
+However, `zarr-python` can be slow with sharding throughput as well as writing throughput.  If you wish to [speed up](https://github.com/LDeakin/zarr_benchmarks) either operation (or receive a moderate boost for reading in general), a [bridge to the `zarr` implementation in Rust](https://zarrs-python.readthedocs.io/en/latest/) can help with that:
+
+```python
+import zarr
+import zarrs
+zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+```
 
 ## GPU i/o
 
