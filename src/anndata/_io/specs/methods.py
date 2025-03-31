@@ -632,7 +632,7 @@ def write_vlen_string_array_zarr(
         filters, dtype = (
             ([VLenUTF8()], object)
             if ad.settings.zarr_write_format == 2
-            else (None, str)
+            else (None, np.dtypes.StringDType())
         )
         f.create_array(
             k,
@@ -1287,7 +1287,7 @@ def write_scalar_zarr(
             case 2, str():
                 filters, dtype = [VLenUTF8()], object
             case 3, str():
-                filters, dtype = None, str
+                filters, dtype = None, np.dtypes.StringDType()
             case _, _:
                 filters, dtype = None, np.array(value).dtype
         a = f.create_array(
