@@ -517,10 +517,7 @@ def concat_on_disk(
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     with httpx.stream('GET', file_url) as r, out_path.open('wb') as f:
-    ...         r.raise_for_status()
-    ...         for data in r.iter_bytes():
-    ...             f.write(data)
+    ...     out_path.write_bytes(httpx.get(file_url).content)
     ...     return out_path
     >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
     >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
