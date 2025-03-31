@@ -145,6 +145,8 @@ else:
             return "mock cupy.ndarray"
 
 
+CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+
 if find_spec("legacy_api_wrap") or TYPE_CHECKING:
     from legacy_api_wrap import legacy_api  # noqa: TID251
 
