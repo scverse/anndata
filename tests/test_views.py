@@ -155,7 +155,7 @@ def test_modify_view_component(
     mapping_name: Literal["layers", "obsm", "varm"],
     request: pytest.FixtureRequest,
 ) -> None:
-    m = array_type(to_dense(sparse.random(10, 10, format="csr")))
+    m = array_type(sparse.random(10, 10, format="csr"))
     adata = ad.AnnData(np.zeros((10, 10)), **{mapping_name: dict(m=m)})
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
@@ -310,7 +310,7 @@ def test_set_varm(adata):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 @pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk | Flags.Dask)
 def test_not_set_subset_X(array_type: ArrayType, subset_func) -> None:
-    adata = ad.AnnData(array_type(to_dense(sparse.random(20, 20, format="csr"))))
+    adata = ad.AnnData(array_type(sparse.random(20, 20, format="csr")))
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -339,7 +339,7 @@ def test_not_set_subset_X(array_type: ArrayType, subset_func) -> None:
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 @pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk)
 def test_not_set_subset_X_dask(array_type: ArrayType, subset_func) -> None:
-    adata = ad.AnnData(array_type(to_dense(sparse.random(20, 20, format="csr"))))
+    adata = ad.AnnData(array_type(sparse.random(20, 20, format="csr")))
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:

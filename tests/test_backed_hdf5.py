@@ -97,7 +97,7 @@ def test_read_write_X(tmp_path, array_type: ArrayType, backed_mode, as_dense):
     orig_pth = base_pth / "orig.h5ad"
     backed_pth = base_pth / "backed.h5ad"
 
-    orig = ad.AnnData(array_type(to_dense(sparse.random(10, 10, format="csr"))))
+    orig = ad.AnnData(array_type(sparse.random(10, 10, format="csr")))
     orig.write(orig_pth)
 
     backed = ad.read_h5ad(orig_pth, backed=backed_mode)

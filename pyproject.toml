@@ -91,7 +91,7 @@ test = [
     "pytest-memray",
     "pytest-mock",
     "pytest-instafail",
-    "fast-array-utils",
+    "fast-array-utils[testing]",
     "pytest-xdist[psutil]",
     "filelock",
     "matplotlib",
@@ -101,7 +101,7 @@ test = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",                # For data downloading
+    "httpx",                     # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
