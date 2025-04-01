@@ -13,6 +13,7 @@ from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
 
+from .._settings import settings
 from ..compat import (
     AwkArray,
     CupyArray,
@@ -290,7 +291,8 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
-    raise NotImplementedError(f"No view type has been registered for {type(obj)}")
+    msg = f"No view type has been registered for {type(obj)}"
+    raise NotImplementedError(msg)
 
 
 @as_view.register(np.ndarray)
@@ -305,6 +307,11 @@ def as_view_dask_array(array, view_args):
 
 @as_view.register(pd.DataFrame)
 def as_view_df(df, view_args):
+    if settings.remove_unused_categories:
+        for col in df.columns:
+            if isinstance(df[col].dtype, pd.CategoricalDtype):
+                with pd.option_context("mode.chained_assignment", None):
+                    df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
 
 
@@ -403,10 +410,11 @@ try:
         # A better solution might be based on xarray-style "attrs", once this is implemented
         # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
         if type(array).__name__ != "Array":
-            raise NotImplementedError(
+            msg = (
                 "Cannot create a view of an awkward array with __array__ parameter. "
                 "Please open an issue in the AnnData repo and describe your use-case."
             )
+            raise NotImplementedError(msg)
         array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
         array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
         return array

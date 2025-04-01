@@ -10,8 +10,10 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+import anndata
+
 from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CupyArray, CupySparseMatrix, DaskArray, SpArray
+from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -35,7 +37,8 @@ def import_name(name: str) -> Any:
         try:
             obj = getattr(obj, name)
         except AttributeError:
-            raise RuntimeError(f"{parts[:i]}, {parts[i+1:]}, {obj} {name}")
+            msg = f"{parts[:i]}, {parts[i + 1 :]}, {obj} {name}"
+            raise RuntimeError(msg)
     return obj
 
 
@@ -45,7 +48,7 @@ def asarray(x):
     return np.asarray(x)
 
 
-@asarray.register(SpArray)
+@asarray.register(CSArray)
 @asarray.register(sparse.spmatrix)
 def asarray_sparse(x):
     return x.toarray()
@@ -89,10 +92,11 @@ def convert_to_dict_dict(obj: dict):
 @convert_to_dict.register(np.ndarray)
 def convert_to_dict_ndarray(obj: np.ndarray):
     if obj.dtype.fields is None:
-        raise TypeError(
+        msg = (
             "Can only convert np.ndarray with compound dtypes to dict, "
             f"passed array had “{obj.dtype}”."
         )
+        raise TypeError(msg)
     return {k: obj[k] for k in obj.dtype.fields.keys()}
 
 
@@ -125,7 +129,8 @@ try:
                 shape = layout.shape
             numpy_axis = lateral_context["axis"] - depth + 1
             if not (1 <= numpy_axis < len(shape)):
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
             lateral_context["out"] = shape[numpy_axis]
             return ak.contents.EmptyArray()
 
@@ -134,7 +139,8 @@ try:
                 # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
                 # which results in an extra hierarchy-level that shouldn't show up in dim_len
                 # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
-                raise TypeError(f"axis={lateral_context['axis']} is too deep")
+                msg = f"axis={lateral_context['axis']} is too deep"
+                raise TypeError(msg)
 
             if layout.is_regular:
                 # if it's a regular list, you want the size
@@ -152,9 +158,8 @@ try:
             # currently, we don't recurse into records
             # in theory we could, just not sure how to do it at the moment
             # Would need to consider cases like: scalars, unevenly sized values
-            raise TypeError(
-                f"Cannot recurse into record type found at axis={lateral_context['axis']}"
-            )
+            msg = f"Cannot recurse into record type found at axis={lateral_context['axis']}"
+            raise TypeError(msg)
 
         elif layout.is_union:
             # if it's a union, you could get the result of each union branch
@@ -185,7 +190,8 @@ try:
         Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
         """
         if axis < 0:  # negative axis is another can of worms... maybe later
-            raise NotImplementedError("Does not support negative axis")
+            msg = "Does not support negative axis"
+            raise NotImplementedError(msg)
         elif axis == 0:
             return len(array)
         else:
@@ -316,10 +322,11 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
             for col in source.values()
         ]
     except UnicodeEncodeError:
-        raise ValueError(
+        msg = (
             "Currently only support ascii strings. "
             "Don’t use “ö” etc. for sample annotation."
         )
+        raise ValueError(msg)
 
     # if old_index_key not in source:
     #     names.append(new_index_key)
@@ -352,13 +359,14 @@ def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
 
 def deprecated(
     new_name: str,
-    category: type[Warning] = DeprecationWarning,
+    category: type[Warning] = FutureWarning,
     add_msg: str = "",
+    *,
     hide: bool = True,
 ):
     """\
     This is a decorator which can be used to mark functions
-    as deprecated. It will result in a warning being emitted
+    as deprecated with a FutureWarning. It will result in a warning being emitted
     when the function is used.
     """
 
@@ -409,3 +417,27 @@ def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
             f"Please use a single-level index for {attr}."
         )
         raise ValueError(msg)
+
+
+def module_get_attr_redirect(
+    attr_name: str,
+    deprecated_mapping: Mapping[str, str],
+    old_module_path: str | None = None,
+) -> Any:
+    full_old_module_path = (
+        f"anndata{'.' + old_module_path if old_module_path is not None else ''}"
+    )
+    if new_path := deprecated_mapping.get(attr_name):
+        msg = (
+            f"Importing {attr_name} from `{full_old_module_path}` is deprecated. "
+            f"Import anndata.{new_path} instead."
+        )
+        warnings.warn(msg, FutureWarning)
+        # hacky import_object_by_name, but we test all these
+        mod = anndata
+        while "." in new_path:
+            mod_name, new_path = new_path.split(".", 1)
+            mod = getattr(mod, mod_name)
+        return getattr(mod, new_path)
+    msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
+    raise AttributeError(msg)

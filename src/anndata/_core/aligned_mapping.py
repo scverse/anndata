@@ -5,14 +5,13 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray
+from ..compat import AwkArray, CSArray, CSMatrix
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -33,10 +32,10 @@ if TYPE_CHECKING:
     from .raw import Raw
 
 
-OneDIdx = Union[Sequence[int], Sequence[bool], slice]
+OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = Union[pd.DataFrame, spmatrix, np.ndarray]
+Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
 P = TypeVar("P", bound="AlignedMappingBase")
 """Parent mapping an AlignedView is based on."""
@@ -127,7 +126,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)", FutureWarning)
+    @deprecated("dict(obj)")
     def as_dict(self) -> dict:
         return dict(self)
 
@@ -175,9 +174,8 @@ class AlignedView(AlignedMappingBase, Generic[P, I]):
 
     def __delitem__(self, key: str) -> None:
         if key not in self:
-            raise KeyError(
-                "'{key!r}' not found in view of {self.attrname}"
-            )  # Make sure it exists before bothering with a copy
+            msg = f"{key!r} not found in view of {self.attrname}"
+            raise KeyError(msg)  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
             "initializing view as actual.",
@@ -376,9 +374,14 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
-AlignedMapping = Union[
-    AxisArrays, AxisArraysView, Layers, LayersView, PairwiseArrays, PairwiseArraysView
-]
+AlignedMapping = (
+    AxisArrays
+    | AxisArraysView
+    | Layers
+    | LayersView
+    | PairwiseArrays
+    | PairwiseArraysView
+)
 T = TypeVar("T", bound=AlignedMapping)
 """Pair of types to be aligned."""
 
@@ -408,9 +411,7 @@ class AlignedMappingProperty(property, Generic[T]):
 
         def fake(): ...
 
-        fake.__annotations__ = {
-            "return": Union[self.cls._actual_class, self.cls._view_class]
-        }
+        fake.__annotations__ = {"return": self.cls._actual_class | self.cls._view_class}
         return fake
 
     def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:

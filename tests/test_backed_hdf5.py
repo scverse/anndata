@@ -10,7 +10,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import SpArray
+from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     as_dense_dask_array,
@@ -85,6 +85,8 @@ def as_dense(request):
 # -------------------------------------------------------------------------------
 
 
+# h5py internally calls `product` on min-versions
+@pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
@@ -200,8 +202,8 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     var_idx = subset_func2(mem_adata.var_names)
     if (
         array_type is asarray
-        and isinstance(obs_idx, (list, np.ndarray, sparse.spmatrix, SpArray))
-        and isinstance(var_idx, (list, np.ndarray, sparse.spmatrix, SpArray))
+        and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
+        and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
     ):
         pytest.xfail(
             "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
@@ -270,6 +272,8 @@ def test_return_to_memory_mode(adata, backing_h5ad):
     adata.filename = None
     assert not adata.isbacked
 
+    assert adata.X is not None
+
     # make sure the previous file had been properly closed
     # when setting `adata.filename = None`
     # if it hadn’t the following line would throw an error
@@ -312,7 +316,7 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.isbacked
 
     with pytest.warns(
-        PendingDeprecationWarning, match=r"__setitem__ will likely be removed"
+        FutureWarning, match=r"__setitem__ for backed sparse will be removed"
     ):
         adata.X[0, [0, 2]] = 10
         adata.X[1, [0, 2]] = [11, 12]

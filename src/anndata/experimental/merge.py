@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 import shutil
 from collections.abc import Mapping
 from functools import singledispatch
+from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -100,26 +100,34 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
-    raise NotImplementedError("This is not yet implemented.")
+def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
+    msg = "This is not yet implemented."
+    raise NotImplementedError(msg)
 
 
-@as_group.register(os.PathLike)
+@as_group.register(PathLike)
 @as_group.register(str)
-def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+def _(store: PathLike[str] | str, *, mode: str) -> ZarrGroup | H5Group:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, *args, **kwargs)
-    import zarr
+        return h5py.File(store, mode=mode)
 
-    return zarr.open_group(store, *args, **kwargs)
+    if mode == "r":  # others all write: r+, a, w, w-
+        import zarr
+
+        return zarr.open_group(store, mode=mode)
+
+    from anndata._io.zarr import open_write_group
+
+    return open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *args, **kwargs):
+def _(store, *, mode: str) -> ZarrGroup | H5Group:
+    del mode
     return store
 
 
@@ -142,7 +150,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in elem.items()}
+            return {k: read_as_backed(v) for k, v in dict(elem).items()}
         else:
             return func(elem)
 
@@ -220,7 +228,7 @@ def write_concat_sparse(
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(len(d.group["indices"]) for d in datasets)
+    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(
@@ -284,15 +292,15 @@ def _write_concat_arrays(
     init_elem = arrays[0]
     init_type = type(init_elem)
     if not all(isinstance(a, init_type) for a in arrays):
-        raise NotImplementedError(
-            f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
-        )
+        msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+        raise NotImplementedError(msg)
 
     if reindexers is None:
         if join == "inner":
             reindexers = gen_inner_reindexers(arrays, new_index=None, axis=axis)
         else:
-            raise NotImplementedError("Cannot reindex arrays with outer join.")
+            msg = "Cannot reindex arrays with outer join."
+            raise NotImplementedError(msg)
 
     if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
@@ -307,9 +315,8 @@ def _write_concat_arrays(
                 fill_value,
             )
         else:
-            raise NotImplementedError(
-                f"Concat of following not supported: {[a.format for a in arrays]}"
-            )
+            msg = f"Concat of following not supported: {[a.format for a in arrays]}"
+            raise NotImplementedError(msg)
     else:
         write_concat_dense(
             arrays, output_group, output_path, axis, reindexers, fill_value
@@ -335,14 +342,14 @@ def _write_concat_sequence(
             if join == "inner":
                 reindexers = gen_inner_reindexers(arrays, None, axis=axis)
             else:
-                raise NotImplementedError("Cannot reindex dataframes with outer join.")
+                msg = "Cannot reindex dataframes with outer join."
+                raise NotImplementedError(msg)
         if not all(
             isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
-            raise NotImplementedError(
-                "Cannot concatenate a dataframe with other array types."
-            )
+            msg = "Cannot concatenate a dataframe with other array types."
+            raise NotImplementedError(msg)
         df = concat_arrays(
             arrays=arrays,
             reindexers=reindexers,
@@ -352,7 +359,7 @@ def _write_concat_sequence(
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, (pd.DataFrame, BaseCompressedSparseDataset, H5Array, ZarrArray))
+        isinstance(a, pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray)
         for a in arrays
     ):
         _write_concat_arrays(
@@ -366,9 +373,8 @@ def _write_concat_sequence(
             join,
         )
     else:
-        raise NotImplementedError(
-            f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays] } with axis={axis}."
-        )
+        msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
+        raise NotImplementedError(msg)
 
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
@@ -404,8 +410,8 @@ def _write_axis_annot(
 
 
 def concat_on_disk(
-    in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
-    out_file: str | os.PathLike,
+    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
+    out_file: PathLike[str] | str,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -511,10 +517,7 @@ def concat_on_disk(
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     with httpx.stream('GET', file_url) as r, out_path.open('wb') as f:
-    ...         r.raise_for_status()
-    ...         for data in r.iter_bytes():
-    ...             f.write(data)
+    ...     out_path.write_bytes(httpx.get(file_url).content)
     ...     return out_path
     >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
     >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
@@ -537,25 +540,29 @@ def concat_on_disk(
     Name: count, dtype: int64
     """
     if len(in_files) == 0:
-        raise ValueError("No objects to concatenate.")
+        msg = "No objects to concatenate."
+        raise ValueError(msg)
 
     # Argument normalization
     if pairwise:
-        raise NotImplementedError("pairwise concatenation not yet implemented")
+        msg = "pairwise concatenation not yet implemented"
+        raise NotImplementedError(msg)
 
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
     out_file = Path(out_file)
     if not out_file.parent.exists():
-        raise FileNotFoundError(f"Parent directory of {out_file} does not exist.")
+        msg = f"Parent directory of {out_file} does not exist."
+        raise FileNotFoundError(msg)
 
     if isinstance(in_files, Mapping):
         if keys is not None:
-            raise TypeError(
+            msg = (
                 "Cannot specify categories in both mapping keys and using `keys`. "
                 "Only specify this once."
             )
+            raise TypeError(msg)
         keys, in_files = list(in_files.keys()), list(in_files.values())
     else:
         in_files = list(in_files)
@@ -571,7 +578,7 @@ def concat_on_disk(
     _, alt_axis_name = _resolve_axis(1 - axis)
 
     output_group = as_group(out_file, mode="w")
-    groups = [as_group(f) for f in in_files]
+    groups = [as_group(f, mode="r") for f in in_files]
 
     use_reindexing = False
 
@@ -582,7 +589,8 @@ def concat_on_disk(
 
     # All groups must be anndata
     if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
-        raise ValueError("All groups must be anndata")
+        msg = "All groups must be anndata"
+        raise ValueError(msg)
 
     # Write metadata
     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})

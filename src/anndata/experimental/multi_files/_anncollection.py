@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping
 from functools import reduce
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -15,10 +15,10 @@ from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
-from ...compat import _map_cat_to_str
+from ...compat import _map_cat_to_str, old_positionals
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from typing import Literal
 
     from ..._core.index import Index
@@ -123,9 +123,11 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
+    @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(
         self,
         batch_size: int,
+        *,
         axis: Literal[0, 1] = 0,
         shuffle: bool = False,
         drop_last: bool = False,
@@ -144,7 +146,8 @@ class _IterateViewMixin:
             Set to `True` to drop a batch with the length lower than `batch_size`.
         """
         if axis not in {0, 1}:
-            raise ValueError("Axis should be either 0 or 1.")
+            msg = "Axis should be either 0 or 1."
+            raise ValueError(msg)
 
         n = self.shape[axis]
 
@@ -189,9 +192,10 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key, use_convert=True):
+    def __getitem__(self, key: str, *, use_convert: bool = True):
         if self._keys is not None and key not in self._keys:
-            raise KeyError(f"No {key} in {self.attr} view")
+            msg = f"No {key} in {self.attr} view"
+            raise KeyError(msg)
 
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
@@ -237,11 +241,12 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self, keys=None, use_convert=True):
+    @old_positionals("use_convert")
+    def to_dict(self, keys: Iterable[str] | None = None, *, use_convert=True):
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, use_convert)
+            dct[key] = self.__getitem__(key, use_convert=use_convert)
         return dct
 
     @property
@@ -299,7 +304,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         self._convert_X = None
         self.convert = convert
 
-    def _lazy_init_attr(self, attr, set_vidx=False):
+    def _lazy_init_attr(self, attr: str, *, set_vidx: bool = False):
         if getattr(self, f"_{attr}_view") is not None:
             return
         keys = None
@@ -544,7 +549,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
+    @old_positionals("ignore_X", "ignore_layers")
+    def to_adata(self, *, ignore_X: bool = False, ignore_layers: bool = False):
         """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
@@ -584,7 +590,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
 
 DictCallable = dict[str, Callable]
-ConvertType = Union[Callable, dict[str, Union[Callable, DictCallable]]]
+ConvertType = Callable | dict[str, Callable | DictCallable]
 
 
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
@@ -675,9 +681,21 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     100
     """
 
+    @old_positionals(
+        "join_obs",
+        "join_obsm",
+        "join_vars",
+        "label",
+        "keys",
+        "index_unique",
+        "convert",
+        "harmonize_dtypes",
+        "indices_strict",
+    )
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         join_obs: Literal["inner", "outer"] | None = "inner",
         join_obsm: Literal["inner"] | None = None,
         join_vars: Literal["inner"] | None = None,
@@ -690,10 +708,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
-                raise TypeError(
+                msg = (
                     "Cannot specify categories in both mapping keys and using `keys`. "
                     "Only specify this once."
                 )
+                raise TypeError(msg)
             keys, adatas = list(adatas.keys()), list(adatas.values())
         else:
             adatas = list(adatas)
@@ -715,10 +734,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                     self.adatas_vidx.append(adata_vidx)
             self.var_names = var_names
         else:
-            raise ValueError(
+            msg = (
                 "Adatas have different variables. "
                 "Please specify join_vars='inner' for intersection."
             )
+            raise ValueError(msg)
 
         concat_indices = pd.concat(
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True

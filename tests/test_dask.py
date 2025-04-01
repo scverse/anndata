@@ -4,6 +4,8 @@ For tests using dask
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,6 +24,11 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
+
+
 pytest.importorskip("dask.array")
 
 
@@ -35,11 +42,6 @@ pytest.importorskip("dask.array")
     ]
 )
 def sizes(request):
-    return request.param
-
-
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
     return request.param
 
 
@@ -103,7 +105,13 @@ def test_dask_write(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_distributed_write(adata, tmp_path, diskfmt):
+@pytest.mark.xdist_group("dask")
+def test_dask_distributed_write(
+    adata: AnnData,
+    tmp_path: Path,
+    diskfmt: Literal["h5ad", "zarr"],
+    local_cluster_addr: str,
+) -> None:
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
@@ -111,10 +119,7 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
 
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1, processes=False) as cluster,
-        dd.Client(cluster),
-    ):
+    with dd.Client(local_cluster_addr):
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))
@@ -122,10 +127,12 @@ def test_dask_distributed_write(adata, tmp_path, diskfmt):
         orig = adata
         if diskfmt == "h5ad":
             with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
-                ad.write_elem(g, "", orig)
+                ad.io.write_elem(g, "", orig)
             return
-        ad.write_elem(g, "", orig)
-        curr = ad.read_elem(g)
+        ad.io.write_elem(g, "", orig)
+        # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
+        g = as_group(pth, mode="r")
+        curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])

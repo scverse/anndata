@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from anndata.compat import CSArray, CSMatrix
+
 from .._warnings import ImplicitModificationWarning
 from ..utils import (
     ensure_df_homogeneous,
@@ -25,28 +27,39 @@ def coerce_array(
     allow_df: bool = False,
     allow_array_like: bool = False,
 ):
+    try:
+        from anndata.experimental.backed._compat import Dataset2D
+    except ImportError:
+
+        class Dataset2D:
+            @staticmethod
+            def __repr__():
+                return "mock anndata.experimental.backed._xarray."
+
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
-    from ..typing import ArrayDataStructureType
+    from ..typing import ArrayDataStructureTypes
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    array_data_structure_types = get_args(ArrayDataStructureType)
-    if isinstance(value, array_data_structure_types):
+    array_data_structure_types = get_args(ArrayDataStructureTypes)
+    if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
-    elif isinstance(value, sparse.spmatrix):
-        msg = (
-            f"AnnData previously had undefined behavior around matrices of type {type(value)}."
-            "In 0.12, passing in this type will throw an error. Please convert to a supported type."
-            "Continue using for this minor version at your own risk."
-        )
-        warnings.warn(msg, FutureWarning)
-        return value
+    is_non_csc_r_array_or_matrix = (
+        (isinstance(value, base) and not isinstance(value, csr_c_format))
+        for base, csr_c_format in [
+            (sparse.spmatrix, CSMatrix),
+            (sparse.sparray, CSArray),
+        ]
+    )
+    if any(is_non_csc_r_array_or_matrix):
+        msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
+        raise ValueError(msg)
     if isinstance(value, pd.DataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)

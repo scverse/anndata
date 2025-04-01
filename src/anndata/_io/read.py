@@ -21,17 +21,9 @@ from .utils import is_float
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
-try:
-    from .zarr import read_zarr
-except ImportError as _e:
-    e = _e
-
-    def read_zarr(*_, **__):
-        raise e
-
 
 def read_csv(
-    filename: PathLike | Iterator[str],
+    filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = ",",
     first_column_names: bool | None = None,
     dtype: str = "float32",
@@ -39,7 +31,7 @@ def read_csv(
     """\
     Read `.csv` file.
 
-    Same as :func:`~anndata.read_text` but with default delimiter `','`.
+    Same as :func:`~anndata.io.read_text` but with default delimiter `','`.
 
     Parameters
     ----------
@@ -57,7 +49,9 @@ def read_csv(
     return read_text(filename, delimiter, first_column_names, dtype)
 
 
-def read_excel(filename: PathLike, sheet: str | int, dtype: str = "float32") -> AnnData:
+def read_excel(
+    filename: PathLike[str] | str, sheet: str | int, dtype: str = "float32"
+) -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
 
@@ -81,7 +75,7 @@ def read_excel(filename: PathLike, sheet: str | int, dtype: str = "float32") -> 
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
+def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -104,7 +98,7 @@ def read_umi_tools(filename: PathLike, dtype=None) -> AnnData:
     return AnnData(X=X, obs=obs, var=var)
 
 
-def read_hdf(filename: PathLike, key: str) -> AnnData:
+def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
     """\
     Read `.h5` (hdf5) file.
 
@@ -122,10 +116,11 @@ def read_hdf(filename: PathLike, key: str) -> AnnData:
         # a view and not a list is returned
         keys = [k for k in f.keys()]
         if key == "":
-            raise ValueError(
+            msg = (
                 f"The file {filename} stores the following sheets:\n{keys}\n"
                 f"Call read/read_hdf5 with one of them."
             )
+            raise ValueError(msg)
         # read array
         X = f[key][()]
         # try to find row and column names
@@ -159,7 +154,7 @@ def _fmt_loom_axis_attrs(
 
 @_deprecate_positional_args(version="0.9")
 def read_loom(
-    filename: PathLike,
+    filename: PathLike[str] | str,
     *,
     sparse: bool = True,
     cleanup: bool = False,
@@ -208,7 +203,7 @@ def read_loom(
 
     .. code:: python
 
-        pbmc = anndata.read_loom(
+        pbmc = anndata.io.read_loom(
             "pbmc.loom",
             sparse=True,
             X_name="lognorm",
@@ -227,10 +222,11 @@ def read_loom(
             FutureWarning,
         )
         if obsm_mapping != {}:
-            raise ValueError(
+            msg = (
                 "Received values for both `obsm_names` and `obsm_mapping`. This is "
                 "ambiguous, only pass `obsm_mapping`."
             )
+            raise ValueError(msg)
         obsm_mapping = obsm_names
     if varm_names is not None:
         warn(
@@ -239,10 +235,11 @@ def read_loom(
             FutureWarning,
         )
         if varm_mapping != {}:
-            raise ValueError(
+            msg = (
                 "Received values for both `varm_names` and `varm_mapping`. This is "
                 "ambiguous, only pass `varm_mapping`."
             )
+            raise ValueError(msg)
         varm_mapping = varm_names
 
     filename = fspath(filename)  # allow passing pathlib.Path objects
@@ -300,7 +297,7 @@ def read_loom(
     return adata
 
 
-def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
+def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     """\
     Read `.mtx` file.
 
@@ -322,7 +319,7 @@ def read_mtx(filename: PathLike, dtype: str = "float32") -> AnnData:
 
 
 def read_text(
-    filename: PathLike | Iterator[str],
+    filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = None,
     first_column_names: bool | None = None,
     dtype: str = "float32",
@@ -330,7 +327,7 @@ def read_text(
     """\
     Read `.txt`, `.tab`, `.data` (text) file.
 
-    Same as :func:`~anndata.read_csv` but with default delimiter `None`.
+    Same as :func:`~anndata.io.read_csv` but with default delimiter `None`.
 
     Parameters
     ----------
@@ -345,7 +342,7 @@ def read_text(
     dtype
         Numpy data type.
     """
-    if not isinstance(filename, (PathLike, str, bytes)):
+    if not isinstance(filename, PathLike | str | bytes):
         return _read_text(filename, delimiter, first_column_names, dtype)
 
     filename = Path(filename)
@@ -387,7 +384,8 @@ def _read_text(
                 comments.append(comment)
         else:
             if delimiter is not None and delimiter not in line:
-                raise ValueError(f"Did not find delimiter {delimiter!r} in first line.")
+                msg = f"Did not find delimiter {delimiter!r} in first line."
+                raise ValueError(msg)
             line_list = line.split(delimiter)
             # the first column might be row names, so check the last
             if not is_float(line_list[-1]):
@@ -449,10 +447,11 @@ def _read_text(
     #   in the end, to separate row_names from float data, slicing takes
     #   a lot of memory and CPU time
     if data[0].size != data[-1].size:
-        raise ValueError(
+        msg = (
             f"Length of first line ({data[0].size}) is different "
             f"from length of last line ({data[-1].size})."
         )
+        raise ValueError(msg)
     data = np.array(data, dtype=dtype)
     # logg.msg("    constructed array from list of list", t=True, v=4)
     # transform row_names

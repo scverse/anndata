@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-import anndata as ad
 import anndata.experimental
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
@@ -26,7 +25,7 @@ def adata():
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         var=dict(var_names=["a", "b", "c"]),
     )
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
     adata.X = adata.X / 2
@@ -34,13 +33,13 @@ def adata():
 
 
 def test_get_obsvar_array_warn(adata):
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_obs_array("a")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_var_array("s1")
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_get_obsvar_array(adata):
     assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
     assert np.allclose(
@@ -102,35 +101,37 @@ def test_dtype_warning():
 def test_deprecated_write_attribute(tmp_path):
     pth = tmp_path / "file.h5"
     A = np.random.randn(20, 10)
-    from anndata import read_elem
     from anndata._io.utils import read_attribute, write_attribute
+    from anndata.io import read_elem
 
     with h5py.File(pth, "w") as f:
-        with pytest.warns(DeprecationWarning, match=r"write_elem"):
+        with pytest.warns(FutureWarning, match=r"write_elem"):
             write_attribute(f, "written_attribute", A)
 
     with h5py.File(pth, "r") as f:
         elem_A = read_elem(f["written_attribute"])
-        with pytest.warns(DeprecationWarning, match=r"read_elem"):
+        with pytest.warns(FutureWarning, match=r"read_elem"):
             attribute_A = read_attribute(f["written_attribute"])
 
         assert_equal(elem_A, attribute_A)
         assert_equal(A, attribute_A)
 
 
-def test_deprecated_read(tmp_path):
-    memory = AnnData(np.random.randn(20, 10))
-    memory.write_h5ad(tmp_path / "file.h5ad")
-
-    with pytest.warns(FutureWarning, match=r"`anndata.read` is deprecated"):
-        from_disk = ad.read(tmp_path / "file.h5ad")
-
-    assert_equal(memory, from_disk)
-
-
 @pytest.mark.parametrize(
-    ("old_name", "new_name"), anndata.experimental._DEPRECATED.items()
+    ("old_name", "new_name", "module"),
+    (
+        (old_name, new_name, module)
+        for module in [anndata, anndata.experimental]
+        for (old_name, new_name) in module._DEPRECATED.items()
+    ),
 )
-def test_warn_on_import_from_experimental(old_name: str, new_name: str):
+def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
     with pytest.warns(FutureWarning, match=rf"Importing {old_name}.*is deprecated"):
-        getattr(anndata.experimental, old_name)
+        getattr(module, old_name)
+
+
+def test_warn_on_deprecated__io_module():
+    with pytest.warns(
+        FutureWarning, match=r"Importing read_h5ad from `anndata._io` is deprecated"
+    ):
+        from anndata._io import read_h5ad  # noqa

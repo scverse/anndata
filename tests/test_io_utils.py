@@ -4,6 +4,7 @@ from contextlib import AbstractContextManager, suppress
 from typing import TYPE_CHECKING
 
 import h5py
+import numpy as np
 import pandas as pd
 import pytest
 import zarr
@@ -18,11 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -32,7 +28,7 @@ def diskfmt(request):
 )
 @pytest.mark.parametrize("nested", [True, False], ids=["nested", "root"])
 def test_key_error(
-    tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
+    *, tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
 ):
     @report_read_key_on_error
     def read_attr(_):
@@ -45,7 +41,7 @@ def test_key_error(
             path = "/nested"
         else:
             path = "/"
-        group["X"] = [1, 2, 3]
+        group["X"] = np.array([1, 2, 3])
         group.create_group("group")
 
         with pytest.raises(
@@ -107,10 +103,10 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
     pattern = r"(?s)^((?!Error raised while writing key '/?a').)*$"
 
     with pytest.raises(IORegistryError, match=pattern):
-        ad.write_elem(group, "/", {"a": {"b": Foo()}})
+        ad.io.write_elem(group, "/", {"a": {"b": Foo()}})
 
-    ad.write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
+    ad.io.write_elem(group, "/", {"a": {"b": [1, 2, 3]}})
     group["a/b"].attrs["encoding-type"] = "not a real encoding type"
 
     with pytest.raises(IORegistryError, match=pattern):
-        ad.read_elem(group)
+        ad.io.read_elem(group)

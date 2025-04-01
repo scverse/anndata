@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from copy import deepcopy
 from operator import mul
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -21,7 +22,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CAN_USE_SPARSE_ARRAY, CupyCSCMatrix, DaskArray
+from anndata.compat import CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -34,6 +35,9 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from types import EllipsisType
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -175,7 +179,7 @@ def test_modify_view_component(matrix_type, mapping_name, request):
 
     assert init_hash == hash_func(adata)
 
-    if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
+    if "sparse_array_dask_array" in request.node.callspec.id:
         msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
         pytest.fail(msg)
 
@@ -525,7 +529,7 @@ def test_layers_view():
 # TODO: This can be flaky. Make that stop
 def test_view_of_view(matrix_type, subset_func, subset_func2):
     adata = gen_adata((30, 15), X_type=matrix_type)
-    adata.raw = adata
+    adata.raw = adata.copy()
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
@@ -627,7 +631,7 @@ def test_invalid_scalar_index(adata, index):
 
 @pytest.mark.parametrize("obs", [False, True])
 @pytest.mark.parametrize("index", [-100, -50, -1])
-def test_negative_scalar_index(adata, index: int, obs: bool):
+def test_negative_scalar_index(*, adata, index: int, obs: bool):
     pos_index = index + (adata.n_obs if obs else adata.n_vars)
 
     if obs:
@@ -669,9 +673,7 @@ def test_viewness_propagation_allclose(adata):
     assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
-spmat = [sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    spmat += [sparse.csr_array, sparse.csc_array]
+spmat = [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
 
 
 @pytest.mark.parametrize("spmat", spmat)
@@ -689,10 +691,7 @@ def test_deepcopy_subset(adata, spmat: type):
     view_type = (
         SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView
     )
-    if CAN_USE_SPARSE_ARRAY:
-        view_type = (
-            SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
-        )
+    view_type = SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
     assert not isinstance(
         adata.obsp["spmat"],
         view_type,
@@ -700,9 +699,13 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
-array_type = [asarray, sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    array_type += [sparse.csr_array, sparse.csc_array]
+array_type = [
+    asarray,
+    sparse.csr_matrix,
+    sparse.csc_matrix,
+    sparse.csr_array,
+    sparse.csc_array,
+]
 
 
 # https://github.com/scverse/anndata/issues/680
@@ -784,6 +787,46 @@ def test_dataframe_view_index_setting():
     assert isinstance(a2.obs, pd.DataFrame)
     assert a1.obs.index.values.tolist() == ["aa", "bb"]
     assert a2.obs.index.values.tolist() == ["a", "b"]
+
+
+def test_ellipsis_index(
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
+    matrix_type,
+):
+    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
+    subset_ellipsis = adata[ellipsis_index]
+    subset = adata[equivalent_ellipsis_index]
+    assert_equal(subset_ellipsis, subset)
+
+
+@pytest.mark.parametrize(
+    ("index", "expected_error"),
+    [
+        ((..., 0, ...), r"only have a single ellipsis"),
+        ((0, 0, 0), r"Received a length 3 index"),
+    ],
+    ids=["ellipsis-int-ellipsis", "int-int-int"],
+)
+def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
+    with pytest.raises(IndexError, match=expected_error):
+        gen_adata((10, 10))[index]
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(sparse.csr_matrix(np.random.random((1, 10))), id="sparse"),
+        pytest.param([1.2, 3.4], id="list"),
+        *(
+            pytest.param(np.array([1.2, 2.3], dtype=dtype), id=f"ndarray-{dtype}")
+            for dtype in [np.float32, np.float64]
+        ),
+    ],
+)
+def test_index_float_sequence_raises_error(index):
+    with pytest.raises(IndexError, match=r"has floating point values"):
+        gen_adata((10, 10))[index]
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])

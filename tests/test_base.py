@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from itertools import product
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -11,10 +12,14 @@ from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
 
+import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
-from anndata.compat import CAN_USE_SPARSE_ARRAY
 from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -31,8 +36,7 @@ def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2, format="csr"))
-    if CAN_USE_SPARSE_ARRAY:
-        AnnData(sp.eye_array(2))
+    AnnData(sp.csr_array([[1, 0], [0, 1]]))
     X = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
         X=X,
@@ -277,7 +281,7 @@ def test_setting_dim_index(dim):
     mapping_attr = f"{dim}m"
 
     orig = gen_adata((5, 5))
-    orig.raw = orig
+    orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
     new_idx = pd.Index(list("abcde"), name="letters")
@@ -453,7 +457,7 @@ def test_slicing_remove_unused_categories():
 
 
 def test_slicing_dont_remove_unused_categories():
-    with settings.override(shall_remove_unused_categories=False):
+    with settings.override(remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
@@ -462,7 +466,7 @@ def test_slicing_dont_remove_unused_categories():
 
 
 def test_no_uniqueness_check_gives_repeat_indices():
-    with settings.override(shall_check_uniqueness=False):
+    with settings.override(check_uniqueness=False):
         obs_names = ["0", "0", "1", "1"]
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -590,7 +594,7 @@ def test_convenience():
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
-    adata.raw = adata
+    adata.raw = adata.copy()
     adata.X = adata.X / 2
     adata_dense = adata.copy()
     adata_dense.X = adata_dense.X.toarray()
@@ -735,3 +739,18 @@ def test_to_memory_no_copy():
         assert mem.obsp[key] is adata.obsp[key]
     for key in adata.varp:
         assert mem.varp[key] is adata.varp[key]
+
+
+@pytest.mark.parametrize("axis", ["obs", "var"])
+@pytest.mark.parametrize("elem_type", ["p", "m"])
+def test_create_adata_from_single_axis_elem(
+    axis: Literal["obs", "var"], elem_type: Literal["m", "p"], tmp_path: Path
+):
+    d = dict(
+        a=np.zeros((10, 10)),
+    )
+    in_memory = AnnData(**{f"{axis}{elem_type}": d})
+    assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
+    in_memory.write_h5ad(tmp_path / "adata.h5ad")
+    from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
+    ad.tests.helpers.assert_equal(from_disk, in_memory)

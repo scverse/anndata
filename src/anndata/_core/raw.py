@@ -17,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
-    from scipy import sparse
-
+    from ..compat import CSMatrix
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -31,7 +30,7 @@ class Raw:
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | sparse.spmatrix | None = None,
+        X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
@@ -40,7 +39,7 @@ class Raw:
         # construct manually
         if adata.isbacked == (X is None):
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(X, (CupyArray, CupySparseMatrix)):
+            if isinstance(X, CupyArray | CupySparseMatrix):
                 self._X = X.get()
             else:
                 self._X = X
@@ -51,14 +50,15 @@ class Raw:
             self.varm = varm
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(adata.X, (CupyArray, CupySparseMatrix)):
+            if isinstance(adata.X, CupyArray | CupySparseMatrix):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
             self._var = adata.var.copy()
             self.varm = adata.varm.copy()
         elif adata.isbacked:
-            raise ValueError("Cannot specify X if adata is backed")
+            msg = "Cannot specify X if adata is backed"
+            raise ValueError(msg)
 
     def _get_X(self, layer=None):
         if layer is not None:
@@ -66,7 +66,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | sparse.spmatrix:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -78,10 +78,11 @@ class Raw:
         elif "raw.X" in self._adata.file:
             X = self._adata.file["raw.X"]  # Backwards compat
         else:
-            raise AttributeError(
+            msg = (
                 f"Could not find dataset for raw X in file: "
                 f"{self._adata.file.filename}."
             )
+            raise AttributeError(msg)
         if isinstance(X, h5py.Group):
             X = sparse_dataset(X)
         # Check if we need to subset
@@ -124,9 +125,9 @@ class Raw:
         oidx, vidx = self._normalize_indices(index)
 
         # To preserve two dimensional shape
-        if isinstance(vidx, (int, np.integer)):
+        if isinstance(vidx, int | np.integer):
             vidx = slice(vidx, vidx + 1, 1)
-        if isinstance(oidx, (int, np.integer)):
+        if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
         if not self._adata.isbacked:

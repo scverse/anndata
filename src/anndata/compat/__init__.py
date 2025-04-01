@@ -1,25 +1,21 @@
 from __future__ import annotations
 
-import os
-import sys
 from codecs import decode
 from collections.abc import Mapping
-from contextlib import AbstractContextManager
-from dataclasses import dataclass, field
-from functools import singledispatch, wraps
+from functools import cache, partial, singledispatch, wraps
+from importlib.util import find_spec
 from inspect import Parameter, signature
-from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar, Union
+from types import EllipsisType
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import h5py
 import numpy as np
 import pandas as pd
 import scipy
-import scipy.sparse
 from packaging.version import Version
-
-from .exceptiongroups import add_note  # noqa: F401
+from zarr import Array as ZarrArray  # noqa: F401
+from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
     from typing import Any
@@ -29,89 +25,51 @@ if TYPE_CHECKING:
 #############################
 
 
-CAN_USE_SPARSE_ARRAY = Version(scipy.__version__) >= Version("1.11")
-
-if not CAN_USE_SPARSE_ARRAY:
-
-    class SpArray:
-        @staticmethod
-        def __repr__():
-            return "mock scipy.sparse.sparray"
-else:
-    SpArray = scipy.sparse.sparray
+CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
+CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
 
 
 class Empty:
     pass
 
 
-Index1D = Union[slice, int, str, np.int64, np.ndarray]
-Index = Union[Index1D, tuple[Index1D, Index1D], scipy.sparse.spmatrix, SpArray]
+Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series
+IndexRest = Index1D | EllipsisType
+Index = (
+    IndexRest
+    | tuple[Index1D, IndexRest]
+    | tuple[IndexRest, Index1D]
+    | tuple[Index1D, Index1D, EllipsisType]
+    | tuple[EllipsisType, Index1D, Index1D]
+    | tuple[Index1D, EllipsisType, Index1D]
+    | CSMatrix
+    | CSArray
+)
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
 
 
 #############################
-# stdlib
-#############################
-
-
-if sys.version_info >= (3, 11):
-    from contextlib import chdir
-else:
-
-    @dataclass
-    class chdir(AbstractContextManager):
-        path: Path
-        _old_cwd: list[Path] = field(default_factory=list)
-
-        def __enter__(self) -> None:
-            self._old_cwd.append(Path())
-            os.chdir(self.path)
-
-        def __exit__(self, *_exc_info) -> None:
-            os.chdir(self._old_cwd.pop())
-
-
-if sys.version_info >= (3, 10):
-    from itertools import pairwise
-else:
-
-    def pairwise(iterable):
-        from itertools import tee
-
-        a, b = tee(iterable)
-        next(b, None)
-        return zip(a, b)
-
-
-#############################
 # Optional deps
 #############################
+@cache
+def is_zarr_v2() -> bool:
+    import zarr
+    from packaging.version import Version
 
-try:
-    from zarr.core import Array as ZarrArray
-    from zarr.hierarchy import Group as ZarrGroup
-except ImportError:
-
-    class ZarrArray:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Array"
-
-    class ZarrGroup:
-        @staticmethod
-        def __repr__():
-            return "mock zarr.core.Group"
+    return Version(zarr.__version__) < Version("3.0.0")
 
 
-try:
-    import awkward
+if is_zarr_v2():
+    msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
+    warn(msg, DeprecationWarning)
 
-    AwkArray = awkward.Array
 
-except ImportError:
+if find_spec("awkward") or TYPE_CHECKING:
+    import awkward  # noqa: F401
+    from awkward import Array as AwkArray
+else:
 
     class AwkArray:
         @staticmethod
@@ -119,9 +77,9 @@ except ImportError:
             return "mock awkward.highlevel.Array"
 
 
-try:
+if find_spec("zappy") or TYPE_CHECKING:
     from zappy.base import ZappyArray
-except ImportError:
+else:
 
     class ZappyArray:
         @staticmethod
@@ -129,9 +87,12 @@ except ImportError:
             return "mock zappy.base.ZappyArray"
 
 
-try:
+if TYPE_CHECKING:
+    # type checkers are confused and can only see …core.Array
+    from dask.array.core import Array as DaskArray
+elif find_spec("dask"):
     from dask.array import Array as DaskArray
-except ImportError:
+else:
 
     class DaskArray:
         @staticmethod
@@ -139,27 +100,29 @@ except ImportError:
             return "mock dask.array.core.Array"
 
 
-try:
+# https://github.com/scverse/anndata/issues/1749
+def is_cupy_importable() -> bool:
+    try:
+        import cupy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+if is_cupy_importable() or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
-    from cupyx.scipy.sparse import (
-        csc_matrix as CupyCSCMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        csr_matrix as CupyCSRMatrix,
-    )
-    from cupyx.scipy.sparse import (
-        spmatrix as CupySparseMatrix,
-    )
+    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
+    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
+    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
 
     try:
         import dask.array as da
-
-        da.register_chunk_type(CupyCSRMatrix)
-        da.register_chunk_type(CupyCSCMatrix)
     except ImportError:
         pass
-
-except ImportError:
+    else:
+        da.register_chunk_type(CupyCSRMatrix)
+        da.register_chunk_type(CupyCSCMatrix)
+else:
 
     class CupySparseMatrix:
         @staticmethod
@@ -180,6 +143,16 @@ except ImportError:
         @staticmethod
         def __repr__():
             return "mock cupy.ndarray"
+
+
+if find_spec("legacy_api_wrap") or TYPE_CHECKING:
+    from legacy_api_wrap import legacy_api  # noqa: TID251
+
+    old_positionals = partial(legacy_api, category=FutureWarning)
+else:
+
+    def old_positionals(*old_positionals):
+        return lambda func: func
 
 
 #############################
@@ -248,7 +221,7 @@ def _from_fixed_length_strings(value):
 
 
 def _decode_structured_array(
-    arr: np.ndarray, dtype: np.dtype | None = None, copy: bool = False
+    arr: np.ndarray, *, dtype: np.dtype | None = None, copy: bool = False
 ) -> np.ndarray:
     """
     h5py 3.0 now reads all strings as bytes. There is a helper method which can convert these to strings,
@@ -293,7 +266,7 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=Union[ZarrGroup, h5py.Group])
+Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
@@ -324,7 +297,7 @@ def _clean_uns(adata: AnnData):  # noqa: F821
             continue
         name = cats_name.replace("_categories", "")
         # fix categories with a single category
-        if isinstance(cats, (str, int)):
+        if isinstance(cats, str | int):
             cats = [cats]
         for ann in [adata.obs, adata.var]:
             if name not in ann:
@@ -349,7 +322,7 @@ def _move_adj_mtx(d):
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], (scipy.sparse.spmatrix, np.ndarray))
+            and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
             warn(

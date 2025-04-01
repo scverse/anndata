@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import scipy
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from packaging.version import Version
@@ -20,7 +21,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CupySparseMatrix, DaskArray, SpArray
+from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -61,7 +62,7 @@ def _filled_array(a, fill_value=None):
     return as_dense_dask_array(_filled_array_np(a, fill_value))
 
 
-@filled_like.register(sparse.spmatrix)
+@filled_like.register(CSMatrix)
 def _filled_sparse(a, fill_value=None):
     if fill_value is None:
         return sparse.csr_matrix(a.shape)
@@ -69,7 +70,7 @@ def _filled_sparse(a, fill_value=None):
         return sparse.csr_matrix(np.broadcast_to(fill_value, a.shape))
 
 
-@filled_like.register(SpArray)
+@filled_like.register(CSArray)
 def _filled_sparse_array(a, fill_value=None):
     return sparse.csr_array(filled_like(sparse.csr_matrix(a)))
 
@@ -125,7 +126,9 @@ def merge_strategy(request):
     return request.param
 
 
-def fix_known_differences(orig, result, backwards_compat=True):
+def fix_known_differences(
+    orig: AnnData, result: AnnData, *, backwards_compat: bool = True
+):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.
@@ -150,9 +153,11 @@ def fix_known_differences(orig, result, backwards_compat=True):
         result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
-    for k, dtype in orig.obs.dtypes.items():
-        if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
-            result.obs[k] = result.obs[k].astype(dtype)
+    for get_df in [lambda k: getattr(k, "obs"), lambda k: getattr(k, "obsm")["df"]]:
+        str_to_df_converted = get_df(result)
+        for k, dtype in get_df(orig).dtypes.items():
+            if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
+                str_to_df_converted[k] = str_to_df_converted[k].astype(dtype)
 
     return orig, result
 
@@ -197,10 +202,7 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
     assert_equal(result[orig.obs_names].copy(), orig)
     base_type = type(orig.X)
     if sparse.issparse(orig.X):
-        if isinstance(orig.X, SpArray):
-            base_type = SpArray
-        else:
-            base_type = sparse.spmatrix
+        base_type = CSArray if isinstance(orig.X, CSArray) else CSMatrix
     if isinstance(orig.X, CupySparseMatrix):
         base_type = CupySparseMatrix
     assert isinstance(result.X, base_type)
@@ -404,7 +406,7 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
         ),
     )
 
-    assert isinstance(outer.obsm["sparse"], sparse.spmatrix)
+    assert isinstance(outer.obsm["sparse"], CSMatrix)
     np.testing.assert_equal(
         outer.obsm["sparse"].toarray(),
         np.array(
@@ -495,19 +497,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, (pd.DataFrame, AwkArray))
+        if not isinstance(v, pd.DataFrame | AwkArray)
     }
     # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
     for tmp_ad in [adata1, adata2, adata3]:
@@ -697,9 +699,9 @@ def test_concatenate_with_raw():
         layers=dict(Xs=X4),
     )
 
-    adata1.raw = adata1
-    adata2.raw = adata2
-    adata3.raw = adata3
+    adata1.raw = adata1.copy()
+    adata2.raw = adata2.copy()
+    adata3.raw = adata3.copy()
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3)
     assert isinstance(adata_all.raw, Raw)
@@ -713,7 +715,7 @@ def test_concatenate_with_raw():
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
 
-    adata3.raw = adata4
+    adata3.raw = adata4.copy()
     adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcdz")
@@ -1044,7 +1046,9 @@ def gen_list(n):
 
 
 def gen_sparse(n):
-    return sparse.random(np.random.randint(1, 100), np.random.randint(1, 100))
+    return sparse.random(
+        np.random.randint(1, 100), np.random.randint(1, 100), format="csr"
+    )
 
 
 def gen_something(n):
@@ -1249,9 +1253,9 @@ def test_concat_categories_maintain_dtype():
 
     result = concat({"a": a, "b": b, "c": c}, join="outer")
 
-    assert isinstance(
-        result.obs["cat"].dtype, pd.CategoricalDtype
-    ), f"Was {result.obs['cat'].dtype}"
+    assert isinstance(result.obs["cat"].dtype, pd.CategoricalDtype), (
+        f"Was {result.obs['cat'].dtype}"
+    )
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 
@@ -1436,15 +1440,21 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
 
 
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
-def test_concat_outer_aligned_mapping(elem):
+@pytest.mark.parametrize("axis", ["obs", "var"])
+def test_concat_outer_aligned_mapping(elem, axis):
     a = gen_adata((5, 5), **GEN_ADATA_DASK_ARGS)
     b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
-    del b.obsm[elem]
+    del getattr(b, f"{axis}m")[elem]
 
-    concated = concat({"a": a, "b": b}, join="outer", label="group")
-    result = concated.obsm[elem][concated.obs["group"] == "b"]
+    concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis)
 
-    check_filled_like(result, elem_name=f"obsm/{elem}")
+    mask = getattr(concated, axis)["group"] == "b"
+    result = getattr(
+        concated[(mask, slice(None)) if axis == "obs" else (slice(None), mask)],
+        f"{axis}m",
+    )[elem]
+
+    check_filled_like(result, elem_name=f"{axis}m/{elem}")
 
 
 @mark_legacy_concatenate
@@ -1492,14 +1502,18 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
     assert result.X.dtype == np.int8
     assert result.raw.X.dtype == np.float64
     if sparse.issparse(result.X):
-        # See https://github.com/scipy/scipy/issues/20389 for why this doesn't work with csc
+        # https://github.com/scipy/scipy/issues/20389 was merged in 1.15 but is still an issue with matrix
         if sparse_indexer_type == np.int64 and (
-            issubclass(cpu_array_type, sparse.spmatrix) or adata.X.format == "csc"
+            (
+                (issubclass(cpu_array_type, CSArray) or adata.X.format == "csc")
+                and Version(scipy.__version__) < Version("1.15.0")
+            )
+            or issubclass(cpu_array_type, CSMatrix)
         ):
             pytest.xfail(
                 "Data type int64 is not maintained for sparse matrices or csc array"
             )
-        assert result.X.indptr.dtype == sparse_indexer_type
+        assert result.X.indptr.dtype == sparse_indexer_type, result.X
         assert result.X.indices.dtype == sparse_indexer_type
 
 
@@ -1529,6 +1543,35 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     assert_equal(result1, target1)
     assert_equal(result2, target2)
+
+
+def test_concat_missing_elem_dask_join(join_type):
+    import dask.array as da
+
+    import anndata as ad
+
+    ad1 = ad.AnnData(X=np.ones((5, 10)))
+    ad2 = ad.AnnData(X=np.zeros((5, 5)), layers={"a": da.ones((5, 5))})
+    ad_in_memory_with_layers = ad2.to_memory()
+
+    result1 = ad.concat([ad1, ad2], join=join_type)
+    result2 = ad.concat([ad1, ad_in_memory_with_layers], join=join_type)
+    assert_equal(result1, result2)
+
+
+def test_impute_dask(axis_name):
+    import dask.array as da
+
+    from anndata._core.merge import _resolve_axis, missing_element
+
+    axis, _ = _resolve_axis(axis_name)
+    els = [da.ones((5, 5))]
+    missing = missing_element(6, els, axis=axis, off_axis_size=17)
+    assert isinstance(missing, DaskArray)
+    in_memory = missing.compute()
+    assert np.all(np.isnan(in_memory))
+    assert in_memory.shape[axis] == 6
+    assert in_memory.shape[axis - 1] == 17
 
 
 def test_outer_concat_with_missing_value_for_df():
@@ -1635,3 +1678,23 @@ def test_concat_on_var_outer_join(array_type):
     # This shouldn't error
     # TODO: specify expected result while accounting for null value
     _ = concat([a, b], join="outer", axis=1)
+
+
+def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+    import dask.array as da
+
+    X = sparse.random(50, 20, density=0.5, format="csr")
+    X_dask = da.from_array(X, chunks=(5, 20))
+    var_names_1 = [f"gene_{i}" for i in range(20)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20, 40)]
+
+    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
+    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+
+    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
+    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+
+    res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
+    res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+
+    assert_equal(res_in_memory, res_dask)

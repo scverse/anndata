@@ -18,6 +18,7 @@ from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..compat import (
+    CSMatrix,
     _clean_uns,
     _decode_structured_array,
     _from_fixed_length_strings,
@@ -29,12 +30,14 @@ from .utils import (
     H5PY_V3,
     _read_legacy_raw,
     idx_chunks_along_axis,
+    no_write_dataset_2d,
     report_read_key_on_error,
     report_write_key_on_error,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Mapping, Sequence
+    from os import PathLike
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
@@ -42,8 +45,9 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@no_write_dataset_2d
 def write_h5ad(
-    filepath: Path | str,
+    filepath: PathLike[str] | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
@@ -51,17 +55,18 @@ def write_h5ad(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     **kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_h5ad`."""
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
         as_dense = list(as_dense)
         as_dense[as_dense.index("raw.X")] = "raw/X"
     if any(val not in {"X", "raw/X"} for val in as_dense):
-        raise NotImplementedError(
-            "Currently, only `X` and `raw/X` are supported values in `as_dense`"
-        )
+        msg = "Currently, only `X` and `raw/X` are supported values in `as_dense`"
+        raise NotImplementedError(msg)
     if "raw/X" in as_dense and adata.raw is None:
-        raise ValueError("Cannot specify writing `raw/X` to dense if it doesn’t exist.")
+        msg = "Cannot specify writing `raw/X` to dense if it doesn’t exist."
+        raise ValueError(msg)
 
     if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
@@ -82,14 +87,14 @@ def write_h5ad(
         f.attrs.setdefault("encoding-version", "0.1.0")
 
         if "X" in as_dense and isinstance(
-            adata.X, (sparse.spmatrix, BaseCompressedSparseDataset)
+            adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
             # If adata.isbacked, X should already be up to date
             write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
-            adata.raw.X, (sparse.spmatrix, BaseCompressedSparseDataset)
+            adata.raw.X, CSMatrix | BaseCompressedSparseDataset
         ):
             write_sparse_as_dense(
                 f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
@@ -115,7 +120,7 @@ def write_h5ad(
 def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
-    value: sparse.spmatrix | BaseCompressedSparseDataset,
+    value: CSMatrix | BaseCompressedSparseDataset,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
@@ -139,7 +144,9 @@ def write_sparse_as_dense(
         del f[key]
 
 
-def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
+def read_h5ad_backed(
+    filename: str | PathLike[str], mode: Literal["r", "r+"]
+) -> AnnData:
     d = dict(filename=filename, filemode=mode)
 
     f = h5py.File(filename, mode)
@@ -168,11 +175,11 @@ def read_h5ad_backed(filename: str | Path, mode: Literal["r", "r+"]) -> AnnData:
 
 
 def read_h5ad(
-    filename: str | Path,
+    filename: PathLike[str] | str,
     backed: Literal["r", "r+"] | bool | None = None,
     *,
     as_sparse: Sequence[str] = (),
-    as_sparse_fmt: type[sparse.spmatrix] = sparse.csr_matrix,
+    as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
 ) -> AnnData:
     """\
@@ -193,7 +200,7 @@ def read_h5ad(
         `backed` mode. If you would like save changes made to these slots
         of a `backed` :class:`~anndata.AnnData`, write them to a new file
         (see :meth:`~anndata.AnnData.write`). For an example, see
-        [here] (https://anndata-tutorials.readthedocs.io/en/latest/getting-started.html#Partial-reading-of-large-data).
+        :ref:`read-partial`.
     as_sparse
         If an array was saved as dense, passing its name here will read it as
         a sparse_matrix, by chunk of size `chunk_size`.
@@ -214,9 +221,8 @@ def read_h5ad(
         return read_h5ad_backed(filename, mode)
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
-        raise NotImplementedError(
-            "Dense formats can only be read to CSR or CSC matrices at this time."
-        )
+        msg = "Dense formats can only be read to CSR or CSC matrices at this time."
+        raise NotImplementedError(msg)
     if isinstance(as_sparse, str):
         as_sparse = [as_sparse]
     else:
@@ -225,9 +231,8 @@ def read_h5ad(
         if as_sparse[i] in {("raw", "X"), "raw.X"}:
             as_sparse[i] = "raw/X"
         elif as_sparse[i] not in {"raw/X", "X"}:
-            raise NotImplementedError(
-                "Currently only `X` and `raw/X` can be read as sparse."
-            )
+            msg = "Currently only `X` and `raw/X` can be read as sparse."
+            raise NotImplementedError(msg)
 
     rdasp = partial(
         read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
@@ -275,7 +280,7 @@ def read_h5ad(
 def _read_raw(
     f: h5py.File | AnnDataFileManager,
     as_sparse: Collection[str] = (),
-    rdasp: Callable[[h5py.Dataset], sparse.spmatrix] | None = None,
+    rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
@@ -348,14 +353,15 @@ def read_dataset(dataset: h5py.Dataset):
 
 @report_read_key_on_error
 def read_dense_as_sparse(
-    dataset: h5py.Dataset, sparse_format: sparse.spmatrix, axis_chunk: int
+    dataset: h5py.Dataset, sparse_format: CSMatrix, axis_chunk: int
 ):
     if sparse_format == sparse.csr_matrix:
         return read_dense_as_csr(dataset, axis_chunk)
     elif sparse_format == sparse.csc_matrix:
         return read_dense_as_csc(dataset, axis_chunk)
     else:
-        raise ValueError(f"Cannot read dense array as type: {sparse_format}")
+        msg = f"Cannot read dense array as type: {sparse_format}"
+        raise ValueError(msg)
 
 
 def read_dense_as_csr(dataset: h5py.Dataset, axis_chunk: int = 6000):

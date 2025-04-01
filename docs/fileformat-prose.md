@@ -91,7 +91,7 @@ Using this information, we're able to dispatch onto readers for the different el
 ## Dense arrays
 
 Dense numeric arrays have the most simple representation on disk,
-as they have native equivalents in H5py {doc}`h5py:high/dataset` and Zarr {ref}`Arrays <zarr:tutorial_create>`.
+as they have native equivalents in H5py {doc}`h5py:high/dataset` and Zarr {doc}`Arrays <zarr:user-guide/arrays>`.
 We can see an example of this with dimensionality reductions stored in the `obsm` group:
 
 `````{tab-set}
@@ -635,7 +635,7 @@ function:
 
 ```python
 >>> import awkward as ak
->>> from anndata import read_elem
+>>> from anndata.io import read_elem
 >>> awkward_group = store["varm/transcript"]
 >>> ak.from_buffers(
 ...     awkward_group.attrs["form"],

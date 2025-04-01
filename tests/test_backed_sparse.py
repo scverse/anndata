@@ -13,17 +13,28 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.compat import CAN_USE_SPARSE_ARRAY, SpArray
+from anndata._io.specs.registry import read_elem_lazy
+from anndata._io.zarr import open_write_group
+from anndata.compat import (
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    ZarrGroup,
+    is_zarr_v2,
+)
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
+    from types import EllipsisType
 
     from _pytest.mark import ParameterSet
     from numpy.typing import ArrayLike, NDArray
     from pytest_mock import MockerFixture
+
+    from anndata.abc import CSCDataset, CSRDataset
 
     Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
@@ -31,13 +42,18 @@ if TYPE_CHECKING:
 subset_func2 = subset_func
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 M = 50
 N = 50
+
+
+@pytest.fixture
+def zarr_metadata_key():
+    return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+
+
+@pytest.fixture
+def zarr_separator():
+    return "" if ad.settings.zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
@@ -73,7 +89,10 @@ def ondisk_equivalent_adata(
             def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                     return AnnData(
-                        **{k: read_dispatched(v, callback) for k, v in elem.items()}
+                        **{
+                            k: read_dispatched(v, callback)
+                            for k, v in dict(elem).items()
+                        }
                     )
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem)
@@ -125,6 +144,17 @@ def test_backed_indexing(
     assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+
+
+def test_backed_ellipsis_indexing(
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    equivalent_ellipsis_index: tuple[slice, slice],
+):
+    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csr_disk.X[ellipsis_index])
+    assert_equal(csr_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
 
 
 def make_randomized_mask(size: int) -> np.ndarray:
@@ -247,18 +277,18 @@ def test_consecutive_bool(
 )
 def test_dataset_append_memory(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
 
     diskmtx.append(b)
@@ -267,6 +297,25 @@ def test_dataset_append_memory(
     frommem = append_method([a, b])
 
     assert_equal(fromdisk, frommem)
+
+
+def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    a = sparse.random(100, 100, format="csr")
+    if diskfmt == "zarr":
+        f = open_write_group(path, mode="a")
+    else:
+        f = h5py.File(path, "a")
+    ad.io.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx_2", a)
+    diskmtx = sparse_dataset(f["mtx"])
+    old_array_shapes = {}
+    array_names = ["indptr", "indices", "data"]
+    for name in array_names:
+        old_array_shapes[name] = getattr(diskmtx, f"_{name}").shape
+    diskmtx.append(sparse_dataset(f["mtx_2"]))
+    for name in array_names:
+        assert old_array_shapes[name] != getattr(diskmtx, f"_{name}").shape
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
@@ -284,7 +333,7 @@ def test_dataset_append_memory(
 )
 def test_read_array(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
@@ -294,17 +343,15 @@ def test_read_array(
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "mtx", a)
+    ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
-    if not CAN_USE_SPARSE_ARRAY:
-        pytest.skip("scipy.sparse.cs{r,c}array not available")
-    ad.settings.shall_use_sparse_array_on_read = True
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), SpArray)
-    ad.settings.shall_use_sparse_array_on_read = False
-    assert issubclass(type(diskmtx[obs_idx, var_idx]), sparse.spmatrix)
+    ad.settings.use_sparse_array_on_read = True
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
+    ad.settings.use_sparse_array_on_read = False
+    assert issubclass(type(diskmtx[obs_idx, var_idx]), CSMatrix)
 
 
 @pytest.mark.parametrize(
@@ -316,8 +363,8 @@ def test_read_array(
 )
 def test_dataset_append_disk(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
-    append_method: Callable[[list[sparse.spmatrix]], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    append_method: Callable[[list[CSMatrix]], CSMatrix],
     diskfmt: Literal["h5ad", "zarr"],
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
@@ -325,11 +372,11 @@ def test_dataset_append_disk(
     b = sparse_format(sparse.random(10, 10))
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
-    ad.write_elem(f, "a", a)
-    ad.write_elem(f, "b", b)
+    ad.io.write_elem(f, "a", a)
+    ad.io.write_elem(f, "b", b)
     a_disk = sparse_dataset(f["a"])
     b_disk = sparse_dataset(f["b"])
 
@@ -342,24 +389,34 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
-def test_indptr_cache(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+def test_lazy_array_cache(
+    tmp_path: Path, sparse_format: Callable[[ArrayLike], CSMatrix], zarr_metadata_key
 ):
+    elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
-    f = zarr.open_group(path, "a")
-    ad.write_elem(f, "X", a)
+    f = open_write_group(path, mode="a")
+    ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path)
-    store.initialize_key_trackers(["X/indptr"])
-    f = zarr.open_group(store, "a")
+    for elem in elems:
+        store.initialize_key_trackers([f"X/{elem}"])
+    f = open_write_group(store, mode="a")
     a_disk = sparse_dataset(f["X"])
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
     # one each for .zarray and actual access
-    assert store.get_access_count("X/indptr") == 2
+    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for why 4
+    assert store.get_access_count("X/indptr") == 2 if is_zarr_v2() else 4
+    for elem_not_indptr in elems - {"indptr"}:
+        assert (
+            sum(
+                zarr_metadata_key in key_accessed
+                for key_accessed in store.get_accessed_keys(f"X/{elem_not_indptr}")
+            )
+            == 1
+        )
 
 
 Kind = Literal["slice", "int", "array", "mask"]
@@ -409,52 +466,83 @@ def width_idx_kinds(
         (
             [0],
             slice(None, None),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+            ["X/data/{zarr_metadata_key}", "X/data{zarr_separator}/0"],
         ),
         (
             [0],
             slice(None, 3),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/0"],
+            ["X/data/{zarr_metadata_key}", "X/data{zarr_separator}/0"],
         ),
         (
             [3, 4, 5],
             slice(None, None),
-            ["X/data/.zarray", "X/data/.zarray", "X/data/3", "X/data/4", "X/data/5"],
+            [
+                "X/data/{zarr_metadata_key}",
+                "X/data{zarr_separator}/3",
+                "X/data{zarr_separator}/4",
+                "X/data{zarr_separator}/5",
+            ],
         ),
         l=10,
     ),
 )
+@pytest.mark.parametrize(
+    "open_func",
+    [
+        sparse_dataset,
+        lambda x: read_elem_lazy(
+            x, chunks=(1, -1) if x.attrs["encoding-type"] == "csr_matrix" else (-1, 1)
+        ),
+    ],
+    ids=["sparse_dataset", "read_elem_lazy"],
+)
 def test_data_access(
     tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], sparse.spmatrix],
+    sparse_format: Callable[[ArrayLike], CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
-    exp: Sequence[str],
+    exp: list[str],
+    open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
+    zarr_metadata_key,
+    zarr_separator,
 ):
+    exp = [
+        e.format(zarr_metadata_key=zarr_metadata_key, zarr_separator=zarr_separator)
+        for e in exp
+    ]
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
-    f = zarr.open_group(path, "a")
-    ad.write_elem(f, "X", a)
+    f = open_write_group(path, mode="a")
+    ad.io.write_elem(f, "X", a)
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
-    zarr.array(data, store=path / "X" / "data", chunks=(1,))
+    zarr.array(
+        data,
+        store=path / "X" / "data",
+        chunks=(1,),
+        zarr_format=ad.settings.zarr_write_format,
+    )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
-    a_disk = sparse_dataset(f["X"])
-
-    # Do the slicing with idx
-    store.reset_key_trackers()
-    if a_disk.format == "csr":
-        a_disk[idx_maj, idx_min]
+    a_disk = AnnData(X=open_func(f["X"]))
+    if a.format == "csr":
+        subset = a_disk[idx_maj, idx_min]
     else:
-        a_disk[idx_min, idx_maj]
+        subset = a_disk[idx_min, idx_maj]
+    if isinstance(subset.X, DaskArray):
+        subset.X.compute(scheduler="single-threaded")
+    # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
+    # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
+    if ad.settings.zarr_write_format == 2 and not is_zarr_v2():
+        exp = exp + ["X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"
     )
-    assert store.get_accessed_keys("X/data") == exp
+    # dask access order is not guaranteed so need to sort
+    assert sorted(store.get_accessed_keys("X/data")) == sorted(exp)
 
 
 @pytest.mark.parametrize(
@@ -476,12 +564,12 @@ def test_wrong_shape(
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "a", a_mem)
-    ad.write_elem(f, "b", b_mem)
+    ad.io.write_elem(f, "a", a_mem)
+    ad.io.write_elem(f, "b", b_mem)
     a_disk = sparse_dataset(f["a"])
     b_disk = sparse_dataset(f["b"])
 
@@ -489,16 +577,16 @@ def test_wrong_shape(
         a_disk.append(b_disk)
 
 
-def test_reset_group(tmp_path: Path):
+def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / "test.zarr"
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "base", base)
+    ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
     with pytest.raises(AttributeError):
         disk_mtx.group = f
@@ -509,11 +597,11 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "base", base)
+    ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
     pre_checks = disk_mtx.to_memory()
 
@@ -523,7 +611,14 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
-    disk_dense = f.create_dataset("dense", data=np.random.random((100, 100)))
+    if isinstance(f, ZarrGroup) and not is_zarr_v2():
+        data = np.random.random((100, 100))
+        disk_dense = f.create_array("dense", shape=(100, 100), dtype=data.dtype)
+        disk_dense[...] = data
+    else:
+        disk_dense = f.create_dataset(
+            "dense", data=np.random.random((100, 100)), shape=(100, 100)
+        )
     with pytest.raises(NotImplementedError):
         disk_mtx.append(disk_dense)
 
@@ -538,11 +633,11 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     base = sparse.random(100, 100, format="csr")
 
     if diskfmt == "zarr":
-        f = zarr.open_group(path, "a")
+        f = open_write_group(path, mode="a")
     else:
         f = h5py.File(path, "a")
 
-    ad.write_elem(f, "/", base)
+    ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
 
@@ -566,24 +661,31 @@ def test_backed_sizeof(
         pytest.param(lambda p: h5py.File(p / "test.h5", mode="a"), id="h5py"),
     ],
 )
-@pytest.mark.parametrize("sparse_class", [sparse.csr_matrix, sparse.csr_array])
-def test_append_overflow_check(group_fn, sparse_class, tmpdir):
-    if CAN_USE_SPARSE_ARRAY and issubclass(sparse_class, SpArray):
-        pytest.skip("scipy bug causes view to be allocated")
-    group = group_fn(tmpdir)
+@pytest.mark.parametrize(
+    "sparse_class",
+    [
+        sparse.csr_matrix,
+        pytest.param(
+            sparse.csr_array,
+            marks=[pytest.mark.skip(reason="scipy bug causes view to be allocated")],
+        ),
+    ],
+)
+def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
     # Minimally allocating new matrix
     new_mtx = sparse_class(
         (
-            np.broadcast_to(True, typemax_int32 - 1),
+            np.broadcast_to(True, typemax_int32 - 1),  # noqa: FBT003
             np.broadcast_to(np.int32(1), typemax_int32 - 1),
             [0, typemax_int32 - 1],
         ),
         shape=(1, 2),
     )
 
-    ad.write_elem(group, "mtx", orig_mtx)
+    ad.io.write_elem(group, "mtx", orig_mtx)
     backed = sparse_dataset(group["mtx"])
 
     # Checking for correct caching behaviour
