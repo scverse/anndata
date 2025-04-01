@@ -46,6 +46,7 @@ dependencies = [
     "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
+    "fast-array-utils",
     "legacy-api-wrap",
     "zarr >=2.15.0, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3",
 ]

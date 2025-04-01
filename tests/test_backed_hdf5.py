@@ -232,7 +232,7 @@ def test_backed_raw_subset(
     assert_equal(final_adata, backed_v.to_memory())  # assert loading into memory
 
 
-@pytest.mark.array_type(skip=Flags.Gpu | Flags.Disk | Flags.Dask)
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_to_memory_full(
     tmp_path: Path, array_type: ArrayType[np.ndarray | CSMatrix | CSArray]
 ) -> None:
