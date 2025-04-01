@@ -32,7 +32,7 @@ from ..compat import (
     DaskArray,
     _map_cat_to_str,
 )
-from ..utils import asarray, axis_len, warn_once
+from ..utils import axis_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 
@@ -115,8 +115,8 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
-    a = asarray(a)
-    b = asarray(b)
+    a = np.asarray(a)
+    b = np.asarray(b)
     if a.ndim == b.ndim == 0:
         return bool(a == b)
     return np.array_equal(a, b)
@@ -150,7 +150,7 @@ def equal_dask_array(a, b) -> bool:
 def equal_array(a, b) -> bool:
     # Reshaping allows us to compare inputs with >2 dimensions
     # We cast to pandas since it will still work with non-numeric types
-    b = asarray(b)
+    b = np.asarray(b)
     if a.shape != b.shape:
         return False
 

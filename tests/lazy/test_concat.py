@@ -12,10 +12,9 @@ import anndata as ad
 from anndata._core.file_backing import to_memory
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import assert_equal, gen_adata
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
 
 from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
-
-pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,6 +26,13 @@ if TYPE_CHECKING:
     from anndata import AnnData
     from anndata._types import AnnDataElem, Join_T
     from anndata.tests.helpers import AccessTrackingStore
+
+
+SPARSE_DASK = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Dask
+}
+
+pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 
 def unify_extension_dtypes(
@@ -215,6 +221,7 @@ def test_concat_to_memory_var(
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 def test_concat_data_with_cluster_to_memory(
     adata_remote: AnnData, join: Join_T, local_cluster_addr: str
 ) -> None:
@@ -224,6 +231,7 @@ def test_concat_data_with_cluster_to_memory(
         ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 @pytest.mark.parametrize(
     "index",
     [
@@ -277,6 +285,7 @@ def test_concat_data_subsetting(
     )
 
 
+@pytest.mark.array_type(skip={Flags.Gpu | Flags.Disk, *SPARSE_DASK})
 @pytest.mark.parametrize(
     ("attr", "key"),
     (

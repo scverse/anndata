@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
@@ -15,7 +14,6 @@ from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     DEFAULT_COL_TYPES,
     AccessTrackingStore,
-    as_dense_dask_array,
     gen_adata,
     gen_typed_df,
 )
@@ -25,16 +23,10 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from testing.fast_array_utils import ArrayType
+
+
 ANNDATA_ELEMS = typing.get_args(AnnDataElem)
-
-
-@pytest.fixture(
-    params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
-    ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
-    scope="session",
-)
-def mtx_format(request):
-    return request.param
 
 
 @pytest.fixture(
@@ -74,11 +66,11 @@ def simple_subset_func(request):
     return request.param
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def adata_remote_orig_with_path(
-    tmp_path_factory,
+    tmp_path_factory: pytest.TempPathFactory,
     diskfmt: str,
-    mtx_format,
+    array_type: ArrayType,
     worker_id: str = "serial",
 ) -> tuple[Path, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
@@ -89,7 +81,7 @@ def adata_remote_orig_with_path(
         orig_path = tmp_path_factory.mktemp(file_name)
     orig = gen_adata(
         (100, 110),
-        mtx_format,
+        array_type,
         obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
         var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
     )
@@ -115,10 +107,10 @@ def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
     return orig
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def adata_remote_with_store_tall_skinny_path(
-    tmp_path_factory,
-    mtx_format,
+    tmp_path_factory: pytest.TempPathFactory,
+    array_type: ArrayType,
     worker_id: str = "serial",
 ) -> Path:
     orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
@@ -131,7 +123,7 @@ def adata_remote_with_store_tall_skinny_path(
     orig = AnnData(
         obs=obs,
         var=var,
-        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
+        X=array_type(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
     )
     orig.raw = orig.copy()
     orig.write_zarr(orig_path)
