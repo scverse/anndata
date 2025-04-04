@@ -1,6 +1,6 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the [v3 format], with the exception of structured arrays.
+`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.remove_unused_category`, with the exception of structured arrays.
 Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.
 Here is a quick guide on some of our learnings so far:
 
@@ -73,7 +73,7 @@ We therefore recommend this pipeline for writing full datasets and reading conti
 
 ## Codecs
 
-The default `zarr-python` v3 codec for the [v3 format] is no longer `blosc` but `zstd`.
+The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `zstd`.
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the [`BloscCodec`] to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
 
@@ -97,8 +97,6 @@ However, `zarr-python` has a fully `async` API and provides its own event-loop s
 We anticipate providing `async` versions of {func}`anndata.io.read_elem` and {func}`anndata.experimental.read_dispatched` so that users can download data asynchronously without using the `zarr-python` event loop.
 We also would like to create an asynchronous partial reader to enable iterative streaming of a dataset.
 
-
-[v3 format]: https://anndata.readthedocs.io/en/stable/generated/anndata.settings.html#anndata.settings.zarr_write_format
 [consolidated metadata]: https://zarr.readthedocs.io/en/stable/user-guide/consolidated_metadata.html
 [`zarr` stores]: https://zarr.readthedocs.io/en/stable/api/zarr/storage/index.html
 [`obstore` claims]: https://developmentseed.org/obstore/latest/performance
