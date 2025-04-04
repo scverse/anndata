@@ -9,12 +9,12 @@ Here is a quick guide on some of our learnings so far:
 We now provide the {func}`anndata.experimental.read_lazy` feature for reading as much of the {class}`~anndata.AnnData` object as lazily as possible, using `dask` and {mod}`xarray`.
 Please note that this feature is experimental and subject to change.
 To enable this functionality in a performant and feature-complete way for remote data sources, we use [consolidated metadata] on the `zarr` store (written by default).
-Please note that this introduces consistency issues - if you update the structure of the underlying `zarr` store i.e., remove a column from `obs`, the consolidated metadata will no longer be valid.
+Please note that this introduces consistency issues – if you update the structure of the underlying `zarr` store i.e., remove a column from `obs`, the consolidated metadata will no longer be valid.
 Further, note that without consolidated metadata, we cannot guarantee your stored `AnnData` object will be fully readable.
 And even if it is fully readable, it will almost certainly be much slower to read.
 
 There are two ways of opening remote [`zarr` stores] from the `zarr-python` package, `fsspec` and `obstore`, and both can be used with `read_lazy`.
-[`obstore` claims] to be more performant out-of-the-box, but notes that this claim has not been benchmarked with the `uvloop` event loop, which itself claims to be 2X more performant than the default event loop for `python`.
+[`obstore` claims] to be more performant out-of-the-box, but notes that this claim has not been benchmarked with the `uvloop` event loop, which itself claims to be 2× more performant than the default event loop for `python`.
 
 ## Local data
 
@@ -73,7 +73,7 @@ The same issue with `zstd` applies to data that may eventually be written by the
 ## GPU i/o
 
 At the moment, it is unlikely your `anndata` i/o will work if you use [`zarr.enable_gpu`].
-It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested - sparse data, awkward arrays, and dataframes will not.
+It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
 `kvikio` currently provides a [`GDS`-enabled store] although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: https://github.com/zarr-developers/zarr-python/pull/2863).
 
 We anticipate enabling officially supporting this functionality officially for dense data, sparse data, and possibly awkward arrays in the next minor release, 0.13.
