@@ -25,21 +25,32 @@ Sharding requires knowledge of the array element you are writing, though, and th
 Here is a short example, although you should tune the sizes to your own use-case and also use the compression that makes the most sense for you:
 
 ```python
+import zarr
 import anndata as ad
 from collections.abc import Mapping
 from typing import Any
-import zarr
 
 ad.settings.zarr_write_format = 3 # Absolutely crucial! Sharding is only for the v3 file format!
 
 def write_sharded(group: zarr.Group, adata: ad.AnnData):
-    def callback(func: ad.experimental.Write, g: zarr.Group, k: str, elem: ad.typing.RWAble, dataset_kwargs: Mapping[str, Any], iospec: ad.experimental.IOSpec):
-        if iospec.encoding_type in { "array" }:
-            dataset_kwargs = { "shards": tuple(int(2 ** (16 / len(elem.shape))) for _ in elem.shape), **dataset_kwargs}
+    def callback(
+        func: ad.experimental.Write,
+        g: zarr.Group,
+        k: str,
+        elem: ad.typing.RWAble,
+        dataset_kwargs: Mapping[str, Any],
+        iospec: ad.experimental.IOSpec,
+    ):
+        if iospec.encoding_type in {"array"}:
+            dataset_kwargs = {
+                "shards": tuple(int(2 ** (16 / len(elem.shape))) for _ in elem.shape),
+                **dataset_kwargs,
+            }
             dataset_kwargs["chunks"] = tuple(i // 2 for i in dataset_kwargs["shards"])
-        elif iospec.encoding_type in { "csr_matrix", "csc_matrix" }:
-            dataset_kwargs = { "shards": (2**16,), "chunks": (2**8, ), **dataset_kwargs }
+        elif iospec.encoding_type in {"csr_matrix", "csc_matrix"}:
+            dataset_kwargs = {"shards": (2**16,), "chunks": (2**8,), **dataset_kwargs}
         func(g, k, elem, dataset_kwargs=dataset_kwargs)
+
     return ad.experimental.write_dispatched(group, "/", adata, callback=callback)
 ```
 
@@ -65,7 +76,7 @@ The default `zarr-python` v3 codec for the [v3 format] is no longer `blosc` but 
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the [`BloscCodec`] to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
 
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): https://github.com/zarr-developers/numcodecs/issues/424.
+There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
 Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
 
 The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
@@ -74,7 +85,7 @@ The same issue with `zstd` applies to data that may eventually be written by the
 
 At the moment, it is unlikely your `anndata` i/o will work if you use [`zarr.enable_gpu`].
 It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
-`kvikio` currently provides a [`GDS`-enabled store] although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: https://github.com/zarr-developers/zarr-python/pull/2863).
+`kvikio` currently provides a [`GDS`-enabled store] although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: {pr}`zarr-developers/zarr-python#2863`.
 
 We anticipate enabling officially supporting this functionality officially for dense data, sparse data, and possibly awkward arrays in the next minor release, 0.13.
 
