@@ -183,6 +183,27 @@ Types used by the former:
    experimental.backed._xarray.Dataset2D
 ```
 
+(extensions-api)=
+
+## Extensions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   register_anndata_namespace
+
+```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.ExtensionNamespace
+```
+
 (errors-api)=
 
 ## Errors and warnings
