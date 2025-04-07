@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -16,20 +17,10 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._io.specs import (
-    _REGISTRY,
-    IOSpec,
-    get_spec,
-)
+from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    ZarrGroup,
-    _read_attr,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -49,25 +40,20 @@ if TYPE_CHECKING:
     G = TypeVar("G", H5Group, ZarrGroup)
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
-@pytest.fixture(params=["h5", "zarr"])
-def store(request, tmp_path) -> H5Group | ZarrGroup:
-    if request.param == "h5":
-        file = h5py.File(tmp_path / "test.h5", "w")
+@pytest.fixture
+def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
+    if diskfmt == "h5ad":
+        file = h5py.File(tmp_path / "test.h5ad", "w")
         store = file["/"]
-    elif request.param == "zarr":
+    elif diskfmt == "zarr":
         store = open_write_group(tmp_path / "test.zarr")
     else:
-        pytest.fail(f"Unknown store type: {request.param}")
+        pytest.fail(f"Unknown store type: {diskfmt}")
 
     try:
         yield store
     finally:
-        if request.param == "h5":
+        if diskfmt == "h5ad":
             file.close()
 
 
@@ -77,7 +63,7 @@ DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
 @pytest.fixture(params=sparse_formats)
-def sparse_format(request):
+def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
     return request.param
 
 
@@ -217,16 +203,23 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    ad.settings.allow_write_nullable_strings = True
+    # zarr v3 can't write recarray
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    if (
+        ad.settings.zarr_write_format == 3
+        and encoding_type == "anndata"
+        and "O_recarray" in value.uns
+    ):
+        del value.uns["O_recarray"]
+    with ad.settings.override(allow_write_nullable_strings=True):
+        key = f"key_for_{encoding_type}"
+        write_elem(store, key, value, dataset_kwargs={})
 
-    key = f"key_for_{encoding_type}"
-    write_elem(store, key, value, dataset_kwargs={})
+        assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
-
-    from_disk = read_elem(store[key])
-    assert_equal(value, from_disk)
-    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+        from_disk = read_elem(store[key])
+        assert_equal(value, from_disk)
+        assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 @pytest.mark.parametrize(
@@ -346,7 +339,10 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
-def test_read_lazy_h5_cluster(sparse_format, tmp_path):
+@pytest.mark.xdist_group("dask")
+def test_read_lazy_h5_cluster(
+    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+) -> None:
     import dask.distributed as dd
 
     with h5py.File(tmp_path / "test.h5", "w") as file:
@@ -354,10 +350,7 @@ def test_read_lazy_h5_cluster(sparse_format, tmp_path):
         arr_store = create_sparse_store(sparse_format, store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
-    with (
-        dd.LocalCluster(n_workers=1, threads_per_worker=1) as cluster,
-        dd.Client(cluster) as _client,
-    ):
+    with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
@@ -568,6 +561,10 @@ def test_write_to_root(store, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
+    # zarr v3 can't write recarray
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    if ad.settings.zarr_write_format == 3 and isinstance(value, ad.AnnData):
+        del value.uns["O_recarray"]
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():

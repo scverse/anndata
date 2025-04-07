@@ -91,6 +91,12 @@ GLOBAL_LOCK = Lock()
 #     return False
 
 
+def zarr_v3_compressor_compat(dataset_kwargs) -> dict:
+    if not is_zarr_v2() and (compressor := dataset_kwargs.pop("compressor", None)):
+        dataset_kwargs["compressors"] = compressor
+    return dataset_kwargs
+
+
 def _to_cpu_mem_wrapper(write_func):
     """
     Wrapper to bring cupy types into cpu memory before writing.
@@ -342,6 +348,7 @@ def write_basic(
     if isinstance(f, H5Group) or is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
+        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
         if isinstance(elem, ZarrArray):
@@ -374,7 +381,7 @@ def _iter_chunks_for_copy(
 @_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
 def write_chunked_dense_array_to_group(
-    f: GroupStorageType,
+    f: H5Group,
     k: str,
     elem: ArrayStorageType,
     *,
@@ -414,6 +421,8 @@ def write_basic_dask_zarr(
 ):
     import dask.array as da
 
+    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     if is_zarr_v2():
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
@@ -464,6 +473,7 @@ def read_string_array(d: H5Array, *, _reader: Reader):
 )
 @_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(H5Group, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_vlen_string_array(
     f: H5Group,
@@ -486,6 +496,7 @@ def write_vlen_string_array(
 )
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
@@ -517,10 +528,7 @@ def write_vlen_string_array_zarr(
         from numcodecs import VLenUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
-        compressor = None
-        if ad.settings.zarr_write_format == 2:
-            compressor = dataset_kwargs.pop("compressor", None)
-
+        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         filters, dtype = (
             ([VLenUTF8()], object)
             if ad.settings.zarr_write_format == 2
@@ -531,7 +539,6 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
-            compressor=compressor,
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -593,6 +600,8 @@ def write_recarray_zarr(
     if isinstance(f, H5Group) or is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
     else:
+        dataset_kwargs = dataset_kwargs.copy()
+        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         # TODO: zarr’s on-disk format v3 doesn’t support this dtype
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
@@ -620,6 +629,7 @@ def write_sparse_compressed(
     # Allow resizing for hdf5
     if isinstance(f, H5Group):
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
+    dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
 
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)

@@ -1440,15 +1440,21 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
 
 
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
-def test_concat_outer_aligned_mapping(elem):
+@pytest.mark.parametrize("axis", ["obs", "var"])
+def test_concat_outer_aligned_mapping(elem, axis):
     a = gen_adata((5, 5), **GEN_ADATA_DASK_ARGS)
     b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
-    del b.obsm[elem]
+    del getattr(b, f"{axis}m")[elem]
 
-    concated = concat({"a": a, "b": b}, join="outer", label="group")
-    result = concated[concated.obs["group"] == "b"].obsm[elem]
+    concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis)
 
-    check_filled_like(result, elem_name=f"obsm/{elem}")
+    mask = getattr(concated, axis)["group"] == "b"
+    result = getattr(
+        concated[(mask, slice(None)) if axis == "obs" else (slice(None), mask)],
+        f"{axis}m",
+    )[elem]
+
+    check_filled_like(result, elem_name=f"{axis}m/{elem}")
 
 
 @mark_legacy_concatenate

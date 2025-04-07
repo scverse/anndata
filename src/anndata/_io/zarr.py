@@ -15,10 +15,11 @@ from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
 from .specs import read_elem
-from .utils import _read_legacy_raw, report_read_key_on_error
+from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from os import PathLike
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
@@ -26,6 +27,20 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+def _check_rec_array(adata):
+    if settings.zarr_write_format == 3 and len(
+        structured_dtype_keys := {
+            k
+            for k in adata.uns.keys()
+            if isinstance(adata.uns[k], np.recarray)
+            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+        }
+    ):
+        msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
+        raise NotImplementedError(msg)
+
+
+@no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
     adata: AnnData,
@@ -34,6 +49,8 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
+    """See :meth:`~anndata.AnnData.write_zarr`."""
+    _check_rec_array(adata)
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
@@ -61,7 +78,7 @@ def write_zarr(
         zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: str | Path | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 
@@ -156,10 +173,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
 def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
-    if len({"zarr_version", "zarr_format"}.intersection(kwargs.keys())):
-        msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
-        raise ValueError(msg)
-    kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
-        settings.zarr_write_format
-    )
+    if not is_zarr_v2() and "zarr_format" not in kwargs:
+        kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)

@@ -266,7 +266,7 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast(str, self.override.__doc__)
+        doc = cast("str", self.override.__doc__)
         insert_index = doc.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
             self.describe(option, should_print_description=False).splitlines(
@@ -432,7 +432,7 @@ settings.register(
 
 def validate_zarr_write_format(format: int):
     validate_int(format)
-    if format != 2:
+    if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
 
@@ -445,7 +445,7 @@ settings.register(
     get_from_env=lambda name, default: check_and_get_environ_var(
         f"ANNDATA_{name.upper()}",
         str(default),
-        ["2"],
+        ["2", "3"],
         lambda x: int(x),
     ),
 )

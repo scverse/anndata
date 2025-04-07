@@ -13,6 +13,8 @@ The central class:
    AnnData
 ```
 
+(combining-api)=
+
 ## Combining
 
 Combining {class}`AnnData` objects.
@@ -24,6 +26,8 @@ See also the section on concatenation.
 
    concat
 ```
+
+(reading-api)=
 
 ## Reading
 
@@ -66,16 +70,33 @@ You might have more success by assembling the {class}`AnnData` object yourself f
    io.read_umi_tools
 ```
 
+(writing-api)=
+
 ## Writing
 
 Writing a complete {class}`AnnData` object to disk in anndata’s native formats `.h5ad` and `zarr`.
+(These functions are also exported as {func}`io.write_h5ad` and {func}`io.write_zarr`.)
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   AnnData.write
+   AnnData.write_h5ad
    AnnData.write_zarr
+
+
+..
+    .. autosummary::
+       :toctree: generated/
+
+       io.write_h5ad
+       io.write_zarr
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.io.write_h5ad
+   generated/anndata.io.write_zarr
 ```
 
 Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
@@ -162,6 +183,29 @@ Types used by the former:
    experimental.backed._xarray.Dataset2D
 ```
 
+(extensions-api)=
+
+## Extensions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   register_anndata_namespace
+
+```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.ExtensionNamespace
+```
+
+(errors-api)=
+
 ## Errors and warnings
 
 ```{eval-rst}
@@ -170,6 +214,8 @@ Types used by the former:
 
    ImplicitModificationWarning
 ```
+
+(settings-api)=
 
 ## Settings
 
@@ -180,6 +226,8 @@ Types used by the former:
    settings
    settings.override
 ```
+
+(types-api)=
 
 ## Custom Types/Classes for Readable/Writeable Elements
 

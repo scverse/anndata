@@ -13,18 +13,41 @@ if Version(dask.__version__) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
+
+from filelock import FileLock
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from types import EllipsisType
 
 
 @pytest.fixture
 def backing_h5ad(tmp_path):
     return tmp_path / "test.h5ad"
+
+
+@pytest.fixture(
+    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)], ids=["h5ad", "zarr2", "zarr3"]
+)
+def diskfmt(request):
+    if (fmt := request.param[0]) == "h5ad":
+        yield fmt
+    else:
+        with ad.settings.override(zarr_write_format=request.param[1]):
+            yield fmt
+
+
+@pytest.fixture
+def diskfmt2(diskfmt):
+    if diskfmt == "h5ad":
+        with ad.settings.override(zarr_write_format=2):
+            yield "zarr"
+    else:
+        yield "h5ad"
 
 
 @pytest.fixture(
@@ -73,6 +96,39 @@ def equivalent_ellipsis_index(
     ],
 ) -> tuple[slice, slice]:
     return ellipsis_index_with_equivalent[1]
+
+
+@pytest.fixture(scope="session")
+def local_cluster_addr(
+    tmp_path_factory: pytest.TempPathFactory, worker_id: str
+) -> Generator[str, None, None]:
+    # Adapted from https://pytest-xdist.readthedocs.io/en/latest/how-to.html#making-session-scoped-fixtures-execute-only-once
+    import dask.distributed as dd
+
+    def make_cluster() -> dd.LocalCluster:
+        return dd.LocalCluster(n_workers=1, threads_per_worker=1)
+
+    if worker_id == "master":
+        with make_cluster() as cluster:
+            yield cluster.scheduler_address
+            return
+
+    # get the temp directory shared by all workers
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+
+    fn = root_tmp_dir / "dask_scheduler_address.txt"
+    lock = FileLock(str(fn) + ".lock")
+    lock.acquire()  # can’t use context manager, because we need to release the lock before yielding
+    address = fn.read_text() if fn.is_file() else None
+    if address:
+        lock.release()
+        yield address
+        return
+
+    with make_cluster() as cluster:
+        fn.write_text(cluster.scheduler_address)
+        lock.release()
+        yield cluster.scheduler_address
 
 
 #####################
