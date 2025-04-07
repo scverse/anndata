@@ -20,7 +20,6 @@ benchmarks
 contributing
 release-notes/index
 references
-zarr-v3
 ```
 
 # News

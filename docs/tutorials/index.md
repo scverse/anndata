@@ -15,4 +15,5 @@ notebooks/anndata_dask_array
 notebooks/awkward-arrays
 notebooks/{read,write}_dispatched
 notebooks/read_lazy
+zarr-v3
 ```
