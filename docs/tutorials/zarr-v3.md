@@ -20,7 +20,7 @@ There are two ways of opening remote `zarr` stores from the `zarr-python` packag
 
 Local data generally poses a different set of challenges.
 First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.
-For the "many small files" problem, `zarr` has introduced `{ref} sharding <zarr:user-guide/performance#sharding>` in the v3 file format.
+For the "many small files" problem, `zarr` has introduced `{ref} sharding <zarr:user-guide-sharding>` in the v3 file format.
 Sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use sharding.
 For example, you cannot shard a 1D array with `shard` sizes `(256, 256)`.
 Here is a short example, although you should tune the sizes to your own use-case and also use the compression that makes the most sense for you:
@@ -84,7 +84,7 @@ The same issue with `zstd` applies to data that may eventually be written by the
 
 ## GPU i/o
 
-At the moment, it is unlikely your `anndata` i/o will work if you use `zarr.enable_gpu <zarr:user-guide-gpu>`.
+At the moment, it is unlikely your `anndata` i/o will work if you use {ref}`zarr.config.enable_gpu <zarr:user-guide-gpu>`.
 It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
 `kvikio` currently provides a {class}`kvikio.zarr.GDSStore` although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: {pr}`zarr-developers/zarr-python#2863`.
 
