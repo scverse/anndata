@@ -8,7 +8,7 @@ Here is a quick guide on some of our learnings so far:
 
 We now provide the {func}`anndata.experimental.read_lazy` feature for reading as much of the {class}`~anndata.AnnData` object as lazily as possible, using `dask` and {mod}`xarray`.
 Please note that this feature is experimental and subject to change.
-To enable this functionality in a performant and feature-complete way for remote data sources, we use {doc}`conslidated metadata <zarr:user-guide/consolidated_metadata>` on the `zarr` store (written by default).
+To enable this functionality in a performant and feature-complete way for remote data sources, we use {doc}`zarr:user-guide/consolidated_metadata` on the `zarr` store (written by default).
 Please note that this introduces consistency issues – if you update the structure of the underlying `zarr` store i.e., remove a column from `obs`, the consolidated metadata will no longer be valid.
 Further, note that without consolidated metadata, we cannot guarantee your stored `AnnData` object will be fully readable.
 And even if it is fully readable, it will almost certainly be much slower to read.
