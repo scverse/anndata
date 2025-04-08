@@ -95,7 +95,7 @@ We anticipate enabling officially supporting this functionality officially for d
 At the moment, `anndata` exports no `async` functions.
 However, `zarr-python` has a fully `async` API and provides its own event-loop so that users like `anndata` can interact with a synchronous API while still beenfitting from `zarr-python`'s asynchronous functionality under that API.
 We anticipate providing `async` versions of {func}`anndata.io.read_elem` and {func}`anndata.experimental.read_dispatched` so that users can download data asynchronously without using the `zarr-python` event loop.
-We also would like to create an asynchronous partial reader to enable iterative streaming of a dataset. {doc}`zarr:user-guide/consolidated_metadata`
+We also would like to create an asynchronous partial reader to enable iterative streaming of a dataset.
 
 [`obstore` claims]: https://developmentseed.org/obstore/latest/performance
 [zarr-benchmarks]: https://github.com/LDeakin/zarr_benchmarks
