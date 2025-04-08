@@ -117,7 +117,9 @@ intersphinx_mapping = dict(
     xarray=("https://docs.xarray.dev/en/stable", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
     kvikio=("https://docs.rapids.ai/api/kvikio/stable/", None),
+    zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
 )
+
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",

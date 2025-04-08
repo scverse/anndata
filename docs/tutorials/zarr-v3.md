@@ -56,7 +56,7 @@ def write_sharded(group: zarr.Group, adata: ad.AnnData):
 ```
 
 However, `zarr-python` can be slow with sharding throughput as well as writing throughput.
-Thus if you wish to speed up either writing, sharding, or both (or receive a modest speed-boost for reading), a bridge to the `zarr` implementation in Rust: https://zarrs-python.readthedocs.io/en/latest/ can help with that (see https://github.com/LDeakin/zarr_benchmarks for benchmarks):
+Thus if you wish to speed up either writing, sharding, or both (or receive a modest speed-boost for reading), a bridge to the `zarr` implementation in Rust {doc}`zarrs-python <zarrs:index>` can help with that (see the [zarr-benchmarks]):
 
 ```
 uv pip install zarrs
@@ -98,3 +98,4 @@ We anticipate providing `async` versions of {func}`anndata.io.read_elem` and {fu
 We also would like to create an asynchronous partial reader to enable iterative streaming of a dataset. {doc}`zarr:user-guide/consolidated_metadata`
 
 [`obstore` claims]: https://developmentseed.org/obstore/latest/performance
+[zarr-benchmarks]: https://github.com/LDeakin/zarr_benchmarks
