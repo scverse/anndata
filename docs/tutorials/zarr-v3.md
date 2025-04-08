@@ -20,7 +20,7 @@ There are two ways of opening remote `zarr` stores from the `zarr-python` packag
 
 Local data generally poses a different set of challenges.
 First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.
-For the "many small files" problem, `zarr` has introduced `{ref} sharding <zarr:user-guide-sharding>` in the v3 file format.
+For the "many small files" problem, `zarr` has introduced {ref}`sharding <zarr:user-guide-sharding>` in the v3 file format.
 Sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use sharding.
 For example, you cannot shard a 1D array with `shard` sizes `(256, 256)`.
 Here is a short example, although you should tune the sizes to your own use-case and also use the compression that makes the most sense for you:
