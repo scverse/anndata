@@ -82,6 +82,10 @@ Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if 
 
 The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
 
+## Dask
+
+Zarr v3 should be compatible with dask, although the default behavior is to use zarr's chunking for its own. With sharding, this behavior may be undesirable as shards can often contain many small chunks, thereby slowing down i/o as dask will need to index into the zarr store for every chunk.  Therefore it may be better to customize this behavior by passing `chunks=my_zarr_array.shards` as an argument to the {func}`dask.array.from_zarr` or similar.
+
 ## GPU i/o
 
 At the moment, it is unlikely your `anndata` i/o will work if you use {ref}`zarr.config.enable_gpu <zarr:user-guide-gpu>`.
