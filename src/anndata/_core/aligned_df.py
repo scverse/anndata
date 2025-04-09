@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
+from ..compat import XDataset
+from .xarray import Dataset2D
 
 from .._warnings import ImplicitModificationWarning
 
@@ -119,3 +121,18 @@ def _mk_df_error(
             "({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
+
+@_gen_dataframe.register(Dataset2D)
+def _gen_dataframe_xr(
+    anno: Dataset2D,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return anno
+
+@_gen_dataframe.register(XDataset)
+def _gen_dataframe_xdataset(anno: Dataset, index_names: Iterable[str], *, source: Literal["X", "shape"], attr: Literal["obs", "var"], length: int | None=None):
+    return Dataset2D(anno)

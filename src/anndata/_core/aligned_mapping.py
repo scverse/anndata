@@ -12,6 +12,7 @@ import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
+from .xarray import Dataset2D
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -78,7 +79,6 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
             val = val.reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
-            from .xarray import Dataset2D
             val = Dataset2D(data_vars=val.data_vars, coords=val.coords, attrs=val.attrs)
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):

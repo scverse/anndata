@@ -11,6 +11,7 @@ import pandas as pd
 from scipy.sparse import issparse
 
 from ..compat import AwkArray, CSArray, CSMatrix, DaskArray
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
@@ -208,6 +209,14 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
+
+@_subset.register(Dataset2D)
+def _(a: Dataset2D, subset_idx: Index):
+    key = get_index_dim(a)
+    # xarray seems to have some code looking for a second entry in tuples
+    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
+        subset_idx = subset_idx[0]
+    return a.isel(**{key: subset_idx})
 
 
 # Registration for SparseDataset occurs in sparse_dataset.py

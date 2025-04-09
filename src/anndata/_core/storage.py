@@ -10,6 +10,8 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
+from .xarray import Dataset2D
+from ..compat import XDataset
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
@@ -29,13 +31,14 @@ def coerce_array(
 ):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
     from ..typing import ArrayDataStructureTypes
-    from .xarray import Dataset2D
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_args(ArrayDataStructureTypes)
+    if isinstance(value, XDataset):
+        value = Dataset2D(value)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."

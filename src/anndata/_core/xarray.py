@@ -4,11 +4,6 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from .anndata import AnnData, _gen_dataframe
-from .file_backing import to_memory
-from .index import _subset
-from .views import as_view
-
 from ..compat import XDataset
 
 if TYPE_CHECKING:
@@ -101,44 +96,3 @@ class Dataset2D(XDataset):
         """
         columns_list = list(self.keys())
         return pd.Index(columns_list)
-
-
-@_subset.register(Dataset2D)
-def _(a: Dataset2D, subset_idx: Index):
-    key = get_index_dim(a)
-    # xarray seems to have some code looking for a second entry in tuples
-    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
-        subset_idx = subset_idx[0]
-    return a.isel(**{key: subset_idx})
-
-
-@as_view.register(Dataset2D)
-def _(a: Dataset2D, view_args):
-    return a
-
-
-@_gen_dataframe.register(Dataset2D)
-def _gen_dataframe_xr(
-    anno: Dataset2D,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return anno
-
-@_gen_dataframe.register(XDataset)
-def _gen_dataframe_xdataset(anno: Dataset, index_names: Iterable[str], *, source: Literal["X", "shape"], attr: Literal["obs", "var"], length: int | None=None):
-    return Dataset2D(anno)
-
-
-@AnnData._remove_unused_categories.register(Dataset2D)
-@staticmethod
-def _remove_unused_categories_xr(
-    df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
-):
-    pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
-
-
-to_memory.register(Dataset2D, Dataset2D.to_memory)
