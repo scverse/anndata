@@ -4,36 +4,29 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from ..._core.anndata import AnnData, _gen_dataframe
-from ..._core.file_backing import to_memory
-from ..._core.index import _subset
-from ..._core.views import as_view
+from .anndata import AnnData, _gen_dataframe
+from .file_backing import to_memory
+from .index import _subset
+from .views import as_view
 
-try:
-    from xarray import Dataset
-except ImportError:
-
-    class Dataset:
-        def __repr__(self) -> str:
-            return "mock Dataset"
-
+from .._compat import XDataset
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable
     from typing import Any, Literal
 
-    from ..._core.index import Index
-    from ._compat import xarray as xr
+    from .index import Index
+    from .._compat import XArray
 
 
-def get_index_dim(ds: xr.DataArray) -> Hashable:
+def get_index_dim(ds: XArray) -> Hashable:
     if len(ds.sizes) != 1:
         msg = f"xarray Dataset should not have more than 1 dims, found {len(ds.sizes)} {ds.sizes}, {ds}"
         raise ValueError(msg)
     return next(iter(ds.indexes.keys()))
 
 
-class Dataset2D(Dataset):
+class Dataset2D(XDataset):
     """
     A wrapper class meant to enable working with lazy dataframe data.
     We do not guarantee the stability of this API beyond that guaranteed

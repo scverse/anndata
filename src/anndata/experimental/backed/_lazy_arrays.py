@@ -11,8 +11,8 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ._compat import BackendArray, DataArray, ZarrArrayWrapper
-from ._compat import xarray as xr
+from ..._compat import XBackendArray, XArray, XZarrArrayWrapper
+from ..._compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path

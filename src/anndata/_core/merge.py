@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
     from anndata._types import Join_T
-    from anndata.experimental.backed._compat import DataArray, Dataset2D
+    from .._compat import XArray, Dataset2D
 
 T = TypeVar("T")
 

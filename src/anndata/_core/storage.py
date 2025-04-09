@@ -27,17 +27,9 @@ def coerce_array(
     allow_df: bool = False,
     allow_array_like: bool = False,
 ):
-    try:
-        from anndata.experimental.backed._compat import Dataset2D
-    except ImportError:
-
-        class Dataset2D:
-            @staticmethod
-            def __repr__():
-                return "mock anndata.experimental.backed._xarray."
-
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
     from ..typing import ArrayDataStructureTypes
+    from .xarray import Dataset2D
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
