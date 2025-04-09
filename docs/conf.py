@@ -113,9 +113,14 @@ intersphinx_mapping = dict(
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/stable/", None),
+    # TODO: move back to stable once `ObjectStore` is released
+    zarr=("https://zarr.readthedocs.io/en/latest/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
+    obstore=("https://developmentseed.org/obstore/latest/", None),
+    kvikio=("https://docs.rapids.ai/api/kvikio/stable/", None),
+    zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
 )
+
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
