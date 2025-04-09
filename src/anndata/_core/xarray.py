@@ -9,14 +9,14 @@ from .file_backing import to_memory
 from .index import _subset
 from .views import as_view
 
-from .._compat import XDataset
+from ..compat import XDataset
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable
     from typing import Any, Literal
 
     from .index import Index
-    from .._compat import XArray
+    from ..compat import XArray
 
 
 def get_index_dim(ds: XArray) -> Hashable:
@@ -127,6 +127,10 @@ def _gen_dataframe_xr(
     length: int | None = None,
 ):
     return anno
+
+@_gen_dataframe.register(XDataset)
+def _gen_dataframe_xdataset(anno: Dataset, index_names: Iterable[str], *, source: Literal["X", "shape"], attr: Literal["obs", "var"], length: int | None=None):
+    return Dataset2D(anno)
 
 
 @AnnData._remove_unused_categories.register(Dataset2D)
