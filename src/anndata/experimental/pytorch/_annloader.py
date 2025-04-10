@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import copy
-from functools import partial
-from importlib.util import find_spec
+from functools import partial, wraps
 from math import ceil
 from typing import TYPE_CHECKING
 
@@ -14,16 +13,11 @@ from ..._core.anndata import AnnData
 from ...compat import old_positionals
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
-if find_spec("torch") or TYPE_CHECKING:
-    import torch
-    from torch.utils.data import BatchSampler, DataLoader, Sampler
-else:
-    Sampler, BatchSampler, DataLoader = object, object, object
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
-    from typing import TypeAlias, Union
+    from typing import Any, TypeAlias, Union
 
+    import torch
     from scipy.sparse import spmatrix
 
     # need to use Union because of autodoc_mock_imports
@@ -32,48 +26,75 @@ if TYPE_CHECKING:
 
 # Custom sampler to get proper batches instead of joined separate indices
 # maybe move to multi_files
-class BatchIndexSampler(Sampler):
-    @old_positionals("batch_size", "shuffle", "drop_last")
-    def __init__(
-        self,
-        n_obs: int,
-        *,
-        batch_size: int,
-        shuffle: bool = False,
-        drop_last: bool = False,
-    ) -> None:
-        self.n_obs = n_obs
-        self.batch_size = batch_size if batch_size < n_obs else n_obs
-        self.shuffle = shuffle
-        self.drop_last = drop_last
 
-    def __iter__(self) -> Generator[list[int], None, None]:
-        indices: list[int]
-        if self.shuffle:
-            indices = np.random.permutation(self.n_obs).tolist()
-        else:
-            indices = list(range(self.n_obs))
 
-        for i in range(0, self.n_obs, self.batch_size):
-            batch = indices[i : min(i + self.batch_size, self.n_obs)]
+class BatchIndexSampler:
+    _base_cls = None
 
-            # only happens if the last batch is smaller than batch_size
-            if len(batch) < self.batch_size and self.drop_last:
-                continue
+    @classmethod
+    def _create_real_sampler_class(cls):
+        from torch.utils.data import Sampler
 
-            yield batch
+        def old_positionals(*param_names):
+            def decorator(f):
+                @wraps(f)
+                def wrapper(*args, **kwargs):
+                    return f(*args, **kwargs)
 
-    def __len__(self) -> int:
-        if self.drop_last:
-            length = self.n_obs // self.batch_size
-        else:
-            length = ceil(self.n_obs / self.batch_size)
+                return wrapper
 
-        return length
+            return decorator
+
+        class RealBatchIndexSampler(Sampler):
+            @old_positionals("batch_size", "shuffle", "drop_last")
+            def __init__(
+                self,
+                n_obs: int,
+                *,
+                batch_size: int,
+                shuffle: bool = False,
+                drop_last: bool = False,
+            ) -> None:
+                super().__init__()
+                self.n_obs = n_obs
+                self.batch_size = batch_size if batch_size < n_obs else n_obs
+                self.shuffle = shuffle
+                self.drop_last = drop_last
+
+            def __iter__(self) -> Generator[list[int], None, None]:
+                indices: list[int]
+                if self.shuffle:
+                    indices = np.random.permutation(self.n_obs).tolist()
+                else:
+                    indices = list(range(self.n_obs))
+
+                for i in range(0, self.n_obs, self.batch_size):
+                    batch = indices[i : min(i + self.batch_size, self.n_obs)]
+                    # only happens if the last batch is smaller than batch_size
+                    if len(batch) < self.batch_size and self.drop_last:
+                        continue
+                    yield batch
+
+            def __len__(self) -> int:
+                if self.drop_last:
+                    length = self.n_obs // self.batch_size
+                else:
+                    length = ceil(self.n_obs / self.batch_size)
+                return length
+
+        return RealBatchIndexSampler
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        if cls._base_cls is None:
+            cls._base_cls = cls._create_real_sampler_class()
+
+        return cls._base_cls(*args, **kwargs)
 
 
 # maybe replace use_cuda with explicit device option
 def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
+    import torch
+
     if isinstance(arr, torch.Tensor):
         if use_cuda:
             arr = arr.cuda()
@@ -119,7 +140,7 @@ def _convert_on_top(
 
 
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
-class AnnLoader(DataLoader):
+class AnnLoader:
     """\
     PyTorch DataLoader for AnnData objects.
 
@@ -148,91 +169,112 @@ class AnnLoader(DataLoader):
         arguments for `AnnCollection` initialization.
     """
 
-    @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
-    def __init__(
-        self,
-        adatas: Sequence[AnnData] | dict[str, AnnData],
-        *,
-        batch_size: int = 1,
-        shuffle: bool = False,
-        use_default_converter: bool = True,
-        use_cuda: bool = False,
-        **kwargs,
-    ):
-        if isinstance(adatas, AnnData):
-            adatas = [adatas]
+    _base_cls = None
 
-        if (
-            isinstance(adatas, list)
-            or isinstance(adatas, tuple)
-            or isinstance(adatas, dict)
-        ):
-            join_obs = kwargs.pop("join_obs", "inner")
-            join_obsm = kwargs.pop("join_obsm", None)
-            label = kwargs.pop("label", None)
-            keys = kwargs.pop("keys", None)
-            index_unique = kwargs.pop("index_unique", None)
-            convert = kwargs.pop("convert", None)
-            harmonize_dtypes = kwargs.pop("harmonize_dtypes", True)
-            indices_strict = kwargs.pop("indices_strict", True)
+    @classmethod
+    def _create_real_loader_class(cls):
+        from torch.utils.data import BatchSampler, DataLoader
 
-            dataset = AnnCollection(
-                adatas,
-                join_obs=join_obs,
-                join_obsm=join_obsm,
-                label=label,
-                keys=keys,
-                index_unique=index_unique,
-                convert=convert,
-                harmonize_dtypes=harmonize_dtypes,
-                indices_strict=indices_strict,
+        class RealAnnLoader(DataLoader):
+            @old_positionals(
+                "batch_size", "shuffle", "use_default_converter", "use_cuda"
             )
+            def __init__(
+                self,
+                adatas: Sequence[AnnData] | dict[str, AnnData],
+                *,
+                batch_size: int = 1,
+                shuffle: bool = False,
+                use_default_converter: bool = True,
+                use_cuda: bool = False,
+                **kwargs,
+            ):
+                if isinstance(adatas, AnnData):
+                    adatas = [adatas]
 
-        elif isinstance(adatas, _ConcatViewMixin):
-            dataset = copy(adatas)
-        else:
-            msg = "adata should be of type AnnData or AnnCollection."
-            raise ValueError(msg)
+                if (
+                    isinstance(adatas, list)
+                    or isinstance(adatas, tuple)
+                    or isinstance(adatas, dict)
+                ):
+                    join_obs = kwargs.pop("join_obs", "inner")
+                    join_obsm = kwargs.pop("join_obsm", None)
+                    label = kwargs.pop("label", None)
+                    keys = kwargs.pop("keys", None)
+                    index_unique = kwargs.pop("index_unique", None)
+                    convert = kwargs.pop("convert", None)
+                    harmonize_dtypes = kwargs.pop("harmonize_dtypes", True)
+                    indices_strict = kwargs.pop("indices_strict", True)
 
-        if use_default_converter:
-            pin_memory = kwargs.pop("pin_memory", False)
-            _converter = partial(
-                default_converter, use_cuda=use_cuda, pin_memory=pin_memory
-            )
-            dataset.convert = _convert_on_top(
-                dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
-            )
+                    dataset = AnnCollection(
+                        adatas,
+                        join_obs=join_obs,
+                        join_obsm=join_obsm,
+                        label=label,
+                        keys=keys,
+                        index_unique=index_unique,
+                        convert=convert,
+                        harmonize_dtypes=harmonize_dtypes,
+                        indices_strict=indices_strict,
+                    )
 
-        has_sampler = "sampler" in kwargs
-        has_batch_sampler = "batch_sampler" in kwargs
+                elif isinstance(adatas, _ConcatViewMixin):
+                    dataset = copy(adatas)
+                else:
+                    msg = "adata should be of type AnnData or AnnCollection."
+                    raise ValueError(msg)
 
-        has_worker_init_fn = (
-            "worker_init_fn" in kwargs and kwargs["worker_init_fn"] is not None
-        )
-        has_workers = "num_workers" in kwargs and kwargs["num_workers"] > 0
-        use_parallel = has_worker_init_fn or has_workers
+                if use_default_converter:
+                    pin_memory = kwargs.pop("pin_memory", False)
+                    _converter = partial(
+                        default_converter, use_cuda=use_cuda, pin_memory=pin_memory
+                    )
+                    dataset.convert = _convert_on_top(
+                        dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
+                    )
 
-        if (
-            batch_size is not None
-            and batch_size > 1
-            and not has_batch_sampler
-            and not use_parallel
-        ):
-            drop_last = kwargs.pop("drop_last", False)
+                has_sampler = "sampler" in kwargs
+                has_batch_sampler = "batch_sampler" in kwargs
 
-            if has_sampler:
-                sampler = kwargs.pop("sampler")
-                sampler = BatchSampler(
-                    sampler, batch_size=batch_size, drop_last=drop_last
+                has_worker_init_fn = (
+                    "worker_init_fn" in kwargs and kwargs["worker_init_fn"] is not None
                 )
-            else:
-                sampler = BatchIndexSampler(
-                    len(dataset),
-                    batch_size=batch_size,
-                    shuffle=shuffle,
-                    drop_last=drop_last,
-                )
+                has_workers = "num_workers" in kwargs and kwargs["num_workers"] > 0
+                use_parallel = has_worker_init_fn or has_workers
 
-            super().__init__(dataset, batch_size=None, sampler=sampler, **kwargs)
-        else:
-            super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
+                if (
+                    batch_size is not None
+                    and batch_size > 1
+                    and not has_batch_sampler
+                    and not use_parallel
+                ):
+                    drop_last = kwargs.pop("drop_last", False)
+
+                    if has_sampler:
+                        sampler = kwargs.pop("sampler")
+                        sampler = BatchSampler(
+                            sampler, batch_size=batch_size, drop_last=drop_last
+                        )
+                    else:
+                        sampler = BatchIndexSampler(
+                            len(dataset),
+                            batch_size=batch_size,
+                            shuffle=shuffle,
+                            drop_last=drop_last,
+                        )
+
+                    super().__init__(
+                        dataset, batch_size=None, sampler=sampler, **kwargs
+                    )
+                else:
+                    super().__init__(
+                        dataset, batch_size=batch_size, shuffle=shuffle, **kwargs
+                    )
+
+        return RealAnnLoader
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        if cls._base_cls is None:
+            cls._base_cls = cls._create_real_loader_class()
+
+        return cls._base_cls(*args, **kwargs)
