@@ -97,5 +97,8 @@ class Dataset2D(XDataset):
         -------
         :class:`pandas.Index` that represents the "columns."
         """
-        columns_list = list(self.keys())
-        return pd.Index(columns_list)
+        columns = set(self.keys())
+        index_key = self.attrs.get("indexing_key", None)
+        if index_key is not None:
+            columns.discard(index_key)
+        return pd.Index(columns)

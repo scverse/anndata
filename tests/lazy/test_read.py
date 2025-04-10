@@ -7,7 +7,7 @@ import pytest
 
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, gen_adata
+from anndata.tests.helpers import AccessTrackingStore, assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
 
 from .conftest import ANNDATA_ELEMS
 
@@ -144,7 +144,7 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 
 def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format)
+    adata = gen_adata((1000, 1000), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()

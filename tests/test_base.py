@@ -15,7 +15,7 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
-from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
+from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df, GEN_ADATA_NO_XARRAY_ARGS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -724,7 +724,7 @@ def test_copy():
 
 
 def test_to_memory_no_copy():
-    adata = gen_adata((3, 5))
+    adata = gen_adata((3, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     mem = adata.to_memory()
 
     assert mem.X is adata.X

@@ -10,7 +10,7 @@ import pytest
 from packaging.version import Version
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata
+from anndata.tests.helpers import gen_adata, GEN_ADATA_NO_XARRAY_ARGS
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
@@ -44,7 +44,7 @@ def test_old_format_warning_thrown():
 
 def test_old_format_warning_not_thrown(tmp_path):
     pth = tmp_path / "current.h5ad"
-    adata = gen_adata((20, 10))
+    adata = gen_adata((20, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_h5ad(pth)
 
     with warnings.catch_warnings(record=True) as record:

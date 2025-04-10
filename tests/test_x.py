@@ -10,7 +10,7 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [
@@ -156,7 +156,7 @@ def test_io_missing_X(tmp_path, diskfmt):
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
 
-    adata = gen_adata((20, 30))
+    adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
 
     write(adata, file_pth)

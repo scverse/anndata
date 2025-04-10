@@ -29,7 +29,7 @@ from anndata.compat import (
     _read_attr,
     is_zarr_v2,
 )
-from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
+from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -87,7 +87,7 @@ def dataset_kwargs(request):
 @pytest.fixture
 def rw(backing_h5ad):
     M, N = 100, 101
-    orig = gen_adata((M, N))
+    orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
     curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
@@ -255,7 +255,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
-    adata = gen_adata((M, N), X_type=typ)
+    adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)
@@ -286,7 +286,7 @@ def store_context(path: Path):
     ],
 )
 def test_read_full_io_error(tmp_path, name, read, write):
-    adata = gen_adata((4, 3))
+    adata = gen_adata((4, 3), **GEN_ADATA_NO_XARRAY_ARGS)
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
@@ -325,7 +325,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
 def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     # https://github.com/scverse/anndata/issues/497
     pth = Path(tmp_path) / "adata.h5ad"
-    adata = gen_adata((10, 8))
+    adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     kwargs = {}
     if compression is not None:
         kwargs["compression"] = compression
@@ -362,7 +362,7 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 def test_zarr_compression(tmp_path, zarr_write_format):
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
-    adata = gen_adata((10, 8))
+    adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if zarr_write_format == 2 or is_zarr_v2():
         from numcodecs import Blosc
 
@@ -415,7 +415,7 @@ def test_zarr_compression(tmp_path, zarr_write_format):
 def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
-    orig = gen_adata((10, 10))
+    orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.obs_names.name = "obs"
     orig.var_names.name = "var"
     modified = orig.copy()
@@ -751,7 +751,7 @@ def test_zarr_chunk_X(tmp_path):
     import zarr
 
     zarr_pth = Path(tmp_path) / "test.zarr"
-    adata = gen_adata((100, 100), X_type=np.array)
+    adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
     z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
@@ -879,13 +879,13 @@ def test_backwards_compat_zarr():
 def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     pth = tmp_path / f"adatas_in_uns.{diskfmt}"
 
-    orig = gen_adata((4, 5))
+    orig = gen_adata((4, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"] = {
-        "a": gen_adata((1, 2)),
-        "b": gen_adata((12, 8)),
+        "a": gen_adata((1, 2), **GEN_ADATA_NO_XARRAY_ARGS),
+        "b": gen_adata((12, 8), **GEN_ADATA_NO_XARRAY_ARGS),
     }
-    another_one = gen_adata((2, 5))
-    another_one.raw = gen_adata((2, 7))
+    another_one = gen_adata((2, 5), **GEN_ADATA_NO_XARRAY_ARGS)
+    another_one.raw = gen_adata((2, 7), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"]["b"].uns["another_one"] = another_one
 
     curr = roundtrip(orig, pth)

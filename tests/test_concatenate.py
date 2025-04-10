@@ -21,7 +21,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
+from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray, XDataset
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -497,19 +497,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
     }
     # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
     for tmp_ad in [adata1, adata2, adata3]:

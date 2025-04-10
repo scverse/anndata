@@ -14,6 +14,8 @@ from anndata._types import AnnDataElem
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     DEFAULT_COL_TYPES,
+    DEFAULT_KEY_TYPES,
+    AwkArray,
     AccessTrackingStore,
     as_dense_dask_array,
     gen_adata,
@@ -92,6 +94,8 @@ def adata_remote_orig_with_path(
         mtx_format,
         obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
         var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
+        obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
+        varm_types=(*DEFAULT_KEY_TYPES, AwkArray),
     )
     orig.raw = orig.copy()
     with ad.settings.override(allow_write_nullable_strings=True):
