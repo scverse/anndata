@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -45,8 +45,6 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
-    from ..experimental.backed._compat import DataArray
-
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
@@ -113,7 +111,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
-    elif isinstance(indexer, DataArray):
+    elif isinstance(indexer, XArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data
@@ -212,7 +210,7 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 
 @_subset.register(Dataset2D)
 def _(a: Dataset2D, subset_idx: Index):
-    key = get_index_dim(a)
+    key = a.index_dim
     # xarray seems to have some code looking for a second entry in tuples
     if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
         subset_idx = subset_idx[0]

@@ -14,13 +14,6 @@ if TYPE_CHECKING:
     from ..compat import XArray
 
 
-def get_index_dim(ds: XArray) -> Hashable:
-    if len(ds.sizes) != 1:
-        msg = f"xarray Dataset should not have more than 1 dims, found {len(ds.sizes)} {ds.sizes}, {ds}"
-        raise ValueError(msg)
-    return next(iter(ds.indexes.keys()))
-
-
 class Dataset2D(XDataset):
     """
     A wrapper class meant to enable working with lazy dataframe data.
@@ -33,6 +26,17 @@ class Dataset2D(XDataset):
     __slots__ = ()
 
     @property
+    def index_dim(self) -> str:
+        if len(self.sizes) != 1:
+            msg = f"xarray Dataset should not have more than 1 dims, found {len(self.sizes)} {self.sizes}, {self}"
+            raise ValueError(msg)
+        return next(iter(self.coords.keys()))
+
+    @property
+    def xr_index(self) -> XArray:
+        return self[self.index_dim]
+
+    @property
     def index(self) -> pd.Index:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
 
@@ -40,8 +44,7 @@ class Dataset2D(XDataset):
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
         """
-        coord = get_index_dim(self)
-        return self.indexes[coord]
+        return self.indexes[self.index_dim]
 
     @index.setter
     def index(self, val) -> None:
@@ -56,7 +59,7 @@ class Dataset2D(XDataset):
         -------
         The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
         """
-        return (self.sizes[get_index_dim(self)], len(self))
+        return (self.sizes[self.index_dim], len(self))
 
     @property
     def iloc(self):
@@ -72,7 +75,7 @@ class Dataset2D(XDataset):
                 self._ds = ds
 
             def __getitem__(self, idx):
-                coord = get_index_dim(self._ds)
+                coord = self._ds.index_dim
                 return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)

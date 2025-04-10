@@ -254,7 +254,7 @@ def test_concat_data_subsetting(
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
 ):
-    from anndata.experimental.backed._compat import Dataset2D
+    from anndata._core.xarray import Dataset2D
 
     remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
     if index is not None:

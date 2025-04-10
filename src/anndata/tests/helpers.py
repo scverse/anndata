@@ -25,6 +25,8 @@ from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
     AwkArray,
+    XArray,
+    XDataset,
     CSArray,
     CSMatrix,
     CupyArray,
@@ -290,8 +292,8 @@ def gen_adata(  # noqa: PLR0913
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
-    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
+    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray, XArray, XDataset),
+    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray, XArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",

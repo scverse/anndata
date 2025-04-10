@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
-    from ..._compat import Dataset2D
+    from ...compat import Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
 

@@ -13,7 +13,8 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
+from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup, XArray
+from anndata._core.xarray import Dataset2D
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -23,8 +24,7 @@ if TYPE_CHECKING:
 
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ..._compat import CSArray, CSMatrix, H5File, XArray
-    from ..._core.xarray import Dataset2D
+    from ...compat import CSArray, CSMatrix, H5File
     from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
@@ -221,8 +221,8 @@ def _gen_xarray_dict_iterator_from_elems(
     dim_name: str,
     index: np.NDArray,
 ) -> Generator[tuple[str, XArray], None, None]:
-    from ..._compat import XArray
-    from ..._compat import xarray as xr
+    from ...compat import XArray
+    from ...compat import xarray as xr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     for k, v in elem_dict.items():
@@ -263,8 +263,6 @@ def read_dataframe(
     _reader: LazyReader,
     use_range_index: bool = False,
 ) -> Dataset2D:
-    from ..._compat import XArray, Dataset2D
-
     elem_dict = {
         k: _reader.read_elem(elem[k])
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]

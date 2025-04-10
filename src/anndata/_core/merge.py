@@ -1125,7 +1125,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def make_dask_col_from_extension_dtype(
-    col: DataArray, *, use_only_object_dtype: bool = False
+    col: XArray, *, use_only_object_dtype: bool = False
 ) -> DaskArray:
     """
     Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
@@ -1149,8 +1149,7 @@ def make_dask_col_from_extension_dtype(
         maybe_open_h5,
     )
     from anndata.experimental import read_elem_lazy
-    from anndata.experimental.backed._compat import DataArray
-    from anndata.experimental.backed._compat import xarray as xr
+    from anndata.compat import XArray, xarray as xr
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
     elem_name = col.attrs.get("elem_name")
@@ -1171,7 +1170,7 @@ def make_dask_col_from_extension_dtype(
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
             )
-            data_array = DataArray(
+            data_array = XArray(
                 variable,
                 coords=coords,
                 dims=dims,
@@ -1253,16 +1252,18 @@ def concat_dataset2d_on_annot_axis(
     Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
     """
     from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
-    from anndata.experimental.backed._compat import Dataset2D
-    from anndata.experimental.backed._compat import xarray as xr
+    from anndata._core.xarray import Dataset2D
+    from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
     for a in make_xarray_extension_dtypes_dask(annotations):
-        old_key = next(iter(a.coords.keys()))
+        old_key = a.index_dim
+        if "indexing_key" not in a.attrs:
+            a.attrs["indexing_key"] = old_key
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
-            pd.RangeIndex(a[a.attrs["indexing_key"]].shape[0]).astype("str"),
+            pd.RangeIndex(a.shape[0]).astype("str"),
         )
         # Set all the dimensions to this new dummy index
         a = a.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
@@ -1501,8 +1502,8 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
 
-    from anndata.experimental.backed._compat import Dataset2D
-    from anndata.experimental.backed._compat import xarray as xr
+    from anndata._core.xarray import Dataset2D
+    from anndata.compat import xarray as xr
 
     # Argument normalization
     merge = resolve_merge_strategy(merge)
