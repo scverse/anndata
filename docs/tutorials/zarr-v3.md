@@ -77,7 +77,7 @@ The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `z
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the {class}`zarr.codecs.BloscCodec` to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
 
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
+There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): [`zarr-developers/numcodecs#424`].
 Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
 
 The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
@@ -90,7 +90,7 @@ Zarr v3 should be compatible with dask, although the default behavior is to use 
 
 At the moment, it is unlikely your `anndata` i/o will work if you use {ref}`zarr.config.enable_gpu <zarr:user-guide-gpu>`.
 It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
-`kvikio` currently provides a {class}`kvikio.zarr.GDSStore` although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: {pr}`zarr-developers/zarr-python#2863`.
+`kvikio` currently provides a {class}`kvikio.zarr.GDSStore` although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: [`zarr-developers/zarr-python#2863`].
 
 We anticipate enabling officially supporting this functionality officially for dense data, sparse data, and possibly awkward arrays in the next minor release, 0.13.
 
@@ -103,3 +103,5 @@ We also would like to create an asynchronous partial reader to enable iterative 
 
 [`obstore` claims]: https://developmentseed.org/obstore/latest/performance
 [zarr-benchmarks]: https://github.com/LDeakin/zarr_benchmarks
+[`zarr-developers/zarr-python#2863`]: https://github.com/zarr-developers/zarr-python/pull/2863
+[`zarr-developers/numcodecs#424`]: https://github.com/zarr-developers/numcodecs/issues/424
