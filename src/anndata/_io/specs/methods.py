@@ -18,8 +18,6 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core import views
-from anndata._core.index import _normalize_indices
-from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
@@ -42,11 +40,10 @@ from anndata.compat import (
 
 from ..._settings import settings
 from ...compat import is_zarr_v2
-from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+from .registry import _REGISTRY, IOSpec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from os import PathLike
     from typing import Any, Literal
 
     from numpy import typing as npt
@@ -173,16 +170,6 @@ def read_basic_zarr(
         return zarr.read_dataset(elem)  # TODO: Handle legacy
 
 
-# @_REGISTRY.register_read_partial(IOSpec("", ""))
-# def read_basic_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-#     if isinstance(elem, Mapping):
-#         return _read_partial(elem, items=items, indices=indices)
-#     elif indices != (slice(None), slice(None)):
-#         return elem[indices]
-#     else:
-#         return elem[()]
-
-
 ###########
 # AnnData #
 ###########
@@ -196,77 +183,6 @@ def read_indices(group):
     var_idx_elem = var_group[_read_attr(var_group.attrs, "_index")]
     var_idx = read_elem(var_idx_elem)
     return obs_idx, var_idx
-
-
-def read_partial(
-    pth: PathLike[str] | str,
-    *,
-    obs_idx=slice(None),
-    var_idx=slice(None),
-    X=True,
-    obs=None,
-    var=None,
-    obsm=None,
-    varm=None,
-    obsp=None,
-    varp=None,
-    layers=None,
-    uns=None,
-) -> ad.AnnData:
-    result = {}
-    with h5py.File(pth, "r") as f:
-        obs_idx, var_idx = _normalize_indices((obs_idx, var_idx), *read_indices(f))
-        result["obs"] = read_elem_partial(
-            f["obs"], items=obs, indices=(obs_idx, slice(None))
-        )
-        result["var"] = read_elem_partial(
-            f["var"], items=var, indices=(var_idx, slice(None))
-        )
-        if X:
-            result["X"] = read_elem_partial(f["X"], indices=(obs_idx, var_idx))
-        else:
-            result["X"] = sparse.csr_matrix((len(result["obs"]), len(result["var"])))
-        if "obsm" in f:
-            result["obsm"] = _read_partial(
-                f["obsm"], items=obsm, indices=(obs_idx, slice(None))
-            )
-        if "varm" in f:
-            result["varm"] = _read_partial(
-                f["varm"], items=varm, indices=(var_idx, slice(None))
-            )
-        if "obsp" in f:
-            result["obsp"] = _read_partial(
-                f["obsp"], items=obsp, indices=(obs_idx, obs_idx)
-            )
-        if "varp" in f:
-            result["varp"] = _read_partial(
-                f["varp"], items=varp, indices=(var_idx, var_idx)
-            )
-        if "layers" in f:
-            result["layers"] = _read_partial(
-                f["layers"], items=layers, indices=(obs_idx, var_idx)
-            )
-        if "uns" in f:
-            result["uns"] = _read_partial(f["uns"], items=uns)
-
-    return ad.AnnData(**result)
-
-
-def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
-    if group is None:
-        return None
-    if items is None:
-        keys = intersect_keys((group,))
-    else:
-        keys = intersect_keys((group, items))
-    result = {}
-    for k in keys:
-        if isinstance(items, Mapping):
-            next_items = items.get(k, None)
-        else:
-            next_items = None
-        result[k] = read_elem_partial(group[k], items=next_items, indices=indices)
-    return result
 
 
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
@@ -543,26 +459,10 @@ def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
-@_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
-    return elem[indices]
-
-
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
-def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
-    return elem.oindex[indices]
-
-
 # arrays of strings
 @_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_string_array(d: H5Array, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
-
-
-@_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
-def read_string_array_partial(d, items=None, indices=slice(None)):
-    return read_array_partial(d.asstr(), items=items, indices=indices)
 
 
 @_REGISTRY.register_write(
@@ -901,14 +801,6 @@ def read_sparse(elem: GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArra
     return sparse_dataset(elem).to_memory()
 
 
-@_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
-    return sparse_dataset(elem)[indices]
-
-
 #################
 # Awkward array #
 #################
@@ -1028,29 +920,6 @@ def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     return df
 
 
-# TODO: Figure out what indices is allowed to be at each element
-@_REGISTRY.register_read_partial(H5Group, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-def read_dataframe_partial(
-    elem, *, items=None, indices=(slice(None, None), slice(None, None))
-):
-    if items is not None:
-        columns = [
-            col for col in _read_attr(elem.attrs, "column-order") if col in items
-        ]
-    else:
-        columns = list(_read_attr(elem.attrs, "column-order"))
-    idx_key = _read_attr(elem.attrs, "_index")
-    df = pd.DataFrame(
-        {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
-        index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=columns if len(columns) else None,
-    )
-    if idx_key != "_index":
-        df.index.name = idx_key
-    return df
-
-
 # Backwards compat dataframe reading
 
 
@@ -1089,18 +958,6 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
         return read_elem(dataset)
 
 
-@_REGISTRY.register_read_partial(H5Group, IOSpec("dataframe", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("dataframe", "0.1.0"))
-def read_partial_dataframe_0_1_0(
-    elem, *, items=None, indices=(slice(None), slice(None))
-):
-    if items is None:
-        items = slice(None)
-    else:
-        items = list(items)
-    return read_elem(elem)[items].iloc[indices[0]]
-
-
 ###############
 # Categorical #
 ###############
@@ -1131,16 +988,6 @@ def read_categorical(elem: GroupStorageType, *, _reader: Reader) -> pd.Categoric
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
         categories=_reader.read_elem(elem["categories"]),
-        ordered=bool(_read_attr(elem.attrs, "ordered")),
-    )
-
-
-@_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
-    return pd.Categorical.from_codes(
-        codes=read_elem_partial(elem["codes"], indices=indices),
-        categories=read_elem(elem["categories"]),
         ordered=bool(_read_attr(elem.attrs, "ordered")),
     )
 

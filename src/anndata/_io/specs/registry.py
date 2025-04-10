@@ -89,7 +89,6 @@ R = TypeVar("R", Read, ReadLazy)
 class IORegistry(Generic[_R, R]):
     def __init__(self):
         self.read: dict[tuple[type, IOSpec, frozenset[str]], _R] = {}
-        self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
         ] = {}
@@ -180,29 +179,6 @@ class IORegistry(Generic[_R, R]):
         self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
     ) -> bool:
         return (src_type, spec, modifiers) in self.read
-
-    def register_read_partial(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
-    ):
-        spec = proc_spec(spec)
-        modifiers = frozenset(modifiers)
-
-        def _register(func):
-            self.read_partial[(src_type, spec, modifiers)] = func
-            return func
-
-        return _register
-
-    def get_partial_read(
-        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
-        if (src_type, spec, modifiers) in self.read_partial:
-            return self.read_partial[(src_type, spec, modifiers)]
-        name = "read_partial"
-        raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
     def get_spec(self, elem: Any) -> IOSpec:
         if isinstance(elem, DaskArray):
@@ -507,18 +483,3 @@ def write_elem(
         E.g. for zarr this would be `chunks`, `compressor`.
     """
     Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
-
-
-# TODO: If all items would be read, just call normal read method
-def read_elem_partial(
-    elem,
-    *,
-    items=None,
-    indices=(slice(None), slice(None)),
-    modifiers: frozenset[str] = frozenset(),
-):
-    """Read part of an element from an on disk store."""
-    read_partial = _REGISTRY.get_partial_read(
-        type(elem), get_spec(elem), frozenset(modifiers)
-    )
-    return read_partial(elem, items=items, indices=indices)
