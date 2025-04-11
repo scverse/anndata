@@ -15,7 +15,7 @@ import pandas as pd
 from scipy import sparse
 
 from .. import AnnData
-from ..compat import _deprecate_positional_args
+from ..compat import old_positionals
 from .utils import is_float
 
 if TYPE_CHECKING:
@@ -152,7 +152,18 @@ def _fmt_loom_axis_attrs(
     return axis_df, axis_mapping
 
 
-@_deprecate_positional_args(version="0.9")
+@old_positionals(
+    "sparse",
+    "cleanup",
+    "X_name",
+    "obs_names",
+    "obsm_names",
+    "var_names",
+    "varm_names",
+    "dtype",
+    "obsm_mapping",
+    "varm_mapping",
+)
 def read_loom(  # noqa: PLR0912, PLR0913
     filename: PathLike[str] | str,
     *,

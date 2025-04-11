@@ -306,7 +306,7 @@ def get_compressed_vectors_for_slices(
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=False)]
+        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr

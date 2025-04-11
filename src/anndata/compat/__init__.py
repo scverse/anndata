@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping
-from functools import cache, partial, singledispatch, wraps
+from functools import cache, partial, singledispatch
 from importlib.util import find_spec
-from inspect import Parameter, signature
 from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -339,63 +338,6 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
         elif scipy.sparse.issparse(v) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
-
-
-# This function was adapted from scikit-learn
-# github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/validation.py
-def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.25)"):
-    """Decorator for methods that issues warnings for positional arguments.
-    Using the keyword-only argument syntax in pep 3102, arguments after the
-    * will issue a warning when passed as a positional argument.
-
-    Parameters
-    ----------
-    func
-        Function to check arguments on.
-    version
-        The version when positional arguments will result in error.
-    """
-
-    def _inner_deprecate_positional_args(f):
-        sig = signature(f)
-        kwonly_args = []
-        all_args = []
-
-        for name, param in sig.parameters.items():
-            if param.kind == Parameter.POSITIONAL_OR_KEYWORD:
-                all_args.append(name)
-            elif param.kind == Parameter.KEYWORD_ONLY:
-                kwonly_args.append(name)
-
-        @wraps(f)
-        def inner_f(*args, **kwargs):
-            extra_args = len(args) - len(all_args)
-            if extra_args <= 0:
-                return f(*args, **kwargs)
-
-            # extra_args > 0
-            args_msg = [
-                f"{name}={arg}"
-                for name, arg in zip(
-                    kwonly_args[:extra_args], args[-extra_args:], strict=False
-                )
-            ]
-            args_msg = ", ".join(args_msg)
-            warn(
-                f"Pass {args_msg} as keyword args. From version {version} passing "
-                "these as positional arguments will result in an error",
-                FutureWarning,
-                stacklevel=2,
-            )
-            kwargs.update(zip(sig.parameters, args, strict=False))
-            return f(**kwargs)
-
-        return inner_f
-
-    if func is not None:
-        return _inner_deprecate_positional_args(func)
-
-    return _inner_deprecate_positional_args
 
 
 def _transpose_by_block(dask_array: DaskArray) -> DaskArray:

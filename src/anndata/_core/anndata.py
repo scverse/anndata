@@ -2100,7 +2100,7 @@ def _infer_shape_for_axis(
     for elem in [xxx, xxxm, xxxp]:
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
-    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=False):
+    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True):
         if elem is not None:
             elem = cast("Mapping", elem)
             for sub_elem in elem.values():

@@ -855,7 +855,7 @@ def test_pairwise_concat(axis_name, array_type):
             obsp={"arr": gen_axis_array(m)},
             varp={"arr": gen_axis_array(n)},
         )
-        for k, m, n in zip("abc", Ms, Ns, strict=False)
+        for k, m, n in zip("abc", Ms, Ns, strict=True)
     }
 
     w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)

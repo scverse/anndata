@@ -343,7 +343,7 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
             names,
             [str(c.dtype) for c in cols],
             [(c.shape[1],) for c in cols],
-            strict=False,
+            strict=True,
         )
     )
     # might be unnecessary
