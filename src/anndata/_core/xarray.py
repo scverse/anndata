@@ -37,7 +37,8 @@ class Dataset2D(XDataset):
     def true_index_dim(self, val: str):
         if val not in self.dims:
             if val not in self.data_vars:
-                raise ValueError(f"Unknown variable `{val}`.")
+                msg = f"Unknown variable `{val}`."
+                raise ValueError(msg)
             self.attrs["indexing_key"] = val
 
     @property

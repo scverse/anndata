@@ -11,7 +11,7 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ...compat import XArray, XBackendArray, XZarrArrayWrapper
+from ...compat import XBackendArray, XArray, XZarrArrayWrapper
 from ...compat import xarray as xr
 
 if TYPE_CHECKING:
@@ -31,8 +31,7 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
     def __init__(self, array: K):
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
-            super().__init__(array)
-            return
+            return super().__init__(array)
         self._array = array
         self.shape = self._array.shape
         self.dtype = self._array.dtype
@@ -169,12 +168,12 @@ class MaskedArray(XBackendArray, Generic[K]):
 
 
 @_subset.register(XArray)
-def _subset_masked(a: DataArray, subset_idx: Index):
+def _subset_masked(a: XArray, subset_idx: Index):
     return a[subset_idx]
 
 
 @as_view.register(XArray)
-def _view_pd_boolean_array(a: DataArray, view_args):
+def _view_pd_boolean_array(a: XArray, view_args):
     return a
 
 

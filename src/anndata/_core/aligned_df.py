@@ -137,7 +137,7 @@ def _gen_dataframe_xr(
 
 @_gen_dataframe.register(XDataset)
 def _gen_dataframe_xdataset(
-    anno: Dataset,
+    anno: XDataset,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],

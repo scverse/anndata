@@ -164,7 +164,7 @@ def _(x: AwkArray, *, copy: bool = False):
 
 
 @to_memory.register(Dataset2D)
-def _(x: Dataset2D, copy: bool = False):
+def _(x: Dataset2D, *, copy: bool = False):
     return x.to_memory(copy=copy)
 
 
