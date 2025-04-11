@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping
 from functools import reduce
-from itertools import pairwise
+from itertools import chain, pairwise
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -94,7 +94,7 @@ class _ConcatViewMixin:
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
 
-        iter_limits = list(pairwise(self.limits))
+        iter_limits = list(pairwise(chain([0], self.limits)))
 
         n_adatas_used = 0
         for lower, upper in iter_limits:
