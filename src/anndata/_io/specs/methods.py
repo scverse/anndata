@@ -198,7 +198,7 @@ def read_indices(group):
     return obs_idx, var_idx
 
 
-def read_partial(
+def read_partial(  # noqa: PLR0913
     pth: PathLike[str] | str,
     *,
     obs_idx=slice(None),
@@ -933,6 +933,7 @@ def write_awkward(
     from anndata.compat import awkward as ak
 
     group = f.require_group(k)
+    del k
     if isinstance(v, views.AwkwardArrayView):
         # copy to remove the view attributes
         v = copy(v)
@@ -1021,7 +1022,7 @@ def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     df = pd.DataFrame(
         {k: _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
-        columns=columns if len(columns) else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key

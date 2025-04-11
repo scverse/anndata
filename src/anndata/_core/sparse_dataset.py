@@ -509,7 +509,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: CSMatrix | CSArray) -> None:
+    def append(self, sparse_matrix: CSMatrix | CSArray) -> None:  # noqa: PLR0912, PLR0915
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters

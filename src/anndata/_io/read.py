@@ -153,7 +153,7 @@ def _fmt_loom_axis_attrs(
 
 
 @_deprecate_positional_args(version="0.9")
-def read_loom(
+def read_loom(  # noqa: PLR0912, PLR0913
     filename: PathLike[str] | str,
     *,
     sparse: bool = True,
@@ -365,7 +365,7 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
             yield line
 
 
-def _read_text(
+def _read_text(  # noqa: PLR0912, PLR0915
     f: Iterator[str],
     delimiter: str | None,
     first_column_names: bool | None,
@@ -391,13 +391,12 @@ def _read_text(
             if not is_float(line_list[-1]):
                 col_names = line_list
                 # logg.msg("    assuming first line in file stores column names", v=4)
+            elif not is_float(line_list[0]) or first_column_names:
+                first_column_names = True
+                row_names.append(line_list[0])
+                data.append(np.array(line_list[1:], dtype=dtype))
             else:
-                if not is_float(line_list[0]) or first_column_names:
-                    first_column_names = True
-                    row_names.append(line_list[0])
-                    data.append(np.array(line_list[1:], dtype=dtype))
-                else:
-                    data.append(np.array(line_list, dtype=dtype))
+                data.append(np.array(line_list, dtype=dtype))
             break
     if not col_names:
         # try reading col_names from the last comment line

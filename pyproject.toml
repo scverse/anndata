@@ -181,21 +181,23 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
-    "E",   # Error detected by Pycodestyle
-    "EM",  # Traceback-friendly error messages
-    "F",   # Errors detected by Pyflakes
-    "FBT", # Boolean positional arguments
-    "W",   # Warning detected by Pycodestyle
-    "PLW", # Pylint
-    "UP",  # pyupgrade
-    "I",   # isort
-    "TC",  # manage type checking blocks
-    "TID", # Banned imports
-    "ICN", # Follow import conventions
-    "PTH", # Pathlib instead of os.path
-    "PT",  # Pytest conventions
-    "PYI", # Typing
+    "E",      # Error detected by Pycodestyle
+    "EM",     # Traceback-friendly error messages
+    "F",      # Errors detected by Pyflakes
+    "FBT",    # Boolean positional arguments
+    "I",      # isort
+    "ICN",    # Follow import conventions
+    "PTH",    # Pathlib instead of os.path
+    "PT",     # Pytest conventions
+    "PL",     # Pylint
+    "PYI",    # Typing
+    "RUF100", # Unused noqa
+    "TC",     # manage type checking blocks
+    "TID",    # Banned imports
+    "UP",     # pyupgrade
+    "W",      # Warning detected by Pycodestyle
 ]
+external = [ "PLR0917" ] # preview rule
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E501",
@@ -205,12 +207,16 @@ ignore = [
     "E741",
     # We use relative imports from parent modules
     "TID252",
+    # “2” is often not too “magic” a number
+    "PLR2004",
     # Shadowing loop variables isn’t a big deal
     "PLW2901",
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 "tests/test_readwrite.py" = [ "E721" ]
+# PLR0913, PLR0917: tests can use a lot of “arguments” that are actually fixtures
+"tests/**/*.py" = [ "PLR0913", "PLR0917" ]
 [tool.ruff.lint.isort]
 known-first-party = [ "anndata" ]
 required-imports = [ "from __future__ import annotations" ]
@@ -222,6 +228,9 @@ required-imports = [ "from __future__ import annotations" ]
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true
+[tool.ruff.lint.pylint]
+max-args = 7
+max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"

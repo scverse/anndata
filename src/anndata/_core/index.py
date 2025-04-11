@@ -34,7 +34,7 @@ def _normalize_indices(
     return ax0, ax1
 
 
-def _normalize_index(
+def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: slice
     | np.integer
     | int
@@ -47,9 +47,7 @@ def _normalize_index(
     from ..experimental.backed._compat import DataArray
 
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
-    if not isinstance(index, pd.RangeIndex) and (
-        index.dtype == float or index.dtype == int
-    ):
+    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
 

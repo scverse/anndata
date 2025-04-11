@@ -23,10 +23,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def import_name(name: str) -> Any:
+def import_name(full_name: str) -> Any:
     from importlib import import_module
 
-    parts = name.split(".")
+    parts = full_name.split(".")
     obj = import_module(parts[0])
     for i, name in enumerate(parts[1:]):
         try:
@@ -118,7 +118,7 @@ def axis_len(x, axis: Literal[0, 1]) -> int | None:
 try:
     from .compat import awkward as ak
 
-    def _size_at_depth(layout, depth, lateral_context, **kwargs):
+    def _size_at_depth(layout, depth, lateral_context, **kwargs):  # noqa: PLR0912
         """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
         if layout.is_numpy:
             # if it's an embedded rectilinear array, we have to deal with its shape

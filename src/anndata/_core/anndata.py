@@ -8,7 +8,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
-from functools import partial, singledispatch
+from functools import partial, singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
 from typing import TYPE_CHECKING, cast
@@ -207,7 +207,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         "filemode",
         "asview",
     )
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         X: XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
@@ -310,9 +310,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         else:
             self._raw = None
 
-    def _init_as_actual(
+    def _init_as_actual(  # noqa: PLR0912, PLR0913, PLR0915
         self,
         X=None,
+        *,
         obs=None,
         var=None,
         uns=None,
@@ -412,7 +413,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             n_obs, n_vars = (
                 shape
                 if shape is not None
-                else _infer_shape(obs, var, obsm, varm, layers, obsp, varp)
+                else _infer_shape(
+                    obs, var, obsm=obsm, varm=varm, layers=layers, obsp=obsp, varp=varp
+                )
             )
             source = "shape"
 
@@ -574,7 +577,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         #     return X
 
     @X.setter
-    def X(self, value: XDataType | None):
+    def X(self, value: XDataType | None):  # noqa: PLR0912
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -627,34 +630,33 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)
-            else:
-                if self.is_view:
-                    if sparse.issparse(self._adata_ref._X) and isinstance(
-                        value, np.ndarray
-                    ):
-                        if isinstance(self._adata_ref.X, CSArray):
-                            memory_class = sparse.coo_array
-                        else:
-                            memory_class = sparse.coo_matrix
-                        value = memory_class(value)
-                    elif sparse.issparse(value) and isinstance(
-                        self._adata_ref._X, np.ndarray
-                    ):
-                        warnings.warn(
-                            "Trying to set a dense array with a sparse array on a view."
-                            "Densifying the sparse array."
-                            "This may incur excessive memory usage",
-                            stacklevel=2,
-                        )
-                        value = value.toarray()
+            elif self.is_view:
+                if sparse.issparse(self._adata_ref._X) and isinstance(
+                    value, np.ndarray
+                ):
+                    if isinstance(self._adata_ref.X, CSArray):
+                        memory_class = sparse.coo_array
+                    else:
+                        memory_class = sparse.coo_matrix
+                    value = memory_class(value)
+                elif sparse.issparse(value) and isinstance(
+                    self._adata_ref._X, np.ndarray
+                ):
                     warnings.warn(
-                        "Modifying `X` on a view results in data being overridden",
-                        ImplicitModificationWarning,
+                        "Trying to set a dense array with a sparse array on a view."
+                        "Densifying the sparse array."
+                        "This may incur excessive memory usage",
                         stacklevel=2,
                     )
-                    self._adata_ref._X[oidx, vidx] = value
-                else:
-                    self._X = value
+                    value = value.toarray()
+                warnings.warn(
+                    "Modifying `X` on a view results in data being overridden",
+                    ImplicitModificationWarning,
+                    stacklevel=2,
+                )
+                self._adata_ref._X[oidx, vidx] = value
+            else:
+                self._X = value
         else:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
@@ -1026,8 +1028,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
+    @singledispatchmethod
     @staticmethod
-    @singledispatch
     def _remove_unused_categories(
         df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
     ):
@@ -1129,6 +1131,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 dont_modify = True
         else:
             dfs = [df]
+        del df
+
         for df in dfs:
             string_cols = [
                 key for key in df.columns if infer_dtype(df[key]) == "string"
@@ -1481,7 +1485,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         *adatas: AnnData,
         join: str = "inner",
         batch_key: str = "batch",
-        batch_categories: Sequence[Any] = None,
+        batch_categories: Sequence[Any] | None = None,
         uns_merge: str | None = None,
         index_unique: str | None = "-",
         fill_value=None,
@@ -2125,6 +2129,7 @@ def _infer_shape_for_axis(
 def _infer_shape(
     obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
     var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    *,
     obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
     varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
     layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,

@@ -131,7 +131,7 @@ def issubdtype(
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
 
-def gen_random_column(
+def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
     if issubdtype(dtype, pd.CategoricalDtype):
@@ -283,7 +283,7 @@ def maybe_add_sparse_array(
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(
+def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,

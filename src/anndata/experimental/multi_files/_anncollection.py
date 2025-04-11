@@ -170,11 +170,12 @@ class _IterateViewMixin:
 
 
 class MapObsView:
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         attr,
         adatas,
         keys,
+        *,
         adatas_oidx,
         adatas_vidx=None,
         convert=None,
@@ -192,7 +193,7 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key: str, *, use_convert: bool = True):
+    def __getitem__(self, key: str, *, use_convert: bool = True):  # noqa: PLR0912
         if self._keys is not None and key not in self._keys:
             msg = f"No {key} in {self.attr} view"
             raise KeyError(msg)
@@ -340,16 +341,16 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 attr,
                 adatas,
                 keys,
-                adatas_oidx,
-                adatas_vidx,
-                attr_convert,
-                reverse,
-                attr_dtypes,
-                obs_names,
+                adatas_oidx=adatas_oidx,
+                adatas_vidx=adatas_vidx,
+                convert=attr_convert,
+                reverse=reverse,
+                dtypes=attr_dtypes,
+                obs_names=obs_names,
             ),
         )
 
-    def _gather_X(self):
+    def _gather_X(self):  # noqa: PLR0912
         if self._X is not None:
             return self._X
 
@@ -692,7 +693,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         "harmonize_dtypes",
         "indices_strict",
     )
-    def __init__(
+    def __init__(  # noqa: PLR0912, PLR0913, PLR0915
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
         *,

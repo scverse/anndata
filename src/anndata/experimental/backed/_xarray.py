@@ -137,6 +137,7 @@ def _gen_dataframe_xr(
 
 
 @AnnData._remove_unused_categories.register(Dataset2D)
+@staticmethod
 def _remove_unused_categories_xr(
     df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
 ):

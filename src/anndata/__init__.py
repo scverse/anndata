@@ -23,10 +23,10 @@ from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
-from . import abc, experimental, typing, io, types  # noqa: E402 isort: skip
+from . import abc, experimental, typing, io, types  # isort: skip
 
 # We use these in tests by attribute access
-from . import logging  # noqa: F401, E402 isort: skip
+from . import logging  # noqa: F401  # isort: skip
 
 _DEPRECATED_IO = (
     "read_loom",
