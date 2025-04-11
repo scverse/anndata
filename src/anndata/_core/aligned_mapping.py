@@ -75,6 +75,8 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
             )
+        if isinstance(val, np.ndarray) and len(val.shape) == 1:
+            val = val.reshape((val.shape[0], 1))
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue
@@ -94,7 +96,6 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
                     f"Value had shape {actual_shape} while it should have had {right_shape}."
                 )
             raise ValueError(msg)
-
         name = f"{self.attrname.title().rstrip('s')} {key!r}"
         return coerce_array(val, name=name, allow_df=self._allow_df)
 

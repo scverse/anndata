@@ -1698,3 +1698,9 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
 
     assert_equal(res_in_memory, res_dask)
+
+
+def test_1d_concat():
+    adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
+    concated = concat([adata, adata])
+    assert concated.obsm["1d-array"].shape == (10, 1)

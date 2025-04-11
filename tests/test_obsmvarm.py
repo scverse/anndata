@@ -144,3 +144,13 @@ def test_error_set_multiindex_df(adata: AnnData):
     df = get_multiindex_columns_df((adata.shape[0], 20))
     with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
         adata.obsm["df"] = df
+
+
+def test_1d_declaration():
+    adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
+    assert adata.obsm["1d-array"].shape == (5, 1)
+
+
+def test_1d_set(adata):
+    adata.varm["1d-array"] = np.ones(adata.shape[1])
+    assert adata.varm["1d-array"].shape == (adata.shape[1], 1)
