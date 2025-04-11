@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+from fast_array_utils.conv import to_dense
 from scipy import sparse
 
 from anndata import AnnData, concat
@@ -13,11 +14,13 @@ from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, gen_adata
-from anndata.utils import asarray
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Literal
+
+    from anndata.compat import CSArray, CSMatrix
 
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
@@ -98,13 +101,15 @@ def assert_eq_concat_on_disk(
     assert_equal(res1, res2, exact=False)
 
 
-def get_array_type(array_type, axis):
+def get_array_type(
+    array_type: Literal["array", "sparse", "sparse_array"], axis: Literal[0, 1]
+) -> Callable[[np.ndarray], CSArray | CSMatrix | np.ndarray]:
     if array_type == "sparse":
         return sparse.csr_matrix if axis == 0 else sparse.csc_matrix
     if array_type == "sparse_array":
         return sparse.csr_array if axis == 0 else sparse.csc_array
     if array_type == "array":
-        return asarray
+        return to_dense
     msg = f"array_type {array_type} not implemented"
     raise NotImplementedError(msg)
 

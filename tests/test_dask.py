@@ -9,20 +9,22 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata.compat import CupyArray, DaskArray
+from anndata.compat import DaskArray
 from anndata.experimental.merge import as_group
-from anndata.tests.helpers import (
-    GEN_ADATA_DASK_ARGS,
-    as_dense_cupy_dask_array,
-    as_dense_dask_array,
-    as_sparse_dask_array,
-    assert_equal,
-    gen_adata,
-)
+from anndata.tests.helpers import GEN_ADATA_DASK_ARGS, assert_equal, gen_adata
+from testing.fast_array_utils import SUPPORTED_TYPES, Flags
+
+if TYPE_CHECKING:
+    from anndata.compat import CSArray, CSMatrix, CupyArray, CupyCSRMatrix
+    from testing.fast_array_utils import ArrayType
+
+
+CUPY_SPARSE = {
+    at for at in SUPPORTED_TYPES if at.flags & Flags.Sparse and at.flags & Flags.Gpu
+}
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -272,22 +274,15 @@ def test_assign_X(adata):
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
-@pytest.mark.parametrize(
-    ("array_func", "mem_type"),
-    [
-        pytest.param(as_dense_dask_array, np.ndarray, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
-        pytest.param(
-            as_dense_cupy_dask_array,
-            CupyArray,
-            id="cupy_dense_dask_array",
-            marks=pytest.mark.gpu,
-        ),
+@pytest.mark.array_type(select=Flags.Dask, skip=CUPY_SPARSE)
+def test_dask_to_memory_unbacked(
+    array_type: ArrayType[
+        DaskArray,
+        ArrayType[np.ndarray | CSMatrix | CSArray | CupyArray | CupyCSRMatrix, None],
     ],
-)
-def test_dask_to_memory_unbacked(array_func, mem_type):
-    orig = gen_adata((15, 10), X_type=array_func, **GEN_ADATA_DASK_ARGS)
-    orig.uns = {"da": {"da": array_func(np.ones((4, 12)))}}
+) -> None:
+    orig = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    orig.uns = {"da": {"da": array_type(np.ones((4, 12)))}}
 
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["da"], DaskArray)
@@ -298,11 +293,11 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     curr = orig.to_memory()
 
     assert_equal(orig, curr)
-    assert isinstance(curr.X, mem_type)
+    assert isinstance(curr.X, array_type.inner.cls)
     assert isinstance(curr.obsm["da"], np.ndarray)
     assert isinstance(curr.varm["da"], np.ndarray)
     assert isinstance(curr.layers["da"], np.ndarray)
-    assert isinstance(curr.uns["da"]["da"], mem_type)
+    assert isinstance(curr.uns["da"]["da"], array_type.inner.cls)
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["da"], DaskArray)
     assert isinstance(orig.layers["da"], DaskArray)
@@ -311,11 +306,12 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
-def test_dask_to_memory_copy_unbacked():
+@pytest.mark.array_type(select=Flags.Dask, skip=Flags.Sparse | Flags.Gpu)
+def test_dask_to_memory_copy_unbacked(array_type: ArrayType[DaskArray]) -> None:
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
-    orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
+    orig = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)  # noqa: F821
+    orig.uns = {"da": {"da": array_type(np.ones(12))}}  # noqa: F821
 
     curr = orig.to_memory(copy=True)
 

@@ -46,6 +46,7 @@ dependencies = [
     "packaging>=24.2",
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
+    "fast-array-utils",
     "legacy-api-wrap",
     "zarr >=2.18.7, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3",
 ]
@@ -85,25 +86,27 @@ doc = [
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-full = [ "anndata[test,lazy]" ]
 test = [
-    "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
+    "pytest-instafail",
+    "fast-array-utils[testing]",
     "pytest-xdist[psutil]",
     "filelock",
     "matplotlib",
     "scikit-learn",
+    "loompy>=3.0.5",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",                # For data downloading
+    "httpx",                     # For data downloading
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
-    "anndata[dask]",
+    "anndata[dask,lazy]",
 ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]

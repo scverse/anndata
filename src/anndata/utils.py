@@ -5,20 +5,19 @@ import warnings
 from functools import singledispatch, wraps
 from typing import TYPE_CHECKING
 
-import h5py
 import numpy as np
 import pandas as pd
-from scipy import sparse
 
 import anndata
 
-from ._core.sparse_dataset import BaseCompressedSparseDataset
-from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any, Literal
+
+    from scipy import sparse
+
 
 logger = get_logger(__name__)
 
@@ -40,43 +39,6 @@ def import_name(full_name: str) -> Any:
             msg = f"{parts[:i]}, {parts[i + 1 :]}, {obj} {name}"
             raise RuntimeError(msg)
     return obj
-
-
-@singledispatch
-def asarray(x):
-    """Convert x to a numpy array"""
-    return np.asarray(x)
-
-
-@asarray.register(CSArray)
-@asarray.register(sparse.spmatrix)
-def asarray_sparse(x):
-    return x.toarray()
-
-
-@asarray.register(BaseCompressedSparseDataset)
-def asarray_sparse_dataset(x):
-    return asarray(x.to_memory())
-
-
-@asarray.register(h5py.Dataset)
-def asarray_h5py_dataset(x):
-    return x[...]
-
-
-@asarray.register(CupyArray)
-def asarray_cupy(x):
-    return x.get()
-
-
-@asarray.register(CupySparseMatrix)
-def asarray_cupy_sparse(x):
-    return x.toarray().get()
-
-
-@asarray.register(DaskArray)
-def asarray_dask(x):
-    return asarray(x.compute())
 
 
 @singledispatch
@@ -207,10 +169,6 @@ try:
 
             # Use `None` as null token.
             return None if context["out"] == -1 else context["out"]
-
-    @asarray.register(ak.Array)
-    def asarray_awkward(x):
-        return x
 
 except ImportError:
     pass
