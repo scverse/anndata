@@ -160,7 +160,7 @@ class ReadCallback(Protocol[S_co, RWAble]):
 
 
 class WriteCallback(Protocol[RWAble]):
-    def __call__(  # noqa: PLR0913
+    def __call__(
         self,
         /,
         write_func: Write[RWAble],

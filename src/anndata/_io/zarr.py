@@ -62,7 +62,7 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(  # noqa: PLR0913
+    def callback(
         write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
     ) -> None:
         if (

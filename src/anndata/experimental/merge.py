@@ -167,7 +167,7 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
-def write_concat_dense(  # noqa: PLR0913, PLR0917
+def write_concat_dense(  # noqa: PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
@@ -198,7 +198,7 @@ def write_concat_dense(  # noqa: PLR0913, PLR0917
     )
 
 
-def write_concat_sparse(  # noqa: PLR0913, PLR0917
+def write_concat_sparse(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
@@ -395,7 +395,7 @@ def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
     write_elem(output_group, alt_axis_name, alt_annot)
 
 
-def _write_axis_annot(  # noqa: PLR0913, PLR0917
+def _write_axis_annot(  # noqa: PLR0917
     groups, output_group, axis_name, concat_indices, label, label_col, join
 ):
     concat_annot = pd.concat(

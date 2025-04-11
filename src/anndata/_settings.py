@@ -200,7 +200,7 @@ class SettingsManager:
         )
 
     @old_positionals("default_value", "description", "validate", "option_type")
-    def register(  # noqa: PLR0913
+    def register(
         self,
         option: str,
         *,

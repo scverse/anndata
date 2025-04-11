@@ -181,21 +181,23 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
-    "E",   # Error detected by Pycodestyle
-    "EM",  # Traceback-friendly error messages
-    "F",   # Errors detected by Pyflakes
-    "FBT", # Boolean positional arguments
-    "I",   # isort
-    "ICN", # Follow import conventions
-    "PTH", # Pathlib instead of os.path
-    "PT",  # Pytest conventions
-    "PL",  # Pylint
-    "PYI", # Typing
-    "TC",  # manage type checking blocks
-    "TID", # Banned imports
-    "UP",  # pyupgrade
-    "W",   # Warning detected by Pycodestyle
+    "E",      # Error detected by Pycodestyle
+    "EM",     # Traceback-friendly error messages
+    "F",      # Errors detected by Pyflakes
+    "FBT",    # Boolean positional arguments
+    "I",      # isort
+    "ICN",    # Follow import conventions
+    "PTH",    # Pathlib instead of os.path
+    "PT",     # Pytest conventions
+    "PL",     # Pylint
+    "PYI",    # Typing
+    "RUF100", # Unused noqa
+    "TC",     # manage type checking blocks
+    "TID",    # Banned imports
+    "UP",     # pyupgrade
+    "W",      # Warning detected by Pycodestyle
 ]
+external = [ "PLR0917" ] # preview rule
 ignore = [
     # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E501",
@@ -226,6 +228,9 @@ required-imports = [ "from __future__ import annotations" ]
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true
+[tool.ruff.lint.pylint]
+max-args = 7
+max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"

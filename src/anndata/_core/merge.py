@@ -989,7 +989,7 @@ def missing_element(
     return np.zeros(shape, dtype=bool)
 
 
-def outer_concat_aligned_mapping(  # noqa: PLR0913
+def outer_concat_aligned_mapping(
     mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, fill_value=None
 ):
     if concat_axis is None:

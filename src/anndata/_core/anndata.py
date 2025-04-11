@@ -1480,7 +1480,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         "https://anndata.readthedocs.io/en/latest/concatenation.html",
         hide=False,
     )
-    def concatenate(  # noqa: PLR0913
+    def concatenate(
         self,
         *adatas: AnnData,
         join: str = "inner",
@@ -2126,7 +2126,7 @@ def _infer_shape_for_axis(
     return None
 
 
-def _infer_shape(  # noqa: PLR0913
+def _infer_shape(
     obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
     var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
     *,
