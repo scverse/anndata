@@ -693,8 +693,8 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
-    for k in a.keys():
+    assert set(a) == set(b), format_msg(elem_name)
+    for k in a:
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
@@ -979,10 +979,7 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
 
 
 def resolve_cupy_type(val):
-    if not isinstance(val, type):
-        input_typ = type(val)
-    else:
-        input_typ = val
+    input_typ = type(val) if not isinstance(val, type) else val
 
     if issubclass(input_typ, np.ndarray):
         typ = CupyArray

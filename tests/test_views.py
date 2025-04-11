@@ -330,7 +330,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -358,7 +358,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == tokenize(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -725,12 +725,7 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         getattr(adata, attr)["arr"] = X
 
     view = adata[:50]
-
-    if attr == "X":
-        arr_view = view.X
-    else:
-        arr_view = getattr(view, attr)["arr"]
-
+    arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
     if sparse.issparse(X):

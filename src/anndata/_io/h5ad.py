@@ -223,10 +223,7 @@ def read_h5ad(
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
         msg = "Dense formats can only be read to CSR or CSC matrices at this time."
         raise NotImplementedError(msg)
-    if isinstance(as_sparse, str):
-        as_sparse = [as_sparse]
-    else:
-        as_sparse = list(as_sparse)
+    as_sparse = [as_sparse] if isinstance(as_sparse, str) else list(as_sparse)
     for i in range(len(as_sparse)):
         if as_sparse[i] in {("raw", "X"), "raw.X"}:
             as_sparse[i] = "raw/X"
@@ -247,7 +244,7 @@ def read_h5ad(
                         # This is covering up backwards compat in the anndata initializer
                         # In most cases we should be able to call `func(elen[k])` instead
                         k: read_dispatched(elem[k], callback)
-                        for k in elem.keys()
+                        for k in elem
                         if not k.startswith("raw.")
                     }
                 )

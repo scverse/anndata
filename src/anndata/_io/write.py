@@ -105,10 +105,10 @@ def write_loom(
         raise ValueError(msg)
 
     if write_obsm_varm:
-        for key in adata.obsm.keys():
-            col_attrs[key] = adata.obsm[key]
-        for key in adata.varm.keys():
-            row_attrs[key] = adata.varm[key]
+        for key, array in adata.obsm.items():
+            col_attrs[key] = array
+        for key, array in adata.varm.items():
+            row_attrs[key] = array
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
             f"The loom file will lack these fields:\n"
@@ -117,8 +117,8 @@ def write_loom(
         )
 
     layers = {"": adata.X.T}
-    for key in adata.layers.keys():
-        layers[key] = adata.layers[key].T
+    for key, layer in adata.layers.items():
+        layers[key] = layer.T
 
     from loompy import create
 

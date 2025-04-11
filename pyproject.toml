@@ -192,6 +192,7 @@ select = [
     "PL",     # Pylint
     "PYI",    # Typing
     "RUF100", # Unused noqa
+    "SIM",    # Code simplifications
     "TC",     # manage type checking blocks
     "TID",    # Banned imports
     "UP",     # pyupgrade

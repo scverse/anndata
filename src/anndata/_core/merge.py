@@ -136,9 +136,8 @@ def equal_dask_array(a, b) -> bool:
         return True
     if a.shape != b.shape:
         return False
-    if isinstance(b, DaskArray):
-        if tokenize(a) == tokenize(b):
-            return True
+    if isinstance(b, DaskArray) and tokenize(a) == tokenize(b):
+        return True
     if isinstance(a._meta, CSMatrix):
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
