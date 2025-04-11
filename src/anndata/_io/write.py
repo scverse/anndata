@@ -70,7 +70,7 @@ def write_csvs(
                 value = value[None]
             try:
                 df = pd.DataFrame(value)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 warnings.warn(
                     f"Omitting to write {key!r} of type {type(e)}.",
                     WriteWarning,
@@ -105,10 +105,8 @@ def write_loom(
         raise ValueError(msg)
 
     if write_obsm_varm:
-        for key, array in adata.obsm.items():
-            col_attrs[key] = array
-        for key, array in adata.varm.items():
-            row_attrs[key] = array
+        col_attrs.update(adata.obsm)
+        row_attrs.update(adata.varm)
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
             f"The loom file will lack these fields:\n"

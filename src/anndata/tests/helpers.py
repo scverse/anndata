@@ -201,15 +201,11 @@ def _gen_awkward_inner(shape, rng, dtype):
         return dtype(rng.randrange(1000))
     else:
         curr_dim_len = shape[0]
-        lil = []
         if curr_dim_len is None:
             # ragged dimension, set random length
             curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
 
-        for _ in range(curr_dim_len):
-            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
-
-        return lil
+        return [_gen_awkward_inner(shape[1:], rng, dtype) for _ in range(curr_dim_len)]
 
 
 def gen_awkward(shape, dtype=np.int32):

@@ -699,7 +699,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         # check if the variables are the same in all adatas
         self.adatas_vidx = [None for adata in adatas]
         vars_names_list = [adata.var_names for adata in adatas]
-        vars_eq = all([adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:]])
+        vars_eq = all(adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:])
         if vars_eq:
             self.var_names = adatas[0].var_names
         elif join_vars == "inner":
@@ -917,7 +917,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     @property
     def has_backed(self):
         """`True` if `adatas` have backed AnnData objects, `False` otherwise."""
-        return any([adata.isbacked for adata in self.adatas])
+        return any(adata.isbacked for adata in self.adatas)
 
     @property
     def attrs_keys(self):

@@ -66,7 +66,7 @@ def _doctest_env(
 
 def pytest_itemcollected(item: pytest.Item) -> None:
     """Define behavior of pytest.mark.gpu."""
-    is_gpu = len([mark for mark in item.iter_markers(name="gpu")]) > 0
+    is_gpu = len(list(item.iter_markers(name="gpu"))) > 0
     if is_gpu:
         item.add_marker(
             pytest.mark.skipif(not find_spec("cupy"), reason="Cupy not installed.")
