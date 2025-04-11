@@ -11,7 +11,7 @@ import pytest
 import anndata as ad
 from anndata._core.file_backing import to_memory
 from anndata.experimental import read_lazy
-from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 
 from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
 

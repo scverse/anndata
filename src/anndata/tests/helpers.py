@@ -25,8 +25,6 @@ from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
     AwkArray,
-    XArray,
-    XDataset,
     CSArray,
     CSMatrix,
     CupyArray,
@@ -34,6 +32,8 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    XArray,
+    XDataset,
     ZarrArray,
     is_zarr_v2,
 )
@@ -88,8 +88,7 @@ GEN_ADATA_DASK_ARGS = dict(
 )
 
 GEN_ADATA_NO_XARRAY_ARGS = dict(
-    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
-    varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
 
@@ -344,7 +343,9 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
-        xdataset=xr.Dataset.from_dataframe(gen_typed_df(M, obs_names, dtypes=obs_dtypes))
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        ),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
@@ -360,7 +361,9 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
-        xdataset=xr.Dataset.from_dataframe(gen_typed_df(N, var_names, dtypes=var_dtypes))
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        ),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
@@ -740,9 +743,13 @@ def assert_equal_extension_array(
         _elem_name=elem_name,
     )
 
+
 @assert_equal.register(XArray)
-def assert_equal_xarray(a: XArray, b: object, *, exact: bool=False, elem_name: str | None = None):
+def assert_equal_xarray(
+    a: XArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     report_name(a.equals)(b, _elem_name=elem_name)
+
 
 @assert_equal.register(Raw)
 def assert_equal_raw(

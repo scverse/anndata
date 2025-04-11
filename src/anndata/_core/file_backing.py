@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 import h5py
 
 from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
-from .xarray import Dataset2D
 from .sparse_dataset import BaseCompressedSparseDataset
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -161,6 +161,7 @@ def _(x: AwkArray, *, copy: bool = False):
         return _copy(x)
     else:
         return x
+
 
 @to_memory.register(Dataset2D)
 def _(x: Dataset2D, copy: bool = False):

@@ -99,13 +99,16 @@ else:
         def __repr__():
             return "mock dask.array.core.Array"
 
+
 if find_spec("xarray") or TYPE_CHECKING:
     import xarray
-    from xarray import DataArray as XArray, Dataset as XDataset
+    from xarray import DataArray as XArray
+    from xarray import Dataset as XDataset
     from xarray.backends import BackendArray as XBackendArray
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 else:
     xarray = None
+
     class XArray:
         def __repr__(self) -> str:
             return "mock DataArray"
@@ -121,6 +124,7 @@ else:
     class XBackendArray:
         def __repr__(self) -> str:
             return "mock BackendArray"
+
 
 # https://github.com/scverse/anndata/issues/1749
 def is_cupy_importable() -> bool:

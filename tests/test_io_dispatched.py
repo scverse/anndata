@@ -10,7 +10,7 @@ import anndata as ad
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
-from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 
 if TYPE_CHECKING:
     from collections.abc import Callable

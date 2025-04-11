@@ -24,6 +24,7 @@ from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
 from .views import as_view, view_update
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -278,7 +279,9 @@ class AxisArraysBase(AlignedMappingBase):
                 else:
                     msg = "Index.equals and pd.testing.assert_index_equal disagree"
                     raise AssertionError(msg)
-            val.index.name = self.dim_names.name # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
+            val.index.name = (
+                self.dim_names.name
+            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
         return super()._validate_value(val, key)
 
     @property

@@ -17,8 +17,8 @@ import pandas as pd
 import scipy
 from natsort import natsorted
 from packaging.version import Version
-from scipy import sparse
 from pandas.api.types import is_extension_array_dtype
+from scipy import sparse
 
 from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
     from anndata._types import Join_T
+
     from ..compat import XArray
 
 T = TypeVar("T")
@@ -208,6 +209,7 @@ def equal_awkward(a, b) -> bool:
     from ..compat import awkward as ak
 
     return ak.almost_equal(a, b)
+
 
 @equal.register(Dataset2D)
 def equal_dataset2d(a, b) -> bool:
@@ -732,11 +734,20 @@ class Reindexer:
         index_dim = el.index_dim
         if axis == 0:
             # Dataset.reindex() can't handle ExtensionArrays
-            extension_arrays = {col: arr for col, arr in el.items() if is_extension_array_dtype(arr)}
+            extension_arrays = {
+                col: arr for col, arr in el.items() if is_extension_array_dtype(arr)
+            }
             el = el.drop_vars(extension_arrays.keys())
-            el = el.reindex({index_dim: self.new_idx}, method=None, fill_value=fill_value)
+            el = el.reindex(
+                {index_dim: self.new_idx}, method=None, fill_value=fill_value
+            )
             for col, arr in extension_arrays.items():
-                el[col] = (index_dim, pd.Series(arr, index=self.old_idx).reindex(self.new_idx, fill_value=fill_value))
+                el[col] = (
+                    index_dim,
+                    pd.Series(arr, index=self.old_idx).reindex(
+                        self.new_idx, fill_value=fill_value
+                    ),
+                )
             return el
         else:
             cols = el.columns
@@ -746,7 +757,6 @@ class Reindexer:
             for col in newcols:
                 el[col] = (el.index_dim, np.broadcast_to(fill_value, el.shape[0]))
             return el
-
 
     @property
     def idx(self):
@@ -1181,19 +1191,23 @@ def make_dask_col_from_extension_dtype(
         get_chunksize,
         maybe_open_h5,
     )
+    from anndata.compat import XArray
+    from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
-    from anndata.compat import XArray, xarray as xr
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
     elem_name = col.attrs.get("elem_name")
-    if base_path_or_zarr_group is not None and elem_name is not None: # lazy, backed by store
+    if (
+        base_path_or_zarr_group is not None and elem_name is not None
+    ):  # lazy, backed by store
         dims = col.dims
         coords = col.coords.copy()
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
             maybe_chunk_size = get_chunksize(read_elem_lazy(f))
             chunk_size = (
                 compute_chunk_layout_for_axis_size(
-                    1000 if maybe_chunk_size is None else maybe_chunk_size[0], col.shape[0]
+                    1000 if maybe_chunk_size is None else maybe_chunk_size[0],
+                    col.shape[0],
                 ),
             )
 
@@ -1210,7 +1224,8 @@ def make_dask_col_from_extension_dtype(
                     dims=dims,
                 )
                 idx = tuple(
-                    slice(start, stop) for start, stop in block_info[None]["array-location"]
+                    slice(start, stop)
+                    for start, stop in block_info[None]["array-location"]
                 )
                 chunk = np.array(data_array.data[idx].array)
             return chunk
@@ -1225,7 +1240,7 @@ def make_dask_col_from_extension_dtype(
             meta=np.array([], dtype=dtype),
             dtype=dtype,
         )
-    else: # in-memory
+    else:  # in-memory
         return da.from_array(col.values, chunks=-1)
 
 
@@ -1287,8 +1302,8 @@ def concat_dataset2d_on_annot_axis(
     -------
     Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
     """
-    from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
     from anndata._core.xarray import Dataset2D
+    from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
     from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
@@ -1327,7 +1342,11 @@ def concat_dataset2d_on_annot_axis(
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
     ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
-    for key in set(true_index for a in annotations_re_indexed if (true_index := a.true_index_dim) != a.index_dim):
+    for key in set(
+        true_index
+        for a in annotations_re_indexed
+        if (true_index := a.true_index_dim) != a.index_dim
+    ):
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
@@ -1606,7 +1625,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
         concat_annot.index = concat_indices
     if label is not None:
-        concat_annot[label] = label_col if not isinstance(concat_annot, Dataset2D) else (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
+        concat_annot[label] = (
+            label_col
+            if not isinstance(concat_annot, Dataset2D)
+            else (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
+        )
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
@@ -1631,7 +1654,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             a.rename({a.true_index_dim: "merge_index"})
             for a in annotations_with_only_dask
         ]
-        alt_annot = Dataset2D(xr.merge(annotations_with_only_dask, join=join, compat="override"))
+        alt_annot = Dataset2D(
+            xr.merge(annotations_with_only_dask, join=join, compat="override")
+        )
         alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)

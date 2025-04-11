@@ -15,7 +15,12 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._settings import settings
-from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    get_multiindex_columns_df,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -276,7 +281,9 @@ def test_setting_index_names_error(attr):
 
 
 @pytest.mark.parametrize("dim", ["obs", "var"])
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_setting_dim_index(dim, obs_xdataset, var_xdataset):
     index_attr = f"{dim}_names"
     mapping_attr = f"{dim}m"

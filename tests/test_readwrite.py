@@ -29,7 +29,12 @@ from anndata.compat import (
     _read_attr,
     is_zarr_v2,
 )
-from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
+)
 
 if TYPE_CHECKING:
     from typing import Literal

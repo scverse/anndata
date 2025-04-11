@@ -42,12 +42,12 @@ from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
-from .xarray import Dataset2D
 from .views import (
     DictView,
     _resolve_idxs,
     as_view,
 )
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -748,7 +748,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return len(self.var_names)
 
     def _set_dim_df(self, value: pd.DataFrame | XDataset, attr: Literal["obs", "var"]):
-        value = _gen_dataframe(value, [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"], source="shape", attr=attr, length=self.n_obs if attr == "obs" else self.n_vars)
+        value = _gen_dataframe(
+            value,
+            [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
+            source="shape",
+            attr=attr,
+            length=self.n_obs if attr == "obs" else self.n_vars,
+        )
         raise_value_error_if_multiindex_columns(value, attr)
         value_idx = self._prep_dim_index(value.index, attr)
         if self.is_view:
@@ -2077,12 +2083,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
 
+
 @AnnData._remove_unused_categories.register(Dataset2D)
 @staticmethod
 def _remove_unused_categories_xr(
     df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
 ):
     pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
+
 
 def _check_2d_shape(X):
     """\

@@ -24,9 +24,10 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
-    from ...compat import Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
+
+    from ...compat import Dataset2D
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)

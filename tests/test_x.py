@@ -10,7 +10,7 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal, gen_adata, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [

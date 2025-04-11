@@ -21,7 +21,14 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray, XDataset
+from anndata.compat import (
+    AwkArray,
+    CSArray,
+    CSMatrix,
+    CupySparseMatrix,
+    DaskArray,
+    XDataset,
+)
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -151,7 +158,11 @@ def fix_known_differences(
             for colname, col in resattr.items():
                 # concatenation of XDatasets happens via Dask arrays and those don't know about Pandas Extension arrays
                 # so categoricals and nullable arrays are all converted to other dtypes
-                if col.dtype != origattr[colname].dtype and pd.api.types.is_extension_array_dtype(origattr[colname].dtype):
+                if col.dtype != origattr[
+                    colname
+                ].dtype and pd.api.types.is_extension_array_dtype(
+                    origattr[colname].dtype
+                ):
                     resattr[colname] = col.astype(origattr[colname].dtype)
 
     result.strings_to_categoricals()  # Should this be implicit in concatenation?
@@ -176,9 +187,14 @@ def fix_known_differences(
     return orig, result
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_concat_interface_errors(obs_xdataset, var_xdataset):
-    adatas = [gen_adata((5, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset), gen_adata((5, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)]
+    adatas = [
+        gen_adata((5, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset),
+        gen_adata((5, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset),
+    ]
 
     with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
         concat(adatas, axis=3)
@@ -196,9 +212,19 @@ def test_concat_interface_errors(obs_xdataset, var_xdataset):
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
     ],
 )
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
-def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat, obs_xdataset, var_xdataset):
-    adata = gen_adata((100, 10), X_type=array_type, obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
+def test_concatenate_roundtrip(
+    join_type, array_type, concat_func, backwards_compat, obs_xdataset, var_xdataset
+):
+    adata = gen_adata(
+        (100, 10),
+        X_type=array_type,
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
     if backwards_compat and (obs_xdataset or var_xdataset):
         pytest.xfail("https://github.com/pydata/xarray/issues/10218")
@@ -1180,12 +1206,28 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     assert_equal(merged, result, elem_name="uns")
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
-def test_transposed_concat(array_type, axis_name, join_type, merge_strategy, obs_xdataset, var_xdataset):
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
+def test_transposed_concat(
+    array_type, axis_name, join_type, merge_strategy, obs_xdataset, var_xdataset
+):
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    lhs = gen_adata((10, 10), X_type=array_type, obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
-    rhs = gen_adata((10, 12), X_type=array_type, obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
+    lhs = gen_adata(
+        (10, 10),
+        X_type=array_type,
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    rhs = gen_adata(
+        (10, 12),
+        X_type=array_type,
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
     a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
     b = concat([lhs.T, rhs.T], axis=alt_axis, join=join_type, merge=merge_strategy).T
@@ -1193,14 +1235,26 @@ def test_transposed_concat(array_type, axis_name, join_type, merge_strategy, obs
     assert_equal(a, b)
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_batch_key(axis_name, obs_xdataset, var_xdataset):
     """Test that concat only adds a label if the key is provided"""
 
     get_annot = attrgetter(axis_name)
 
-    lhs = gen_adata((10, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
-    rhs = gen_adata((10, 12), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
+    lhs = gen_adata(
+        (10, 10),
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    rhs = gen_adata(
+        (10, 12),
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
     # There is probably a prettier way to do this
     annot = get_annot(concat([lhs, rhs], axis=axis_name))
@@ -1221,7 +1275,9 @@ def test_batch_key(axis_name, obs_xdataset, var_xdataset):
     ) == ["batch"]
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_concat_categories_from_mapping(obs_xdataset, var_xdataset):
     mapping = {
         "a": gen_adata((10, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset),
@@ -1361,7 +1417,9 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_concat_names(axis_name, obs_xdataset, var_xdataset):
     get_annot = attrgetter(axis_name)
 
@@ -1399,14 +1457,30 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
-def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape, obs_xdataset, var_xdataset):
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
+def test_concat_size_0_axis(
+    axis_name, join_type, merge_strategy, shape, obs_xdataset, var_xdataset
+):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
     col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
-    a = gen_adata((5, 7), obs_dtypes=col_dtypes, var_dtypes=col_dtypes, obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
-    b = gen_adata(shape, obs_dtypes=col_dtypes, var_dtypes=col_dtypes, obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
+    a = gen_adata(
+        (5, 7),
+        obs_dtypes=col_dtypes,
+        var_dtypes=col_dtypes,
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+    )
+    b = gen_adata(
+        shape,
+        obs_dtypes=col_dtypes,
+        var_dtypes=col_dtypes,
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+    )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
@@ -1465,10 +1539,22 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape, obs_xda
 
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 @pytest.mark.parametrize("axis", ["obs", "var"])
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_concat_outer_aligned_mapping(elem, axis, obs_xdataset, var_xdataset):
-    a = gen_adata((5, 5), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
-    b = gen_adata((3, 5), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset, **GEN_ADATA_DASK_ARGS)
+    a = gen_adata(
+        (5, 5),
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    b = gen_adata(
+        (3, 5),
+        obs_xdataset=obs_xdataset,
+        var_xdataset=var_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
     del getattr(b, f"{axis}m")[elem]
 
     concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis)
@@ -1494,9 +1580,14 @@ def test_concatenate_size_0_axis():
     b.concatenate([a]).shape == (10, 0)
 
 
-@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
 def test_concat_null_X(obs_xdataset, var_xdataset):
-    adatas_orig = {k: gen_adata((20, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset) for k in list("abc")}
+    adatas_orig = {
+        k: gen_adata((20, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
+        for k in list("abc")
+    }
     adatas_no_X = {}
     for k, v in adatas_orig.items():
         v = v.copy()

@@ -10,7 +10,7 @@ import pytest
 from packaging.version import Version
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata, GEN_ADATA_NO_XARRAY_ARGS
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")

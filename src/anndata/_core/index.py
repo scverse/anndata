@@ -208,6 +208,7 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
 
+
 @_subset.register(Dataset2D)
 def _(a: Dataset2D, subset_idx: Index):
     key = a.index_dim

@@ -15,8 +15,8 @@ from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     DEFAULT_COL_TYPES,
     DEFAULT_KEY_TYPES,
-    AwkArray,
     AccessTrackingStore,
+    AwkArray,
     as_dense_dask_array,
     gen_adata,
     gen_typed_df,

@@ -7,10 +7,6 @@ import pandas as pd
 from ..compat import XDataset
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable
-    from typing import Any, Literal
-
-    from .index import Index
     from ..compat import XArray
 
 
@@ -107,7 +103,7 @@ class Dataset2D(XDataset):
 
     def __getitem__(self, idx) -> Dataset2D:
         ret = super().__getitem__(idx)
-        if idx == []: # empty XDataset
+        if idx == []:  # empty XDataset
             ret.coords[self.index_dim] = self.xr_index
         return ret
 

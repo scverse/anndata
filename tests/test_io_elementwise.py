@@ -24,12 +24,12 @@ from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
     as_cupy,
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
     gen_adata,
-    GEN_ADATA_NO_XARRAY_ARGS
 )
 
 if TYPE_CHECKING:
@@ -124,7 +124,9 @@ def create_sparse_store(
         pytest.param(True, "numeric-scalar", id="py_bool"),
         pytest.param(1.0, "numeric-scalar", id="py_float"),
         pytest.param({"a": 1}, "dict", id="py_dict"),
-        pytest.param(gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), "anndata", id="anndata"),
+        pytest.param(
+            gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), "anndata", id="anndata"
+        ),
         pytest.param(
             sparse.random(5, 3, format="csr", density=0.5),
             "csr_matrix",

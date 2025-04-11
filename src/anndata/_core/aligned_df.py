@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
-from ..compat import XDataset
-from .xarray import Dataset2D
 
 from .._warnings import ImplicitModificationWarning
+from ..compat import XDataset
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -122,6 +122,7 @@ def _mk_df_error(
         )
     return ValueError(msg)
 
+
 @_gen_dataframe.register(Dataset2D)
 def _gen_dataframe_xr(
     anno: Dataset2D,
@@ -133,6 +134,14 @@ def _gen_dataframe_xr(
 ):
     return anno
 
+
 @_gen_dataframe.register(XDataset)
-def _gen_dataframe_xdataset(anno: Dataset, index_names: Iterable[str], *, source: Literal["X", "shape"], attr: Literal["obs", "var"], length: int | None=None):
+def _gen_dataframe_xdataset(
+    anno: Dataset,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
     return Dataset2D(anno)

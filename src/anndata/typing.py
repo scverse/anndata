@@ -16,9 +16,9 @@ from .compat import (
     CupySparseMatrix,
     DaskArray,
     H5Array,
+    XArray,
     ZappyArray,
     ZarrArray,
-    XArray
 )
 from .compat import Index as _Index
 

@@ -12,9 +12,9 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
-from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup, XArray
 from anndata._core.xarray import Dataset2D
+from anndata.abc import CSCDataset, CSRDataset
+from anndata.compat import DaskArray, H5Array, H5Group, XArray, ZarrArray, ZarrGroup
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -221,9 +221,10 @@ def _gen_xarray_dict_iterator_from_elems(
     dim_name: str,
     index: np.NDArray,
 ) -> Generator[tuple[str, XArray], None, None]:
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
     from ...compat import XArray
     from ...compat import xarray as xr
-    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     for k, v in elem_dict.items():
         if isinstance(v, DaskArray) and k != dim_name:
@@ -243,9 +244,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = XArray(
-                index, coords=[index], dims=[dim_name], name=dim_name
-            )
+            data_array = XArray(index, coords=[index], dims=[dim_name], name=dim_name)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)

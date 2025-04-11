@@ -10,13 +10,13 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from .xarray import Dataset2D
 from ..compat import XDataset
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
     raise_value_error_if_multiindex_columns,
 )
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from typing import Any

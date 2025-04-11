@@ -22,8 +22,8 @@ from ..compat import (
     DaskArray,
     ZappyArray,
 )
-from .xarray import Dataset2D
 from .access import ElementRef
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
@@ -361,6 +361,7 @@ def as_view_cupy_csr(mtx, view_args):
 @as_view.register(CupyCSCMatrix)
 def as_view_cupy_csc(mtx, view_args):
     return CupySparseCSCView(mtx, view_args=view_args)
+
 
 @as_view.register(Dataset2D)
 def _(a: Dataset2D, view_args):
