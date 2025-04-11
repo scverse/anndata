@@ -1127,8 +1127,8 @@ def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, axis_name = _resolve_axis(axis)
     attr = getattr(adata, axis_name)
-    if isinstance(attr, Dataset2D) and "indexing_key" in attr.attrs:
-        return attr[attr.attrs["indexing_key"]].to_index()
+    if isinstance(attr, Dataset2D):
+        return attr.true_index
     else:
         return attr.index
 
@@ -1294,8 +1294,7 @@ def concat_dataset2d_on_annot_axis(
     annotations_re_indexed = []
     for a in make_xarray_extension_dtypes_dask(annotations):
         old_key = a.index_dim
-        if "indexing_key" not in a.attrs:
-            a.attrs["indexing_key"] = old_key
+        is_fake_index = old_key != a.true_index_dim
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
@@ -1307,6 +1306,8 @@ def concat_dataset2d_on_annot_axis(
         old_coord = a.coords[old_key]
         del a.coords[old_key]
         a[old_key] = old_coord
+        if not is_fake_index:
+            a.true_index_dim = old_key
         annotations_re_indexed.append(a)
     # Concat along the dummy index
     ds = Dataset2D(
@@ -1320,13 +1321,13 @@ def concat_dataset2d_on_annot_axis(
     # Create a new true index and then delete the columns resulting from the concatenation for each index.
     # This includes the dummy column (which is neither a dimension nor a true indexing column)
     index = xr.concat(
-        [a[a.attrs["indexing_key"]] for a in annotations_re_indexed],
+        [a.true_xr_index for a in annotations_re_indexed],
         dim=DS_CONCAT_DUMMY_INDEX_NAME,
     )
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
     ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
-    for key in set(a.attrs["indexing_key"] for a in annotations_re_indexed):
+    for key in set(true_index for a in annotations_re_indexed if (true_index := a.true_index_dim) != a.index_dim):
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]

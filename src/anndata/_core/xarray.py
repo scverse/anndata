@@ -69,6 +69,14 @@ class Dataset2D(XDataset):
             del self.attrs["indexing_key"]
 
     @property
+    def true_xr_index(self) -> XArray:
+        return self[self.true_index_dim]
+
+    @property
+    def true_index(self) -> pd.Index:
+        return self.true_xr_index.to_index()
+
+    @property
     def shape(self) -> tuple[int, int]:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
 
