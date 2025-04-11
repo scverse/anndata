@@ -100,6 +100,7 @@ test = [
     "boltons",
     "scanpy>=1.10",
     "httpx",                # For data downloading
+    "xarray>=2024.06.0",
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
