@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray, CSArray, CSMatrix
+from ..compat import AwkArray, CSArray, CSMatrix, CupyArray
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -75,7 +75,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
             )
-        if isinstance(val, np.ndarray) and len(val.shape) == 1:
+        if isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
             val = val.reshape((val.shape[0], 1))
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):

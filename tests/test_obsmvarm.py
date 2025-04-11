@@ -7,6 +7,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData
+from anndata.compat import CupyArray
 from anndata.tests.helpers import get_multiindex_columns_df
 
 M, N = (100, 100)
@@ -146,11 +147,13 @@ def test_error_set_multiindex_df(adata: AnnData):
         adata.obsm["df"] = df
 
 
-def test_1d_declaration():
-    adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
+@pytest.fixture(params=[CupyArray, np.array], ids=["cupy", "numpy"])
+def test_1d_declaration(array_type):
+    adata = AnnData(np.ones((5, 20)), obsm={"1d-array": array_type(np.ones(5))})
     assert adata.obsm["1d-array"].shape == (5, 1)
 
 
-def test_1d_set(adata):
-    adata.varm["1d-array"] = np.ones(adata.shape[1])
+@pytest.fixture(params=[CupyArray, np.array], ids=["cupy", "numpy"])
+def test_1d_set(adata, array_type):
+    adata.varm["1d-array"] = array_type(np.ones(adata.shape[1]))
     assert adata.varm["1d-array"].shape == (adata.shape[1], 1)
