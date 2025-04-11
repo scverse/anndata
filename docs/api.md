@@ -180,7 +180,7 @@ Types used by the former:
    experimental.StorageType
    experimental.backed._lazy_arrays.MaskedArray
    experimental.backed._lazy_arrays.CategoricalArray
-   experimental.backed._xarray.Dataset2D
+   _core.xarray.Dataset2D
 ```
 
 (extensions-api)=
