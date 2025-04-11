@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -8,9 +10,22 @@ from scipy import sparse
 
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import get_multiindex_columns_df
+from anndata.tests.helpers import as_cupy, get_multiindex_columns_df
 
 M, N = (100, 100)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            partial(as_cupy, typ=CupyArray), id="cupy_array", marks=pytest.mark.gpu
+        ),
+        pytest.param(np.array, id="numpy_array"),
+    ],
+    ids=["cupy", "numpy"],
+)
+def array_type(request):
+    return request.param
 
 
 @pytest.fixture
@@ -147,13 +162,11 @@ def test_error_set_multiindex_df(adata: AnnData):
         adata.obsm["df"] = df
 
 
-@pytest.fixture(params=[CupyArray, np.array], ids=["cupy", "numpy"])
 def test_1d_declaration(array_type):
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": array_type(np.ones(5))})
     assert adata.obsm["1d-array"].shape == (5, 1)
 
 
-@pytest.fixture(params=[CupyArray, np.array], ids=["cupy", "numpy"])
 def test_1d_set(adata, array_type):
     adata.varm["1d-array"] = array_type(np.ones(adata.shape[1]))
     assert adata.varm["1d-array"].shape == (adata.shape[1], 1)
