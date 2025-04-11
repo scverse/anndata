@@ -93,7 +93,7 @@ def check_and_get_environ_var(
             f"Value {environ_value_or_default_value!r} is not in allowed {allowed_values} for environment variable {key}. "
             f"Default {default_value} will be used."
         )
-        warnings.warn(msg)
+        warnings.warn(msg, UserWarning, stacklevel=3)
         environ_value_or_default_value = default_value
     return (
         cast(environ_value_or_default_value)
@@ -326,7 +326,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, FutureWarning)
+            warnings.warn(msg, FutureWarning, stacklevel=2)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."

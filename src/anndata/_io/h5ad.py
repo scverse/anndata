@@ -296,11 +296,11 @@ def _read_raw(
 @report_read_key_on_error
 def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
     """Read pre-anndata 0.7 dataframes."""
-    warn(
-        f"'{dataset.name}' was written with a very old version of AnnData. "
-        "Consider rewriting it.",
-        OldFormatWarning,
+    msg = (
+        f"{dataset.name!r} was written with a very old version of AnnData. "
+        "Consider rewriting it."
     )
+    warn(msg, OldFormatWarning, stacklevel=2)
     if H5PY_V3:
         df = pd.DataFrame(
             _decode_structured_array(

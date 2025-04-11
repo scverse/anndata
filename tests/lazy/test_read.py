@@ -92,9 +92,9 @@ def test_access_count_dtype(
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
-    adata_remote_tall_skinny.obs["cat"].dtype
-    adata_remote_tall_skinny.obs["cat"].dtype
-    adata_remote_tall_skinny.obs["cat"].dtype
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
 
 

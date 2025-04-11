@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ from scipy.sparse import csr_matrix, issparse
 
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
+from anndata._core.raw import Raw
 from anndata._settings import settings
 from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
 
@@ -541,15 +543,15 @@ def test_equality_comparisons():
     adata1 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     with pytest.raises(NotImplementedError):
-        adata1 == adata1  # noqa: PLR0124
+        adata1 == adata1  # noqa: B015, PLR0124
     with pytest.raises(NotImplementedError):
-        adata1 == adata2
+        adata1 == adata2  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 != adata2
+        adata1 != adata2  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 == 1
+        adata1 == 1  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 != 1
+        adata1 != 1  # noqa: B015
 
 
 def test_rename_categories():
@@ -613,19 +615,23 @@ def test_convenience():
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, lambda x: x.obs_vector(obs_k, layer=layer)
+            adata, adata_dense, partial(AnnData.obs_vector, k=obs_k, layer=layer)
         )
 
     for obs_k in ["a", "b", "c"]:
-        assert_same_op_result(adata, adata_dense, lambda x: x.raw.obs_vector(obs_k))
+        assert_same_op_result(
+            adata.raw, adata_dense.raw, partial(Raw.obs_vector, k=obs_k)
+        )
 
     for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, lambda x: x.var_vector(var_k, layer=layer)
+            adata, adata_dense, partial(AnnData.var_vector, k=var_k, layer=layer)
         )
 
     for var_k in ["s1", "s2", "anno2"]:
-        assert_same_op_result(adata, adata_dense, lambda x: x.raw.var_vector(var_k))
+        assert_same_op_result(
+            adata.raw, adata_dense.raw, partial(Raw.var_vector, k=var_k)
+        )
 
 
 def test_1d_slice_dtypes():

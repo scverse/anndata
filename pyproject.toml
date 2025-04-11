@@ -181,6 +181,7 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
+    "B",    # Likely bugs and design issues
     "BLE",  # Blind except
     "C4",   # Comprehensions
     "E",    # Error detected by Pycodestyle
@@ -191,6 +192,7 @@ select = [
     "ICN",  # Follow import conventions
     "ISC",  # Implicit string concatenation
     "PERF", # Performance
+    "PIE",  # Syntax simplifications
     "PTH",  # Pathlib instead of os.path
     "PT",   # Pytest conventions
     "PL",   # Pylint
@@ -221,6 +223,8 @@ allowed-confusables = [ "×", "’", "–", "α" ]
 [tool.ruff.lint.isort]
 known-first-party = [ "anndata" ]
 required-imports = [ "from __future__ import annotations" ]
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [ "slice" ]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"

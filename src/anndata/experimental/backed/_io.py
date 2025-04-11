@@ -83,11 +83,11 @@ def read_lazy(
     """
     try:
         import xarray  # noqa: F401
-    except ImportError:
+    except ImportError as e:
         msg = (
             "xarray is required to use the `read_lazy` function. Please install xarray."
         )
-        raise ImportError(msg)
+        raise ImportError(msg) from e
     is_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
     is_h5 = (
         isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad"
@@ -98,13 +98,13 @@ def read_lazy(
         import zarr
 
         if not isinstance(store, ZarrGroup):
+            # v3 returns a ValueError for consolidated metadata not found
+            err_cls = KeyError if is_zarr_v2() else ValueError
             try:
                 f = zarr.open_consolidated(store, mode="r")
-            except (
-                KeyError if is_zarr_v2() else ValueError
-            ):  # v3 returns a ValueError for consolidated metadata not found
+            except err_cls:
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
-                warnings.warn(msg)
+                warnings.warn(msg, UserWarning, stacklevel=2)
                 has_keys = False
                 f = zarr.open_group(store, mode="r")
         else:

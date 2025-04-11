@@ -47,7 +47,7 @@ def coerce_array(
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
-            warnings.warn(msg, ImplicitModificationWarning)
+            warnings.warn(msg, ImplicitModificationWarning, stacklevel=3)
             value = value.A
         return value
     is_non_csc_r_array_or_matrix = (

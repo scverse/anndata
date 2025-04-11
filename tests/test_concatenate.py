@@ -153,7 +153,7 @@ def fix_known_differences(
         result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
-    for get_df in [lambda k: getattr(k, "obs"), lambda k: getattr(k, "obsm")["df"]]:
+    for get_df in [lambda k: k.obs, lambda k: k.obsm["df"]]:
         str_to_df_converted = get_df(result)
         for k, dtype in get_df(orig).dtypes.items():
             if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
@@ -855,7 +855,7 @@ def test_pairwise_concat(axis_name, array_type):
             obsp={"arr": gen_axis_array(m)},
             varp={"arr": gen_axis_array(n)},
         )
-        for k, m, n in zip("abc", Ms, Ns)
+        for k, m, n in zip("abc", Ms, Ns, strict=True)
     }
 
     w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
@@ -1414,7 +1414,7 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
 
         check_filled_like(result.X[axis_idx], elem_name="X")
         check_filled_like(result.X[altaxis_idx], elem_name="X")
-        for k, elem in getattr(result, "layers").items():
+        for k, elem in result.layers.items():
             check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
@@ -1465,8 +1465,8 @@ def test_concatenate_size_0_axis():
     b = gen_adata((5, 0))
 
     # Mostly testing that this doesn't error
-    a.concatenate([b]).shape == (10, 0)
-    b.concatenate([a]).shape == (10, 0)
+    assert a.concatenate([b]).shape == (10, 0)
+    assert b.concatenate([a]).shape == (10, 0)
 
 
 def test_concat_null_X():
