@@ -1230,7 +1230,7 @@ def make_dask_col_from_extension_dtype(
                 chunk = np.array(data_array.data[idx].array)
             return chunk
 
-        if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype: # noqa PLR1714
+        if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
             dtype = "object"
         else:
             dtype = col.dtype.numpy_dtype
@@ -1342,7 +1342,11 @@ def concat_dataset2d_on_annot_axis(
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
     ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
-    for key in {true_index for a in annotations_re_indexed if (true_index := a.true_index_dim) != a.index_dim}:
+    for key in {
+        true_index
+        for a in annotations_re_indexed
+        if (true_index := a.true_index_dim) != a.index_dim
+    }:
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
