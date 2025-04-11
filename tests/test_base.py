@@ -541,7 +541,7 @@ def test_equality_comparisons():
     adata1 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     with pytest.raises(NotImplementedError):
-        adata1 == adata1
+        adata1 == adata1  # noqa: PLR0124
     with pytest.raises(NotImplementedError):
         adata1 == adata2
     with pytest.raises(NotImplementedError):

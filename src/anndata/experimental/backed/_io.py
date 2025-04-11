@@ -109,11 +109,10 @@ def read_lazy(
                 f = zarr.open_group(store, mode="r")
         else:
             f = store
+    elif is_h5_store:
+        f = store
     else:
-        if is_h5_store:
-            f = store
-        else:
-            f = h5py.File(store, mode="r")
+        f = h5py.File(store, mode="r")
 
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):

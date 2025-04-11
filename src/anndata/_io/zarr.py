@@ -28,7 +28,7 @@ T = TypeVar("T")
 
 
 def _check_rec_array(adata):
-    if settings.zarr_write_format == 3 and len(
+    if settings.zarr_write_format == 3 and (
         structured_dtype_keys := {
             k
             for k in adata.uns.keys()
@@ -62,14 +62,16 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+    def callback(  # noqa: PLR0913
+        write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
+    ) -> None:
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
-            and k.lstrip("/") == "X"
+            and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
-        func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
     if is_zarr_v2():

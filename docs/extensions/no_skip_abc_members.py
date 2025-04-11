@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from sphinx.ext.autodoc import Options
 
 
-def autodoc_skip_member(
+def autodoc_skip_member(  # noqa: PLR0913, PLR0917
     app: Sphinx,
     what: Literal["module", "class", "exception", "function", "method", "attribute"],
     name: str,

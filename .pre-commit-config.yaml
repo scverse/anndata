@@ -5,6 +5,10 @@ repos:
       - id: ruff
         args: ["--fix"]
       - id: ruff-format
+      # The following can be removed once PLR0917 is out of preview
+      - name: ruff preview rules
+        id: ruff
+        args: ["--preview", "--select=PLR0917"]
   - repo: https://github.com/biomejs/pre-commit
     rev: v1.9.4
     hooks:

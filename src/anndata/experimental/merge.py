@@ -167,12 +167,12 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
-def write_concat_dense(
+def write_concat_dense(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer = None,
+    reindexers: Reindexer | None = None,
     fill_value=None,
 ):
     """
@@ -198,13 +198,13 @@ def write_concat_dense(
     )
 
 
-def write_concat_sparse(
+def write_concat_sparse(  # noqa: PLR0913, PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer = None,
+    reindexers: Reindexer | None = None,
     fill_value=None,
 ):
     """
@@ -244,7 +244,7 @@ def write_concat_sparse(
         del temp_elem
 
 
-def _write_concat_mappings(
+def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings,
     output_group: ZarrGroup | H5Group,
     keys,
@@ -279,7 +279,7 @@ def _write_concat_mappings(
         )
 
 
-def _write_concat_arrays(
+def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group,
     output_path,
@@ -323,7 +323,7 @@ def _write_concat_arrays(
         )
 
 
-def _write_concat_sequence(
+def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group,
     output_path,
@@ -395,7 +395,7 @@ def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
     write_elem(output_group, alt_axis_name, alt_annot)
 
 
-def _write_axis_annot(
+def _write_axis_annot(  # noqa: PLR0913, PLR0917
     groups, output_group, axis_name, concat_indices, label, label_col, join
 ):
     concat_annot = pd.concat(
@@ -409,7 +409,7 @@ def _write_axis_annot(
     write_elem(output_group, axis_name, concat_annot)
 
 
-def concat_on_disk(
+def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
     out_file: PathLike[str] | str,
     *,

@@ -197,9 +197,10 @@ class SettingsManager:
             option, message, removal_version
         )
 
-    def register(
+    def register(  # noqa: PLR0913
         self,
         option: str,
+        *,
         default_value: T,
         description: str,
         validate: Callable[[T], None],
