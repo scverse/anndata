@@ -185,15 +185,12 @@ def _read_attr_hdf5(
     attr = attrs[name]
     attr_id = attrs.get_id(name)
     dtype = h5py.check_string_dtype(attr_id.dtype)
-    if dtype is None:
+    if dtype is None or dtype.length is None:  # variable-length string, no problem
         return attr
-    else:
-        if dtype.length is None:  # variable-length string, no problem
-            return attr
-        elif len(attr_id.shape) == 0:  # Python bytestring
-            return attr.decode("utf-8")
-        else:  # NumPy array
-            return [decode(s, "utf-8") for s in attr]
+    elif len(attr_id.shape) == 0:  # Python bytestring
+        return attr.decode("utf-8")
+    else:  # NumPy array
+        return [decode(s, "utf-8") for s in attr]
 
 
 def _from_fixed_length_strings(value):

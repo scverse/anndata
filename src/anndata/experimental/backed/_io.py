@@ -109,11 +109,10 @@ def read_lazy(
                 f = zarr.open_group(store, mode="r")
         else:
             f = store
+    elif is_h5_store:
+        f = store
     else:
-        if is_h5_store:
-            f = store
-        else:
-            f = h5py.File(store, mode="r")
+        f = h5py.File(store, mode="r")
 
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
@@ -142,7 +141,7 @@ def read_lazy(
             }
             or "nullable" in iospec.encoding_type
         ):
-            if "dataframe" == iospec.encoding_type and elem_name in {"/obs", "/var"}:
+            if iospec.encoding_type == "dataframe" and elem_name in {"/obs", "/var"}:
                 return read_elem_lazy(elem, use_range_index=not load_annotation_index)
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:

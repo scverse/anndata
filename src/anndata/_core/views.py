@@ -26,7 +26,7 @@ from .access import ElementRef
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
-    from typing import Any
+    from typing import Any, ClassVar
 
     from anndata import AnnData
 
@@ -85,7 +85,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -106,7 +106,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -178,7 +178,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -244,7 +244,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         import cupy as cp
 
@@ -266,7 +266,7 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ["_view_args"]
+    _metadata: ClassVar = ["_view_args"]
 
     @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):

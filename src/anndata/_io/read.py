@@ -114,7 +114,7 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
     with h5py.File(filename, "r") as f:
         # the following is necessary in Python 3, because only
         # a view and not a list is returned
-        keys = [k for k in f.keys()]
+        keys = list(f)
         if key == "":
             msg = (
                 f"The file {filename} stores the following sheets:\n{keys}\n"
@@ -153,7 +153,7 @@ def _fmt_loom_axis_attrs(
 
 
 @_deprecate_positional_args(version="0.9")
-def read_loom(
+def read_loom(  # noqa: PLR0912, PLR0913
     filename: PathLike[str] | str,
     *,
     sparse: bool = True,
@@ -245,8 +245,14 @@ def read_loom(
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
 
+    if TYPE_CHECKING:
+        from loompy import LoomConnection
+
+    lc: LoomConnection
     with connect(filename, "r", **kwargs) as lc:
-        if X_name not in lc.layers.keys():
+        assert lc.layers is not None
+
+        if X_name not in lc.layers:
             X_name = ""
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
         X = X.astype(dtype, copy=False)
@@ -256,13 +262,9 @@ def read_loom(
             layers["matrix"] = (
                 lc.layers[""].sparse().T.tocsr() if sparse else lc.layers[""][()].T
             )
-        for key in lc.layers.keys():
+        for key, layer in lc.layers.items():
             if key != "":
-                layers[key] = (
-                    lc.layers[key].sparse().T.tocsr()
-                    if sparse
-                    else lc.layers[key][()].T
-                )
+                layers[key] = layer.sparse().T.tocsr() if sparse else layer[()].T
 
         # TODO: Figure out the singleton obs elements
         obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_mapping)
@@ -365,7 +367,7 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
             yield line
 
 
-def _read_text(
+def _read_text(  # noqa: PLR0912, PLR0915
     f: Iterator[str],
     delimiter: str | None,
     first_column_names: bool | None,
@@ -391,13 +393,12 @@ def _read_text(
             if not is_float(line_list[-1]):
                 col_names = line_list
                 # logg.msg("    assuming first line in file stores column names", v=4)
+            elif not is_float(line_list[0]) or first_column_names:
+                first_column_names = True
+                row_names.append(line_list[0])
+                data.append(np.array(line_list[1:], dtype=dtype))
             else:
-                if not is_float(line_list[0]) or first_column_names:
-                    first_column_names = True
-                    row_names.append(line_list[0])
-                    data.append(np.array(line_list[1:], dtype=dtype))
-                else:
-                    data.append(np.array(line_list, dtype=dtype))
+                data.append(np.array(line_list, dtype=dtype))
             break
     if not col_names:
         # try reading col_names from the last comment line

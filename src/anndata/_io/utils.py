@@ -14,8 +14,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
 
-    from .._types import ContravariantRWAble, StorageType, _WriteInternal
+    from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
+    from ..typing import RWAble
     from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
@@ -297,11 +298,11 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
 
-    @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
+    @wraps(func, assigned=(*WRAPPER_ASSIGNMENTS, "__defaults__", "__kwdefaults__"))
     def func_wrapper(
         f: StorageType,
         k: str,
-        elem: ContravariantRWAble,
+        elem: RWAble,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],

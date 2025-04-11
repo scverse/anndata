@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .compat import CSArray, CSMatrix, Index
 
 
-__all__ = ["CSRDataset", "CSCDataset"]
+__all__ = ["CSCDataset", "CSRDataset"]
 
 
 class _AbstractCSDataset(ABC):

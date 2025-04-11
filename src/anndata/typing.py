@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["Index", "RWAble", "AxisStorable"]
+__all__ = ["AxisStorable", "Index", "RWAble"]
 
 
 Index = _Index

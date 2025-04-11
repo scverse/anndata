@@ -1154,7 +1154,7 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     """
     # So we can see what the initial pattern was meant to be
     print(merge_strategy, "\n", unss, "\n", result)
-    result, *unss = permute_nested_values([result] + unss, value_gen)
+    result, *unss = permute_nested_values([result, *unss], value_gen)
     adatas = [uns_ad(uns) for uns in unss]
     with pytest.warns(FutureWarning, match=r"concatenate is deprecated"):
         merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns

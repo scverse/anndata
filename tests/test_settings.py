@@ -37,9 +37,25 @@ def validate_int_list(val) -> bool:
 @pytest.fixture
 def settings() -> SettingsManager:
     settings = SettingsManager()
-    settings.register(option, default_val, description, validate_bool)
-    settings.register(option_2, default_val_2, description_2, validate_bool)
-    settings.register(option_3, default_val_3, description_3, validate_int_list, type_3)
+    settings.register(
+        option,
+        default_value=default_val,
+        description=description,
+        validate=validate_bool,
+    )
+    settings.register(
+        option_2,
+        default_value=default_val_2,
+        description=description_2,
+        validate=validate_bool,
+    )
+    settings.register(
+        option_3,
+        default_value=default_val_3,
+        description=description_3,
+        validate=validate_int_list,
+        option_type=type_3,
+    )
     return settings
 
 
@@ -57,9 +73,9 @@ def test_register_with_env(settings: SettingsManager, monkeypatch: pytest.Monkey
 
     settings.register(
         option_env,
-        default_val_env,
-        description_env,
-        validate_bool,
+        default_value=default_val_env,
+        description=description_env,
+        validate=validate_bool,
         get_from_env=check_and_get_bool,
     )
 
@@ -86,9 +102,9 @@ def test_register_with_env_enum(
 
     settings.register(
         option_env,
-        default_val_env,
-        description_env,
-        validate_bool,
+        default_value=default_val_env,
+        description=description_env,
+        validate=validate_bool,
         get_from_env=check_and_get_bool_enum,
     )
 
@@ -99,10 +115,10 @@ def test_register_bad_option(settings: SettingsManager):
     with pytest.raises(TypeError, match=r"'foo' is not a valid int list"):
         settings.register(
             "test_var_4",
-            "foo",  # should be a list of ints
-            description_3,
-            validate_int_list,
-            type_3,
+            default_value="foo",  # should be a list of ints
+            description=description_3,
+            validate=validate_int_list,
+            option_type=type_3,
         )
 
 

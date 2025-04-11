@@ -284,10 +284,7 @@ def test_dataset_append_memory(
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
 
@@ -302,10 +299,7 @@ def test_dataset_append_memory(
 def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format="csr")
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     ad.io.write_elem(f, "mtx_2", a)
     diskmtx = sparse_dataset(f["mtx"])
@@ -342,10 +336,7 @@ def test_read_array(
     a = sparse_format(sparse.random(100, 100))
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(f["mtx"])
     ad.settings.use_sparse_array_on_read = True
@@ -371,10 +362,7 @@ def test_dataset_append_disk(
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "a", a)
     ad.io.write_elem(f, "b", b)
     a_disk = sparse_dataset(f["a"])
@@ -431,9 +419,8 @@ def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
         if all(np.diff(idx) == 1):
             stop = idx[-1] + 1 if idx[-1] < l - 1 else None
             return slice(start, stop)
-    if kind == "int":
-        if len(idx) == 1:
-            return idx[0]
+    if kind == "int" and len(idx) == 1:
+        return idx[0]
     if kind == "array":
         return np.asarray(idx)
     if kind == "mask":
@@ -527,16 +514,13 @@ def test_data_access(
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store)
     a_disk = AnnData(X=open_func(f["X"]))
-    if a.format == "csr":
-        subset = a_disk[idx_maj, idx_min]
-    else:
-        subset = a_disk[idx_min, idx_maj]
+    subset = a_disk[idx_maj, idx_min] if a.format == "csr" else a_disk[idx_min, idx_maj]
     if isinstance(subset.X, DaskArray):
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
     if ad.settings.zarr_write_format == 2 and not is_zarr_v2():
-        exp = exp + ["X/data/.zgroup", "X/data/.zattrs"]
+        exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"
@@ -563,10 +547,7 @@ def test_wrong_shape(
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad.io.write_elem(f, "a", a_mem)
     ad.io.write_elem(f, "b", b_mem)
@@ -581,10 +562,7 @@ def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / "test.zarr"
     base = sparse.random(100, 100, format="csr")
 
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
@@ -596,10 +574,7 @@ def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     base = sparse.random(100, 100, format="csr")
 
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
@@ -632,10 +607,7 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     base = sparse.random(100, 100, format="csr")
 
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
 
     ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))

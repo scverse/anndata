@@ -19,9 +19,8 @@ def _cleanup_dummy() -> Generator[None, None, None]:
     yield
     if original is not None:
         setattr(ad.AnnData, "dummy", original)
-    else:
-        if hasattr(ad.AnnData, "dummy"):
-            delattr(ad.AnnData, "dummy")
+    elif hasattr(ad.AnnData, "dummy"):
+        delattr(ad.AnnData, "dummy")
 
 
 @pytest.fixture

@@ -136,9 +136,8 @@ def equal_dask_array(a, b) -> bool:
         return True
     if a.shape != b.shape:
         return False
-    if isinstance(b, DaskArray):
-        if tokenize(a) == tokenize(b):
-            return True
+    if isinstance(b, DaskArray) and tokenize(a) == tokenize(b):
+        return True
     if isinstance(a._meta, CSMatrix):
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
@@ -258,11 +257,11 @@ def unify_dtypes(
     else:
         dfs = [df.copy(deep=False) for df in dfs]
 
-    new_dtypes = {}
-    for col in dtypes.keys():
-        target_dtype = try_unifying_dtype(dtypes[col])
-        if target_dtype is not None:
-            new_dtypes[col] = target_dtype
+    new_dtypes = {
+        col: target_dtype
+        for col, dtype in dtypes.items()
+        if (target_dtype := try_unifying_dtype(dtype)) is not None
+    }
 
     for df in dfs:
         for col, dtype in new_dtypes.items():
@@ -539,7 +538,7 @@ class Reindexer:
     def __call__(self, el, *, axis=1, fill_value=None):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
-    def apply(self, el, *, axis, fill_value=None):
+    def apply(self, el, *, axis, fill_value=None):  # noqa: PLR0911
         """
         Reindex element so el[axis] is aligned to self.new_idx.
 
@@ -626,7 +625,7 @@ class Reindexer:
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
 
-    def _apply_to_sparse(
+    def _apply_to_sparse(  # noqa: PLR0912
         self, el: CSMatrix | CSArray, *, axis, fill_value=None
     ) -> CSMatrix:
         if isinstance(el, CupySparseMatrix):
@@ -777,7 +776,7 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
     return df
 
 
-def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):
+def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # noqa: PLR0911, PLR0912
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -1182,7 +1181,7 @@ def make_dask_col_from_extension_dtype(
             chunk = np.array(data_array.data[idx].array)
         return chunk
 
-    if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:
+    if col.dtype in ("category", "string") or use_only_object_dtype:
         dtype = "object"
     else:
         dtype = col.dtype.numpy_dtype
@@ -1258,7 +1257,7 @@ def concat_dataset2d_on_annot_axis(
 
     annotations_re_indexed = []
     for a in make_xarray_extension_dtypes_dask(annotations):
-        old_key = list(a.coords.keys())[0]
+        old_key = next(iter(a.coords.keys()))
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
@@ -1290,14 +1289,14 @@ def concat_dataset2d_on_annot_axis(
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
     ds[f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"] = index
-    for key in set(a.attrs["indexing_key"] for a in annotations_re_indexed):
+    for key in {a.attrs["indexing_key"] for a in annotations_re_indexed}:
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
     return ds
 
 
-def concat(
+def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",

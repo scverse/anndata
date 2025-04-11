@@ -50,7 +50,7 @@ def _gen_dataframe_mapping(
         df = pd.DataFrame(
             anno,
             index=anno[index_name],
-            columns=[k for k in anno.keys() if k != index_name],
+            columns=[k for k in anno if k != index_name],
         )
         break
     else:

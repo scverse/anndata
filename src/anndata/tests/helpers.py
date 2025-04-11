@@ -131,7 +131,7 @@ def issubdtype(
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
 
-def gen_random_column(
+def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
     if issubdtype(dtype, pd.CategoricalDtype):
@@ -201,15 +201,11 @@ def _gen_awkward_inner(shape, rng, dtype):
         return dtype(rng.randrange(1000))
     else:
         curr_dim_len = shape[0]
-        lil = []
         if curr_dim_len is None:
             # ragged dimension, set random length
             curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
 
-        for _ in range(curr_dim_len):
-            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
-
-        return lil
+        return [_gen_awkward_inner(shape[1:], rng, dtype) for _ in range(curr_dim_len)]
 
 
 def gen_awkward(shape, dtype=np.int32):
@@ -283,7 +279,7 @@ def maybe_add_sparse_array(
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(
+def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
@@ -294,8 +290,8 @@ def gen_adata(
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
-    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -693,8 +689,8 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
-    for k in a.keys():
+    assert set(a) == set(b), format_msg(elem_name)
+    for k in a:
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
@@ -950,7 +946,7 @@ def _(a, format="csr"):
 
 
 @contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern | None = None):
     """Error handling using pytest 8's support for __notes__.
 
     See: https://github.com/pytest-dev/pytest/pull/11227
@@ -979,10 +975,7 @@ def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Patter
 
 
 def resolve_cupy_type(val):
-    if not isinstance(val, type):
-        input_typ = type(val)
-    else:
-        input_typ = val
+    input_typ = type(val) if not isinstance(val, type) else val
 
     if issubclass(input_typ, np.ndarray):
         typ = CupyArray
