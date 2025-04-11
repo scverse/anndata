@@ -152,7 +152,7 @@ def test_view_subset_shapes():
 
     view = adata[:, ::2]
     assert view.var.shape == (5, 8)
-    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
+    assert {k: v.shape[0] for k, v in view.varm.items()} == dict.fromkeys(view.varm, 5)
 
 
 def test_modify_view_component(matrix_type, mapping_name, request):

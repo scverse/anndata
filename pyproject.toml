@@ -181,12 +181,16 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
+    "BLE",    # Blind except
+    "C4",     # Comprehensions
     "E",      # Error detected by Pycodestyle
     "EM",     # Traceback-friendly error messages
     "F",      # Errors detected by Pyflakes
     "FBT",    # Boolean positional arguments
     "I",      # isort
     "ICN",    # Follow import conventions
+    "ISC",    # Implicit string concatenation
+    "PERF",   # Performance
     "PTH",    # Pathlib instead of os.path
     "PT",     # Pytest conventions
     "PL",     # Pylint
