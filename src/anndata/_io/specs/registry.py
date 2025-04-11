@@ -359,10 +359,8 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (
-            (isinstance(store, ZarrGroup) and is_zarr_v2())
-            or isinstance(store, h5py.Group)
-            and not PurePosixPath(k).is_absolute()
+        if (isinstance(store, ZarrGroup) and is_zarr_v2()) or (
+            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
         ):
             k = str(PurePosixPath(store.name) / k)
 

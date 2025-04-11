@@ -133,8 +133,8 @@ def _get_chunk_indices(za):
     """
     return [
         (i, j)
-        for i in range(int(math.ceil(float(za.shape[0]) / za.chunks[0])))
-        for j in range(int(math.ceil(float(za.shape[1]) / za.chunks[1])))
+        for i in range(math.ceil(float(za.shape[0]) / za.chunks[0]))
+        for j in range(math.ceil(float(za.shape[1]) / za.chunks[1]))
     ]
 
 

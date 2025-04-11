@@ -298,7 +298,7 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
 
-    @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
+    @wraps(func, assigned=(*WRAPPER_ASSIGNMENTS, "__defaults__", "__kwdefaults__"))
     def func_wrapper(
         f: StorageType,
         k: str,

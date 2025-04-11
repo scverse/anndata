@@ -1257,7 +1257,7 @@ def concat_dataset2d_on_annot_axis(
 
     annotations_re_indexed = []
     for a in make_xarray_extension_dtypes_dask(annotations):
-        old_key = list(a.coords.keys())[0]
+        old_key = next(iter(a.coords.keys()))
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
