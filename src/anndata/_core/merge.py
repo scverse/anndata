@@ -17,6 +17,7 @@ import pandas as pd
 import scipy
 from natsort import natsorted
 from packaging.version import Version
+from pandas.api.types import is_extension_array_dtype
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -35,6 +36,7 @@ from ..compat import (
 from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Sequence
@@ -43,7 +45,8 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
     from anndata._types import Join_T
-    from anndata.experimental.backed._compat import DataArray, Dataset2D
+
+    from ..compat import XArray
 
 T = TypeVar("T")
 
@@ -206,6 +209,11 @@ def equal_awkward(a, b) -> bool:
     from ..compat import awkward as ak
 
     return ak.almost_equal(a, b)
+
+
+@equal.register(Dataset2D)
+def equal_dataset2d(a, b) -> bool:
+    return a.equals(b)
 
 
 def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
@@ -448,7 +456,7 @@ def _merge_nested(
     vals = [d[k] for d in ds if k in d]
     if len(vals) == 0:
         return MissingVal
-    elif all(isinstance(v, Mapping) for v in vals):
+    elif all(isinstance(v, Mapping) and not isinstance(v, Dataset2D) for v in vals):
         new_map = merge_nested(vals, keys_join, value_join)
         if len(new_map) == 0:
             return MissingVal
@@ -556,6 +564,8 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, Dataset2D):
+            return self._apply_to_dataset2d(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
@@ -717,6 +727,36 @@ class Reindexer:
             if len(self.new_idx) > len(self.old_idx):
                 el = ak.pad_none(el, 1, axis=axis)  # axis == 0
             return el[self.idx]
+
+    def _apply_to_dataset2d(self, el: Dataset2D, *, axis, fill_value=None):
+        if fill_value is None:
+            fill_value = np.nan
+        index_dim = el.index_dim
+        if axis == 0:
+            # Dataset.reindex() can't handle ExtensionArrays
+            extension_arrays = {
+                col: arr for col, arr in el.items() if is_extension_array_dtype(arr)
+            }
+            el = el.drop_vars(extension_arrays.keys())
+            el = el.reindex(
+                {index_dim: self.new_idx}, method=None, fill_value=fill_value
+            )
+            for col, arr in extension_arrays.items():
+                el[col] = (
+                    index_dim,
+                    pd.Series(arr, index=self.old_idx).reindex(
+                        self.new_idx, fill_value=fill_value
+                    ),
+                )
+            return el
+        else:
+            cols = el.columns
+            tokeep = cols[cols.isin(self.new_idx)]
+            el = el[tokeep.to_list()]
+            newcols = self.new_idx[~self.new_idx.isin(cols)]
+            for col in newcols:
+                el[col] = (el.index_dim, np.broadcast_to(fill_value, el.shape[0]))
+            return el
 
     @property
     def idx(self):
@@ -1096,7 +1136,11 @@ def _resolve_axis(
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, axis_name = _resolve_axis(axis)
-    return getattr(adata, f"{axis_name}_names")
+    attr = getattr(adata, axis_name)
+    if isinstance(attr, Dataset2D):
+        return attr.true_index
+    else:
+        return attr.index
 
 
 # TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
@@ -1124,7 +1168,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def make_dask_col_from_extension_dtype(
-    col: DataArray, *, use_only_object_dtype: bool = False
+    col: XArray, *, use_only_object_dtype: bool = False
 ) -> DaskArray:
     """
     Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
@@ -1147,50 +1191,57 @@ def make_dask_col_from_extension_dtype(
         get_chunksize,
         maybe_open_h5,
     )
+    from anndata.compat import XArray
+    from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
-    from anndata.experimental.backed._compat import DataArray
-    from anndata.experimental.backed._compat import xarray as xr
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
     elem_name = col.attrs.get("elem_name")
-    dims = col.dims
-    coords = col.coords.copy()
-    with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
-        maybe_chunk_size = get_chunksize(read_elem_lazy(f))
-        chunk_size = (
-            compute_chunk_layout_for_axis_size(
-                1000 if maybe_chunk_size is None else maybe_chunk_size[0], col.shape[0]
-            ),
-        )
-
-    def get_chunk(block_info=None):
-        # reopening is important to get around h5py's unserializable lock in processes
+    if (
+        base_path_or_zarr_group is not None and elem_name is not None
+    ):  # lazy, backed by store
+        dims = col.dims
+        coords = col.coords.copy()
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
-            v = read_elem_lazy(f)
-            variable = xr.Variable(
-                data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
+            maybe_chunk_size = get_chunksize(read_elem_lazy(f))
+            chunk_size = (
+                compute_chunk_layout_for_axis_size(
+                    1000 if maybe_chunk_size is None else maybe_chunk_size[0],
+                    col.shape[0],
+                ),
             )
-            data_array = DataArray(
-                variable,
-                coords=coords,
-                dims=dims,
-            )
-            idx = tuple(
-                slice(start, stop) for start, stop in block_info[None]["array-location"]
-            )
-            chunk = np.array(data_array.data[idx].array)
-        return chunk
 
-    if col.dtype in ("category", "string") or use_only_object_dtype:
-        dtype = "object"
-    else:
-        dtype = col.dtype.numpy_dtype
-    return da.map_blocks(
-        get_chunk,
-        chunks=chunk_size,
-        meta=np.array([], dtype=dtype),
-        dtype=dtype,
-    )
+        def get_chunk(block_info=None):
+            # reopening is important to get around h5py's unserializable lock in processes
+            with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
+                v = read_elem_lazy(f)
+                variable = xr.Variable(
+                    data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
+                )
+                data_array = XArray(
+                    variable,
+                    coords=coords,
+                    dims=dims,
+                )
+                idx = tuple(
+                    slice(start, stop)
+                    for start, stop in block_info[None]["array-location"]
+                )
+                chunk = np.array(data_array.data[idx].array)
+            return chunk
+
+        if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
+            dtype = "object"
+        else:
+            dtype = col.dtype.numpy_dtype
+        return da.map_blocks(
+            get_chunk,
+            chunks=chunk_size,
+            meta=np.array([], dtype=dtype),
+            dtype=dtype,
+        )
+    else:  # in-memory
+        return da.from_array(col.values, chunks=-1)
 
 
 def make_xarray_extension_dtypes_dask(
@@ -1251,17 +1302,18 @@ def concat_dataset2d_on_annot_axis(
     -------
     Concatenated :class:`~anndata.experimental.backed._xarray.Dataset2D`
     """
+    from anndata._core.xarray import Dataset2D
     from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
-    from anndata.experimental.backed._compat import Dataset2D
-    from anndata.experimental.backed._compat import xarray as xr
+    from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
     for a in make_xarray_extension_dtypes_dask(annotations):
-        old_key = next(iter(a.coords.keys()))
+        old_key = a.index_dim
+        is_fake_index = old_key != a.true_index_dim
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
-            pd.RangeIndex(a[a.attrs["indexing_key"]].shape[0]).astype("str"),
+            pd.RangeIndex(a.shape[0]),
         )
         # Set all the dimensions to this new dummy index
         a = a.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
@@ -1269,27 +1321,32 @@ def concat_dataset2d_on_annot_axis(
         old_coord = a.coords[old_key]
         del a.coords[old_key]
         a[old_key] = old_coord
+        if not is_fake_index:
+            a.true_index_dim = old_key
         annotations_re_indexed.append(a)
     # Concat along the dummy index
     ds = Dataset2D(
         xr.concat(annotations_re_indexed, join=join, dim=DS_CONCAT_DUMMY_INDEX_NAME),
-        attrs={"indexing_key": f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"},
     )
     ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
         ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
-    ).astype("str")
+    )
     # Drop any lingering dimensions (swap doesn't delete)
     ds = ds.drop_dims(d for d in ds.dims if d != DS_CONCAT_DUMMY_INDEX_NAME)
     # Create a new true index and then delete the columns resulting from the concatenation for each index.
     # This includes the dummy column (which is neither a dimension nor a true indexing column)
     index = xr.concat(
-        [a[a.attrs["indexing_key"]] for a in annotations_re_indexed],
+        [a.true_xr_index for a in annotations_re_indexed],
         dim=DS_CONCAT_DUMMY_INDEX_NAME,
     )
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
-    ds[f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"] = index
-    for key in {a.attrs["indexing_key"] for a in annotations_re_indexed}:
+    ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
+    for key in {
+        true_index
+        for a in annotations_re_indexed
+        if (true_index := a.true_index_dim) != a.index_dim
+    }:
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
@@ -1500,8 +1557,8 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     {'a': 1, 'b': 2, 'c': {'c.a': 3, 'c.b': 4, 'c.c': 5}}
     """
 
-    from anndata.experimental.backed._compat import Dataset2D
-    from anndata.experimental.backed._compat import xarray as xr
+    from anndata._core.xarray import Dataset2D
+    from anndata.compat import xarray as xr
 
     # Argument normalization
     merge = resolve_merge_strategy(merge)
@@ -1566,8 +1623,13 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     else:
         concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
+        concat_annot.index = concat_indices
     if label is not None:
-        concat_annot[label] = label_col
+        concat_annot[label] = (
+            label_col
+            if not isinstance(concat_annot, Dataset2D)
+            else (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
+        )
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
@@ -1589,13 +1651,13 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             )
         )
         annotations_with_only_dask = [
-            a.rename({a.attrs["indexing_key"]: "merge_index"})
+            a.rename({a.true_index_dim: "merge_index"})
             for a in annotations_with_only_dask
         ]
         alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override"),
-            attrs={"indexing_key": "merge_index"},
+            xr.merge(annotations_with_only_dask, join=join, compat="override")
         )
+        alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 

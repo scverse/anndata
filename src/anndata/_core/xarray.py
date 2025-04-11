@@ -4,36 +4,13 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from ..._core.anndata import AnnData, _gen_dataframe
-from ..._core.file_backing import to_memory
-from ..._core.index import _subset
-from ..._core.views import as_view
-
-try:
-    from xarray import Dataset
-except ImportError:
-
-    class Dataset:
-        def __repr__(self) -> str:
-            return "mock Dataset"
-
+from ..compat import XDataset
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable
-    from typing import Any, Literal
-
-    from ..._core.index import Index
-    from ._compat import xarray as xr
+    from ..compat import XArray
 
 
-def get_index_dim(ds: xr.DataArray) -> Hashable:
-    if len(ds.sizes) != 1:
-        msg = f"xarray Dataset should not have more than 1 dims, found {len(ds.sizes)} {ds.sizes}, {ds}"
-        raise ValueError(msg)
-    return next(iter(ds.indexes.keys()))
-
-
-class Dataset2D(Dataset):
+class Dataset2D(XDataset):
     """
     A wrapper class meant to enable working with lazy dataframe data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -45,6 +22,30 @@ class Dataset2D(Dataset):
     __slots__ = ()
 
     @property
+    def index_dim(self) -> str:
+        if len(self.sizes) != 1:
+            msg = f"xarray Dataset should not have more than 1 dims, found {len(self.sizes)} {self.sizes}, {self}"
+            raise ValueError(msg)
+        return next(iter(self.coords.keys()))
+
+    @property
+    def true_index_dim(self) -> str:
+        index_dim = self.attrs.get("indexing_key", None)
+        return index_dim if index_dim is not None else self.index_dim
+
+    @true_index_dim.setter
+    def true_index_dim(self, val: str):
+        if val not in self.dims:
+            if val not in self.data_vars:
+                msg = f"Unknown variable `{val}`."
+                raise ValueError(msg)
+            self.attrs["indexing_key"] = val
+
+    @property
+    def xr_index(self) -> XArray:
+        return self[self.index_dim]
+
+    @property
     def index(self) -> pd.Index:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
 
@@ -52,13 +53,25 @@ class Dataset2D(Dataset):
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
         """
-        coord = get_index_dim(self)
-        return self.indexes[coord]
+        return self.indexes[self.index_dim]
 
     @index.setter
     def index(self, val) -> None:
-        coord = get_index_dim(self)
-        self.coords[coord] = val
+        index_dim = self.index_dim
+        self.coords[index_dim] = (index_dim, val)
+        if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
+            self.update(self.rename({self.index_dim: val.name}))
+            del self.coords[index_dim]
+        if "indexing_key" in self.attrs:
+            del self.attrs["indexing_key"]
+
+    @property
+    def true_xr_index(self) -> XArray:
+        return self[self.true_index_dim]
+
+    @property
+    def true_index(self) -> pd.Index:
+        return self.true_xr_index.to_index()
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -68,7 +81,7 @@ class Dataset2D(Dataset):
         -------
         The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
         """
-        return (self.sizes[get_index_dim(self)], len(self))
+        return (self.sizes[self.index_dim], len(self))
 
     @property
     def iloc(self):
@@ -84,10 +97,16 @@ class Dataset2D(Dataset):
                 self._ds = ds
 
             def __getitem__(self, idx):
-                coord = get_index_dim(self._ds)
+                coord = self._ds.index_dim
                 return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)
+
+    def __getitem__(self, idx) -> Dataset2D:
+        ret = super().__getitem__(idx)
+        if idx == []:  # empty XDataset
+            ret.coords[self.index_dim] = self.xr_index
+        return ret
 
     def to_memory(self, *, copy=False) -> pd.DataFrame:
         df = self.to_dataframe()
@@ -106,42 +125,8 @@ class Dataset2D(Dataset):
         -------
         :class:`pandas.Index` that represents the "columns."
         """
-        columns_list = list(self.keys())
-        return pd.Index(columns_list)
-
-
-@_subset.register(Dataset2D)
-def _(a: Dataset2D, subset_idx: Index):
-    key = get_index_dim(a)
-    # xarray seems to have some code looking for a second entry in tuples
-    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
-        subset_idx = subset_idx[0]
-    return a.isel(**{key: subset_idx})
-
-
-@as_view.register(Dataset2D)
-def _(a: Dataset2D, view_args):
-    return a
-
-
-@_gen_dataframe.register(Dataset2D)
-def _gen_dataframe_xr(
-    anno: Dataset2D,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return anno
-
-
-@AnnData._remove_unused_categories.register(Dataset2D)
-@staticmethod
-def _remove_unused_categories_xr(
-    df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
-):
-    pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
-
-
-to_memory.register(Dataset2D, Dataset2D.to_memory)
+        columns = set(self.keys())
+        index_key = self.attrs.get("indexing_key", None)
+        if index_key is not None:
+            columns.discard(index_key)
+        return pd.Index(columns)

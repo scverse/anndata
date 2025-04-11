@@ -12,8 +12,9 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
+from anndata._core.xarray import Dataset2D
 from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, ZarrArray, ZarrGroup
+from anndata.compat import DaskArray, H5Array, H5Group, XArray, ZarrArray, ZarrGroup
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
     from typing import Literal, ParamSpec, TypeVar
 
-    from anndata.experimental.backed._compat import DataArray, Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ...compat import CSArray, CSMatrix, H5File
@@ -220,19 +220,20 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     dim_name: str,
     index: np.NDArray,
-) -> Generator[tuple[str, DataArray], None, None]:
-    from anndata.experimental.backed._compat import DataArray
-    from anndata.experimental.backed._compat import xarray as xr
+) -> Generator[tuple[str, XArray], None, None]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
+    from ...compat import XArray
+    from ...compat import xarray as xr
 
     for k, v in elem_dict.items():
         if isinstance(v, DaskArray) and k != dim_name:
-            data_array = DataArray(v, coords=[index], dims=[dim_name], name=k)
+            data_array = XArray(v, coords=[index], dims=[dim_name], name=k)
         elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
             )
-            data_array = DataArray(
+            data_array = XArray(
                 variable,
                 coords=[index],
                 dims=[dim_name],
@@ -243,9 +244,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = DataArray(
-                index, coords=[index], dims=[dim_name], name=dim_name
-            )
+            data_array = XArray(index, coords=[index], dims=[dim_name], name=dim_name)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
@@ -263,8 +262,6 @@ def read_dataframe(
     _reader: LazyReader,
     use_range_index: bool = False,
 ) -> Dataset2D:
-    from anndata.experimental.backed._compat import DataArray, Dataset2D
-
     elem_dict = {
         k: _reader.read_elem(elem[k])
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -282,15 +279,16 @@ def read_dataframe(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
     if use_range_index:
-        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = DataArray(
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XArray(
             index,
             coords=[index],
             dims=[DUMMY_RANGE_INDEX_KEY],
             name=DUMMY_RANGE_INDEX_KEY,
         )
+    ds = Dataset2D(elem_xarray_dict)
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case
-    ds = Dataset2D(elem_xarray_dict, attrs={"indexing_key": elem.attrs["_index"]})
+    ds.true_index_dim = "_index"
     return ds
 
 
