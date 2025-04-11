@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _import_name(full_name: str) -> Any:
+def import_name(full_name: str) -> Any:
     from importlib import import_module
 
     parts = full_name.split(".")
