@@ -255,16 +255,10 @@ def read_partial(  # noqa: PLR0913
 def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
     if group is None:
         return None
-    if items is None:
-        keys = intersect_keys((group,))
-    else:
-        keys = intersect_keys((group, items))
+    keys = intersect_keys((group,)) if items is None else intersect_keys((group, items))
     result = {}
     for k in keys:
-        if isinstance(items, Mapping):
-            next_items = items.get(k, None)
-        else:
-            next_items = None
+        next_items = items.get(k, None) if isinstance(items, Mapping) else None
         result[k] = read_elem_partial(group[k], items=next_items, indices=indices)
     return result
 
@@ -951,7 +945,7 @@ def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
-    container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
+    container = {k: _reader.read_elem(elem[k]) for k in elem}
 
     return ak.from_buffers(form, int(length), container)
 
@@ -1095,10 +1089,7 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
 def read_partial_dataframe_0_1_0(
     elem, *, items=None, indices=(slice(None), slice(None))
 ):
-    if items is None:
-        items = slice(None)
-    else:
-        items = list(items)
+    items = slice(None) if items is None else list(items)
     return read_elem(elem)[items].iloc[indices[0]]
 
 

@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def _check_rec_array(adata):
+def _check_rec_array(adata: AnnData) -> None:
     if settings.zarr_write_format == 3 and (
         structured_dtype_keys := {
             k
-            for k in adata.uns.keys()
-            if isinstance(adata.uns[k], np.recarray)
-            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+            for k, v in adata.uns.items()
+            if isinstance(v, np.recarray)
+            or (isinstance(v, np.ndarray) and v.dtype.fields)
         }
     ):
         msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
@@ -92,10 +92,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     if isinstance(store, Path):
         store = str(store)
 
-    if isinstance(store, zarr.Group):
-        f = store
-    else:
-        f = zarr.open(store, mode="r")
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):

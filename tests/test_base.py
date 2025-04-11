@@ -719,7 +719,7 @@ def test_copy():
             # check that we don’t create too many references
             assert getattr(adata_copy, f"_{attr}") is map_copy._data
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
-        for key in map_sprs.keys():
+        for key in map_sprs:
             assert_eq_not_id(map_sprs[key], map_copy[key])
 
 

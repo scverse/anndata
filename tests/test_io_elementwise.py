@@ -586,10 +586,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     if consolidated:
         zarr.consolidate_metadata(z.store)
 
-    if consolidated:
-        read_func = zarr.open_consolidated
-    else:
-        read_func = zarr.open
+    read_func = zarr.open_consolidated if consolidated else zarr.open
 
     z = read_func(pth)
     expected = ad.read_zarr(z["table/table"])
@@ -644,10 +641,7 @@ def test_read_sparse_array(
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])

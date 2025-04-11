@@ -381,8 +381,7 @@ def is_sparse_indexing_overridden(
 ):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
-        (isinstance(major_indexer, int | np.integer))
-        or (isinstance(major_indexer, slice))
+        isinstance(major_indexer, int | np.integer | slice)
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )
 

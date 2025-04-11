@@ -97,7 +97,7 @@ def convert_to_dict_ndarray(obj: np.ndarray):
             f"passed array had “{obj.dtype}”."
         )
         raise TypeError(msg)
-    return {k: obj[k] for k in obj.dtype.fields.keys()}
+    return {k: obj[k] for k in obj.dtype.fields}
 
 
 @convert_to_dict.register(type(None))
@@ -118,15 +118,12 @@ def axis_len(x, axis: Literal[0, 1]) -> int | None:
 try:
     from .compat import awkward as ak
 
-    def _size_at_depth(layout, depth, lateral_context, **kwargs):  # noqa: PLR0912
+    def _size_at_depth(layout, depth, lateral_context, **kwargs):
         """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
         if layout.is_numpy:
             # if it's an embedded rectilinear array, we have to deal with its shape
             # which might not be 1-dimensional
-            if layout.is_unknown:
-                shape = (0,)
-            else:
-                shape = layout.shape
+            shape = (0,) if layout.is_unknown else layout.shape
             numpy_axis = lateral_context["axis"] - depth + 1
             if not (1 <= numpy_axis < len(shape)):
                 msg = f"axis={lateral_context['axis']} is too deep"

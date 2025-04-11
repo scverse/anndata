@@ -725,12 +725,7 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         getattr(adata, attr)["arr"] = X
 
     view = adata[:50]
-
-    if attr == "X":
-        arr_view = view.X
-    else:
-        arr_view = getattr(view, attr)["arr"]
-
+    arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
     if sparse.issparse(X):

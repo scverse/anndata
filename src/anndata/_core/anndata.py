@@ -506,10 +506,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         return sum(sizes.values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
-        if self.isbacked:
-            backed_at = f" backed at {str(self.filename)!r}"
-        else:
-            backed_at = ""
+        backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
         for attr in [
             "obs",
@@ -990,10 +987,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             else:
                 # change from memory to backing-mode
                 # write the content of self to disk
-                if self.raw is not None:
-                    as_dense = ("X", "raw/X")
-                else:
-                    as_dense = ("X",)
+                as_dense = ("X", "raw/X") if self.raw is not None else ("X",)
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
@@ -1206,10 +1200,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """
         from anndata.compat import _safe_transpose
 
-        if not self.isbacked:
-            X = self.X
-        else:
-            X = self.file["X"]
+        X = self.X if not self.isbacked else self.file["X"]
         if self.is_view:
             msg = (
                 "You’re trying to transpose a view of an `AnnData`, "
@@ -1373,13 +1364,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
-        if self.isbacked:
-            if "X" not in kwargs or (self.raw is not None and "raw" not in kwargs):
-                msg = (
-                    "This function does not currently handle backed objects "
-                    "internally, this should be dealt with before."
-                )
-                raise NotImplementedError(msg)
+        if self.isbacked and (
+            "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)
+        ):
+            msg = (
+                "This function does not currently handle backed objects "
+                "internally, this should be dealt with before."
+            )
+            raise NotImplementedError(msg)
         new = {}
 
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
@@ -1783,30 +1775,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         raise AttributeError(msg)
 
     def _check_dimensions(self, key=None):
-        if key is None:
-            key = {"obsm", "varm"}
-        else:
-            key = {key}
-        if "obsm" in key:
-            if (
-                not all([axis_len(o, 0) == self.n_obs for o in self.obsm.values()])
-                and len(self.obsm.dim_names) != self.n_obs
-            ):
-                msg = (
-                    "Observations annot. `obsm` must have number of rows of `X`"
-                    f" ({self.n_obs}), but has {len(self.obsm)} rows."
-                )
-                raise ValueError(msg)
-        if "varm" in key:
-            if (
-                not all([axis_len(v, 0) == self.n_vars for v in self.varm.values()])
-                and len(self.varm.dim_names) != self.n_vars
-            ):
-                msg = (
-                    "Variables annot. `varm` must have number of columns of `X`"
-                    f" ({self.n_vars}), but has {len(self.varm)} rows."
-                )
-                raise ValueError(msg)
+        key = {"obsm", "varm"} if key is None else {key}
+        if "obsm" in key and (
+            not all([axis_len(o, 0) == self.n_obs for o in self.obsm.values()])
+            and len(self.obsm.dim_names) != self.n_obs
+        ):
+            msg = (
+                "Observations annot. `obsm` must have number of rows of `X`"
+                f" ({self.n_obs}), but has {len(self.obsm)} rows."
+            )
+            raise ValueError(msg)
+        if "varm" in key and (
+            not all([axis_len(v, 0) == self.n_vars for v in self.varm.values()])
+            and len(self.varm.dim_names) != self.n_vars
+        ):
+            msg = (
+                "Variables annot. `varm` must have number of columns of `X`"
+                f" ({self.n_vars}), but has {len(self.varm)} rows."
+            )
+            raise ValueError(msg)
 
     @old_positionals("compression", "compression_opts", "as_dense")
     def write_h5ad(

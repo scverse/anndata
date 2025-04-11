@@ -130,10 +130,7 @@ class Raw:
         if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
-        if not self._adata.isbacked:
-            X = _subset(self.X, (oidx, vidx))
-        else:
-            X = None
+        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
