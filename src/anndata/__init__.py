@@ -45,26 +45,21 @@ def __getattr__(attr_name: str) -> Any:
 
 
 __all__ = [
-    # Attributes
-    "__version__",
-    "settings",
-    # Submodules
-    "abc",
-    "experimental",
-    "typing",
-    "types",
-    "io",
-    # Classes
     "AnnData",
-    "Raw",
-    # Functions
-    "concat",
-    "read_zarr",
-    "read_h5ad",
-    "register_anndata_namespace",
-    # Warnings
-    "OldFormatWarning",
-    "WriteWarning",
-    "ImplicitModificationWarning",
     "ExperimentalFeatureWarning",
+    "ImplicitModificationWarning",
+    "OldFormatWarning",
+    "Raw",
+    "WriteWarning",
+    "__version__",
+    "abc",
+    "concat",
+    "experimental",
+    "io",
+    "read_h5ad",
+    "read_zarr",
+    "register_anndata_namespace",
+    "settings",
+    "types",
+    "typing",
 ]

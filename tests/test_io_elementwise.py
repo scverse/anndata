@@ -136,7 +136,7 @@ def create_sparse_store(
         ),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
         pytest.param(
-            pd.Categorical(list("aabccedd") + [pd.NA]),
+            pd.Categorical([*"aabccedd", pd.NA]),
             "categorical",
             id="pd_cat_np_str",
         ),
@@ -146,7 +146,7 @@ def create_sparse_store(
             id="pd_cat_np_str_ord",
         ),
         pytest.param(
-            pd.array(list("aabccedd") + [pd.NA], dtype="string").astype("category"),
+            pd.array([*"aabccedd", pd.NA], dtype="string").astype("category"),
             "categorical",
             id="pd_cat_pd_str",
         ),

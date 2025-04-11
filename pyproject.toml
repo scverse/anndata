@@ -181,26 +181,26 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
-    "BLE",    # Blind except
-    "C4",     # Comprehensions
-    "E",      # Error detected by Pycodestyle
-    "EM",     # Traceback-friendly error messages
-    "F",      # Errors detected by Pyflakes
-    "FBT",    # Boolean positional arguments
-    "I",      # isort
-    "ICN",    # Follow import conventions
-    "ISC",    # Implicit string concatenation
-    "PERF",   # Performance
-    "PTH",    # Pathlib instead of os.path
-    "PT",     # Pytest conventions
-    "PL",     # Pylint
-    "PYI",    # Typing
-    "RUF100", # Unused noqa
-    "SIM",    # Code simplifications
-    "TC",     # manage type checking blocks
-    "TID",    # Banned imports
-    "UP",     # pyupgrade
-    "W",      # Warning detected by Pycodestyle
+    "BLE",  # Blind except
+    "C4",   # Comprehensions
+    "E",    # Error detected by Pycodestyle
+    "EM",   # Traceback-friendly error messages
+    "F",    # Errors detected by Pyflakes
+    "FBT",  # Boolean positional arguments
+    "I",    # isort
+    "ICN",  # Follow import conventions
+    "ISC",  # Implicit string concatenation
+    "PERF", # Performance
+    "PTH",  # Pathlib instead of os.path
+    "PT",   # Pytest conventions
+    "PL",   # Pylint
+    "PYI",  # Typing
+    "RUF",  # Unused noqa
+    "SIM",  # Code simplifications
+    "TC",   # manage type checking blocks
+    "TID",  # Banned imports
+    "UP",   # pyupgrade
+    "W",    # Warning detected by Pycodestyle
 ]
 external = [ "PLR0917" ] # preview rule
 ignore = [
@@ -212,6 +212,7 @@ ignore = [
     "PLR2004", # “2” is often not too “magic” a number
     "PLW2901", # Shadowing loop variables isn’t a big deal
 ]
+allowed-confusables = [ "×", "’", "–", "α" ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 "tests/test_readwrite.py" = [ "E721" ]

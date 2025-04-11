@@ -290,8 +290,8 @@ def gen_adata(  # noqa: PLR0913
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
-    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -946,7 +946,7 @@ def _(a, format="csr"):
 
 
 @contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
+def pytest_8_raises(exc_cls, *, match: str | re.Pattern | None = None):
     """Error handling using pytest 8's support for __notes__.
 
     See: https://github.com/pytest-dev/pytest/pull/11227

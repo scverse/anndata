@@ -520,7 +520,7 @@ def test_data_access(
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
     if ad.settings.zarr_write_format == 2 and not is_zarr_v2():
-        exp = exp + ["X/data/.zgroup", "X/data/.zattrs"]
+        exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
         "X/data"

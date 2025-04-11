@@ -30,7 +30,7 @@ def get_index_dim(ds: xr.DataArray) -> Hashable:
     if len(ds.sizes) != 1:
         msg = f"xarray Dataset should not have more than 1 dims, found {len(ds.sizes)} {ds.sizes}, {ds}"
         raise ValueError(msg)
-    return list(ds.indexes.keys())[0]
+    return next(iter(ds.indexes.keys()))
 
 
 class Dataset2D(Dataset):

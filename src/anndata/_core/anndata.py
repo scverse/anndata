@@ -176,10 +176,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     .. _scikit-learn: http://scikit-learn.org/
     """
 
-    _BACKED_ATTRS = ["X", "raw.X"]
+    _BACKED_ATTRS: ClassVar[list[str]] = ["X", "raw.X"]
 
     # backwards compat
-    _H5_ALIASES = dict(
+    _H5_ALIASES: ClassVar[dict[str, set[str]]] = dict(
         X={"X", "_X", "data", "_data"},
         obs={"obs", "_obs", "smp", "_smp"},
         var={"var", "_var"},
@@ -189,7 +189,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         layers={"layers", "_layers"},
     )
 
-    _H5_ALIASES_NAMES = dict(
+    _H5_ALIASES_NAMES: ClassVar[dict[str, set[str]]] = dict(
         obs={"obs_names", "smp_names", "row_names", "index"},
         var={"var_names", "col_names", "index"},
     )
@@ -1703,7 +1703,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             return self.copy()
         elif len(adatas) == 1 and not isinstance(adatas[0], AnnData):
             adatas = adatas[0]  # backwards compatibility
-        all_adatas = (self,) + tuple(adatas)
+        all_adatas = (self, *adatas)
 
         out = concat(
             all_adatas,
