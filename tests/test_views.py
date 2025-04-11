@@ -330,7 +330,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -358,7 +358,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == tokenize(adata)
     assert isinstance(subset.X, type(adata.X))

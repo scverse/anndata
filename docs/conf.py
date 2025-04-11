@@ -128,7 +128,7 @@ qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
     **{
         f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for cls in ["Layers", "AxisArrays", "PairwiseArrays"]
         for kind in ["", "View"]
     },
     "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",

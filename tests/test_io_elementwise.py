@@ -433,7 +433,7 @@ def test_io_spec_raw(store):
 
     write_elem(store, "adata", adata)
 
-    assert "raw" == _read_attr(store["adata/raw"].attrs, "encoding-type")
+    assert _read_attr(store["adata/raw"].attrs, "encoding-type") == "raw"
 
     from_disk = read_elem(store["adata"])
     assert_equal(from_disk.raw, adata.raw)
@@ -448,7 +448,7 @@ def test_write_anndata_to_root(store):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
-    assert "anndata" == _read_attr(store.attrs, "encoding-type")
+    assert _read_attr(store.attrs, "encoding-type") == "anndata"
     assert_equal(from_disk, adata)
 
 

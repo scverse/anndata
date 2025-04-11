@@ -228,8 +228,8 @@ def test_names():
         dict(var_names=["a", "b", "c"]),
     )
 
-    assert adata.obs_names.tolist() == "A B".split()
-    assert adata.var_names.tolist() == "a b c".split()
+    assert adata.obs_names.tolist() == ["A", "B"]
+    assert adata.var_names.tolist() == ["a", "b", "c"]
 
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]), var=dict(var_names=["a", "b"]))
     assert adata.var_names.tolist() == ["a", "b"]
@@ -498,16 +498,16 @@ def test_append_col():
     with pytest.raises(
         ValueError, match="Length of values.*does not match length of index"
     ):
-        adata.obs["new4"] = "far too long".split()
+        adata.obs["new4"] = ["far", "too", "long"]
 
 
 def test_delete_col():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
-    assert ["o1", "o2"] == adata.obs_keys()
+    assert adata.obs_keys() == ["o1", "o2"]
 
     del adata.obs["o1"]
-    assert ["o2"] == adata.obs_keys()
-    assert [3, 4] == adata.obs["o2"].tolist()
+    assert adata.obs_keys() == ["o2"]
+    assert adata.obs["o2"].tolist() == [3, 4]
 
 
 def test_set_obs():
@@ -711,7 +711,7 @@ def test_copy():
 
     assert adata_sparse is not adata_copy
     assert_eq_not_id(adata_sparse.X, adata_copy.X)
-    for attr in "layers var obs obsm varm".split():
+    for attr in ["layers", "var", "obs", "obsm", "varm"]:
         map_sprs = getattr(adata_sparse, attr)
         map_copy = getattr(adata_copy, attr)
         assert map_sprs is not map_copy
