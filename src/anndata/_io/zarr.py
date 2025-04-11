@@ -150,12 +150,11 @@ def read_dataset(dataset: zarr.Array):
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
-    warn(
+    msg = (
         f"'{dataset.name}' was written with a very old version of AnnData. "
-        "Consider rewriting it.",
-        OldFormatWarning,
-        stacklevel=3,
+        "Consider rewriting it."
     )
+    warn(msg, OldFormatWarning, stacklevel=3)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df

@@ -322,7 +322,7 @@ def _move_adj_mtx(d):
             and len(n[k].shape) == 2
         ):
             msg = (
-                f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
+                f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
                 "This is where adjacency matrices should go now."
             )
             # 4: caller -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
