@@ -12,7 +12,6 @@ import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
-from .xarray import Dataset2D
 from ..utils import (
     axis_len,
     convert_to_dict,
