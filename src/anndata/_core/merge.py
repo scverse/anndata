@@ -1126,7 +1126,11 @@ def _resolve_axis(
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, axis_name = _resolve_axis(axis)
-    return getattr(adata, f"{axis_name}_names")
+    attr = getattr(adata, axis_name)
+    if isinstance(attr, Dataset2D) and "indexing_key" in attr.attrs:
+        return attr[attr.attrs["indexing_key"]].to_index()
+    else:
+        return attr.index
 
 
 # TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
@@ -1295,7 +1299,7 @@ def concat_dataset2d_on_annot_axis(
         # First create a dummy index
         a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
-            pd.RangeIndex(a.shape[0]).astype("str"),
+            pd.RangeIndex(a.shape[0]),
         )
         # Set all the dimensions to this new dummy index
         a = a.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
@@ -1599,8 +1603,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     else:
         concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
+        concat_annot.index = concat_indices
     if label is not None:
-        concat_annot[label] = label_col
+        concat_annot[label] = label_col if not isinstance(concat_annot, Dataset2D) else (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
@@ -1622,13 +1627,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             )
         )
         annotations_with_only_dask = [
-            a.rename({a.attrs["indexing_key"]: "merge_index"})
+            a.rename({a.true_index_dim: "merge_index"})
             for a in annotations_with_only_dask
         ]
-        alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override"),
-            attrs={"indexing_key": "merge_index"},
-        )
+        alt_annot = Dataset2D(xr.merge(annotations_with_only_dask, join=join, compat="override"))
+        alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 

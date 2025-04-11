@@ -33,6 +33,18 @@ class Dataset2D(XDataset):
         return next(iter(self.coords.keys()))
 
     @property
+    def true_index_dim(self) -> str:
+        index_dim = self.attrs.get("indexing_key", None)
+        return index_dim if index_dim is not None else self.index_dim
+
+    @true_index_dim.setter
+    def true_index_dim(self, val: str):
+        if val not in self.dims:
+            if val not in self.data_vars:
+                raise ValueError(f"Unknown variable `{val}`.")
+            self.attrs["indexing_key"] = val
+
+    @property
     def xr_index(self) -> XArray:
         return self[self.index_dim]
 
@@ -48,8 +60,13 @@ class Dataset2D(XDataset):
 
     @index.setter
     def index(self, val) -> None:
-        coord = get_index_dim(self)
-        self.coords[coord] = val
+        index_dim = self.index_dim
+        self.coords[index_dim] = (index_dim, val)
+        if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
+            self.update(self.rename({self.index_dim: val.name}))
+            del self.coords[index_dim]
+        if "indexing_key" in self.attrs:
+            del self.attrs["indexing_key"]
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -79,6 +96,12 @@ class Dataset2D(XDataset):
                 return self._ds.isel(**{coord: idx})
 
         return IlocGetter(self)
+
+    def __getitem__(self, idx) -> Dataset2D:
+        ret = super().__getitem__(idx)
+        if idx == []: # empty XDataset
+            ret.coords[self.index_dim] = self.xr_index
+        return ret
 
     def to_memory(self, *, copy=False) -> pd.DataFrame:
         df = self.to_dataframe()

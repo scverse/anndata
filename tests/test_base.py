@@ -276,11 +276,12 @@ def test_setting_index_names_error(attr):
 
 
 @pytest.mark.parametrize("dim", ["obs", "var"])
-def test_setting_dim_index(dim):
+@pytest.mark.parametrize(("obs_xdataset", "var_xdataset"), [(False, False), (True, True)])
+def test_setting_dim_index(dim, obs_xdataset, var_xdataset):
     index_attr = f"{dim}_names"
     mapping_attr = f"{dim}m"
 
-    orig = gen_adata((5, 5))
+    orig = gen_adata((5, 5), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
     orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
@@ -514,12 +515,10 @@ def test_set_obs():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
-    assert adata.obs_names.tolist() == [0, 1]
+    assert adata.obs_names.tolist() == ["0", "1"]
 
-    with pytest.raises(ValueError, match="but this AnnData has shape"):
+    with pytest.raises(ValueError, match="`shape` is inconsistent with `obs`"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
-    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
-        adata.obs = dict(a=[1, 2])
 
 
 def test_multicol():

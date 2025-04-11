@@ -279,6 +279,8 @@ def gen_adata(  # noqa: PLR0913
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
+    obs_xdataset: bool = False,
+    var_xdataset: bool = False,
     obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray, XDataset),
     varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
@@ -325,6 +327,11 @@ def gen_adata(  # noqa: PLR0913
     # For #147
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
+
+    if obs_xdataset:
+        obs = XDataset.from_dataframe(obs)
+    if var_xdataset:
+        var = XDataset.from_dataframe(var)
 
     if X_type is None:
         X = None

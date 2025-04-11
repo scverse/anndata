@@ -109,8 +109,8 @@ def _mk_df_error(
     expected: int,
     actual: int,
 ):
+    what = "row" if attr == "obs" else "column"
     if source == "X":
-        what = "row" if attr == "obs" else "column"
         msg = (
             f"Observations annot. `{attr}` must have as many rows as `X` has {what}s "
             f"({expected}), but has {actual} rows."
@@ -118,7 +118,7 @@ def _mk_df_error(
     else:
         msg = (
             f"`shape` is inconsistent with `{attr}` "
-            "({actual} {what}s instead of {expected})"
+            f"({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
 

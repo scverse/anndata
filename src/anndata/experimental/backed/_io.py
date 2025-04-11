@@ -141,7 +141,7 @@ def read_lazy(
             }
             or "nullable" in iospec.encoding_type
         ):
-            if iospec.encoding_type == "dataframe" and elem_name in {"/obs", "/var"}:
+            if "dataframe" == iospec.encoding_type and (elem_name[:4] in {"/obs", "/var"} or elem_name[:8] in {"/raw/obs", "/raw/var"}):
                 return read_elem_lazy(elem, use_range_index=not load_annotation_index)
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
