@@ -1182,7 +1182,7 @@ def make_dask_col_from_extension_dtype(
             chunk = np.array(data_array.data[idx].array)
         return chunk
 
-    if col.dtype in {"category", "string"} or use_only_object_dtype:
+    if col.dtype in ("category", "string") or use_only_object_dtype:
         dtype = "object"
     else:
         dtype = col.dtype.numpy_dtype
