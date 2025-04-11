@@ -306,7 +306,7 @@ def get_compressed_vectors_for_slices(
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets)]
+        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=False)]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
@@ -499,10 +499,10 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return row, col
 
     def __setitem__(self, index: Index | tuple[()], value) -> None:
-        warnings.warn(
-            "__setitem__ for backed sparse will be removed in the next anndata release.",
-            FutureWarning,
+        msg = (
+            "__setitem__ for backed sparse will be removed in the next anndata release."
         )
+        warnings.warn(msg, FutureWarning, stacklevel=2)
         row, col = self._normalize_index(index)
         mock_matrix = self._to_backed()
         mock_matrix[row, col] = value

@@ -63,7 +63,7 @@ def is_zarr_v2() -> bool:
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning)
+    warn(msg, DeprecationWarning, stacklevel=2)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -273,7 +273,7 @@ def _require_group_write_dataframe(
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, track_order=True, *args, **kwargs)
+        return f.create_group(name, *args, track_order=True, **kwargs)
     return f.require_group(name, *args, **kwargs)
 
 
@@ -322,11 +322,12 @@ def _move_adj_mtx(d):
             and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
-            warn(
+            msg = (
                 f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
-                "This is where adjacency matrices should go now.",
-                FutureWarning,
+                "This is where adjacency matrices should go now."
             )
+            # 4: caller -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
+            warn(msg, FutureWarning, stacklevel=4)
             obsp[k] = n.pop(k)
 
 
@@ -375,15 +376,18 @@ def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.
             # extra_args > 0
             args_msg = [
                 f"{name}={arg}"
-                for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
+                for name, arg in zip(
+                    kwonly_args[:extra_args], args[-extra_args:], strict=False
+                )
             ]
             args_msg = ", ".join(args_msg)
             warn(
                 f"Pass {args_msg} as keyword args. From version {version} passing "
                 "these as positional arguments will result in an error",
                 FutureWarning,
+                stacklevel=2,
             )
-            kwargs.update(zip(sig.parameters, args))
+            kwargs.update(zip(sig.parameters, args, strict=False))
             return f(**kwargs)
 
         return inner_f

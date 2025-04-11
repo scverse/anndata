@@ -154,6 +154,7 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         f"'{dataset.name}' was written with a very old version of AnnData. "
         "Consider rewriting it.",
         OldFormatWarning,
+        stacklevel=3,
     )
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)

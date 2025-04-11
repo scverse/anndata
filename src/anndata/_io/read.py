@@ -216,11 +216,11 @@ def read_loom(  # noqa: PLR0912, PLR0913
     """
     # Deprecations
     if obsm_names is not None:
-        warn(
+        msg = (
             "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
-            "In 0.9 this will be an error.",
-            FutureWarning,
+            "In 0.9 this will be an error."
         )
+        warn(msg, FutureWarning, stacklevel=2)
         if obsm_mapping != {}:
             msg = (
                 "Received values for both `obsm_names` and `obsm_mapping`. This is "
@@ -229,11 +229,11 @@ def read_loom(  # noqa: PLR0912, PLR0913
             raise ValueError(msg)
         obsm_mapping = obsm_names
     if varm_names is not None:
-        warn(
+        msg = (
             "Argument varm_names has been deprecated in favour of `varm_mapping`. "
-            "In 0.9 this will be an error.",
-            FutureWarning,
+            "In 0.9 this will be an error."
         )
+        warn(msg, FutureWarning, stacklevel=2)
         if varm_mapping != {}:
             msg = (
                 "Received values for both `varm_names` and `varm_mapping`. This is "

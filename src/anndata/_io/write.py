@@ -56,7 +56,8 @@ def write_csvs(
     for key, value in d_write.items():
         if issparse(value):
             if not_yet_raised_sparse_warning:
-                warnings.warn("Omitting to write sparse annotation.", WriteWarning)
+                msg = "Omitting to write sparse annotation."
+                warnings.warn(msg, WriteWarning, stacklevel=2)
                 not_yet_raised_sparse_warning = False
             continue
         filename = dirname
@@ -74,6 +75,7 @@ def write_csvs(
                 warnings.warn(
                     f"Omitting to write {key!r} of type {type(e)}.",
                     WriteWarning,
+                    stacklevel=2,
                 )
                 continue
         df.to_csv(
