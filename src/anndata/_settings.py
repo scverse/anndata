@@ -13,6 +13,8 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
+from .compat import old_positionals
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from typing import Any, TypeGuard
@@ -197,6 +199,7 @@ class SettingsManager:
             option, message, removal_version
         )
 
+    @old_positionals("default_value", "description", "validate", "option_type")
     def register(  # noqa: PLR0913
         self,
         option: str,
