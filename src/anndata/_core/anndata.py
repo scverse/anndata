@@ -938,7 +938,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
 
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
-        return sorted(list(self._uns.keys()))
+        return sorted(self._uns.keys())
 
     @property
     def isbacked(self) -> bool:
@@ -1777,7 +1777,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
     def _check_dimensions(self, key=None):
         key = {"obsm", "varm"} if key is None else {key}
         if "obsm" in key and (
-            not all([axis_len(o, 0) == self.n_obs for o in self.obsm.values()])
+            not all(axis_len(o, 0) == self.n_obs for o in self.obsm.values())
             and len(self.obsm.dim_names) != self.n_obs
         ):
             msg = (
@@ -1786,7 +1786,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             )
             raise ValueError(msg)
         if "varm" in key and (
-            not all([axis_len(v, 0) == self.n_vars for v in self.varm.values()])
+            not all(axis_len(v, 0) == self.n_vars for v in self.varm.values())
             and len(self.varm.dim_names) != self.n_vars
         ):
             msg = (
@@ -2073,10 +2073,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 m_attr[key] = self._get_and_delete_multicol_field(axis, key)
 
     def _get_and_delete_multicol_field(self, a, key_multicol):
-        keys = []
-        for k in getattr(self, a).columns:
-            if k.startswith(key_multicol):
-                keys.append(k)
+        keys = [k for k in getattr(self, a).columns if k.startswith(key_multicol)]
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values

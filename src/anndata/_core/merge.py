@@ -1289,7 +1289,7 @@ def concat_dataset2d_on_annot_axis(
     # prevent duplicate values
     index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
     ds[f"true_{DS_CONCAT_DUMMY_INDEX_NAME}"] = index
-    for key in set(a.attrs["indexing_key"] for a in annotations_re_indexed):
+    for key in {a.attrs["indexing_key"] for a in annotations_re_indexed}:
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]

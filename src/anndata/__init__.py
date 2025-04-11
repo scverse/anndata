@@ -37,7 +37,7 @@ _DEPRECATED_IO = (
     "read_text",
     "read_mtx",
 )
-_DEPRECATED = dict((method, f"io.{method}") for method in _DEPRECATED_IO)
+_DEPRECATED = {method: f"io.{method}" for method in _DEPRECATED_IO}
 
 
 def __getattr__(attr_name: str) -> Any:
