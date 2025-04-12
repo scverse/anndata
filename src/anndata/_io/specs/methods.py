@@ -605,7 +605,7 @@ def write_vlen_string_array_zarr(
 
         if Version(numcodecs.__version__) < Version("0.13"):
             msg = "Old numcodecs version detected. Please update for improved performance and stability."
-            warnings.warn(msg)
+            warnings.warn(msg, UserWarning, stacklevel=2)
             # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
             if hasattr(elem, "flags") and not elem.flags.writeable:
                 elem = elem.copy()

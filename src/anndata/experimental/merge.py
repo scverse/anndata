@@ -68,7 +68,7 @@ def _gen_slice_to_append(
     axis=0,
     fill_value=None,
 ):
-    for ds, ri in zip(datasets, reindexers):
+    for ds, ri in zip(datasets, reindexers, strict=False):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
@@ -188,7 +188,7 @@ def write_concat_dense(  # noqa: PLR0917
     res = da.concatenate(
         [
             ri(a, axis=1 - axis, fill_value=fill_value)
-            for a, ri in zip(darrays, reindexers)
+            for a, ri in zip(darrays, reindexers, strict=False)
         ],
         axis=axis,
     )

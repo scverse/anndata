@@ -62,7 +62,7 @@ def is_zarr_v2() -> bool:
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning)
+    warn(msg, DeprecationWarning, stacklevel=2)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -272,7 +272,7 @@ def _require_group_write_dataframe(
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, track_order=True, *args, **kwargs)
+        return f.create_group(name, *args, track_order=True, **kwargs)
     return f.require_group(name, *args, **kwargs)
 
 
@@ -325,8 +325,8 @@ def _move_adj_mtx(d):
                 f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
                 "This is where adjacency matrices should go now."
             )
-            # 4: caller -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
-            warn(msg, FutureWarning)  # , stacklevel=4)
+            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
+            warn(msg, FutureWarning, stacklevel=5)
             obsp[k] = n.pop(k)
 
 

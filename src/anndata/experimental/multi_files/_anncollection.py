@@ -736,7 +736,8 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self.obs_names = pd.Index(concat_indices)
 
         if not self.obs_names.is_unique:
-            warnings.warn("Observation names are not unique.", UserWarning)
+            msg = "Observation names are not unique."
+            warnings.warn(msg, UserWarning, stacklevel=2)
 
         view_attrs = ATTRS.copy()
 

@@ -801,7 +801,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
             raise NotImplementedError(msg)
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
-            unify_dtypes(f(x) for f, x in zip(reindexers, arrays)),
+            unify_dtypes(f(x) for f, x in zip(reindexers, arrays, strict=True)),
             axis=axis,
             ignore_index=True,
         )
@@ -816,7 +816,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
 
-        return ak.concatenate([f(a) for f, a in zip(reindexers, arrays)], axis=axis)
+        return ak.concatenate(
+            [f(a) for f, a in zip(reindexers, arrays, strict=True)], axis=axis
+        )
     elif any(isinstance(a, CupySparseMatrix) for a in arrays):
         import cupyx.scipy.sparse as cpsparse
 
@@ -829,7 +831,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
         return sparse_stack(
             [
                 f(as_cp_sparse(a), axis=1 - axis, fill_value=fill_value)
-                for f, a in zip(reindexers, arrays)
+                for f, a in zip(reindexers, arrays, strict=True)
             ],
             format="csr",
         )
@@ -842,7 +844,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
         return cp.concatenate(
             [
                 f(cp.asarray(x), fill_value=fill_value, axis=1 - axis)
-                for f, x in zip(reindexers, arrays)
+                for f, x in zip(reindexers, arrays, strict=True)
             ],
             axis=axis,
         )
@@ -856,7 +858,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
                     axis=1 - axis,
                     fill_value=fill_value,
                 )
-                for f, a in zip(reindexers, arrays)
+                for f, a in zip(reindexers, arrays, strict=True)
             ],
             format="csr",
         )
@@ -871,7 +873,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
         return np.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
-                for f, x in zip(reindexers, arrays)
+                for f, x in zip(reindexers, arrays, strict=True)
             ],
             axis=axis,
         )
@@ -932,7 +934,7 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
             (lambda x: x)
             if not_missing(el)
             else (lambda _, shape=shape: pd.DataFrame(index=range(shape)))
-            for el, shape in zip(els, shapes)
+            for el, shape in zip(els, shapes, strict=True)
         ]
     elif any(isinstance(el, AwkArray) for el in els if not_missing(el)):
         import awkward as ak
@@ -1025,7 +1027,7 @@ def outer_concat_aligned_mapping(
                     fill_value=fill_value,
                     off_axis_size=off_axis_size,
                 )
-                for el, n in zip(els, ns)
+                for el, n in zip(els, ns, strict=True)
             ],
             cur_reindexers,
             axis=concat_axis,
@@ -1046,7 +1048,8 @@ def concat_pairwise_mapping(
 
     for k in join_keys(mappings):
         els = [
-            m.get(k, sparse_class((s, s), dtype=bool)) for m, s in zip(mappings, shapes)
+            m.get(k, sparse_class((s, s), dtype=bool))
+            for m, s in zip(mappings, shapes, strict=True)
         ]
         if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
             result[k] = _cp_block_diag(els, format="csr")
@@ -1075,7 +1078,7 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     all_keys = union_keys(mappings)
     out = merge(mappings)
     for key in all_keys.difference(out.keys()):
-        for b, m in zip(batch_keys, mappings):
+        for b, m in zip(batch_keys, mappings, strict=True):
             val = m.get(key, None)
             if val is not None:
                 out[f"{key}{join_index}{b}"] = val
@@ -1633,7 +1636,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     alt_mapping = merge(
         [
             {k: r(v, axis=0) for k, v in getattr(a, f"{alt_axis_name}m").items()}
-            for r, a in zip(reindexers, adatas)
+            for r, a in zip(reindexers, adatas, strict=True)
         ],
     )
     alt_pairwise = merge(
@@ -1642,7 +1645,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
                 k: r(r(v, axis=0), axis=1)
                 for k, v in getattr(a, f"{alt_axis_name}p").items()
             }
-            for r, a in zip(reindexers, adatas)
+            for r, a in zip(reindexers, adatas, strict=True)
         ]
     )
     uns = uns_merge([a.uns for a in adatas])
@@ -1668,11 +1671,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             axis=axis,
         )
     elif any(has_raw):
-        warn(
+        msg = (
             "Only some AnnData objects have `.raw` attribute, "
-            "not concatenating `.raw` attributes.",
-            UserWarning,
+            "not concatenating `.raw` attributes."
         )
+        warn(msg, UserWarning, stacklevel=2)
     return AnnData(
         **{
             "X": X,
