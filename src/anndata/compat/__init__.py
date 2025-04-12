@@ -325,8 +325,9 @@ def _move_adj_mtx(d):
                 f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
                 "This is where adjacency matrices should go now."
             )
+            # TODO: tests fail if stacklevel is set here, needs to be fixed
             # 4: caller -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
-            warn(msg, FutureWarning, stacklevel=4)
+            warn(msg, FutureWarning)  # , stacklevel=4)  # noqa: B028
             obsp[k] = n.pop(k)
 
 
