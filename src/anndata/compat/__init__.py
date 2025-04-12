@@ -327,8 +327,8 @@ def _move_adj_mtx(d):
             )
             # TODO: tests fail if stacklevel is set here, needs to be fixed:
             # https://github.com/scverse/anndata/issues/1969
-            # 4: caller -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
-            warn(msg, FutureWarning)  # , stacklevel=4)  # noqa: B028
+            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
+            warn(msg, FutureWarning, stacklevel=5)
             obsp[k] = n.pop(k)
 
 
