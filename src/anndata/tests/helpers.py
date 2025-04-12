@@ -6,7 +6,6 @@ import re
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
-from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
 from string import ascii_letters
 from typing import TYPE_CHECKING
@@ -943,21 +942,6 @@ def _(a, format="csr"):
     return a.rechunk((a.chunks[0], -1)).map_blocks(
         partial(as_cupy, typ=memory_class), dtype=a.dtype
     )
-
-
-@contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern | None = None):
-    """Error handling using pytest 8's support for __notes__.
-
-    See: https://github.com/pytest-dev/pytest/pull/11227
-
-    Remove once pytest 8 is out!
-    """
-
-    with pytest.raises(exc_cls) as exc_info:
-        yield exc_info
-
-    check_error_or_notes_match(exc_info, match)
 
 
 def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
