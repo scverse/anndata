@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 import random
-import re
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
@@ -941,20 +940,6 @@ def _(a, format="csr"):
         return a.copy()
     return a.rechunk((a.chunks[0], -1)).map_blocks(
         partial(as_cupy, typ=memory_class), dtype=a.dtype
-    )
-
-
-def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
-    """
-    Checks whether the printed error message or the notes contains the given pattern.
-
-    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
-    """
-    import traceback
-
-    message = "".join(traceback.format_exception_only(e.type, e.value))
-    assert re.search(pattern, message), (
-        f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
     )
 
 
