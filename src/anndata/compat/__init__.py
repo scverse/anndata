@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from packaging.version import Version
+from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
