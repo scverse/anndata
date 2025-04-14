@@ -288,7 +288,7 @@ def read_dataframe(
     ds = Dataset2D(elem_xarray_dict)
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case
-    ds.true_index_dim = "_index"
+    ds.true_index_dim = elem.attrs["_index"]
     return ds
 
 
