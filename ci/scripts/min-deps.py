@@ -34,7 +34,7 @@ def min_dep(req: Requirement) -> Requirement:
     -------
 
     >>> min_dep(Requirement("numpy>=1.0"))
-    <Requirement('numpy==1.0.*')>
+    <Requirement('numpy~=1.0.0')>
     >>> min_dep(Requirement("numpy<3.0"))
     <Requirement('numpy<3.0')>
     """
