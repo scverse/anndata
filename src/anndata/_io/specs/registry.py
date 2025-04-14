@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
 
-    from ...compat import Dataset2D
+    from ..._core.xarray import Dataset2D
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
