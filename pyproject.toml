@@ -101,6 +101,7 @@ test = [
     "scanpy>=1.10",
     "httpx",                # For data downloading
     "xarray>=2024.10.0",
+    "pandas>=2.1.0",
     "dask[distributed]",
     "awkward>=2.3",
     "pyarrow",
