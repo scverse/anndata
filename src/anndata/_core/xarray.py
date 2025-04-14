@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 
-from ..compat import XArray, XDataset
+from ..compat import XDataset
+
+if TYPE_CHECKING:
+    from ..compat import XArray
 
 
 class Dataset2D(XDataset):
