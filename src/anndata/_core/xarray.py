@@ -4,10 +4,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from ..compat import XDataset
-
-if TYPE_CHECKING:
-    from ..compat import XArray
+from ..compat import XArray, XDataset
 
 
 class Dataset2D(XDataset):
