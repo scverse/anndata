@@ -17,6 +17,7 @@ from ._io.zarr import read_zarr, write_zarr
 
 __all__ = [
     "read_csv",
+    "read_elem",
     "read_excel",
     "read_h5ad",
     "read_hdf",
@@ -25,11 +26,10 @@ __all__ = [
     "read_text",
     "read_umi_tools",
     "read_zarr",
+    "sparse_dataset",
     "write_csvs",
+    "write_elem",
     "write_h5ad",
     "write_loom",
     "write_zarr",
-    "write_elem",
-    "read_elem",
-    "sparse_dataset",
 ]

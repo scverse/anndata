@@ -336,14 +336,12 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     adata.write_h5ad(pth, **kwargs)
 
     def check_compressed(key, value):
-        if isinstance(value, h5py.Dataset) and value.shape != ():
-            if compression is not None and value.compression != compression:
-                not_compressed.append(key)
-            elif (
-                compression_opts is not None
-                and value.compression_opts != compression_opts
-            ):
-                not_compressed.append(key)
+        if not isinstance(value, h5py.Dataset) or value.shape == ():
+            return
+        if (compression is not None and value.compression != compression) or (
+            compression_opts is not None and value.compression_opts != compression_opts
+        ):
+            not_compressed.append(key)
 
     with h5py.File(pth) as f:
         f.visititems(check_compressed)

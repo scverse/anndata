@@ -186,7 +186,7 @@ def read_h5_array(
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks: tuple[int, ...] = (
+    chunks = (
         tuple(
             c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
         )
@@ -332,7 +332,7 @@ def read_nullable(
     elem_name = get_elem_name(elem)
     return MaskedArray(
         values=elem["values"],
-        mask=elem["mask"] if "mask" in elem else None,
+        mask=elem.get("mask", None),
         dtype_str=encoding_type,
         base_path_or_zarr_group=base_path_or_zarr_group,
         elem_name=elem_name,

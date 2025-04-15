@@ -118,7 +118,7 @@ def test_init_x_as_none_explicit_shape():
     assert adata.shape == shape
 
 
-@pytest.mark.parametrize("shape", SINGULAR_SHAPES + [pytest.param((5, 3), id="(5, 3)")])
+@pytest.mark.parametrize("shape", [*SINGULAR_SHAPES, pytest.param((5, 3), id="(5, 3)")])
 def test_transpose_with_X_as_none(shape):
     adata = gen_adata(shape, X_type=lambda x: None)
     adataT = adata.transpose()

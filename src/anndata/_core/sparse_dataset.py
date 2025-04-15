@@ -306,7 +306,7 @@ def get_compressed_vectors_for_slices(
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
     end_indptr = np.concatenate(
-        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets)]
+        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)]
     )
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
@@ -343,11 +343,11 @@ def get_memory_class(
     format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
 ) -> type[_cs_matrix]:
     for fmt, _, memory_class in FORMATS:
-        if format == fmt:
-            if use_sparray_in_io and issubclass(memory_class, CSArray):
-                return memory_class
-            elif not use_sparray_in_io and issubclass(memory_class, CSMatrix):
-                return memory_class
+        if format == fmt and (
+            (use_sparray_in_io and issubclass(memory_class, CSArray))
+            or (not use_sparray_in_io and issubclass(memory_class, CSMatrix))
+        ):
+            return memory_class
     msg = f"Format string {format} is not supported."
     raise ValueError(msg)
 
@@ -356,11 +356,11 @@ def get_backed_class(
     format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
 ) -> type[BackedSparseMatrix]:
     for fmt, backed_class, _ in FORMATS:
-        if format == fmt:
-            if use_sparray_in_io and issubclass(backed_class, CSArray):
-                return backed_class
-            elif not use_sparray_in_io and issubclass(backed_class, CSMatrix):
-                return backed_class
+        if format == fmt and (
+            (use_sparray_in_io and issubclass(backed_class, CSArray))
+            or (not use_sparray_in_io and issubclass(backed_class, CSMatrix))
+        ):
+            return backed_class
     msg = f"Format string {format} is not supported."
     raise ValueError(msg)
 
@@ -381,8 +381,7 @@ def is_sparse_indexing_overridden(
 ):
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
-        (isinstance(major_indexer, int | np.integer))
-        or (isinstance(major_indexer, slice))
+        isinstance(major_indexer, int | np.integer | slice)
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )
 
@@ -500,16 +499,16 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return row, col
 
     def __setitem__(self, index: Index | tuple[()], value) -> None:
-        warnings.warn(
-            "__setitem__ for backed sparse will be removed in the next anndata release.",
-            FutureWarning,
+        msg = (
+            "__setitem__ for backed sparse will be removed in the next anndata release."
         )
+        warnings.warn(msg, FutureWarning, stacklevel=2)
         row, col = self._normalize_index(index)
         mock_matrix = self._to_backed()
         mock_matrix[row, col] = value
 
     # TODO: split to other classes?
-    def append(self, sparse_matrix: CSMatrix | CSArray) -> None:
+    def append(self, sparse_matrix: CSMatrix | CSArray) -> None:  # noqa: PLR0912, PLR0915
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters

@@ -104,9 +104,8 @@ def test_deprecated_write_attribute(tmp_path):
     from anndata._io.utils import read_attribute, write_attribute
     from anndata.io import read_elem
 
-    with h5py.File(pth, "w") as f:
-        with pytest.warns(FutureWarning, match=r"write_elem"):
-            write_attribute(f, "written_attribute", A)
+    with h5py.File(pth, "w") as f, pytest.warns(FutureWarning, match=r"write_elem"):
+        write_attribute(f, "written_attribute", A)
 
     with h5py.File(pth, "r") as f:
         elem_A = read_elem(f["written_attribute"])

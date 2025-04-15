@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def _check_rec_array(adata):
-    if settings.zarr_write_format == 3 and len(
+def _check_rec_array(adata: AnnData) -> None:
+    if settings.zarr_write_format == 3 and (
         structured_dtype_keys := {
             k
-            for k in adata.uns.keys()
-            if isinstance(adata.uns[k], np.recarray)
-            or (isinstance(adata.uns[k], np.ndarray) and adata.uns[k].dtype.kind == "V")
+            for k, v in adata.uns.items()
+            if isinstance(v, np.recarray)
+            or (isinstance(v, np.ndarray) and v.dtype.fields)
         }
     ):
         msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
@@ -62,14 +62,16 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+    def callback(
+        write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
+    ) -> None:
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
-            and k.lstrip("/") == "X"
+            and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
-        func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
     if is_zarr_v2():
@@ -90,10 +92,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     if isinstance(store, Path):
         store = str(store)
 
-    if isinstance(store, zarr.Group):
-        f = store
-    else:
-        f = zarr.open(store, mode="r")
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
@@ -151,11 +150,11 @@ def read_dataset(dataset: zarr.Array):
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
-    warn(
+    msg = (
         f"'{dataset.name}' was written with a very old version of AnnData. "
-        "Consider rewriting it.",
-        OldFormatWarning,
+        "Consider rewriting it."
     )
+    warn(msg, OldFormatWarning, stacklevel=3)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df

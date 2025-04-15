@@ -56,7 +56,8 @@ def write_csvs(
     for key, value in d_write.items():
         if issparse(value):
             if not_yet_raised_sparse_warning:
-                warnings.warn("Omitting to write sparse annotation.", WriteWarning)
+                msg = "Omitting to write sparse annotation."
+                warnings.warn(msg, WriteWarning, stacklevel=2)
                 not_yet_raised_sparse_warning = False
             continue
         filename = dirname
@@ -70,11 +71,9 @@ def write_csvs(
                 value = value[None]
             try:
                 df = pd.DataFrame(value)
-            except Exception as e:
-                warnings.warn(
-                    f"Omitting to write {key!r} of type {type(e)}.",
-                    WriteWarning,
-                )
+            except Exception as e:  # noqa: BLE001
+                msg = f"Omitting to write {key!r} of type {type(e)}."
+                warnings.warn(msg, WriteWarning, stacklevel=2)
                 continue
         df.to_csv(
             filename,
@@ -105,10 +104,8 @@ def write_loom(
         raise ValueError(msg)
 
     if write_obsm_varm:
-        for key in adata.obsm.keys():
-            col_attrs[key] = adata.obsm[key]
-        for key in adata.varm.keys():
-            row_attrs[key] = adata.varm[key]
+        col_attrs.update(adata.obsm)
+        row_attrs.update(adata.varm)
     elif len(adata.obsm.keys()) > 0 or len(adata.varm.keys()) > 0:
         logger.warning(
             f"The loom file will lack these fields:\n"
@@ -117,8 +114,8 @@ def write_loom(
         )
 
     layers = {"": adata.X.T}
-    for key in adata.layers.keys():
-        layers[key] = adata.layers[key].T
+    for key, layer in adata.layers.items():
+        layers[key] = layer.T
 
     from loompy import create
 
@@ -135,8 +132,8 @@ def _get_chunk_indices(za):
     """
     return [
         (i, j)
-        for i in range(int(math.ceil(float(za.shape[0]) / za.chunks[0])))
-        for j in range(int(math.ceil(float(za.shape[1]) / za.chunks[1])))
+        for i in range(math.ceil(float(za.shape[0]) / za.chunks[0]))
+        for j in range(math.ceil(float(za.shape[1]) / za.chunks[1]))
     ]
 
 

@@ -25,10 +25,7 @@ def test_backwards_compat_files(archive_dir):
         from_h5ad = ad.read_h5ad(archive_dir / "adata.h5ad")
     with pytest.warns(ad.OldFormatWarning):
         path = archive_dir / "adata.zarr.zip"
-        if is_zarr_v2():
-            store = path
-        else:
-            store = zarr.storage.ZipStore(path)
+        store = path if is_zarr_v2() else zarr.storage.ZipStore(path)
         from_zarr = ad.read_zarr(store)
 
     assert_equal(from_h5ad, from_zarr, exact=True)

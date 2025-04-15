@@ -198,7 +198,7 @@ def read_indices(group):
     return obs_idx, var_idx
 
 
-def read_partial(
+def read_partial(  # noqa: PLR0913
     pth: PathLike[str] | str,
     *,
     obs_idx=slice(None),
@@ -255,16 +255,10 @@ def read_partial(
 def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
     if group is None:
         return None
-    if items is None:
-        keys = intersect_keys((group,))
-    else:
-        keys = intersect_keys((group, items))
+    keys = intersect_keys((group,)) if items is None else intersect_keys((group, items))
     result = {}
     for k in keys:
-        if isinstance(items, Mapping):
-            next_items = items.get(k, None)
-        else:
-            next_items = None
+        next_items = items.get(k, None) if isinstance(items, Mapping) else None
         result[k] = read_elem_partial(group[k], items=next_items, indices=indices)
     return result
 
@@ -611,7 +605,7 @@ def write_vlen_string_array_zarr(
 
         if Version(numcodecs.__version__) < Version("0.13"):
             msg = "Old numcodecs version detected. Please update for improved performance and stability."
-            warnings.warn(msg)
+            warnings.warn(msg, UserWarning, stacklevel=2)
             # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
             if hasattr(elem, "flags") and not elem.flags.writeable:
                 elem = elem.copy()
@@ -933,6 +927,7 @@ def write_awkward(
     from anndata.compat import awkward as ak
 
     group = f.require_group(k)
+    del k
     if isinstance(v, views.AwkwardArrayView):
         # copy to remove the view attributes
         v = copy(v)
@@ -950,7 +945,7 @@ def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
 
     form = _read_attr(elem.attrs, "form")
     length = _read_attr(elem.attrs, "length")
-    container = {k: _reader.read_elem(elem[k]) for k in elem.keys()}
+    container = {k: _reader.read_elem(elem[k]) for k in elem}
 
     return ak.from_buffers(form, int(length), container)
 
@@ -1021,7 +1016,7 @@ def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     df = pd.DataFrame(
         {k: _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
-        columns=columns if len(columns) else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
@@ -1094,10 +1089,7 @@ def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
 def read_partial_dataframe_0_1_0(
     elem, *, items=None, indices=(slice(None), slice(None))
 ):
-    if items is None:
-        items = slice(None)
-    else:
-        items = list(items)
+    items = slice(None) if items is None else list(items)
     return read_elem(elem)[items].iloc[indices[0]]
 
 

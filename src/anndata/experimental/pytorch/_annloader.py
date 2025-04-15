@@ -192,11 +192,7 @@ class AnnLoader:
                 if isinstance(adatas, AnnData):
                     adatas = [adatas]
 
-                if (
-                    isinstance(adatas, list)
-                    or isinstance(adatas, tuple)
-                    or isinstance(adatas, dict)
-                ):
+                if isinstance(adatas, list | tuple | dict):
                     join_obs = kwargs.pop("join_obs", "inner")
                     join_obsm = kwargs.pop("join_obsm", None)
                     label = kwargs.pop("label", None)

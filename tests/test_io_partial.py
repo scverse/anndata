@@ -83,15 +83,15 @@ def test_read_partial_adata(tmp_path, diskfmt):
     assert np.all(part.keys() == adata_sbs.var.keys())
     assert np.all(part.index == adata_sbs.var.index)
 
-    for key in storage["obsm"].keys():
+    for key in storage["obsm"]:
         part = read_elem_partial(storage["obsm"][key], indices=(obs_idx,))
         assert np.all(part == adata_sbs.obsm[key])
 
-    for key in storage["varm"].keys():
+    for key in storage["varm"]:
         part = read_elem_partial(storage["varm"][key], indices=(var_idx,))
         np.testing.assert_equal(part, adata_sbs.varm[key])
 
-    for key in storage["obsp"].keys():
+    for key in storage["obsp"]:
         part = read_elem_partial(storage["obsp"][key], indices=(obs_idx, obs_idx))
         part = part.toarray()
         assert np.all(part == adata_sbs.obsp[key])
