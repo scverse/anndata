@@ -153,7 +153,7 @@ def fix_known_differences(
         result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
-    for get_df in [lambda k: getattr(k, "obs"), lambda k: getattr(k, "obsm")["df"]]:
+    for get_df in [lambda k: k.obs, lambda k: k.obsm["df"]]:
         str_to_df_converted = get_df(result)
         for k, dtype in get_df(orig).dtypes.items():
             if isinstance(dtype, pd.CategoricalDtype) and dtype.ordered:
@@ -855,7 +855,7 @@ def test_pairwise_concat(axis_name, array_type):
             obsp={"arr": gen_axis_array(m)},
             varp={"arr": gen_axis_array(n)},
         )
-        for k, m, n in zip("abc", Ms, Ns)
+        for k, m, n in zip("abc", Ms, Ns, strict=True)
     }
 
     w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
@@ -1154,7 +1154,7 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     """
     # So we can see what the initial pattern was meant to be
     print(merge_strategy, "\n", unss, "\n", result)
-    result, *unss = permute_nested_values([result] + unss, value_gen)
+    result, *unss = permute_nested_values([result, *unss], value_gen)
     adatas = [uns_ad(uns) for uns in unss]
     with pytest.warns(FutureWarning, match=r"concatenate is deprecated"):
         merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns
@@ -1414,7 +1414,7 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
 
         check_filled_like(result.X[axis_idx], elem_name="X")
         check_filled_like(result.X[altaxis_idx], elem_name="X")
-        for k, elem in getattr(result, "layers").items():
+        for k, elem in result.layers.items():
             check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")
 
@@ -1465,8 +1465,8 @@ def test_concatenate_size_0_axis():
     b = gen_adata((5, 0))
 
     # Mostly testing that this doesn't error
-    a.concatenate([b]).shape == (10, 0)
-    b.concatenate([a]).shape == (10, 0)
+    assert a.concatenate([b]).shape == (10, 0)
+    assert b.concatenate([a]).shape == (10, 0)
 
 
 def test_concat_null_X():
@@ -1698,3 +1698,9 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
 
     assert_equal(res_in_memory, res_dask)
+
+
+def test_1d_concat():
+    adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
+    concated = concat([adata, adata])
+    assert concated.obsm["1d-array"].shape == (10, 1)

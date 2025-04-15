@@ -136,7 +136,7 @@ def create_sparse_store(
         ),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), "dataframe", id="pd_df"),
         pytest.param(
-            pd.Categorical(list("aabccedd") + [pd.NA]),
+            pd.Categorical([*"aabccedd", pd.NA]),
             "categorical",
             id="pd_cat_np_str",
         ),
@@ -146,7 +146,7 @@ def create_sparse_store(
             id="pd_cat_np_str_ord",
         ),
         pytest.param(
-            pd.array(list("aabccedd") + [pd.NA], dtype="string").astype("category"),
+            pd.array([*"aabccedd", pd.NA], dtype="string").astype("category"),
             "categorical",
             id="pd_cat_pd_str",
         ),
@@ -358,7 +358,7 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
     shape = (3000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
+    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
     assert X_dask_from_disk.shape == shape
 
 
@@ -433,7 +433,7 @@ def test_io_spec_raw(store):
 
     write_elem(store, "adata", adata)
 
-    assert "raw" == _read_attr(store["adata/raw"].attrs, "encoding-type")
+    assert _read_attr(store["adata/raw"].attrs, "encoding-type") == "raw"
 
     from_disk = read_elem(store["adata"])
     assert_equal(from_disk.raw, adata.raw)
@@ -448,7 +448,7 @@ def test_write_anndata_to_root(store):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
-    assert "anndata" == _read_attr(store.attrs, "encoding-type")
+    assert _read_attr(store.attrs, "encoding-type") == "anndata"
     assert_equal(from_disk, adata)
 
 
@@ -586,10 +586,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     if consolidated:
         zarr.consolidate_metadata(z.store)
 
-    if consolidated:
-        read_func = zarr.open_consolidated
-    else:
-        read_func = zarr.open
+    read_func = zarr.open_consolidated if consolidated else zarr.open
 
     z = read_func(pth)
     expected = ad.read_zarr(z["table/table"])
@@ -644,10 +641,7 @@ def test_read_sparse_array(
 ):
     path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
-    if diskfmt == "zarr":
-        f = open_write_group(path, mode="a")
-    else:
-        f = h5py.File(path, "a")
+    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])

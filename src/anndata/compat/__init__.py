@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping
-from functools import cache, partial, singledispatch, wraps
+from functools import cache, partial, singledispatch
 from importlib.util import find_spec
-from inspect import Parameter, signature
 from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -63,7 +62,7 @@ def is_zarr_v2() -> bool:
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning)
+    warn(msg, DeprecationWarning, stacklevel=2)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -185,15 +184,12 @@ def _read_attr_hdf5(
     attr = attrs[name]
     attr_id = attrs.get_id(name)
     dtype = h5py.check_string_dtype(attr_id.dtype)
-    if dtype is None:
+    if dtype is None or dtype.length is None:  # variable-length string, no problem
         return attr
-    else:
-        if dtype.length is None:  # variable-length string, no problem
-            return attr
-        elif len(attr_id.shape) == 0:  # Python bytestring
-            return attr.decode("utf-8")
-        else:  # NumPy array
-            return [decode(s, "utf-8") for s in attr]
+    elif len(attr_id.shape) == 0:  # Python bytestring
+        return attr.decode("utf-8")
+    else:  # NumPy array
+        return [decode(s, "utf-8") for s in attr]
 
 
 def _from_fixed_length_strings(value):
@@ -276,7 +272,7 @@ def _require_group_write_dataframe(
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, track_order=True, *args, **kwargs)
+        return f.create_group(name, *args, track_order=True, **kwargs)
     return f.require_group(name, *args, **kwargs)
 
 
@@ -325,11 +321,12 @@ def _move_adj_mtx(d):
             and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
-            warn(
-                f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
-                "This is where adjacency matrices should go now.",
-                FutureWarning,
+            msg = (
+                f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
+                "This is where adjacency matrices should go now."
             )
+            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
+            warn(msg, FutureWarning, stacklevel=5)
             obsp[k] = n.pop(k)
 
 
@@ -341,60 +338,6 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
         elif scipy.sparse.issparse(v) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
-
-
-# This function was adapted from scikit-learn
-# github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/validation.py
-def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.25)"):
-    """Decorator for methods that issues warnings for positional arguments.
-    Using the keyword-only argument syntax in pep 3102, arguments after the
-    * will issue a warning when passed as a positional argument.
-
-    Parameters
-    ----------
-    func
-        Function to check arguments on.
-    version
-        The version when positional arguments will result in error.
-    """
-
-    def _inner_deprecate_positional_args(f):
-        sig = signature(f)
-        kwonly_args = []
-        all_args = []
-
-        for name, param in sig.parameters.items():
-            if param.kind == Parameter.POSITIONAL_OR_KEYWORD:
-                all_args.append(name)
-            elif param.kind == Parameter.KEYWORD_ONLY:
-                kwonly_args.append(name)
-
-        @wraps(f)
-        def inner_f(*args, **kwargs):
-            extra_args = len(args) - len(all_args)
-            if extra_args <= 0:
-                return f(*args, **kwargs)
-
-            # extra_args > 0
-            args_msg = [
-                f"{name}={arg}"
-                for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
-            ]
-            args_msg = ", ".join(args_msg)
-            warn(
-                f"Pass {args_msg} as keyword args. From version {version} passing "
-                "these as positional arguments will result in an error",
-                FutureWarning,
-            )
-            kwargs.update(zip(sig.parameters, args))
-            return f(**kwargs)
-
-        return inner_f
-
-    if func is not None:
-        return _inner_deprecate_positional_args(func)
-
-    return _inner_deprecate_positional_args
 
 
 def _transpose_by_block(dask_array: DaskArray) -> DaskArray:

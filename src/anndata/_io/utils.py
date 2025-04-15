@@ -14,8 +14,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
 
-    from .._types import ContravariantRWAble, StorageType, _WriteInternal
+    from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
+    from ..typing import RWAble
     from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
@@ -131,20 +132,16 @@ def check_key(key):
 def read_attribute(*args, **kwargs):
     from .specs import read_elem
 
-    warn(
-        "This internal function has been deprecated, please use read_elem instead",
-        FutureWarning,
-    )
+    msg = "This internal function has been deprecated, please use read_elem instead"
+    warn(msg, FutureWarning, stacklevel=2)
     return read_elem(*args, **kwargs)
 
 
 def write_attribute(*args, **kwargs):
     from .specs import write_elem
 
-    warn(
-        "This internal function has been deprecated, please use write_elem instead",
-        FutureWarning,
-    )
+    msg = "This internal function has been deprecated, please use write_elem instead"
+    warn(msg, FutureWarning, stacklevel=2)
     return write_elem(*args, **kwargs)
 
 
@@ -157,8 +154,6 @@ def write_attribute(*args, **kwargs):
 
 class AnnDataReadError(OSError):
     """Error caused while trying to read in AnnData."""
-
-    pass
 
 
 def _get_display_path(store: Storage) -> str:
@@ -241,7 +236,8 @@ def report_write_key_on_error(func):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
-        for arg, key in pairwise(args):
+        for arg, _key in pairwise(args):
+            key = _key
             if not isinstance(arg, Writer):
                 store = cast("Storage", arg)
                 break
@@ -297,11 +293,11 @@ def zero_dim_array_as_scalar(func: _WriteInternal):
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
 
-    @wraps(func, assigned=WRAPPER_ASSIGNMENTS + ("__defaults__", "__kwdefaults__"))
+    @wraps(func, assigned=(*WRAPPER_ASSIGNMENTS, "__defaults__", "__kwdefaults__"))
     def func_wrapper(
         f: StorageType,
         k: str,
-        elem: ContravariantRWAble,
+        elem: RWAble,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],

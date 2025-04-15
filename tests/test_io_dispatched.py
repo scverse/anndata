@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 
 def test_read_dispatched_w_regex(tmp_path: Path):
     def read_only_axis_dfs(func, elem_name: str, elem, iospec):
-        if iospec.encoding_type == "anndata":
-            return func(elem)
-        elif re.match(r"^/((obs)|(var))?(/.*)?$", elem_name):
+        if iospec.encoding_type == "anndata" or re.match(
+            r"^/((obs)|(var))?(/.*)?$", elem_name
+        ):
             return func(elem)
         else:
             return None
@@ -94,7 +94,10 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     def determine_chunks(elem_shape, specified_chunks):
         chunk_iterator = chain(specified_chunks, repeat(None))
-        return tuple(e if c is None else c for e, c in zip(elem_shape, chunk_iterator))
+        return tuple(
+            e if c is None else c
+            for e, c in zip(elem_shape, chunk_iterator, strict=False)
+        )
 
     adata = gen_adata((1000, 100))
 

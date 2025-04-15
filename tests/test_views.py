@@ -152,7 +152,7 @@ def test_view_subset_shapes():
 
     view = adata[:, ::2]
     assert view.var.shape == (5, 8)
-    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
+    assert {k: v.shape[0] for k, v in view.varm.items()} == dict.fromkeys(view.varm, 5)
 
 
 def test_modify_view_component(matrix_type, mapping_name, request):
@@ -330,7 +330,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -358,7 +358,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == tokenize(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -534,7 +534,7 @@ def test_view_of_view(matrix_type, subset_func, subset_func2):
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
-    adata[:, var_s1].X
+    adata[:, var_s1].X  # noqa: B018
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
     assert var_view2._adata_ref is adata
@@ -725,12 +725,7 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         getattr(adata, attr)["arr"] = X
 
     view = adata[:50]
-
-    if attr == "X":
-        arr_view = view.X
-    else:
-        arr_view = getattr(view, attr)["arr"]
-
+    arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
     if sparse.issparse(X):

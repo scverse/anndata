@@ -31,7 +31,8 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
     def __init__(self, array: K):
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
-            return super().__init__(array)
+            super().__init__(array)
+            return
         self._array = array
         self.shape = self._array.shape
         self.dtype = self._array.dtype

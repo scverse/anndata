@@ -21,25 +21,19 @@ def test_old_format_warning_thrown():
         )
         import scanpy as sc
 
-    pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
-    # TODO: with Pytest 8, all this can be a
-    #       `with pytest.warns(...), pytest.warns(...):`
-    with warnings.catch_warnings(record=True) as record:
-        warnings.simplefilter("always", ad.OldFormatWarning)
-        warnings.simplefilter("always", FutureWarning)
-        ad.read_h5ad(pth)
-
-    assert any(issubclass(w.category, ad.OldFormatWarning) for w in record), [
-        w.message for w in record if not issubclass(w.category, FutureWarning)
-    ]
-    assert any(
-        issubclass(w.category, FutureWarning)
-        and re.match(
-            r"Moving element from \.uns\['neighbors']\['distances'] to \.obsp\['distances']\.",
-            str(w.message),
+    def msg_re(entry: str) -> str:
+        return re.escape(
+            f"Moving element from .uns['neighbors'][{entry!r}] to .obsp[{entry!r}]."
         )
-        for w in record
-    ), [w.message for w in record if not issubclass(w.category, ad.OldFormatWarning)]
+
+    pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+    with (
+        pytest.warns(FutureWarning, match=msg_re("distances")),
+        pytest.warns(FutureWarning, match=msg_re("connectivities")),
+        pytest.warns(ad.OldFormatWarning),
+    ):
+        warnings.simplefilter("default", FutureWarning)
+        ad.read_h5ad(pth)
 
 
 def test_old_format_warning_not_thrown(tmp_path):

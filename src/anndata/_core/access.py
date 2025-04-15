@@ -13,7 +13,7 @@ class ElementRef(NamedTuple):
     keys: tuple[str, ...] = ()
 
     def __str__(self) -> str:
-        return f".{self.attrname}" + "".join(map(lambda x: f"['{x}']", self.keys))
+        return f".{self.attrname}" + "".join(f"[{x!r}]" for x in self.keys)
 
     @property
     def _parent_el(self):
