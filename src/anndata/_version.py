@@ -44,7 +44,7 @@ def _get_version_from_vcs(project_name: str) -> str:  # pragma: no cover
         msg = (
             f"Unknown error getting version from hatchling config for '{project_name}'."
         )
-        warnings.warn(f"{msg}: {e}")
+        warnings.warn(f"{msg}: {e}", stacklevel=1)
         raise GetVersionError(msg) from e
 
     # We found a hatchling environment, but is it ours?
