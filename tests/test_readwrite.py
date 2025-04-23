@@ -76,6 +76,7 @@ uns_dict = dict(  # unstructured annotation
         f=np.int32(7),
         g=[1, np.float32(2.5)],
     ),
+    uns5=None
 )
 
 
