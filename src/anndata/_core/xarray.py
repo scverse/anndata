@@ -22,6 +22,17 @@ class Dataset2D(XDataset):
     __slots__ = ()
 
     @property
+    def is_backed(self) -> bool:
+        return self.attrs.get("is_backed", False)
+
+    @is_backed.setter
+    def is_backed(self, isbacked: bool):
+        if not isbacked and "is_backed" in self.attrs:
+            del self.attrs["is_backed"]
+        else:
+            self.attrs["is_backed"] = isbacked
+
+    @property
     def index_dim(self) -> str:
         if len(self.sizes) != 1:
             msg = f"xarray Dataset should not have more than 1 dims, found {len(self.sizes)} {self.sizes}, {self}"

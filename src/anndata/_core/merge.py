@@ -304,13 +304,25 @@ def try_unifying_dtype(
                 ordered = ordered | dtype.ordered
             elif not pd.isnull(dtype):
                 return None
-        if len(dtypes) > 0 and not ordered:
+        if len(dtypes) > 0:
             categories = reduce(
                 lambda x, y: x.union(y),
-                [dtype.categories for dtype in dtypes if not pd.isnull(dtype)],
+                (dtype.categories for dtype in dtypes if not pd.isnull(dtype)),
             )
 
-            return pd.CategoricalDtype(natsorted(categories), ordered=False)
+            if not ordered:
+                return pd.CategoricalDtype(natsorted(categories), ordered=False)
+            else: # for xarray Datasets, see https://github.com/pydata/xarray/issues/10247
+                categories_intersection = reduce(lambda x, y: x.intersection(y), (dtype.categories for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0))
+                if len(categories_intersection) < len(categories):
+                    return object
+                else:
+                    same_orders = all(dtype.ordered for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0)
+                    same_orders &= all(np.all(categories == dtype.categories) for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0)
+                    if same_orders:
+                        return next(iter(dtypes))
+                    else:
+                        return object
     # Boolean
     elif all(pd.api.types.is_bool_dtype(dtype) or dtype is None for dtype in col):
         if any(dtype is None for dtype in col):
@@ -816,7 +828,7 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
     return df
 
 
-def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # noqa: PLR0911, PLR0912
+def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None, force_lazy: bool = False):  # noqa: PLR0911, PLR0912
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -830,7 +842,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
             msg = f"Cannot concatenate a Dataset2D with other array types {[type(a) for a in arrays if not isinstance(a, Dataset2D)]}."
             raise ValueError(msg)
         else:
-            return concat_dataset2d_on_annot_axis(arrays, join="outer")
+            return concat_dataset2d_on_annot_axis(arrays, join="outer", force_lazy=force_lazy)
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
@@ -920,7 +932,7 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None):  # n
 
 
 def inner_concat_aligned_mapping(
-    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None
+    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, force_lazy: bool = False
 ):
     if concat_axis is None:
         concat_axis = axis
@@ -935,7 +947,7 @@ def inner_concat_aligned_mapping(
         else:
             cur_reindexers = reindexers
 
-        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=concat_axis)
+        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=concat_axis, force_lazy=force_lazy)
     return result
 
 
@@ -1031,7 +1043,7 @@ def missing_element(
 
 
 def outer_concat_aligned_mapping(
-    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, fill_value=None
+    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, fill_value=None, force_lazy:bool=False
 ):
     if concat_axis is None:
         concat_axis = axis
@@ -1073,6 +1085,7 @@ def outer_concat_aligned_mapping(
             axis=concat_axis,
             index=index,
             fill_value=fill_value,
+            force_lazy=force_lazy
         )
     return result
 
@@ -1243,8 +1256,8 @@ def make_dask_col_from_extension_dtype(
             meta=np.array([], dtype=dtype),
             dtype=dtype,
         )
-    else:  # in-memory
-        return da.from_array(col.values, chunks=-1)
+
+    return da.from_array(col.values, chunks=-1) # in-memory
 
 
 def make_xarray_extension_dtypes_dask(
@@ -1289,6 +1302,7 @@ DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
 def concat_dataset2d_on_annot_axis(
     annotations: Iterable[Dataset2D],
     join: Join_T,
+    force_lazy: bool
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
@@ -1310,7 +1324,12 @@ def concat_dataset2d_on_annot_axis(
     from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
-    for a in make_xarray_extension_dtypes_dask(annotations):
+    have_backed = any(a.is_backed for a in annotations)
+    if have_backed or force_lazy:
+        annotations = make_xarray_extension_dtypes_dask(annotations)
+    else:
+        annotations = unify_dtypes(annotations)
+    for a in annotations:
         old_key = a.index_dim
         is_fake_index = old_key != a.true_index_dim
         # First create a dummy index
@@ -1331,6 +1350,7 @@ def concat_dataset2d_on_annot_axis(
     ds = Dataset2D(
         xr.concat(annotations_re_indexed, join=join, dim=DS_CONCAT_DUMMY_INDEX_NAME),
     )
+    ds.is_backed = have_backed
     ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
         ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
     )
@@ -1368,6 +1388,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     index_unique: str | None = None,
     fill_value: Any | None = None,
     pairwise: bool = False,
+    force_lazy: bool = False,
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
@@ -1416,6 +1437,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
         This is False by default, since the resulting arrays are often not meaningful.
+    force_lazy
+        Whether to lazily concatenate elements using dask even when eager concatenation is possible.
+        At the moment, this only affects obs/var and elements of obsm/varm that are xarray Datasets.
 
     Notes
     -----
@@ -1624,7 +1648,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         concat_annot.index = concat_indices
     else:
-        concat_annot = concat_dataset2d_on_annot_axis(annotations, join)
+        concat_annot = concat_dataset2d_on_annot_axis(annotations, join, force_lazy)
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
         concat_annot.index = concat_indices
     if label is not None:
@@ -1684,6 +1708,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         axis=axis,
         concat_axis=0,
         index=concat_indices,
+        force_lazy=force_lazy
     )
     if pairwise:
         concat_pairwise = concat_pairwise_mapping(

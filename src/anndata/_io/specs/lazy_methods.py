@@ -244,9 +244,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = XDataArray(
-                index, coords=[index], dims=[dim_name], name=dim_name
-            )
+            data_array = XDataArray(index, coords=[index], dims=[dim_name], name=dim_name)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
@@ -288,6 +286,7 @@ def read_dataframe(
             name=DUMMY_RANGE_INDEX_KEY,
         )
     ds = Dataset2D(elem_xarray_dict)
+    ds.is_backed = True
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case
     ds.true_index_dim = elem.attrs["_index"]
