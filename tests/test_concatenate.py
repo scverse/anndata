@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
-from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from itertools import chain, permutations, product
@@ -213,10 +212,17 @@ def test_concat_interface_errors(obs_xdataset, var_xdataset):
     ],
 )
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_concatenate_roundtrip(
-    join_type, array_type, concat_func, backwards_compat, obs_xdataset, var_xdataset, force_lazy
+    join_type,
+    array_type,
+    concat_func,
+    backwards_compat,
+    obs_xdataset,
+    var_xdataset,
+    force_lazy,
 ):
     if backwards_compat and force_lazy:
         pytest.skip("unsupported")
@@ -1209,10 +1215,17 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
 
 
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_transposed_concat(
-    array_type, axis_name, join_type, merge_strategy, obs_xdataset, var_xdataset, force_lazy
+    array_type,
+    axis_name,
+    join_type,
+    merge_strategy,
+    obs_xdataset,
+    var_xdataset,
+    force_lazy,
 ):
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
@@ -1231,14 +1244,27 @@ def test_transposed_concat(
         **GEN_ADATA_DASK_ARGS,
     )
 
-    a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy, force_lazy=force_lazy)
-    b = concat([lhs.T, rhs.T], axis=alt_axis, join=join_type, merge=merge_strategy, force_lazy=force_lazy).T
+    a = concat(
+        [lhs, rhs],
+        axis=axis,
+        join=join_type,
+        merge=merge_strategy,
+        force_lazy=force_lazy,
+    )
+    b = concat(
+        [lhs.T, rhs.T],
+        axis=alt_axis,
+        join=join_type,
+        merge=merge_strategy,
+        force_lazy=force_lazy,
+    ).T
 
     assert_equal(a, b)
 
 
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_batch_key(axis_name, obs_xdataset, var_xdataset, force_lazy):
     """Test that concat only adds a label if the key is provided"""
@@ -1269,7 +1295,9 @@ def test_batch_key(axis_name, obs_xdataset, var_xdataset, force_lazy):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis_name, label="batch", force_lazy=force_lazy))
+    batch_annot = get_annot(
+        concat([lhs, rhs], axis=axis_name, label="batch", force_lazy=force_lazy)
+    )
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
@@ -1278,7 +1306,8 @@ def test_batch_key(axis_name, obs_xdataset, var_xdataset, force_lazy):
 
 
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_concat_categories_from_mapping(obs_xdataset, var_xdataset, force_lazy):
     mapping = {
@@ -1420,7 +1449,8 @@ def test_bool_promotion():
 
 
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_concat_names(axis_name, obs_xdataset, var_xdataset, force_lazy):
     get_annot = attrgetter(axis_name)
@@ -1428,7 +1458,9 @@ def test_concat_names(axis_name, obs_xdataset, var_xdataset, force_lazy):
     lhs = gen_adata((10, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
     rhs = gen_adata((10, 10), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
 
-    assert not get_annot(concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy)).index.is_unique
+    assert not get_annot(
+        concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy)
+    ).index.is_unique
     assert get_annot(
         concat([lhs, rhs], axis=axis_name, index_unique="-", force_lazy=force_lazy)
     ).index.is_unique
@@ -1460,7 +1492,8 @@ def expected_shape(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_concat_size_0_axis(
     axis_name, join_type, merge_strategy, shape, obs_xdataset, var_xdataset, force_lazy
@@ -1493,7 +1526,7 @@ def test_concat_size_0_axis(
         merge=merge_strategy,
         pairwise=True,
         index_unique="-",
-        force_lazy=force_lazy
+        force_lazy=force_lazy,
     )
     assert result.shape == expected_size
 
@@ -1534,9 +1567,12 @@ def test_concat_size_0_axis(
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 @pytest.mark.parametrize("axis", ["obs", "var"])
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
-def test_concat_outer_aligned_mapping(elem, axis, obs_xdataset, var_xdataset, force_lazy):
+def test_concat_outer_aligned_mapping(
+    elem, axis, obs_xdataset, var_xdataset, force_lazy
+):
     a = gen_adata(
         (5, 5),
         obs_xdataset=obs_xdataset,
@@ -1551,7 +1587,9 @@ def test_concat_outer_aligned_mapping(elem, axis, obs_xdataset, var_xdataset, fo
     )
     del getattr(b, f"{axis}m")[elem]
 
-    concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis, force_lazy=force_lazy)
+    concated = concat(
+        {"a": a, "b": b}, join="outer", label="group", axis=axis, force_lazy=force_lazy
+    )
 
     mask = getattr(concated, axis)["group"] == "b"
     result = getattr(
@@ -1575,7 +1613,8 @@ def test_concatenate_size_0_axis():
 
 
 @pytest.mark.parametrize(
-    ("obs_xdataset", "var_xdataset", "force_lazy"), [(False, False, False), (True, True, False), (True, True, True)]
+    ("obs_xdataset", "var_xdataset", "force_lazy"),
+    [(False, False, False), (True, True, False), (True, True, True)],
 )
 def test_concat_null_X(obs_xdataset, var_xdataset, force_lazy):
     adatas_orig = {

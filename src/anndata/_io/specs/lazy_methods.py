@@ -244,7 +244,9 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = XDataArray(index, coords=[index], dims=[dim_name], name=dim_name)
+            data_array = XDataArray(
+                index, coords=[index], dims=[dim_name], name=dim_name
+            )
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)

@@ -312,13 +312,28 @@ def try_unifying_dtype(
 
             if not ordered:
                 return pd.CategoricalDtype(natsorted(categories), ordered=False)
-            else: # for xarray Datasets, see https://github.com/pydata/xarray/issues/10247
-                categories_intersection = reduce(lambda x, y: x.intersection(y), (dtype.categories for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0))
+            else:  # for xarray Datasets, see https://github.com/pydata/xarray/issues/10247
+                categories_intersection = reduce(
+                    lambda x, y: x.intersection(y),
+                    (
+                        dtype.categories
+                        for dtype in dtypes
+                        if not pd.isnull(dtype) and len(dtype.categories) > 0
+                    ),
+                )
                 if len(categories_intersection) < len(categories):
                     return object
                 else:
-                    same_orders = all(dtype.ordered for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0)
-                    same_orders &= all(np.all(categories == dtype.categories) for dtype in dtypes if not pd.isnull(dtype) and len(dtype.categories) > 0)
+                    same_orders = all(
+                        dtype.ordered
+                        for dtype in dtypes
+                        if not pd.isnull(dtype) and len(dtype.categories) > 0
+                    )
+                    same_orders &= all(
+                        np.all(categories == dtype.categories)
+                        for dtype in dtypes
+                        if not pd.isnull(dtype) and len(dtype.categories) > 0
+                    )
                     if same_orders:
                         return next(iter(dtypes))
                     else:
@@ -828,7 +843,9 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
     return df
 
 
-def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None, force_lazy: bool = False):  # noqa: PLR0911, PLR0912
+def concat_arrays(
+    arrays, reindexers, axis=0, index=None, fill_value=None, force_lazy: bool = False
+):  # noqa: PLR0911, PLR0912
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -842,7 +859,9 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None, force
             msg = f"Cannot concatenate a Dataset2D with other array types {[type(a) for a in arrays if not isinstance(a, Dataset2D)]}."
             raise ValueError(msg)
         else:
-            return concat_dataset2d_on_annot_axis(arrays, join="outer", force_lazy=force_lazy)
+            return concat_dataset2d_on_annot_axis(
+                arrays, join="outer", force_lazy=force_lazy
+            )
     if any(isinstance(a, pd.DataFrame) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
@@ -932,7 +951,13 @@ def concat_arrays(arrays, reindexers, axis=0, index=None, fill_value=None, force
 
 
 def inner_concat_aligned_mapping(
-    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, force_lazy: bool = False
+    mappings,
+    *,
+    reindexers=None,
+    index=None,
+    axis=0,
+    concat_axis=None,
+    force_lazy: bool = False,
 ):
     if concat_axis is None:
         concat_axis = axis
@@ -947,7 +972,9 @@ def inner_concat_aligned_mapping(
         else:
             cur_reindexers = reindexers
 
-        result[k] = concat_arrays(els, cur_reindexers, index=index, axis=concat_axis, force_lazy=force_lazy)
+        result[k] = concat_arrays(
+            els, cur_reindexers, index=index, axis=concat_axis, force_lazy=force_lazy
+        )
     return result
 
 
@@ -1043,7 +1070,14 @@ def missing_element(
 
 
 def outer_concat_aligned_mapping(
-    mappings, *, reindexers=None, index=None, axis=0, concat_axis=None, fill_value=None, force_lazy:bool=False
+    mappings,
+    *,
+    reindexers=None,
+    index=None,
+    axis=0,
+    concat_axis=None,
+    fill_value=None,
+    force_lazy: bool = False,
 ):
     if concat_axis is None:
         concat_axis = axis
@@ -1085,7 +1119,7 @@ def outer_concat_aligned_mapping(
             axis=concat_axis,
             index=index,
             fill_value=fill_value,
-            force_lazy=force_lazy
+            force_lazy=force_lazy,
         )
     return result
 
@@ -1257,7 +1291,7 @@ def make_dask_col_from_extension_dtype(
             dtype=dtype,
         )
 
-    return da.from_array(col.values, chunks=-1) # in-memory
+    return da.from_array(col.values, chunks=-1)  # in-memory
 
 
 def make_xarray_extension_dtypes_dask(
@@ -1300,9 +1334,7 @@ DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
 
 
 def concat_dataset2d_on_annot_axis(
-    annotations: Iterable[Dataset2D],
-    join: Join_T,
-    force_lazy: bool
+    annotations: Iterable[Dataset2D], join: Join_T, force_lazy: bool
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
@@ -1708,7 +1740,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         axis=axis,
         concat_axis=0,
         index=concat_indices,
-        force_lazy=force_lazy
+        force_lazy=force_lazy,
     )
     if pairwise:
         concat_pairwise = concat_pairwise_mapping(
