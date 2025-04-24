@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from anndata._types import Join_T
 
-    from ..compat import XArray
+    from ..compat import XDataArray
 
 T = TypeVar("T")
 
@@ -1168,7 +1168,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
 
 
 def make_dask_col_from_extension_dtype(
-    col: XArray, *, use_only_object_dtype: bool = False
+    col: XDataArray, *, use_only_object_dtype: bool = False
 ) -> DaskArray:
     """
     Creates dask arrays from :class:`pandas.api.extensions.ExtensionArray` dtype :class:`xarray.DataArray`s.
@@ -1191,7 +1191,7 @@ def make_dask_col_from_extension_dtype(
         get_chunksize,
         maybe_open_h5,
     )
-    from anndata.compat import XArray
+    from anndata.compat import XDataArray
     from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
@@ -1218,7 +1218,7 @@ def make_dask_col_from_extension_dtype(
                 variable = xr.Variable(
                     data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
                 )
-                data_array = XArray(
+                data_array = XDataArray(
                     variable,
                     coords=coords,
                     dims=dims,

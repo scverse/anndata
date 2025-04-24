@@ -7,7 +7,7 @@ import pandas as pd
 from ..compat import XDataset
 
 if TYPE_CHECKING:
-    from ..compat import XArray
+    from ..compat import XDataArray
 
 
 class Dataset2D(XDataset):
@@ -42,7 +42,7 @@ class Dataset2D(XDataset):
             self.attrs["indexing_key"] = val
 
     @property
-    def xr_index(self) -> XArray:
+    def xr_index(self) -> XDataArray:
         return self[self.index_dim]
 
     @property
@@ -66,7 +66,7 @@ class Dataset2D(XDataset):
             del self.attrs["indexing_key"]
 
     @property
-    def true_xr_index(self) -> XArray:
+    def true_xr_index(self) -> XDataArray:
         return self[self.true_index_dim]
 
     @property

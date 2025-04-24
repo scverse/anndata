@@ -32,7 +32,7 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    XArray,
+    XDataArray,
     XDataset,
     ZarrArray,
     is_zarr_v2,
@@ -744,9 +744,9 @@ def assert_equal_extension_array(
     )
 
 
-@assert_equal.register(XArray)
+@assert_equal.register(XDataArray)
 def assert_equal_xarray(
-    a: XArray, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: XDataArray, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     report_name(a.equals)(b, _elem_name=elem_name)
 

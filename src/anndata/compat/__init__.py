@@ -102,14 +102,14 @@ else:
 
 if find_spec("xarray") or TYPE_CHECKING:
     import xarray
-    from xarray import DataArray as XArray
+    from xarray import DataArray as XDataArray
     from xarray import Dataset as XDataset
     from xarray.backends import BackendArray as XBackendArray
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 else:
     xarray = None
 
-    class XArray:
+    class XDataArray:
         def __repr__(self) -> str:
             return "mock DataArray"
 

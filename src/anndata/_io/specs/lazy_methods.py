@@ -14,7 +14,7 @@ import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D
 from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, XArray, ZarrArray, ZarrGroup
+from anndata.compat import DaskArray, H5Array, H5Group, XDataArray, ZarrArray, ZarrGroup
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -220,20 +220,20 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     dim_name: str,
     index: np.NDArray,
-) -> Generator[tuple[str, XArray], None, None]:
+) -> Generator[tuple[str, XDataArray], None, None]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ...compat import XArray
+    from ...compat import XDataArray
     from ...compat import xarray as xr
 
     for k, v in elem_dict.items():
         if isinstance(v, DaskArray) and k != dim_name:
-            data_array = XArray(v, coords=[index], dims=[dim_name], name=k)
+            data_array = XDataArray(v, coords=[index], dims=[dim_name], name=k)
         elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
             variable = xr.Variable(
                 data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
             )
-            data_array = XArray(
+            data_array = XDataArray(
                 variable,
                 coords=[index],
                 dims=[dim_name],
@@ -244,7 +244,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = XArray(index, coords=[index], dims=[dim_name], name=dim_name)
+            data_array = XDataArray(index, coords=[index], dims=[dim_name], name=dim_name)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
@@ -279,7 +279,7 @@ def read_dataframe(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
     if use_range_index:
-        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XArray(
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XDataArray(
             index,
             coords=[index],
             dims=[DUMMY_RANGE_INDEX_KEY],

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -111,7 +111,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
-    elif isinstance(indexer, XArray):
+    elif isinstance(indexer, XDataArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data

@@ -11,7 +11,7 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ...compat import XArray, XBackendArray, XZarrArrayWrapper
+from ...compat import XDataArray, XBackendArray, XZarrArrayWrapper
 from ...compat import xarray as xr
 
 if TYPE_CHECKING:
@@ -168,13 +168,13 @@ class MaskedArray(XBackendArray, Generic[K]):
         raise RuntimeError(msg)
 
 
-@_subset.register(XArray)
-def _subset_masked(a: XArray, subset_idx: Index):
+@_subset.register(XDataArray)
+def _subset_masked(a: XDataArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@as_view.register(XArray)
-def _view_pd_boolean_array(a: XArray, view_args):
+@as_view.register(XDataArray)
+def _view_pd_boolean_array(a: XDataArray, view_args):
     return a
 
 
