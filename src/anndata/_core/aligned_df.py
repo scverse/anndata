@@ -82,7 +82,8 @@ def _gen_dataframe_df(
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
-        warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+        msg = "Transforming to str index."
+        warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
         anno.index = anno.index.astype(str)
     if not len(anno.columns):
         anno.columns = anno.columns.astype(str)

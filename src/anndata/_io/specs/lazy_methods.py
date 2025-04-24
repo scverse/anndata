@@ -186,7 +186,7 @@ def read_h5_array(
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks: tuple[int, ...] = (
+    chunks = (
         tuple(
             c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
         )

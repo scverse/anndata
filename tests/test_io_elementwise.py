@@ -361,7 +361,7 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
     shape = (3000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape))
+    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
     assert X_dask_from_disk.shape == shape
 
 

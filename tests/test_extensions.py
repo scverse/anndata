@@ -18,7 +18,7 @@ def _cleanup_dummy() -> Generator[None, None, None]:
     original = getattr(ad.AnnData, "dummy", None)
     yield
     if original is not None:
-        setattr(ad.AnnData, "dummy", original)
+        ad.AnnData.dummy = original
     elif hasattr(ad.AnnData, "dummy"):
         delattr(ad.AnnData, "dummy")
 

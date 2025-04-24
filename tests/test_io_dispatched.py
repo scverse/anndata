@@ -94,7 +94,10 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     def determine_chunks(elem_shape, specified_chunks):
         chunk_iterator = chain(specified_chunks, repeat(None))
-        return tuple(e if c is None else c for e, c in zip(elem_shape, chunk_iterator))
+        return tuple(
+            e if c is None else c
+            for e, c in zip(elem_shape, chunk_iterator, strict=False)
+        )
 
     adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
 

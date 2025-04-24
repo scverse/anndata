@@ -47,7 +47,7 @@ dependencies = [
     # array-api-compat 1.5 has https://github.com/scverse/anndata/issues/1410
     "array_api_compat>1.4,!=1.5",
     "legacy-api-wrap",
-    "zarr >=2.18.7, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3",
+    "zarr >=2.18.7, !=3.0.0, !=3.0.1, !=3.0.2, !=3.0.3, <3.0.7",
 ]
 dynamic = [ "version" ]
 
@@ -72,12 +72,11 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.15.1",
+    "scanpydoc[theme,typehints] >=0.15.3",
     "awkward>=2.3",
     "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
-    "readthedocs-sphinx-search",
     # for unreleased changes
     "anndata[dev-doc,dask]",
     "awkward>=2.3",
@@ -183,6 +182,7 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
+    "B",    # Likely bugs and design issues
     "BLE",  # Blind except
     "C4",   # Comprehensions
     "E",    # Error detected by Pycodestyle
@@ -193,6 +193,7 @@ select = [
     "ICN",  # Follow import conventions
     "ISC",  # Implicit string concatenation
     "PERF", # Performance
+    "PIE",  # Syntax simplifications
     "PTH",  # Pathlib instead of os.path
     "PT",   # Pytest conventions
     "PL",   # Pylint
@@ -223,6 +224,8 @@ allowed-confusables = [ "×", "’", "–", "α" ]
 [tool.ruff.lint.isort]
 known-first-party = [ "anndata" ]
 required-imports = [ "from __future__ import annotations" ]
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [ "slice" ]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "subprocess.call".msg = "Use `subprocess.run([…])` instead"
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"

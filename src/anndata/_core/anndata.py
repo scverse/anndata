@@ -392,10 +392,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             _check_2d_shape(X)
             # if type doesn’t match, a copy is made, otherwise, use a view
             if dtype is not None:
-                warnings.warn(
-                    "The dtype argument is deprecated and will be removed in late 2024.",
-                    FutureWarning,
+                msg = (
+                    "The dtype argument is deprecated and will be removed in late 2024."
                 )
+                warnings.warn(msg, FutureWarning, stacklevel=3)
                 if issparse(X) or isinstance(X, ma.MaskedArray):
                     # TODO: maybe use view on data attribute of sparse matrix
                     #       as in readwrite.read_10x_h5
@@ -1305,11 +1305,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if "X" in self.layers:
                 pass
             else:
-                warnings.warn(
+                msg = (
                     "In a future version of AnnData, access to `.X` by passing"
-                    " `layer='X'` will be removed. Instead pass `layer=None`.",
-                    FutureWarning,
+                    " `layer='X'` will be removed. Instead pass `layer=None`."
                 )
+                warnings.warn(msg, FutureWarning, stacklevel=2)
                 layer = None
         return get_vector(self, k, "obs", "var", layer=layer)
 
@@ -1337,11 +1337,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
             if "X" in self.layers:
                 pass
             else:
-                warnings.warn(
+                msg = (
                     "In a future version of AnnData, access to `.X` by passing "
-                    "`layer='X'` will be removed. Instead pass `layer=None`.",
-                    FutureWarning,
+                    "`layer='X'` will be removed. Instead pass `layer=None`."
                 )
+                warnings.warn(msg, FutureWarning, stacklevel=2)
                 layer = None
         return get_vector(self, k, "var", "obs", layer=layer)
 
@@ -2113,7 +2113,7 @@ def _infer_shape_for_axis(
     for elem in [xxx, xxxm, xxxp]:
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
-    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"]):
+    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True):
         if elem is not None:
             elem = cast("Mapping", elem)
             for sub_elem in elem.values():
