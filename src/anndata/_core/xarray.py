@@ -46,7 +46,9 @@ class Dataset2D(XDataset):
 
     @true_index_dim.setter
     def true_index_dim(self, val: str):
-        if val not in self.dims:
+        if val is None or (val == self.index_dim and "indexing_key" in self.attrs):
+            del self.attrs["indexing_key"]
+        elif val not in self.dims:
             if val not in self.data_vars:
                 msg = f"Unknown variable `{val}`."
                 raise ValueError(msg)
@@ -115,7 +117,7 @@ class Dataset2D(XDataset):
 
     def __getitem__(self, idx) -> Dataset2D:
         ret = super().__getitem__(idx)
-        if idx == []:  # empty XDataset
+        if len(idx) == 0 and not isinstance(idx, tuple):  # empty XDataset
             ret.coords[self.index_dim] = self.xr_index
         return ret
 
