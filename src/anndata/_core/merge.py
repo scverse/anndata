@@ -279,7 +279,7 @@ def unify_dtypes(
     return dfs
 
 
-def try_unifying_dtype(
+def try_unifying_dtype(  # noqa PLR0911, PLR0912
     col: Sequence[np.dtype | ExtensionDtype],
 ) -> pd.core.dtypes.base.ExtensionDtype | None:
     """
@@ -843,9 +843,9 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
     return df
 
 
-def concat_arrays(
-    arrays, reindexers, axis=0, index=None, fill_value=None, force_lazy: bool = False
-):  # noqa: PLR0911, PLR0912
+def concat_arrays(  # noqa: PLR0911, PLR0912
+    arrays, reindexers, axis=0, index=None, fill_value=None, *, force_lazy: bool = False
+):
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -1334,7 +1334,7 @@ DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
 
 
 def concat_dataset2d_on_annot_axis(
-    annotations: Iterable[Dataset2D], join: Join_T, force_lazy: bool
+    annotations: Iterable[Dataset2D], join: Join_T, *, force_lazy: bool
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed._xarray.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
@@ -1680,7 +1680,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         concat_annot.index = concat_indices
     else:
-        concat_annot = concat_dataset2d_on_annot_axis(annotations, join, force_lazy)
+        concat_annot = concat_dataset2d_on_annot_axis(
+            annotations, join, force_lazy=force_lazy
+        )
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
         concat_annot.index = concat_indices
     if label is not None:
