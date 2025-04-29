@@ -13,7 +13,7 @@ from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Callable, Generator, Iterable, Iterator
     from typing import Any
 
     from anndata._types import (
@@ -294,6 +294,7 @@ class LazyReader(Reader):
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
+        reopen: None | Callable[[], Iterator[StorageType]] = None,
         **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
@@ -315,7 +316,7 @@ class LazyReader(Reader):
                 raise ValueError(msg)
         if "chunks" in read_params:
             kwargs["chunks"] = chunks
-        return read_func(elem, **kwargs)
+        return read_func(elem, chunks=chunks, reopen=reopen)
 
 
 class Writer:
@@ -404,7 +405,10 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType,
+    chunks: tuple[int, ...] | None = None,
+    reopen: None | Callable[[], Iterator[StorageType]] = None,
+    **kwargs,
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
@@ -424,6 +428,8 @@ def read_elem_lazy(
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
+    reopen, optional
+        A custom function for re-opening your store in the dask reader.
 
     Returns
     -------
@@ -479,7 +485,7 @@ def read_elem_lazy(
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, -1))
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, None))
     """
-    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
+    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, reopen=reopen)
 
 
 def write_elem(
