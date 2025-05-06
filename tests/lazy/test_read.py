@@ -3,8 +3,11 @@ from __future__ import annotations
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
+import numpy as np
+import pandas as pd
 import pytest
 
+from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
@@ -20,7 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from anndata import AnnData
     from anndata._types import AnnDataElem
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
@@ -110,6 +112,21 @@ def test_uns_uses_dask(adata_remote: AnnData):
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
+
+
+def test_access_counts_obsm_df(tmp_path: Path):
+    adata = AnnData(
+        X=np.array(np.random.rand(100, 20)),
+    )
+    adata.obsm["df"] = pd.DataFrame(
+        {"col1": np.random.rand(100), "col2": np.random.rand(100)},
+        index=adata.obs_names,
+    )
+    adata.write_zarr(tmp_path)
+    store = AccessTrackingStore(tmp_path)
+    store.initialize_key_trackers(["obsm/df"])
+    read_lazy(store, load_annotation_index=False)
+    store.assert_access_count("obsm/df", 0)
 
 
 def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
