@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy
+import xarray as xr
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from packaging.version import Version
@@ -146,6 +147,14 @@ def fix_known_differences(
     orig = orig.copy()
     result = result.copy()
 
+    if backwards_compat:
+        del orig.varm
+        del orig.varp
+        if isinstance(result.obs, XDataset):
+            result.obs = result.obs.drop_vars(["batch"])
+        else:
+            result.obs.drop(columns=["batch"], inplace=True)
+
     for attrname in ("obs", "var"):
         if isinstance(getattr(result, attrname), XDataset):
             for adata in (orig, result):
@@ -170,11 +179,6 @@ def fix_known_differences(
     # * merge varm, varp similar to uns
     # * merge obsp, but some information should be lost
     del orig.obsp  # TODO
-
-    if backwards_compat:
-        del orig.varm
-        del orig.varp
-        result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for get_df in [lambda k: k.obs, lambda k: k.obsm["df"]]:
@@ -234,9 +238,6 @@ def test_concatenate_roundtrip(
         **GEN_ADATA_DASK_ARGS,
     )
 
-    if backwards_compat and (obs_xdataset or var_xdataset):
-        pytest.xfail("https://github.com/pydata/xarray/issues/10218")
-
     remaining = adata.obs_names
     subsets = []
     while len(remaining) > 0:
@@ -245,7 +246,17 @@ def test_concatenate_roundtrip(
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
 
+    if (
+        backwards_compat
+        and (obs_xdataset or var_xdataset)
+        and Version(xr.__version__) < Version("2025.4.0")
+    ):
+        pytest.xfail("https://github.com/pydata/xarray/issues/10218")
     result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
+    if backwards_compat and var_xdataset:
+        result.var = xr.Dataset.from_dataframe(
+            result.var
+        )  # backwards compat always returns a dataframe
 
     # Correcting for known differences
     orig, result = fix_known_differences(

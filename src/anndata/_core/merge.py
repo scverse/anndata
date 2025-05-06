@@ -122,7 +122,11 @@ def equal(a, b) -> bool:
     b = asarray(b)
     if a.ndim == b.ndim == 0:
         return bool(a == b)
-    return np.array_equal(a, b)
+    a_na = (
+        pd.isna(a) if a.dtype.names is None else np.False_
+    )  # pd.isna doesn't work for record arrays
+    b_na = pd.isna(b) if b.dtype.names is None else np.False_
+    return np.array_equal(a_na, b_na) and np.array_equal(a[~a_na], b[~b_na])
 
 
 @equal.register(pd.DataFrame)
