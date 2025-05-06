@@ -777,13 +777,8 @@ class Reindexer:
                 )
             return el
         else:
-            cols = el.columns
-            tokeep = cols[cols.isin(self.new_idx)]
-            el = el[tokeep.to_list()]
-            newcols = self.new_idx[~self.new_idx.isin(cols)]
-            for col in newcols:
-                el[col] = (el.index_dim, np.broadcast_to(fill_value, el.shape[0]))
-            return el
+            msg = "This should be unreachable, please open an issue."
+            raise Exception(msg)
 
     @property
     def idx(self):
