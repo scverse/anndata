@@ -1276,7 +1276,7 @@ def make_dask_col_from_extension_dtype(
                     slice(start, stop)
                     for start, stop in block_info[None]["array-location"]
                 )
-                chunk = np.array(data_array.data[idx].array)
+                chunk = np.array(data_array.data[idx])
             return chunk
 
         if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
