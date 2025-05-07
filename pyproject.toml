@@ -100,7 +100,6 @@ test-min = [
     "dask[distributed]",
     "awkward>=2.3.2",
     "pyarrow",
-    "pandas>=2.1",          # for xarray
     "anndata[dask]",
 ]
 test = [ "anndata[test-min,lazy]" ]
