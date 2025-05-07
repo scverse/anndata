@@ -340,11 +340,13 @@ def read_null(_elem, _reader) -> None:
 
 @_REGISTRY.register_write(H5Group, type(None), IOSpec("null", "0.1.0"))
 def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     f.create_dataset(k, data=h5py.Empty("f"), **dataset_kwargs)
 
 
 @_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
 def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
+    dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     # zarr has no first-class null dataset
     if is_zarr_v2():
         import zarr

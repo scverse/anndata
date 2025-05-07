@@ -10,10 +10,11 @@ from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_lazy
 from .merge import concat_on_disk
 from .multi_files import AnnCollection
-from .pytorch import AnnLoader
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from .pytorch import AnnLoader
 
 # Map old name in `anndata.experimental` to new name in `anndata`
 _DEPRECATED = MappingProxyType(
@@ -33,6 +34,10 @@ _DEPRECATED = MappingProxyType(
 
 
 def __getattr__(attr_name: str) -> Any:
+    if attr_name == "AnnLoader":
+        from .pytorch import AnnLoader
+
+        return AnnLoader
     return module_get_attr_redirect(
         attr_name, deprecated_mapping=_DEPRECATED, old_module_path="experimental"
     )
