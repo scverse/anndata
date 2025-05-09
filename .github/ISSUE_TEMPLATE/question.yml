@@ -1,0 +1,14 @@
+name: Technical question
+description: You wonder about a design decision or implementation detail?
+#title: ...
+labels:
+  - question
+#assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Question
+      description: If you have *usage* question, please visit the [Scverse Community Forum](https://discourse.scverse.org/) instead.
+    validations:
+      required: true
