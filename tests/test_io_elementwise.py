@@ -24,6 +24,7 @@ from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
     as_cupy,
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
@@ -123,7 +124,9 @@ def create_sparse_store(
         pytest.param(True, "numeric-scalar", id="py_bool"),
         pytest.param(1.0, "numeric-scalar", id="py_float"),
         pytest.param({"a": 1}, "dict", id="py_dict"),
-        pytest.param(gen_adata((3, 2)), "anndata", id="anndata"),
+        pytest.param(
+            gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), "anndata", id="anndata"
+        ),
         pytest.param(
             sparse.random(5, 3, format="csr", density=0.5),
             "csr_matrix",
@@ -428,7 +431,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 
 
 def test_io_spec_raw(store):
-    adata = gen_adata((3, 2))
+    adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
     write_elem(store, "adata", adata)
@@ -440,7 +443,7 @@ def test_io_spec_raw(store):
 
 
 def test_write_anndata_to_root(store):
-    adata = gen_adata((3, 2))
+    adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -460,7 +463,7 @@ def test_write_anndata_to_root(store):
     ],
 )
 def test_read_iospec_not_found(store, attribute, value):
-    adata = gen_adata((3, 2))
+    adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     write_elem(store, "/", adata)
     store["obs"].attrs.update({attribute: value})
@@ -527,7 +530,7 @@ def test_override_specification():
     "value",
     [
         pytest.param({"a": 1}, id="dict"),
-        pytest.param(gen_adata((3, 2)), id="anndata"),
+        pytest.param(gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), id="anndata"),
         pytest.param(sparse.random(5, 3, format="csr", density=0.5), id="csr_matrix"),
         pytest.param(sparse.random(5, 3, format="csc", density=0.5), id="csc_matrix"),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), id="dataframe"),
@@ -578,7 +581,7 @@ def test_write_to_root(store, value):
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
     pth = tmp_path / "test.zarr"
-    adata = gen_adata((3, 2))
+    adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     z = open_write_group(pth)
     write_elem(z, "table/table", adata)
@@ -628,7 +631,7 @@ def test_io_pd_cow(store, copy_on_write):
         pytest.xfail("copy_on_write option is not available in pandas < 2")
     # https://github.com/zarr-developers/numcodecs/issues/514
     with pd.option_context("mode.copy_on_write", copy_on_write):
-        orig = gen_adata((3, 2))
+        orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
         write_elem(store, "adata", orig)
         from_store = read_elem(store["adata"])
         assert_equal(orig, from_store)

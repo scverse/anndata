@@ -79,11 +79,9 @@ doc = [
     "sphinx_design>=0.5.0",
     # for unreleased changes
     "anndata[dev-doc,dask]",
-    "awkward>=2.3",
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
-test-full = [ "anndata[test,lazy]" ]
-test = [
+test-min = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
@@ -100,15 +98,19 @@ test = [
     "scanpy>=1.10",
     "httpx",                # For data downloading
     "dask[distributed]",
-    "awkward>=2.3",
+    "awkward>=2.3.2",
     "pyarrow",
     "anndata[dask]",
 ]
+test = [
+    "anndata[test-min,lazy]",
+    "pandas>=2.1.0",
+] # pandas 2.1.0 needs to be specified for xarray to work with min-deps script
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
-lazy = [ "xarray>=2024.06.0", "aiohttp", "requests", "anndata[dask]" ]
+lazy = [ "xarray>=2025.04.0", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
