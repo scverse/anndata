@@ -100,10 +100,12 @@ test-min = [
     "dask[distributed]",
     "awkward>=2.3.2",
     "pyarrow",
-    "pandas>=2.1",          # for xarray
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]" ]
+test = [
+    "anndata[test-min,lazy]",
+    "pandas>=2.1.0",
+] # pandas 2.1.0 needs to be specified for xarray to work with min-deps script
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
