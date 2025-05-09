@@ -79,6 +79,7 @@ def extract_min_deps(
         else:
             if req.name in deps:
                 req.specifier &= deps[req.name].specifier
+                req.extras |= deps[req.name].extras
             deps[req.name] = min_dep(req)
     yield from deps.values()
 
