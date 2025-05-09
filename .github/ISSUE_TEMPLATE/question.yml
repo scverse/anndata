@@ -8,6 +8,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: If you have *usage* question, please visit the [Scverse Community Forum](https://discourse.scverse.org/) instead.
+      label: Question
+      description: If you have *usage* question, please visit the [Scverse Community Forum](https://discourse.scverse.org/) instead.
     validations:
       required: true
