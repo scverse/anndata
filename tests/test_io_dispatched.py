@@ -10,7 +10,7 @@ import anndata as ad
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,7 +26,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
         else:
             return None
 
-    adata = gen_adata((1000, 100))
+    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
     z = open_write_group(tmp_path)
 
     ad.io.write_elem(z, "/", adata)
@@ -57,7 +57,7 @@ def test_read_dispatched_dask(tmp_path: Path):
         else:
             return func(elem)
 
-    adata = gen_adata((1000, 100))
+    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -77,7 +77,7 @@ def test_read_dispatched_dask(tmp_path: Path):
 
 
 def test_read_dispatched_null_case(tmp_path: Path):
-    adata = gen_adata((100, 100))
+    adata = gen_adata((100, 100), **GEN_ADATA_NO_XARRAY_ARGS)
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -99,7 +99,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
             for e, c in zip(elem_shape, chunk_iterator, strict=False)
         )
 
-    adata = gen_adata((1000, 100))
+    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
 
     def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
         M, N = 13, 42
@@ -197,7 +197,7 @@ def test_io_dispatched_keys(tmp_path: Path):
         zarr_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
         return func(elem)
 
-    adata = gen_adata((50, 100))
+    adata = gen_adata((50, 100), **GEN_ADATA_NO_XARRAY_ARGS)
 
     with h5py.File(h5ad_path, "w") as f:
         write_dispatched(f, "/", adata, callback=h5ad_writer)

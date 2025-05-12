@@ -3,11 +3,19 @@ from __future__ import annotations
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
+import numpy as np
+import pandas as pd
 import pytest
 
+from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_lazy
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    AccessTrackingStore,
+    assert_equal,
+    gen_adata,
+)
 
 from .conftest import ANNDATA_ELEMS
 
@@ -15,7 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from anndata import AnnData
     from anndata._types import AnnDataElem
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
@@ -107,6 +114,21 @@ def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     assert_equal(remote_to_memory, adata_orig)
 
 
+def test_access_counts_obsm_df(tmp_path: Path):
+    adata = AnnData(
+        X=np.array(np.random.rand(100, 20)),
+    )
+    adata.obsm["df"] = pd.DataFrame(
+        {"col1": np.random.rand(100), "col2": np.random.rand(100)},
+        index=adata.obs_names,
+    )
+    adata.write_zarr(tmp_path)
+    store = AccessTrackingStore(tmp_path)
+    store.initialize_key_trackers(["obsm/df"])
+    read_lazy(store, load_annotation_index=False)
+    store.assert_access_count("obsm/df", 0)
+
+
 def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     obs_cats = adata_orig.obs["obs_cat"].cat.categories
     subset_obs = adata_orig.obs["obs_cat"] == obs_cats[0]
@@ -144,7 +166,7 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 
 def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format)
+    adata = gen_adata((1000, 1000), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()

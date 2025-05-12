@@ -30,6 +30,8 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    XDataArray,
+    XDataset,
     ZarrArray,
     is_zarr_v2,
 )
@@ -56,32 +58,6 @@ except ImportError:
     )
 
 
-# Give this to gen_adata when dask array support is expected.
-GEN_ADATA_DASK_ARGS = dict(
-    obsm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    varm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    layers_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-)
-
-
 DEFAULT_KEY_TYPES = (
     sparse.csr_matrix,
     np.ndarray,
@@ -99,6 +75,18 @@ DEFAULT_COL_TYPES = (
     np.bool_,
     pd.BooleanDtype,
     pd.Int32Dtype,
+)
+
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
+)
+
+GEN_ADATA_NO_XARRAY_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
 
@@ -288,8 +276,10 @@ def gen_adata(  # noqa: PLR0913
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
-    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
+    obs_xdataset: bool = False,
+    var_xdataset: bool = False,
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -321,6 +311,7 @@ def gen_adata(  # noqa: PLR0913
         (csr, csc)
     """
     import dask.array as da
+    import xarray as xr
 
     if random_state is None:
         random_state = np.random.default_rng()
@@ -334,6 +325,11 @@ def gen_adata(  # noqa: PLR0913
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if obs_xdataset:
+        obs = XDataset.from_dataframe(obs)
+    if var_xdataset:
+        var = XDataset.from_dataframe(var)
+
     if X_type is None:
         X = None
     else:
@@ -345,6 +341,9 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        ),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
@@ -360,6 +359,9 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        ),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
@@ -738,6 +740,13 @@ def assert_equal_extension_array(
         check_exact=exact,
         _elem_name=elem_name,
     )
+
+
+@assert_equal.register(XDataArray)
+def assert_equal_xarray(
+    a: XDataArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    report_name(a.equals)(b, _elem_name=elem_name)
 
 
 @assert_equal.register(Raw)

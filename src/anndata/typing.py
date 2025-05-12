@@ -16,6 +16,7 @@ from .compat import (
     CupySparseMatrix,
     DaskArray,
     H5Array,
+    XDataArray,
     ZappyArray,
     ZarrArray,
 )
@@ -45,7 +46,7 @@ XDataType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
-ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray
 
 
 InMemoryArrayOrScalarType: TypeAlias = (

@@ -13,6 +13,7 @@ import anndata as ad
 from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
+    GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
@@ -196,7 +197,7 @@ def test_backed_raw(tmp_path):
 def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), X_type=array_type)
+    mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)

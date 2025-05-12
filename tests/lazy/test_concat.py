@@ -11,7 +11,7 @@ import pytest
 import anndata as ad
 from anndata._core.file_backing import to_memory
 from anndata.experimental import read_lazy
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 
 from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
 
@@ -254,7 +254,7 @@ def test_concat_data_subsetting(
     join: Join_T,
     index: slice | NDArray | Literal["a"] | None,
 ):
-    from anndata.experimental.backed._compat import Dataset2D
+    from anndata._core.xarray import Dataset2D
 
     remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
     if index is not None:
@@ -312,7 +312,7 @@ def test_concat_df_ds_mixed_types(
 
 
 def test_concat_bad_mixed_types(tmp_path: Path):
-    orig = gen_adata((100, 200), np.array)
+    orig = gen_adata((100, 200), np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write_zarr(tmp_path)
     remote = read_lazy(tmp_path)
     orig.obsm["df"] = orig.obsm["array"]

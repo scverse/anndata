@@ -47,6 +47,7 @@ from .views import (
     _resolve_idxs,
     as_view,
 )
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import Index1D
+    from ..compat import Index1D, XDataset
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
@@ -746,10 +747,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame, attr: Literal["obs", "var"]):
-        if not isinstance(value, pd.DataFrame):
-            msg = f"Can only assign pd.DataFrame to {attr}."
-            raise ValueError(msg)
+    def _set_dim_df(self, value: pd.DataFrame | XDataset, attr: Literal["obs", "var"]):
+        value = _gen_dataframe(
+            value,
+            [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
+            source="shape",
+            attr=attr,
+            length=self.n_obs if attr == "obs" else self.n_vars,
+        )
         raise_value_error_if_multiindex_columns(value, attr)
         value_idx = self._prep_dim_index(value.index, attr)
         if self.is_view:
@@ -804,12 +809,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
                 v.index = value
 
     @property
-    def obs(self) -> pd.DataFrame:
+    def obs(self) -> pd.DataFrame | Dataset2D:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
         return self._obs
 
     @obs.setter
-    def obs(self, value: pd.DataFrame):
+    def obs(self, value: pd.DataFrame | XDataset):
         self._set_dim_df(value, "obs")
 
     @obs.deleter
@@ -827,12 +832,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         self._set_dim_index(names, "obs")
 
     @property
-    def var(self) -> pd.DataFrame:
+    def var(self) -> pd.DataFrame | Dataset2D:
         """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
         return self._var
 
     @var.setter
-    def var(self, value: pd.DataFrame):
+    def var(self, value: pd.DataFrame | XDataset):
         self._set_dim_df(value, "var")
 
     @var.deleter
@@ -2077,6 +2082,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
+
+
+@AnnData._remove_unused_categories.register(Dataset2D)
+@staticmethod
+def _remove_unused_categories_xr(
+    df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
+):
+    pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
 
 def _check_2d_shape(X):

@@ -11,8 +11,8 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ._compat import BackendArray, DataArray, ZarrArrayWrapper
-from ._compat import xarray as xr
+from ...compat import XBackendArray, XDataArray, XZarrArrayWrapper
+from ...compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 K = TypeVar("K", H5Array, ZarrArray)
 
 
-class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
+class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
     def __init__(self, array: K):
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
@@ -48,7 +48,7 @@ class ZarrOrHDF5Wrapper(ZarrArrayWrapper, Generic[K]):
         )
 
 
-class CategoricalArray(BackendArray, Generic[K]):
+class CategoricalArray(XBackendArray, Generic[K]):
     """
     A wrapper class meant to enable working with lazy categorical data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -103,7 +103,7 @@ class CategoricalArray(BackendArray, Generic[K]):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-class MaskedArray(BackendArray, Generic[K]):
+class MaskedArray(XBackendArray, Generic[K]):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -168,13 +168,13 @@ class MaskedArray(BackendArray, Generic[K]):
         raise RuntimeError(msg)
 
 
-@_subset.register(DataArray)
-def _subset_masked(a: DataArray, subset_idx: Index):
+@_subset.register(XDataArray)
+def _subset_masked(a: XDataArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@as_view.register(DataArray)
-def _view_pd_boolean_array(a: DataArray, view_args):
+@as_view.register(XDataArray)
+def _view_pd_boolean_array(a: XDataArray, view_args):
     return a
 
 

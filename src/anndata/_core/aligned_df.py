@@ -9,6 +9,8 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
+from ..compat import XDataset
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -108,8 +110,8 @@ def _mk_df_error(
     expected: int,
     actual: int,
 ):
+    what = "row" if attr == "obs" else "column"
     if source == "X":
-        what = "row" if attr == "obs" else "column"
         msg = (
             f"Observations annot. `{attr}` must have as many rows as `X` has {what}s "
             f"({expected}), but has {actual} rows."
@@ -117,6 +119,30 @@ def _mk_df_error(
     else:
         msg = (
             f"`shape` is inconsistent with `{attr}` "
-            "({actual} {what}s instead of {expected})"
+            f"({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
+
+
+@_gen_dataframe.register(Dataset2D)
+def _gen_dataframe_xr(
+    anno: Dataset2D,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return anno
+
+
+@_gen_dataframe.register(XDataset)
+def _gen_dataframe_xdataset(
+    anno: XDataset,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return Dataset2D(anno)

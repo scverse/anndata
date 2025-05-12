@@ -17,7 +17,12 @@ import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._core.raw import Raw
 from anndata._settings import settings
-from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    get_multiindex_columns_df,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -278,11 +283,14 @@ def test_setting_index_names_error(attr):
 
 
 @pytest.mark.parametrize("dim", ["obs", "var"])
-def test_setting_dim_index(dim):
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
+def test_setting_dim_index(dim, obs_xdataset, var_xdataset):
     index_attr = f"{dim}_names"
     mapping_attr = f"{dim}m"
 
-    orig = gen_adata((5, 5))
+    orig = gen_adata((5, 5), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
     orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
@@ -516,12 +524,10 @@ def test_set_obs():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
-    assert adata.obs_names.tolist() == [0, 1]
+    assert adata.obs_names.tolist() == ["0", "1"]
 
-    with pytest.raises(ValueError, match="but this AnnData has shape"):
+    with pytest.raises(ValueError, match="`shape` is inconsistent with `obs`"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
-    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
-        adata.obs = dict(a=[1, 2])
 
 
 def test_multicol():
@@ -730,7 +736,7 @@ def test_copy():
 
 
 def test_to_memory_no_copy():
-    adata = gen_adata((3, 5))
+    adata = gen_adata((3, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     mem = adata.to_memory()
 
     assert mem.X is adata.X
