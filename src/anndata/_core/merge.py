@@ -1333,7 +1333,12 @@ DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
 
 
 def concat_dataset2d_on_annot_axis(
-    annotations: Iterable[Dataset2D], join: Join_T, *, force_lazy: bool
+    annotations: Iterable[Dataset2D],
+    join: Join_T,
+    *,
+    force_lazy: bool,
+    label: str | None = None,
+    label_col: pd.Categorical | None = None,
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata._core.xarray.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
@@ -1345,6 +1350,13 @@ def concat_dataset2d_on_annot_axis(
         The :class:`~anndata._core.xarray.Dataset2D` objects to be concatenated.
     join
         Type of join operation
+    force_lazy
+        Whether to lazily concatenate elements using dask even when eager concatenation is possible.
+    label
+        Column in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
+        If it's None, no column is added.
+    label_col
+        The bath information annotation.
 
     Returns
     -------
@@ -1404,6 +1416,8 @@ def concat_dataset2d_on_annot_axis(
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
+    if label is not None and label_col is not None:
+        ds[label] = (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
     return ds
 
 
@@ -1678,18 +1692,14 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             ignore_index=True,
         )
         concat_annot.index = concat_indices
+        if label is not None:
+            concat_annot[label] = label_col
     else:
         concat_annot = concat_dataset2d_on_annot_axis(
-            annotations, join, force_lazy=force_lazy
+            annotations, join, force_lazy=force_lazy, label=label, label_col=label_col
         )
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
         concat_annot.index = concat_indices
-    if label is not None:
-        concat_annot[label] = (
-            label_col
-            if not isinstance(concat_annot, Dataset2D)
-            else (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
-        )
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
