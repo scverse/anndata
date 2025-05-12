@@ -41,8 +41,7 @@ class Dataset2D(XDataset):
 
     @property
     def true_index_dim(self) -> str:
-        index_dim = self.attrs.get("indexing_key", None)
-        return index_dim if index_dim is not None else self.index_dim
+        return self.attrs.get("indexing_key", self.index_dim)
 
     @true_index_dim.setter
     def true_index_dim(self, val: str):
@@ -75,6 +74,7 @@ class Dataset2D(XDataset):
         if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
             self.update(self.rename({self.index_dim: val.name}))
             del self.coords[index_dim]
+        # without `indexing_key` explicitly set on `self.attrs`, `self.true_index_dim` will use the `self.index_dim`
         if "indexing_key" in self.attrs:
             del self.attrs["indexing_key"]
 
