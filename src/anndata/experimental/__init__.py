@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from .._core.xarray import Dataset2D
 from .._io.specs import IOSpec, read_elem_lazy
 from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
 from ..utils import module_get_attr_redirect
@@ -46,6 +47,7 @@ def __getattr__(attr_name: str) -> Any:
 __all__ = [
     "AnnCollection",
     "AnnLoader",
+    "Dataset2D",
     "IOSpec",
     "Read",
     "ReadCallback",
