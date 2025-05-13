@@ -15,7 +15,7 @@ scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-n
 
 [envs.hatch-test]
 default-args = [  ]
-features = [ "dev", "test" ]
+features = [ "dev", "test-min" ]
 extra-dependencies = [ "ipykernel" ]
 env-vars.UV_CONSTRAINT = "ci/constraints.txt"
 overrides.matrix.deps.env-vars = [
@@ -30,7 +30,7 @@ overrides.matrix.deps.python = [
     { if = [ "stable", "pre" ], value = "3.13" },
 ]
 overrides.matrix.deps.features = [
-    { if = [ "stable", "pre" ], value = "test-full" },
+    { if = [ "stable", "pre" ], value = "test" },
 ]
 
 [[envs.hatch-test.matrix]]
