@@ -34,7 +34,7 @@ def min_dep(req: Requirement) -> Requirement:
     -------
 
     >>> min_dep(Requirement("numpy>=1.0"))
-    <Requirement('numpy~=1.0.0')>
+    <Requirement('numpy==1.0.0')>
     >>> min_dep(Requirement("numpy<3.0"))
     <Requirement('numpy<3.0')>
     """
@@ -55,7 +55,7 @@ def min_dep(req: Requirement) -> Requirement:
         elif spec.operator == "==":
             min_version = Version(spec.version)
 
-    return Requirement(f"{req_name}~={min_version}.0")
+    return Requirement(f"{req_name}=={min_version}")
 
 
 def extract_min_deps(
