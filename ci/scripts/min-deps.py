@@ -105,6 +105,7 @@ class Args(argparse.Namespace):
             prog="min-deps",
             description=cls.__doc__,
             usage="pip install `python min-deps.py pyproject.toml`",
+            allow_abbrev=False,
         )
         parser.add_argument(
             "_path",
