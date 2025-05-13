@@ -62,7 +62,7 @@ jobs:
         if: matrix.dependencies-version == 'minimum'
         run: |
           uv pip install --system --compile tomli packaging
-          deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extra=dev test-min)
+          deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extras dev test-min)
           uv pip install --system --compile $deps -e 'anndata @ .'
 
       - name: Install dependencies release candidates
