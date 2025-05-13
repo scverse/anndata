@@ -80,7 +80,7 @@ doc = [
     "anndata[dev-doc,dask]",
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
-test-min = [
+test = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",
@@ -101,10 +101,7 @@ test-min = [
     "pyarrow",
     "anndata[dask]",
 ]
-test = [
-    "anndata[test-min,lazy]",
-    "pandas>=2.1.0",
-] # pandas 2.1.0 needs to be specified for xarray to work with min-deps script
+test-full = [ "anndata[test-min,lazy]" ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
