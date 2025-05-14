@@ -12,6 +12,7 @@ from scipy import sparse
 
 import anndata
 
+from ._core.anndata import AnnData
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
@@ -19,8 +20,6 @@ from .logging import get_logger
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any, Literal
-
-    from ._core.anndata import AnnData
 
 logger = get_logger(__name__)
 
