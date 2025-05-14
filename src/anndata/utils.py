@@ -12,7 +12,6 @@ from scipy import sparse
 
 import anndata
 
-from ._core.anndata import AnnData
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
@@ -463,6 +462,9 @@ def adapt_vars_like(
     """
     Make target have the same .var (genes) as source., missing genes are filled with fill_value.
     """
+    # importing here to avoid circular import issues
+    from ._core.anndata import AnnData
+
     # needed to add it as when trying to call target.X[:, target.var.index]
     # it would raise an error if target.X is None
     if target.X is None:
