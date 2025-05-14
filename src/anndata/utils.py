@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any, Literal
 
+    from ._core.anndata import AnnData
+
 logger = get_logger(__name__)
 
 
@@ -450,3 +452,36 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def adapt_vars_like(
+    source: AnnData, target: AnnData, fill_value: float = 0.0
+) -> AnnData:
+    """
+    Make target have the same .var (genes) as source., missing genes are filled with fill_value.
+    """
+    # needed to add it as when trying to call target.X[:, target.var.index]
+    # it would raise an error if target.X is None
+    if target.X is None:
+        msg = "target.X is None; cannot adapt vars without a data matrix."
+        raise ValueError(msg)
+    # this will become the .var of returned AnnData
+    new_var = source.var.copy()
+    # this will become the .X matrix. Makes sure all genes in source are
+    # represented, and placeholders are ready for copying shared ones
+    new_x = np.full((target.n_obs, new_var.shape[0]), fill_value, dtype=target.X.dtype)
+
+    shared_genes = source.var_names.intersection(target.var_names)
+    # positions of shared genes in source
+    source_idx = new_var.index.get_indexer(shared_genes)
+    # positions of those same genes in target
+    target_idx = target.var.index.get_indexer(shared_genes)
+    # fills the new .X array for all target cells
+    # inserts expression values from target.X into the correct columns of
+    # the new_x that match shared genes
+    # only genes in both source and target are copied over. Everything else
+    # remains at fill_value
+    new_x[:, source_idx] = target.X[:, target_idx]
+    # creates a new AnnData object with the new .X and .var
+    new_adata = AnnData(X=new_x, obs=target.obs.copy(), var=new_var)
+    return new_adata
