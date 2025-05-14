@@ -457,6 +457,10 @@ def module_get_attr_redirect(
 def adapt_vars_like(
     source: AnnData, target: AnnData, fill_value: float = 0.0
 ) -> AnnData:
+    # source = AnnData object that defines the desired genes
+    # target = the data you want to reshape to match source
+    # fill_vlaue = what value to use for missing genes (default set to 0.0)
+    # returns a new AnnData object with the same genes as source
     """
     Make target have the same .var (genes) as source., missing genes are filled with fill_value.
     """
@@ -465,23 +469,28 @@ def adapt_vars_like(
     if target.X is None:
         msg = "target.X is None; cannot adapt vars without a data matrix."
         raise ValueError(msg)
-    # this will become the .var of returned AnnData
+    # this will define the gene list we want to match
     new_var = source.var.copy()
-    # this will become the .X matrix. Makes sure all genes in source are
-    # represented, and placeholders are ready for copying shared ones
+    # initializing a new dense np array of shape (number of target cells, number of genes in source)
+    # filled with fill_value
+    # this will become the new .X matrix.
+    # It makes sure all genes in source are represented, and placeholders are ready for copying shared ones
     new_x = np.full((target.n_obs, new_var.shape[0]), fill_value, dtype=target.X.dtype)
-
+    # finds gene names that appeare in both source and target
     shared_genes = source.var_names.intersection(target.var_names)
     # positions of shared genes in source
     source_idx = new_var.index.get_indexer(shared_genes)
     # positions of those same genes in target
     target_idx = target.var.index.get_indexer(shared_genes)
-    # fills the new .X array for all target cells
-    # inserts expression values from target.X into the correct columns of
-    # the new_x that match shared genes
-    # only genes in both source and target are copied over. Everything else
-    # remains at fill_value
+    # fills the new .X array for all target cells (rows)
+    # also inserts expression values from target.X into the correct columns of new_x
+    # for the shared genes
+    # only genes in both source and target are copied over.
+    # everything else remains at fill_value
     new_x[:, source_idx] = target.X[:, target_idx]
     # creates a new AnnData object with the new .X and .var
+    # .X is the filled new_x array
+    # .obs is a copy of the target.obs
+    # .var is copied from source.var, making sure alignment of gene annotations
     new_adata = AnnData(X=new_x, obs=target.obs.copy(), var=new_var)
     return new_adata
