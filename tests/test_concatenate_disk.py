@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData, concat
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
@@ -252,3 +253,93 @@ def test_output_dir_exists(tmp_path):
 def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
+
+def test_concat_on_disk_varm_and_uns_series(tmp_path):
+    a = AnnData(X=np.ones((3,3)))
+    b = AnnData(X=np.ones((2,3)))
+
+    a.var_names = b.var_names = ["g1", "g2", "g3"]
+    a.obs_names = [f"a{i}" for i in range(3)]
+    b.obs_names = [f"b{i}" for i in range(2)]
+
+    a.varm["marker"] = pd.DataFrame({"s": [1, 2, 3]}, index=a.var_names)
+    b.varm["marker"] = pd.DataFrame({"s": [1, 2, 3]}, index=b.var_names)
+
+    a.uns["description"] = ["first", "second"]
+    a.uns["meta"] = {"version": [1, 2, 3]}
+    b.uns["description"] = ["first", "second"]
+    b.uns["meta"] = {"version": [4, 5, 6]}
+
+    p1 = tmp_path / "a1.h5ad"
+    p2 = tmp_path / "a2.h5ad"
+    out = tmp_path / "out.h5ad"
+    a.write_h5ad(p1)
+    b.write_h5ad(p2)
+
+    concat_on_disk(
+        in_files={"x": p1, "y": p2},
+        out_file=out,
+        max_loaded_elems=int(1e6),
+        axis=0,
+        join="outer",
+        merge="unique",
+        uns_merge="first",
+        index_unique="-",
+    )
+
+    adata = ad.read_h5ad(out)
+    assert "marker" in adata.varm
+    assert isinstance(adata.varm["marker"], pd.DataFrame)
+    assert "description" in adata.uns
+    assert "meta" in adata.uns
+
+def test_varm_uns_missing_in_one_input(tmp_path):
+    # this test checks whether concat_on_disk() correctly handles cases where
+    # some inputs have .varm and .uns entries, and others do not
+    # creating two in-memory anndata objects, each are 2x3 matrix of ones as .X data
+    a = AnnData(X=np.ones((2, 3)))
+    b = AnnData(X=np.ones((2, 3)))
+    # setting var_name for object objects so they are consistent and could be aligned when merged
+    a.var_names = b.var_names = ["g1", "g2", "g3"]
+
+    a.varm["marker"] = pd.DataFrame([1, 2, 3], index=a.var_names, columns=["marker"])
+    # b.varm is empty
+    a.uns["meta"] = {"v": pd.DataFrame([1, 2], columns=["v"])}
+    # b.uns is empty
+    # constructing paths for writing the anndata files and thei final merged output
+    p1 = tmp_path / "a1.h5ad"
+    p2 = tmp_path / "a2.h5ad"
+    out = tmp_path / "out.h5ad"
+    # write the anndata objects to disk as .h5ad files
+    a.write_h5ad(p1)
+    b.write_h5ad(p2)
+
+    concat_on_disk({"x": p1, "y": p2},
+                   out, axis=0,
+                   join="outer", merge="unique", 
+                   uns_merge="unique", index_unique="-")
+    result = ad.read_h5ad(out)
+    # checking with marker field is present after merge
+    assert "marker" in result.varm
+    # checking if meta field also survive even though not present in b
+    assert "meta" in result.uns
+
+def test_uns_merge_same_fails_on_conflict(tmp_path):
+    # checking that a merge conflict in .uns with uns_merge="same" triggers and appropriate error
+    a = AnnData(X=np.ones((2, 2)))
+    b = AnnData(X=np.ones((2, 2)))
+    # adding conflicting values to the same .uns["shared"] key:
+    # "foo" in a and "boo" in b
+    a.uns["shared"] = "foo"
+    b.uns["shared"] = "boo"
+
+    a.write_h5ad(tmp_path / "a.h5ad")
+    b.write_h5ad(tmp_path / "b.h5ad")
+
+    with pytest.raises(ValueError):
+        concat_on_disk(
+            {"a": tmp_path / "a.h5ad", 
+             "b": tmp_path / "b.h5ad"},
+            tmp_path / "out.h5ad",
+            uns_merge="same_strict"
+        )

@@ -371,11 +371,26 @@ def _write_concat_sequence(
 
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
+    # helped function used during disk-based concatenation of AnnData objects
+    # Write Alternative axis mappings liks .bsm, .varm etc to the output
+    # reads .obsm or .varm group from each input file, then open the group in a backend mode
+    # merged all those into one mapping like a dict of arrayrs of df 
     alt_mapping = merge([read_as_backed(g[f"{alt_axis_name}m"]) for g in groups])
     # If its empty, we need to write an empty dataframe with the correct index
+    # if the merged object is a single pandas.series, convert it to a df
+    if isinstance (alt_mapping, pd.Series):
+        alt_mapping = alt_mapping.to_frame()
+    # normalizing nested dict values if they contain series 
+    # if the result is a dict, checking each item in the dict, converts any series to a proper df
+    if isinstance(alt_mapping, dict):
+        for k,v in alt_mapping.items():
+            if isinstance(v, pd.Series):
+                alt_mapping[k] = v.to_frame()
+    # handling a case when there is nothing to write
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
         write_elem(output_group, f"{alt_axis_name}m", alt_df)
+    # otherwise, write the merged alt mapping
     else:
         write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
 
@@ -403,8 +418,21 @@ def _write_axis_annot(
 
 
 def _write_uns(groups, output_group, merge):
+    # function writes the .uns slot of merged AnnData objects to disk
+    # read and merge all .uns from input groups
     uns = merge([read_elem(g["uns"]) for g in groups])
+    # normalizing the result if it is a single pd.Series
+    # making sure it is converted into a dataframe for consistency
+    if isinstance(uns, pd.Series):
+        uns = uns.to_frame()
+    # convert any nested series inside the merged dict to dataframes
+    # iterating over each element in dict and converting it to df
+    if isinstance(uns, dict):
+        for k, v in uns.items():
+            if isinstance(v, pd.Series):
+                uns[k] = v.to_frame()
     write_elem(output_group, "uns", uns)
+
 
 
 def concat_on_disk(
