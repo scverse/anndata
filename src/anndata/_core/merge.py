@@ -454,6 +454,23 @@ def merge_unique(ds: Collection[Mapping]) -> Mapping:
 def merge_same(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, intersect_keys, unique_value)
 
+def merge_same_strict(ds: Collection[Mapping]) -> Mapping:
+    # only keys shared across all inputs are considered
+    # only identical values are merged with _raise_on_conflict
+    return merge_nested(ds, intersect_keys, _raise_on_conflict)
+
+def _raise_on_conflict(vals: list) -> Any:
+    # building a filtered list of non-empty values
+    # checks if each value has an .empty attribute and exclude empty ones
+    non_empty = [v for v in vals if getattr(v, "empty", False) is False]
+    if not non_empty:
+        return vals[0]
+    # if all values are equal to the first one, then it would return it
+    # passes in the common case where merging same values in valid
+    if all(equal(v, vals[0]) for v in vals):
+        return vals[0]
+    msg = f"Values do not match across all objects: {vals}"
+    raise ValueError(msg)
 
 def merge_first(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, union_keys, first)
@@ -473,12 +490,13 @@ def merge_only(ds: Collection[Mapping]) -> Mapping:
 MERGE_STRATEGIES = {
     None: lambda x: {},
     "same": merge_same,
+    "same-strict": merge_same_strict,
     "unique": merge_unique,
     "first": merge_first,
     "only": merge_only,
 }
 
-StrategiesLiteral = Literal["same", "unique", "first", "only"]
+StrategiesLiteral = Literal["same", "same-strict", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
