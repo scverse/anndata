@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pandas as pd
 
-from ..compat import XDataset
-
-if TYPE_CHECKING:
-    from ..compat import XDataArray
+from ..compat import XDataArray, XDataset
 
 
 class Dataset2D(XDataset):
@@ -143,3 +138,28 @@ class Dataset2D(XDataset):
         if index_key is not None:
             columns.discard(index_key)
         return pd.Index(columns)
+
+    def __setitem__(self, key, value):
+        if key == self.index_dim:
+            msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
+            raise KeyError(msg)
+        if not isinstance(value, tuple) and not isinstance(value, XDataArray):
+            # maintain setting behavior of a 2D dataframe i.e., one dim
+            value = (self.index_dim, value)
+        if isinstance(value, XDataArray):
+            if value.name is not None and value.name != key:
+                msg = f"DataArray should have name {key}, found {value.name}"
+                raise ValueError(msg)
+            if len(value.dims) != 1:
+                msg = f"XDataArray should have only one dimension, found {len(value.dims)}"
+                raise ValueError(msg)
+            if value.dims[0] != self.index_dim:
+                msg = f"DataArray should have dimension {self.index_dim}, found {value.dims[0]}"
+                raise ValueError(msg)
+            if (
+                self.index_dim not in value.coords
+                or value.coords[self.index_dim].name != self.index_dim
+            ):
+                msg = f"DataArray should have coordinate {self.index_dim} with same name, found {value.coords} with name {value.coords[next(iter(value.coords.keys()))].name}"
+                raise ValueError(msg)
+        super().__setitem__(key, value)
