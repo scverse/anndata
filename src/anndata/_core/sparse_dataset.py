@@ -21,10 +21,12 @@ from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
+import cupy as cp
 import h5py
 import numpy as np
 import scipy
 import scipy.sparse as ss
+from cupyx.scipy.sparse import csc_matrix, csr_matrix
 from packaging.version import Version
 from scipy.sparse import _sparsetools
 
@@ -166,25 +168,28 @@ class BackedSparseMatrix(_cs_matrix):
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         new_indptr = self.indptr[s.start : s.stop + 1].copy()
-
         start = new_indptr[0]
         stop = new_indptr[-1]
+        import cupy as cp
 
         new_indptr -= start
-
+        if isinstance(start, cp.ndarray):
+            start = start.item()
+            stop = stop.item()
         new_data = self.data[start:stop]
         new_indices = self.indices[start:stop]
-
-        return new_data, new_indices, new_indptr
+        return new_data.ravel(), new_indices.ravel(), new_indptr.ravel()
 
 
 class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
     def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
+        print("from intXslice")
         return ss.csr_matrix(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
         )[:, col]
 
     def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
+        print("from sliceXslice")
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -196,13 +201,21 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
             return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
         if row.step != 1:
             return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
-        res = ss.csr_matrix(
-            self._get_contiguous_compressed_slice(row),
-            shape=(out_shape[0], self.shape[1]),
-        )
+        data, indices, indptr = self._get_contiguous_compressed_slice(row)
+        if isinstance(data, cp.ndarray):
+            res = csr_matrix(
+                (data, indices, indptr),
+                shape=(out_shape[0], self.shape[1]),
+            )
+        else:
+            res = ss.csr_matrix(
+                (data, indices, indptr),
+                shape=(out_shape[0], self.shape[1]),
+            )
         return res if out_shape[1] == self.shape[1] else res[:, col]
 
     def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
+        print("from arrayXslice")
         idxs = np.asarray(row)
         if len(idxs) == 0:
             return ss.csr_matrix((0, self.shape[1]))
@@ -231,10 +244,17 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
             return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
         if col.step != 1:
             return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
-        res = ss.csc_matrix(
-            self._get_contiguous_compressed_slice(col),
-            shape=(self.shape[0], out_shape[1]),
-        )
+        data, indices, indptr = self._get_contiguous_compressed_slice(row)
+        if isinstance(data, cp.ndarray):
+            res = csc_matrix(
+                (data, indices, indptr),
+                shape=(out_shape[0], self.shape[1]),
+            )
+        else:
+            res = ss.csc_matrix(
+                (data, indices, indptr),
+                shape=(out_shape[0], self.shape[1]),
+            )
         return res if out_shape[0] == self.shape[0] else res[row, :]
 
     def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
@@ -456,13 +476,15 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         row_sp_matrix_validated, col_sp_matrix_validated = validate_indices(
             mtx, indices
         )
-
+        print(f"type of mtx: {type(mtx)}")
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
+            print("Optimized CSR masked indexing")
             sub = ss.csr_matrix(
                 subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
+            print("Optimized CSC masked indexing")
             sub = ss.csc_matrix(
                 subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
             )[row, :]
@@ -470,8 +492,10 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         elif not is_sparse_indexing_overridden(
             self.format, row_sp_matrix_validated, col_sp_matrix_validated
         ):
+            print("Optimized to_memory indexing")
             sub = self.to_memory()[row_sp_matrix_validated, col_sp_matrix_validated]
         else:
+            print("Default indexing")
             sub = mtx[row, col]
 
         # If indexing is array x array it returns a backed_sparse_matrix
