@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pandas as pd
 
-from ..compat import XDataset
-
-if TYPE_CHECKING:
-    from ..compat import XDataArray
+from ..compat import XDataArray, XDataset
 
 
 class Dataset2D(XDataset):
@@ -143,3 +138,16 @@ class Dataset2D(XDataset):
         if index_key is not None:
             columns.discard(index_key)
         return pd.Index(columns)
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, tuple) and not isinstance(value, XDataArray):
+            # maintain setting behavior of a 2D dataframe i.e., one dim
+            value = (self.index_dim, value)
+        if isinstance(value, XDataArray):
+            if len(value.dims) != 1:
+                msg = f"XDataArray should have only one dimension, found {len(value.dims)}"
+                raise ValueError(msg)
+            if value.dims[0] != self.index_dim:
+                msg = f"DataArray {value} should have dimension {self.index_dim}, found {value.dims[0]}"
+                raise ValueError(msg)
+        super().__setitem__(key, value)

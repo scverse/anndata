@@ -1338,6 +1338,7 @@ def concat_dataset2d_on_annot_axis(
     force_lazy: bool,
     label: str | None = None,
     label_col: pd.Categorical | None = None,
+    concat_indices: pd.Index | None = None,
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata._core.xarray.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
@@ -1393,20 +1394,25 @@ def concat_dataset2d_on_annot_axis(
         xr.concat(annotations_re_indexed, join=join, dim=DS_CONCAT_DUMMY_INDEX_NAME),
     )
     ds.is_backed = have_backed
-    ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
-        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
-    )
+    if concat_indices is not None:
+        concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
+        ds.index = concat_indices
+    else:
+        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
+            ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
+        )
     # Drop any lingering dimensions (swap doesn't delete)
     ds = ds.drop_dims(d for d in ds.dims if d != DS_CONCAT_DUMMY_INDEX_NAME)
     # Create a new true index and then delete the columns resulting from the concatenation for each index.
     # This includes the dummy column (which is neither a dimension nor a true indexing column)
-    index = xr.concat(
-        [a.true_xr_index for a in annotations_re_indexed],
-        dim=DS_CONCAT_DUMMY_INDEX_NAME,
-    )
-    # prevent duplicate values
-    index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
-    ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
+    if concat_indices is None:
+        index = xr.concat(
+            [a.true_xr_index for a in annotations_re_indexed],
+            dim=DS_CONCAT_DUMMY_INDEX_NAME,
+        )
+        # prevent duplicate values
+        index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
+        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
     for key in {
         true_index
         for a in annotations_re_indexed
@@ -1691,14 +1697,17 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             ignore_index=True,
         )
         concat_annot.index = concat_indices
-        if label is not None:
-            concat_annot[label] = label_col
     else:
         concat_annot = concat_dataset2d_on_annot_axis(
-            annotations, join, force_lazy=force_lazy, label=label, label_col=label_col
+            annotations,
+            join,
+            force_lazy=force_lazy,
+            label=label,
+            label_col=label_col,
+            concat_indices=concat_indices,
         )
-        concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
-        concat_annot.index = concat_indices
+    if label is not None:
+        concat_annot[label] = label_col
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
