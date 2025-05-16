@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import wraps
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -8,6 +9,19 @@ from ..compat import XDataset
 
 if TYPE_CHECKING:
     from ..compat import XDataArray
+
+
+def requires_xarray(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            import xarray  # noqa: F401
+        except ImportError as e:
+            msg = "xarray is required to read dataframes lazily. Please install xarray."
+            raise ImportError(msg) from e
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 class Dataset2D(XDataset):
