@@ -118,6 +118,18 @@ Writing formats that cannot represent all aspects of {class}`AnnData` objects.
    AnnData.write_loom
 ```
 
+(utilities-api)=
+## Utilities
+Helper functions used internationally or for reshaping and aligng `AnnData` objects. Can be useful for cusotm workflows or edge cases.
+
+```{eval-rst}
+.. autosummary::
+	:toctree: generated/
+	
+	utils.adapt_vars_like
+
+```
+
 (experimental-api)=
 
 ## Experimental API
@@ -203,6 +215,8 @@ Types used by the former:
 
    types.ExtensionNamespace
 ```
+
+
 
 (errors-api)=
 

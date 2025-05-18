@@ -453,14 +453,36 @@ def module_get_attr_redirect(
 
 
 def adapt_vars_like(
-    source: AnnData, target: AnnData, fill_value: float = 0.0
+    source: AnnData,
+    target: AnnData,
+    fill_value: float = 0.0,
 ) -> AnnData:
     # source = AnnData object that defines the desired genes
     # target = the data you want to reshape to match source
     # fill_vlaue = what value to use for missing genes (default set to 0.0)
     # returns a new AnnData object with the same genes as source
     """
-    Make target have the same .var (genes) as source., missing genes are filled with fill_value.
+    Adapt the `.var` structure of `target` to match that of `source`.
+
+    This function makes sure that the `target` AnnData object has the same set
+    of genes (`.var_names`) as the `source` AnnData object. It fills in the
+    any missing genes in the `target` object with a specified `fill_value`.
+
+    Parameters
+    ----------
+    source
+        Refernece AnnData object whose genes (.var) define the desired structure.
+    target
+        AnnData object to be adapted to match the source's gene structure.
+    fill_value
+        Value used to fill in missing genes. Defaults to 0.0.
+
+    Returns
+    -------
+    AnnData
+        A new AnnData object with the genes matching the source's structure and data from
+        `target`, with missing values filled in with `fill_value`.
+
     """
     # importing here to avoid circular import issues
     from ._core.anndata import AnnData
