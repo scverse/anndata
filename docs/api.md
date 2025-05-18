@@ -125,7 +125,7 @@ Helper functions used internationally or for reshaping and aligng `AnnData` obje
 ```{eval-rst}
 .. autosummary::
 	:toctree: generated/
-	
+
 	utils.adapt_vars_like
 
 ```
