@@ -493,14 +493,25 @@ def adapt_vars_like(
     if target.X is None:
         msg = "target.X is None; cannot adapt vars without a data matrix."
         raise ValueError(msg)
-    # this will define the gene list we want to match
+    # making a copy to use in the new AnnData object returned later
     new_var = source.var.copy()
-    # initializing a new dense np array of shape (number of target cells, number of genes in source)
-    # filled with fill_value
-    # this will become the new .X matrix.
-    # It makes sure all genes in source are represented, and placeholders are ready for copying shared ones
-    reindexer = Reindexer(new_var.index, target.var.index, fill_value=fill_value)
-    new_x = reindexer(target.X)
+    # handling the case when not all source genes are in target
+    if not source.var_names.isin(target.var_names).all():
+        # manual fix
+        # computing the list of genes that are in source and target
+        shared = source.var_names.intersection(target.var_names)
+        # getting positions of the shared genes in source and target
+        source_idx = new_var.index.get_indexer(shared)
+        target_idx = target.var_names.get_indexer(shared)
+        # creating a new matrix of shape (number of cells, number of genes in source)
+        # filled with the fill_value
+        new_x = np.full((target.n_obs, new_var.shape[0]), fill_value)
+        # for the genes that are in both source and target, copy over the values
+        new_x[:, source_idx] = target.X[:, target_idx]
+    else:
+        # in other cases just use reindexer
+        reindexer = Reindexer(new_var.index, target.var.index)
+        new_x = reindexer(target.X, fill_value=fill_value)
     # creates a new AnnData object with the new .X and .var
     # .X is the filled new_x array
     # .obs is a copy of the target.obs
