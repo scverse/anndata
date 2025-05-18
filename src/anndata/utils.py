@@ -486,6 +486,7 @@ def adapt_vars_like(
     """
     # importing here to avoid circular import issues
     from ._core.anndata import AnnData
+    from ._core.merge import Reindexer
 
     # needed to add it as when trying to call target.X[:, target.var.index]
     # it would raise an error if target.X is None
@@ -498,19 +499,8 @@ def adapt_vars_like(
     # filled with fill_value
     # this will become the new .X matrix.
     # It makes sure all genes in source are represented, and placeholders are ready for copying shared ones
-    new_x = np.full((target.n_obs, new_var.shape[0]), fill_value, dtype=target.X.dtype)
-    # finds gene names that appeare in both source and target
-    shared_genes = source.var_names.intersection(target.var_names)
-    # positions of shared genes in source
-    source_idx = new_var.index.get_indexer(shared_genes)
-    # positions of those same genes in target
-    target_idx = target.var.index.get_indexer(shared_genes)
-    # fills the new .X array for all target cells (rows)
-    # also inserts expression values from target.X into the correct columns of new_x
-    # for the shared genes
-    # only genes in both source and target are copied over.
-    # everything else remains at fill_value
-    new_x[:, source_idx] = target.X[:, target_idx]
+    reindexer = Reindexer(new_var.index, target.var.index, fill_value=fill_value)
+    new_x = reindexer(target.X)
     # creates a new AnnData object with the new .X and .var
     # .X is the filled new_x array
     # .obs is a copy of the target.obs
