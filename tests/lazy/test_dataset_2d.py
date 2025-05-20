@@ -20,26 +20,6 @@ def dataset_2d():
     )
 
 
-def test_dataset_2d_set_array_different_dims(dataset_2d):
-    da = XDataArray(
-        np.arange(3),
-        coords=[np.arange(3)],
-        dims="not_obs_names",
-    )
-    with pytest.raises(ValueError, match="dimension obs_names, found not_obs_names"):
-        dataset_2d["foo"] = da
-
-
-def test_dataset_2d_set_array_multiple_dims(dataset_2d):
-    da = XDataArray(
-        np.arange(9).reshape(3, 3),
-        coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
-        dims=("obs_names", "not_obs_names"),
-    )
-    with pytest.raises(ValueError, match="should have only one dimension"):
-        dataset_2d["foo"] = da
-
-
 def test_dataset_2d_set_dataarray(dataset_2d):
     da = XDataArray(
         np.arange(3), coords={"obs_names": [1, 2, 3]}, dims=("obs_names"), name="bar"
@@ -49,35 +29,59 @@ def test_dataset_2d_set_dataarray(dataset_2d):
     assert dataset_2d["bar"].equals(da)
 
 
-def test_dataset_2d_set_dataarray_bad_coord_name(dataset_2d):
-    da = XDataArray(
-        np.arange(3),
-        coords={"foo": ("obs_names", np.arange(3))},
-        dims=("obs_names"),
-        name="bar",
-    )
-    with pytest.raises(ValueError, match="DataArray should have coordinate obs_names"):
-        dataset_2d["bar"] = da
-
-
-def test_dataset_2d_set_dataarray_bad_name(dataset_2d):
-    da = XDataArray(
-        np.arange(3),
-        coords={"obs_names": np.arange(3)},
-        dims=("obs_names"),
-        name="not_bar",
-    )
-    with pytest.raises(
-        ValueError, match="DataArray should have name bar, found not_bar"
-    ):
-        dataset_2d["bar"] = da
-
-
 def test_dataset_2d_set_extension_array(dataset_2d):
     array = pd.array(["e", "f", "g"], dtype="category")
     dataset_2d["bar"] = array
     assert dataset_2d["bar"].dims == ("obs_names",)
     assert dataset_2d["bar"].data is array
+
+
+@pytest.mark.parametrize(
+    ("da", "msg"),
+    [
+        pytest.param(
+            XDataArray(
+                np.arange(3),
+                coords={"foo": ("obs_names", np.arange(3))},
+                dims="obs_names",
+                name="bar",
+            ),
+            "DataArray should have coordinate obs_names",
+            id="coord_name",
+        ),
+        pytest.param(
+            XDataArray(
+                np.arange(3),
+                coords={"obs_names": np.arange(3)},
+                dims=("obs_names",),
+                name="not_bar",
+            ),
+            "DataArray should have name bar, found not_bar",
+            id="dataarray_name",
+        ),
+        pytest.param(
+            XDataArray(
+                np.arange(9).reshape(3, 3),
+                coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
+                dims=("obs_names", "not_obs_names"),
+            ),
+            "should have only one dimension",
+            id="multiple_dims",
+        ),
+        pytest.param(
+            XDataArray(
+                np.arange(3),
+                coords=[np.arange(3)],
+                dims="not_obs_names",
+            ),
+            "dimension obs_names, found not_obs_names",
+            id="name_conflict",
+        ),
+    ],
+)
+def test_dataset_2d_set_with_bad_dataarray(da, msg, dataset_2d):
+    with pytest.raises(ValueError, match=msg):
+        dataset_2d["bar"] = da
 
 
 @pytest.mark.parametrize(
