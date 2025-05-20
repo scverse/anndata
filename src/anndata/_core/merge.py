@@ -772,11 +772,8 @@ class Reindexer:
                 {index_dim: self.new_idx}, method=None, fill_value=fill_value
             )
             for col, arr in extension_arrays.items():
-                el[col] = (
-                    index_dim,
-                    pd.Series(arr, index=self.old_idx).reindex(
-                        self.new_idx, fill_value=fill_value
-                    ),
+                el[col] = pd.Series(arr, index=self.old_idx).reindex(
+                    self.new_idx, fill_value=fill_value
                 )
             return el
         else:
@@ -1421,8 +1418,6 @@ def concat_dataset2d_on_annot_axis(
         del ds[key]
     if DUMMY_RANGE_INDEX_KEY in ds:
         del ds[DUMMY_RANGE_INDEX_KEY]
-    if label is not None and label_col is not None:
-        ds[label] = (DS_CONCAT_DUMMY_INDEX_NAME, label_col)
     return ds
 
 

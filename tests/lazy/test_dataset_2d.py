@@ -93,3 +93,11 @@ def test_dataset_2d_set_index(data, dataset_2d):
         match="Cannot set obs_names as a variable",
     ):
         dataset_2d["obs_names"] = data
+
+
+def test_dataset_2d_set_tuple(dataset_2d):
+    with pytest.raises(
+        TypeError,
+        match="Setting with a tuple is not permitted",
+    ):
+        dataset_2d["foo"] = ("obs_names", [1, 2, 3])

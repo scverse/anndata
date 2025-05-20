@@ -140,9 +140,17 @@ class Dataset2D(XDataset):
         return pd.Index(columns)
 
     def __setitem__(self, key, value):
+        """
+        Setting can only be performed when the incoming value is \"standalone\" like :class:`nump.ndarray` to mimic pandas.
+        One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
+        Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as `self.index_dim`.
+        """
         if key == self.index_dim:
             msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
             raise KeyError(msg)
+        if isinstance(value, tuple):
+            msg = "Setting with a tuple is not permitted as there is only one dimension and this dimension should not be altered or added to"
+            raise TypeError(msg)
         if not isinstance(value, tuple) and not isinstance(value, XDataArray):
             # maintain setting behavior of a 2D dataframe i.e., one dim
             value = (self.index_dim, value)
