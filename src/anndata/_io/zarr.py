@@ -27,19 +27,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def _check_rec_array(adata: AnnData) -> None:
-    if settings.zarr_write_format == 3 and (
-        structured_dtype_keys := {
-            k
-            for k, v in adata.uns.items()
-            if isinstance(v, np.recarray)
-            or (isinstance(v, np.ndarray) and v.dtype.fields)
-        }
-    ):
-        msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
-        raise NotImplementedError(msg)
-
-
 @no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
@@ -50,7 +37,6 @@ def write_zarr(
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
-    _check_rec_array(adata)
     if isinstance(store, Path):
         store = str(store)
     if convert_strings_to_categoricals:
