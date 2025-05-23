@@ -29,11 +29,18 @@ def test_dataset_2d_set_dataarray(dataset_2d):
     assert dataset_2d["bar"].equals(da)
 
 
-def test_dataset_2d_set_extension_array(dataset_2d):
-    array = pd.array(["e", "f", "g"], dtype="category")
-    dataset_2d["bar"] = array
+@pytest.mark.parametrize(
+    "setter",
+    [
+        pd.array(["e", "f", "g"], dtype="category"),
+        ("obs_names", pd.array(["e", "f", "g"], dtype="category")),
+    ],
+    ids=["array", "tuple_with_array"],
+)
+def test_dataset_2d_set_extension_array(dataset_2d, setter):
+    dataset_2d["bar"] = setter
     assert dataset_2d["bar"].dims == ("obs_names",)
-    assert dataset_2d["bar"].data is array
+    assert dataset_2d["bar"].data is setter[1] if isinstance(setter, tuple) else setter
 
 
 @pytest.mark.parametrize(
@@ -77,6 +84,21 @@ def test_dataset_2d_set_extension_array(dataset_2d):
             "dimension obs_names, found not_obs_names",
             id="name_conflict",
         ),
+        pytest.param(
+            ("not_obs_names", [1, 2, 3]),
+            "Setting value tuple should have first entry",
+            id="tuple_bad_dim",
+        ),
+        pytest.param(
+            (("not_obs_names",), [1, 2, 3]),
+            "Dimension tuple should have only",
+            id="nested_tuple_bad_dim",
+        ),
+        pytest.param(
+            (("obs_names", "bar"), [1, 2, 3]),
+            "Dimension tuple is too long",
+            id="nested_tuple_too_long",
+        ),
     ],
 )
 def test_dataset_2d_set_with_bad_dataarray(da, msg, dataset_2d):
@@ -93,11 +115,3 @@ def test_dataset_2d_set_index(data, dataset_2d):
         match="Cannot set obs_names as a variable",
     ):
         dataset_2d["obs_names"] = data
-
-
-def test_dataset_2d_set_tuple(dataset_2d):
-    with pytest.raises(
-        TypeError,
-        match="Setting with a tuple is not permitted",
-    ):
-        dataset_2d["foo"] = ("obs_names", [1, 2, 3])

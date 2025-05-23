@@ -149,8 +149,17 @@ class Dataset2D(XDataset):
             msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
             raise KeyError(msg)
         if isinstance(value, tuple):
-            msg = "Setting with a tuple is not permitted as there is only one dimension and this dimension should not be altered or added to"
-            raise TypeError(msg)
+            if isinstance(value[0], tuple):
+                if value[0][0] != self.index_dim:
+                    msg = f"Dimension tuple should have only {self.index_dim} as its dimension, found {value[0][0]}"
+                    raise ValueError(msg)
+                if len(value[0]) > 1:
+                    msg = "Dimension tuple is too long."
+                    raise ValueError(msg)
+            if not isinstance(value[0], tuple) and value[0] != self.index_dim:
+                msg = f"Setting value tuple should have first entry {self.index_dim}, found {value[0]}"
+                raise ValueError(msg)
+
         if not isinstance(value, tuple) and not isinstance(value, XDataArray):
             # maintain setting behavior of a 2D dataframe i.e., one dim
             value = (self.index_dim, value)
