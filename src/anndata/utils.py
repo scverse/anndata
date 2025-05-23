@@ -450,3 +450,71 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def adapt_vars_like(
+    source: AnnData,
+    target: AnnData,
+    fill_value: float = 0.0,
+) -> AnnData:
+    # source = AnnData object that defines the desired genes
+    # target = the data you want to reshape to match source
+    # fill_vlaue = what value to use for missing genes (default set to 0.0)
+    # returns a new AnnData object with the same genes as source
+    """
+    Adapt the `.var` structure of `target` to match that of `source`.
+
+    This function makes sure that the `target` AnnData object has the same set
+    of genes (`.var_names`) as the `source` AnnData object. It fills in the
+    any missing genes in the `target` object with a specified `fill_value`.
+
+    Parameters
+    ----------
+    source
+        Refernece AnnData object whose genes (.var) define the desired structure.
+    target
+        AnnData object to be adapted to match the source's gene structure.
+    fill_value
+        Value used to fill in missing genes. Defaults to 0.0.
+
+    Returns
+    -------
+    AnnData
+        A new AnnData object with the genes matching the source's structure and data from
+        `target`, with missing values filled in with `fill_value`.
+
+    """
+    # importing here to avoid circular import issues
+    from ._core.anndata import AnnData
+    from ._core.merge import Reindexer
+
+    # needed to add it as when trying to call target.X[:, target.var.index]
+    # it would raise an error if target.X is None
+    if target.X is None:
+        msg = "target.X is None; cannot adapt vars without a data matrix."
+        raise ValueError(msg)
+    # making a copy to use in the new AnnData object returned later
+    new_var = source.var.copy()
+    # handling the case when not all source genes are in target
+    if not source.var_names.isin(target.var_names).all():
+        # manual fix
+        # computing the list of genes that are in source and target
+        shared = source.var_names.intersection(target.var_names)
+        # getting positions of the shared genes in source and target
+        source_idx = new_var.index.get_indexer(shared)
+        target_idx = target.var_names.get_indexer(shared)
+        # creating a new matrix of shape (number of cells, number of genes in source)
+        # filled with the fill_value
+        new_x = np.full((target.n_obs, new_var.shape[0]), fill_value)
+        # for the genes that are in both source and target, copy over the values
+        new_x[:, source_idx] = target.X[:, target_idx]
+    else:
+        # in other cases just use reindexer
+        reindexer = Reindexer(new_var.index, target.var.index)
+        new_x = reindexer(target.X, fill_value=fill_value)
+    # creates a new AnnData object with the new .X and .var
+    # .X is the filled new_x array
+    # .obs is a copy of the target.obs
+    # .var is copied from source.var, making sure alignment of gene annotations
+    new_adata = AnnData(X=new_x, obs=target.obs.copy(), var=new_var)
+    return new_adata
