@@ -457,10 +457,6 @@ def adapt_vars_like(
     target: AnnData,
     fill_value: float = 0.0,
 ) -> AnnData:
-    # source = AnnData object that defines the desired genes
-    # target = the data you want to reshape to match source
-    # fill_vlaue = what value to use for missing genes (default set to 0.0)
-    # returns a new AnnData object with the same genes as source
     """
     Adapt the `.var` structure of `target` to match that of `source`.
 
