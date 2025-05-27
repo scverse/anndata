@@ -22,31 +22,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pytest:
+  get-environments:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+      - id: get-envs
+        run: |
+          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
+            | map(
+              select(.key | startswith("hatch-test"))
+              | {
+                name: .key,
+                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
+                python: .value.python,
+              }
+            )')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
+  test:
+    needs: get-environments
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        include:
-          - python-version: '3.13'
-            test-type: coverage
-          - python-version: '3.11'
-            test-type: standard
-          - python-version: '3.13'
-            dependencies-version: pre-release
-            test-type: strict-warning
-          - python-version: '3.11'
-            dependencies-version: minimum
-            test-type: coverage
+        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+    env:  # environment variable for use in codecov’s env_vars tagging
+      ENV_NAME: ${{ matrix.env.name }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           filter: blob:none
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.env.python }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.env.python }}
 
       - name: Install UV
         uses: astral-sh/setup-uv@v5
@@ -55,43 +72,25 @@ jobs:
           cache-dependency-glob: pyproject.toml
 
       - name: Install dependencies
-        if: matrix.dependencies-version == null
-        run: uv pip install --system --compile -r pyproject.toml --extra=dev --extra=test -e 'anndata @ .' -c ci/constraints.txt
+        run: uvx hatch -v env create ${{ matrix.env.name }}
 
-      - name: Install minimum dependencies
-        if: matrix.dependencies-version == 'minimum'
-        run: |
-          uv pip install --system --compile tomli packaging
-          deps=$(python3 ci/scripts/min-deps.py pyproject.toml --extras dev test-min)
-          uv pip install --system --compile $deps -e 'anndata @ .'
+      - name: Run tests
+        if: matrix.env.test-type == null
+        run: uvx hatch run ${{ matrix.env.name }}:run
+      - name: Run tests (coverage)
+        if: matrix.env.test-type == 'coverage'
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
 
-      - name: Install dependencies release candidates
-        if: matrix.dependencies-version == 'pre-release'
-        run: uv pip install -v --system --compile --pre -r pyproject.toml --extra=dev --extra=test -e 'anndata @ .' -c ci/constraints.txt
-
-      - name: Display installed versions
-        run: uv pip list
-
-      - name: Run Pytest
-        if: matrix.test-type == 'standard'
-        run: pytest -n auto
-
-      - name: Run Pytest (coverage)
-        if: matrix.test-type == 'coverage'
-        run: coverage run -m pytest -n auto --cov --cov-report=xml
-
-      - name: Run Pytest (treat warnings as errors)
-        if: matrix.test-type == 'strict-warning'
-        run: pytest --strict-warnings -n auto
-
-      - uses: codecov/codecov-action@v4
-        if: matrix.test-type == 'coverage'
+      - name: Upload coverage data
+        uses: codecov/codecov-action@v5
+        if: matrix.env.test-type == 'coverage'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: ENV_NAME
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
-  check-build:
+  build:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -121,3 +120,15 @@ jobs:
         run: |
           pip install dist/*.whl
           python -c 'import anndata; print(anndata.__version__)'
+
+  check:
+    if: always()
+    needs:
+      - get-environments
+      - test
+      - build
+    runs-on: ubuntu-latest
+    steps:
+        - uses: re-actors/alls-green@release/v1
+          with:
+            jobs: ${{ toJSON(needs) }}
