@@ -14,7 +14,15 @@ import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D
 from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, XDataArray, ZarrArray, ZarrGroup
+from anndata.compat import (
+    DaskArray,
+    H5Array,
+    H5Group,
+    XDataArray,
+    XDataset,
+    ZarrArray,
+    ZarrGroup,
+)
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -287,7 +295,7 @@ def read_dataframe(
             dims=[DUMMY_RANGE_INDEX_KEY],
             name=DUMMY_RANGE_INDEX_KEY,
         )
-    ds = Dataset2D(elem_xarray_dict)
+    ds = Dataset2D(XDataset(elem_xarray_dict))
     ds.is_backed = True
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case

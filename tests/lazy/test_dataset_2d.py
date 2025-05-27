@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from anndata._core.xarray import Dataset2D
-from anndata.compat import XDataArray
+from anndata.compat import XDataArray, XDataset
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
@@ -15,8 +15,10 @@ pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not inst
 @pytest.fixture
 def dataset_2d():
     return Dataset2D(
-        {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
-        coords={"obs_names": [1, 2, 3]},
+        XDataset(
+            {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+            coords={"obs_names": [1, 2, 3]},
+        )
     )
 
 

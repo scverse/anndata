@@ -21,14 +21,8 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
-from anndata.compat import (
-    AwkArray,
-    CSArray,
-    CSMatrix,
-    CupySparseMatrix,
-    DaskArray,
-    XDataset,
-)
+from anndata._core.xarray import Dataset2D
+from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -150,15 +144,17 @@ def fix_known_differences(
     if backwards_compat:
         del orig.varm
         del orig.varp
-        if isinstance(result.obs, XDataset):
-            result.obs = result.obs.drop_vars(["batch"])
+        if isinstance(result.obs, Dataset2D):
+            result.obs = result.obs.ds.drop_vars(["batch"])
         else:
             result.obs.drop(columns=["batch"], inplace=True)
 
     for attrname in ("obs", "var"):
-        if isinstance(getattr(result, attrname), XDataset):
+        if isinstance(getattr(result, attrname), Dataset2D):
             for adata in (orig, result):
-                df = getattr(adata, attrname).to_dataframe()
+                df = getattr(adata, attrname).ds.to_dataframe()[
+                    getattr(orig, attrname).columns
+                ]
                 df.index.name = "index"
                 setattr(adata, attrname, df)
             resattr = getattr(result, attrname)
@@ -245,13 +241,6 @@ def test_concatenate_roundtrip(
         subset_idx = np.random.choice(remaining, n, replace=False)
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
-
-    if (
-        backwards_compat
-        and (obs_xdataset or var_xdataset)
-        and Version(xr.__version__) < Version("2025.4.0")
-    ):
-        pytest.xfail("https://github.com/pydata/xarray/issues/10218")
     result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
     if backwards_compat and var_xdataset:
         result.var = xr.Dataset.from_dataframe(
@@ -561,19 +550,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray | XDataset)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
     for tmp_ad in [adata1, adata2, adata3]:

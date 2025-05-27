@@ -17,7 +17,6 @@ import pandas as pd
 import scipy
 from natsort import natsorted
 from packaging.version import Version
-from pandas.api.types import is_extension_array_dtype
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -46,7 +45,7 @@ if TYPE_CHECKING:
 
     from anndata._types import Join_T
 
-    from ..compat import XDataArray
+    from ..compat import XDataArray, XDataset
 
 T = TypeVar("T")
 
@@ -130,6 +129,8 @@ def equal(a, b) -> bool:
 
 
 @equal.register(pd.DataFrame)
+@equal.register(Dataset2D)
+@equal.register(pd.Series)
 def equal_dataframe(a, b) -> bool:
     return a.equals(b)
 
@@ -170,11 +171,6 @@ def equal_cupyarray(a, b) -> bool:
     return bool(cp.array_equal(a, b, equal_nan=True))
 
 
-@equal.register(pd.Series)
-def equal_series(a, b) -> bool:
-    return a.equals(b)
-
-
 @equal.register(CSMatrix)
 @equal.register(CSArray)
 @equal.register(CupySparseMatrix)
@@ -213,11 +209,6 @@ def equal_awkward(a, b) -> bool:
     from ..compat import awkward as ak
 
     return ak.almost_equal(a, b)
-
-
-@equal.register(Dataset2D)
-def equal_dataset2d(a, b) -> bool:
-    return a.equals(b)
 
 
 def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
@@ -584,8 +575,8 @@ class Reindexer:
         """
         if self.no_change and (axis_len(el, axis) == len(self.old_idx)):
             return el
-        if isinstance(el, pd.DataFrame):
-            return self._apply_to_df(el, axis=axis, fill_value=fill_value)
+        if isinstance(el, pd.DataFrame | Dataset2D):
+            return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
@@ -594,12 +585,10 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, Dataset2D):
-            return self._apply_to_dataset2d(el, axis=axis, fill_value=fill_value)
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
-    def _apply_to_df(self, el: pd.DataFrame, *, axis, fill_value=None):
+    def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = np.nan
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
@@ -757,28 +746,6 @@ class Reindexer:
             if len(self.new_idx) > len(self.old_idx):
                 el = ak.pad_none(el, 1, axis=axis)  # axis == 0
             return el[self.idx]
-
-    def _apply_to_dataset2d(self, el: Dataset2D, *, axis, fill_value=None):
-        if fill_value is None:
-            fill_value = np.nan
-        index_dim = el.index_dim
-        if axis == 0:
-            # Dataset.reindex() can't handle ExtensionArrays
-            extension_arrays = {
-                col: arr for col, arr in el.items() if is_extension_array_dtype(arr)
-            }
-            el = el.drop_vars(extension_arrays.keys())
-            el = el.reindex(
-                {index_dim: self.new_idx}, method=None, fill_value=fill_value
-            )
-            for col, arr in extension_arrays.items():
-                el[col] = pd.Series(arr, index=self.old_idx).reindex(
-                    self.new_idx, fill_value=fill_value
-                )
-            return el
-        else:
-            msg = "This should be unreachable, please open an issue."
-            raise Exception(msg)
 
     @property
     def idx(self):
@@ -1291,7 +1258,7 @@ def make_dask_col_from_extension_dtype(
 
 def make_xarray_extension_dtypes_dask(
     annotations: Iterable[Dataset2D], *, use_only_object_dtype: bool = False
-) -> Generator[Dataset2D, None, None]:
+) -> Generator[XDataset, None, None]:
     """
     Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
 
@@ -1373,33 +1340,40 @@ def concat_dataset2d_on_annot_axis(
         old_key = a.index_dim
         is_fake_index = old_key != a.true_index_dim
         # First create a dummy index
-        a.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
+        a.ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = (
             old_key,
             pd.RangeIndex(a.shape[0]),
         )
         # Set all the dimensions to this new dummy index
-        a = a.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
+        a.ds = a.ds.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
         # Move the old coordinate into a variable
-        old_coord = a.coords[old_key]
-        del a.coords[old_key]
-        a[old_key] = old_coord
+        old_coord = a.ds.coords[old_key]
+        del a.ds.coords[old_key]
+        a.ds[old_key] = old_coord
         if not is_fake_index:
             a.true_index_dim = old_key
         annotations_re_indexed.append(a)
     # Concat along the dummy index
-    ds = Dataset2D(
-        xr.concat(annotations_re_indexed, join=join, dim=DS_CONCAT_DUMMY_INDEX_NAME),
+    ds_concat = xr.concat(
+        [a.ds for a in annotations_re_indexed],
+        join=join,
+        dim=DS_CONCAT_DUMMY_INDEX_NAME,
     )
-    ds.is_backed = have_backed
+    ds_concat.attrs.pop("indexing_key", None)
+    ds_concat_2d = Dataset2D(ds_concat)
+    ds_concat_2d.is_backed = have_backed
     if concat_indices is not None:
         concat_indices.name = DS_CONCAT_DUMMY_INDEX_NAME
-        ds.index = concat_indices
+        ds_concat_2d.index = concat_indices
+        ds_concat = ds_concat_2d.ds
     else:
-        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
-            ds.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
+        ds_concat.coords[DS_CONCAT_DUMMY_INDEX_NAME] = pd.RangeIndex(
+            ds_concat.coords[DS_CONCAT_DUMMY_INDEX_NAME].shape[0]
         )
     # Drop any lingering dimensions (swap doesn't delete)
-    ds = ds.drop_dims(d for d in ds.dims if d != DS_CONCAT_DUMMY_INDEX_NAME)
+    ds_concat = ds_concat.drop_dims(
+        d for d in ds_concat.dims if d != DS_CONCAT_DUMMY_INDEX_NAME
+    )
     # Create a new true index and then delete the columns resulting from the concatenation for each index.
     # This includes the dummy column (which is neither a dimension nor a true indexing column)
     if concat_indices is None:
@@ -1408,17 +1382,20 @@ def concat_dataset2d_on_annot_axis(
             dim=DS_CONCAT_DUMMY_INDEX_NAME,
         )
         # prevent duplicate values
-        index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds.coords[DS_CONCAT_DUMMY_INDEX_NAME]
-        ds.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
+        index.coords[DS_CONCAT_DUMMY_INDEX_NAME] = ds_concat.coords[
+            DS_CONCAT_DUMMY_INDEX_NAME
+        ]
+        ds_concat.coords[DS_CONCAT_DUMMY_INDEX_NAME] = index
     for key in {
         true_index
         for a in annotations_re_indexed
         if (true_index := a.true_index_dim) != a.index_dim
     }:
-        del ds[key]
-    if DUMMY_RANGE_INDEX_KEY in ds:
-        del ds[DUMMY_RANGE_INDEX_KEY]
-    return ds
+        del ds_concat[key]
+    if DUMMY_RANGE_INDEX_KEY in ds_concat:
+        del ds_concat[DUMMY_RANGE_INDEX_KEY]
+    ds_concat_2d.ds = ds_concat
+    return ds_concat_2d
 
 
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
@@ -1724,7 +1701,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             )
         )
         annotations_with_only_dask = [
-            a.rename({a.true_index_dim: "merge_index"})
+            a.ds.rename({a.true_index_dim: "merge_index"})
             for a in annotations_with_only_dask
         ]
         alt_annot = Dataset2D(

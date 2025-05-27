@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from anndata._core.xarray import Dataset2D
+from anndata.compat import XDataset
 from anndata.tests.helpers import gen_typed_df
 
 
@@ -17,7 +18,7 @@ def df():
 
 @pytest.fixture
 def dataset2d(df):
-    return Dataset2D.from_dataframe(df)
+    return Dataset2D(XDataset.from_dataframe(df))
 
 
 def test_shape(df, dataset2d):
@@ -88,4 +89,4 @@ def test_index(dataset2d):
     dataset2d.index = new_idx
     assert np.all(dataset2d.index == new_idx)
     assert dataset2d.true_index_dim == dataset2d.index_dim == new_idx.name
-    assert list(dataset2d.coords.keys()) == [new_idx.name]
+    assert list(dataset2d.ds.coords.keys()) == [new_idx.name]
