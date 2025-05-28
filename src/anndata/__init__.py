@@ -20,7 +20,7 @@ from ._warnings import (
     WriteWarning,
 )
 from .io import read_h5ad, read_zarr
-from .utils import adapt_vars_like, module_get_attr_redirect
+from .utils import module_get_attr_redirect
 
 # Submodules need to be imported last
 from . import abc, experimental, typing, io, types  # isort: skip

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any, Literal
 
+
 logger = get_logger(__name__)
 
 
@@ -467,7 +468,7 @@ def adapt_vars_like(
     Parameters
     ----------
     source
-        Refernece AnnData object whose genes (.var) define the desired structure.
+        Reference AnnData object whose genes (.var) define the desired structure.
     target
         AnnData object to be adapted to match the source's gene structure.
     fill_value
