@@ -16,7 +16,6 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-import anndata
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
@@ -410,10 +409,6 @@ def gen_adata(  # noqa: PLR0913
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    # zarr v3 on-disk does not write structured dtypes
-    if anndata.settings.zarr_write_format == 3:
-        del uns["O_recarray"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
@@ -1137,26 +1132,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
+        def __init__(*args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
 
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
         async def get(
             self,
             key: str,
