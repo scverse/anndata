@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import itertools
 import random
-import re
 import warnings
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping
-from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
-from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -19,26 +16,33 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
+import anndata
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
 from anndata.compat import (
-    CAN_USE_SPARSE_ARRAY,
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSCMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    SpArray,
+    XDataArray,
+    XDataset,
     ZarrArray,
+    is_zarr_v2,
 )
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
+
+    from zarr.abc.store import ByteRequest
+    from zarr.core.buffer import BufferPrototype
 
     from .._types import ArrayStorageType
 
@@ -54,37 +58,11 @@ except ImportError:
     )
 
 
-# Give this to gen_adata when dask array support is expected.
-GEN_ADATA_DASK_ARGS = dict(
-    obsm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
-    ),
-    varm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
-    ),
-    layers_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
-    ),
-)
-
-
 DEFAULT_KEY_TYPES = (
     sparse.csr_matrix,
     np.ndarray,
     pd.DataFrame,
-    *((sparse.csr_array,) if CAN_USE_SPARSE_ARRAY else ()),
+    sparse.csr_array,
 )
 
 
@@ -97,6 +75,18 @@ DEFAULT_COL_TYPES = (
     np.bool_,
     pd.BooleanDtype,
     pd.Int32Dtype,
+)
+
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
+)
+
+GEN_ADATA_NO_XARRAY_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
 
@@ -127,7 +117,7 @@ def issubdtype(
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
 
-def gen_random_column(
+def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
     if issubdtype(dtype, pd.CategoricalDtype):
@@ -155,7 +145,7 @@ def gen_random_column(
         )
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
-        array = np.array(np.random.choice(letters, n), dtype=dtype)
+        array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
         array[np.random.randint(0, 2, size=n, dtype=bool)] = pd.NA
         return "string", array
     # if issubdtype(dtype, pd.DatetimeTZDtype):
@@ -197,15 +187,11 @@ def _gen_awkward_inner(shape, rng, dtype):
         return dtype(rng.randrange(1000))
     else:
         curr_dim_len = shape[0]
-        lil = []
         if curr_dim_len is None:
             # ragged dimension, set random length
             curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
 
-        for _ in range(curr_dim_len):
-            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
-
-        return lil
+        return [_gen_awkward_inner(shape[1:], rng, dtype) for _ in range(curr_dim_len)]
 
 
 def gen_awkward(shape, dtype=np.int32):
@@ -271,16 +257,15 @@ def maybe_add_sparse_array(
     random_state: np.random.Generator,
     shape: tuple[int, int],
 ):
-    if CAN_USE_SPARSE_ARRAY:
-        if sparse.csr_array in types or sparse.csr_matrix in types:
-            mapping["sparse_array"] = sparse.csr_array(
-                sparse.random(*shape, format=format, random_state=random_state)
-            )
+    if sparse.csr_array in types or sparse.csr_matrix in types:
+        mapping["sparse_array"] = sparse.csr_array(
+            sparse.random(*shape, format=format, random_state=random_state)
+        )
     return mapping
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(
+def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
@@ -291,8 +276,10 @@ def gen_adata(
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
-    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    obs_xdataset: bool = False,
+    var_xdataset: bool = False,
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -324,6 +311,7 @@ def gen_adata(
         (csr, csc)
     """
     import dask.array as da
+    import xarray as xr
 
     if random_state is None:
         random_state = np.random.default_rng()
@@ -337,6 +325,11 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if obs_xdataset:
+        obs = XDataset.from_dataframe(obs)
+    if var_xdataset:
+        var = XDataset.from_dataframe(var)
+
     if X_type is None:
         X = None
     else:
@@ -348,6 +341,9 @@ def gen_adata(
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        ),
     )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
@@ -363,6 +359,9 @@ def gen_adata(
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
+        xdataset=xr.Dataset.from_dataframe(
+            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        ),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
@@ -389,18 +388,16 @@ def gen_adata(
         array=np.random.random((M, M)),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        obsp["sparse_array"] = sparse.csr_array(
-            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-        )
+    obsp["sparse_array"] = sparse.csr_array(
+        sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+    )
     varp = dict(
         array=np.random.random((N, N)),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
-    if CAN_USE_SPARSE_ARRAY:
-        varp["sparse_array"] = sparse.csr_array(
-            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-        )
+    varp["sparse_array"] = sparse.csr_array(
+        sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+    )
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(
@@ -413,6 +410,10 @@ def gen_adata(
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
+    # https://github.com/zarr-developers/zarr-python/issues/2134
+    # zarr v3 on-disk does not write structured dtypes
+    if anndata.settings.zarr_write_format == 3:
+        del uns["O_recarray"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
@@ -622,9 +623,9 @@ def assert_equal_sparse(
     assert_equal(b, a, exact=exact, elem_name=elem_name)
 
 
-@assert_equal.register(SpArray)
+@assert_equal.register(CSArray)
 def assert_equal_sparse_array(
-    a: SpArray, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
@@ -688,8 +689,8 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
-    for k in a.keys():
+    assert set(a) == set(b), format_msg(elem_name)
+    for k in a:
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
@@ -739,6 +740,13 @@ def assert_equal_extension_array(
         check_exact=exact,
         _elem_name=elem_name,
     )
+
+
+@assert_equal.register(XDataArray)
+def assert_equal_xarray(
+    a: XDataArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    report_name(a.equals)(b, _elem_name=elem_name)
 
 
 @assert_equal.register(Raw)
@@ -836,7 +844,7 @@ def as_dense_dask_array(a):
     return da.asarray(a, chunks=_half_chunk_size(a.shape))
 
 
-@as_dense_dask_array.register(sparse.spmatrix)
+@as_dense_dask_array.register(CSMatrix)
 def _(a):
     return as_dense_dask_array(a.toarray())
 
@@ -853,14 +861,14 @@ def as_sparse_dask_array(a) -> DaskArray:
     return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(sparse.spmatrix)
+@as_sparse_dask_array.register(CSMatrix)
 def _(a):
     import dask.array as da
 
     return da.from_array(a, _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(SpArray)
+@as_sparse_dask_array.register(CSArray)
 def _(a):
     import dask.array as da
 
@@ -944,40 +952,8 @@ def _(a, format="csr"):
     )
 
 
-@contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
-    """Error handling using pytest 8's support for __notes__.
-
-    See: https://github.com/pytest-dev/pytest/pull/11227
-
-    Remove once pytest 8 is out!
-    """
-
-    with pytest.raises(exc_cls) as exc_info:
-        yield exc_info
-
-    check_error_or_notes_match(exc_info, match)
-
-
-def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
-    """
-    Checks whether the printed error message or the notes contains the given pattern.
-
-    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
-    """
-    import traceback
-
-    message = "".join(traceback.format_exception_only(e.type, e.value))
-    assert re.search(pattern, message), (
-        f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
-    )
-
-
 def resolve_cupy_type(val):
-    if not isinstance(val, type):
-        input_typ = type(val)
-    else:
-        input_typ = val
+    input_typ = type(val) if not isinstance(val, type) else val
 
     if issubclass(input_typ, np.ndarray):
         typ = CupyArray
@@ -1004,7 +980,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, sparse.spmatrix):
+        if isinstance(val, CSMatrix):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1041,7 +1017,7 @@ def shares_memory(x, y) -> bool:
     return np.shares_memory(x, y)
 
 
-@shares_memory.register(sparse.spmatrix)
+@shares_memory.register(CSMatrix)
 def shares_memory_sparse(x, y):
     return (
         np.shares_memory(x.data, y.data)
@@ -1052,8 +1028,8 @@ def shares_memory_sparse(x, y):
 
 BASE_MATRIX_PARAMS = [
     pytest.param(asarray, id="np_array"),
-    pytest.param(sparse.csr_matrix, id="scipy_csr"),
-    pytest.param(sparse.csc_matrix, id="scipy_csc"),
+    pytest.param(sparse.csr_matrix, id="scipy_csr_matrix"),
+    pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]
@@ -1090,46 +1066,105 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if find_spec("zarr") or TYPE_CHECKING:
-    from zarr import DirectoryStore
+if is_zarr_v2():
+    from zarr.storage import DirectoryStore as LocalStore
 else:
-
-    class DirectoryStore:
-        def __init__(self, *_args, **_kwargs) -> None:
-            cls_name = type(self).__name__
-            msg = f"zarr must be imported to create a {cls_name} instance."
-            raise ImportError(msg)
+    from zarr.storage import LocalStore
 
 
-class AccessTrackingStore(DirectoryStore):
+class AccessTrackingStoreBase(LocalStore):
     _access_count: Counter[str]
-    _accessed_keys: dict[str, list[str]]
+    _accessed: defaultdict[str, set]
+    _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
-        self._accessed_keys = {}
+        self._accessed = defaultdict(set)
+        self._accessed_keys = defaultdict(list)
 
-    def __getitem__(self, key: str) -> object:
+    def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
             if tracked in key:
                 self._access_count[tracked] += 1
+                self._accessed[tracked].add(key)
                 self._accessed_keys[tracked] += [key]
-        return super().__getitem__(key)
 
     def get_access_count(self, key: str) -> int:
+        # access defaultdict when value is not there causes key to be there,
+        # which causes it to be tracked
+        if key not in self._access_count:
+            msg = f"{key} not found among access count"
+            raise KeyError(msg)
         return self._access_count[key]
 
+    def get_subkeys_accessed(self, key: str) -> set[str]:
+        if key not in self._accessed:
+            msg = f"{key} not found among accessed"
+            raise KeyError(msg)
+        return self._accessed[key]
+
     def get_accessed_keys(self, key: str) -> list[str]:
+        if key not in self._accessed_keys:
+            msg = f"{key} not found among accessed keys"
+            raise KeyError(msg)
         return self._accessed_keys[key]
 
     def initialize_key_trackers(self, keys_to_track: Iterable[str]) -> None:
         for k in keys_to_track:
             self._access_count[k] = 0
             self._accessed_keys[k] = []
+            self._accessed[k] = set()
 
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
+
+    def assert_access_count(self, key: str, count: int):
+        keys_accessed = self.get_subkeys_accessed(key)
+        access_count = self.get_access_count(key)
+        assert self.get_access_count(key) == count, (
+            f"Found {access_count} accesses at {keys_accessed}"
+        )
+
+
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
+
+
+if is_zarr_v2():
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        def __getitem__(self, key: str) -> bytes:
+            self._check_and_track_key(key)
+            return super().__getitem__(key)
+
+else:
+
+    class AccessTrackingStore(AccessTrackingStoreBase):
+        async def get(
+            self,
+            key: str,
+            prototype: BufferPrototype | None = None,
+            byte_range: ByteRequest | None = None,
+        ) -> object:
+            self._check_and_track_key(key)
+            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:

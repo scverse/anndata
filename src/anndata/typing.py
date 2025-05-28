@@ -5,17 +5,18 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from numpy import ma
-from scipy import sparse
 
 from . import abc
 from ._core.anndata import AnnData
 from .compat import (
     AwkArray,
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     H5Array,
-    SpArray,
+    XDataArray,
     ZappyArray,
     ZarrArray,
 )
@@ -25,20 +26,17 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["Index", "RWAble", "AxisStorable"]
+__all__ = ["AxisStorable", "Index", "RWAble"]
 
 
 Index = _Index
 """1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
-
-ArrayDataStructureType: TypeAlias = (
+XDataType: TypeAlias = (
     np.ndarray
     | ma.MaskedArray
-    | sparse.csr_matrix
-    | sparse.csc_matrix
-    | SpArray
-    | AwkArray
+    | CSMatrix
+    | CSArray
     | H5Array
     | ZarrArray
     | ZappyArray
@@ -48,10 +46,11 @@ ArrayDataStructureType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray
 
 
 InMemoryArrayOrScalarType: TypeAlias = (
-    pd.DataFrame | np.number | str | ArrayDataStructureType
+    pd.DataFrame | np.number | str | ArrayDataStructureTypes
 )
 
 

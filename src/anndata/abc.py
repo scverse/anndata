@@ -7,12 +7,11 @@ if TYPE_CHECKING:
     from typing import ClassVar, Literal
 
     import numpy as np
-    from scipy.sparse import csc_matrix, csr_matrix
 
-    from .compat import Index, SpArray
+    from .compat import CSArray, CSMatrix, Index
 
 
-__all__ = ["CSRDataset", "CSCDataset"]
+__all__ = ["CSCDataset", "CSRDataset"]
 
 
 class _AbstractCSDataset(ABC):
@@ -31,7 +30,7 @@ class _AbstractCSDataset(ABC):
     """Which file type is used on-disk."""
 
     @abstractmethod
-    def __getitem__(self, index: Index) -> float | csr_matrix | csc_matrix | SpArray:
+    def __getitem__(self, index: Index) -> float | CSMatrix | CSArray:
         """Load a slice or an element from the sparse dataset into memory.
 
         Parameters
@@ -45,7 +44,7 @@ class _AbstractCSDataset(ABC):
         """
 
     @abstractmethod
-    def to_memory(self) -> csr_matrix | csc_matrix | SpArray:
+    def to_memory(self) -> CSMatrix | CSArray:
         """Load the sparse dataset into memory.
 
         Returns
@@ -57,7 +56,7 @@ class _AbstractCSDataset(ABC):
 _sparse_dataset_doc = """\
 On disk {format} sparse matrix.
 
-Analogous to :class:`h5py.Dataset` or :class:`zarr.core.Array`, but for sparse matrices.
+Analogous to :class:`h5py.Dataset` or :class:`zarr.Array`, but for sparse matrices.
 """
 
 

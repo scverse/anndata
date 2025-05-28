@@ -47,13 +47,11 @@ def _alloc_cache():
 
     adata = ad.AnnData(
         da.random.random(*size),
-        **{
-            "layers": dict(m=da.random.random(*size)),
-            "obsm": dict(m=da.random.random(*size)),
-            "obs": dict(m=da.random.random(N)),
-            "var": dict(m=da.random.random(N)),
-            "varm": dict(m=da.random.random(*size)),
-        },
+        layers=dict(m=da.random.random(*size)),
+        obsm=dict(m=da.random.random(*size)),
+        obs=dict(m=da.random.random(N)),
+        var=dict(m=da.random.random(N)),
+        varm=dict(m=da.random.random(*size)),
     )
     subset = adata[:10, :][:, :10]
     for mn in ["varm", "obsm", "layers"]:

@@ -13,6 +13,7 @@ from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
 
+from .._settings import settings
 from ..compat import (
     AwkArray,
     CupyArray,
@@ -22,10 +23,11 @@ from ..compat import (
     ZappyArray,
 )
 from .access import ElementRef
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
-    from typing import Any
+    from typing import Any, ClassVar
 
     from anndata import AnnData
 
@@ -84,7 +86,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -105,7 +107,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -152,7 +154,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
             results = (results,)
         results = tuple(
             (np.asarray(result) if output is None else output)
-            for result, output in zip(results, outputs)
+            for result, output in zip(results, outputs, strict=True)
         )
         return results[0] if len(results) == 1 else results
 
@@ -177,7 +179,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -243,7 +245,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         import cupy as cp
 
@@ -265,7 +267,7 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ["_view_args"]
+    _metadata: ClassVar = ["_view_args"]
 
     @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):
@@ -306,6 +308,11 @@ def as_view_dask_array(array, view_args):
 
 @as_view.register(pd.DataFrame)
 def as_view_df(df, view_args):
+    if settings.remove_unused_categories:
+        for col in df.columns:
+            if isinstance(df[col].dtype, pd.CategoricalDtype):
+                with pd.option_context("mode.chained_assignment", None):
+                    df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
 
 
@@ -354,6 +361,11 @@ def as_view_cupy_csr(mtx, view_args):
 @as_view.register(CupyCSCMatrix)
 def as_view_cupy_csc(mtx, view_args):
     return CupySparseCSCView(mtx, view_args=view_args)
+
+
+@as_view.register(Dataset2D)
+def _(a: Dataset2D, view_args):
+    return a
 
 
 try:

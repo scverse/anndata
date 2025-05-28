@@ -13,10 +13,7 @@ from anndata import AnnData, concat
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import (
-    assert_equal,
-    gen_adata,
-)
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -31,7 +28,7 @@ GEN_ADATA_OOC_CONCAT_ARGS = dict(
         pd.DataFrame,
     ),
     varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
-    layers_types=(sparse.spmatrix, np.ndarray, pd.DataFrame),
+    layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
 )
 
 
@@ -55,8 +52,8 @@ def file_format(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
 
-# trying with 10 should be slow but will guarantee that the feature is being used
-@pytest.fixture(params=[10, 100_000_000])
+# 1000 is enough to guarantee that the feature is being used
+@pytest.fixture(params=[1_000, 100_000_000])
 def max_loaded_elems(request) -> int:
     return request.param
 
@@ -98,7 +95,7 @@ def assert_eq_concat_on_disk(
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, **kwargs)
-    res2 = read_elem(as_group(out_name))
+    res2 = read_elem(as_group(out_name, mode="r"))
     assert_equal(res1, res2, exact=False)
 
 

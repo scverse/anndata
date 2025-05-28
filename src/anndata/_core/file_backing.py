@@ -10,6 +10,7 @@ import h5py
 
 from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
 from .sparse_dataset import BaseCompressedSparseDataset
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -26,7 +27,7 @@ class AnnDataFileManager:
     def __init__(
         self,
         adata: anndata.AnnData,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
         self._adata_ref = weakref.ref(adata)
@@ -81,12 +82,12 @@ class AnnDataFileManager:
         return self._filename
 
     @filename.setter
-    def filename(self, filename: PathLike | None):
+    def filename(self, filename: PathLike[str] | str | None):
         self._filename = None if filename is None else Path(filename)
 
     def open(
         self,
-        filename: PathLike | None = None,
+        filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
         if filename is not None:
@@ -160,6 +161,11 @@ def _(x: AwkArray, *, copy: bool = False):
         return _copy(x)
     else:
         return x
+
+
+@to_memory.register(Dataset2D)
+def _(x: Dataset2D, *, copy: bool = False):
+    return x.to_memory(copy=copy)
 
 
 @singledispatch

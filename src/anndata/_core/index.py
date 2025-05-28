@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse, spmatrix
+from scipy.sparse import issparse
 
-from ..compat import AwkArray, DaskArray, SpArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
@@ -34,7 +35,7 @@ def _normalize_indices(
     return ax0, ax1
 
 
-def _normalize_index(
+def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: slice
     | np.integer
     | int
@@ -44,10 +45,10 @@ def _normalize_index(
     | pd.Index,
     index: pd.Index,
 ) -> slice | int | np.ndarray:  # ndarray of int or bool
-    if not isinstance(index, pd.RangeIndex):
-        msg = "Don’t call _normalize_index with non-categorical/string names"
-        assert index.dtype != float, msg
-        assert index.dtype != int, msg
+    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
+        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
+        raise TypeError(msg)
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
@@ -69,13 +70,13 @@ def _normalize_index(
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | spmatrix | np.matrix | SpArray
+        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
     ):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
-            if isinstance(indexer, spmatrix | SpArray):
+            if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
         if not isinstance(indexer, np.ndarray | pd.Index):
@@ -110,8 +111,12 @@ def _normalize_index(
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
+    elif isinstance(indexer, XDataArray):
+        if isinstance(indexer.data, DaskArray):
+            return indexer.data.compute()
+        return indexer.data
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError(msg)
+    raise IndexError()
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
@@ -180,9 +185,9 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
     return a[subset_idx]
 
 
-@_subset.register(spmatrix)
-@_subset.register(SpArray)
-def _subset_sparse(a: spmatrix | SpArray, subset_idx: Index):
+@_subset.register(CSMatrix)
+@_subset.register(CSArray)
+def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -202,6 +207,15 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
+
+
+@_subset.register(Dataset2D)
+def _(a: Dataset2D, subset_idx: Index):
+    key = a.index_dim
+    # xarray seems to have some code looking for a second entry in tuples
+    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
+        subset_idx = subset_idx[0]
+    return a.isel(**{key: subset_idx})
 
 
 # Registration for SparseDataset occurs in sparse_dataset.py

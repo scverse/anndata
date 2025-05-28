@@ -10,6 +10,7 @@ import pytest
 import zarr
 
 from anndata import AnnData
+from anndata._io.zarr import open_write_group
 from anndata.io import write_elem
 from anndata.tests.helpers import assert_equal
 
@@ -18,16 +19,11 @@ if TYPE_CHECKING:
     from typing import Literal
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def file(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | zarr.Group:
     path = tmp_path / f"test.{diskfmt}"
     if diskfmt == "zarr":
-        return zarr.open_group(path, "a")
+        return open_write_group(path, mode="a")
     if diskfmt == "h5ad":
         return h5py.File(path, "a")
     pytest.fail(f"Unknown diskfmt: {diskfmt}")
