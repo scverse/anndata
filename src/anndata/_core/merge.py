@@ -196,7 +196,7 @@ def equal_sparse(a, b) -> bool:
                 and (a.shape == b.shape)
                 and np.all(a.indptr == b.indptr)
                 and np.all(a.indices == b.indices)
-                and np.all(a.data == b.data)
+                and np.all((a.data == b.data) | (np.isnan(a.data) & np.isnan(b.data)))
             )
         comp = a != b
         if isinstance(comp, bool):
