@@ -294,12 +294,8 @@ def test_concat_on_disk_varm_and_uns_series(tmp_path):
     assert "meta" in adata.uns
 
 def test_varm_uns_missing_in_one_input(tmp_path):
-    # this test checks whether concat_on_disk() correctly handles cases where
-    # some inputs have .varm and .uns entries, and others do not
-    # creating two in-memory anndata objects, each are 2x3 matrix of ones as .X data
     a = AnnData(X=np.ones((2, 3)))
     b = AnnData(X=np.ones((2, 3)))
-    # setting var_name for object objects so they are consistent and could be aligned when merged
     a.var_names = b.var_names = ["g1", "g2", "g3"]
 
     a.varm["marker"] = pd.DataFrame([1, 2, 3], index=a.var_names, columns=["marker"])
@@ -341,5 +337,5 @@ def test_uns_merge_same_fails_on_conflict(tmp_path):
             {"a": tmp_path / "a.h5ad", 
              "b": tmp_path / "b.h5ad"},
             tmp_path / "out.h5ad",
-            uns_merge="same_strict"
+            uns_merge="same-strict"
         )
