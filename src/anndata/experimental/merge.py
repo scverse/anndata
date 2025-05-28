@@ -379,10 +379,10 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
     alt_mapping = merge([read_as_backed(g[f"{alt_axis_name}m"]) for g in groups])
-    if isinstance (alt_mapping, pd.Series):
+    if isinstance(alt_mapping, pd.Series):
         alt_mapping = alt_mapping.to_frame()
     if isinstance(alt_mapping, dict):
-        for k,v in alt_mapping.items():
+        for k, v in alt_mapping.items():
             if isinstance(v, pd.Series):
                 alt_mapping[k] = v.to_frame()
     # handling a case when there is nothing to write
@@ -415,6 +415,7 @@ def _write_axis_annot(  # noqa: PLR0917
         concat_annot[label] = label_col
     write_elem(output_group, axis_name, concat_annot)
 
+
 def _write_uns(groups, output_group, merge):
     uns = merge([read_elem(g["uns"]) for g in groups])
     if isinstance(uns, pd.Series):
@@ -424,6 +425,7 @@ def _write_uns(groups, output_group, merge):
             if isinstance(v, pd.Series):
                 uns[k] = v.to_frame()
     write_elem(output_group, "uns", uns)
+
 
 def concat_on_disk(
     in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],

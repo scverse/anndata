@@ -251,9 +251,10 @@ def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
 
+
 def test_concat_on_disk_varm_and_uns_series(tmp_path):
-    a = AnnData(X=np.ones((3,3)))
-    b = AnnData(X=np.ones((2,3)))
+    a = AnnData(X=np.ones((3, 3)))
+    b = AnnData(X=np.ones((2, 3)))
 
     a.var_names = b.var_names = ["g1", "g2", "g3"]
     a.obs_names = [f"a{i}" for i in range(3)]
@@ -290,6 +291,7 @@ def test_concat_on_disk_varm_and_uns_series(tmp_path):
     assert "description" in adata.uns
     assert "meta" in adata.uns
 
+
 def test_varm_uns_missing_in_one_input(tmp_path):
     a = AnnData(X=np.ones((2, 3)))
     b = AnnData(X=np.ones((2, 3)))
@@ -307,15 +309,21 @@ def test_varm_uns_missing_in_one_input(tmp_path):
     a.write_h5ad(p1)
     b.write_h5ad(p2)
 
-    concat_on_disk({"x": p1, "y": p2},
-                   out, axis=0,
-                   join="outer", merge="unique", 
-                   uns_merge="unique", index_unique="-")
+    concat_on_disk(
+        {"x": p1, "y": p2},
+        out,
+        axis=0,
+        join="outer",
+        merge="unique",
+        uns_merge="unique",
+        index_unique="-",
+    )
     result = ad.read_h5ad(out)
     # checking with marker field is present after merge
     assert "marker" in result.varm
     # checking if meta field also survive even though not present in b
     assert "meta" in result.uns
+
 
 def test_uns_merge_same_fails_on_conflict(tmp_path):
     # checking that a merge conflict in .uns with uns_merge="same" triggers and appropriate error
@@ -331,8 +339,7 @@ def test_uns_merge_same_fails_on_conflict(tmp_path):
 
     with pytest.raises(ValueError):
         concat_on_disk(
-            {"a": tmp_path / "a.h5ad", 
-             "b": tmp_path / "b.h5ad"},
+            {"a": tmp_path / "a.h5ad", "b": tmp_path / "b.h5ad"},
             tmp_path / "out.h5ad",
-            uns_merge="same-strict"
+            uns_merge="same-strict",
         )

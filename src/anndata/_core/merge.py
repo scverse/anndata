@@ -503,10 +503,12 @@ def merge_unique(ds: Collection[Mapping]) -> Mapping:
 def merge_same(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, intersect_keys, unique_value)
 
+
 def merge_same_strict(ds: Collection[Mapping]) -> Mapping:
     # only keys shared across all inputs are considered
     # only identical values are merged with _raise_on_conflict
     return merge_nested(ds, intersect_keys, _raise_on_conflict)
+
 
 def _raise_on_conflict(vals: list) -> Any:
     # building a filtered list of non-empty values
@@ -520,6 +522,7 @@ def _raise_on_conflict(vals: list) -> Any:
         return vals[0]
     msg = f"Values do not match across all objects: {vals}"
     raise ValueError(msg)
+
 
 def merge_first(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, union_keys, first)
