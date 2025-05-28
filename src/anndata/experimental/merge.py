@@ -419,8 +419,6 @@ def _write_uns(groups, output_group, merge):
                 uns[k] = v.to_frame()
     write_elem(output_group, "uns", uns)
 
-
-
 def concat_on_disk(
     in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
     out_file: str | os.PathLike,
