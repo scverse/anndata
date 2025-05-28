@@ -201,3 +201,24 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
         match="Cannot set obs_names as a variable",
     ):
         dataset_2d_one_column["obs_names"] = data
+
+
+@pytest.mark.parametrize(
+    "ds",
+    [
+        XDataset(
+            {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+            coords={"obs_names": ("not_obs_names", [1, 2, 3])},
+        ),
+        XDataset(
+            {"foo": ("foo", pd.array(["a", "b", "c"], dtype="category"))},
+            coords={
+                "obs_names": ("obs_names", [1, 2, 3]),
+                "not_obs_names": ("obs_names", [1, 2, 3]),
+            },
+        ),
+    ],
+)
+def test_init_errors(ds):
+    with pytest.raises(ValueError):  # noqa: PT011
+        Dataset2D(ds)
