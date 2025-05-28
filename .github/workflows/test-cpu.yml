@@ -8,7 +8,6 @@ on:
   pull_request:
 
 env:
-  PYTEST_ADDOPTS: "-v --color=yes -n auto --junitxml=test-data/test-results.xml"
   FORCE_COLOR: "1"
 
 defaults:
@@ -39,11 +38,7 @@ jobs:
           ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
             | map(
               select(.key | startswith("hatch-test"))
-              | {
-                name: .key,
-                "test-type": (if (.key | test("pre|min")) then "coverage" else null end),
-                python: .value.python,
-              }
+              | { name: .key, python: .value.python }
             )')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
@@ -75,15 +70,10 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        if: matrix.env.test-type == null
-        run: uvx hatch run ${{ matrix.env.name }}:run
-      - name: Run tests (coverage)
-        if: matrix.env.test-type == 'coverage'
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov --cov --cov-report=xml
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml
 
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
-        if: matrix.env.test-type == 'coverage'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: ENV_NAME
