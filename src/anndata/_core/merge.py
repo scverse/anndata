@@ -15,7 +15,9 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import scipy
 from natsort import natsorted
+from packaging.version import Version
 from scipy import sparse
 from scipy.sparse import spmatrix
 
