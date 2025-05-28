@@ -484,33 +484,48 @@ def adapt_vars_like(
     from ._core.anndata import AnnData
     from ._core.merge import Reindexer
 
-    # needed to add it as when trying to call target.X[:, target.var.index]
-    # it would raise an error if target.X is None
-    if target.X is None:
-        msg = "target.X is None; cannot adapt vars without a data matrix."
-        raise ValueError(msg)
-    # making a copy to use in the new AnnData object returned later
+    # copy over the var structure from source = becomes new feature index structure
+    # that we want target to match
     new_var = source.var.copy()
-    # handling the case when not all source genes are in target
-    if not source.var_names.isin(target.var_names).all():
-        # manual fix
-        # computing the list of genes that are in source and target
-        shared = source.var_names.intersection(target.var_names)
-        # getting positions of the shared genes in source and target
-        source_idx = new_var.index.get_indexer(shared)
-        target_idx = target.var_names.get_indexer(shared)
-        # creating a new matrix of shape (number of cells, number of genes in source)
-        # filled with the fill_value
-        new_x = np.full((target.n_obs, new_var.shape[0]), fill_value)
-        # for the genes that are in both source and target, copy over the values
-        new_x[:, source_idx] = target.X[:, target_idx]
+    # Initializing reindexer = help map the old gene indices to the new structure
+    reindexer = Reindexer(target.var.index, new_var.index)
+    # if target object actually has .X matrix (i.e. expression data), I reindex it to match the source
+
+    if target.X is not None:
+        new_X = reindexer(target.X, axis=1, fill_value=fill_value)
     else:
-        # in other cases just use reindexer
-        reindexer = Reindexer(new_var.index, target.var.index)
-        new_x = reindexer(target.X, fill_value=fill_value)
-    # creates a new AnnData object with the new .X and .var
-    # .X is the filled new_x array
-    # .obs is a copy of the target.obs
-    # .var is copied from source.var, making sure alignment of gene annotations
-    new_adata = AnnData(X=new_x, obs=target.obs.copy(), var=new_var)
+        # otherwise I just create a dummy matrix of the right shape filled with a constant value
+        new_X = np.full((target.n_obs, len(new_var)), fill_value)
+
+    # reindexing each layer matrix along the gene (column) axis so it matches new structure
+    new_layers = {
+        k: reindexer(v, axis=1, fill_value=fill_value) for k, v in target.layers.items()
+    }
+    # reindex varm which stores matrix-like annotation for each gene
+    # for each entry, reindex along the gene axis, cast it to a numpy array to make it uniform
+    # convert it to a plain python list to avoid type checker error
+    new_varm: dict[str, Sequence[Any]] = {
+        k: np.asarray(reindexer(v, axis=0, fill_value=fill_value)).tolist()
+        for k, v in target.varm.items()
+    }
+    # creating new Anndata Object
+    # directly copying .obs without changes - we ar enot touching the cells here, just aligning features
+    new_adata = AnnData(
+        X=new_X,
+        obs=target.obs.copy(),
+        var=new_var,
+        varm=new_varm,
+        layers=new_layers,
+    )
+    # if the original target fad a .raw layer, reindex it as well
+    # since .raw is immutable (from what I understand), we create a new AnnData object
+    # with matching .X, .obs, .var assigning it directly to new_adata.raw
+    if target.raw is not None:
+        new_raw_X = reindexer(target.raw.X, axis=1, fill_value=fill_value)
+        new_adata.raw = AnnData(
+            X=new_raw_X,
+            var=source.var.copy(),
+            obs=target.obs.copy(),
+        )
+
     return new_adata

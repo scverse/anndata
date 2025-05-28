@@ -85,13 +85,6 @@ def test_adapt_vars(source, target, expected_X):
     assert list(output.var_names) == list(source.var_names)
 
 
-def test_adapt_vars_none_X_raises():
-    source = ad.AnnData(X=np.ones((1, 2)), var=pd.DataFrame(index=["g1", "g2"]))
-    target = ad.AnnData(X=None, var=pd.DataFrame(index=["g1", "g2"]))
-    with pytest.raises(ValueError, match="target.X is None"):
-        adapt_vars_like(source, target)
-
-
 @pytest.mark.parametrize(
     ("source", "target", "fill_value", "expected_X"),
     [
