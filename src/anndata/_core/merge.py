@@ -190,6 +190,7 @@ def equal_sparse(a, b) -> bool:
             # https://github.com/cupy/cupy/issues/7757
             a, b = CupyCSRMatrix(a), CupyCSRMatrix(b)
         if Version(scipy.__version__) >= Version("1.16.0rc1"):
+            # TODO: https://github.com/scipy/scipy/issues/23068
             return bool(
                 a.format == b.format
                 and (a.shape == b.shape)
