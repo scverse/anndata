@@ -1132,26 +1132,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
+        def __init__(*args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
 
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
         async def get(
             self,
             key: str,
