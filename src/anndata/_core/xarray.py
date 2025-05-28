@@ -33,11 +33,11 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
         if not isinstance(ds, XDataset):
             msg = f"Expected an xarray Dataset, found {type(ds)}"
             raise TypeError(msg)
-        if len(ds.dims) != 1 or len(ds.coords) != 1:
+        if (is_coords_too_long := (len(ds.coords) != 1)) or len(ds.dims) != 1:
             string, length, rep = (
                 ("coordinate", len(ds.coords), ds.coords)
-                if len(ds.coords) != 1
-                else ("dimensions", len(ds.dims), ds.dims)
+                if is_coords_too_long
+                else ("dimension", len(ds.dims), ds.dims)
             )
             msg = f"Dataset should have exactly one {string}, found {length}: {rep}"
             raise ValueError(msg)
