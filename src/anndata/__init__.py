@@ -53,7 +53,6 @@ __all__ = [
     "WriteWarning",
     "__version__",
     "abc",
-    "adapt_vars_like",
     "concat",
     "experimental",
     "io",
@@ -63,4 +62,5 @@ __all__ = [
     "settings",
     "types",
     "typing",
+    "utils",
 ]
