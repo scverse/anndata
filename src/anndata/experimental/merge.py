@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Mapping
 from functools import singledispatch
@@ -378,13 +379,20 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
 
 
 def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
-    alt_mapping = merge([read_as_backed(g[alt_axis_name]) for g in groups])
-    # If its empty, we need to write an empty dataframe with the correct index
+    alt_mapping = merge([read_as_backed(g[f"{alt_axis_name}m"]) for g in groups])
+    if isinstance(alt_mapping, pd.Series):
+        alt_mapping = alt_mapping.to_frame()
+    if isinstance(alt_mapping, dict):
+        for k, v in alt_mapping.items():
+            if isinstance(v, pd.Series):
+                alt_mapping[k] = v.to_frame()
+    # handling a case when there is nothing to write
     if not alt_mapping:
         alt_df = pd.DataFrame(index=alt_indices)
-        write_elem(output_group, alt_axis_name, alt_df)
+        write_elem(output_group, f"{alt_axis_name}m", alt_df)
+    # otherwise, write the merged alt mapping
     else:
-        write_elem(output_group, alt_axis_name, alt_mapping)
+        write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
 
 
 def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
@@ -409,9 +417,20 @@ def _write_axis_annot(  # noqa: PLR0917
     write_elem(output_group, axis_name, concat_annot)
 
 
-def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
-    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
-    out_file: PathLike[str] | str,
+def _write_uns(groups, output_group, merge):
+    uns = merge([read_elem(g["uns"]) for g in groups])
+    if isinstance(uns, pd.Series):
+        uns = uns.to_frame()
+    if isinstance(uns, dict):
+        for k, v in uns.items():
+            if isinstance(v, pd.Series):
+                uns[k] = v.to_frame()
+    write_elem(output_group, "uns", uns)
+
+
+def concat_on_disk(
+    in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
+    out_file: str | os.PathLike,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -636,6 +655,9 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
 
     # Write {alt_axis_name}m
     _write_alt_mapping(groups, output_group, alt_axis_name, alt_index, merge)
+
+    # Write uns
+    _write_uns(groups, output_group, uns_merge)
 
     # Write X
 
