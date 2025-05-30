@@ -1304,14 +1304,14 @@ def concat_dataset2d_on_annot_axis(
     label_col: pd.Categorical | None = None,
     concat_indices: pd.Index | None = None,
 ) -> Dataset2D:
-    """Create a concatenate dataset from a list of :class:`~anndata._core.xarray.Dataset2D` objects.
+    """Create a concatenate dataset from a list of :class:`~anndata.experimental.backed.Dataset2D` objects.
     The goal of this function is to mimic `pd.concat(..., ignore_index=True)` so has some complicated logic
     for handling the "index" to ensure (a) nothing is loaded into memory and (b) the true index is always tracked.
 
     Parameters
     ----------
     annotations
-        The :class:`~anndata._core.xarray.Dataset2D` objects to be concatenated.
+        The :class:`~anndata.experimental.backed.Dataset2D` objects to be concatenated.
     join
         Type of join operation
     force_lazy
@@ -1324,7 +1324,7 @@ def concat_dataset2d_on_annot_axis(
 
     Returns
     -------
-    Concatenated :class:`~anndata._core.xarray.Dataset2D`
+    Concatenated :class:`~anndata.experimental.backed.Dataset2D`
     """
     from anndata._core.xarray import Dataset2D
     from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
