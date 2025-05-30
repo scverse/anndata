@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from typing import Any, Literal
 
+
 logger = get_logger(__name__)
 
 
@@ -450,3 +451,82 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def adapt_vars_like(
+    source: AnnData,
+    target: AnnData,
+    fill_value: float = 0.0,
+) -> AnnData:
+    """
+    Adapt the `.var` structure of `target` to match that of `source`.
+
+    This function makes sure that the `target` AnnData object has the same set
+    of genes (`.var_names`) as the `source` AnnData object. It fills in the
+    any missing genes in the `target` object with a specified `fill_value`.
+
+    Parameters
+    ----------
+    source
+        Reference AnnData object whose genes (.var) define the desired structure.
+    target
+        AnnData object to be adapted to match the source's gene structure.
+    fill_value
+        Value used to fill in missing genes. Defaults to 0.0.
+
+    Returns
+    -------
+    AnnData
+        A new AnnData object with the genes matching the source's structure and data from
+        `target`, with missing values filled in with `fill_value`.
+
+    """
+    # importing here to avoid circular import issues
+    from ._core.anndata import AnnData
+    from ._core.merge import Reindexer
+
+    # copy over the var structure from source = becomes new feature index structure
+    # that we want target to match
+    new_var = source.var.copy()
+    # Initializing reindexer = help map the old gene indices to the new structure
+    reindexer = Reindexer(target.var.index, new_var.index)
+    # if target object actually has .X matrix (i.e. expression data), I reindex it to match the source
+
+    if target.X is not None:
+        new_X = reindexer(target.X, axis=1, fill_value=fill_value)
+    else:
+        # otherwise I just create a dummy matrix of the right shape filled with a constant value
+        new_X = np.full((target.n_obs, len(new_var)), fill_value)
+
+    # reindexing each layer matrix along the gene (column) axis so it matches new structure
+    new_layers = {
+        k: reindexer(v, axis=1, fill_value=fill_value) for k, v in target.layers.items()
+    }
+    # reindex varm which stores matrix-like annotation for each gene
+    # for each entry, reindex along the gene axis, cast it to a numpy array to make it uniform
+    # convert it to a plain python list to avoid type checker error
+    new_varm: dict[str, Sequence[Any]] = {
+        k: np.asarray(reindexer(v, axis=0, fill_value=fill_value)).tolist()
+        for k, v in target.varm.items()
+    }
+    # creating new Anndata Object
+    # directly copying .obs without changes - we ar enot touching the cells here, just aligning features
+    new_adata = AnnData(
+        X=new_X,
+        obs=target.obs.copy(),
+        var=new_var,
+        varm=new_varm,
+        layers=new_layers,
+    )
+    # if the original target fad a .raw layer, reindex it as well
+    # since .raw is immutable (from what I understand), we create a new AnnData object
+    # with matching .X, .obs, .var assigning it directly to new_adata.raw
+    if target.raw is not None:
+        new_raw_X = reindexer(target.raw.X, axis=1, fill_value=fill_value)
+        new_adata.raw = AnnData(
+            X=new_raw_X,
+            var=source.var.copy(),
+            obs=target.obs.copy(),
+        )
+
+    return new_adata

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from itertools import repeat
 
+import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import gen_typed_df
-from anndata.utils import make_index_unique
+from anndata.utils import adapt_vars_like, make_index_unique
 
 
 def test_make_index_unique():
@@ -55,3 +56,55 @@ def test_adata_unique_indices():
 
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "expected_X"),
+    [
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["a", "b", "c"])),
+            ad.AnnData(
+                X=np.array([[1, 2, 3]]), var=pd.DataFrame(index=["a", "b", "c"])
+            ),
+            np.array([[1, 2, 3]]),
+            id="exact_match",
+        ),
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["a", "b", "c"])),
+            ad.AnnData(
+                X=np.array([[3, 2, 1]]), var=pd.DataFrame(index=["c", "b", "a"])
+            ),
+            np.array([[1, 2, 3]]),
+            id="different_order",
+        ),
+    ],
+)
+def test_adapt_vars(source, target, expected_X):
+    output = adapt_vars_like(source, target)
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == list(source.var_names)
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "fill_value", "expected_X"),
+    [
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 2)), var=pd.DataFrame(index=["g1", "g2"])),
+            ad.AnnData(X=np.array([[7, 8]]), var=pd.DataFrame(index=["g3", "g4"])),
+            0.5,
+            np.array([[0.5, 0.5]]),
+            id="no_shared_genes",
+        ),
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["g1", "g2", "g3"])),
+            ad.AnnData(X=np.array([[1, 3]]), var=pd.DataFrame(index=["g1", "g3"])),
+            -1,
+            np.array([[1, -1, 3]]),
+            id="missing_genes",
+        ),
+    ],
+)
+def test_adapt_vars_with_fill_value(source, target, fill_value, expected_X):
+    output = adapt_vars_like(source, target, fill_value=fill_value)
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == list(source.var_names)
