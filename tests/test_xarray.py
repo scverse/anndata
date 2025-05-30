@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from anndata._core.xarray import Dataset2D
-from anndata.compat import XDataArray
+from anndata.compat import XDataArray, XDataset
 from anndata.tests.helpers import gen_typed_df
 
 
@@ -18,7 +18,7 @@ def df():
 
 @pytest.fixture
 def dataset2d(df):
-    return Dataset2D.from_dataframe(df)
+    return Dataset2D(XDataset.from_dataframe(df))
 
 
 def test_shape(df, dataset2d):
@@ -89,14 +89,16 @@ def test_index(dataset2d):
     dataset2d.index = new_idx
     assert np.all(dataset2d.index == new_idx)
     assert dataset2d.true_index_dim == dataset2d.index_dim == new_idx.name
-    assert list(dataset2d.coords.keys()) == [new_idx.name]
+    assert list(dataset2d.ds.coords.keys()) == [new_idx.name]
 
 
 @pytest.fixture
 def dataset_2d_one_column():
     return Dataset2D(
-        {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
-        coords={"obs_names": [1, 2, 3]},
+        XDataset(
+            {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+            coords={"obs_names": [1, 2, 3]},
+        )
     )
 
 
@@ -199,3 +201,52 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
         match="Cannot set obs_names as a variable",
     ):
         dataset_2d_one_column["obs_names"] = data
+
+
+@pytest.mark.parametrize(
+    ("ds", "error"),
+    [
+        pytest.param(
+            XDataset(
+                {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+                coords={"obs_names": ("not_obs_names", [1, 2, 3])},
+            ),
+            "Dataset should have exactly one dimension",
+            id="more_than_one_dimension",
+        ),
+        pytest.param(
+            XDataset(
+                {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+                coords={
+                    "obs_names": ("obs_names", [1, 2, 3]),
+                    "not_obs_names": ("obs_names", [1, 2, 3]),
+                },
+            ),
+            "Dataset should have exactly one coordinate",
+            id="more_than_one_coord",
+        ),
+        pytest.param(
+            XDataset(
+                {"foo": ("not_obs_names", pd.array(["a", "b", "c"], dtype="category"))},
+                coords={
+                    "obs_names": ("not_obs_names", [1, 2, 3]),
+                },
+            ),
+            "does not match coordinate",
+            id="coord_dim_mismatch",
+        ),
+        pytest.param(
+            XDataset(
+                {"foo": (("obs", "obs1"), np.arange(9).reshape(3, 3))},
+                coords={
+                    "obs_names": (("obs", "obs1"), np.arange(9).reshape(3, 3)),
+                },
+            ),
+            "does not match coordinate",
+            id="multi_dim_coord",
+        ),
+    ],
+)
+def test_init_errors(ds, error):
+    with pytest.raises(ValueError, match=error):
+        Dataset2D(ds)
