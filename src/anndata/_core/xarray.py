@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Hashable, Mapping
 from typing import TYPE_CHECKING, overload
 
 import numpy as np
@@ -8,11 +9,11 @@ import pandas as pd
 from ..compat import XDataArray, XDataset
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable, Iterator, Mapping
+    from collections.abc import Iterable, Iterator
     from typing import Any
 
 
-class Dataset2D:
+class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     """
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
