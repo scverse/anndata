@@ -235,6 +235,16 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
             "does not match coordinate",
             id="coord_dim_mismatch",
         ),
+        pytest.param(
+            XDataset(
+                {"foo": (("obs", "obs1"), np.arange(9).reshape(3, 3))},
+                coords={
+                    "obs_names": (("obs", "obs1"), np.arange(9).reshape(3, 3)),
+                },
+            ),
+            "does not match coordinate",
+            id="multi_dim_coord",
+        ),
     ],
 )
 def test_init_errors(ds, error):

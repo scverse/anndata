@@ -13,19 +13,22 @@ if TYPE_CHECKING:
     from typing import Any
 
 
-class Dataset2D(Mapping[Hashable, "XDataArray"]):
+class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     """
-    A wrapper class meant to enable working with lazy dataframe data.
-    We do not guarantee the stability of this API beyond that guaranteed
-    by :class:`xarray.Dataset` and the `to_memory` function, a thin wrapper
-    around :meth:`xarray.Dataset.to_dataframe` to ensure roundtrip
-    compatibility here.
+    A wrapper class meant to enable working with lazy dataframe data according to
+    :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
+    are respected, namely that there is only one 1d dim and coord with the same name i.e.,
+    like a :class:`pandas.DataFrame`.
+
+    You should not have to initiate this class yourself.  Setting an :class:`xarray.Dataset`
+    into a relevant part of the :class:`~anndata.AnnData` object will attempt to wrap that
+    object in this object, trying to enforce the "dataframe-invariants."
     """
 
     ds: XDataset
 
     @staticmethod
-    def validate_shape_invariants(ds: XDataset):
+    def _validate_shape_invariants(ds: XDataset):
         """
         Validate that the dataset has only one dimension, which is the index dimension.
         This is a requirement for 2D datasets.
@@ -46,11 +49,15 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
             raise ValueError(msg)
 
     def __init__(self, ds: XDataset):
-        Dataset2D.validate_shape_invariants(ds)
+        Dataset2D._validate_shape_invariants(ds)
         self.ds = ds
 
     @property
     def is_backed(self) -> bool:
+        """
+        Check whether or not the object is backed, used to indicate if there are any in-memory objects.
+        Must be externally set, defaults false.
+        """
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
@@ -62,6 +69,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
 
     @property
     def index_dim(self) -> str:
+        """The underlying computational index i.e., the lone coordinate dimension."""
         if len(self.ds.sizes) != 1:
             msg = f"xarray Dataset should not have more than 1 dims, found {len(self.ds.sizes)} {self.ds.sizes}, {self}"
             raise ValueError(msg)
@@ -69,6 +77,16 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
 
     @property
     def true_index_dim(self) -> str:
+        """
+        Because xarray loads its coordinates/indexes in memory,
+        we allow for signaling that a given variable, which is not a coordinate, is the "true" index.
+
+        For example, the true index may be cell names but loading these over an internet connection may not be
+        desirable or necessary for most use cases such as getting a quick preview of the columns or loading only
+        one column that isn't the index.
+
+        This property is the key of said variable.
+        """
         return self.ds.attrs.get("indexing_key", self.index_dim)
 
     @true_index_dim.setter
@@ -83,6 +101,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
 
     @property
     def xr_index(self) -> XDataArray:
+        """The coordinate of self.index"""
         return self.ds[self.index_dim]
 
     @property
@@ -280,6 +299,5 @@ class Dataset2D(Mapping[Hashable, "XDataArray"]):
                     index, fill_value=fill_value
                 )
             return Dataset2D(el)
-        else:
-            msg = "This should be unreachable, please open an issue."
-            raise Exception(msg)
+        msg = "This should be unreachable, please open an issue."
+        raise Exception(msg)
