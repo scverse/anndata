@@ -504,20 +504,28 @@ def adapt_vars_like(
     # reindex varm which stores matrix-like annotation for each gene
     # for each entry, reindex along the gene axis, cast it to a numpy array to make it uniform
     # convert it to a plain python list to avoid type checker error
-    # new_varm: dict[str, Sequence[Any]] = {
-    #     k: np.asarray(reindexer(v, axis=0, fill_value=fill_value)).tolist()
-    #     for k, v in target.varm.items()
-    # }
     new_varm: AxisStorable = {
         k: reindexer(v, axis=0, fill_value=fill_value) for k, v in target.varm.items()
     }
+
+    new_varp: AxisStorable = {
+        k: reindexer(
+            reindexer(v, axis=0, fill_value=fill_value), axis=1, fill_value=fill_value
+        )
+        for k, v in target.varp.items()
+    }
+
+    new_obsp = {k: v.copy() for k, v in target.obsp.items()}
+
     # creating new Anndata Object
-    # directly copying .obs without changes - we ar enot touching the cells here, just aligning features
+    # directly copying .obs without changes - we are not touching the cells here, just aligning features
     new_adata = AnnData(
         X=new_X,
         obs=target.obs.copy(),
         var=new_var,
         varm=new_varm,
+        varp=new_varp,
+        obsp=new_obsp,
         layers=new_layers,
     )
     # if the original target fad a .raw layer, reindex it as well
