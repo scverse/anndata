@@ -18,8 +18,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-    from typing import Any, Literal
-
+    from typing import Any, AxisStorable, Literal
 
 logger = get_logger(__name__)
 
@@ -505,9 +504,12 @@ def adapt_vars_like(
     # reindex varm which stores matrix-like annotation for each gene
     # for each entry, reindex along the gene axis, cast it to a numpy array to make it uniform
     # convert it to a plain python list to avoid type checker error
-    new_varm: dict[str, Sequence[Any]] = {
-        k: np.asarray(reindexer(v, axis=0, fill_value=fill_value)).tolist()
-        for k, v in target.varm.items()
+    # new_varm: dict[str, Sequence[Any]] = {
+    #     k: np.asarray(reindexer(v, axis=0, fill_value=fill_value)).tolist()
+    #     for k, v in target.varm.items()
+    # }
+    new_varm: AxisStorable = {
+        k: reindexer(v, axis=0, fill_value=fill_value) for k, v in target.varm.items()
     }
     # creating new Anndata Object
     # directly copying .obs without changes - we ar enot touching the cells here, just aligning features

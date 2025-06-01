@@ -22,7 +22,7 @@ from .compat import (
 from .compat import Index as _Index
 
 if TYPE_CHECKING:
-    from typing import TypeAlias
+    from typing import AxisStorable, TypeAlias
 
 
 __all__ = ["AxisStorable", "Index", "RWAble"]
