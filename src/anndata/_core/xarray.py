@@ -141,7 +141,7 @@ class Dataset2D(XDataset):
 
     def __setitem__(self, key, value):
         """
-        Setting can only be performed when the incoming value is \"standalone\" like :class:`nump.ndarray` to mimic pandas.
+        Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
         One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
         Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as `self.index_dim`.
         """
