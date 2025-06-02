@@ -142,14 +142,14 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
 
 
 @pytest.mark.parametrize(
-    ("da", "msg"),
+    ("da", "pattern"),
     [
         pytest.param(
             XDataset(
                 data_vars={"bar": ("obs_names", np.arange(3))},
                 coords={"foo": ("obs_names", np.arange(3))},
             ),
-            "Dataset should have coordinate obs_names",
+            r"Dataset should have coordinate obs_names",
             id="coord_name_dataset",
         ),
         pytest.param(
@@ -159,7 +159,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 dims="obs_names",
                 name="bar",
             ),
-            "DataArray should have coordinate obs_names",
+            r"DataArray should have coordinate obs_names",
             id="coord_name",
         ),
         pytest.param(
@@ -169,7 +169,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 dims=("obs_names",),
                 name="not_bar",
             ),
-            "DataArray should have name bar, found not_bar",
+            r"DataArray should have name bar, found not_bar",
             id="dataarray_name",
         ),
         pytest.param(
@@ -179,7 +179,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 },
                 coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
             ),
-            "Dataset should have only one dimension",
+            r"Dataset should have only one dimension",
             id="multiple_dims_dataset",
         ),
         pytest.param(
@@ -188,7 +188,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
                 dims=("obs_names", "not_obs_names"),
             ),
-            "DataArray should have only one dimension",
+            r"DataArray should have only one dimension",
             id="multiple_dims_dataarray",
         ),
         pytest.param(
@@ -196,7 +196,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 data=np.arange(9).reshape(3, 3),
                 dims=("obs_names", "not_obs_names"),
             ),
-            "Variable should have only one dimension",
+            r"Variable should have only one dimension",
             id="multiple_dims_variable",
         ),
         pytest.param(
@@ -204,7 +204,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 data_vars={"foo": ("other", np.arange(3))},
                 coords={"obs_names": ("other", np.arange(3))},
             ),
-            "Dataset should have dimension obs_names",
+            r"Dataset should have dimension obs_names",
             id="name_conflict_dataset",
         ),
         pytest.param(
@@ -212,7 +212,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 data=np.arange(3),
                 dims="not_obs_names",
             ),
-            "Variable should have dimension obs_names, found not_obs_names",
+            r"Variable should have dimension obs_names, found not_obs_names",
             id="name_conflict_variable",
         ),
         pytest.param(
@@ -221,28 +221,28 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 coords=[np.arange(3)],
                 dims="not_obs_names",
             ),
-            "DataArray should have dimension obs_names, found not_obs_names",
+            r"DataArray should have dimension obs_names, found not_obs_names",
             id="name_conflict_dataarray",
         ),
         pytest.param(
             ("not_obs_names", [1, 2, 3]),
-            "Setting value tuple should have first entry",
+            r"Setting value tuple should have first entry",
             id="tuple_bad_dim",
         ),
         pytest.param(
             (("not_obs_names",), [1, 2, 3]),
-            "Dimension tuple should have only",
+            r"Dimension tuple should have only",
             id="nested_tuple_bad_dim",
         ),
         pytest.param(
             (("obs_names", "bar"), [1, 2, 3]),
-            "Dimension tuple is too long",
+            r"Dimension tuple is too long",
             id="nested_tuple_too_long",
         ),
     ],
 )
-def test_dataset_2d_set_with_bad_obj(da, msg, dataset_2d_one_column):
-    with pytest.raises(ValueError, match=msg):
+def test_dataset_2d_set_with_bad_obj(da, pattern, dataset_2d_one_column):
+    with pytest.raises(ValueError, match=pattern):
         dataset_2d_one_column["bar"] = da
 
 
