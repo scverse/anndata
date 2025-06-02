@@ -387,7 +387,9 @@ def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
             if isinstance(v, pd.Series):
                 alt_mapping[k] = v.to_frame()
     # handling a case when there is nothing to write
-    if not alt_mapping:
+    if (isinstance(alt_mapping, dict) and not alt_mapping) or (
+        isinstance(alt_mapping, pd.DataFrame) and alt_mapping.empty
+    ):
         alt_df = pd.DataFrame(index=alt_indices)
         write_elem(output_group, f"{alt_axis_name}m", alt_df)
     # otherwise, write the merged alt mapping
@@ -417,15 +419,61 @@ def _write_axis_annot(  # noqa: PLR0917
     write_elem(output_group, axis_name, concat_annot)
 
 
+# def _write_uns(groups, output_group, merge):
+#     uns = merge([read_elem(g["uns"]) for g in groups])
+#     if isinstance(uns, pd.Series):
+#         uns = uns.to_frame()
+#     if isinstance(uns, dict):
+#         for k, v in uns.items():
+#             if isinstance(v, pd.Series):
+#                 uns[k] = v.to_frame()
+#     write_elem(output_group, "uns", uns)
+
+
 def _write_uns(groups, output_group, merge):
-    uns = merge([read_elem(g["uns"]) for g in groups])
+    # initialize an empty list to collect .uns dictionaries
+    uns_list = []
+    for g in groups:
+        try:
+            uns_list.append(read_elem(g["uns"]))
+        except KeyError:
+            # if 'uns' is not present in the group, append an empty dict
+            uns_list.append({})
+
+    # If all collected .uns dictionaries are empty, create an empty .uns group
+    # with the appropriate attributes and return
+    if all(not u for u in uns_list):
+        # Create an empty .uns group with the required attributes
+        output_group.create_group("uns").attrs.update(
+            {
+                "encoding-type": "dict",
+                "encoding-version": "0.1.0",
+            }
+        )
+        return
+    # Use the provided merge strategy to combine the .uns dictionaries
+    uns = merge(uns_list)
+    # If the merged .uns is a Series, convert it to a DataFrame
     if isinstance(uns, pd.Series):
         uns = uns.to_frame()
-    if isinstance(uns, dict):
-        for k, v in uns.items():
-            if isinstance(v, pd.Series):
-                uns[k] = v.to_frame()
-    write_elem(output_group, "uns", uns)
+    # If the merged .uns is a dict, ensure it is a valid dictionary
+    if not isinstance(uns, dict):
+        msg = f"Expected merged .uns to be a dict, got {type(uns)}"
+        raise TypeError(msg)
+
+    uns_group = output_group.create_group("uns")
+    uns_group.attrs.update(
+        {
+            "encoding-type": "dict",
+            "encoding-version": "0.1.0",
+        }
+    )
+    # write each element of the merged .uns dictionary
+    # to the .uns group using write_elem
+    for k, v in uns.items():
+        if isinstance(v, pd.Series):
+            v = v.to_frame()
+        write_elem(uns_group, k, v)
 
 
 def concat_on_disk(
