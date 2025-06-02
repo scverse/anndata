@@ -484,26 +484,17 @@ def adapt_vars_like(
     from ._core.anndata import AnnData
     from ._core.merge import Reindexer
 
-    # copy over the var structure from source = becomes new feature index structure
-    # that we want target to match
     new_var = source.var.copy()
-    # Initializing reindexer = help map the old gene indices to the new structure
     reindexer = Reindexer(target.var.index, new_var.index)
-    # if target object actually has .X matrix (i.e. expression data), I reindex it to match the source
-
-    if target.X is not None:
-        new_X = reindexer(target.X, axis=1, fill_value=fill_value)
+    if target.X is None:
+        new_X = None
     else:
-        # otherwise I just create a dummy matrix of the right shape filled with a constant value
-        new_X = np.full((target.n_obs, len(new_var)), fill_value)
+        new_X = reindexer(target.X, axis=1, fill_value=fill_value)
 
-    # reindexing each layer matrix along the gene (column) axis so it matches new structure
     new_layers = {
         k: reindexer(v, axis=1, fill_value=fill_value) for k, v in target.layers.items()
     }
-    # reindex varm which stores matrix-like annotation for each gene
-    # for each entry, reindex along the gene axis, cast it to a numpy array to make it uniform
-    # convert it to a plain python list to avoid type checker error
+
     new_varm: AxisStorable = {
         k: reindexer(v, axis=0, fill_value=fill_value) for k, v in target.varm.items()
     }
@@ -517,8 +508,6 @@ def adapt_vars_like(
 
     new_obsp = {k: v.copy() for k, v in target.obsp.items()}
 
-    # creating new Anndata Object
-    # directly copying .obs without changes - we are not touching the cells here, just aligning features
     new_adata = AnnData(
         X=new_X,
         obs=target.obs.copy(),
@@ -528,9 +517,7 @@ def adapt_vars_like(
         obsp=new_obsp,
         layers=new_layers,
     )
-    # if the original target fad a .raw layer, reindex it as well
-    # since .raw is immutable (from what I understand), we create a new AnnData object
-    # with matching .X, .obs, .var assigning it directly to new_adata.raw
+
     if target.raw is not None:
         new_raw_X = reindexer(target.raw.X, axis=1, fill_value=fill_value)
         new_adata.raw = AnnData(

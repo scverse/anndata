@@ -108,3 +108,18 @@ def test_adapt_vars_with_fill_value(source, target, fill_value, expected_X):
     output = adapt_vars_like(source, target, fill_value=fill_value)
     np.testing.assert_array_equal(output.X, expected_X)
     assert list(output.var_names) == list(source.var_names)
+
+
+def test_adapt_vars_target_X_none():
+    source = ad.AnnData(
+        X=np.ones((2, 2)),
+        var=pd.DataFrame(index=["g1", "g2"]),
+    )
+    target = ad.AnnData(
+        X=None,
+        var=pd.DataFrame(index=["g2", "g3"]),
+        obs=pd.DataFrame(index=["cell1", "cell2"]),
+    )
+    output = adapt_vars_like(source, target, fill_value=-1)
+    assert output.X is None
+    assert list(output.var_names) == list(source.var_names)
