@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 
-from ..compat import XDataArray, XDataset
+from ..compat import XDataArray, XDataset, XVariable
 
 
 class Dataset2D(XDataset):
@@ -144,6 +146,8 @@ class Dataset2D(XDataset):
         Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
         One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
         Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as `self.index_dim`.
+
+        For supported setter values see :meth:`xarray.Dataset.__setitem__`.
         """
         if key == self.index_dim:
             msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
@@ -159,21 +163,34 @@ class Dataset2D(XDataset):
             if not isinstance(value[0], tuple) and value[0] != self.index_dim:
                 msg = f"Setting value tuple should have first entry {self.index_dim}, found {value[0]}"
                 raise ValueError(msg)
-        elif isinstance(value, XDataArray):
-            if value.name is not None and value.name != key:
-                msg = f"DataArray should have name {key}, found {value.name}"
-                raise ValueError(msg)
-            if len(value.dims) != 1:
-                msg = f"XDataArray should have only one dimension, found {len(value.dims)}"
-                raise ValueError(msg)
-            if value.dims[0] != self.index_dim:
-                msg = f"DataArray should have dimension {self.index_dim}, found {value.dims[0]}"
-                raise ValueError(msg)
+        elif isinstance(value, XDataArray | XDataset | XVariable):
+            value_typ = type(value).__name__
+            # https://docs.xarray.dev/en/stable/generated/xarray.Dataset.dims.html#xarray.Dataset.dims
+            # Unfortunately `dims` not the same across data structures.
+            with warnings.catch_warnings(action="ignore"):
+                dims = (
+                    list(value.dims.keys())
+                    if isinstance(value, XDataset)
+                    else value.dims
+                )
             if (
+                isinstance(value, XDataArray)
+                and value.name is not None
+                and value.name != key
+            ):
+                msg = f"{value_typ} should have name {key}, found {value.name}"
+                raise ValueError(msg)
+            if len(dims) != 1:
+                msg = f"{value_typ} should have only one dimension, found {len(dims)}"
+                raise ValueError(msg)
+            if dims[0] != self.index_dim:
+                msg = f"{value_typ} should have dimension {self.index_dim}, found {dims[0]}"
+                raise ValueError(msg)
+            if not isinstance(value, XVariable) and (
                 self.index_dim not in value.coords
                 or value.coords[self.index_dim].name != self.index_dim
             ):
-                msg = f"DataArray should have coordinate {self.index_dim} with same name, found {value.coords} with name {value.coords[next(iter(value.coords.keys()))].name}"
+                msg = f"{value_typ} should have coordinate {self.index_dim} with same name, found {value.coords} with name {value.coords[next(iter(value.coords.keys()))].name}"
                 raise ValueError(msg)
         else:
             # maintain setting behavior of a 2D dataframe i.e., one dim

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from anndata._core.xarray import Dataset2D
-from anndata.compat import XDataArray
+from anndata.compat import XDataArray, XDataset, XVariable
 from anndata.tests.helpers import gen_typed_df
 
 
@@ -109,6 +109,20 @@ def test_dataset_2d_set_dataarray(dataset_2d_one_column):
     assert dataset_2d_one_column["bar"].equals(da)
 
 
+def test_dataset_2d_set_dataset(dataset_2d_one_column):
+    ds = XDataset(
+        data_vars={
+            "foo": ("obs_names", np.arange(3)),
+            "bar": ("obs_names", np.arange(3) + 3),
+        },
+        coords={"obs_names": [1, 2, 3]},
+    )
+    key = ["foo", "bar"]
+    dataset_2d_one_column[key] = ds
+    assert tuple(dataset_2d_one_column[key].sizes.keys()) == ("obs_names",)
+    assert dataset_2d_one_column[key].equals(ds)
+
+
 @pytest.mark.parametrize(
     "setter",
     [
@@ -131,6 +145,14 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
     ("da", "msg"),
     [
         pytest.param(
+            XDataset(
+                data_vars={"bar": ("obs_names", np.arange(3))},
+                coords={"foo": ("obs_names", np.arange(3))},
+            ),
+            "Dataset should have coordinate obs_names",
+            id="coord_name_dataset",
+        ),
+        pytest.param(
             XDataArray(
                 np.arange(3),
                 coords={"foo": ("obs_names", np.arange(3))},
@@ -151,13 +173,47 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
             id="dataarray_name",
         ),
         pytest.param(
+            XDataset(
+                data_vars={
+                    "foo": (["obs_names", "not_obs_names"], np.arange(9).reshape(3, 3))
+                },
+                coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
+            ),
+            "Dataset should have only one dimension",
+            id="multiple_dims_dataset",
+        ),
+        pytest.param(
             XDataArray(
                 np.arange(9).reshape(3, 3),
                 coords={"obs_names": np.arange(3), "not_obs_names": np.arange(3)},
                 dims=("obs_names", "not_obs_names"),
             ),
-            "should have only one dimension",
-            id="multiple_dims",
+            "DataArray should have only one dimension",
+            id="multiple_dims_dataarray",
+        ),
+        pytest.param(
+            XVariable(
+                data=np.arange(9).reshape(3, 3),
+                dims=("obs_names", "not_obs_names"),
+            ),
+            "Variable should have only one dimension",
+            id="multiple_dims_variable",
+        ),
+        pytest.param(
+            XDataset(
+                data_vars={"foo": ("other", np.arange(3))},
+                coords={"obs_names": ("other", np.arange(3))},
+            ),
+            "Dataset should have dimension obs_names",
+            id="name_conflict_dataset",
+        ),
+        pytest.param(
+            XVariable(
+                data=np.arange(3),
+                dims="not_obs_names",
+            ),
+            "Variable should have dimension obs_names, found not_obs_names",
+            id="name_conflict_variable",
         ),
         pytest.param(
             XDataArray(
@@ -165,8 +221,8 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
                 coords=[np.arange(3)],
                 dims="not_obs_names",
             ),
-            "dimension obs_names, found not_obs_names",
-            id="name_conflict",
+            "DataArray should have dimension obs_names, found not_obs_names",
+            id="name_conflict_dataarray",
         ),
         pytest.param(
             ("not_obs_names", [1, 2, 3]),
@@ -185,7 +241,7 @@ def test_dataset_2d_set_extension_array(dataset_2d_one_column, setter):
         ),
     ],
 )
-def test_dataset_2d_set_with_bad_dataarray(da, msg, dataset_2d_one_column):
+def test_dataset_2d_set_with_bad_obj(da, msg, dataset_2d_one_column):
     with pytest.raises(ValueError, match=msg):
         dataset_2d_one_column["bar"] = da
 
