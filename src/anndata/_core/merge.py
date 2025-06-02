@@ -1342,8 +1342,6 @@ def concat_dataset2d_on_annot_axis(
     join: Join_T,
     *,
     force_lazy: bool,
-    label: str | None = None,
-    label_col: pd.Categorical | None = None,
     concat_indices: pd.Index | None = None,
 ) -> Dataset2D:
     """Create a concatenate dataset from a list of :class:`~anndata._core.xarray.Dataset2D` objects.
@@ -1358,11 +1356,8 @@ def concat_dataset2d_on_annot_axis(
         Type of join operation
     force_lazy
         Whether to lazily concatenate elements using dask even when eager concatenation is possible.
-    label
-        Column in axis annotation (i.e. `.obs` or `.var`) to place batch information in.
-        If it's None, no column is added.
-    label_col
-        The bath information annotation.
+    concat_indices
+        Already calculated indices to be used as the index on the concatenated object.
 
     Returns
     -------
@@ -1706,8 +1701,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             annotations,
             join,
             force_lazy=force_lazy,
-            label=label,
-            label_col=label_col,
             concat_indices=concat_indices,
         )
     if label is not None:
