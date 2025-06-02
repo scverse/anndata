@@ -93,6 +93,14 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
 ]
+nitpick_ignore_regex = [
+    # See https://github.com/python/cpython/blob/7775d93e2d142ab66c7d8fa7cff068b2522a37b0/Lib/_collections_abc.py#L807-L809
+    # for why these are necessary.
+    # The docstrings are just normal strings and thus misinterpreted.
+    # TODO: revert once this is resolved in python.
+    ("py:class", "D[k] if k in D.*"),
+    ("py:class", "a.*object providing.*"),
+]
 
 
 def setup(app: Sphinx):
