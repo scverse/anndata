@@ -159,11 +159,7 @@ class Dataset2D(XDataset):
             if not isinstance(value[0], tuple) and value[0] != self.index_dim:
                 msg = f"Setting value tuple should have first entry {self.index_dim}, found {value[0]}"
                 raise ValueError(msg)
-
-        if not isinstance(value, tuple) and not isinstance(value, XDataArray):
-            # maintain setting behavior of a 2D dataframe i.e., one dim
-            value = (self.index_dim, value)
-        if isinstance(value, XDataArray):
+        elif isinstance(value, XDataArray):
             if value.name is not None and value.name != key:
                 msg = f"DataArray should have name {key}, found {value.name}"
                 raise ValueError(msg)
@@ -179,4 +175,7 @@ class Dataset2D(XDataset):
             ):
                 msg = f"DataArray should have coordinate {self.index_dim} with same name, found {value.coords} with name {value.coords[next(iter(value.coords.keys()))].name}"
                 raise ValueError(msg)
+        else:
+            # maintain setting behavior of a 2D dataframe i.e., one dim
+            value = (self.index_dim, value)
         super().__setitem__(key, value)
