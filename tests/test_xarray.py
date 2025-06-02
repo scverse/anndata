@@ -260,14 +260,14 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
 
 
 @pytest.mark.parametrize(
-    ("ds", "error"),
+    ("ds", "pattern"),
     [
         pytest.param(
             XDataset(
                 {"foo": ("obs_names", pd.array(["a", "b", "c"], dtype="category"))},
                 coords={"obs_names": ("not_obs_names", [1, 2, 3])},
             ),
-            "Dataset should have exactly one dimension",
+            r"Dataset should have exactly one dimension",
             id="more_than_one_dimension",
         ),
         pytest.param(
@@ -278,7 +278,7 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
                     "not_obs_names": ("obs_names", [1, 2, 3]),
                 },
             ),
-            "Dataset should have exactly one coordinate",
+            r"Dataset should have exactly one coordinate",
             id="more_than_one_coord",
         ),
         pytest.param(
@@ -288,7 +288,7 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
                     "obs_names": ("not_obs_names", [1, 2, 3]),
                 },
             ),
-            "does not match coordinate",
+            r"does not match coordinate",
             id="coord_dim_mismatch",
         ),
         pytest.param(
@@ -298,11 +298,11 @@ def test_dataset_2d_set_index(data, dataset_2d_one_column):
                     "obs_names": (("obs", "obs1"), np.arange(9).reshape(3, 3)),
                 },
             ),
-            "does not match coordinate",
+            r"Dataset should have exactly one",
             id="multi_dim_coord",
         ),
     ],
 )
-def test_init_errors(ds, error):
-    with pytest.raises(ValueError, match=error):
+def test_init_errors(ds, pattern):
+    with pytest.raises(ValueError, match=pattern):
         Dataset2D(ds)
