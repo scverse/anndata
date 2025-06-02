@@ -1349,11 +1349,12 @@ def concat_dataset2d_on_annot_axis(
             pd.RangeIndex(a.shape[0]),
         )
         # Set all the dimensions to this new dummy index
-        a.ds = a.ds.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
+        ds_swapped = a.ds.swap_dims({old_key: DS_CONCAT_DUMMY_INDEX_NAME})
         # Move the old coordinate into a variable
-        old_coord = a.ds.coords[old_key]
-        del a.ds.coords[old_key]
-        a.ds[old_key] = old_coord
+        old_coord = ds_swapped.coords[old_key]
+        del ds_swapped.coords[old_key]
+        ds_swapped[old_key] = old_coord
+        a = Dataset2D(ds_swapped)
         if not is_fake_index:
             a.true_index_dim = old_key
         annotations_re_indexed.append(a)
@@ -1398,7 +1399,7 @@ def concat_dataset2d_on_annot_axis(
         del ds_concat[key]
     if DUMMY_RANGE_INDEX_KEY in ds_concat:
         del ds_concat[DUMMY_RANGE_INDEX_KEY]
-    ds_concat_2d.ds = ds_concat
+    ds_concat_2d = Dataset2D(ds_concat)
     return ds_concat_2d
 
 

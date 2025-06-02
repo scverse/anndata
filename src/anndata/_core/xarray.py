@@ -26,8 +26,6 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     object in this object, trying to enforce the "dataframe-invariants."
     """
 
-    ds: XDataset
-
     @staticmethod
     def _validate_shape_invariants(ds: XDataset):
         """
@@ -51,7 +49,11 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     def __init__(self, ds: XDataset):
         Dataset2D._validate_shape_invariants(ds)
-        self.ds = ds
+        self._ds = ds
+
+    @property
+    def ds(self) -> XDataset:
+        return self._ds
 
     @property
     def is_backed(self) -> bool:
