@@ -160,7 +160,7 @@ class Dataset2D(XDataset):
                 if len(value[0]) > 1:
                     msg = "Dimension tuple is too long."
                     raise ValueError(msg)
-            if not isinstance(value[0], tuple) and value[0] != self.index_dim:
+            elif value[0] != self.index_dim:
                 msg = f"Setting value tuple should have first entry {self.index_dim}, found {value[0]}"
                 raise ValueError(msg)
         elif isinstance(value, XDataArray | XDataset | XVariable):
