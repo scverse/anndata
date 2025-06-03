@@ -343,14 +343,6 @@ def gen_adata(  # noqa: PLR0913
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    obsm = maybe_add_sparse_array(
-        mapping=obsm,
-        types=obsm_types,
-        format=sparse_fmt,
-        random_state=random_state,
-        shape=(M, 100),
-    )
     varm = dict(
         array=np.random.random((N, 50)),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
@@ -367,6 +359,14 @@ def gen_adata(  # noqa: PLR0913
         varm["xdataset"] = xr.Dataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
+    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = maybe_add_sparse_array(
+        mapping=obsm,
+        types=obsm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, 100),
+    )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
         mapping=varm,
