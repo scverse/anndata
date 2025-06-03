@@ -24,6 +24,11 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     You should not have to initiate this class yourself.  Setting an :class:`xarray.Dataset`
     into a relevant part of the :class:`~anndata.AnnData` object will attempt to wrap that
     object in this object, trying to enforce the "dataframe-invariants."
+
+    Because xarray requires {attr}`xarray.Dataset.coords` to be in-memory, this class provides
+    handling for an out-of-memory index via {attr}`~anndata.experimental.backed.Dataset2D.true_index`.
+    This feature is helpful for loading remote data faster where the index itself may not be initially useful
+    for constructing the object e.g., cell ids.
     """
 
     @staticmethod
@@ -53,6 +58,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @property
     def ds(self) -> XDataset:
+        """The underlying :class:`xarray.Dataset`."""
         return self._ds
 
     @property
@@ -104,13 +110,13 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @property
     def xr_index(self) -> XDataArray:
-        """The coordinate of self.index"""
+        """The coordinate of :attr:`anndata.experimental.backed.Dataset2D.index_dim`"""
         return self.ds[self.index_dim]
 
     @property
     def index(self) -> pd.Index:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
-
+        A :class:`pandas.Index` object corresponding to {attr}`anndata.experimental.backed.Dataset2D.index_dim`
         Returns
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
@@ -130,10 +136,12 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @property
     def true_xr_index(self) -> XDataArray:
+        """The index {class}`~anndata.AnnData` is actually interested e.g., cell names, for verification."""
         return self.ds[self.true_index_dim]
 
     @property
     def true_index(self) -> pd.Index:
+        """{attr}`~anndata.experimental.backed.Dataset2D.true_xr_index` as a {class}`pandas.Index`"""
         return self.true_xr_index.to_index()
 
     @property
