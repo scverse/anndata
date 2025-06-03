@@ -640,6 +640,7 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
+            fill_value="",
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -1294,6 +1295,7 @@ def write_scalar_zarr(
             shape=(),
             dtype=dtype,
             filters=filters,
+            fill_value="" if dtype is object else None,
             **dataset_kwargs,
         )
         a[...] = np.array(value)
