@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import Literal, TypeVar
+from typing import List, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
@@ -459,17 +459,56 @@ def merge_same_strict(ds: Collection[Mapping]) -> Mapping:
     # only identical values are merged with _raise_on_conflict
     return merge_nested(ds, intersect_keys, _raise_on_conflict)
 
-def _raise_on_conflict(vals: list) -> Any:
-    # building a filtered list of non-empty values
-    # checks if each value has an .empty attribute and exclude empty ones
-    non_empty = [v for v in vals if getattr(v, "empty", False) is False]
-    if not non_empty:
-        return vals[0]
-    # if all values are equal to the first one, then it would return it
-    # passes in the common case where merging same values in valid
-    if all(equal(v, vals[0]) for v in vals):
-        return vals[0]
-    msg = f"Values do not match across all objects: {vals}"
+def _harmonize_categories(vals: list[pd.Series]) -> list[pd.Series]:
+    """
+    To make sure that all categorical Series have the same categories (union).
+    """
+    # align categories across all series (only if all are categoricals)
+    if not all(isinstance(v, pd.Series) and v.dtype.name == "category" for v in vals):
+        return vals
+    # build the full set of all categories used across inputs
+    category_union = sorted(set(cat for v in vals for cat in v.cat.categories))
+
+    harmonized = []
+    for v in vals:
+        # fill with NA if the original had no categories
+        if len(v.cat.categories) == 0:
+            harmonized.append(pd.Series([pd.NA] * len(v), dtype=pd.CategoricalDtype(categories=category_union)))
+        else:
+            # remap to common category set (union)
+            harmonized.append(v.cat.set_categories(category_union))
+    return harmonized
+
+
+def _raise_on_conflict(vals: list) -> any:
+    # standardize categories first so we can compare fairly
+    vals = _harmonize_categories(vals)
+
+    try:
+        lengths = {len(v) for v in vals}
+        if not lengths:
+            # fallback if somehow empty
+            return vals[0]
+        if len(lengths) == 1:
+            # use the first one as the baseline
+            ref = pd.Series(vals[0])
+            # cast all to series just in case
+            series_vals = [pd.Series(v) for v in vals]
+            # if all NA, then return NA
+            if all(s.equals(ref) for s in series_vals):
+                return vals[0]
+            # if non-NA values match (ignoring order/NA), allow
+            if all(s.isna().all() for s in series_vals):
+                return pd.Series([pd.NA] * len(ref), dtype=ref.dtype)
+            if all(set(s.dropna()) == set(ref.dropna()) for s in series_vals):
+                return ref.copy()
+            # if one side empty, then fallback
+            if any(s.isna().all() for s in series_vals):
+                return ref.copy()
+    except Exception:
+        pass
+
+    msg = f"Values don't match all objects: {vals}"
     raise ValueError(msg)
 
 def merge_first(ds: Collection[Mapping]) -> Mapping:
