@@ -123,3 +123,60 @@ def test_adapt_vars_target_X_none():
     output = adapt_vars_like(source, target, fill_value=-1)
     assert output.X is None
     assert list(output.var_names) == list(source.var_names)
+
+
+def test_adapt_vars_all_objects():
+    source = ad.AnnData(
+        X=np.ones((2, 3)),
+        var=gen_typed_df(3, index=pd.Index(["a", "b", "c"])),
+    )
+
+    target = ad.AnnData(
+        X=np.array([[1, 3], [2, 4]]),
+        var=gen_typed_df(2, index=pd.Index(["a", "c"])),
+        obs=pd.DataFrame(index=["cell1", "cell2"]),
+        varm={"varm_key": np.array([[10, 11], [30, 31]])},
+        varp={"varp_key": np.array([[1, 2], [3, 4]])},
+        obsp={"obsp_key": np.array([[5, 6], [7, 8]])},
+        layers={"layer1": np.array([[1000, 3000], [1001, 3001]])},
+    )
+
+    output = adapt_vars_like(source, target, fill_value=-1)
+
+    expected_X = np.array(
+        [
+            [1, -1, 3],
+            [2, -1, 4],
+        ]
+    )
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == ["a", "b", "c"]
+
+    expected_layer = np.array(
+        [
+            [1000, -1, 3000],
+            [1001, -1, 3001],
+        ]
+    )
+    np.testing.assert_array_equal(output.layers["layer1"], expected_layer)
+
+    expected_varm = np.array(
+        [
+            [10, 11],
+            [-1, -1],
+            [30, 31],
+        ]
+    )
+    np.testing.assert_array_equal(output.varm["varm_key"], expected_varm)
+
+    expected_varp = np.array(
+        [
+            [1, -1, 2],
+            [-1, -1, -1],
+            [3, -1, 4],
+        ]
+    )
+    np.testing.assert_array_equal(output.varp["varp_key"], expected_varp)
+
+    expected_obsp = np.array([[5, 6], [7, 8]])
+    np.testing.assert_array_equal(output.obsp["obsp_key"], expected_obsp)
