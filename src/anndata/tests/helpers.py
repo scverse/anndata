@@ -1132,7 +1132,7 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
-        def __init__(*args, **kwargs):
+        def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs, read_only=True)
 
         async def get(
