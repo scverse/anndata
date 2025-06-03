@@ -141,7 +141,7 @@ def read_dataset(dataset: zarr.Array):
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
         value = _from_fixed_length_strings(value)
-    if value.shape == ():
+    if value.shape == () and not np.isscalar(value):
         value = value[()]
     return value
 
