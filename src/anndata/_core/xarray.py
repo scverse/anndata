@@ -11,7 +11,7 @@ from ..compat import XDataArray, XDataset, XVariable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
-    from typing import Any
+    from typing import Any, Literal
 
 
 class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
@@ -94,7 +94,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         desirable or necessary for most use cases such as getting a quick preview of the columns or loading only
         one column that isn't the index.
 
-        This property is the key of said variable.
+        This property is the key of said variable. The default is `index_dim` if this variable has not been set.
         """
         return self.ds.attrs.get("indexing_key", self.index_dim)
 
@@ -136,7 +136,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @property
     def true_xr_index(self) -> XDataArray:
-        """The index {class}`~anndata.AnnData` is actually interested e.g., cell names, for verification."""
+        """The index {class}`~anndata.AnnData` is actually interested in e.g., cell names, for verification."""
         return self.ds[self.true_index_dim]
 
     @property
@@ -175,7 +175,6 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @overload
     def __getitem__(self, key: Hashable) -> XDataArray: ...
-    # Mapping is Iterable
     @overload
     def __getitem__(self, key: Iterable[Hashable]) -> Dataset2D: ...
     def __getitem__(
@@ -308,14 +307,34 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             b = b.ds
         return self.ds.equals(b)
 
-    def reindex(self, index=None, axis=0, fill_value=np.nan) -> Dataset2D:
+    def reindex(
+        self,
+        index: pd.Index | None = None,
+        axis: Literal[0] = 0,
+        fill_value: Any | None = np.nan,
+    ) -> Dataset2D:
+        """Reindex the current object against a new index.
+
+        Parameters
+        ----------
+        index, optional
+            The new index for reindexing, by default None
+        axis, optional
+            Provided for API consistency, should not be called over axis!=0, by default 0
+        fill_value, optional
+            The value with which to fill in via :meth:`pandas.Series.reindex`, by default np.nan
+
+        Returns
+        -------
+            Reindexed dataset.
+        """
         index_dim = self.index_dim
         if axis == 0:
             # Dataset.reindex() can't handle ExtensionArrays
             extension_arrays = {
-                col: arr
-                for col, arr in self.items()
-                if pd.api.types.is_extension_array_dtype(arr)
+                col: arr.data
+                for col, arr in self.ds.items()
+                if pd.api.types.is_extension_array_dtype(arr.dtype)
             }
             el = self.ds.drop_vars(extension_arrays.keys())
             el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
