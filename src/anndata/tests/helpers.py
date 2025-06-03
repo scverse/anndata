@@ -325,10 +325,11 @@ def gen_adata(  # noqa: PLR0913
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
-    if obs_xdataset:
-        obs = XDataset.from_dataframe(obs)
-    if var_xdataset:
-        var = XDataset.from_dataframe(var)
+    if has_xr := find_spec("xarray"):
+        if obs_xdataset:
+            obs = XDataset.from_dataframe(obs)
+        if var_xdataset:
+            var = XDataset.from_dataframe(var)
 
     if X_type is None:
         X = None
@@ -357,7 +358,7 @@ def gen_adata(  # noqa: PLR0913
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
     )
-    if find_spec("xarray"):
+    if has_xr:
         import xarray as xr
 
         obsm["xdataset"] = xr.Dataset.from_dataframe(
