@@ -103,6 +103,7 @@ if find_spec("xarray") or TYPE_CHECKING:
     import xarray
     from xarray import DataArray as XDataArray
     from xarray import Dataset as XDataset
+    from xarray import Variable as XVariable
     from xarray.backends import BackendArray as XBackendArray
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 else:
@@ -115,6 +116,10 @@ else:
     class XDataset:
         def __repr__(self) -> str:
             return "mock Dataset"
+
+    class XVariable:
+        def __repr__(self) -> str:
+            return "mock Variable"
 
     class XZarrArrayWrapper:
         def __repr__(self) -> str:
