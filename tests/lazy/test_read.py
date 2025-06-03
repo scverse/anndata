@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
 
     from anndata._types import AnnDataElem
 
-pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
+pytestmark = pytest.importorskip("xarray")
 
 
 @pytest.mark.parametrize(

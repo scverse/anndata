@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Hashable
 from copy import deepcopy
 from functools import partial, singledispatch
+from importlib.util import find_spec
 from itertools import chain, permutations, product
 from operator import attrgetter
 from typing import TYPE_CHECKING
@@ -12,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy
-import xarray as xr
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from packaging.version import Version
@@ -217,7 +217,25 @@ def test_concat_interface_errors(obs_xdataset, var_xdataset):
 )
 @pytest.mark.parametrize(
     ("obs_xdataset", "var_xdataset", "force_lazy"),
-    [(False, False, False), (True, True, False), (True, True, True)],
+    [
+        (False, False, False),
+        pytest.param(
+            True,
+            True,
+            False,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+        pytest.param(
+            True,
+            True,
+            True,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+    ],
 )
 def test_concatenate_roundtrip(
     join_type,
@@ -245,15 +263,10 @@ def test_concatenate_roundtrip(
         subset_idx = np.random.choice(remaining, n, replace=False)
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
-
-    if (
-        backwards_compat
-        and (obs_xdataset or var_xdataset)
-        and Version(xr.__version__) < Version("2025.4.0")
-    ):
-        pytest.xfail("https://github.com/pydata/xarray/issues/10218")
     result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
     if backwards_compat and var_xdataset:
+        import xarray as xr
+
         result.var = xr.Dataset.from_dataframe(
             result.var
         )  # backwards compat always returns a dataframe
@@ -1504,7 +1517,25 @@ def expected_shape(
 )
 @pytest.mark.parametrize(
     ("obs_xdataset", "var_xdataset", "force_lazy"),
-    [(False, False, False), (True, True, False), (True, True, True)],
+    [
+        (False, False, False),
+        pytest.param(
+            True,
+            True,
+            False,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+        pytest.param(
+            True,
+            True,
+            True,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+    ],
 )
 def test_concat_size_0_axis(
     axis_name, join_type, merge_strategy, shape, obs_xdataset, var_xdataset, force_lazy
@@ -1579,7 +1610,25 @@ def test_concat_size_0_axis(
 @pytest.mark.parametrize("axis", ["obs", "var"])
 @pytest.mark.parametrize(
     ("obs_xdataset", "var_xdataset", "force_lazy"),
-    [(False, False, False), (True, True, False), (True, True, True)],
+    [
+        (False, False, False),
+        pytest.param(
+            True,
+            True,
+            False,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+        pytest.param(
+            True,
+            True,
+            True,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+        ),
+    ],
 )
 def test_concat_outer_aligned_mapping(
     elem, axis, obs_xdataset, var_xdataset, force_lazy
