@@ -37,8 +37,8 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_args(ArrayDataStructureTypes)
-    if isinstance(value, XDataset) and not isinstance(value, Dataset2D):
-        value = Dataset2D(value.data_vars, value.coords, value.attrs)
+    if isinstance(value, XDataset):
+        value = Dataset2D(value)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
