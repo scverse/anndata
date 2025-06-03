@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from functools import wraps
-from typing import TYPE_CHECKING
 import warnings
+from functools import wraps
 
 import pandas as pd
 
