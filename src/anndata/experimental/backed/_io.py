@@ -34,7 +34,7 @@ def read_lazy(
 ) -> AnnData:
     """
     Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
-    No array data should need to be read into memory with the exception of :class:`ak.Array`, scalars, and some older-encoding arrays.
+    No array data should need to be read into memory with the exception of :class:`awkward.Array`, scalars, and some older-encoding arrays.
 
     Parameters
     ----------
