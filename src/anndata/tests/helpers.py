@@ -351,12 +351,10 @@ def gen_adata(  # noqa: PLR0913
         da=da.random.random((N, 50)),
     )
     if has_xr:
-        import xarray as xr
-
-        obsm["xdataset"] = xr.Dataset.from_dataframe(
+        obsm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(M, obs_names, dtypes=obs_dtypes)
         )
-        varm["xdataset"] = xr.Dataset.from_dataframe(
+        varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
