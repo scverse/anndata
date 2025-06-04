@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import reduce
-from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,7 +14,7 @@ from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_ad
 
 from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
 
-pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
+pytest.importorskip("xarray")
 
 if TYPE_CHECKING:
     from collections.abc import Callable
