@@ -395,10 +395,12 @@ def validate_indices(
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     _group: GroupStorageType
+    _should_cache_indptr: bool
 
-    def __init__(self, group: GroupStorageType):
+    def __init__(self, group: GroupStorageType, *, should_cache_indptr: bool = True):
         type(self)._check_group_format(group)
         self._group = group
+        self._should_cache_indptr = should_cache_indptr
 
     @property
     def group(self) -> GroupStorageType:
@@ -616,8 +618,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
         It should therefore fit into memory, so we cache it for faster access.
         """
-        arr = self.group["indptr"][...]
-        return arr
+        if self._should_cache_indptr:
+            return self.group["indptr"][...]
+        return self.group["indptr"]
 
     @cached_property
     def _indices(self) -> H5Array | ZarrArray:
@@ -660,13 +663,19 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
+def sparse_dataset(
+    group: GroupStorageType,
+    *,
+    should_cache_indptr: bool = True,
+) -> abc.CSRDataset | abc.CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
     ----------
     group
         The backing group store.
+    should_cache_indptr
+        Whether or not to cache the indptr for repeated reuse as a :class:`numpy.array`
 
     Returns
     -------
@@ -713,9 +722,9 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
-        return _CSRDataset(group)
+        return _CSRDataset(group, should_cache_indptr=should_cache_indptr)
     elif encoding_type == "csc":
-        return _CSCDataset(group)
+        return _CSCDataset(group, should_cache_indptr=should_cache_indptr)
     msg = f"Unknown encoding type {encoding_type}"
     raise ValueError(msg)
 

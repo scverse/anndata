@@ -15,13 +15,7 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    DaskArray,
-    ZarrGroup,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -47,7 +41,7 @@ N = 50
 
 
 @pytest.fixture
-def zarr_metadata_key():
+def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
     return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
 
 
@@ -377,8 +371,13 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("should_cache_indptr", [True, False])
 def test_lazy_array_cache(
-    tmp_path: Path, sparse_format: Callable[[ArrayLike], CSMatrix], zarr_metadata_key
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    zarr_metadata_key: Literal[".zarray", "zarr.json"],
+    *,
+    should_cache_indptr: bool,
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -389,7 +388,7 @@ def test_lazy_array_cache(
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
     f = open_write_group(store, mode="a")
-    a_disk = sparse_dataset(f["X"])
+    a_disk = sparse_dataset(f["X"], should_cache_indptr=should_cache_indptr)
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]

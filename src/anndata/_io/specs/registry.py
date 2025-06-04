@@ -405,7 +405,11 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType,
+    chunks: tuple[int, ...] | None = None,
+    *,
+    should_cache_indptr: bool = True,
+    **kwargs,
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
@@ -425,6 +429,10 @@ def read_elem_lazy(
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
+    should_cache_indptr, optional
+        Whether or not to cache the indptr upon initial access in its entirety.  This is especially important for hdf5
+        where each chunk reopens the dataset repeatedly and thus will attempt to load the entire indptr into memory by default on access.
+        Set this to False to turn off this behavior, likely desirable for hdf5 backed data.
 
     Returns
     -------
@@ -480,6 +488,7 @@ def read_elem_lazy(
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, -1))
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, None))
     """
+    kwargs["should_cache_indptr"] = should_cache_indptr
     return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
 
