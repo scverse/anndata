@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import string
+from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,7 @@ from anndata._core.xarray import Dataset2D
 from anndata.compat import XDataArray, XDataset, XVariable
 from anndata.tests.helpers import gen_typed_df
 
-pytestmark = pytest.importorskip("xarray")
+pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="requires xarray")
 
 
 @pytest.fixture
