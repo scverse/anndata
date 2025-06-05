@@ -393,8 +393,9 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    # one each for .zarray and then actual access (1 more when cached, 3 more otherwise)
-    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for why 4/7 for zarr v3
+    # One hit for .zarray in zarr v2 and three for metadata in zarr v3:
+    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for more info on the difference.
+    # Then there is actual data access, 1 more when cached, 4 more otherwise.
     match should_cache_indptr, is_zarr_v2():
         case True, True:
             assert store.get_access_count("X/indptr") == 2
