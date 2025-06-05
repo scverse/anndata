@@ -75,6 +75,7 @@ def compute_chunk_layout_for_axis_size(
 def make_dask_chunk(
     path_or_sparse_dataset: Path | D,
     elem_name: str,
+    indptr: np.ndarray | None = None,
     block_info: BlockInfo | None = None,
 ) -> CSMatrix | CSArray:
     if block_info is None:
@@ -84,6 +85,8 @@ def make_dask_chunk(
     # https://github.com/scverse/anndata/issues/1105
     with maybe_open_h5(path_or_sparse_dataset, elem_name) as f:
         mtx = ad.io.sparse_dataset(f) if isinstance(f, H5Group) else f
+        if indptr is not None:
+            mtx._set_indptr_cache(indptr)
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
@@ -108,6 +111,7 @@ def read_sparse_as_dask(
     *,
     _reader: LazyReader,
     chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
+    load_indptr_in_parent: bool = False,
 ) -> DaskArray:
     import dask.array as da
 
@@ -149,7 +153,10 @@ def read_sparse_as_dask(
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
     memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
-    make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
+    indptr = None
+    if load_indptr_in_parent:
+        indptr = elem["indptr"][...]
+    make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name, indptr)
     da_mtx = da.map_blocks(
         make_chunk,
         dtype=dtype,

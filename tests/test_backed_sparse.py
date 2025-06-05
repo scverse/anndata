@@ -15,13 +15,7 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    DaskArray,
-    ZarrGroup,
-    is_zarr_v2,
-)
+from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
@@ -377,8 +371,13 @@ def test_dataset_append_disk(
 
 
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
+@pytest.mark.parametrize("load_indptr_in_parent", [True, False])
 def test_lazy_array_cache(
-    tmp_path: Path, sparse_format: Callable[[ArrayLike], CSMatrix], zarr_metadata_key
+    tmp_path: Path,
+    sparse_format: Callable[[ArrayLike], CSMatrix],
+    zarr_metadata_key: Literal[".zarray", "zarr.json"],
+    *,
+    load_indptr_in_parent: bool,
 ):
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
@@ -390,6 +389,8 @@ def test_lazy_array_cache(
         store.initialize_key_trackers([f"X/{elem}"])
     f = open_write_group(store, mode="a")
     a_disk = sparse_dataset(f["X"])
+    if load_indptr_in_parent:
+        a_disk._set_indptr_cache(f["X"]["indptr"][...])
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]

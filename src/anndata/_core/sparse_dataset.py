@@ -605,19 +605,25 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         indices[orig_data_size:] = append_indices
 
         # Clear cached property
-        for attr in ["_indptr", "_indices", "_data"]:
+        for attr in ["_indices", "_data"]:
             if hasattr(self, attr):
                 delattr(self, attr)
+        if hasattr(self, "_indptr_cached"):
+            self._indptr_cached = None
 
-    @cached_property
+    @property
     def _indptr(self) -> np.ndarray:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
         It should therefore fit into memory, so we cache it for faster access.
         """
-        arr = self.group["indptr"][...]
-        return arr
+        if getattr(self, "_indptr_cached", None) is None:
+            self._indptr_cached = self.group["indptr"][...]
+        return self._indptr_cached
+
+    def _set_indptr_cache(self, indptr: np.ndarray):
+        self._indptr_cached = indptr
 
     @cached_property
     def _indices(self) -> H5Array | ZarrArray:

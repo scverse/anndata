@@ -289,9 +289,12 @@ def test_dask_write_sparse(sparse_format, store):
     assert x_sparse_store["X_dask/indices"].dtype == np.int64
 
 
-def test_read_lazy_2d_dask(sparse_format, store):
+@pytest.mark.parametrize("load_indptr_in_parent", [True, False])
+def test_read_lazy_2d_dask(sparse_format, store, *, load_indptr_in_parent: bool):
     arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_lazy(arr_store["X"])
+    X_dask_from_disk = read_elem_lazy(
+        arr_store["X"], load_indptr_in_parent=load_indptr_in_parent
+    )
     X_from_disk = read_elem(arr_store["X"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -343,15 +346,22 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.parametrize("load_indptr_in_parent", [True, False])
 def test_read_lazy_h5_cluster(
-    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+    sparse_format: Literal["csr", "csc"],
+    tmp_path: Path,
+    local_cluster_addr: str,
+    *,
+    load_indptr_in_parent: bool,
 ) -> None:
     import dask.distributed as dd
 
     with h5py.File(tmp_path / "test.h5", "w") as file:
         store = file["/"]
         arr_store = create_sparse_store(sparse_format, store)
-        X_dask_from_disk = read_elem_lazy(arr_store["X"])
+        X_dask_from_disk = read_elem_lazy(
+            arr_store["X"], load_indptr_in_parent=load_indptr_in_parent
+        )
         X_from_disk = read_elem(arr_store["X"])
     with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
