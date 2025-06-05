@@ -407,8 +407,6 @@ def read_elem(elem: StorageType) -> RWAble:
 def read_elem_lazy(
     elem: StorageType,
     chunks: tuple[int, ...] | None = None,
-    *,
-    should_cache_indptr: bool = True,
     **kwargs,
 ) -> LazyDataStructures:
     """
@@ -488,7 +486,6 @@ def read_elem_lazy(
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, -1))
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, None))
     """
-    kwargs["should_cache_indptr"] = should_cache_indptr
     return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
 
