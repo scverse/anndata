@@ -675,7 +675,7 @@ def sparse_dataset(
     group
         The backing group store.
     should_cache_indptr
-        Whether or not to cache the indptr for repeated reuse as a :class:`numpy.array`
+        Whether or not to cache the indptr for repeated reuse as a :class:`numpy.ndarray`
 
     Returns
     -------
