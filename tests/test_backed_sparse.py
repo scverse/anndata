@@ -393,9 +393,17 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    # one each for .zarray and actual access
-    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for why 4
-    assert store.get_access_count("X/indptr") == 2 if is_zarr_v2() else 4
+    # one each for .zarray and then actual access (1 more when cached, 3 more otherwise)
+    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for why 4/7 for zarr v3
+    match should_cache_indptr, is_zarr_v2():
+        case True, True:
+            assert store.get_access_count("X/indptr") == 2
+        case False, True:
+            assert store.get_access_count("X/indptr") == 5
+        case True, False:
+            assert store.get_access_count("X/indptr") == 4
+        case False, False:
+            assert store.get_access_count("X/indptr") == 7
     for elem_not_indptr in elems - {"indptr"}:
         assert (
             sum(
