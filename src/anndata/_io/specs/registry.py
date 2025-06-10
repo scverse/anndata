@@ -427,10 +427,6 @@ def read_elem_lazy(
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
-    should_cache_indptr, optional
-        Whether or not to cache the indptr upon initial access in its entirety.  This is especially important for hdf5
-        where each chunk reopens the dataset repeatedly and thus will attempt to load the entire indptr into memory by default on access.
-        Set this to False to turn off this behavior, likely desirable for hdf5 backed data.
 
     Returns
     -------

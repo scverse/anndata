@@ -289,12 +289,9 @@ def test_dask_write_sparse(sparse_format, store):
     assert x_sparse_store["X_dask/indices"].dtype == np.int64
 
 
-@pytest.mark.parametrize("should_cache_indptr", [True, False])
-def test_read_lazy_2d_dask(sparse_format, store, *, should_cache_indptr: bool):
+def test_read_lazy_2d_dask(sparse_format, store):
     arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_lazy(
-        arr_store["X"], should_cache_indptr=should_cache_indptr
-    )
+    X_dask_from_disk = read_elem_lazy(arr_store["X"])
     X_from_disk = read_elem(arr_store["X"])
 
     assert_equal(X_from_disk, X_dask_from_disk)
