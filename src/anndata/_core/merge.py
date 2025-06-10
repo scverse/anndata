@@ -1365,6 +1365,8 @@ def concat_dataset2d_on_annot_axis(
         dim=DS_CONCAT_DUMMY_INDEX_NAME,
     )
     ds_concat.attrs.pop("indexing_key", None)
+    # Wrapping allows us to use the Dataset2D methods
+    # directly for setting certain attrs/coords without duplicating here.
     ds_concat_2d = Dataset2D(ds_concat)
     ds_concat_2d.is_backed = have_backed
     if concat_indices is not None:
