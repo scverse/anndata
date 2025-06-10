@@ -25,8 +25,8 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     into a relevant part of the :class:`~anndata.AnnData` object will attempt to wrap that
     object in this object, trying to enforce the "dataframe-invariants."
 
-    Because xarray requires {attr}`xarray.Dataset.coords` to be in-memory, this class provides
-    handling for an out-of-memory index via {attr}`~anndata.experimental.backed.Dataset2D.true_index`.
+    Because xarray requires :attr:`xarray.Dataset.coords` to be in-memory, this class provides
+    handling for an out-of-memory index via :attr:`~anndata.experimental.backed.Dataset2D.true_index`.
     This feature is helpful for loading remote data faster where the index itself may not be initially useful
     for constructing the object e.g., cell ids.
     """
@@ -116,7 +116,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     @property
     def index(self) -> pd.Index:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
-        A :class:`pandas.Index` object corresponding to {attr}`anndata.experimental.backed.Dataset2D.index_dim`
+        A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`
         Returns
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
@@ -136,12 +136,12 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     @property
     def true_xr_index(self) -> XDataArray:
-        """The index {class}`~anndata.AnnData` is actually interested in e.g., cell names, for verification."""
+        """The index :class:`~anndata.AnnData` is actually interested in e.g., cell names, for verification."""
         return self.ds[self.true_index_dim]
 
     @property
     def true_index(self) -> pd.Index:
-        """{attr}`~anndata.experimental.backed.Dataset2D.true_xr_index` as a {class}`pandas.Index`"""
+        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`"""
         return self.true_xr_index.to_index()
 
     @property
@@ -317,11 +317,11 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
         Parameters
         ----------
-        index, optional
+        index
             The new index for reindexing, by default None
-        axis, optional
+        axis
             Provided for API consistency, should not be called over axis!=0, by default 0
-        fill_value, optional
+        fill_value
             The value with which to fill in via :meth:`pandas.Series.reindex`, by default np.nan
 
         Returns
