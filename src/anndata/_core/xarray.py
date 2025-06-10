@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 # See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
 class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     """
+
+    Bases :class:`~collections.abc.Mapping` [ :class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D` ]
+
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
     are respected, namely that there is only one 1d dim and coord with the same name i.e.,
