@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
 
+# See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
 class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     """
     A wrapper class meant to enable working with lazy dataframe data according to
@@ -173,6 +174,8 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
         return IlocGetter(self.ds)
 
+    # See https://github.com/pydata/xarray/blob/568f3c1638d2d34373408ce2869028faa3949446/xarray/core/dataset.py#L1239-L1248
+    # for typing
     @overload
     def __getitem__(self, key: Hashable) -> XDataArray: ...
     @overload
