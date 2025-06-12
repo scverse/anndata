@@ -163,6 +163,7 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
+            # https://github.com/pydata/xarray/issues/10419
             return np.dtype("O")
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
