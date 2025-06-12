@@ -24,9 +24,8 @@ if TYPE_CHECKING:
 
     from anndata._types import AnnDataElem
 
-from importlib.util import find_spec
 
-pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
+pytest.importorskip("xarray")
 
 
 @pytest.mark.parametrize(
