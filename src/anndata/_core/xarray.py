@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-
 from collections.abc import Hashable, Mapping
 from functools import wraps
 from typing import TYPE_CHECKING, overload
