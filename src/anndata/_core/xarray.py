@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import warnings
+
 from collections.abc import Hashable, Mapping
+from functools import wraps
 from typing import TYPE_CHECKING, overload
 
 import numpy as np
@@ -12,6 +14,19 @@ from ..compat import XDataArray, XDataset, XVariable
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from typing import Any, Literal
+
+
+def requires_xarray(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            import xarray  # noqa: F401
+        except ImportError as e:
+            msg = "xarray is required to read dataframes lazily. Please install xarray."
+            raise ImportError(msg) from e
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 # See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
@@ -33,7 +48,6 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     handling for an out-of-memory index via :attr:`~anndata.experimental.backed.Dataset2D.true_index`.
     This feature is helpful for loading remote data faster where the index itself may not be initially useful
     for constructing the object e.g., cell ids.
-    """
 
     @staticmethod
     def _validate_shape_invariants(ds: XDataset):
@@ -213,10 +227,18 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         -------
             :class:`pandas.DataFrame` with index set accordingly.
         """
-        df = self.ds.to_dataframe()
-        index_key = self.ds.attrs.get("indexing_key", None)
+        # https://github.com/pydata/xarray/issues/10419
+        non_nullable_string_cols = {
+            col
+            for col in self.columns
+            if not self[col].attrs.get("is_nullable_string", False)
+        }
+        df = self.to_dataframe()
+        index_key = self.attrs.get("indexing_key", None)
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
+        for col in set(self.columns) - non_nullable_string_cols:
+            df[col] = pd.array(self[col].data, dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 

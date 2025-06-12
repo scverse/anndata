@@ -952,8 +952,17 @@ def test_forward_slash_key(elem_key, tmp_path):
 
 
 @pytest.mark.skipif(
-    find_spec("xarray"), reason="Xarray is installed so `read_lazy` will not error"
+    find_spec("xarray"),
+    reason="Xarray is installed so `read_{elem_}lazy` will not error",
 )
-def test_read_lazy_import_error():
+@pytest.mark.parametrize(
+    "func", [ad.experimental.read_lazy, ad.experimental.read_elem_lazy]
+)
+def test_read_lazy_import_error(func, tmp_path):
+    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
     with pytest.raises(ImportError, match="xarray"):
-        ad.experimental.read_lazy("test.zarr")
+        func(
+            zarr.open(
+                tmp_path if func is ad.experimental.read_lazy else tmp_path / "obs"
+            )
+        )

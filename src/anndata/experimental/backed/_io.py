@@ -13,6 +13,7 @@ from anndata._types import AnnDataElem
 from testing.anndata._doctest import doctest_needs
 
 from ..._core.anndata import AnnData
+from ..._core.xarray import requires_xarray
 from ..._settings import settings
 from ...compat import ZarrGroup, is_zarr_v2
 from .. import read_dispatched
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 
 
 @doctest_needs("xarray")
+@requires_xarray
 def read_lazy(
     store: PathLike[str] | str | MutableMapping | ZarrGroup | h5py.Dataset,
     *,
@@ -81,13 +83,6 @@ def read_lazy(
     AnnData object with n_obs × n_vars = 490 × 33452
         obs: 'donor_id', 'self_reported_ethnicity_ontology_term_id', 'organism_ontology_term_id'...
     """
-    try:
-        import xarray  # noqa: F401
-    except ImportError as e:
-        msg = (
-            "xarray is required to use the `read_lazy` function. Please install xarray."
-        )
-        raise ImportError(msg) from e
     is_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
     is_h5 = (
         isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad"
