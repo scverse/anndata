@@ -32,7 +32,6 @@ def requires_xarray(func):
 # See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
 class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     r"""
-
     Bases :class:`~collections.abc.Mapping`\ [:class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D`\ ]
 
     A wrapper class meant to enable working with lazy dataframe data according to
@@ -48,6 +47,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     handling for an out-of-memory index via :attr:`~anndata.experimental.backed.Dataset2D.true_index`.
     This feature is helpful for loading remote data faster where the index itself may not be initially useful
     for constructing the object e.g., cell ids.
+    """
 
     @staticmethod
     def _validate_shape_invariants(ds: XDataset):
