@@ -20,14 +20,14 @@ extra-dependencies = [ "ipykernel" ]
 env-vars.UV_CONSTRAINT = "ci/constraints.txt"
 overrides.matrix.deps.env-vars = [
     { if = [ "pre" ], key = "UV_PRERELEASE", value = "allow" },
+    { if = [ "pre" ], key = "UV_CONSTRAINT", value = "ci/pre-deps.txt" },
     { if = [ "min" ], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-deps.txt" },
 ]
 overrides.matrix.deps.pre-install-commands = [
     { if = [ "min" ], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
-]
-# To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward
-overrides.matrix.deps.post-install-commands = [
-    { if = [ "pre" ], value = "uv pip install git+https://github.com/pydata/xarray.git" },
+    # To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward
+    { if = [ "pre" ], value = "echo xarray @ git+https://github.com/pydata/xarray.git > ci/pre-deps.txt" },
+
 ]
 overrides.matrix.deps.python = [
     { if = [ "min" ], value = "3.11" },
