@@ -241,7 +241,11 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": v.dtype == np.dtype("O"),
+                    "is_nullable_string": isinstance(v, MaskedArray)
+                    and v.dtype
+                    == np.dtype(
+                        "O"
+                    ),  # CategoricalArray dtype access requires a read nad is not necessary here
                 },
             )
         elif k == dim_name:
