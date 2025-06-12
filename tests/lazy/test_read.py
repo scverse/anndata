@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from anndata._types import AnnDataElem
 
+
 pytest.importorskip("xarray")
 
 
