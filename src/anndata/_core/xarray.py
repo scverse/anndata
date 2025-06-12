@@ -350,19 +350,19 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             Reindexed dataset.
         """
         index_dim = self.index_dim
-        if axis == 0:
-            # Dataset.reindex() can't handle ExtensionArrays
-            extension_arrays = {
-                col: arr.data
-                for col, arr in self.ds.items()
-                if pd.api.types.is_extension_array_dtype(arr.dtype)
-            }
-            el = self.ds.drop_vars(extension_arrays.keys())
-            el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
-            for col, arr in extension_arrays.items():
-                el[col] = pd.Series(arr, index=self.index).reindex(
-                    index, fill_value=fill_value
-                )
-            return Dataset2D(el)
-        msg = "This should be unreachable, please open an issue."
-        raise Exception(msg)
+        if axis != 0:
+            msg = f"Only axis 0 is supported, got axis: {axis}"
+            raise ValueError(msg)
+        # Dataset.reindex() can't handle ExtensionArrays
+        extension_arrays = {
+            col: arr.data
+            for col, arr in self.ds.items()
+            if pd.api.types.is_extension_array_dtype(arr.dtype)
+        }
+        el = self.ds.drop_vars(extension_arrays.keys())
+        el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
+        for col, arr in extension_arrays.items():
+            el[col] = pd.Series(arr, index=self.index).reindex(
+                index, fill_value=fill_value
+            )
+        return Dataset2D(el)
