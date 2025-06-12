@@ -241,6 +241,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
+                    "is_nullable_string": v.dtype == np.dtype("O"),
                 },
             )
         elif k == dim_name:
