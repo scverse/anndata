@@ -678,7 +678,7 @@ def sparse_dataset(
         Whether or not to cache the indptr for repeated reuse as a :class:`numpy.ndarray`.
         The default is `True` but one might set it to false if the dataset is repeatedly reopened
         using this command, and then only a subset is read in before closing again.
-        See https://github.com/scverse/anndata/blob/26d9f89a962724508f75b46a30569df225d0eb3b/src/anndata/_io/specs/lazy_methods.py#L85-L90
+        See https://github.com/scverse/anndata/blob/3c489b979086c39c59d3eb5dad90ebacce3b9a80/src/anndata/_io/specs/lazy_methods.py#L85-L95
         for the target use-case.
 
     Returns
