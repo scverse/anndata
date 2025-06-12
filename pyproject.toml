@@ -60,7 +60,7 @@ Home-page = "https://github.com/scverse/anndata"
 dev = [
     # runtime dev version generation
     "hatch-vcs",
-    "anndata[dev-doc,test]",
+    "anndata[dev-doc]",
 ]
 doc = [
     "sphinx>=8.2.1",
