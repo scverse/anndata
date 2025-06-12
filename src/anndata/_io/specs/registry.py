@@ -405,9 +405,7 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType,
-    chunks: tuple[int, ...] | None = None,
-    **kwargs,
+    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
