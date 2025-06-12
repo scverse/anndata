@@ -350,7 +350,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             Reindexed dataset.
         """
         index_dim = self.index_dim
-        if axis != 0:
+        if axis != 0:  # pragma: no cover
             msg = f"Only axis 0 is supported, got axis: {axis}"
             raise ValueError(msg)
         # Dataset.reindex() can't handle ExtensionArrays
