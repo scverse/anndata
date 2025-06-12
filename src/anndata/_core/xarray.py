@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 # See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
 class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
-    """
+    r"""
 
-    Bases :class:`~collections.abc.Mapping` [ :class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D` ]
+    Bases :class:`~collections.abc.Mapping`\ [:class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D`\ ]
 
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
@@ -199,6 +199,20 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         return ret
 
     def to_memory(self, *, copy=False) -> pd.DataFrame:
+        """
+        Converts to :class:`pandas.DataFrame`.
+        The index of the dataframe comes from :attr:`~anndata.experimental.backed.Dataset2D.true_index_dim`
+        if it differs from :attr:`~anndata.experimental.backed.Dataset2D.index_dim`.
+
+        Parameters
+        ----------
+        copy
+            Unused argument
+
+        Returns
+        -------
+            :class:`pandas.DataFrame` with index set accordingly.
+        """
         df = self.ds.to_dataframe()
         index_key = self.ds.attrs.get("indexing_key", None)
         if df.index.name != index_key and index_key is not None:
@@ -309,6 +323,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         return self.ds.dtypes
 
     def equals(self, b: object) -> bool:
+        """Thin wrapper around :meth:`xarray.Dataset.equals`"""
         if isinstance(b, Dataset2D):
             b = b.ds
         return self.ds.equals(b)
