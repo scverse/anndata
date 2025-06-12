@@ -12,9 +12,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-from importlib.util import find_spec
 
-pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
+pytest.importorskip("xarray")
 
 
 @pytest.mark.parametrize("fmt", ["zarr", "h5ad", "loom", "csvs"])
