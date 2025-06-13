@@ -12,7 +12,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
-from anndata._core.xarray import Dataset2D
+from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import DaskArray, H5Array, H5Group, XDataArray, ZarrArray, ZarrGroup
 
@@ -241,6 +241,9 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
+                    "is_nullable_string": isinstance(v, MaskedArray)
+                    and v.dtype  # CategoricalArray dtype access requires a read nad is not necessary here
+                    == np.dtype("O"),
                 },
             )
         elif k == dim_name:
@@ -258,6 +261,7 @@ DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
+@requires_xarray
 def read_dataframe(
     elem: H5Group | ZarrGroup,
     *,
@@ -297,6 +301,7 @@ def read_dataframe(
 
 @_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
 @_LAZY_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
+@requires_xarray
 def read_categorical(
     elem: H5Group | ZarrGroup,
     *,
@@ -317,6 +322,7 @@ def read_categorical(
     )
 
 
+@requires_xarray
 def read_nullable(
     elem: H5Group | ZarrGroup,
     *,

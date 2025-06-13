@@ -60,7 +60,7 @@ Home-page = "https://github.com/scverse/anndata"
 dev = [
     # runtime dev version generation
     "hatch-vcs",
-    "anndata[dev-doc,test]",
+    "anndata[dev-doc]",
 ]
 doc = [
     "sphinx>=8.2.1",
@@ -109,7 +109,7 @@ gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
-lazy = [ "xarray>=2025.04.0,<2025.06.0", "aiohttp", "requests", "anndata[dask]" ]
+lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]

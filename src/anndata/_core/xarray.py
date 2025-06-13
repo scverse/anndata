@@ -1,13 +1,24 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import warnings
+from functools import wraps
 
 import pandas as pd
 
-from ..compat import XDataset
+from ..compat import XDataArray, XDataset, XVariable
 
-if TYPE_CHECKING:
-    from ..compat import XDataArray
+
+def requires_xarray(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            import xarray  # noqa: F401
+        except ImportError as e:
+            msg = "xarray is required to read dataframes lazily. Please install xarray."
+            raise ImportError(msg) from e
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 class Dataset2D(XDataset):
@@ -122,10 +133,18 @@ class Dataset2D(XDataset):
         return ret
 
     def to_memory(self, *, copy=False) -> pd.DataFrame:
+        # https://github.com/pydata/xarray/issues/10419
+        non_nullable_string_cols = {
+            col
+            for col in self.columns
+            if not self[col].attrs.get("is_nullable_string", False)
+        }
         df = self.to_dataframe()
         index_key = self.attrs.get("indexing_key", None)
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
+        for col in set(self.columns) - non_nullable_string_cols:
+            df[col] = pd.array(self[col].data, dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 
@@ -143,3 +162,59 @@ class Dataset2D(XDataset):
         if index_key is not None:
             columns.discard(index_key)
         return pd.Index(columns)
+
+    def __setitem__(self, key, value):
+        """
+        Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
+        One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
+        Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as `self.index_dim`.
+
+        For supported setter values see :meth:`xarray.Dataset.__setitem__`.
+        """
+        if key == self.index_dim:
+            msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
+            raise KeyError(msg)
+        if isinstance(value, tuple):
+            if isinstance(value[0], tuple):
+                if value[0][0] != self.index_dim:
+                    msg = f"Dimension tuple should have only {self.index_dim} as its dimension, found {value[0][0]}"
+                    raise ValueError(msg)
+                if len(value[0]) > 1:
+                    msg = "Dimension tuple is too long."
+                    raise ValueError(msg)
+            elif value[0] != self.index_dim:
+                msg = f"Setting value tuple should have first entry {self.index_dim}, found {value[0]}"
+                raise ValueError(msg)
+        elif isinstance(value, XDataArray | XDataset | XVariable):
+            value_typ = type(value).__name__
+            # https://docs.xarray.dev/en/stable/generated/xarray.Dataset.dims.html#xarray.Dataset.dims
+            # Unfortunately `dims` not the same across data structures.
+            with warnings.catch_warnings(action="ignore"):
+                dims = (
+                    list(value.dims.keys())
+                    if isinstance(value, XDataset)
+                    else value.dims
+                )
+            if (
+                isinstance(value, XDataArray)
+                and value.name is not None
+                and value.name != key
+            ):
+                msg = f"{value_typ} should have name {key}, found {value.name}"
+                raise ValueError(msg)
+            if len(dims) != 1:
+                msg = f"{value_typ} should have only one dimension, found {len(dims)}"
+                raise ValueError(msg)
+            if dims[0] != self.index_dim:
+                msg = f"{value_typ} should have dimension {self.index_dim}, found {dims[0]}"
+                raise ValueError(msg)
+            if not isinstance(value, XVariable) and (
+                self.index_dim not in value.coords
+                or value.coords[self.index_dim].name != self.index_dim
+            ):
+                msg = f"{value_typ} should have coordinate {self.index_dim} with same name, found {value.coords} with name {value.coords[next(iter(value.coords.keys()))].name}"
+                raise ValueError(msg)
+        else:
+            # maintain setting behavior of a 2D dataframe i.e., one dim
+            value = (self.index_dim, value)
+        super().__setitem__(key, value)

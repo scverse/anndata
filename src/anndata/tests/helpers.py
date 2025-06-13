@@ -6,6 +6,7 @@ import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from functools import partial, singledispatch, wraps
+from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -310,7 +311,6 @@ def gen_adata(  # noqa: PLR0913
         (csr, csc)
     """
     import dask.array as da
-    import xarray as xr
 
     if random_state is None:
         random_state = np.random.default_rng()
@@ -324,10 +324,11 @@ def gen_adata(  # noqa: PLR0913
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
-    if obs_xdataset:
-        obs = XDataset.from_dataframe(obs)
-    if var_xdataset:
-        var = XDataset.from_dataframe(var)
+    if has_xr := find_spec("xarray"):
+        if obs_xdataset:
+            obs = XDataset.from_dataframe(obs)
+        if var_xdataset:
+            var = XDataset.from_dataframe(var)
 
     if X_type is None:
         X = None
@@ -340,17 +341,6 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
-        xdataset=xr.Dataset.from_dataframe(
-            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
-        ),
-    )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    obsm = maybe_add_sparse_array(
-        mapping=obsm,
-        types=obsm_types,
-        format=sparse_fmt,
-        random_state=random_state,
-        shape=(M, 100),
     )
     varm = dict(
         array=np.random.random((N, 50)),
@@ -358,9 +348,21 @@ def gen_adata(  # noqa: PLR0913
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
         da=da.random.random((N, 50)),
-        xdataset=xr.Dataset.from_dataframe(
+    )
+    if has_xr:
+        obsm["xdataset"] = XDataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        )
+        varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
-        ),
+        )
+    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = maybe_add_sparse_array(
+        mapping=obsm,
+        types=obsm_types,
+        format=sparse_fmt,
+        random_state=random_state,
+        shape=(M, 100),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
