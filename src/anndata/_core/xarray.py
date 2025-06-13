@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Hashable, Mapping
 from functools import wraps
 from typing import TYPE_CHECKING, overload
 
@@ -11,7 +10,7 @@ import pandas as pd
 from ..compat import XDataArray, XDataset, XVariable
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Hashable, Iterable, Iterator, Mapping
     from typing import Any, Literal
 
 
@@ -28,8 +27,7 @@ def requires_xarray(func):
     return wrapper
 
 
-# See https://github.com/pydata/xarray/blob/main/xarray/core/dataset.py#L194 for typing
-class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
+class Dataset2D:
     r"""
     Bases :class:`~collections.abc.Mapping`\ [:class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D`\ ]
 
@@ -77,6 +75,9 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     def ds(self) -> XDataset:
         """The underlying :class:`xarray.Dataset`."""
         return self._ds
+
+    def keys(self) -> list[Hashable]:
+        return list(iter(self.ds))
 
     @property
     def is_backed(self) -> bool:
@@ -377,13 +378,13 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         # Dataset.reindex() can't handle ExtensionArrays
         extension_arrays = {
             col: arr.data
-            for col, arr in self.ds.items()
-            if pd.api.types.is_extension_array_dtype(arr.dtype)
+            for col in self.ds
+            if pd.api.types.is_extension_array_dtype((arr := self.ds[col]).dtype)
         }
         el = self.ds.drop_vars(extension_arrays.keys())
         el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
-        for col, arr in extension_arrays.items():
-            el[col] = pd.Series(arr, index=self.index).reindex(
+        for col in self.ds:
+            el[col] = pd.Series(self.ds[col], index=self.index).reindex(
                 index, fill_value=fill_value
             )
         return Dataset2D(el)
