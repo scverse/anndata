@@ -233,7 +233,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             if not self[col].attrs.get("is_nullable_string", False)
         }
         df = self.ds.to_dataframe()
-        index_key = self.attrs.get("indexing_key", None)
+        index_key = self.ds.attrs.get("indexing_key", None)
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
         for col in set(self.columns) - non_nullable_string_cols:
