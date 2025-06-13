@@ -1277,12 +1277,13 @@ def write_scalar_zarr(
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         match ad.settings.zarr_write_format, value:
             case 2, str():
-                filters, dtype = [VLenUTF8()], object
+                filters, dtype = [VLenUTF8()], VariableLengthUTF8()
             case 3, str():
-                filters, dtype = None, np.dtypes.StringDType()
+                filters, dtype = None, VariableLengthUTF8()
             case _, _:
                 filters, dtype = None, np.array(value).dtype
         a = f.create_array(
@@ -1290,7 +1291,9 @@ def write_scalar_zarr(
             shape=(),
             dtype=dtype,
             filters=filters,
-            fill_value="" if dtype is object else None,
+            fill_value=""
+            if ad.settings.zarr_write_format == 2 and dtype == VariableLengthUTF8()
+            else None,
             **dataset_kwargs,
         )
         a[...] = np.array(value)
