@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
@@ -126,7 +127,7 @@ def adata_remote_with_store_tall_skinny_path(
     worker_id: str = "serial",
 ) -> Path:
     orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
-    M = 100_000  # forces zarr to chunk `obs` columns multiple ways - that way 1 access to `int64` below is actually only one access
+    M = 1000
     N = 5
     obs_names = pd.Index(f"cell{i}" for i in range(M))
     var_names = pd.Index(f"gene{i}" for i in range(N))
@@ -139,6 +140,14 @@ def adata_remote_with_store_tall_skinny_path(
     )
     orig.raw = orig.copy()
     orig.write_zarr(orig_path)
+    g = zarr.open_group(orig_path, mode="a", use_consolidated=False)
+    ad.io.write_elem(
+        g,
+        "obs",
+        obs,
+        dataset_kwargs=dict(chunks=(250,)),
+    )
+    zarr.consolidate_metadata(g.store)
     return orig_path
 
 

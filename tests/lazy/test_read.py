@@ -64,8 +64,8 @@ def test_access_count_subset(
         ["obs/cat/codes", *non_obs_elem_names]
     )
     adata_remote_tall_skinny[adata_remote_tall_skinny.obs["cat"] == "a", :]
-    # all codes read in for subset (from 1 chunk)
-    remote_store_tall_skinny.assert_access_count("obs/cat/codes", 1)
+    # all codes read in for subset (from 4 chunks as set in the fixture)
+    remote_store_tall_skinny.assert_access_count("obs/cat/codes", 4)
     for elem_name in non_obs_elem_names:
         remote_store_tall_skinny.assert_access_count(elem_name, 0)
 
