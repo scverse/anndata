@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import warnings
+from functools import wraps
 
 import pandas as pd
 
 from ..compat import XDataArray, XDataset, XVariable
+
+
+def requires_xarray(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            import xarray  # noqa: F401
+        except ImportError as e:
+            msg = "xarray is required to read dataframes lazily. Please install xarray."
+            raise ImportError(msg) from e
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 class Dataset2D(XDataset):
@@ -119,10 +133,18 @@ class Dataset2D(XDataset):
         return ret
 
     def to_memory(self, *, copy=False) -> pd.DataFrame:
+        # https://github.com/pydata/xarray/issues/10419
+        non_nullable_string_cols = {
+            col
+            for col in self.columns
+            if not self[col].attrs.get("is_nullable_string", False)
+        }
         df = self.to_dataframe()
         index_key = self.attrs.get("indexing_key", None)
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
+        for col in set(self.columns) - non_nullable_string_cols:
+            df[col] = pd.array(self[col].data, dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 

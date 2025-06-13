@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+import numpy as np
 import pandas as pd
 
 from anndata._core.index import _subset
@@ -17,8 +18,6 @@ from ...compat import xarray as xr
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
-
-    import numpy as np
 
     from anndata._core.index import Index
     from anndata.compat import ZarrGroup
@@ -137,7 +136,7 @@ class MaskedArray(XBackendArray, Generic[K]):
 
     def __getitem__(
         self, key: xr.core.indexing.ExplicitIndexer
-    ) -> xr.core.extension_array.PandasExtensionArray:
+    ) -> xr.core.extension_array.PandasExtensionArray | np.ndarray:
         values = self._values[key]
         mask = self._mask[key]
         if self._dtype_str == "nullable-integer":
@@ -146,8 +145,9 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
-            values[mask] = pd.NA
-            extension_array = pd.array(values, dtype=pd.StringDtype())
+            # https://github.com/pydata/xarray/issues/10419
+            values[mask] = np.nan
+            return values
         else:
             msg = f"Invalid dtype_str {self._dtype_str}"
             raise RuntimeError(msg)
@@ -163,7 +163,8 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
-            return pd.StringDtype()
+            # https://github.com/pydata/xarray/issues/10419
+            return np.dtype("O")
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
 

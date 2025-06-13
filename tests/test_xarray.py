@@ -10,6 +10,8 @@ from anndata._core.xarray import Dataset2D
 from anndata.compat import XDataArray, XDataset, XVariable
 from anndata.tests.helpers import gen_typed_df
 
+pytest.importorskip("xarray")
+
 
 @pytest.fixture
 def df():
