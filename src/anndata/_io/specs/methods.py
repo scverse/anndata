@@ -622,24 +622,20 @@ def write_vlen_string_array_zarr(
         f[k][:] = elem
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        match (
-            ad.settings.zarr_write_format,
-            Version(np.__version__) >= Version("2.0.0"),
-        ):
-            case 2, _:
-                filters, dtype = [VLenUTF8()], object
-            case 3, True:
-                filters, dtype = None, np.dtypes.StringDType()
-            case 3, False:
-                filters, dtype = None, np.dtypes.ObjectDType()
+        dtype = VariableLengthUTF8()
+        filters = None
+        if ad.settings.zarr_write_format == 2:
+            filters = [VLenUTF8()]
         f.create_array(
             k,
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
+            fill_value="",
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -1281,12 +1277,13 @@ def write_scalar_zarr(
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         match ad.settings.zarr_write_format, value:
             case 2, str():
-                filters, dtype = [VLenUTF8()], object
+                filters, dtype = [VLenUTF8()], VariableLengthUTF8()
             case 3, str():
-                filters, dtype = None, np.dtypes.StringDType()
+                filters, dtype = None, VariableLengthUTF8()
             case _, _:
                 filters, dtype = None, np.array(value).dtype
         a = f.create_array(
@@ -1294,6 +1291,9 @@ def write_scalar_zarr(
             shape=(),
             dtype=dtype,
             filters=filters,
+            fill_value=""
+            if ad.settings.zarr_write_format == 2 and dtype == VariableLengthUTF8()
+            else None,
             **dataset_kwargs,
         )
         a[...] = np.array(value)
