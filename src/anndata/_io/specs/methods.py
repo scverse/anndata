@@ -622,19 +622,14 @@ def write_vlen_string_array_zarr(
         f[k][:] = elem
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        match (
-            ad.settings.zarr_write_format,
-            Version(np.__version__) >= Version("2.0.0"),
-        ):
-            case 2, _:
-                filters, dtype = [VLenUTF8()], object
-            case 3, True:
-                filters, dtype = None, np.dtypes.StringDType()
-            case 3, False:
-                filters, dtype = None, np.dtypes.ObjectDType()
+        dtype = VariableLengthUTF8()
+        filters = None
+        if ad.settings.zarr_write_format == 2:
+            filters = [VLenUTF8()]
         f.create_array(
             k,
             shape=elem.shape,
