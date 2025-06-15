@@ -142,6 +142,7 @@ qualname_overrides = {
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
     "anndata.compat.XDataArray": "xarray.DataArray",
+    "anndata.compat.XDataset": "xarray.Dataset",
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),

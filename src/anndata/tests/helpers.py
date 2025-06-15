@@ -22,6 +22,7 @@ from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
+from anndata._core.xarray import Dataset2D
 from anndata.compat import (
     AwkArray,
     CSArray,
@@ -672,6 +673,13 @@ def are_equal_dataframe(
         _elem_name=elem_name,
         check_frame_type=False,
     )
+
+
+@assert_equal.register(Dataset2D)
+def are_equal_dataset2d(
+    a: Dataset2D, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    a.equals(b)
 
 
 @assert_equal.register(AwkArray)
