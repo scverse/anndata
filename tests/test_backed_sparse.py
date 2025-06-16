@@ -387,13 +387,8 @@ def test_lazy_array_cache(
     store = AccessTrackingStore(path)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
-<<<<<<< ig/zarr_dtype
     f = zarr.open_group(store, mode="r")
-    a_disk = sparse_dataset(f["X"])
-=======
-    f = open_write_group(store, mode="a")
     a_disk = sparse_dataset(f["X"], should_cache_indptr=should_cache_indptr)
->>>>>>> main
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]
