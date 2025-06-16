@@ -46,7 +46,7 @@ dependencies = [
     "packaging>=24.2",
     "array_api_compat>=1.7.1",
     "legacy-api-wrap",
-    "zarr@git+https://github.com/d-v-b/zarr-python.git@feat/fixed-length-strings",
+    "zarr@git+https://github.com/zarr-developers/zarr-python.git",
 ]
 dynamic = [ "version" ]
 
