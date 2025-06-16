@@ -635,7 +635,9 @@ def write_vlen_string_array_zarr(
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
-            fill_value="",
+            fill_value=""
+            if ad.settings.zarr_write_format == 2 and dtype == VariableLengthUTF8()
+            else None,
             **dataset_kwargs,
         )
         f[k][:] = elem

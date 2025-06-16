@@ -144,7 +144,7 @@ class Dataset2D(XDataset):
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
         for col in set(self.columns) - non_nullable_string_cols:
-            df[col] = pd.array(self[col].data, dtype="string")
+            df[col] = pd.array(df[col].to_numpy(), dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 

@@ -146,6 +146,9 @@ class MaskedArray(XBackendArray, Generic[K]):
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
+            values = values.astype(
+                "object"
+            )  # TODO: file bug report around roundtripped v2 arrays
             values[mask] = np.nan
             return values
         else:
