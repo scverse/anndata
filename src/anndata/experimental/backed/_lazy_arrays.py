@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 
 from anndata._core.index import _subset
 from anndata._core.views import as_view
@@ -146,10 +147,8 @@ class MaskedArray(XBackendArray, Generic[K]):
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            values = values.astype(
-                "object"
-            )  # TODO: file bug report around roundtripped v2 arrays
-            values[mask] = np.nan
+            values = values.astype(self.dtype)
+            values[mask] = pd.NA
             return values
         else:
             msg = f"Invalid dtype_str {self._dtype_str}"
@@ -167,7 +166,11 @@ class MaskedArray(XBackendArray, Generic[K]):
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            return np.dtype("O")
+            return (
+                np.dtype("O")
+                if Version(np.__version__) < Version("2")
+                else np.dtypes.StringDType(na_object=pd.NA)
+            )
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
 

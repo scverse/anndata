@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, overload
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -251,8 +252,12 @@ def _gen_xarray_dict_iterator_from_elems(
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
                     "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype  # CategoricalArray dtype access requires a read nad is not necessary here
-                    == np.dtype("O"),
+                    and v.dtype
+                    == (
+                        np.dtype("O")
+                        if Version(np.__version__) < Version("2")
+                        else np.dtypes.StringDType(na_object=pd.NA)
+                    ),
                 },
             )
         elif k == dim_name:
