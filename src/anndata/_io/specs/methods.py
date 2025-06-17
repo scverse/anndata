@@ -24,6 +24,7 @@ from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_datase
 from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -1209,11 +1210,7 @@ def _string_array(
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
     arr = pd.array(
-        values.astype(
-            "object"
-            if Version(np.__version__) < Version("2")
-            else np.dtypes.StringDType(na_object=pd.NA)
-        ),
+        values.astype(NULLABLE_NUMPY_STRING_TYPE),
         dtype=pd.StringDtype(),
     )
     arr[mask] = pd.NA

@@ -190,6 +190,13 @@ else:
 #############################
 
 
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(np.__version__) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:

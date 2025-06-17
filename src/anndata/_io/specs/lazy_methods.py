@@ -8,14 +8,21 @@ from typing import TYPE_CHECKING, overload
 import h5py
 import numpy as np
 import pandas as pd
-from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.abc import CSCDataset, CSRDataset
-from anndata.compat import DaskArray, H5Array, H5Group, XDataArray, ZarrArray, ZarrGroup
+from anndata.compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
+    DaskArray,
+    H5Array,
+    H5Group,
+    XDataArray,
+    ZarrArray,
+    ZarrGroup,
+)
 
 from .registry import _LAZY_REGISTRY, IOSpec
 
@@ -252,12 +259,7 @@ def _gen_xarray_dict_iterator_from_elems(
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
                     "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype
-                    == (
-                        np.dtype("O")
-                        if Version(np.__version__) < Version("2")
-                        else np.dtypes.StringDType(na_object=pd.NA)
-                    ),
+                    and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
                 },
             )
         elif k == dim_name:
