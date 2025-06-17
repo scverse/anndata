@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING, overload
 
@@ -88,7 +89,7 @@ class Dataset2D:
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
-    def is_backed(self, isbacked: bool):
+    def is_backed(self, isbacked: bool) -> bool:
         if not isbacked and "is_backed" in self.ds.attrs:
             del self.ds.attrs["is_backed"]
         else:
@@ -180,16 +181,16 @@ class Dataset2D:
         -------
         Handler class for doing the iloc-style indexing using :meth:`~xarray.Dataset.isel`.
         """
-        coord = self.index_dim
 
+        @dataclass(frozen=True)
         class IlocGetter:
-            def __init__(self, ds):
-                self._ds = ds
+            _ds: XDataset
+            _coord: str
 
             def __getitem__(self, idx):
-                return Dataset2D(self._ds.isel(**{coord: idx}))
+                return Dataset2D(self._ds.isel(**{self._coord: idx}))
 
-        return IlocGetter(self.ds)
+        return IlocGetter(self.ds, self.index_dim)
 
     # See https://github.com/pydata/xarray/blob/568f3c1638d2d34373408ce2869028faa3949446/xarray/core/dataset.py#L1239-L1248
     # for typing
@@ -212,7 +213,7 @@ class Dataset2D:
             return as_2d
         return ret
 
-    def to_memory(self, *, copy=False) -> pd.DataFrame:
+    def to_memory(self, *, copy: bool = False) -> pd.DataFrame:
         """
         Converts to :class:`pandas.DataFrame`.
         The index of the dataframe comes from :attr:`~anndata.experimental.backed.Dataset2D.true_index_dim`
@@ -257,7 +258,9 @@ class Dataset2D:
             columns.discard(index_key)
         return pd.Index(columns)
 
-    def __setitem__(self, key, value):
+    def __setitem__(
+        self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
+    ) -> None:
         """
         Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
         One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
@@ -313,7 +316,7 @@ class Dataset2D:
             value = (self.index_dim, value)
         self.ds.__setitem__(key, value)
 
-    def copy(self, *args, **kwargs):
+    def copy(self, *args, **kwargs) -> Dataset2D:
         """
         Return a copy of the Dataset2D object.
         """
@@ -322,7 +325,7 @@ class Dataset2D:
         as_2d.is_backed = self.is_backed
         return as_2d
 
-    def isel(self, *args, **kwargs):
+    def isel(self, *args, **kwargs) -> Dataset2D:
         """
         Return a isel of the Dataset2D object.
         """
