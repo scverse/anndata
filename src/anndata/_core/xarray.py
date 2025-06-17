@@ -321,6 +321,7 @@ class Dataset2D:
     def copy(self, *args, **kwargs) -> Dataset2D:
         """
         Return a copy of the Dataset2D object.
+        See :meth:`xarray.Dataset.copy` for arguments.
         """
         as_2d = Dataset2D(self.ds.copy(*args, **kwargs))
         as_2d.true_index_dim = self.true_index_dim
@@ -330,6 +331,7 @@ class Dataset2D:
     def isel(self, *args, **kwargs) -> Dataset2D:
         """
         Return a isel of the Dataset2D object.
+        See :meth:`xarray.Dataset.isel` for arguments.
         """
         as_2d = Dataset2D(self.ds.isel(*args, **kwargs))
         as_2d.true_index_dim = self.true_index_dim
