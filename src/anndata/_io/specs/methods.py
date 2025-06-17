@@ -41,7 +41,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import is_zarr_v2
+from ...compat import NULLABLE_NUMPY_STRING_TYPE, is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1210,7 +1210,7 @@ def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
-    arr = pd.array(values, dtype=pd.StringDtype())
+    arr = pd.array(values.astype(NULLABLE_NUMPY_STRING_TYPE), dtype=pd.StringDtype())
     arr[mask] = pd.NA
     return arr
 
