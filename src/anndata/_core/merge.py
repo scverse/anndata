@@ -1289,14 +1289,14 @@ def make_xarray_extension_dtypes_dask(
 
         yield a.copy(
             data={
-                col: (
+                name: (
                     make_dask_col_from_extension_dtype(
-                        a[col], use_only_object_dtype=use_only_object_dtype
+                        col, use_only_object_dtype=use_only_object_dtype
                     )
-                    if col in extension_cols
-                    else a[col]
+                    if name in extension_cols
+                    else col
                 )
-                for col in a
+                for name, col in a._items()
             }
         )
 

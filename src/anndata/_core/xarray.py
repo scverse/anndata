@@ -383,9 +383,9 @@ class Dataset2D:
             raise ValueError(msg)
         # Dataset.reindex() can't handle ExtensionArrays
         extension_arrays = {
-            col: arr.data
-            for col in self.ds
-            if pd.api.types.is_extension_array_dtype((arr := self.ds[col]).dtype)
+            col: data
+            for col, data in self._items()
+            if pd.api.types.is_extension_array_dtype(data.dtype)
         }
         el = self.ds.drop_vars(extension_arrays.keys())
         el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
@@ -394,3 +394,8 @@ class Dataset2D:
                 index, fill_value=fill_value
             )
         return Dataset2D(el)
+
+    # Used "publicly" in _merge.py but not intended for public use.
+    def _items(self):
+        for col in self:
+            yield col, self[col]
