@@ -54,10 +54,10 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    import zarr
-    from packaging.version import Version
+    # import zarr
+    # from packaging.version import Version
 
-    return Version(zarr.__version__) < Version("3.0.0")
+    return False
 
 
 if is_zarr_v2():
@@ -188,6 +188,13 @@ else:
 #############################
 # IO helpers
 #############################
+
+
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(np.__version__) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)
 
 
 @singledispatch
