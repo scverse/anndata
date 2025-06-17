@@ -4,7 +4,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from .._io.specs import IOSpec, read_elem_lazy
-from .._types import Read, ReadCallback, StorageType, Write, WriteCallback
+from .._types import (
+    Dataset2DIlocIndexer,
+    Read,
+    ReadCallback,
+    StorageType,
+    Write,
+    WriteCallback,
+)
 from ..utils import module_get_attr_redirect
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_lazy
@@ -46,6 +53,7 @@ def __getattr__(attr_name: str) -> Any:
 __all__ = [
     "AnnCollection",
     "AnnLoader",
+    "Dataset2DIlocIndexer",
     "IOSpec",
     "Read",
     "ReadCallback",

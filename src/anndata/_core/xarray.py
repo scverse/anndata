@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, Iterator, Mapping
     from typing import Any, Literal
 
+    from .._types import Dataset2DIlocIndexer
+
 
 def requires_xarray(func):
     @wraps(func)
@@ -174,7 +176,7 @@ class Dataset2D:
         return (self.ds.sizes[self.index_dim], len(self.ds))
 
     @property
-    def iloc(self):
+    def iloc(self) -> Dataset2DIlocIndexer:
         """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability
 
         Returns
@@ -187,7 +189,7 @@ class Dataset2D:
             _ds: XDataset
             _coord: str
 
-            def __getitem__(self, idx):
+            def __getitem__(self, idx) -> Dataset2D:
                 return Dataset2D(self._ds.isel(**{self._coord: idx}))
 
         return IlocGetter(self.ds, self.index_dim)

@@ -178,9 +178,10 @@ Types used by the former:
    experimental.ReadCallback
    experimental.WriteCallback
    experimental.StorageType
-   experimental.backed._lazy_arrays.MaskedArray
-   experimental.backed._lazy_arrays.CategoricalArray
+   experimental.backed.MaskedArray
+   experimental.backed.CategoricalArray
    experimental.backed.Dataset2D
+   experimental.Dataset2DIlocIndexer
 ```
 
 (extensions-api)=

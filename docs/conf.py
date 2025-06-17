@@ -133,6 +133,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
     # Buffer is not yet exported, so the buffer class registry is the closest thing
