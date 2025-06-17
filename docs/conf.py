@@ -99,6 +99,27 @@ def setup(app: Sphinx):
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
+    # TODO: move to scanpydoc
+    if TYPE_CHECKING:
+        from docutils.nodes import TextElement, reference
+        from sphinx.addnodes import pending_xref
+        from sphinx.environment import BuildEnvironment
+
+    def res(
+        app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: TextElement
+    ) -> reference | None:
+        return env.domains["py"].resolve_xref(
+            env,
+            node["refdoc"],
+            app.builder,
+            node["reftype"],
+            node["reftarget"],
+            node,
+            contnode,
+        )
+
+    app.connect("missing-reference", res, priority=502)
+
 
 intersphinx_mapping = dict(
     awkward=("https://awkward-array.org/doc/stable", None),
