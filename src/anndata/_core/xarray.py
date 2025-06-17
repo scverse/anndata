@@ -190,6 +190,10 @@ class Dataset2D:
             _coord: str
 
             def __getitem__(self, idx) -> Dataset2D:
+                # xarray seems to have some code looking for a second entry in tuples,
+                # so we unpack the tuple
+                if isinstance(idx, tuple) and len(idx) == 1:
+                    idx = idx[0]
                 return Dataset2D(self._ds.isel(**{self._coord: idx}))
 
         return IlocGetter(self.ds, self.index_dim)
@@ -318,22 +322,17 @@ class Dataset2D:
             value = (self.index_dim, value)
         self.ds.__setitem__(key, value)
 
-    def copy(self, *args, **kwargs) -> Dataset2D:
+    def copy(
+        self,
+        data: Mapping | None = None,
+        *,
+        deep: bool = False,
+    ) -> Dataset2D:
         """
         Return a copy of the Dataset2D object.
-        See :meth:`xarray.Dataset.copy` for arguments.
+        See :meth:`xarray.Dataset.copy` for more information.
         """
-        as_2d = Dataset2D(self.ds.copy(*args, **kwargs))
-        as_2d.true_index_dim = self.true_index_dim
-        as_2d.is_backed = self.is_backed
-        return as_2d
-
-    def isel(self, *args, **kwargs) -> Dataset2D:
-        """
-        Return a isel of the Dataset2D object.
-        See :meth:`xarray.Dataset.isel` for arguments.
-        """
-        as_2d = Dataset2D(self.ds.isel(*args, **kwargs))
+        as_2d = Dataset2D(self.ds.copy(deep=deep, data=data))
         as_2d.true_index_dim = self.true_index_dim
         as_2d.is_backed = self.is_backed
         return as_2d
