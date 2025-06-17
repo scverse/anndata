@@ -418,7 +418,7 @@ def read_elem_lazy(
     ----------
     elem
         The stored element.
-    chunks, optional
+    chunks
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
        Defaults to `(1000, adata.shape[1])` for CSR sparse,

@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
+    from anndata._core.xarray import Dataset2D
+
     from ._io.specs.registry import (
         IOSpec,
         LazyDataStructures,
@@ -20,6 +22,7 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
+
 
 __all__ = [
     "ArrayStorageType",
@@ -41,6 +44,10 @@ RWAble = TypeVar("RWAble", bound=typing.RWAble)
 
 S_co = TypeVar("S_co", covariant=True, bound=StorageType)
 S_contra = TypeVar("S_contra", contravariant=True, bound=StorageType)
+
+
+class Dataset2DIlocIndexer(Protocol):
+    def __getitem__(self, idx: Any) -> Dataset2D: ...
 
 
 class _ReadInternal(Protocol[S_contra, RWAble_co]):

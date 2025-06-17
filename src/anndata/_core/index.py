@@ -198,7 +198,8 @@ def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
 
 
 @_subset.register(pd.DataFrame)
-def _subset_df(df: pd.DataFrame, subset_idx: Index):
+@_subset.register(Dataset2D)
+def _subset_df(df: pd.DataFrame | Dataset2D, subset_idx: Index):
     return df.iloc[subset_idx]
 
 
@@ -207,15 +208,6 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
-
-
-@_subset.register(Dataset2D)
-def _(a: Dataset2D, subset_idx: Index):
-    key = a.index_dim
-    # xarray seems to have some code looking for a second entry in tuples
-    if isinstance(subset_idx, tuple) and len(subset_idx) == 1:
-        subset_idx = subset_idx[0]
-    return a.isel(**{key: subset_idx})
 
 
 # Registration for SparseDataset occurs in sparse_dataset.py
