@@ -99,6 +99,27 @@ def setup(app: Sphinx):
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
+    # TODO: move to scanpydoc
+    if TYPE_CHECKING:
+        from docutils.nodes import TextElement, reference
+        from sphinx.addnodes import pending_xref
+        from sphinx.environment import BuildEnvironment
+
+    def res(
+        app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: TextElement
+    ) -> reference | None:
+        return env.domains["py"].resolve_xref(
+            env,
+            node["refdoc"],
+            app.builder,
+            node["reftype"],
+            node["reftarget"],
+            node,
+            contnode,
+        )
+
+    app.connect("missing-reference", res, priority=502)
+
 
 intersphinx_mapping = dict(
     awkward=("https://awkward-array.org/doc/stable", None),
@@ -133,6 +154,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
     # Buffer is not yet exported, so the buffer class registry is the closest thing
@@ -142,6 +164,7 @@ qualname_overrides = {
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
     "anndata.compat.XDataArray": "xarray.DataArray",
+    "anndata.compat.XDataset": "xarray.Dataset",
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
