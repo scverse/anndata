@@ -91,7 +91,16 @@ def make_dask_chunk(
     # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
     # https://github.com/scverse/anndata/issues/1105
     with maybe_open_h5(path_or_sparse_dataset, elem_name) as f:
-        mtx = ad.io.sparse_dataset(f) if isinstance(f, H5Group) else f
+        # See https://github.com/scverse/anndata/pull/2005 for why
+        # should_cache_indptr is False.
+        # The prupose of caching the indptr was when the dataset is reused
+        # which is in general the case but is not here.  Hence
+        # caching it on every access to the dataset here is quite costly.
+        mtx = (
+            ad.io.sparse_dataset(f, should_cache_indptr=False)
+            if isinstance(f, H5Group)
+            else f
+        )
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
