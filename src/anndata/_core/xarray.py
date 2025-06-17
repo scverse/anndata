@@ -395,7 +395,7 @@ class Dataset2D:
             )
         return Dataset2D(el)
 
-    # Used "publicly" in _merge.py but not intended for public use.
+    # Used "publicly" in src/anndata/_core/merge.py but not intended for public use.
     def _items(self):
         for col in self:
             yield col, self[col]
