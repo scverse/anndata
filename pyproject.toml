@@ -214,6 +214,7 @@ ignore = [
     "TID252",  # We use relative imports from parent modules
     "PLR2004", # “2” is often not too “magic” a number
     "PLW2901", # Shadowing loop variables isn’t a big deal
+    "PLC0415", # We use inline imports a lot
 ]
 allowed-confusables = [ "×", "’", "–", "α" ]
 [tool.ruff.lint.per-file-ignores]
