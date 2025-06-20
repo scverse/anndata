@@ -404,3 +404,10 @@ def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
         return cat.map(str, na_action="ignore")
     else:
         return cat.map(str)
+
+
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(np.__version__) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)

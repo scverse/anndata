@@ -79,7 +79,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
             val = val.reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
-            val = Dataset2D(data_vars=val.data_vars, coords=val.coords, attrs=val.attrs)
+            val = Dataset2D(val)
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue

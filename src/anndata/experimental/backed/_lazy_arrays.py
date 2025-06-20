@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-import numpy as np
 import pandas as pd
 
 from anndata._core.index import _subset
@@ -12,12 +11,19 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
-from ...compat import XBackendArray, XDataArray, XZarrArrayWrapper
+from ...compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
+    XBackendArray,
+    XDataArray,
+    XZarrArrayWrapper,
+)
 from ...compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
+
+    import numpy as np
 
     from anndata._core.index import Index
     from anndata.compat import ZarrGroup
@@ -146,7 +152,8 @@ class MaskedArray(XBackendArray, Generic[K]):
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            values[mask] = np.nan
+            values = values.astype(self.dtype)
+            values[mask] = pd.NA
             return values
         else:
             msg = f"Invalid dtype_str {self._dtype_str}"
@@ -164,7 +171,7 @@ class MaskedArray(XBackendArray, Generic[K]):
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            return np.dtype("O")
+            return NULLABLE_NUMPY_STRING_TYPE
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
 
