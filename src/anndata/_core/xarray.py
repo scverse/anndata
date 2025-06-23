@@ -389,9 +389,11 @@ class Dataset2D:
         }
         el = self.ds.drop_vars(extension_arrays.keys())
         el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
-        for col in self.ds:
-            el[col] = pd.Series(self.ds[col], index=self.index).reindex(
-                index, fill_value=fill_value
+        for col, data in extension_arrays.items():
+            el[col] = XDataArray.from_series(
+                pd.Series(data.data, index=self.index).reindex(
+                    index, fill_value=fill_value
+                )
             )
         return Dataset2D(el)
 
