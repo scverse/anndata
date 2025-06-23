@@ -360,11 +360,22 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (isinstance(store, ZarrGroup) and is_zarr_v2()) or (
-            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
-        ):
+        if (
+            is_zarr_v2_store := (
+                (is_zarr_store := isinstance(store, ZarrGroup)) and is_zarr_v2()
+            )
+        ) or (isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()):
             k = str(PurePosixPath(store.name) / k)
+        is_consolidated = False
+        if is_zarr_v2_store:
+            from zarr.storage import ConsolidatedMetadataStore
 
+            is_consolidated = isinstance(store.store, ConsolidatedMetadataStore)
+        elif is_zarr_store:
+            is_consolidated = store.metadata.consolidated_metadata is not None
+        if is_consolidated:
+            msg = "Cannot overwrite/edit a store with consolidated metadata"
+            raise ValueError(msg)
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
                 from zarr.core.sync import sync

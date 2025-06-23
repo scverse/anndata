@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+import zarr.convenience
 from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
@@ -966,3 +967,16 @@ def test_read_lazy_import_error(func, tmp_path):
                 tmp_path if func is ad.experimental.read_lazy else tmp_path / "obs"
             )
         )
+
+
+def test_write_elem_consolidated(tmp_path: Path):
+    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
+    g = (
+        zarr.convenience.open_consolidated(tmp_path)
+        if is_zarr_v2()
+        else zarr.open(tmp_path)
+    )
+    with pytest.raises(
+        ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
+    ):
+        ad.io.write_elem(g["obs"], "foo", np.arange(10))
