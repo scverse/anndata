@@ -392,7 +392,8 @@ class Dataset2D:
         for col, data in extension_arrays.items():
             el[col] = XDataArray.from_series(
                 pd.Series(data.data, index=self.index).reindex(
-                    index.rename(self.index.name), fill_value=fill_value
+                    index.rename(self.index.name) if index is not None else index,
+                    fill_value=fill_value,
                 )
             )
         return Dataset2D(el)
