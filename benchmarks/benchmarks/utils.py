@@ -93,47 +93,61 @@ def gen_indexer(adata, dim, index_kind, ratio, seed=None):
     n = int(xp.round(axis_size * ratio))
 
     if index_kind == "slice":
-        subset[axis] = slice(0, n))
+        subset[axis] = slice(0, n)
     elif index_kind == "intarray":
         if xp.__name__.startswith("jax"):
-            subset[axis] = jax.random.choice(rng, xp.arange(axis_size), shape=(n,), replace=False)
+            subset[axis] = jax.random.choice(
+                rng, xp.arange(axis_size), shape=(n,), replace=False
+            )
         elif xp.__name__.startswith("numpy"):
             subset[axis] = xp.asarray(rng.choice(axis_size, n, replace=False))
 
     elif index_kind == "boolarray":
         mask = xp.zeros(axis_size, dtype=bool)
         if xp.__name__.startswith("jax"):
-            idx = jax.random.choice(rng, xp.arange(axis_size), shape=(n,), replace=False)
+            idx = jax.random.choice(
+                rng, xp.arange(axis_size), shape=(n,), replace=False
+            )
         elif xp.__name__.startswith("numpy"):
             idx = rng.choice(axis_size, n, replace=False)
         mask[idx] = True
         subset[axis] = mask
 
     elif index_kind == "strarray":
-        subset[axis] = rng.choice(
-            getattr(adata, dim).index, n, replace=False
-        )
+        subset[axis] = rng.choice(getattr(adata, dim).index, n, replace=False)
     else:
         raise ValueError()
     return tuple(subset)
 
 
 def gen_adata(n_obs, n_var, attr_set, seed=None):
-    xp = get_namespace()
-    rng = get_rng(xp, seed)
     if "X-csr" in attr_set:
-        X = sparse.random(n_obs, n_var, density=0.1, format="csr")
+        X_sparse = sparse.random(n_obs, n_var, density=0.1, format="csr")
+        xp = get_namespace(X_sparse.toarray())
+        X = X_sparse
     elif "X-dense" in attr_set:
-        X = sparse.random(n_obs, n_var, density=0.1, format="csr")
-        X = xp.asarray(X.toarray())
+        dense_X = sparse.random(n_obs, n_var, density=0.1, format="csr")
+        xp = get_namespace(dense_X)
+        X = xp.asarray(dense_X)
     else:
         # TODO: There's probably a better way to do this
-        X = sparse.random(n_obs, n_var, density=0, format="csr")
+        # fallback to use just numpy
+        import numpy as np
+
+        X_dense = np.zeros((n_obs, n_var))
+        # X = sparse.random(n_obs, n_var, density=0, format="csr")
+        xp = get_namespace(X_dense)
+        X = xp.asarray(X_dense)
+    rng = get_rng(xp, seed)
     adata = AnnData(X)
     if "obs,var" in attr_set:
         if xp.__name__.startswith("jax"):
-            obs = {k: jax.random.randint(rng, (n_obs,), 0, 100) for k in ascii_lowercase}
-            var = {k: jax.random.randint(rng, (n_var,), 0, 100) for k in ascii_lowercase}
+            obs = {
+                k: jax.random.randint(rng, (n_obs,), 0, 100) for k in ascii_lowercase
+            }
+            var = {
+                k: jax.random.randint(rng, (n_var,), 0, 100) for k in ascii_lowercase
+            }
         elif xp.__name__.startswith("numpy"):
             obs = {k: rng.integers(0, 100, size=n_obs) for k in ascii_lowercase}
             var = {k: rng.integers(0, 100, size=n_var) for k in ascii_lowercase}
