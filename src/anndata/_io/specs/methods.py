@@ -1041,7 +1041,7 @@ def read_dataframe_partial(
     df = pd.DataFrame(
         {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=columns if len(columns) else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
