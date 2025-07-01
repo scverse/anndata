@@ -50,7 +50,10 @@ def test_access_count_elem_access(
     # a series of methods that should __not__ read in any data
     elem = getattr(simple_subset_func(adata_remote_tall_skinny), elem_key)
     if sub_key is not None:
-        getattr(elem, sub_key)
+        if elem_key in {"obs", "var"}:
+            elem[sub_key]
+        else:
+            getattr(elem, sub_key)
     remote_store_tall_skinny.assert_access_count(full_path, 0)
     remote_store_tall_skinny.assert_access_count("X", 0)
 

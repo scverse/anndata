@@ -94,7 +94,10 @@ def test_concat_access_count(
     # a series of methods that should __not__ read in any data
     elem = getattr(simple_subset_func(concated_remote), elem_key)
     if sub_key is not None:
-        getattr(elem, sub_key)
+        if elem_key in {"obs", "var"}:
+            elem[sub_key]
+        else:
+            getattr(elem, sub_key)
     for store in stores_for_concat:
         for elem in zero_access_count_keys:
             store.assert_access_count(elem, 0)

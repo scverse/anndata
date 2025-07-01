@@ -11,7 +11,12 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from anndata.compat import NULLABLE_NUMPY_STRING_TYPE, H5Array, ZarrArray
 
 from ..._settings import settings
-from ...compat import XBackendArray, XDataArray, XZarrArrayWrapper
+from ...compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
+    XBackendArray,
+    XDataArray,
+    XZarrArrayWrapper,
+)
 from ...compat import xarray as xr
 
 if TYPE_CHECKING:
