@@ -10,10 +10,19 @@ from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
+# trying to import jax as it is not part of the default dependencies
+try:
+    import jax.numpy as jnp
+
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
+
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from array_api_compat import get_namespace as array_api_get_namespace
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -50,7 +59,6 @@ if TYPE_CHECKING:
 
     DT = TypeVar("DT")
 
-
 try:
     from pandas.core.arrays.integer import IntegerDtype
 except ImportError:
@@ -66,6 +74,9 @@ DEFAULT_KEY_TYPES = (
     pd.DataFrame,
     sparse.csr_array,
 )
+# Add JAX array type to supported backends if JAX is installed
+if JAX_AVAILABLE:
+    DEFAULT_KEY_TYPES += (jnp.ndarray,)
 
 
 DEFAULT_COL_TYPES = (
@@ -79,17 +90,43 @@ DEFAULT_COL_TYPES = (
     pd.Int32Dtype,
 )
 
-
-# Give this to gen_adata when dask array support is expected.
+# preset for testing with Dask arrays
+# includes DaskArray in obsm/varm/layers to test lazy evaluation and chunked storage
+# useful when testing backend="backed"/"memory"/"zarr"
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
 )
 
+# for testing without xarray (XDataset) types
+# excludes XDataset to avoid xarray dependency or reduce test complexity
+# useful for minimal tests or when xarray is not available
 GEN_ADATA_NO_XARRAY_ARGS = dict(
-    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
+    varm_types=(*DEFAULT_KEY_TYPES, AwkArray),
 )
+
+# Optional: define args for JAX-specific backend tests
+# preset for testing with JAX arrays
+# useful when running tests using jax.numpy as the backend for X, obsm, varm, or layers.
+GEN_ADATA_JAX_ARGS = (
+    dict(
+        obsm_types=(*DEFAULT_KEY_TYPES,),
+        varm_types=(*DEFAULT_KEY_TYPES,),
+        layers_types=(*DEFAULT_KEY_TYPES,),
+    )
+    if JAX_AVAILABLE
+    else {}
+)
+
+
+def get_xp(x):
+    try:
+        return array_api_get_namespace(x)
+    except ImportError:
+        # default to numpy if array_api_compat is not installed
+        return np
 
 
 def gen_vstr_recarray(m, n, dtype=None):
