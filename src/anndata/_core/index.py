@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import h5py
 import numpy as np
 import pandas as pd
+from array_api_compat import get_namespace as array_api_get_namespace
 from scipy.sparse import issparse
 
 from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
@@ -15,6 +16,40 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from ..compat import Index, Index1D
+
+
+def get_xp(x):
+    # to fall back to numpy if no array API is available
+    try:
+        return array_api_get_namespace(x)
+    except Exception:
+        return np
+
+
+def is_array_api_obj(x):
+    # check if object supports _array_namespace__, else fall back to numpy
+    return hasattr(x, "__array_namespace__")
+
+
+def get_numeric_dtypes(xp):
+    return (
+        xp.dtype(xp.int32),
+        xp.dtype(xp.int64),
+        xp.dtype(xp.float32),
+        xp.dtype(xp.float64),
+    )
+
+
+def get_integer_dtypes(xp):
+    return (xp.dtype(xp.int32), xp.dtype(xp.int64))
+
+
+def get_floating_dtypes(xp):
+    return (xp.dtype(xp.float32), xp.dtype(xp.float64))
+
+
+def get_boolean_dtype(xp):
+    return xp.dtype(xp.bool_)
 
 
 def _normalize_indices(
@@ -36,17 +71,17 @@ def _normalize_indices(
 
 
 def _normalize_index(  # noqa: PLR0911, PLR0912
-    indexer: slice
-    | np.integer
-    | int
-    | str
-    | Sequence[bool | int | np.integer]
-    | np.ndarray
-    | pd.Index,
+    indexer,
     index: pd.Index,
-) -> slice | int | np.ndarray:  # ndarray of int or bool
+) -> (
+    slice | int | Any
+):  # ndarray of int or bool, switched to Any to make it compatible with array API objects
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
-    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
+    xp = get_xp(indexer)
+    if not isinstance(index, pd.RangeIndex) and index.dtype in (
+        xp.float64,
+        xp.int64,
+    ):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
 
@@ -65,34 +100,37 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             stop = None if stop is None else stop + 1
         step = indexer.step
         return slice(start, stop, step)
-    elif isinstance(indexer, np.integer | int):
+    if isinstance(indexer, (int,)) or (
+        is_array_api_obj(indexer) and isinstance(indexer, xp.integer)
+    ):
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
-    ):
+        indexer, (Sequence, pd.Index, CSMatrix, CSArray)
+    ) or is_array_api_obj(indexer):
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
-            indexer = np.ravel(indexer)
-        if not isinstance(indexer, np.ndarray | pd.Index):
-            indexer = np.array(indexer)
+            indexer = xp.ravel(indexer)
+        if not isinstance(indexer, (pd.Index,)) and not is_array_api_obj(indexer):
+            indexer = xp.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if isinstance(indexer, np.ndarray) and np.issubdtype(
-            indexer.dtype, np.floating
-        ):
+
+        if get_xp(indexer).issubdtype(indexer.dtype, get_xp(indexer).floating):
             indexer_int = indexer.astype(int)
-            if np.all((indexer - indexer_int) != 0):
+            if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if issubclass(indexer.dtype.type, np.integer | np.floating):
+        if get_xp(indexer).issubdtype(
+            indexer.dtype, get_xp(indexer).integer | get_xp(indexer).floating
+        ):
             return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+        elif get_xp(indexer).issubdtype(indexer.dtype, get_xp(indexer).bool_):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -103,7 +141,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             return indexer
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
-            if np.any(positions < 0):
+            if get_xp(positions).any(positions < 0):
                 not_found = indexer[positions < 0]
                 msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
@@ -168,11 +206,14 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
+def _subset(a, subset_idx: Index):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
-    if all(isinstance(x, Iterable) for x in subset_idx):
-        subset_idx = np.ix_(*subset_idx)
+    xp = get_xp(a)
+    if all(
+        isinstance(x, Iterable) and not isinstance(x, (str, bytes)) for x in subset_idx
+    ):
+        subset_idx = xp.ix_(*subset_idx)
     return a[subset_idx]
 
 
@@ -189,10 +230,13 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 @_subset.register(CSArray)
 def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
     # Correcting for indexing behaviour of sparse.spmatrix
-    if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
+    xp = get_xp(a)
+    if len(subset_idx) > 1 and all(
+        isinstance(x, Iterable) and not isinstance(x, (str, bytes)) for x in subset_idx
+    ):
         first_idx = subset_idx[0]
-        if issubclass(first_idx.dtype.type, np.bool_):
-            first_idx = np.where(first_idx)[0]
+        if hasattr(first_idx, "dtype") and first_idx.dtype == bool:
+            first_idx = xp.where(first_idx)[0]
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
 
@@ -205,8 +249,11 @@ def _subset_df(df: pd.DataFrame | Dataset2D, subset_idx: Index):
 
 @_subset.register(AwkArray)
 def _subset_awkarray(a: AwkArray, subset_idx: Index):
-    if all(isinstance(x, Iterable) for x in subset_idx):
-        subset_idx = np.ix_(*subset_idx)
+    xp = get_xp(a)
+    if all(
+        isinstance(x, Iterable) and not isinstance(x, (str, bytes)) for x in subset_idx
+    ):
+        subset_idx = xp.ix_(*subset_idx)
     return a[subset_idx]
 
 
@@ -215,15 +262,15 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 def _subset_dataset(d, subset_idx):
     if not isinstance(subset_idx, tuple):
         subset_idx = (subset_idx,)
+    xp = get_xp(subset_idx[0])
     ordered = list(subset_idx)
     rev_order = [slice(None) for _ in range(len(subset_idx))]
     for axis, axis_idx in enumerate(ordered.copy()):
-        if isinstance(axis_idx, np.ndarray):
-            if axis_idx.dtype == bool:
-                axis_idx = np.where(axis_idx)[0]
-            order = np.argsort(axis_idx)
-            ordered[axis] = axis_idx[order]
-            rev_order[axis] = np.argsort(order)
+        if hasattr(axis_idx, "dtype") and axis_idx.dtype == bool:
+            axis_idx = xp.where(axis_idx)[0]
+        order = xp.argsort(axis_idx)
+        ordered[axis] = axis_idx[order]
+        rev_order[axis] = xp.argsort(order)
     # from hdf5, then to real order
     return d[tuple(ordered)][tuple(rev_order)]
 
@@ -257,4 +304,4 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
         a = adata._get_X(layer=layer)[idx]
     if issparse(a):
         a = a.toarray()
-    return np.ravel(a)
+    return get_xp(a).ravel(a)
