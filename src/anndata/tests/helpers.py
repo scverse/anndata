@@ -131,6 +131,8 @@ def get_xp(x):
         return np
 
 
+# Only use structured arrays like gen_vstr_recarray under NumPy.
+# These are not supported under the Array API (e.g. JAX, CuPy).
 def gen_vstr_recarray(m, n, dtype=None):
     size = m * n
     lengths = np.random.randint(3, 5, size)
@@ -140,54 +142,6 @@ def gen_vstr_recarray(m, n, dtype=None):
     return pd.DataFrame(arr, columns=[gen_word(5) for i in range(n)]).to_records(
         index=False, column_dtypes=dtype
     )
-
-
-# def gen_vstr_recarray(
-#     m: int,
-#     n: int,
-#     dtype=None,
-#     *,
-#     xp=np,  # Backend namespace (e.g., np or jax.numpy)
-#     rng=None,  # NumPy: np.random.Generator | JAX: (jax.random, key)
-# ):
-#     """
-#     Supports both NumPy and JAX via `xp`. Returns a NumPy-based recarray for compatibility
-#     with AnnData.uns (need to double check)
-#     """
-
-#     size = m * n
-#     letters = xp.array(list(ascii_letters))
-#     if xp.__name__.startswith("jax"):
-#         jrandom, key = rng
-#         key, subkey = jrandom.split(key)
-#         lengths = jrandom.randint(subkey, shape=(size,), minval=3, maxval=5)
-#         lengths = xp.asarray(lengths)
-#     else:
-#         if rng is None:
-#             rng = np.random.default_rng()
-#         lengths = rng.integers(3, 5, size)
-
-#     # generating worlds in different ways depending on the backend
-#     def gen_word_jax(l: int, key, jrandom, letters):
-#         key, subkey = jrandom.split(key)
-#         idxs = jrandom.randint(subkey, shape=(l,), minval=0, maxval=len(letters))
-#         return "".join([ascii_letters[int(i)] for i in idxs]), key
-
-#     def gen_word_numpy(l: int, rng, letters):
-#         return "".join(rng.choice(letters, l))
-
-#     words = []
-#     if xp.__name__.startswith("jax"):
-#         for l in lengths:
-#             word, key = gen_word_jax(int(l), key, jrandom, letters)
-#             words.append(word)
-#     else:
-#         words.extend([gen_word_numpy(l, rng, letters) for l in lengths])
-
-#     arr = np.array(words).reshape(m, n)  # Recarray must be NumPy-compatible
-#     columns = [f"col_{i}" for i in range(n)]
-#     df = pd.DataFrame(arr, columns=columns)
-#     return df.to_records(index=False, column_dtypes=dtype)
 
 
 def issubdtype(
@@ -403,7 +357,7 @@ def gen_adata(  # noqa: PLR0913
     """
     import dask.array as da
 
-    from anndata.experimental import gen_vstr_recarray
+    # from anndata.experimental import gen_vstr_recarray
 
     if random_state is None:
         random_state = np.random.default_rng()
@@ -414,7 +368,10 @@ def gen_adata(  # noqa: PLR0913
 
     # initialize backends
     if xp is None:
-        xp = get_xp(X_type(xp.ones((1, 1), dtype=X_dtype)))
+        try:
+            xp = get_xp(X_type(xp.ones((1, 1), dtype=X_dtype)))
+        except Exception:
+            xp = np  # default to numpy if X_type is not compatible
     if rng is None:
         if xp.__name__.startswith("jax"):
             rng = (jax.random, jax.random.PRNGKey(42))
@@ -443,7 +400,7 @@ def gen_adata(  # noqa: PLR0913
     # generating X and including jax support
     if X_type is None:
         X = None  # if no data matrix is requested, skip creation
-    elif is_jax and issubclass(X_type, sparse.spmatrix):
+    elif is_jax and isinstance(X_type, type) and issubclass(X_type, sparse.spmatrix):
         # JAX does not support scipy sparse matrices (double check)
         msg = "JAX does not support sparse matrices"
         raise ValueError(msg)
