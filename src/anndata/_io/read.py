@@ -368,7 +368,7 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
 def _read_text(
     f: Iterator[str],
     delimiter: str | None,
-    first_column_names: bool | None,
+    first_column_names: bool | None,  # noqa: FBT001
     dtype: str,
 ) -> AnnData:
     comments = []

@@ -189,16 +189,12 @@ select = [
     "PYI", # Typing
 ]
 ignore = [
-    # line too long -> we accept long comment lines; formatter gets rid of long code lines
-    "E501",
-    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
-    "E731",
-    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
-    "E741",
-    # We use relative imports from parent modules
-    "TID252",
-    # Shadowing loop variables isn’t a big deal
-    "PLW2901",
+    "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
+    "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
+    "E741",    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
+    "TID252",  # We use relative imports from parent modules
+    "PLC0415", # We use a lot of non-top-level imports
+    "PLW2901", # Shadowing loop variables isn’t a big deal
 ]
 [tool.ruff.lint.per-file-ignores]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)

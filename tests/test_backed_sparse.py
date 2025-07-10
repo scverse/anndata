@@ -189,6 +189,7 @@ def make_one_elem_mask(size: int) -> np.ndarray:
     ids=["randomized", "alternating_15", "alternating_5", "one_group", "one_elem"],
 )
 def test_consecutive_bool(
+    *,
     mocker: MockerFixture,
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     make_bool_mask: Callable[[int], np.ndarray],

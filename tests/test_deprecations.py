@@ -33,9 +33,9 @@ def adata():
 
 
 def test_get_obsvar_array_warn(adata):
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(DeprecationWarning):  # noqa: PT030
         adata._get_obs_array("a")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(DeprecationWarning):  # noqa: PT030
         adata._get_var_array("s1")
 
 
@@ -90,10 +90,10 @@ def test_dtype_warning():
     assert b.X.dtype == np.float64
 
     # Should warn, should copy
+    c_X = np.ones((3, 3), dtype=np.float32)
     with pytest.warns(FutureWarning):
-        c_X = np.ones((3, 3), dtype=np.float32)
         c = AnnData(c_X, dtype=np.float64)
-        assert not record
+    assert not record
     assert c_X is not c.X
     assert c.X.dtype == np.float64
 

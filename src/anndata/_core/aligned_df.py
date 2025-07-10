@@ -42,7 +42,7 @@ def _gen_dataframe(
         df = pd.DataFrame(
             anno,
             index=None if length is None else mk_index(length),
-            columns=None if len(anno) else [],
+            columns=None if anno else [],
         )
 
     if length is None:

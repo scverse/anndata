@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from .index import Index
 
 
-class AnnData(metaclass=utils.DeprecationMixinMeta):
+class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     """\
     An annotated data matrix.
 
