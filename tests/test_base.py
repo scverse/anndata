@@ -197,21 +197,22 @@ def test_convert_matrix(attr, when):
 
     direct = attr in {"X"}
 
-    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
-        if when == "init":
+    if when == "init":
+        with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
             adata = (
                 AnnData(**{attr: mat})
                 if direct
                 else AnnData(shape=(2, 2), **{attr: {"a": mat}})
             )
-        elif when == "assign":
+    elif when == "assign":
+        with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
             adata = AnnData(shape=(2, 2))
-            if direct:
-                setattr(adata, attr, mat)
-            else:
-                getattr(adata, attr)["a"] = mat
+        if direct:
+            setattr(adata, attr, mat)
         else:
-            raise ValueError(when)
+            getattr(adata, attr)["a"] = mat
+    else:
+        raise ValueError(when)
 
     arr = getattr(adata, attr) if direct else getattr(adata, attr)["a"]
     assert isinstance(arr, np.ndarray), f"{arr} is not an array"

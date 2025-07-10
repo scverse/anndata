@@ -176,7 +176,7 @@ def read_h5ad_backed(
 
 def read_h5ad(
     filename: PathLike[str] | str,
-    backed: Literal["r", "r+"] | bool | None = None,
+    backed: Literal["r", "r+"] | bool | None = None,  # noqa: FBT001
     *,
     as_sparse: Sequence[str] = (),
     as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,

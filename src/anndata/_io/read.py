@@ -22,9 +22,11 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
 
+@old_positionals("first_column_names", "dtype")
 def read_csv(
     filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = ",",
+    *,
     first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
@@ -331,9 +333,11 @@ def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     return AnnData(X)
 
 
+@old_positionals("first_column_names", "dtype")
 def read_text(
     filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = None,
+    *,
     first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
@@ -381,7 +385,7 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
 def _read_text(  # noqa: PLR0912, PLR0915
     f: Iterator[str],
     delimiter: str | None,
-    first_column_names: bool | None,
+    first_column_names: bool | None,  # noqa: FBT001
     dtype: str,
 ) -> AnnData:
     comments = []

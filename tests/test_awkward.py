@@ -143,6 +143,9 @@ def test_view(key):
         ImplicitModificationWarning, match=r"initializing view as actual"
     ):
         getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
+    with pytest.warns(
+        ImplicitModificationWarning, match=r"initializing view as actual"
+    ):
         getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
 
     # values in view were correctly set
