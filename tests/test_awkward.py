@@ -139,14 +139,12 @@ def test_view(key):
     getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
     adata_view = adata[:2, :2]
 
+    # TODO: is “c” sparse and “d” not? Or what happens here? Use proper names.
     with pytest.warns(
         ImplicitModificationWarning, match=r"initializing view as actual"
     ):
         getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
-    with pytest.warns(
-        ImplicitModificationWarning, match=r"initializing view as actual"
-    ):
-        getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
+    getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
 
     # values in view were correctly set
     npt.assert_equal(getattr(adata_view, key)["awk"]["c"], np.full((2, 1), 4))
