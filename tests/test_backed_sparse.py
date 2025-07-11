@@ -521,7 +521,7 @@ def test_data_access(
     )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
-    f = zarr.open_group(store)
+    f = zarr.open_group(store, mode="r")
     a_disk = AnnData(X=open_func(f["X"]))
     subset = a_disk[idx_maj, idx_min] if a.format == "csr" else a_disk[idx_min, idx_maj]
     if isinstance(subset.X, DaskArray):
