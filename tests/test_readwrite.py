@@ -367,6 +367,8 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
 def test_zarr_compression(tmp_path, zarr_write_format):
+    if zarr_write_format == 3 and is_zarr_v2():
+        pytest.xfail("Cannot write zarr v3 format with v2 package")
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
