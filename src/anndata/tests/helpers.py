@@ -10,10 +10,20 @@ from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
+# trying to import jax as it is not part of the default dependencies
+try:
+    import jax
+    import jax.numpy as jnp
+
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
+
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from array_api_compat import get_namespace as array_api_get_namespace
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -50,7 +60,6 @@ if TYPE_CHECKING:
 
     DT = TypeVar("DT")
 
-
 try:
     from pandas.core.arrays.integer import IntegerDtype
 except ImportError:
@@ -66,6 +75,9 @@ DEFAULT_KEY_TYPES = (
     pd.DataFrame,
     sparse.csr_array,
 )
+# Add JAX array type to supported backends if JAX is installed
+if JAX_AVAILABLE:
+    DEFAULT_KEY_TYPES += (jnp.ndarray,)
 
 
 DEFAULT_COL_TYPES = (
@@ -79,19 +91,48 @@ DEFAULT_COL_TYPES = (
     pd.Int32Dtype,
 )
 
-
-# Give this to gen_adata when dask array support is expected.
+# preset for testing with Dask arrays
+# includes DaskArray in obsm/varm/layers to test lazy evaluation and chunked storage
+# useful when testing backend="backed"/"memory"/"zarr"
 GEN_ADATA_DASK_ARGS = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
 )
 
+# for testing without xarray (XDataset) types
+# excludes XDataset to avoid xarray dependency or reduce test complexity
+# useful for minimal tests or when xarray is not available
 GEN_ADATA_NO_XARRAY_ARGS = dict(
-    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
+    varm_types=(*DEFAULT_KEY_TYPES, AwkArray),
+)
+
+# Optional: define args for JAX-specific backend tests
+# preset for testing with JAX arrays
+# useful when running tests using jax.numpy as the backend for X, obsm, varm, or layers.
+GEN_ADATA_JAX_ARGS = (
+    dict(
+        obsm_types=(*DEFAULT_KEY_TYPES,),
+        varm_types=(*DEFAULT_KEY_TYPES,),
+        layers_types=(*DEFAULT_KEY_TYPES,),
+    )
+    if JAX_AVAILABLE
+    else {}
 )
 
 
+def get_xp(x):
+    try:
+        return array_api_get_namespace(x)
+    # in case if getting other errors but ImportError
+    except Exception:  # noqa: BLE001
+        # default to numpy if array_api_compat is not installed
+        return np
+
+
+# Only use structured arrays like gen_vstr_recarray under NumPy.
+# These are not supported under the Array API (e.g. JAX, CuPy).
 def gen_vstr_recarray(m, n, dtype=None):
     size = m * n
     lengths = np.random.randint(3, 5, size)
@@ -285,6 +326,8 @@ def gen_adata(  # noqa: PLR0913
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
+    xp=None,  # setting default to None for now but maybe np is better (review)
+    rng=None,
 ) -> AnnData:
     """\
     Helper function to generate a random AnnData for testing purposes.
@@ -314,12 +357,34 @@ def gen_adata(  # noqa: PLR0913
     """
     import dask.array as da
 
+    # from anndata.experimental import gen_vstr_recarray
+
     if random_state is None:
         random_state = np.random.default_rng()
 
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
+
+    # initialize backends
+    if xp is None:
+        try:
+            xp = get_xp(X_type(xp.ones((1, 1), dtype=X_dtype)))
+        except Exception:
+            xp = np  # default to numpy if X_type is not compatible
+    if rng is None:
+        if xp.__name__.startswith("jax"):
+            rng = (jax.random, jax.random.PRNGKey(42))
+        else:
+            rng = np.random.default_rng()
+
+    is_jax = xp.__name__.startswith("jax")
+    if is_jax:
+        jrandom, key = rng
+    else:
+        jrandom, key = None, None
+
+    # generate obs and var dataframes
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
@@ -332,91 +397,160 @@ def gen_adata(  # noqa: PLR0913
         if var_xdataset:
             var = XDataset.from_dataframe(var)
 
+    # generating X and including jax support
     if X_type is None:
-        X = None
+        X = None  # if no data matrix is requested, skip creation
+    elif is_jax and isinstance(X_type, type) and issubclass(X_type, sparse.spmatrix):
+        # JAX does not support scipy sparse matrices (double check)
+        msg = "JAX does not support sparse matrices"
+        raise ValueError(msg)
     else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        if is_jax:
+            # split the JAX PRNG key to create a new, independent subkey
+            key, subkey = jrandom.split(key)
+            X_array = jrandom.binomial(subkey, 100.0, 0.005, shape=(M, N)).astype(
+                X_dtype
+            )
+            rng = (jrandom, key)
+        else:
+            # if using numpy, generate a binomial distribution
+            X_array = rng.binomial(100, 0.005, (M, N)).astype(X_dtype)
+        X = X_type(X_array)
 
+    # Generate obsm
+    if is_jax:
+        key, subkey = jrandom.split(key)
+        obsm_array = jrandom.uniform(subkey, shape=(M, 50))
+        rng = (jrandom, key)
+    else:
+        obsm_array = rng.random((M, 50))
+
+    # sparse was moved out due to JAX compatibility issues
     obsm = dict(
-        array=np.random.random((M, 50)),
-        sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
+        array=obsm_array,
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
-    varm = dict(
-        array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
-        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
-        awk_2d_ragged=gen_awkward((N, None)),
-        da=da.random.random((N, 50)),
-    )
+
+    if not is_jax:
+        obsm["sparse"] = sparse.random(
+            M, 100, format=sparse_fmt, random_state=random_state
+        )
     if has_xr:
         obsm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(M, obs_names, dtypes=obs_dtypes)
         )
+    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+
+    # generating varm
+    if is_jax:
+        key, subkey = jrandom.split(key)
+        varm_array = jrandom.uniform(subkey, shape=(N, 50))
+        rng = (jrandom, key)
+    else:
+        varm_array = rng.random((N, 50))
+
+    varm = dict(
+        array=varm_array,
+        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
+        awk_2d_ragged=gen_awkward((N, None)),
+        da=da.random.random((N, 50)),
+    )
+    if not is_jax:
+        varm["sparse"] = sparse.random(
+            N, 100, format=sparse_fmt, random_state=random_state
+        )
+    if has_xr:
         varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    obsm = maybe_add_sparse_array(
-        mapping=obsm,
-        types=obsm_types,
-        format=sparse_fmt,
-        random_state=random_state,
-        shape=(M, 100),
-    )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
-    varm = maybe_add_sparse_array(
-        mapping=varm,
-        types=varm_types,
-        format=sparse_fmt,
-        random_state=random_state,
-        shape=(N, 100),
-    )
-    layers = dict(
-        array=np.random.random((M, N)),
-        sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
-        da=da.random.random((M, N)),
-    )
-    layers = maybe_add_sparse_array(
-        mapping=layers,
-        types=layers_types,
-        format=sparse_fmt,
-        random_state=random_state,
-        shape=(M, N),
-    )
+
+    if has_xr:
+        if XDataset in obsm_types:
+            obsm["xdataset"] = XDataset.from_dataframe(
+                gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+            )
+        if XDataset in varm_types:
+            varm["xdataset"] = XDataset.from_dataframe(
+                gen_typed_df(N, var_names, dtypes=var_dtypes)
+            )
+    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    # JAX does not support scipy.sparse, so skip this step to avoid compatibility issues
+    if not is_jax:
+        obsm = maybe_add_sparse_array(
+            mapping=obsm,
+            types=obsm_types,
+            format=sparse_fmt,
+            random_state=random_state,
+            shape=(M, 100),
+        )
+    varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    if not is_jax:
+        varm = maybe_add_sparse_array(
+            mapping=varm,
+            types=varm_types,
+            format=sparse_fmt,
+            random_state=random_state,
+            shape=(N, 100),
+        )
+
+    if is_jax:
+        key, subkey = jrandom.split(key)
+        layer_array = jrandom.uniform(subkey, shape=(M, N))
+        rng = (jrandom, key)
+    else:
+        layer_array = rng.random((M, N))
+
+    layers = dict(array=layer_array, da=da.random.random((M, N)))
+    if not is_jax:
+        layers["sparse"] = sparse.random(
+            M, N, format=sparse_fmt, random_state=random_state
+        )
+        layers = maybe_add_sparse_array(
+            mapping=layers,
+            types=layers_types,
+            format=sparse_fmt,
+            random_state=random_state,
+            shape=(M, N),
+        )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
-    obsp = dict(
-        array=np.random.random((M, M)),
-        sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
-    )
-    obsp["sparse_array"] = sparse.csr_array(
-        sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-    )
-    varp = dict(
-        array=np.random.random((N, N)),
-        sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
-    )
-    varp["sparse_array"] = sparse.csr_array(
-        sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-    )
-    uns = dict(
-        O_recarray=gen_vstr_recarray(N, 5),
-        nested=dict(
-            scalar_str="str",
-            scalar_int=42,
-            scalar_float=3.0,
-            nested_further=dict(array=np.arange(5)),
-        ),
-        awkward_regular=gen_awkward((10, 5)),
-        awkward_ragged=gen_awkward((12, None, None)),
-        # U_recarray=gen_vstr_recarray(N, 5, "U4")
-    )
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    # zarr v3 on-disk does not write structured dtypes
-    if anndata.settings.zarr_write_format == 3:
-        del uns["O_recarray"]
+
+    # skiping obsp/vasp and uns if using JAX
+    obsp, varp, uns = {}, {}, {}
+    if not is_jax:
+        obsp = dict(
+            array=np.random.random((M, M)),
+            sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
+        )
+        obsp["sparse_array"] = sparse.csr_array(
+            sparse.random(M, M, format=sparse_fmt, random_state=random_state)
+        )
+        varp = dict(
+            array=np.random.random((N, N)),
+            sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
+        )
+        varp["sparse_array"] = sparse.csr_array(
+            sparse.random(N, N, format=sparse_fmt, random_state=random_state)
+        )
+        uns = dict(
+            O_recarray=gen_vstr_recarray(N, 5),
+            nested=dict(
+                scalar_str="str",
+                scalar_int=42,
+                scalar_float=3.0,
+                nested_further=dict(array=np.arange(5)),
+            ),
+            awkward_regular=gen_awkward((10, 5)),
+            awkward_ragged=gen_awkward((12, None, None)),
+            # U_recarray=gen_vstr_recarray(N, 5, "U4")
+        )
+        # https://github.com/zarr-developers/zarr-python/issues/2134
+        # zarr v3 on-disk does not write structured dtypes
+        if anndata.settings.zarr_write_format == 3:
+            del uns["O_recarray"]
+    # anndata constuction
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(

@@ -62,6 +62,8 @@ dev = [
     # runtime dev version generation
     "hatch-vcs",
     "anndata[dev-doc]",
+    "jax",
+    "jaxlib",
 ]
 doc = [
     "sphinx>=8.2.1",
@@ -105,6 +107,8 @@ test-min = [
 test = [
     "anndata[test-min,lazy]",
     "pandas>=2.1.0",
+    "jax",
+    "jaxlib",
 ] # pandas 2.1.0 needs to be specified for xarray to work with min-deps script
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
