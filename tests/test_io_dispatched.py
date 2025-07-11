@@ -99,11 +99,10 @@ def test_write_dispatched_chunks(tmp_path: Path):
             for e, c in zip(elem_shape, chunk_iterator, strict=False)
         )
 
-    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
+    adata = gen_adata((100, 50), **GEN_ADATA_NO_XARRAY_ARGS)
+    M, N = 13, 8
 
     def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
-        M, N = 13, 42
-
         def set_copy(d, **kwargs):
             d = dict(d)
             d.update(kwargs)
@@ -149,9 +148,9 @@ def test_write_dispatched_chunks(tmp_path: Path):
         ):
             return
         if re.match(r"obs[mp]?/\w+", k):
-            assert v.chunks[0] == 13
+            assert v.chunks[0] == M
         elif re.match(r"var[mp]?/\w+", k):
-            assert v.chunks[0] == 42
+            assert v.chunks[0] == N
 
     if is_zarr_v2():
         z.visititems(check_chunking)

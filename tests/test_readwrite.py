@@ -889,7 +889,7 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     orig = gen_adata((4, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"] = {
         "a": gen_adata((1, 2), **GEN_ADATA_NO_XARRAY_ARGS),
-        "b": gen_adata((12, 8), **GEN_ADATA_NO_XARRAY_ARGS),
+        "b": gen_adata((2, 3), **GEN_ADATA_NO_XARRAY_ARGS),
     }
     another_one = gen_adata((2, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     another_one.raw = gen_adata((2, 7), **GEN_ADATA_NO_XARRAY_ARGS)
