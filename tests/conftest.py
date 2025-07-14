@@ -23,7 +23,7 @@ import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator
     from types import EllipsisType
 
 
@@ -186,11 +186,3 @@ def tokenize_anndata(adata: ad.AnnData):
     if adata.raw is not None:
         res.append(tokenize(adata.raw.to_adata()))
     return tuple(res)
-
-
-def pytest_collection_modifyitems(
-    session: pytest.Session, config: pytest.Config, items: Iterable[pytest.Item]
-):
-    for item in items:
-        if "zarr" in item.name:
-            item.add_marker("zarr_io")
