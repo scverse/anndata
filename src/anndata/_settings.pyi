@@ -39,8 +39,7 @@ class SettingsManager:
     @property
     def __doc__(self): ...
 
-@dataclass
-class AnnDataSettingsManager:
+class AnnDataSettingsManager(SettingsManager):
     remove_unused_categories: bool = True
     check_uniqueness: bool = True
     allow_write_nullable_strings: bool = False

@@ -274,5 +274,6 @@ def test_hints():
     )
     settings_types_mod = types.ModuleType(types_loader.name)
     types_loader.exec_module(settings_types_mod)
-    for settings_key in settings.registered_settings():
-        assert hasattr(settings_types_mod.AnnDataSettingsManager, settings_key)
+    for settings_key in dir(settings):
+        if not settings_key.startswith("_"):
+            assert hasattr(settings_types_mod.AnnDataSettingsManager, settings_key)

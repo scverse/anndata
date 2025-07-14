@@ -333,7 +333,7 @@ class SettingsManager:
         raise AttributeError(msg)
 
     def __dir__(self) -> Iterable[str]:
-        return sorted((*dir(super()), *self._config.keys()))
+        return sorted((*super().__dir__(), *self._config.keys()))
 
     def reset(self, option: Iterable[str] | str) -> None:
         """
