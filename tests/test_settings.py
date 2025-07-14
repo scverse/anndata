@@ -5,6 +5,7 @@ import os
 import re
 import types
 from enum import Enum
+from pathlib import Path
 
 import pytest
 
@@ -275,6 +276,6 @@ def test_hints():
     types_loader.exec_module(settings_types_mod)
     for settings_key in dir(settings):
         if not settings_key.startswith("_"):
-            assert hasattr(settings_types_mod.AnnDataSettingsManager, settings_key)
-    for settings_key in dir(settings_types_mod.AnnDataSettingsManager):
+            assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
+    for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
         assert hasattr(settings, settings_key)

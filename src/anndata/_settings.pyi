@@ -38,7 +38,7 @@ class SettingsManager:
     @property
     def __doc__(self): ...
 
-class AnnDataSettingsManager(SettingsManager):
+class _AnnDataSettingsManager(SettingsManager):
     remove_unused_categories: bool = True
     check_uniqueness: bool = True
     allow_write_nullable_strings: bool = False
@@ -46,4 +46,4 @@ class AnnDataSettingsManager(SettingsManager):
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
 
-settings: AnnDataSettingsManager
+settings: _AnnDataSettingsManager
