@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import os
-import pathlib
 import re
 import types
 from enum import Enum
