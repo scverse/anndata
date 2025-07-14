@@ -40,12 +40,12 @@ M = 50
 N = 50
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
     return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_separator():
     return "" if ad.settings.zarr_write_format == 2 else "/c"
 

@@ -130,6 +130,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
+@pytest.mark.zarr_io
 def test_readwrite_roundtrip_async(tmp_path):
     import asyncio
 
@@ -756,6 +757,7 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
         assert_equal(teststring, _read_attr(attrs, "string"))
 
 
+@pytest.mark.zarr_io
 def test_zarr_chunk_X(tmp_path):
     import zarr
 
@@ -971,6 +973,7 @@ def test_read_lazy_import_error(func, tmp_path):
         )
 
 
+@pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
     g = (
