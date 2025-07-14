@@ -440,7 +440,7 @@ def validate_zarr_write_format(format: int):
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
     if format == 3 and is_zarr_v2():
-        msg = "Cannot run v3 format tests against v2 package"
+        msg = "Cannot write v3 format against v2 package"
         raise ValueError(msg)
 
 
