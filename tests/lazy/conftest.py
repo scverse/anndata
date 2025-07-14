@@ -46,7 +46,7 @@ def are_vars_different(request):
     return request.param
 
 
-@pytest.fixture(params=["zarr", "h5ad"], scope="session")
+@pytest.fixture(params=["zarr", "h5ad"], scope="session", ids=["zarr", "h5ad"])
 def diskfmt(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
