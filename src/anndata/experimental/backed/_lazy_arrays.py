@@ -8,14 +8,15 @@ import pandas as pd
 from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
-from anndata.compat import NULLABLE_NUMPY_STRING_TYPE, H5Array, ZarrArray
 
 from ..._settings import settings
 from ...compat import (
     NULLABLE_NUMPY_STRING_TYPE,
+    H5Array,
     XBackendArray,
     XDataArray,
     XZarrArrayWrapper,
+    ZarrArray,
 )
 from ...compat import xarray as xr
 
