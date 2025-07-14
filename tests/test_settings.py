@@ -268,11 +268,11 @@ def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
 
 def test_hints():
     settings = ad.settings
-    loader = importlib.machinery.SourceFileLoader(
+    types_loader = importlib.machinery.SourceFileLoader(
         "settings_types",
         pathlib.Path(__file__).parent.parent.resolve() / "src/anndata/_settings.pyi",
     )
-    mod = types.ModuleType(loader.name)
-    loader.exec_module(mod)
+    settings_types_mod = types.ModuleType(types_loader.name)
+    types_loader.exec_module(settings_types_mod)
     for settings_key in settings.registered_settings():
-        assert hasattr(mod.AnnDataSettingsManager, settings_key)
+        assert hasattr(settings_types_mod.AnnDataSettingsManager, settings_key)
