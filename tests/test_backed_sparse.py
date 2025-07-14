@@ -388,7 +388,7 @@ def test_lazy_array_cache(
     store = AccessTrackingStore(path)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
-    f = open_write_group(store, mode="a")
+    f = open_write_group(store, mode="r")
     a_disk = sparse_dataset(f["X"], should_cache_indptr=should_cache_indptr)
     a_disk[:1]
     a_disk[3:5]
@@ -521,7 +521,7 @@ def test_data_access(
     )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
-    f = zarr.open_group(store)
+    f = zarr.open_group(store, mode="r")
     a_disk = AnnData(X=open_func(f["X"]))
     subset = a_disk[idx_maj, idx_min] if a.format == "csr" else a_disk[idx_min, idx_maj]
     if isinstance(subset.X, DaskArray):
