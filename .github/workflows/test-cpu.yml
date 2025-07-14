@@ -47,6 +47,7 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+        io_mark: ["zarr_io", "not zarr_io"]
     env:  # environment variable for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
     steps:
@@ -70,7 +71,7 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{matrix.io_mark}}"
 
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
