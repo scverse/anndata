@@ -213,6 +213,7 @@ ignore = [
     "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
     "E741",    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
     "TID252",  # We use relative imports from parent modules
+    "PLC0415", # We use a lot of non-top-level imports
     "PLR2004", # “2” is often not too “magic” a number
     "PLW2901", # Shadowing loop variables isn’t a big deal
 ]

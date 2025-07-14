@@ -197,7 +197,9 @@ def test_convert_matrix(attr, when):
 
     direct = attr in {"X"}
 
-    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+    with pytest.warns(  # noqa: PT031
+        expected_warning=ImplicitModificationWarning, match=r"np\.ndarray"
+    ):
         if when == "init":
             adata = (
                 AnnData(**{attr: mat})
