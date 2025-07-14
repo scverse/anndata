@@ -51,8 +51,10 @@ def file_format(request) -> Literal["zarr", "h5ad"]:
     return request.param
 
 
-# 1000 is enough to guarantee that the feature is being used
-@pytest.fixture(params=[50, 1_000_000])
+# 5 is enough to guarantee that the feature is being used since the
+# `test_anndatas` generates a minimum of 5 on at least one of the axes.
+# Thus there will be at least 5 elems.
+@pytest.fixture(params=[5, 1_000_000])
 def max_loaded_elems(request) -> int:
     return request.param
 
@@ -135,7 +137,7 @@ def test_anndatas(
 
     adatas = []
     for i in range(3):
-        M, N = (np.random.randint(1, 10) if a in random_axes else 50 for a in (0, 1))
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
         a = gen_adata(
             (M, N),
             X_type=get_array_type(array_type, axis),
