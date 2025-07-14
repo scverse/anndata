@@ -277,3 +277,5 @@ def test_hints():
     for settings_key in dir(settings):
         if not settings_key.startswith("_"):
             assert hasattr(settings_types_mod.AnnDataSettingsManager, settings_key)
+    for settings_key in dir(settings_types_mod.AnnDataSettingsManager):
+        assert hasattr(settings, settings_key)
