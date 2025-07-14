@@ -1,12 +1,71 @@
 from collections.abc import Callable as Callable
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
+from typing import Any, Generic, Literal, NamedTuple, Protocol, TypeVar
 
+_T = TypeVar("_T")
+
+class DeprecatedOption(NamedTuple):
+    option: str
+    message: str | None
+    removal_version: str | None
+
+class describe(Protocol):
+    def __call__(self, *, as_rst: bool = False) -> str: ...
+
+class RegisteredOption(NamedTuple, Generic[_T]):
+    option: str
+    default_value: _T
+    description: str
+    validate: Callable[[_T], None]
+    type: object
+    describe: describe
+
+def check_and_get_environ_var(
+    key: str,
+    default_value: str,
+    allowed_values: Sequence[str] | None = None,
+    cast: Callable[[Any], _T] | type[Enum] = ...,
+) -> _T: ...
+def check_and_get_bool(option, default_value): ...
+def check_and_get_int(option, default_value): ...
 @dataclass
 class SettingsManager:
     __doc_tmpl__: str = ...
+    def describe(
+        self,
+        option: str | Iterable[str] | None = None,
+        *,
+        should_print_description: bool = True,
+        as_rst: bool = False,
+    ) -> str: ...
+    def deprecate(
+        self, option: str, removal_version: str, message: str | None = None
+    ) -> None: ...
+    def register(
+        self,
+        option: str,
+        *,
+        default_value: _T,
+        description: str,
+        validate: Callable[[_T], None],
+        option_type: object | None = None,
+        get_from_env: Callable[[str, _T], _T] = ...,
+    ) -> None: ...
+    def __setattr__(self, option: str, val: object) -> None: ...
+    def __getattr__(self, option: str) -> object: ...
+    def __dir__(self) -> Iterable[str]: ...
+    def reset(self, option: Iterable[str] | str) -> None: ...
+    def registered_settings(self) -> list[str]: ...
+    @contextmanager
+    def override(self, **overrides) -> Generator[None]: ...
+    @property
+    def __doc__(self): ...
+
+@dataclass
+class AnnDataSettingsManager:
     remove_unused_categories: bool = True
     check_uniqueness: bool = True
     allow_write_nullable_strings: bool = False
@@ -14,10 +73,4 @@ class SettingsManager:
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
 
-    def __setattr__(self, option: str, val: object) -> None: ...
-    def __getattr__(self, option: str) -> object: ...
-    def reset(self, option: Iterable[str] | str) -> None: ...
-    @contextmanager
-    def override(self, **overrides) -> Generator[None]: ...
-
-settings: SettingsManager
+settings: AnnDataSettingsManager

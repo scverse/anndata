@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import importlib
 import os
+import pathlib
 import re
+import types
 from enum import Enum
 
 import pytest
 
+import anndata as ad
 from anndata._settings import (
     SettingsManager,
     check_and_get_bool,
@@ -260,3 +264,16 @@ def test_check_and_get_bool_enum(monkeypatch: pytest.MonkeyPatch):
 )
 def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
+
+
+def test_hints():
+    settings = ad.settings
+    loader = importlib.machinery.SourceFileLoader(
+        "settings_types",
+        pathlib.Path(__file__).parent.resolve().parent.resolve()
+        / "src/anndata/_settings.pyi",
+    )
+    mod = types.ModuleType(loader.name)
+    loader.exec_module(mod)
+    for settings_key in settings.registered_settings():
+        assert hasattr(mod.AnnDataSettingsManager, settings_key)

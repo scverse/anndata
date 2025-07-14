@@ -385,6 +385,9 @@ class SettingsManager:
             options_description=options_description,
         )
 
+    def registered_settings(self) -> list[str]:
+        return list(self._config.keys())
+
 
 settings = SettingsManager()
 
