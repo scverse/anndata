@@ -1088,10 +1088,16 @@ class AccessTrackingStoreBase(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
+        # Needed for zarr v3 to prevent a read-only copy being made
+        # https://github.com/zarr-developers/zarr-python/pull/3156
+        if not is_zarr_v2() and "read_only" not in kwargs:
+            kwargs["read_only"] = True
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+        self._read_only = True
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1135,26 +1141,6 @@ class AccessTrackingStoreBase(LocalStore):
         assert self.get_access_count(key) == count, (
             f"Found {access_count} accesses at {keys_accessed}"
         )
-
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 if is_zarr_v2():
