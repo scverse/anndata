@@ -270,8 +270,7 @@ def test_hints():
     settings = ad.settings
     loader = importlib.machinery.SourceFileLoader(
         "settings_types",
-        pathlib.Path(__file__).parent.resolve().parent.resolve()
-        / "src/anndata/_settings.pyi",
+        pathlib.Path(__file__).parent.parent.resolve() / "src/anndata/_settings.pyi",
     )
     mod = types.ModuleType(loader.name)
     loader.exec_module(mod)
