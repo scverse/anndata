@@ -1,36 +1,11 @@
 from collections.abc import Callable as Callable
-from collections.abc import Generator, Iterable, Sequence
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Generic, Literal, NamedTuple, Protocol, TypeVar
+from typing import Literal, TypeVar
 
 _T = TypeVar("_T")
 
-class DeprecatedOption(NamedTuple):
-    option: str
-    message: str | None
-    removal_version: str | None
-
-class describe(Protocol):
-    def __call__(self, *, as_rst: bool = False) -> str: ...
-
-class RegisteredOption(NamedTuple, Generic[_T]):
-    option: str
-    default_value: _T
-    description: str
-    validate: Callable[[_T], None]
-    type: object
-    describe: describe
-
-def check_and_get_environ_var(
-    key: str,
-    default_value: str,
-    allowed_values: Sequence[str] | None = None,
-    cast: Callable[[Any], _T] | type[Enum] = ...,
-) -> _T: ...
-def check_and_get_bool(option, default_value): ...
-def check_and_get_int(option, default_value): ...
 @dataclass
 class SettingsManager:
     __doc_tmpl__: str = ...
