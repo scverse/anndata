@@ -34,7 +34,7 @@ from ..utils import (
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import coerce_array
@@ -1236,30 +1236,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         else:
             return self.raw.var_vector(k)
 
-    def _mutated_copy(self, **kwargs):
-        """Creating AnnData with attributes optionally specified via kwargs."""
-        if self.isbacked and (
-            "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)
-        ):
+    def _copy(self) -> AnnData:
+        if self.isbacked and self.raw is not None:
             msg = (
                 "This function does not currently handle backed objects "
                 "internally, this should be dealt with before."
             )
             raise NotImplementedError(msg)
         new = {}
-
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
-            if key in kwargs:
-                new[key] = kwargs[key]
-            else:
-                new[key] = getattr(self, key).copy()
-        if "uns" in kwargs:
-            new["uns"] = kwargs["uns"]
-        else:
-            new["uns"] = deepcopy(self._uns)
-        if "raw" in kwargs:
-            new["raw"] = kwargs["raw"]
-        elif self.raw is not None:
+            new[key] = getattr(self, key).copy()
+        new["uns"] = deepcopy(self._uns)
+        if self.raw is not None:
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
@@ -1283,7 +1271,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """
         new = {}
         for attr_name in [
-            "X",
             "obs",
             "var",
             "obsm",
@@ -1312,16 +1299,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view and self._has_X():
-                # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don’t have to have a view type
-                # defined for the matrix, which is needed for some of the
-                # current distributed backend. Specifically Dask.
-                return self._mutated_copy(
-                    X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-                )
-            else:
-                return self._mutated_copy()
+            return self._copy()
         else:
             from ..io import read_h5ad, write_h5ad
 
