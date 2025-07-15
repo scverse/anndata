@@ -96,7 +96,8 @@ test-min = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    "httpx",                # For data downloading
+    # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
+    "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.3.2",
     "pyarrow",
