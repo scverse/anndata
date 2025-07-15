@@ -54,10 +54,10 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    # import zarr
-    # from packaging.version import Version
+    import zarr
+    from packaging.version import Version
 
-    return False
+    return Version(zarr.__version__) < Version("3.0.0")
 
 
 if is_zarr_v2():
