@@ -351,6 +351,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 )
                 X = X.layers.get(None)
 
+            if layers is not None and None in layers:
+                if X is not None and X is not layers[None]:
+                    msg = (
+                        "If you provide `layers[None]` and `X`, they must be identical."
+                    )
+                    raise ValueError(msg)
+                X = layers[None]
+
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
                 # to verify index matching, we wait until obs and var are DataFrames
