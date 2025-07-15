@@ -59,6 +59,7 @@ def is_zarr_v2() -> bool:
 
     return Version(zarr.__version__) < Version("3.0.0")
 
+
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
     warn(msg, DeprecationWarning, stacklevel=2)
