@@ -227,13 +227,19 @@ class AlignedActual(AlignedMappingBase[K], Generic[K]):
     def __setitem__(self, key: K, value: Value):
         if value is not None:
             value = self._validate_value(value, key)
-        self._data[key] = value
+        if key is None and value is None:
+            del self[key]
+        else:
+            self._data[key] = value
 
     def __contains__(self, key: K) -> bool:
         return key in self._data
 
     def __delitem__(self, key: K):
-        del self._data[key]
+        if key is None:
+            self._data.pop(key, None)
+        else:
+            del self._data[key]
 
     def __iter__(self) -> Iterator[K]:
         return iter(self._data)
