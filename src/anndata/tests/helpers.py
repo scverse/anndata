@@ -17,7 +17,6 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-import anndata
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
@@ -413,10 +412,6 @@ def gen_adata(  # noqa: PLR0913
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    # zarr v3 on-disk does not write structured dtypes
-    if anndata.settings.zarr_write_format == 3:
-        del uns["O_recarray"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
@@ -1153,6 +1148,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
+
         async def get(
             self,
             key: str,

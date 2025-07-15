@@ -24,6 +24,7 @@ from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_datase
 from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -431,7 +432,7 @@ def write_basic(
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
-        if isinstance(elem, ZarrArray):
+        if isinstance(elem, ZarrArray | H5Array):
             f[k][...] = elem[...]
         else:
             f[k][...] = elem
@@ -622,24 +623,20 @@ def write_vlen_string_array_zarr(
         f[k][:] = elem
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        match (
-            ad.settings.zarr_write_format,
-            Version(np.__version__) >= Version("2.0.0"),
-        ):
-            case 2, _:
-                filters, dtype = [VLenUTF8()], object
-            case 3, True:
-                filters, dtype = None, np.dtypes.StringDType()
-            case 3, False:
-                filters, dtype = None, np.dtypes.ObjectDType()
+        dtype = VariableLengthUTF8()
+        filters, fill_value = None, None
+        if ad.settings.zarr_write_format == 2:
+            filters, fill_value = [VLenUTF8()], ""
         f.create_array(
             k,
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -1210,7 +1207,10 @@ def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
-    arr = pd.array(values, dtype=pd.StringDtype())
+    arr = pd.array(
+        values.astype(NULLABLE_NUMPY_STRING_TYPE),
+        dtype=pd.StringDtype(),
+    )
     arr[mask] = pd.NA
     return arr
 
@@ -1281,19 +1281,21 @@ def write_scalar_zarr(
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         match ad.settings.zarr_write_format, value:
             case 2, str():
-                filters, dtype = [VLenUTF8()], object
+                filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
             case 3, str():
-                filters, dtype = None, np.dtypes.StringDType()
+                filters, dtype, fill_value = None, VariableLengthUTF8(), None
             case _, _:
-                filters, dtype = None, np.array(value).dtype
+                filters, dtype, fill_value = None, np.array(value).dtype, None
         a = f.create_array(
             key,
             shape=(),
             dtype=dtype,
             filters=filters,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         a[...] = np.array(value)

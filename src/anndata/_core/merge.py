@@ -904,12 +904,6 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             ],
             format="csr",
         )
-        scipy_version = Version(scipy.__version__)
-        # Bug where xstack produces a matrix not an array in 1.11.*
-        if use_sparse_array and (scipy_version.major, scipy_version.minor) == (1, 11):
-            if mat.format == "csc":
-                return sparse.csc_array(mat)
-            return sparse.csr_array(mat)
         return mat
     else:
         return np.concatenate(
