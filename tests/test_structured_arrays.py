@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
 from itertools import combinations, product
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pytest
 
 import anndata as ad
 from anndata import AnnData
@@ -45,24 +43,17 @@ def test_io(
     initial = AnnData(np.zeros((3, 3)))
     initial.uns = dict(str_rec=str_recarray, u_rec=u_recarray, s_rec=s_recarray)
 
-    with (
-        pytest.raises(
-            NotImplementedError, match=r"zarr v3 does not support structured dtypes"
-        )
-        if diskfmt == "zarr" and ad.settings.zarr_write_format == 3
-        else nullcontext()
-    ):
-        write1(initial, filepth1)
-        disk_once = read1(filepth1)
-        write2(disk_once, filepth2)
-        disk_twice = read2(filepth2)
+    write1(initial, filepth1)
+    disk_once = read1(filepth1)
+    write2(disk_once, filepth2)
+    disk_twice = read2(filepth2)
 
-        adatas = [initial, disk_once, disk_twice]
-        keys = [
-            "str_rec",
-            "u_rec",
-            # "s_rec"
-        ]
+    adatas = [initial, disk_once, disk_twice]
+    keys = [
+        "str_rec",
+        "u_rec",
+        # "s_rec"
+    ]
 
-        for (ad1, key1), (ad2, key2) in combinations(product(adatas, keys), 2):
-            assert_str_contents_equal(ad1.uns[key1], ad2.uns[key2])
+    for (ad1, key1), (ad2, key2) in combinations(product(adatas, keys), 2):
+        assert_str_contents_equal(ad1.uns[key1], ad2.uns[key2])
