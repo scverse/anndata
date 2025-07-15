@@ -432,7 +432,7 @@ def write_basic(
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
-        if isinstance(elem, ZarrArray):
+        if isinstance(elem, ZarrArray | H5Array):
             f[k][...] = elem[...]
         else:
             f[k][...] = elem
