@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import os
-import sys
 import textwrap
 import warnings
 from collections.abc import Iterable
@@ -14,8 +13,7 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
-from anndata.compat import CAN_USE_SPARSE_ARRAY
-from anndata.compat.exceptiongroups import add_note
+from .compat import old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -53,27 +51,14 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-if sys.version_info >= (3, 11):
+class RegisteredOption(NamedTuple, Generic[T]):
+    option: str
+    default_value: T
+    description: str
+    validate: Callable[[T], None]
+    type: object
 
-    class RegisteredOption(NamedTuple, Generic[T]):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
-
-else:
-
-    class RegisteredOption(NamedTuple):
-        option: str
-        default_value: T
-        description: str
-        validate: Callable[[T], None]
-        type: object
-
-        describe = describe
+    describe = describe
 
 
 def check_and_get_environ_var(
@@ -108,7 +93,7 @@ def check_and_get_environ_var(
             f"Value {environ_value_or_default_value!r} is not in allowed {allowed_values} for environment variable {key}. "
             f"Default {default_value} will be used."
         )
-        warnings.warn(msg)
+        warnings.warn(msg, UserWarning, stacklevel=3)
         environ_value_or_default_value = default_value
     return (
         cast(environ_value_or_default_value)
@@ -123,6 +108,15 @@ def check_and_get_bool(option, default_value):
         str(int(default_value)),
         ["0", "1"],
         lambda x: bool(int(x)),
+    )
+
+
+def check_and_get_int(option, default_value):
+    return check_and_get_environ_var(
+        f"ANNDATA_{option.upper()}",
+        str(int(default_value)),
+        None,
+        lambda x: int(x),
     )
 
 
@@ -205,9 +199,11 @@ class SettingsManager:
             option, message, removal_version
         )
 
+    @old_positionals("default_value", "description", "validate", "option_type")
     def register(
         self,
         option: str,
+        *,
         default_value: T,
         description: str,
         validate: Callable[[T], None],
@@ -235,7 +231,7 @@ class SettingsManager:
         try:
             validate(default_value)
         except (ValueError, TypeError) as e:
-            add_note(e, f"for option {repr(option)}")
+            e.add_note(f"for option {option!r}")
             raise e
         option_type = type(default_value) if option_type is None else option_type
         self._registered_options[option] = RegisteredOption(
@@ -274,7 +270,7 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast(str, self.override.__doc__)
+        doc = cast("str", self.override.__doc__)
         insert_index = doc.find("\n        Yields")
         option_docstring = "\t" + "\t".join(
             self.describe(option, should_print_description=False).splitlines(
@@ -329,15 +325,15 @@ class SettingsManager:
         """
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
-            msg = f"{repr(option)} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, DeprecationWarning)
+            msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
+            warnings.warn(msg, FutureWarning, stacklevel=2)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."
         raise AttributeError(msg)
 
     def __dir__(self) -> Iterable[str]:
-        return sorted((*dir(super()), *self._config.keys()))
+        return sorted((*super().__dir__(), *self._config.keys()))
 
     def reset(self, option: Iterable[str] | str) -> None:
         """
@@ -395,12 +391,20 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
+V = TypeVar("V")
 
 
-def validate_bool(val: Any) -> None:
-    if not isinstance(val, bool):
-        msg = f"{val} not valid boolean"
-        raise TypeError(msg)
+def gen_validator(_type: type[V]) -> Callable[[V], None]:
+    def validate_type(val: V) -> None:
+        if not isinstance(val, _type):
+            msg = f"{val} not valid {_type}"
+            raise TypeError(msg)
+
+    return validate_type
+
+
+validate_bool = gen_validator(bool)
+validate_int = gen_validator(int)
 
 
 settings.register(
@@ -430,23 +434,47 @@ settings.register(
 )
 
 
+def validate_zarr_write_format(format: int):
+    validate_int(format)
+    if format not in {2, 3}:
+        msg = "non-v2 zarr on-disk format not supported"
+        raise ValueError(msg)
+
+
+settings.register(
+    "zarr_write_format",
+    default_value=2,
+    description="Which version of zarr to write to.",
+    validate=validate_zarr_write_format,
+    get_from_env=lambda name, default: check_and_get_environ_var(
+        f"ANNDATA_{name.upper()}",
+        str(default),
+        ["2", "3"],
+        lambda x: int(x),
+    ),
+)
+
+
 def validate_sparse_settings(val: Any) -> None:
     validate_bool(val)
-    if not CAN_USE_SPARSE_ARRAY and cast(bool, val):
-        msg = (
-            "scipy.sparse.cs{r,c}array is not available in current scipy version. "
-            "Falling back to scipy.sparse.cs{r,c}_matrix for reading."
-        )
-        raise ValueError(msg)
 
 
 settings.register(
     "use_sparse_array_on_read",
     default_value=False,
     description="Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data",
-    validate=validate_sparse_settings,
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
+
+settings.register(
+    "min_rows_for_chunked_h5_copy",
+    default_value=1000,
+    description="Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
 
 ##################################################################################
 ##################################################################################

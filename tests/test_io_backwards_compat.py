@@ -4,9 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import zarr
+import zarr.storage
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import assert_equal
 
 ARCHIVE_PTH = Path(__file__).parent / "data/archives"
@@ -17,16 +20,13 @@ def archive_dir(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
-def test_backwards_compat_files(archive_dir):
+def test_backwards_compat_files(archive_dir) -> None:
     with pytest.warns(ad.OldFormatWarning):
         from_h5ad = ad.read_h5ad(archive_dir / "adata.h5ad")
+    path = archive_dir / "adata.zarr.zip"
+    store = path if is_zarr_v2() else zarr.storage.ZipStore(path)
     with pytest.warns(ad.OldFormatWarning):
-        from_zarr = ad.read_zarr(archive_dir / "adata.zarr.zip")
+        from_zarr = ad.read_zarr(store)
 
     assert_equal(from_h5ad, from_zarr, exact=True)
 

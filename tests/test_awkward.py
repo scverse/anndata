@@ -15,6 +15,7 @@ from anndata import (
     ImplicitModificationWarning,
     read_h5ad,
 )
+from anndata.compat import AwkArray
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward
 from anndata.utils import axis_len
@@ -138,11 +139,12 @@ def test_view(key):
     getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
     adata_view = adata[:2, :2]
 
+    # TODO: is “c” sparse and “d” not? Or what happens here? Use proper names.
     with pytest.warns(
         ImplicitModificationWarning, match=r"initializing view as actual"
     ):
         getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
-        getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
+    getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
 
     # values in view were correctly set
     npt.assert_equal(getattr(adata_view, key)["awk"]["c"], np.full((2, 1), 4))
@@ -247,6 +249,22 @@ def test_awkward_io(tmp_path, array):
     adata2 = read_h5ad(adata_path)
 
     assert_equal(adata.uns["awk"], adata2.uns["awk"], exact=True)
+
+
+def test_awkward_io_view(tmp_path):
+    """Check that views are converted to actual arrays on save, i.e. the _view_args and __list__ parameters are removed"""
+    adata = gen_adata((3, 3), varm_types=(), obsm_types=(AwkArray,), layers_types=())
+
+    v = adata[1:]
+    adata_path = tmp_path / "adata.h5ad"
+    v.write_h5ad(adata_path)
+
+    adata2 = read_h5ad(adata_path)
+    # parameters are not fully removed, but set to None
+    assert ak.parameters(adata2.obsm["awk_2d_ragged"]) == {
+        "__list__": None,
+        "_view_args": None,
+    }
 
 
 # @pytest.mark.parametrize("join", ["outer", "inner"])

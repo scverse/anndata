@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import wraps
+from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, cast
 from warnings import warn
@@ -9,14 +9,15 @@ import h5py
 from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from ..compat import add_note
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from typing import Literal
+    from collections.abc import Callable, Mapping
+    from typing import Any, Literal
 
-    from .._types import StorageType
+    from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
+    from ..typing import RWAble
+    from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
 
@@ -119,7 +120,8 @@ def check_key(key):
     # elif issubclass(typ, bytes):
     # return key
     else:
-        raise TypeError(f"{key} of type {typ} is an invalid key. Should be str.")
+        msg = f"{key} of type {typ} is an invalid key. Should be str."
+        raise TypeError(msg)
 
 
 # -------------------------------------------------------------------------------
@@ -130,20 +132,16 @@ def check_key(key):
 def read_attribute(*args, **kwargs):
     from .specs import read_elem
 
-    warn(
-        "This internal function has been deprecated, please use read_elem instead",
-        DeprecationWarning,
-    )
+    msg = "This internal function has been deprecated, please use read_elem instead"
+    warn(msg, FutureWarning, stacklevel=2)
     return read_elem(*args, **kwargs)
 
 
 def write_attribute(*args, **kwargs):
     from .specs import write_elem
 
-    warn(
-        "This internal function has been deprecated, please use write_elem instead",
-        DeprecationWarning,
-    )
+    msg = "This internal function has been deprecated, please use write_elem instead"
+    warn(msg, FutureWarning, stacklevel=2)
     return write_elem(*args, **kwargs)
 
 
@@ -157,15 +155,13 @@ def write_attribute(*args, **kwargs):
 class AnnDataReadError(OSError):
     """Error caused while trying to read in AnnData."""
 
-    pass
-
 
 def _get_display_path(store: Storage) -> str:
     """Return an absolute path of an element (always starts with “/”)."""
     if isinstance(store, BaseCompressedSparseDataset):
         store = store.group
     path = store.name or "??"  # can be None
-    return f'/{path.removeprefix("/")}'
+    return f"/{path.removeprefix('/')}"
 
 
 def add_key_note(
@@ -179,7 +175,7 @@ def add_key_note(
 
     dir = "to" if op == "writ" else "from"
     msg = f"Error raised while {op}ing key {key!r} of {type(store)} {dir} {path}"
-    add_note(e, msg)
+    e.add_note(msg)
 
 
 def report_read_key_on_error(func):
@@ -189,11 +185,12 @@ def report_read_key_on_error(func):
     Example
     -------
     >>> import zarr
+    >>> import numpy as np
     >>> @report_read_key_on_error
     ... def read_arr(group):
     ...     raise NotImplementedError()
-    >>> z = zarr.open("tmp.zarr")
-    >>> z["X"] = [1, 2, 3]
+    >>> z = zarr.open("tmp.zarr", mode="w")
+    >>> z["X"] = np.array([1, 2, 3])
     >>> read_arr(z["X"])  # doctest: +SKIP
     """
 
@@ -207,7 +204,8 @@ def report_read_key_on_error(func):
                 store = cast("Storage", arg)
                 break
         else:
-            raise ValueError("No element found in args.")
+            msg = "No element found in args."
+            raise ValueError(msg)
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -228,7 +226,7 @@ def report_write_key_on_error(func):
     >>> @report_write_key_on_error
     ... def write_arr(group, key, val):
     ...     raise NotImplementedError()
-    >>> z = zarr.open("tmp.zarr")
+    >>> z = zarr.open("tmp.zarr", mode="w")
     >>> X = [1, 2, 3]
     >>> write_arr(z, "X", X)  # doctest: +SKIP
     """
@@ -238,12 +236,14 @@ def report_write_key_on_error(func):
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
-        for arg, key in pairwise(args):
+        for arg, _key in pairwise(args):
+            key = _key
             if not isinstance(arg, Writer):
                 store = cast("Storage", arg)
                 break
         else:
-            raise ValueError("No element found in args.")
+            msg = "No element found in args."
+            raise ValueError(msg)
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -274,7 +274,8 @@ def _read_legacy_raw(
     if modern_raw:
         if any(k.startswith("raw.") for k in f):
             what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
-            raise ValueError(f"{what} has both legacy and current raw formats.")
+            msg = f"{what} has both legacy and current raw formats."
+            raise ValueError(msg)
         return modern_raw
 
     raw = {}
@@ -285,3 +286,42 @@ def _read_legacy_raw(
     if "varm" in attrs and "raw.varm" in f:
         raw["varm"] = read_attr(f["raw.varm"])
     return raw
+
+
+def zero_dim_array_as_scalar(func: _WriteInternal):
+    """\
+    A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
+    """
+
+    @wraps(func, assigned=(*WRAPPER_ASSIGNMENTS, "__defaults__", "__kwdefaults__"))
+    def func_wrapper(
+        f: StorageType,
+        k: str,
+        elem: RWAble,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any],
+    ):
+        if elem.shape == ():
+            _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
+        else:
+            func(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
+
+    return func_wrapper
+
+
+def no_write_dataset_2d(write):
+    def raise_error_if_dataset_2d_present(store, adata, *args, **kwargs):
+        from anndata.experimental.backed._compat import has_dataset_2d
+
+        if has_dataset_2d(adata):
+            msg = (
+                "Writing AnnData objects with a Dataset2D not supported yet. "
+                "Please use `ds.to_memory` to bring the dataset into memory. "
+                "Note that if you have generated this object by concatenating several `AnnData` objects"
+                "the original types may be lost."
+            )
+            raise NotImplementedError(msg)
+        return write(store, adata, *args, **kwargs)
+
+    return raise_error_if_dataset_2d_present

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import MappingProxyType
+
 import numpy as np
 import zarr
 from scipy import sparse
@@ -17,16 +19,18 @@ def make_alternating_mask(n):
 
 
 class SparseCSRContiguousSlice:
-    _slices = {
-        "0:1000": slice(0, 1000),
-        "0:9000": slice(0, 9000),
-        ":9000:-1": slice(None, 9000, -1),
-        "::-2": slice(None, None, 2),
-        "array": np.array([0, 5000, 9999]),
-        "arange": np.arange(0, 1000),
-        "first": 0,
-        "alternating": make_alternating_mask(10),
-    }
+    _slices = MappingProxyType(
+        {
+            "0:1000": slice(0, 1000),
+            "0:9000": slice(0, 9000),
+            ":9000:-1": slice(None, 9000, -1),
+            "::-2": slice(None, None, 2),
+            "array": np.array([0, 5000, 9999]),
+            "arange": np.arange(0, 1000),
+            "first": 0,
+            "alternating": make_alternating_mask(10),
+        }
+    )
     params = (
         [
             (10_000, 10_000),
@@ -34,7 +38,7 @@ class SparseCSRContiguousSlice:
         ],
         _slices.keys(),
     )
-    param_names = ["shape", "slice"]
+    param_names = ("shape", "slice")
 
     def setup(self, shape: tuple[int, int], slice: str):
         X = sparse.random(

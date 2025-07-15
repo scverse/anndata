@@ -28,7 +28,7 @@ def adata():
         layers=dict(layers_key=np.zeros((20, 10))),
         obsp=dict(obsp_key=np.zeros((20, 20))),
         varp=dict(varp_key=np.zeros((10, 10))),
-        uns=dict(uns_key=dict(zip("abc", range(3)))),
+        uns=dict(uns_key=dict(zip("abc", range(3), strict=True))),
     )
 
 

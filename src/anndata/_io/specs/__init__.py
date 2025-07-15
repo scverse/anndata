@@ -9,18 +9,18 @@ from .registry import (
     Writer,
     get_spec,
     read_elem,
-    read_elem_as_dask,
+    read_elem_lazy,
     write_elem,
 )
 
 __all__ = [
-    "methods",
-    "lazy_methods",
-    "write_elem",
-    "get_spec",
-    "read_elem",
-    "read_elem_as_dask",
+    "IOSpec",
     "Reader",
     "Writer",
-    "IOSpec",
+    "get_spec",
+    "lazy_methods",
+    "methods",
+    "read_elem",
+    "read_elem_lazy",
+    "write_elem",
 ]

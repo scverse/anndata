@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import spmatrix
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray
+from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -25,6 +24,7 @@ from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
 from .views import as_view, view_update
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | spmatrix | np.ndarray
+Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
 K = TypeVar("K", str, str | None)
 P = TypeVar("P", bound="AlignedMappingBase")
@@ -78,6 +78,10 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
             )
+        elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
+            val = val.reshape((val.shape[0], 1))
+        elif isinstance(val, XDataset):
+            val = Dataset2D(val)
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue
@@ -97,7 +101,6 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
                     f"Value had shape {actual_shape} while it should have had {right_shape}."
                 )
             raise ValueError(msg)
-
         name = f"{self.attrname.title().rstrip('s')} {key!r}"
         return coerce_array(val, name=name, allow_df=self._allow_df)
 
@@ -130,7 +133,7 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)", FutureWarning)
+    @deprecated("dict(obj)")
     def as_dict(self) -> dict:
         return dict(self)
 
@@ -183,9 +186,8 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
 
     def __delitem__(self, key: K) -> None:
         if key not in self:
-            raise KeyError(
-                "'{key!r}' not found in view of {self.attrname}"
-            )  # Make sure it exists before bothering with a copy
+            msg = f"{key!r} not found in view of {self.attrname}"
+            raise KeyError(msg)  # Make sure it exists before bothering with a copy
         warnings.warn(
             f"Removing element `.{self.attrname}['{key}']` of view, "
             "initializing view as actual.",
@@ -287,6 +289,9 @@ class AxisArraysBase(AlignedMappingBase[str]):
                 else:
                     msg = "Index.equals and pd.testing.assert_index_equal disagree"
                     raise AssertionError(msg)
+            val.index.name = (
+                self.dim_names.name
+            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
         return super()._validate_value(val, key)
 
     @property

@@ -9,7 +9,8 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata._warnings import ImplicitModificationWarning
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [
@@ -22,11 +23,6 @@ UNLABELLED_ARRAY_TYPES = [
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
-
-
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
 
 
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES)
@@ -122,7 +118,7 @@ def test_init_x_as_none_explicit_shape():
     assert adata.shape == shape
 
 
-@pytest.mark.parametrize("shape", SINGULAR_SHAPES + [pytest.param((5, 3), id="(5, 3)")])
+@pytest.mark.parametrize("shape", [*SINGULAR_SHAPES, pytest.param((5, 3), id="(5, 3)")])
 def test_transpose_with_X_as_none(shape):
     adata = gen_adata(shape, X_type=lambda x: None)
     adataT = adata.transpose()
@@ -160,7 +156,7 @@ def test_io_missing_X(tmp_path, diskfmt):
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
 
-    adata = gen_adata((20, 30))
+    adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
 
     write(adata, file_pth)
@@ -174,9 +170,14 @@ def test_set_dense_x_view_from_sparse():
     x1 = np.ones((100, 30))
     orig = ad.AnnData(x)
     view = orig[:30]
-    with pytest.warns(
-        UserWarning,
-        match=r"Trying to set a dense array with a sparse array on a view",
+    with (
+        pytest.warns(
+            UserWarning,
+            match=r"Trying to set a dense array with a sparse array on a view",
+        ),
+        pytest.warns(
+            ImplicitModificationWarning, match=r"Modifying `X` on a view results"
+        ),
     ):
         view.X = sparse.csr_matrix(x1[:30])
     assert_equal(view.X, x1[:30])
@@ -184,10 +185,10 @@ def test_set_dense_x_view_from_sparse():
     assert_equal(orig.X[30:], x[30:])  # change propagates through
 
 
-def test_warn_on_non_csr_csc_matrix():
-    X = sparse.eye(100)
-    with pytest.warns(
-        FutureWarning,
-        match=rf"AnnData previously had undefined behavior around matrices of type {type(X)}.*",
+def test_fail_on_non_csr_csc_matrix():
+    X = sparse.eye(100, format="coo")
+    with pytest.raises(
+        ValueError,
+        match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)

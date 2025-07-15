@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import copy
 from functools import partial
 from importlib.util import find_spec
@@ -10,10 +11,8 @@ import numpy as np
 from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
+from ...compat import old_positionals
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 if find_spec("torch") or TYPE_CHECKING:
     import torch
@@ -21,17 +20,35 @@ if find_spec("torch") or TYPE_CHECKING:
 else:
     Sampler, BatchSampler, DataLoader = object, object, object
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Generator, Sequence
+    from typing import TypeAlias, Union
+
+    from scipy.sparse import spmatrix
+
+    # need to use Union because of autodoc_mock_imports
+    Array: TypeAlias = Union[torch.Tensor, np.ndarray, spmatrix]  # noqa: UP007
+
 
 # Custom sampler to get proper batches instead of joined separate indices
 # maybe move to multi_files
 class BatchIndexSampler(Sampler):
-    def __init__(self, n_obs, batch_size, shuffle=False, drop_last=False):
+    @old_positionals("batch_size", "shuffle", "drop_last")
+    def __init__(
+        self,
+        n_obs: int,
+        *,
+        batch_size: int,
+        shuffle: bool = False,
+        drop_last: bool = False,
+    ) -> None:
         self.n_obs = n_obs
         self.batch_size = batch_size if batch_size < n_obs else n_obs
         self.shuffle = shuffle
         self.drop_last = drop_last
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[list[int], None, None]:
+        indices: list[int]
         if self.shuffle:
             indices = np.random.permutation(self.n_obs).tolist()
         else:
@@ -46,7 +63,7 @@ class BatchIndexSampler(Sampler):
 
             yield batch
 
-    def __len__(self):
+    def __len__(self) -> int:
         if self.drop_last:
             length = self.n_obs // self.batch_size
         else:
@@ -56,7 +73,7 @@ class BatchIndexSampler(Sampler):
 
 
 # maybe replace use_cuda with explicit device option
-def default_converter(arr, use_cuda, pin_memory):
+def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
     if isinstance(arr, torch.Tensor):
         if use_cuda:
             arr = arr.cuda()
@@ -73,7 +90,11 @@ def default_converter(arr, use_cuda, pin_memory):
     return arr
 
 
-def _convert_on_top(convert, top_convert, attrs_keys):
+def _convert_on_top(
+    convert: Callable[[Array], Array] | None | Mapping[str, Callable[[Array], Array]],
+    top_convert: Callable[[Array], Array],
+    attrs_keys: Sequence[str] | Mapping[str, Sequence[str]],
+):
     if convert is None:
         new_convert = top_convert
     elif callable(convert):
@@ -88,7 +109,8 @@ def _convert_on_top(convert, top_convert, attrs_keys):
             if attr not in convert:
                 new_convert[attr] = top_convert
             else:
-                if isinstance(attrs_keys, list):
+                as_ks: Sequence[str] | None
+                if not isinstance(attrs_keys, Mapping):
                     as_ks = None
                 else:
                     as_ks = attrs_keys[attr]
@@ -126,9 +148,11 @@ class AnnLoader(DataLoader):
         arguments for `AnnCollection` initialization.
     """
 
+    @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
     def __init__(
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,
@@ -138,11 +162,7 @@ class AnnLoader(DataLoader):
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
-        if (
-            isinstance(adatas, list)
-            or isinstance(adatas, tuple)
-            or isinstance(adatas, dict)
-        ):
+        if isinstance(adatas, list | tuple | dict):
             join_obs = kwargs.pop("join_obs", "inner")
             join_obsm = kwargs.pop("join_obsm", None)
             label = kwargs.pop("label", None)
@@ -167,7 +187,8 @@ class AnnLoader(DataLoader):
         elif isinstance(adatas, _ConcatViewMixin):
             dataset = copy(adatas)
         else:
-            raise ValueError("adata should be of type AnnData or AnnCollection.")
+            msg = "adata should be of type AnnData or AnnCollection."
+            raise ValueError(msg)
 
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)
@@ -202,7 +223,10 @@ class AnnLoader(DataLoader):
                 )
             else:
                 sampler = BatchIndexSampler(
-                    len(dataset), batch_size, shuffle, drop_last
+                    len(dataset),
+                    batch_size=batch_size,
+                    shuffle=shuffle,
+                    drop_last=drop_last,
                 )
 
             super().__init__(dataset, batch_size=None, sampler=sampler, **kwargs)

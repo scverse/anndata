@@ -63,9 +63,8 @@ def gen_indexer(adata, dim, index_kind, ratio):
     index_kinds = {"slice", "intarray", "boolarray", "strarray"}
 
     if index_kind not in index_kinds:
-        raise ValueError(
-            f"Argument 'index_kind' must be one of {index_kinds}. Was {index_kind}."
-        )
+        msg = f"Argument 'index_kind' must be one of {index_kinds}. Was {index_kind}."
+        raise ValueError(msg)
 
     axis = dimnames.index(dim)
     subset = [slice(None), slice(None)]
@@ -92,22 +91,6 @@ def gen_indexer(adata, dim, index_kind, ratio):
     else:
         raise ValueError()
     return tuple(subset)
-
-
-def take_view(adata, *, dim, index_kind, ratio=0.5, nviews=100):
-    subset = gen_indexer(adata, dim, index_kind, ratio)
-    views = []
-    for i in range(nviews):
-        views.append(adata[subset])
-
-
-def take_repeated_view(adata, *, dim, index_kind, ratio=0.9, nviews=10):
-    v = adata
-    views = []
-    for i in range(nviews):
-        subset = gen_indexer(v, dim, index_kind, ratio)
-        v = v[subset]
-        views.append(v)
 
 
 def gen_adata(n_obs, n_var, attr_set):

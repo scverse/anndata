@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
 
@@ -8,15 +9,31 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
+from ..compat import XDataset
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
     from typing import Any, Literal
 
 
 @singledispatch
 def _gen_dataframe(
-    anno: Mapping[str, Any],
+    anno: Any,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+) -> pd.DataFrame:  # pragma: no cover
+    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+    raise ValueError(msg)
+
+
+@_gen_dataframe.register(Mapping)
+@_gen_dataframe.register(type(None))
+def _gen_dataframe_mapping(
+    anno: Mapping[str, Any] | None,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
@@ -35,14 +52,14 @@ def _gen_dataframe(
         df = pd.DataFrame(
             anno,
             index=anno[index_name],
-            columns=[k for k in anno.keys() if k != index_name],
+            columns=[k for k in anno if k != index_name],
         )
         break
     else:
         df = pd.DataFrame(
             anno,
             index=None if length is None else mk_index(length),
-            columns=None if len(anno) else [],
+            columns=None if anno else [],
         )
 
     if length is None:
@@ -65,7 +82,8 @@ def _gen_dataframe_df(
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
-        warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+        msg = "Transforming to str index."
+        warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
         anno.index = anno.index.astype(str)
     if not len(anno.columns):
         anno.columns = anno.columns.astype(str)
@@ -82,7 +100,8 @@ def _gen_dataframe_1d(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
-    raise ValueError(f"Cannot convert {type(anno)} to {attr} DataFrame")
+    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+    raise ValueError(msg)
 
 
 def _mk_df_error(
@@ -91,8 +110,8 @@ def _mk_df_error(
     expected: int,
     actual: int,
 ):
+    what = "row" if attr == "obs" else "column"
     if source == "X":
-        what = "row" if attr == "obs" else "column"
         msg = (
             f"Observations annot. `{attr}` must have as many rows as `X` has {what}s "
             f"({expected}), but has {actual} rows."
@@ -100,6 +119,30 @@ def _mk_df_error(
     else:
         msg = (
             f"`shape` is inconsistent with `{attr}` "
-            "({actual} {what}s instead of {expected})"
+            f"({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
+
+
+@_gen_dataframe.register(Dataset2D)
+def _gen_dataframe_xr(
+    anno: Dataset2D,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return anno
+
+
+@_gen_dataframe.register(XDataset)
+def _gen_dataframe_xdataset(
+    anno: XDataset,
+    index_names: Iterable[str],
+    *,
+    source: Literal["X", "shape"],
+    attr: Literal["obs", "var"],
+    length: int | None = None,
+):
+    return Dataset2D(anno)

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager, suppress
+from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
 import h5py
+import numpy as np
 import pandas as pd
 import pytest
 import zarr
@@ -18,11 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -32,20 +28,20 @@ def diskfmt(request):
 )
 @pytest.mark.parametrize("nested", [True, False], ids=["nested", "root"])
 def test_key_error(
-    tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
+    *, tmp_path, group_fn: Callable[[Path], zarr.Group | h5py.Group], nested: bool
 ):
     @report_read_key_on_error
     def read_attr(_):
         raise NotImplementedError()
 
     group = group_fn(tmp_path)
-    with group if isinstance(group, AbstractContextManager) else suppress():
+    with group if isinstance(group, AbstractContextManager) else nullcontext():
         if nested:
             group = group.create_group("nested")
             path = "/nested"
         else:
             path = "/"
-        group["X"] = [1, 2, 3]
+        group["X"] = np.array([1, 2, 3])
         group.create_group("group")
 
         with pytest.raises(

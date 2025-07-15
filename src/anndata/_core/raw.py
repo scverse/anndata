@@ -17,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
-    from scipy import sparse
-
+    from ..compat import CSMatrix
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -31,7 +30,7 @@ class Raw:
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | sparse.spmatrix | None = None,
+        X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
@@ -60,7 +59,8 @@ class Raw:
             self._var = adata.var.copy()
             self.varm = adata.varm.copy()
         elif adata.isbacked:
-            raise ValueError("Cannot specify X if adata is backed")
+            msg = "Cannot specify X if adata is backed"
+            raise ValueError(msg)
 
     def _get_X(self, layer=None):
         if layer is not None:
@@ -68,7 +68,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | sparse.spmatrix:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -80,10 +80,11 @@ class Raw:
         elif "raw.X" in self._adata.file:
             X = self._adata.file["raw.X"]  # Backwards compat
         else:
-            raise AttributeError(
+            msg = (
                 f"Could not find dataset for raw X in file: "
                 f"{self._adata.file.filename}."
             )
+            raise AttributeError(msg)
         if isinstance(X, h5py.Group):
             X = sparse_dataset(X)
         # Check if we need to subset
@@ -131,10 +132,7 @@ class Raw:
         if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
-        if not self._adata.isbacked:
-            X = _subset(self.X, (oidx, vidx))
-        else:
-            X = None
+        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)

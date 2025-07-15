@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Mapping
 from functools import reduce
+from itertools import chain, pairwise
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,10 +16,10 @@ from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
-from ...compat import _map_cat_to_str
+from ...compat import _map_cat_to_str, old_positionals
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from typing import Literal
 
     from ..._core.index import Index
@@ -93,7 +94,7 @@ class _ConcatViewMixin:
         if len(self.adatas) == 1:
             return [u_oidx], oidx, vidx, reverse
 
-        iter_limits = list(zip([0] + self.limits, self.limits))
+        iter_limits = list(pairwise(chain([0], self.limits)))
 
         n_adatas_used = 0
         for lower, upper in iter_limits:
@@ -123,9 +124,11 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
+    @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(
         self,
         batch_size: int,
+        *,
         axis: Literal[0, 1] = 0,
         shuffle: bool = False,
         drop_last: bool = False,
@@ -144,21 +147,15 @@ class _IterateViewMixin:
             Set to `True` to drop a batch with the length lower than `batch_size`.
         """
         if axis not in {0, 1}:
-            raise ValueError("Axis should be either 0 or 1.")
+            msg = "Axis should be either 0 or 1."
+            raise ValueError(msg)
 
         n = self.shape[axis]
-
-        if shuffle:
-            indices = np.random.permutation(n).tolist()
-        else:
-            indices = list(range(n))
+        indices = np.random.permutation(n).tolist() if shuffle else list(range(n))
 
         for i in range(0, n, batch_size):
             idx = indices[i : min(i + batch_size, n)]
-            if axis == 1:
-                batch = self[:, idx]
-            else:
-                batch = self[idx]
+            batch = self[:, idx] if axis == 1 else self[idx]
             # only happens if the last batch is smaller than batch_size
             if len(batch) < batch_size and drop_last:
                 continue
@@ -167,11 +164,12 @@ class _IterateViewMixin:
 
 
 class MapObsView:
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         attr,
         adatas,
         keys,
+        *,
         adatas_oidx,
         adatas_vidx=None,
         convert=None,
@@ -189,9 +187,10 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key, use_convert=True):
+    def __getitem__(self, key: str, *, use_convert: bool = True):
         if self._keys is not None and key not in self._keys:
-            raise KeyError(f"No {key} in {self.attr} view")
+            msg = f"No {key} in {self.attr} view"
+            raise KeyError(msg)
 
         arrs = []
         for i, oidx in enumerate(self.adatas_oidx):
@@ -199,16 +198,8 @@ class MapObsView:
                 continue
 
             arr = getattr(self.adatas[i], self.attr)[key]
-
-            if self.adatas_vidx is not None:
-                vidx = self.adatas_vidx[i]
-            else:
-                vidx = None
-
-            if vidx is not None:
-                idx = oidx, vidx
-            else:
-                idx = oidx
+            vidx = self.adatas_vidx[i] if self.adatas_vidx is not None else None
+            idx = (oidx, vidx) if vidx is not None else oidx
 
             if isinstance(arr, pd.DataFrame):
                 arrs.append(arr.iloc[idx])
@@ -237,11 +228,12 @@ class MapObsView:
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
-    def to_dict(self, keys=None, use_convert=True):
+    @old_positionals("use_convert")
+    def to_dict(self, keys: Iterable[str] | None = None, *, use_convert=True):
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, use_convert)
+            dct[key] = self.__getitem__(key, use_convert=use_convert)
         return dct
 
     @property
@@ -299,7 +291,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         self._convert_X = None
         self.convert = convert
 
-    def _lazy_init_attr(self, attr, set_vidx=False):
+    def _lazy_init_attr(self, attr: str, *, set_vidx: bool = False):
         if getattr(self, f"_{attr}_view") is not None:
             return
         keys = None
@@ -323,10 +315,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         if self.convert is not None:
             attr_convert = _select_convert(attr, self.convert)
 
-        if attr == "obs":
-            obs_names = self.obs_names
-        else:
-            obs_names = None
+        obs_names = self.obs_names if attr == "obs" else None
 
         setattr(
             self,
@@ -335,12 +324,12 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 attr,
                 adatas,
                 keys,
-                adatas_oidx,
-                adatas_vidx,
-                attr_convert,
-                reverse,
-                attr_dtypes,
-                obs_names,
+                adatas_oidx=adatas_oidx,
+                adatas_vidx=adatas_vidx,
+                convert=attr_convert,
+                reverse=reverse,
+                dtypes=attr_dtypes,
+                obs_names=obs_names,
             ),
         )
 
@@ -362,12 +351,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 if oidx.size > 1 and np.any(oidx[:-1] >= oidx[1:]):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
-                if isinstance(vidx, slice):
-                    arr = X[oidx, vidx]
-                else:
-                    # this is a very memory inefficient approach
-                    # todo: fix
-                    arr = X[oidx][:, vidx]
+                # TODO: fix memory inefficient approach of X[oidx][:, vidx]
+                arr = X[oidx, vidx] if isinstance(vidx, slice) else X[oidx][:, vidx]
                 Xs.append(arr if reverse is None else arr[reverse])
             elif isinstance(X, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays
@@ -544,7 +529,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 descr += f"\n    {attr}: {str(keys)[1:-1]}"
         return descr
 
-    def to_adata(self, ignore_X: bool = False, ignore_layers: bool = False):
+    @old_positionals("ignore_X", "ignore_layers")
+    def to_adata(self, *, ignore_X: bool = False, ignore_layers: bool = False):
         """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
@@ -675,9 +661,21 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     100
     """
 
-    def __init__(
+    @old_positionals(
+        "join_obs",
+        "join_obsm",
+        "join_vars",
+        "label",
+        "keys",
+        "index_unique",
+        "convert",
+        "harmonize_dtypes",
+        "indices_strict",
+    )
+    def __init__(  # noqa: PLR0912, PLR0913, PLR0915
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
+        *,
         join_obs: Literal["inner", "outer"] | None = "inner",
         join_obsm: Literal["inner"] | None = None,
         join_vars: Literal["inner"] | None = None,
@@ -690,10 +688,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     ):
         if isinstance(adatas, Mapping):
             if keys is not None:
-                raise TypeError(
+                msg = (
                     "Cannot specify categories in both mapping keys and using `keys`. "
                     "Only specify this once."
                 )
+                raise TypeError(msg)
             keys, adatas = list(adatas.keys()), list(adatas.values())
         else:
             adatas = list(adatas)
@@ -701,7 +700,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         # check if the variables are the same in all adatas
         self.adatas_vidx = [None for adata in adatas]
         vars_names_list = [adata.var_names for adata in adatas]
-        vars_eq = all([adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:]])
+        vars_eq = all(adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:])
         if vars_eq:
             self.var_names = adatas[0].var_names
         elif join_vars == "inner":
@@ -715,10 +714,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                     self.adatas_vidx.append(adata_vidx)
             self.var_names = var_names
         else:
-            raise ValueError(
+            msg = (
                 "Adatas have different variables. "
                 "Please specify join_vars='inner' for intersection."
             )
+            raise ValueError(msg)
 
         concat_indices = pd.concat(
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True
@@ -736,7 +736,8 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self.obs_names = pd.Index(concat_indices)
 
         if not self.obs_names.is_unique:
-            warnings.warn("Observation names are not unique.", UserWarning)
+            msg = "Observation names are not unique."
+            warnings.warn(msg, UserWarning, stacklevel=2)
 
         view_attrs = ATTRS.copy()
 
@@ -779,7 +780,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 a0_attr = getattr(adatas[0], attr)
                 new_keys = []
                 for key in keys:
-                    if key in ai_attr.keys():
+                    if key in ai_attr:
                         a0_ashape = a0_attr[key].shape
                         ai_ashape = ai_attr[key].shape
                         if (
@@ -918,7 +919,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     @property
     def has_backed(self):
         """`True` if `adatas` have backed AnnData objects, `False` otherwise."""
-        return any([adata.isbacked for adata in self.adatas])
+        return any(adata.isbacked for adata in self.adatas)
 
     @property
     def attrs_keys(self):
@@ -964,10 +965,7 @@ class LazyAttrData(_IterateViewMixin):
             if len(index) > 1:
                 vidx = index[1]
 
-        if oidx is None:
-            view = self.adset[index]
-        else:
-            view = self.adset[oidx]
+        view = self.adset[index] if oidx is None else self.adset[oidx]
         attr_arr = getattr(view, self.attr)
         if self.key is not None:
             attr_arr = attr_arr[self.key]
