@@ -22,7 +22,7 @@ def diskfmt(request):
     return request.param
 
 
-def test_backwards_compat_files(archive_dir):
+def test_backwards_compat_files(archive_dir) -> None:
     with pytest.warns(ad.OldFormatWarning):
         from_h5ad = ad.read_h5ad(archive_dir / "adata.h5ad")
     with pytest.warns(ad.OldFormatWarning):
