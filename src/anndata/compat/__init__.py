@@ -54,11 +54,10 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    # import zarr
-    # from packaging.version import Version
+    import zarr
+    from packaging.version import Version
 
-    return False
-
+    return Version(zarr.__version__) < Version("3.0.0")
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
