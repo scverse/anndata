@@ -628,17 +628,15 @@ def write_vlen_string_array_zarr(
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         dtype = VariableLengthUTF8()
-        filters = None
+        filters, fill_value = None, None
         if ad.settings.zarr_write_format == 2:
-            filters = [VLenUTF8()]
+            filters, fill_value = [VLenUTF8()], ""
         f.create_array(
             k,
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
-            fill_value=""
-            if ad.settings.zarr_write_format == 2 and dtype == VariableLengthUTF8()
-            else None,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -1287,19 +1285,17 @@ def write_scalar_zarr(
 
         match ad.settings.zarr_write_format, value:
             case 2, str():
-                filters, dtype = [VLenUTF8()], VariableLengthUTF8()
+                filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
             case 3, str():
-                filters, dtype = None, VariableLengthUTF8()
+                filters, dtype, fill_value = None, VariableLengthUTF8(), None
             case _, _:
-                filters, dtype = None, np.array(value).dtype
+                filters, dtype, fill_value = None, np.array(value).dtype, None
         a = f.create_array(
             key,
             shape=(),
             dtype=dtype,
             filters=filters,
-            fill_value=""
-            if ad.settings.zarr_write_format == 2 and dtype == VariableLengthUTF8()
-            else None,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         a[...] = np.array(value)
