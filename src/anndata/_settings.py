@@ -13,7 +13,7 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
-from .compat import old_positionals
+from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -438,6 +438,9 @@ def validate_zarr_write_format(format: int):
     validate_int(format)
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
+        raise ValueError(msg)
+    if format == 3 and is_zarr_v2():
+        msg = "Cannot write v3 format against v2 package"
         raise ValueError(msg)
 
 

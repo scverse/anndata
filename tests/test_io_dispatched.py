@@ -4,6 +4,7 @@ import re
 from typing import TYPE_CHECKING
 
 import h5py
+import pytest
 import zarr
 
 import anndata as ad
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.mark.zarr_io
 def test_read_dispatched_w_regex(tmp_path: Path):
     def read_only_axis_dfs(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or re.match(
@@ -40,6 +42,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
     assert_equal(expected, actual)
 
 
+@pytest.mark.zarr_io
 def test_read_dispatched_dask(tmp_path: Path):
     import dask.array as da
 
@@ -76,6 +79,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     assert_equal(expected, actual)
 
 
+@pytest.mark.zarr_io
 def test_read_dispatched_null_case(tmp_path: Path):
     adata = gen_adata((100, 100), **GEN_ADATA_NO_XARRAY_ARGS)
     z = open_write_group(tmp_path)
@@ -89,6 +93,7 @@ def test_read_dispatched_null_case(tmp_path: Path):
     assert_equal(expected, actual)
 
 
+@pytest.mark.zarr_io
 def test_write_dispatched_chunks(tmp_path: Path):
     from itertools import chain, repeat
 
@@ -99,11 +104,10 @@ def test_write_dispatched_chunks(tmp_path: Path):
             for e, c in zip(elem_shape, chunk_iterator, strict=False)
         )
 
-    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
+    adata = gen_adata((100, 50), **GEN_ADATA_NO_XARRAY_ARGS)
+    M, N = 13, 8
 
     def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
-        M, N = 13, 42
-
         def set_copy(d, **kwargs):
             d = dict(d)
             d.update(kwargs)
@@ -149,9 +153,9 @@ def test_write_dispatched_chunks(tmp_path: Path):
         ):
             return
         if re.match(r"obs[mp]?/\w+", k):
-            assert v.chunks[0] == 13
+            assert v.chunks[0] == M
         elif re.match(r"var[mp]?/\w+", k):
-            assert v.chunks[0] == 42
+            assert v.chunks[0] == N
 
     if is_zarr_v2():
         z.visititems(check_chunking)
@@ -170,6 +174,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         visititems(z, check_chunking)
 
 
+@pytest.mark.zarr_io
 def test_io_dispatched_keys(tmp_path: Path):
     h5ad_write_keys = []
     zarr_write_keys = []

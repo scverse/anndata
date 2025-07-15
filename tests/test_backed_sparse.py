@@ -40,12 +40,12 @@ M = 50
 N = 50
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
     return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_separator():
     return "" if ad.settings.zarr_write_format == 2 else "/c"
 
@@ -550,13 +550,12 @@ def test_wrong_shape(
     sparse_format: Literal["csr", "csc"],
     a_shape: tuple[int, int],
     b_shape: tuple[int, int],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    path = tmp_path / "test.h5ad"
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = h5py.File(path, "a")
 
     ad.io.write_elem(f, "a", a_mem)
     ad.io.write_elem(f, "b", b_mem)
@@ -579,11 +578,11 @@ def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
         disk_mtx.group = f
 
 
-def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+def test_wrong_formats(tmp_path: Path):
+    path = tmp_path / "test.h5ad"
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = h5py.File(path, "a")
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])

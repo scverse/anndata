@@ -120,7 +120,7 @@ def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
     return orig
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def adata_remote_with_store_tall_skinny_path(
     tmp_path_factory,
     mtx_format,
@@ -151,7 +151,7 @@ def adata_remote_with_store_tall_skinny_path(
     return orig_path
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def adatas_paths_var_indices_for_concatenation(
     tmp_path_factory, *, are_vars_different: bool, worker_id: str = "serial"
 ) -> tuple[list[AnnData], list[Path], list[pd.Index]]:

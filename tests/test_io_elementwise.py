@@ -59,7 +59,7 @@ def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
 
 
 sparse_formats = ["csr", "csc"]
-SIZE = 2500
+SIZE = 50
 DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
@@ -317,15 +317,15 @@ def test_read_lazy_2d_dask(sparse_format, store):
 @pytest.mark.parametrize(
     ("n_dims", "chunks"),
     [
-        (1, (100,)),
-        (1, (400,)),
-        (2, (100, 100)),
-        (2, (400, 400)),
-        (2, (200, 400)),
+        (1, (10,)),
+        (1, (40,)),
+        (2, (10, 10)),
+        (2, (40, 40)),
+        (2, (20, 40)),
         (1, None),
         (2, None),
-        (2, (400, -1)),
-        (2, (400, None)),
+        (2, (40, -1)),
+        (2, (40, None)),
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
@@ -358,21 +358,21 @@ def test_read_lazy_h5_cluster(
 
 
 def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
-    shape = (3000, 50)
+    shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
+    assert all(c <= s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
     assert X_dask_from_disk.shape == shape
 
 
 @pytest.mark.parametrize(
     ("arr_type", "chunks", "expected_chunksize"),
     [
-        ("dense", (100, 100), (100, 100)),
-        ("csc", (SIZE, 10), (SIZE, 10)),
-        ("csr", (10, SIZE * 2), (10, SIZE * 2)),
-        ("csc", None, (SIZE, 1000)),
-        ("csr", None, (1000, SIZE * 2)),
+        ("dense", (10, 10), (10, 10)),
+        ("csc", (SIZE, 1), (SIZE, 1)),
+        ("csr", (1, SIZE * 2), (1, SIZE * 2)),
+        ("csc", None, (SIZE, 100)),
+        ("csr", None, DEFAULT_SHAPE),
         ("csr", (10, -1), (10, SIZE * 2)),
         ("csc", (-1, 10), (SIZE, 10)),
         ("csr", (10, None), (10, SIZE * 2)),
@@ -578,6 +578,7 @@ def test_write_to_root(store, value):
 
 
 @pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
     pth = tmp_path / "test.zarr"

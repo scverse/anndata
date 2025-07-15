@@ -168,7 +168,7 @@ testpaths = [
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
-markers = [ "gpu: mark test to run on GPU" ]
+markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve zarr io" ]
 
 [tool.ruff]
 src = [ "src" ]
