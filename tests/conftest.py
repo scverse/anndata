@@ -37,7 +37,8 @@ def backing_h5ad(tmp_path):
         ("h5ad", None),
         ("zarr", 2),
         pytest.param(
-            ("zarr", 3),
+            "zarr",
+            3,
             marks=pytest.mark.skipif(
                 is_zarr_v2(), reason="zarr v3 file format not supported with v2 package"
             ),
