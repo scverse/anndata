@@ -24,7 +24,7 @@ def X(request):
 def test_creation(X: np.ndarray | None):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
 
-    assert list(adata.layers.keys()) == ["L"]
+    assert adata.layers.keys() == {"L", None}
     assert "L" in adata.layers
     assert "X" not in adata.layers
     assert "some_other_thing" not in adata.layers
