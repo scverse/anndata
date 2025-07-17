@@ -189,7 +189,7 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
-    [((10,), (10,)), (-1, (1200,)), (None, (250,))],
+    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
     ids=["small", "minus_one", "none"],
 )
 def test_chunks_df(
@@ -197,9 +197,11 @@ def test_chunks_df(
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
-    df = gen_typed_df(1200)
+    df = gen_typed_df(120)
     path = tmp_path / "foo.zarr"
     g = zarr.open_group(path, mode="w", zarr_format=2)
-    write_elem(g, "foo", df, dataset_kwargs={"chunks": 250})
+    write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
     ds = read_elem_lazy(zarr.open_group(path, mode="r")["foo"], chunks=chunks)
-    assert ds["int64"].data.chunksize == expected_chunks
+    for k in ds:
+        if isinstance(arr := ds[k].data, DaskArray):
+            assert arr.chunksize == expected_chunks

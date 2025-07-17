@@ -177,21 +177,36 @@ def read_sparse_as_dask(
     return da_mtx
 
 
+def resolve_chunks(
+    elem: H5Array | ZarrArray,
+    chunks_arg: tuple[int, ...] | None,
+    shape: tuple[int, ...],
+) -> tuple[int, ...]:
+    shape = tuple(elem.shape)
+    chunks = elem.chunks
+    if chunks_arg is not None:
+        chunks = tuple(
+            c if c not in {None, -1} else s
+            for c, s in zip(chunks_arg, shape, strict=True)
+        )
+    elif elem.chunks is None:  # h5 unchunked
+        chunks = tuple(min(_DEFAULT_STRIDE, s) for s in shape)
+    return chunks
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
     elem: H5Array,
     *,
     _reader: LazyReader,
-    chunks: tuple[int, int] | None = None,
+    chunks: tuple[int] | None = None,
 ) -> DaskArray:
     import dask.array as da
 
     from anndata._io.h5ad import read_dataset
 
-    return da.from_array(
-        read_dataset(elem),
-        chunks=chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(elem.shape),
-    )
+    chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
+    return da.from_array(read_dataset(elem), chunks=chunks)
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -204,13 +219,7 @@ def read_h5_array(
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks = elem.chunks
-    if chunks is not None:
-        chunks = tuple(
-            c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
-        )
-    elif elem.chunks is None:
-        chunks = tuple(min(_DEFAULT_STRIDE, s) for s in shape)
+    chunks = resolve_chunks(elem, chunks, shape)
 
     chunk_layout = tuple(
         compute_chunk_layout_for_axis_size(chunks[i], shape[i])
