@@ -98,7 +98,9 @@ def assert_eq_concat_on_disk(
     adatas,
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
+    *,
     max_loaded_elems: int | None = None,
+    virtual_concat: bool = False,
     *args,
     merge_strategy: merge.StrategiesLiteral | None = None,
     **kwargs,
@@ -110,7 +112,7 @@ def assert_eq_concat_on_disk(
     out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
+    concat_on_disk(paths, out_name, *args, virtual_concat=virtual_concat, merge=merge_strategy, **kwargs)
     with as_group(out_name, mode="r") as rg:
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
@@ -178,6 +180,48 @@ def test_anndatas(
         axis=axis,
         join=join_type,
         merge_strategy=merge_strategy,
+    )
+
+
+def test_anndatas_virtual_concat(
+    *,
+    tmp_path: Path,
+):
+    axis = 0
+    max_loaded_elems = 1_000_000
+    file_format = "h5ad"
+    array_type = "sparse"
+    join_type = "inner"
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = GEN_ADATA_OOC_CONCAT_ARGS
+
+    adatas = []
+    for i in range(3):
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
+        adatas.append(a)
+
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        file_format,
+        max_loaded_elems=max_loaded_elems,
+        virtual_concat=True,
+        axis=axis,
+        join=join_type,
     )
 
 
