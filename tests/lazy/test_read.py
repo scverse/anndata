@@ -187,6 +187,15 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
+@pytest.fixture(scope="session")
+def df_group(tmp_path_factory) -> zarr.Group:
+    df = gen_typed_df(120)
+    path = tmp_path_factory.mktemp("foo.zarr")
+    g = zarr.open_group(path, mode="w", zarr_format=2)
+    write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
+    return zarr.open(path, mode="r")["foo"]
+
+
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
     [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
@@ -196,12 +205,9 @@ def test_chunks_df(
     tmp_path: Path,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
+    df_group: zarr.Group,
 ):
-    df = gen_typed_df(120)
-    path = tmp_path / "foo.zarr"
-    g = zarr.open_group(path, mode="w", zarr_format=2)
-    write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
-    ds = read_elem_lazy(zarr.open_group(path, mode="r")["foo"], chunks=chunks)
+    ds = read_elem_lazy(df_group, chunks=chunks)
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks

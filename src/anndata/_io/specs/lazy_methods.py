@@ -183,15 +183,14 @@ def resolve_chunks(
     shape: tuple[int, ...],
 ) -> tuple[int, ...]:
     shape = tuple(elem.shape)
-    chunks = elem.chunks
     if chunks_arg is not None:
-        chunks = tuple(
+        return tuple(
             c if c not in {None, -1} else s
             for c, s in zip(chunks_arg, shape, strict=True)
         )
     elif elem.chunks is None:  # h5 unchunked
-        chunks = tuple(min(_DEFAULT_STRIDE, s) for s in shape)
-    return chunks
+        return tuple(min(_DEFAULT_STRIDE, s) for s in shape)
+    return elem.chunks
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
@@ -294,9 +293,6 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
-    axis_size = elem[elem.attrs["_index"]].shape[0]
-    if chunks == (-1,):
-        chunks = (axis_size,)
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -309,7 +305,7 @@ def read_dataframe(
         index = elem_dict[dim_name].compute()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
-        index = pd.RangeIndex(axis_size).astype("str")
+        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
