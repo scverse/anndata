@@ -691,6 +691,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         out_shape = shapes[0].copy()
         out_shape[axis] = sum(s[axis] for s in shapes)
 
+        total_nnz = sum(d.group["indices"].shape[0] for d in datasets)
         indptr_dtype = "int64" if total_nnz >= np.iinfo(np.int32).max else "int32"
 
         # Load indptr arrays and compute offsets
@@ -715,8 +716,6 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         out_grp.attrs["encoding-type"] = f"{datasets[0].format}_matrix"
         out_grp.attrs["encoding-version"] = "0.1.0"
         out_grp.attrs["shape"] = tuple(map(int, out_shape))
-
-        total_nnz = new_indptr[-1]
 
         out_grp.create_dataset("indptr", data=new_indptr)
 
