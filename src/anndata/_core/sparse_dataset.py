@@ -697,17 +697,8 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         first = datasets[0]
         data_src = first.group["data"]
         idx_src = first.group["indices"]
-        ds_kwargs = {}
 
-        # Copy HDF5 compression settings
-        # TODO(selmanozleyen): User should be able to specify compression
-        # and chunk settings
-        # for now only the first dataset's compression settings are used
-        if data_src.compression:
-            ds_kwargs["compression"] = data_src.compression
-            ds_kwargs["compression_opts"] = getattr(data_src, "compression_opts", None)
-
-            # Create output subgroup
+        # Create output subgroup
         out_grp = output_group.require_group(output_name)
         # Write encoding metadata per H5AD spec
         out_grp.attrs["encoding-type"] = f"{datasets[0].format}_matrix"
