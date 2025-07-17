@@ -6,15 +6,18 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 
 from anndata import AnnData
 from anndata.compat import DaskArray
-from anndata.experimental import read_lazy
+from anndata.experimental import read_elem_lazy, read_lazy
+from anndata.io import write_elem
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     AccessTrackingStore,
     assert_equal,
     gen_adata,
+    gen_typed_df,
 )
 
 from .conftest import ANNDATA_ELEMS
@@ -182,3 +185,21 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [((10,), (10,)), (-1, (1200,)), (None, (250,))],
+    ids=["small", "minus_one", "none"],
+)
+def test_chunks_df(
+    tmp_path: Path,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+):
+    df = gen_typed_df(1200)
+    path = tmp_path / "foo.zarr"
+    g = zarr.open_group(path, mode="w", zarr_format=2)
+    write_elem(g, "foo", df, dataset_kwargs={"chunks": 250})
+    ds = read_elem_lazy(zarr.open_group(path, mode="r")["foo"], chunks=chunks)
+    assert ds["int64"].data.chunksize == expected_chunks

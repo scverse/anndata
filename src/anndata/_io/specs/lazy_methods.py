@@ -204,13 +204,13 @@ def read_h5_array(
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks = (
-        tuple(
+    chunks = elem.chunks
+    if chunks is not None:
+        chunks = tuple(
             c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
         )
-        if chunks is not None
-        else tuple(min(_DEFAULT_STRIDE, s) for s in shape)
-    )
+    elif elem.chunks is None:
+        chunks = tuple(min(_DEFAULT_STRIDE, s) for s in shape)
 
     chunk_layout = tuple(
         compute_chunk_layout_for_axis_size(chunks[i], shape[i])
@@ -228,7 +228,6 @@ def read_h5_array(
 def read_zarr_array(
     elem: ZarrArray, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
-    chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
 
     return da.from_zarr(elem, chunks=chunks)
@@ -284,9 +283,13 @@ def read_dataframe(
     *,
     _reader: LazyReader,
     use_range_index: bool = False,
+    chunks: tuple[int] | None = None,
 ) -> Dataset2D:
+    axis_size = elem[elem.attrs["_index"]].shape[0]
+    if chunks == (-1,):
+        chunks = (axis_size,)
     elem_dict = {
-        k: _reader.read_elem(elem[k])
+        k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     # If we use a range index, the coord axis needs to have the special dim name
@@ -297,7 +300,7 @@ def read_dataframe(
         index = elem_dict[dim_name].compute()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
-        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
+        index = pd.RangeIndex(axis_size).astype("str")
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
