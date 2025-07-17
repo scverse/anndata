@@ -691,7 +691,6 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         out_shape = shapes[0].copy()
         out_shape[axis] = sum(s[axis] for s in shapes)
 
-        total_nnz = sum(d.group["indices"].shape[0] for d in datasets)
         indptr_dtype = "int64" if total_nnz >= np.iinfo(np.int32).max else "int32"
 
         # Load indptr arrays and compute offsets
