@@ -246,7 +246,7 @@ def write_concat_sparse(  # noqa: PLR0917
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
     if datasets[0].backend == "hdf5" and not use_reindexing:
-        BaseCompressedSparseDataset.virtual_concat_sparse_hdf5(
+        BaseCompressedSparseDataset.virtual_concat_hdf5(
             datasets, output_group, output_path
         )
     else:

@@ -669,7 +669,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return mtx
 
     @staticmethod
-    def virtual_concat_sparse_hdf5(
+    def virtual_concat_hdf5(
         datasets: Sequence[BaseCompressedSparseDataset],
         output_group: H5Group,
         output_name: str,
