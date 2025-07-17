@@ -246,7 +246,7 @@ def write_concat_sparse(  # noqa: PLR0917
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
     if datasets[0].backend == "hdf5" and not use_reindexing:
-        BaseCompressedSparseDataset._concat_sparse_hdf5(
+        BaseCompressedSparseDataset.virtual_concat_sparse_hdf5(
             datasets, output_group, output_path
         )
     else:
@@ -497,7 +497,12 @@ def concat_on_disk(  # noqa: PLR0913
     To adjust the maximum amount of data loaded in memory; for sparse
     arrays use the max_loaded_elems argument; for dense arrays
     see the Dask documentation, as the Dask concatenation function is used
-    to concatenate dense arrays in this function
+    to concatenate dense arrays in this function.
+
+    For sparse arrays, if the backend is hdf5 and there is no reindexing,
+    the virtual concatenation is used using the `h5py` virtual dataset support.
+    This will create soft links to the source files instead of copying the whole content.
+    Be aware that this will make the output file dependent on the source files.
 
     Params
     ------

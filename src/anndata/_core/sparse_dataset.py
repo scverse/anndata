@@ -669,11 +669,23 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return mtx
 
     @staticmethod
-    def _concat_sparse_hdf5(
+    def virtual_concat_sparse_hdf5(
         datasets: Sequence[BaseCompressedSparseDataset],
         output_group: H5Group,
         output_name: str,
     ):
+        """\
+        Concatenate multiple sparse datasets into a single virtual dataset.
+
+        Parameters
+        ----------
+        datasets
+            Sequence of sparse datasets to concatenate.
+        output_group
+            HDF5 group to write the concatenated dataset to.
+        output_name
+            Name of the concatenated dataset.
+        """
         shapes = [np.array(d.shape) for d in datasets]
         axis = 0 if datasets[0].format == "csr" else 1
         out_shape = shapes[0].copy()
