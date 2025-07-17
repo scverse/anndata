@@ -237,26 +237,35 @@ def write_concat_sparse(  # noqa: PLR0917
         The fill value to use for missing elements. Defaults to None.
     """
     elems = None
+    use_reindexing = True
     if all(ri.no_change for ri in reindexers):
         elems = iter(datasets)
+        use_reindexing = False
     else:
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
-    init_elem = next(elems)
-    indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
-    write_elem(
-        output_group,
-        output_path,
-        init_elem,
-        dataset_kwargs=dict(indptr_dtype=indptr_dtype),
-    )
-    del init_elem
-    out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
-    for temp_elem in elems:
-        out_dataset.append(temp_elem)
-        del temp_elem
+    if datasets[0].backend == "hdf5" and not use_reindexing:
+        BaseCompressedSparseDataset._concat_sparse_hdf5(
+            datasets, output_group, output_path
+        )
+    else:
+        init_elem = next(elems)
+        number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
+        indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
+        write_elem(
+            output_group,
+            output_path,
+            init_elem,  # TODO: user should be able to specify dataset kwargs
+            dataset_kwargs=dict(indptr_dtype=indptr_dtype),
+        )
+        del init_elem
+        out_dataset: BaseCompressedSparseDataset = read_as_backed(
+            output_group[output_path]
+        )
+        for temp_elem in elems:
+            out_dataset.append(temp_elem)
+            del temp_elem
 
 
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917

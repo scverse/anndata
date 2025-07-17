@@ -668,6 +668,81 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         mtx.indptr = self._indptr
         return mtx
 
+    @staticmethod
+    def _concat_sparse_hdf5(
+        datasets: Sequence[BaseCompressedSparseDataset],
+        output_group: H5Group,
+        output_name: str,
+    ):
+        shapes = [np.array(d.shape) for d in datasets]
+        axis = 0 if datasets[0].format == "csr" else 1
+        out_shape = shapes[0].copy()
+        out_shape[axis] = sum(s[axis] for s in shapes)
+
+        total_nnz = sum(d.group["indices"].shape[0] for d in datasets)
+        indptr_dtype = "int64" if total_nnz >= np.iinfo(np.int32).max else "int32"
+
+        # Load indptr arrays and compute offsets
+        indptr_list = [d.group["indptr"][...].astype(indptr_dtype) for d in datasets]
+        nnzs = [ip[-1] for ip in indptr_list]
+        offsets = list(accumulate(nnzs, initial=0))
+        # Build combined indptr
+        combined = []
+        for ip, off in zip(indptr_list, offsets[:-1], strict=True):
+            combined.append(ip[:-1] + off)
+        combined.append([offsets[-1]])
+        new_indptr = np.concatenate(combined)
+
+        # Probe first dataset for compression/chunks
+        first = datasets[0]
+        data_src = first.group["data"]
+        idx_src = first.group["indices"]
+        ds_kwargs = {}
+
+        # Copy HDF5 compression settings
+        # TODO(selmanozleyen): User should be able to specify compression
+        # and chunk settings
+        # for now only the first dataset's compression settings are used
+        if data_src.compression:
+            ds_kwargs["compression"] = data_src.compression
+            ds_kwargs["compression_opts"] = getattr(data_src, "compression_opts", None)
+
+            # Create output subgroup
+        out_grp = output_group.require_group(output_name)
+        # Write encoding metadata per H5AD spec
+        out_grp.attrs["encoding-type"] = f"{datasets[0].format}_matrix"
+        out_grp.attrs["encoding-version"] = "0.1.0"
+        out_grp.attrs["shape"] = tuple(map(int, out_shape))
+
+        total_nnz = new_indptr[-1]
+
+        out_grp.create_dataset("indptr", data=new_indptr)
+
+        layout_data = h5py.VirtualLayout(shape=(total_nnz,), dtype=data_src.dtype)
+        layout_idx = h5py.VirtualLayout(shape=(total_nnz,), dtype=idx_src.dtype)
+
+        for ds, off, ip in zip(datasets, offsets[:-1], indptr_list, strict=False):
+            block_nnz = int(ip[-1])
+            # VirtualSource points back into each source file
+            vs_data = h5py.VirtualSource(
+                ds.group["data"],  # the h5py.File object
+            )
+            vs_idx = h5py.VirtualSource(ds.group["indices"])
+            layout_data[off : off + block_nnz] = vs_data
+            layout_idx[off : off + block_nnz] = vs_idx
+
+        # === CREATE VIRTUAL DATASETS ===
+        # note: you can call create_virtual_dataset on the group itself in h5py ≥3.0
+        out_grp.create_virtual_dataset(
+            "data",
+            layout_data,
+        )
+        out_grp.create_virtual_dataset(
+            "indices",
+            layout_idx,
+        )
+        return out_grp
+
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
