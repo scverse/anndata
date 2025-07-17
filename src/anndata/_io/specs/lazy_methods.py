@@ -132,7 +132,7 @@ def read_sparse_as_dask(
     path_or_sparse_dataset = (
         Path(filename(elem))
         if isinstance(elem, H5Group)
-        else ad.io.sparse_dataset(elem)
+        else ad.io.sparse_dataset(elem, should_cache_indptr=False)
     )
     elem_name = get_elem_name(elem)
     shape: tuple[int, int] = tuple(elem.attrs["shape"])
