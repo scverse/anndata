@@ -27,7 +27,9 @@ class Dataset2D:
     params = (
         (
             lambda: h5py.File(Path(tempfile.mkdtemp()) / "data.h5ad", mode="w"),
-            lambda: zarr.open(Path(tempfile.mkdtemp()) / "data.zarr", mode="w"),
+            lambda: zarr.open(
+                Path(tempfile.mkdtemp()) / "data.zarr", mode="w", zarr_version=2
+            ),
         ),
     )
 
