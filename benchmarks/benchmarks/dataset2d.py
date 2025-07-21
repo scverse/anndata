@@ -44,10 +44,10 @@ class Dataset2D:
         self.ds = ad.experimental.read_elem_lazy(store["obs"])
 
     def time_getitem_slice(self, *_):
-        self.ds[0 : (self.n_obs // 2)]
+        self.ds.iloc[0 : (self.n_obs // 2)]
 
     def peakmem_getitem_slivce(self, *_):
-        self.ds[0 : (self.n_obs // 2)]
+        self.ds.iloc[0 : (self.n_obs // 2)]
 
     def time_getitem_bool_mask(self, *_):
         self.ds.iloc[np.random.randint(0, self.n_obs, self.n_obs // 2)]
