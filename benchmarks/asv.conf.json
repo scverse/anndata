@@ -71,6 +71,7 @@
         "pytest": [""],
         "pooch": [""],
         "xarray": [""],
+        "dask": [""],
         // "scanpy": [""],
         // "psutil": [""]
     },
