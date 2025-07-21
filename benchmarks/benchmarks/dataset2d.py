@@ -27,7 +27,7 @@ class Dataset2D:
     )
 
     def setup(self, gen_store: Callable[[], zarr.Group | h5py.File]):
-        self.n_obs = 500
+        self.n_obs = 10000
         df = pd.DataFrame(
             {"a": pd.Categorical(np.array(["a"] * self.n_obs))},
             index=[f"cell{i}" for i in range(self.n_obs)],
