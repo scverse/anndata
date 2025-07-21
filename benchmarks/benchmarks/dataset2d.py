@@ -15,13 +15,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-def make_alternating_mask(n):
-    mask_alternating = np.ones(10_000, dtype=bool)
-    for i in range(0, 10_000, n):
-        mask_alternating[i] = False
-    return mask_alternating
-
-
 class Dataset2D:
     param_names = ("gen_store",)
     params = (
