@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,8 +26,8 @@ class Dataset2D:
     param_names = ("gen_store",)
     params = (
         (
-            lambda: h5py.File(Path(__file__).parent / "data/df.h5", mode="w"),
-            lambda: zarr.open(Path(__file__).parent / "data/df.h5", mode="w"),
+            lambda: h5py.File(Path(tempfile.mkdtemp()) / "data.h5ad", mode="w"),
+            lambda: zarr.open(Path(tempfile.mkdtemp()) / "data.zarr", mode="w"),
         ),
     )
 
