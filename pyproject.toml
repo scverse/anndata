@@ -98,7 +98,7 @@ test-min = [
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.3.2",
-    "pyarrow",
+    "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
 test = [ "anndata[test-min,lazy]" ]
