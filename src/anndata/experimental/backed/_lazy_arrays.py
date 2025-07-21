@@ -53,7 +53,7 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
         )
         return res
 
-    def _getitem(self, key: tuple):
+    def _getitem(self, key: tuple[int | np.integer | slice | np.ndarray]):
         if not isinstance(key, tuple):
             msg = f"`xr.core.indexing.explicit_indexing_adapter` should have produced a tuple, got {type(key)} instead"
             raise ValueError(msg)
