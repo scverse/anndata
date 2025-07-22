@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class Dataset2D:
-    param_names = ("gen_store",)
+    param_names = ("gen_store", "chunks")
     params = (
         (
             lambda: h5py.File(Path(tempfile.mkdtemp()) / "data.h5ad", mode="w"),
@@ -24,9 +24,12 @@ class Dataset2D:
                 Path(tempfile.mkdtemp()) / "data.zarr", mode="w", zarr_version=2
             ),
         ),
+        ((-1,), None),
     )
 
-    def setup(self, gen_store: Callable[[], zarr.Group | h5py.File]):
+    def setup(
+        self, gen_store: Callable[[], zarr.Group | h5py.File], chunks: None | tuple[int]
+    ):
         self.n_obs = 10000
         df = pd.DataFrame(
             {"a": pd.Categorical(np.array(["a"] * self.n_obs))},
@@ -34,7 +37,7 @@ class Dataset2D:
         )
         store = gen_store()
         ad.io.write_elem(store, "obs", df)
-        self.ds = ad.experimental.read_elem_lazy(store["obs"])
+        self.ds = ad.experimental.read_elem_lazy(store["obs"], chunks=chunks)
 
     def time_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
