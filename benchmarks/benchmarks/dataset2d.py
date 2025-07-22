@@ -30,9 +30,12 @@ class Dataset2D:
     def setup(
         self, gen_store: Callable[[], zarr.Group | h5py.File], chunks: None | tuple[int]
     ):
-        self.n_obs = 10000
+        self.n_obs = 100000
         df = pd.DataFrame(
-            {"a": pd.Categorical(np.array(["a"] * self.n_obs))},
+            {
+                "a": pd.Categorical(np.array(["a"] * self.n_obs)),
+                "b": np.arange(self.n_obs),
+            },
             index=[f"cell{i}" for i in range(self.n_obs)],
         )
         store = gen_store()
