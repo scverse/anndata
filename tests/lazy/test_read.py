@@ -199,7 +199,7 @@ def df_group(tmp_path_factory) -> zarr.Group:
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
     [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
-    ids=["small", "minus_one", "none"],
+    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
 )
 def test_chunks_df(
     tmp_path: Path,
