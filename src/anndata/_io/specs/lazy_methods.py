@@ -184,6 +184,8 @@ def resolve_chunks(
 ) -> tuple[int, ...]:
     shape = tuple(elem.shape)
     if chunks_arg is not None:
+        # None and -1 on a given axis indicate that one should use the shape
+        # in `dask`'s semantics.
         return tuple(
             c if c not in {None, -1} else s
             for c, s in zip(chunks_arg, shape, strict=True)
