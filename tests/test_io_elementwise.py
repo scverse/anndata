@@ -657,7 +657,9 @@ def test_read_sparse_array(
     [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
     ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
 )
-@pytest.mark.parametrize("arr", [np.arange(120), np.array(["a"] * 120)])
+@pytest.mark.parametrize(
+    "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
+)
 def test_chunking_1d_array(
     store: H5Group | ZarrGroup,
     arr: np.ndarray,
