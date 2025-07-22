@@ -42,8 +42,14 @@ class Dataset2D:
     def time_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
 
-    def peakmem_getitem_slivce(self, *_):
+    def peakmem_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
+
+    def time_full_to_memory(self, *_):
+        self.ds.to_memory()
+
+    def peakmem_full_to_memory(self, *_):
+        self.ds.to_memory()
 
     def time_getitem_bool_mask(self, *_):
         self.ds.iloc[np.random.randint(0, self.n_obs, self.n_obs // 2)].to_memory()
