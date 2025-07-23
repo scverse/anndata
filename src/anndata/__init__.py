@@ -62,4 +62,5 @@ __all__ = [
     "settings",
     "types",
     "typing",
+    "utils",
 ]

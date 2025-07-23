@@ -18,7 +18,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-    from typing import Any, Literal
+    from typing import Any, AxisStorable, Literal
 
 logger = get_logger(__name__)
 
@@ -449,3 +449,80 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def adapt_vars_like(
+    source: AnnData,
+    target: AnnData,
+    fill_value: float = 0.0,
+) -> AnnData:
+    """
+    Adapt the `.var` structure of `target` to match that of `source`.
+
+    This function makes sure that the `target` AnnData object has the same set
+    of genes (`.var_names`) as the `source` AnnData object. It fills in the
+    any missing genes in the `target` object with a specified `fill_value`.
+
+    Parameters
+    ----------
+    source
+        Reference AnnData object whose genes (.var) define the desired structure.
+    target
+        AnnData object to be adapted to match the source's gene structure.
+    fill_value
+        Value used to fill in missing genes. Defaults to 0.0.
+
+    Returns
+    -------
+    AnnData
+        A new AnnData object with the genes matching the source's structure and data from
+        `target`, with missing values filled in with `fill_value`.
+
+    """
+    # importing here to avoid circular import issues
+    from ._core.anndata import AnnData
+    from ._core.merge import Reindexer
+
+    new_var = source.var.copy()
+    reindexer = Reindexer(target.var.index, new_var.index)
+    if target.X is None:
+        new_X = None
+    else:
+        new_X = reindexer(target.X, axis=1, fill_value=fill_value)
+
+    new_layers = {
+        k: reindexer(v, axis=1, fill_value=fill_value) for k, v in target.layers.items()
+    }
+
+    new_varm: AxisStorable = {
+        k: reindexer(v, axis=0, fill_value=fill_value) for k, v in target.varm.items()
+    }
+
+    new_varp: AxisStorable = {
+        k: reindexer(
+            reindexer(v, axis=0, fill_value=fill_value), axis=1, fill_value=fill_value
+        )
+        for k, v in target.varp.items()
+    }
+
+    new_obsp = {k: v.copy() for k, v in target.obsp.items()}
+
+    new_adata = AnnData(
+        X=new_X,
+        obs=target.obs.copy(),
+        var=new_var,
+        varm=new_varm,
+        varp=new_varp,
+        obsp=new_obsp,
+        layers=new_layers,
+    )
+
+    if target.raw is not None:
+        new_raw_X = reindexer(target.raw.X, axis=1, fill_value=fill_value)
+        new_adata.raw = AnnData(
+            X=new_raw_X,
+            var=source.var.copy(),
+            obs=target.obs.copy(),
+        )
+
+    return new_adata
