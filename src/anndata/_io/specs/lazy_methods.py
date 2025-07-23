@@ -177,21 +177,37 @@ def read_sparse_as_dask(
     return da_mtx
 
 
+def resolve_chunks(
+    elem: H5Array | ZarrArray,
+    chunks_arg: tuple[int, ...] | None,
+    shape: tuple[int, ...],
+) -> tuple[int, ...]:
+    shape = tuple(elem.shape)
+    if chunks_arg is not None:
+        # None and -1 on a given axis indicate that one should use the shape
+        # in `dask`'s semantics.
+        return tuple(
+            c if c not in {None, -1} else s
+            for c, s in zip(chunks_arg, shape, strict=True)
+        )
+    elif elem.chunks is None:  # h5 unchunked
+        return tuple(min(_DEFAULT_STRIDE, s) for s in shape)
+    return elem.chunks
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
     elem: H5Array,
     *,
     _reader: LazyReader,
-    chunks: tuple[int, int] | None = None,
+    chunks: tuple[int] | None = None,
 ) -> DaskArray:
     import dask.array as da
 
     from anndata._io.h5ad import read_dataset
 
-    return da.from_array(
-        read_dataset(elem),
-        chunks=chunks if chunks is not None else (_DEFAULT_STRIDE,) * len(elem.shape),
-    )
+    chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
+    return da.from_array(read_dataset(elem), chunks=chunks)
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -204,13 +220,7 @@ def read_h5_array(
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
-    chunks = (
-        tuple(
-            c if c not in {None, -1} else s for c, s in zip(chunks, shape, strict=True)
-        )
-        if chunks is not None
-        else tuple(min(_DEFAULT_STRIDE, s) for s in shape)
-    )
+    chunks = resolve_chunks(elem, chunks, shape)
 
     chunk_layout = tuple(
         compute_chunk_layout_for_axis_size(chunks[i], shape[i])
@@ -228,7 +238,6 @@ def read_h5_array(
 def read_zarr_array(
     elem: ZarrArray, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
-    chunks: tuple[int, ...] = chunks if chunks is not None else elem.chunks
     import dask.array as da
 
     return da.from_zarr(elem, chunks=chunks)
@@ -284,9 +293,10 @@ def read_dataframe(
     *,
     _reader: LazyReader,
     use_range_index: bool = False,
+    chunks: tuple[int] | None = None,
 ) -> Dataset2D:
     elem_dict = {
-        k: _reader.read_elem(elem[k])
+        k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     # If we use a range index, the coord axis needs to have the special dim name
