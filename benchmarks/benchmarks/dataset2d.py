@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class Dataset2D:
-    param_names = ("gen_store",)
+    param_names = ("gen_store", "chunks")
     params = (
         (
             lambda: h5py.File(Path(tempfile.mkdtemp()) / "data.h5ad", mode="w"),
@@ -24,23 +24,35 @@ class Dataset2D:
                 Path(tempfile.mkdtemp()) / "data.zarr", mode="w", zarr_version=2
             ),
         ),
+        ((-1,), None),
     )
 
-    def setup(self, gen_store: Callable[[], zarr.Group | h5py.File]):
-        self.n_obs = 10000
+    def setup(
+        self, gen_store: Callable[[], zarr.Group | h5py.File], chunks: None | tuple[int]
+    ):
+        self.n_obs = 100000
         df = pd.DataFrame(
-            {"a": pd.Categorical(np.array(["a"] * self.n_obs))},
+            {
+                "a": pd.Categorical(np.array(["a"] * self.n_obs)),
+                "b": np.arange(self.n_obs),
+            },
             index=[f"cell{i}" for i in range(self.n_obs)],
         )
         store = gen_store()
         ad.io.write_elem(store, "obs", df)
-        self.ds = ad.experimental.read_elem_lazy(store["obs"])
+        self.ds = ad.experimental.read_elem_lazy(store["obs"], chunks=chunks)
 
     def time_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
 
-    def peakmem_getitem_slivce(self, *_):
+    def peakmem_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
+
+    def time_full_to_memory(self, *_):
+        self.ds.to_memory()
+
+    def peakmem_full_to_memory(self, *_):
+        self.ds.to_memory()
 
     def time_getitem_bool_mask(self, *_):
         self.ds.iloc[np.random.randint(0, self.n_obs, self.n_obs // 2)].to_memory()
