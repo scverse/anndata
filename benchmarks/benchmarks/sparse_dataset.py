@@ -43,7 +43,7 @@ class SparseCSRContiguousSlice:
     )
     param_names = ("shape", "slice", "use_dask")
 
-    def setup(self, shape: tuple[int, int], slice: str, *, use_dask: bool):
+    def setup(self, shape: tuple[int, int], slice: str, use_dask: bool):  # noqa: FBT001
         X = sparse.random(
             *shape, density=0.01, format="csr", random_state=np.random.default_rng(42)
         )
