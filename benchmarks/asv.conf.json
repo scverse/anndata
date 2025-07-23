@@ -70,6 +70,7 @@
         "pytoml": [""],
         "pytest": [""],
         "pooch": [""],
+        "dask": [""],
         // "scanpy": [""],
         // "psutil": [""]
     },
