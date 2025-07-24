@@ -146,8 +146,7 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    # scanpy 1.10.x raises this
-    "ignore:.*first_column_names:FutureWarning",
+    "ignore:.*first_column_names:FutureWarning:scanpy",     # scanpy 1.10.x
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
