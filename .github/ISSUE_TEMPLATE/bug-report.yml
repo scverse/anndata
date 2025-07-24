@@ -16,7 +16,7 @@ body:
           required: true
         - label: I have confirmed this bug exists on the latest version of anndata.
           required: true
-        - label: (optional) I have confirmed this bug exists on the master branch of anndata.
+        - label: (optional) I have confirmed this bug exists on the main branch of anndata.
           required: false
   - type: markdown
     attributes:
