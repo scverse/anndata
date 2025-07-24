@@ -38,7 +38,7 @@ jobs:
           ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
             | map(
               select(.key | startswith("hatch-test"))
-              | { name: .key, python: .value.python, args: .value.extra-args | join(" ") }
+              | { name: .key, python: .value.python, args: .value."extra-args" | join(" ") }
             )')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
