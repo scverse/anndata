@@ -38,7 +38,7 @@ jobs:
           ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
             | map(
               select(.key | startswith("hatch-test"))
-              | { name: .key, python: .value.python }
+              | { name: .key, python: .value.python, args: (.value."extra-args" // [] | join(" ")) }
             )')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
   test:
@@ -71,7 +71,7 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{matrix.io_mark}}"
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
 
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
