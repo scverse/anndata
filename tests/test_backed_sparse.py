@@ -517,7 +517,7 @@ def test_data_access(
         data,
         store=path / "X" / "data",
         chunks=(1,),
-        zarr_format=ad.settings.zarr_write_format,
+        zarr_format=f.metadata.zarr_format,
     )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])

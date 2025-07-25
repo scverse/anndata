@@ -629,7 +629,7 @@ def write_vlen_string_array_zarr(
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         dtype = VariableLengthUTF8()
         filters, fill_value = None, None
-        if ad.settings.zarr_write_format == 2:
+        if f.metadata.zarr_format == 2:
             filters, fill_value = [VLenUTF8()], ""
         f.create_array(
             k,
@@ -1283,7 +1283,7 @@ def write_scalar_zarr(
         from numcodecs import VLenUTF8
         from zarr.core.dtype import VariableLengthUTF8
 
-        match ad.settings.zarr_write_format, value:
+        match f.metadata.zarr_format, value:
             case 2, str():
                 filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
             case 3, str():

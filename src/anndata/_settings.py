@@ -447,7 +447,7 @@ def validate_zarr_write_format(format: int):
 settings.register(
     "zarr_write_format",
     default_value=2,
-    description="Which version of zarr to write to.",
+    description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
         f"ANNDATA_{name.upper()}",
