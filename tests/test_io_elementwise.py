@@ -638,3 +638,72 @@ def test_read_sparse_array(
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
     assert issubclass(type(mtx), CSArray)
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
+    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+)
+@pytest.mark.parametrize(
+    "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
+)
+def test_chunking_1d_array(
+    store: H5Group | ZarrGroup,
+    arr: np.ndarray,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+):
+    write_elem(store, "foo", arr, dataset_kwargs={"chunks": 25})
+    arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [
+        ((1, 50), (1, 50)),
+        ((10, -1), (10, 50)),
+        ((10, None), (10, 50)),
+        (None, (25, 25)),
+    ],
+    ids=[
+        "small",
+        "minus_one_uses_full",
+        "none_on_axis_uses_full",
+        "none_uses_ondisk_chunking",
+    ],
+)
+def test_chunking_2d_array(
+    store: H5Group | ZarrGroup,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+):
+    write_elem(
+        store,
+        "foo",
+        np.arange(100 * 50).reshape((100, 50)),
+        dataset_kwargs={"chunks": (25, 25)},
+    )
+    arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected_chunks"),
+    [((100, 50), (100, 50)), ((1100, 1100), (1000, 1000))],
+    ids=["under_default", "over_default"],
+)
+def test_h5_unchunked(
+    shape: tuple[int, int],
+    expected_chunks: tuple[int, int],
+    tmp_path: Path,
+):
+    with h5py.File(tmp_path / "foo.h5ad", mode="w") as f:
+        write_elem(
+            f,
+            "foo",
+            np.arange(shape[0] * shape[1]).reshape(shape),
+        )
+        arr = read_elem_lazy(f["foo"])
+    assert arr.chunksize == expected_chunks
