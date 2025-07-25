@@ -513,11 +513,14 @@ def test_data_access(
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
+    kwargs = {}
+    if not is_zarr_v2():
+        kwargs["zarr_format"] = f.metadata.zarr_format
     zarr.array(
         data,
         store=path / "X" / "data",
         chunks=(1,),
-        zarr_format=f.metadata.zarr_format,
+        **kwargs,
     )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
