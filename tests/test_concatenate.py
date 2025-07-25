@@ -972,17 +972,21 @@ def test_nan_merge(axis_name, join_type, array_type):
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
-
-    arr = array_type(
-        sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
-    )
-    arr_nan = arr.copy()
+    # TODO: https://github.com/scipy/scipy/issues/23382 for why we can't
+    # do this setting on the dask array directly, where inputs are converted
+    # to scipy-sparse arrays before setting as a result of
+    # https://github.com/dask/dask/pull/11755/files#diff-65211e64fa680da306e9612b92c60f557365507d46486325f0e7e04359bce64fR456-R459
+    sparse_arr = sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
+    sparse_arr_nan = sparse_arr.copy()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=sparse.SparseEfficiencyWarning)
         for _ in range(10):
-            arr_nan[np.random.choice(arr.shape[0]), np.random.choice(arr.shape[1])] = (
-                np.nan
-            )
+            sparse_arr_nan[
+                np.random.choice(sparse_arr.shape[0]),
+                np.random.choice(sparse_arr.shape[1]),
+            ] = np.nan
+    arr = array_type(sparse_arr)
+    arr_nan = array_type(sparse_arr_nan)
 
     _data = {"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr_nan}}
     orig1 = AnnData(**_data)
@@ -1825,7 +1829,7 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     X = sparse.random(50, 20, density=0.5, format="csr")
     X_dask = da.from_array(X, chunks=(5, 20))
     var_names_1 = [f"gene_{i}" for i in range(20)]
-    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20, 40)]
+    var_names_2 = [f"gene_{i - 20}{'_foo' if (i % 2) else ''}" for i in range(20, 40)]
 
     ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
     ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
@@ -1835,7 +1839,6 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
 
     res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
     res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
-
     assert_equal(res_in_memory, res_dask)
 
 

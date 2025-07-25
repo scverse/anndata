@@ -156,6 +156,9 @@ def test_view_subset_shapes():
 
 
 def test_modify_view_component(matrix_type, mapping_name, request):
+    if "sparse_dask" in request.node.callspec.id:
+        msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
+        pytest.xfail(msg)
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
@@ -178,10 +181,6 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == hash_func(adata)
-
-    if "sparse_array_dask_array" in request.node.callspec.id:
-        msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
-        pytest.fail(msg)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
