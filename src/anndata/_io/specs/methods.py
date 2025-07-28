@@ -700,7 +700,6 @@ def write_recarray_zarr(
     else:
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # TODO: zarr’s on-disk format v3 doesn’t support this dtype
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
 

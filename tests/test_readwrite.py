@@ -983,9 +983,8 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
 def test_write_elem_version_mismatch(tmp_path: Path):
-    if is_zarr_v2():
-        pytest.skip("zarr v3 package test")
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))
     g = zarr.open_group(
