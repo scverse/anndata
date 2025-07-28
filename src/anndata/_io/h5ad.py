@@ -88,9 +88,13 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
-        if not adata.isbacked or adata.filename != filepath:
-            # If adata.isbacked, X should already be up to date
-            _write_x(f, adata.X, as_dense=as_dense, dataset_kwargs=dataset_kwargs)
+        _write_x(
+            f,
+            adata.X,
+            is_backed=adata.isbacked and adata.filename == filepath,
+            as_dense=as_dense,
+            dataset_kwargs=dataset_kwargs,
+        )
         _write_raw(f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs)
         write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
         write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
@@ -106,11 +110,14 @@ def _write_x(
     f: h5py.Group,
     x: XDataType,
     *,
+    is_backed: bool,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
 ) -> None:
     if "X" in as_dense and isinstance(x, CSMatrix | BaseCompressedSparseDataset):
         write_sparse_as_dense(f, "X", x, dataset_kwargs=dataset_kwargs)
+    elif is_backed:
+        pass  # If adata.isbacked, X should already be up to date
     elif x is None:
         f.pop("X", None)
     else:
