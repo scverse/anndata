@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 
     from .._core.file_backing import AnnDataFileManager
     from .._core.raw import Raw
-    from ..typing import XDataType
 
 T = TypeVar("T")
 
@@ -90,7 +89,7 @@ def write_h5ad(
 
         _write_x(
             f,
-            adata.X,
+            adata,
             is_backed=adata.isbacked and adata.filename == filepath,
             as_dense=as_dense,
             dataset_kwargs=dataset_kwargs,
@@ -108,20 +107,20 @@ def write_h5ad(
 
 def _write_x(
     f: h5py.Group,
-    x: XDataType,
+    adata: AnnData,
     *,
     is_backed: bool,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
 ) -> None:
-    if "X" in as_dense and isinstance(x, CSMatrix | BaseCompressedSparseDataset):
-        write_sparse_as_dense(f, "X", x, dataset_kwargs=dataset_kwargs)
+    if "X" in as_dense and isinstance(adata.X, CSMatrix | BaseCompressedSparseDataset):
+        write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
     elif is_backed:
         pass  # If adata.isbacked, X should already be up to date
-    elif x is None:
+    elif adata.X is None:
         f.pop("X", None)
     else:
-        write_elem(f, "X", x, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
 
 
 def _write_raw(
