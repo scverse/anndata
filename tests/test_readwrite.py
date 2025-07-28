@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -38,6 +38,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -98,6 +99,15 @@ def rw(backing_h5ad):
     orig.write(backing_h5ad)
     curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
+
+
+@contextmanager
+def open_store(
+    path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> Generator[h5py.File | zarr.Group, None, None]:
+    f = zarr.open_group(path) if diskfmt == "zarr" else h5py.File(path, "r")
+    with f if isinstance(f, h5py.File) else nullcontext():
+        yield f
 
 
 @pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
@@ -403,10 +413,10 @@ def test_zarr_compression(tmp_path, zarr_write_format):
             not_compressed.append(key)
 
     if is_zarr_v2():
-        with zarr.open(str(pth), "r") as f:
+        with zarr.open(pth, "r") as f:
             f.visititems(check_compressed)
     else:
-        f = zarr.open(str(pth), mode="r")
+        f = zarr.open(pth, mode="r")
         for key, value in f.members(max_depth=None):
             check_compressed(value, key)
 
@@ -765,10 +775,22 @@ def test_zarr_chunk_X(tmp_path):
     adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
-    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    z = zarr.open(zarr_pth)
     assert z["X"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
+
+
+def test_write_x_none(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
+    adata = ad.AnnData(shape=(10, 10), obs={"a": np.ones(10)}, var={"b": np.ones(10)})
+    p = tmp_path / f"adata.{diskfmt}"
+    write = getattr(adata, f"write_{diskfmt}")
+
+    write(p)
+    with open_store(p, diskfmt) as f:
+        root_keys = list(f.keys())
+
+    assert "X" not in root_keys
 
 
 ################################

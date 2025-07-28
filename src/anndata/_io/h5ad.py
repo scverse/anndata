@@ -4,7 +4,7 @@ import re
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 from warnings import warn
 
 import h5py
@@ -82,7 +82,7 @@ def write_h5ad(
         # TODO: Use spec writing system for this
         # Currently can't use write_dispatched here because this function is also called to do an
         # inplace update of a backed object, which would delete "/"
-        f = f["/"]
+        f = cast("h5py.Group", f["/"])
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -90,7 +90,9 @@ def write_h5ad(
             adata.X, CSMatrix | BaseCompressedSparseDataset
         ):
             write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
+        elif adata.X is not None and not (
+            adata.isbacked and Path(adata.filename) == Path(filepath)
+        ):
             # If adata.isbacked, X should already be up to date
             write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
         if "raw/X" in as_dense and isinstance(
