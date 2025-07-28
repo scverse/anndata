@@ -844,7 +844,10 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
         import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
+        warnings.filterwarnings(
+            "ignore", r".*first_column_names.*no longer positional", FutureWarning
+        )
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
     # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
