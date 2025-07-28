@@ -89,7 +89,7 @@ def write_h5ad(
 
         _write_x(
             f,
-            adata,
+            adata,  # accessing adata.X reopens adata.file if it’s backed
             is_backed=adata.isbacked and adata.filename == filepath,
             as_dense=as_dense,
             dataset_kwargs=dataset_kwargs,
