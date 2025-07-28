@@ -695,7 +695,7 @@ def write_recarray_zarr(
     from anndata.compat import _to_fixed_length_strings
 
     elem = _to_fixed_length_strings(elem)
-    if isinstance(f, H5Group) or is_zarr_v2():
+    if is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
     else:
         dataset_kwargs = dataset_kwargs.copy()
