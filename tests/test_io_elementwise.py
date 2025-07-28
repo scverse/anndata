@@ -41,17 +41,6 @@ if TYPE_CHECKING:
     G = TypeVar("G", H5Group, ZarrGroup)
 
 
-if not is_zarr_v2():
-    pytestmark = [
-        pytest.mark.filterwarnings(
-            "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning"
-        ),
-        pytest.mark.filterwarnings(
-            "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning"
-        ),
-    ]
-
-
 @pytest.fixture
 def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
     if diskfmt == "h5ad":

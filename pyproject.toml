@@ -159,6 +159,8 @@ filterwarnings_when_strict = [
     "default:The codec `vlen-utf8:UserWarning",
     "default:The dtype `StringDType():UserWarning",
     "default:Consolidated metadata is:UserWarning",
+    "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [
