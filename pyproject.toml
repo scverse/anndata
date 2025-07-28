@@ -146,6 +146,7 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
+    "ignore:.*first_column_names:FutureWarning:scanpy",     # scanpy 1.10.x
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -158,6 +159,8 @@ filterwarnings_when_strict = [
     "default:The codec `vlen-utf8:UserWarning",
     "default:The dtype `StringDType():UserWarning",
     "default:Consolidated metadata is:UserWarning",
+    "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [
