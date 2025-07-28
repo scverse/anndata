@@ -617,7 +617,18 @@ class Reindexer:
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
-            sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+            # See https://github.com/dask/dask/issues/12026 for the handling
+            # TODO: go back to only using the `else` branch here once the issue is closed.
+            if isinstance(sub_el._meta, CSArray | CSMatrix):
+                fill_shape = sub_el[make_slice(indexer == -1, axis, len(shape))].shape
+                if fill_value == 0:
+                    fill_mat = type(sub_el._meta)(fill_shape, dtype=sub_el.dtype)
+                else:
+                    fill_mat = np.full(fill_shape, fill_value=fill_value)
+                sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_mat
+
+            else:
+                sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
         return sub_el
 
