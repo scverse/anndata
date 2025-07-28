@@ -619,7 +619,11 @@ class Reindexer:
         if any(indexer == -1):
             # See https://github.com/dask/dask/issues/12026 for the handling
             # TODO: go back to only using the `else` branch here once the issue is closed.
-            if isinstance(sub_el._meta, CSArray | CSMatrix):
+            import dask
+
+            if isinstance(sub_el._meta, CSArray | CSMatrix) and Version(
+                dask.__version__
+            ) > Version("2025.1.0"):
                 fill_shape = sub_el[make_slice(indexer == -1, axis, len(shape))].shape
                 if fill_value == 0:
                     fill_mat = type(sub_el._meta)(fill_shape, dtype=sub_el.dtype)
