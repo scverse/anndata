@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData, concat
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
@@ -163,6 +164,61 @@ def test_anndatas(
         axis=axis,
         join=join_type,
     )
+
+
+def test_anndatas_virtual_concat_missing_file(
+    *,
+    tmp_path: Path,
+):
+    axis = 0
+    max_loaded_elems = 1_000_000
+    file_format = "h5ad"
+    array_type = "sparse"
+    join_type = "inner"
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = GEN_ADATA_OOC_CONCAT_ARGS
+
+    adatas = []
+    for i in range(3):
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
+        adatas.append(a)
+
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        file_format,
+        max_loaded_elems=max_loaded_elems,
+        virtual_concat=True,
+        axis=axis,
+        join=join_type,
+    )
+    # remove one of the files
+    # overwrite the file
+    # copy out.h5ad to out2.h5ad
+    import shutil
+
+    shutil.copy(tmp_path / "out.h5ad", tmp_path / "out2.h5ad")
+    with tmp_path.joinpath("0.h5ad").open("w") as f:
+        f.write("0")
+    with pytest.raises(
+        OSError,
+        match="Error raised while reading key 'sparse' of <class 'h5py._hl.group.Group'> from /obsm",
+    ):
+        ad.read_h5ad(tmp_path / "out2.h5ad")
 
 
 def test_anndatas_virtual_concat(
