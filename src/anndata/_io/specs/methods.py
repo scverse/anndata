@@ -275,7 +275,8 @@ def write_anndata(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    if adata.X is not None:
+        _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
