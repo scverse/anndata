@@ -824,13 +824,22 @@ def test_index_float_sequence_raises_error(index):
         gen_adata((10, 10))[index]
 
 
-def test_jax_view():
+def test_jax_indexer():
     import jax.numpy as jnp
 
     index = np.array([0, 3, 6])
     index_jax = jnp.array(index)
     adata = gen_adata((10, 10))
     assert_equal(adata[index], adata[index_jax])
+
+
+@pytest.mark.parametrize("index", [np.array([0, 3, 6]), slice(3), Ellipsis])
+def test_index_into_jax(index):
+    import jax.numpy as jnp
+
+    adata = ad.AnnData(X=np.ones((10, 10)))
+    adata_as_jax = ad.AnnData(X=jnp.ones((10, 10)))
+    assert_equal(adata[index], adata_as_jax[index])
 
 
 # @pytest.mark.parametrize("dim", ["obs", "var"])
