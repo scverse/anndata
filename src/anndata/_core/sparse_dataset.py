@@ -165,7 +165,11 @@ class BackedSparseMatrix(_cs_matrix):
     def _get_contiguous_compressed_slice(
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1].copy()
+        new_indptr = self.indptr[s.start : s.stop + 1]
+        # If indptr is cached, we need to make a copy of the subset
+        # so as not to alter the underlying cached data.
+        if isinstance(self.indptr, np.ndarray):
+            new_indptr = new_indptr.copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]

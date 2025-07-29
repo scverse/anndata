@@ -48,7 +48,9 @@ def read_csv(
     dtype
         Numpy data type.
     """
-    return read_text(filename, delimiter, first_column_names, dtype)
+    return read_text(
+        filename, delimiter, first_column_names=first_column_names, dtype=dtype
+    )
 
 
 def read_excel(
@@ -360,18 +362,26 @@ def read_text(
         Numpy data type.
     """
     if not isinstance(filename, PathLike | str | bytes):
-        return _read_text(filename, delimiter, first_column_names, dtype)
+        return _read_text(
+            filename, delimiter, first_column_names=first_column_names, dtype=dtype
+        )
 
     filename = Path(filename)
     if filename.suffix == ".gz":
         with gzip.open(str(filename), mode="rt") as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
     elif filename.suffix == ".bz2":
         with bz2.open(str(filename), mode="rt") as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
     else:
         with filename.open() as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
 
 
 def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
@@ -385,7 +395,8 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
 def _read_text(  # noqa: PLR0912, PLR0915
     f: Iterator[str],
     delimiter: str | None,
-    first_column_names: bool | None,  # noqa: FBT001
+    *,
+    first_column_names: bool | None,
     dtype: str,
 ) -> AnnData:
     comments = []

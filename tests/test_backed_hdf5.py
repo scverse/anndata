@@ -108,7 +108,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 # this is very similar to the views test
 @pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
-def test_backing(adata, tmp_path, backing_h5ad):
+def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     assert not adata.isbacked
 
     adata.filename = backing_h5ad

@@ -24,11 +24,12 @@ from anndata.tests.helpers import subset_func  # noqa: F401
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
     from types import EllipsisType
 
 
 @pytest.fixture
-def backing_h5ad(tmp_path):
+def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 

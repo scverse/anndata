@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
@@ -37,8 +36,6 @@ def write_zarr(
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
-    if isinstance(store, Path):
-        store = str(store)
     if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
         if adata.raw is not None:
@@ -75,9 +72,6 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
-    if isinstance(store, Path):
-        store = str(store)
-
     f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
