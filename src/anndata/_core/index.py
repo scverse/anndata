@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray, has_xp
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -115,6 +115,9 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data
+    elif has_xp(indexer):
+        msg = "Need to implement array api-based indexing"
+        raise NotImplementedError(msg)
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
 

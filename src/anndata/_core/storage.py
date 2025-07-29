@@ -10,7 +10,7 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, has_xp
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
@@ -67,6 +67,8 @@ def coerce_array(
             return np.array(value)
         except (ValueError, TypeError) as _e:
             e = _e
+    if has_xp(value):
+        return value
     # if value isn’t the right type or convertible, raise an error
     msg = f"{name} needs to be of one of {join_english(map(str, array_data_structure_types))}, not {type(value)}."
     if e is not None:
