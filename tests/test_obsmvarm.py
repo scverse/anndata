@@ -144,6 +144,13 @@ def test_setting_daskarray(adata: AnnData):
     assert h == joblib.hash(adata)
 
 
+def test_setting_jax(adata: AnnData):
+    import jax.numpy as jnp
+
+    adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
+    assert isinstance(adata.obsm["jax"], jnp.ndarray)
+
+
 def test_shape_error(adata: AnnData):
     with pytest.raises(
         ValueError,

@@ -101,7 +101,7 @@ test-min = [
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]" ]
+test = [ "anndata[test-min,lazy]", "jax", "jaxlib" ] # TODO: remove jax? own extra?
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]

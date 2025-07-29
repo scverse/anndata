@@ -116,7 +116,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             return indexer.data.compute()
         return indexer.data
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError()
+    raise IndexError(msg)
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
