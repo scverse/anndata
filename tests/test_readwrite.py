@@ -843,11 +843,6 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
-        # zarr v3 can't write recarray
-        # https://github.com/zarr-developers/zarr-python/issues/2134
-        if ad.settings.zarr_write_format == 3:
-            del pbmc.uns["rank_genes_groups"]["names"]
-            del pbmc.uns["rank_genes_groups"]["scores"]
 
     from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
     from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip
@@ -1010,3 +1005,18 @@ def test_write_elem_consolidated(tmp_path: Path):
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
         ad.io.write_elem(g["obs"], "foo", np.arange(10))
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
+def test_write_elem_version_mismatch(tmp_path: Path):
+    zarr_path = tmp_path / "foo.zarr"
+    adata = ad.AnnData(np.ones((10, 10)))
+    g = zarr.open_group(
+        zarr_path,
+        mode="w",
+        zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
+    )
+    ad.io.write_elem(g, "/", adata)
+    adata_roundtripped = ad.read_zarr(g)
+    assert_equal(adata_roundtripped, adata)
