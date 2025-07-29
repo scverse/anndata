@@ -56,6 +56,9 @@ jobs:
           fetch-depth: 0
           filter: blob:none
 
+      - name: Install system dependencies
+        run: sudo apt install -y hdf5-tools
+
       - name: Set up Python ${{ matrix.env.python }}
         uses: actions/setup-python@v5
         with:
