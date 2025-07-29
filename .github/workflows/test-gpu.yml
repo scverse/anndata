@@ -56,10 +56,9 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install system dependencies
+      - name: Install yq
         run: |
           sudo snap install yq
-          sudo apt install -y hdf5-tools
 
       - name: Extract max Python version from classifiers
         run: |
