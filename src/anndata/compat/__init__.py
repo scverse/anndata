@@ -286,8 +286,12 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     """\
     Convert variable length strings to fixed length.
 
-    Currently a workaround for
-    https://github.com/zarr-developers/zarr-python/pull/422
+    Formerly a workaround for
+    https://github.com/zarr-developers/zarr-python/pull/422,
+    resolved in https://github.com/zarr-developers/zarr-python/pull/813.
+
+    But if we didn't do this conversion, we would have to use a special codec in v2
+    for objects and v3 doesn't support objects at all.  So we leave this function as-is.
     """
     new_dtype = []
     for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():

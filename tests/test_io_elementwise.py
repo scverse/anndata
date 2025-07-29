@@ -206,14 +206,6 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if (
-        ad.settings.zarr_write_format == 3
-        and encoding_type == "anndata"
-        and "O_recarray" in value.uns
-    ):
-        del value.uns["O_recarray"]
     with ad.settings.override(allow_write_nullable_strings=True):
         key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
@@ -564,10 +556,6 @@ def test_write_to_root(store, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if ad.settings.zarr_write_format == 3 and isinstance(value, ad.AnnData):
-        del value.uns["O_recarray"]
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():
