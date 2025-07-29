@@ -85,9 +85,9 @@ def assert_eq_concat_on_disk(
     adatas,
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
+    virtual_concat: bool = False,
     *,
     max_loaded_elems: int | None = None,
-    virtual_concat: bool = False,
     **kwargs,
 ):
     # create one from the concat function
