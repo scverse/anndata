@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy
+from array_api_compat import get_namespace as array_api_get_namespace
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
@@ -415,3 +416,11 @@ def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
         return cat.map(str, na_action="ignore")
     else:
         return cat.map(str)
+
+
+def has_xp(mod):
+    try:
+        array_api_get_namespace(mod)
+        return True
+    except TypeError:
+        return False

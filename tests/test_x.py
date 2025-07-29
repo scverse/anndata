@@ -192,3 +192,9 @@ def test_fail_on_non_csr_csc_matrix():
         match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)
+
+
+def test_create_anndata_with_jax():
+    import jax.numpy as jnp
+
+    ad.AnnData(X=jnp.ones((10, 10)))

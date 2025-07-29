@@ -21,6 +21,7 @@ from ..compat import (
     CupyCSRMatrix,
     DaskArray,
     ZappyArray,
+    has_xp,
 )
 from .access import ElementRef
 from .xarray import Dataset2D
@@ -292,6 +293,9 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
+    if has_xp(obj):
+        # TODO: Determine if we need some sort of specific view object for array-api
+        return obj
     msg = f"No view type has been registered for {type(obj)}"
     raise NotImplementedError(msg)
 
