@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import contextmanager
 from functools import partial, singledispatch
 from pathlib import Path
@@ -312,6 +313,8 @@ def read_dataframe(
             index = elem_dict[dim_name][
                 xarray.core.indexing.BasicIndexer((slice(None),))
             ].array
+            msg = f"Found non-string indices {index} in on-disk {elem} store"
+            warnings.warn(msg, stacklevel=2)
         index = pd.Index(index)
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
