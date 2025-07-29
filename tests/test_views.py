@@ -833,7 +833,31 @@ def test_jax_indexer():
     assert_equal(adata[index], adata[index_jax])
 
 
-@pytest.mark.parametrize("index", [np.array([0, 3, 6]), slice(3), Ellipsis])
+@pytest.mark.parametrize(
+    "index",
+    [
+        np.array([0, 3, 6]),
+        slice(3),
+        Ellipsis,
+        (np.array([0, 3, 6]), np.array([1, 4, 7])),
+        (
+            np.array([([True] * 5) + ([False] * 5)]),
+            np.array([([True] * 5) + ([False] * 5)]),
+        ),
+        (
+            np.array([0, 3, 6]),
+            np.array([([True] * 5) + ([False] * 5)]),
+        ),
+    ],
+    ids=[
+        "integer-array",
+        "slice",
+        "ellipsis",
+        "two-axis-integer-arrays",
+        "two-axis-boolean-arrays",
+        "mixed-array-type",
+    ],
+)
 def test_index_into_jax(index):
     import jax.numpy as jnp
 
