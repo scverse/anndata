@@ -304,7 +304,15 @@ def read_dataframe(
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times
-        index = elem_dict[dim_name].compute()
+        if isinstance(elem_dict[dim_name], DaskArray):
+            index = elem_dict[dim_name].compute()
+        else:
+            import xarray
+
+            index = elem_dict[dim_name][
+                xarray.core.indexing.BasicIndexer((slice(None),))
+            ].array
+        index = pd.Index(index)
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
