@@ -98,11 +98,9 @@ def assert_eq_concat_on_disk(
     adatas,
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
-    *,
-    max_loaded_elems: int | None = None,
-    virtual_concat: bool = False,
     *args,
-    merge_strategy: merge.StrategiesLiteral | None = None,
+    virtual_concat: bool = False,
+    max_loaded_elems: int | None = None,
     **kwargs,
 ):
     # create one from the concat function
@@ -112,7 +110,14 @@ def assert_eq_concat_on_disk(
     out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, virtual_concat=virtual_concat, merge=merge_strategy, **kwargs)
+    concat_on_disk(
+        paths,
+        out_name,
+        *args,
+        virtual_concat=virtual_concat,
+        merge=merge_strategy,
+        **kwargs,
+    )
     with as_group(out_name, mode="r") as rg:
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
@@ -176,11 +181,67 @@ def test_anndatas(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems,
+        max_loaded_elems=max_loaded_elems,
+        virtual_concat=False,
         axis=axis,
         join=join_type,
         merge_strategy=merge_strategy,
     )
+
+
+def test_anndatas_virtual_concat_missing_file(
+    *,
+    tmp_path: Path,
+):
+    axis = 0
+    max_loaded_elems = 1_000_000
+    file_format = "h5ad"
+    array_type = "sparse"
+    join_type = "inner"
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = GEN_ADATA_OOC_CONCAT_ARGS
+
+    adatas = []
+    for i in range(3):
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
+        adatas.append(a)
+
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        file_format,
+        virtual_concat=True,
+        max_loaded_elems=max_loaded_elems,
+        axis=axis,
+        join=join_type,
+    )
+    # remove one of the files
+    # overwrite the file
+    # copy out.h5ad to out2.h5ad
+    import shutil
+
+    shutil.copy(tmp_path / "out.h5ad", tmp_path / "out2.h5ad")
+    with tmp_path.joinpath("0.h5ad").open("w") as f:
+        f.write("0")
+    with pytest.raises(
+        OSError,
+        match="Error raised while reading key 'sparse' of <class 'h5py._hl.group.Group'> from /obsm",
+    ):
+        ad.read_h5ad(tmp_path / "out2.h5ad")
 
 
 def test_anndatas_virtual_concat(
@@ -218,8 +279,8 @@ def test_anndatas_virtual_concat(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems=max_loaded_elems,
         virtual_concat=True,
+        max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
     )
@@ -246,7 +307,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, virtual_concat=False)
 
 
 @pytest.fixture
@@ -303,7 +364,13 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
         for i in range(len(xxxm_adatas)):
             xxxm_adatas[i] = xxxm_adatas[i].T
             xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
-    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
+    assert_eq_concat_on_disk(
+        xxxm_adatas,
+        tmp_path,
+        file_format,
+        join=join_type,
+        virtual_concat=False,
+    )
 
 
 @pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
