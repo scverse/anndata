@@ -85,8 +85,8 @@ def assert_eq_concat_on_disk(
     adatas,
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
-    virtual_concat: bool = False,
     *,
+    virtual_concat: bool = False,
     max_loaded_elems: int | None = None,
     **kwargs,
 ):
@@ -160,7 +160,8 @@ def test_anndatas(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems,
+        max_loaded_elems=max_loaded_elems,
+        virtual_concat=False,
         axis=axis,
         join=join_type,
     )
@@ -201,8 +202,8 @@ def test_anndatas_virtual_concat_missing_file(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems=max_loaded_elems,
         virtual_concat=True,
+        max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
     )
@@ -256,8 +257,8 @@ def test_anndatas_virtual_concat(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems=max_loaded_elems,
         virtual_concat=True,
+        max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
     )
@@ -284,7 +285,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, virtual_concat=False)
 
 
 @pytest.fixture
@@ -341,7 +342,13 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
         for i in range(len(xxxm_adatas)):
             xxxm_adatas[i] = xxxm_adatas[i].T
             xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
-    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
+    assert_eq_concat_on_disk(
+        xxxm_adatas,
+        tmp_path,
+        file_format,
+        join=join_type,
+        virtual_concat=False,
+    )
 
 
 def test_output_dir_exists(tmp_path):
