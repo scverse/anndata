@@ -248,7 +248,7 @@ def _process_index_for_h5py(idx):
     if not isinstance(idx, np.ndarray):
         # Not an array (slice, integer, list) - no special processing needed
         return idx, None
-    
+
     if idx.dtype == bool:
         idx = np.where(idx)[0]
 
