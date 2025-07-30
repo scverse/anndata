@@ -233,7 +233,7 @@ def _subset_dataset(d, subset_idx):
             if len(np.unique(axis_idx)) != len(axis_idx):
                 has_duplicates = True
                 break
-    
+
     # Use safe indexing if there are duplicates OR multiple array dimensions
     # (h5py doesn't support multi-dimensional fancy indexing natively)
     if has_duplicates or num_array_dims > 1:
@@ -249,20 +249,20 @@ def _safe_fancy_index_h5py(dataset, subset_idx):
     # without loading the entire dataset into memory
     if not isinstance(subset_idx, tuple):
         subset_idx = (subset_idx,)
-    
+
     if len(subset_idx) > 1:
         # Multi-dimensional case: use iterative approach to minimize memory usage
         # Apply indexing one dimension at a time, being careful about h5py requirements
-        
+
         # Convert boolean arrays to integer arrays and handle sorting for h5py
         processed_indices = []
         reverse_indices = []
-        
+
         for idx in subset_idx:
             if isinstance(idx, np.ndarray):
                 if idx.dtype == bool:
                     idx = np.where(idx)[0]
-                
+
                 # For h5py fancy indexing, we need sorted indices
                 # But we also need to track how to reverse the sorting
                 if len(np.unique(idx)) != len(idx):
@@ -281,11 +281,11 @@ def _safe_fancy_index_h5py(dataset, subset_idx):
                 # Not an array (slice or integer) - no special processing needed
                 processed_indices.append(idx)
                 reverse_indices.append(None)
-        
+
         # Apply first dimension indexing
         first_idx = processed_indices[0]
         result = dataset[first_idx]
-        
+
         # Apply remaining dimensions
         for dim_offset, idx in enumerate(processed_indices[1:], 1):
             axis = dim_offset  # Since we already indexed the first dimension
@@ -302,17 +302,17 @@ def _safe_fancy_index_h5py(dataset, subset_idx):
                 slices = [slice(None)] * result.ndim
                 slices[axis] = idx
                 result = result[tuple(slices)]
-        
+
         # Now apply reverse mappings to get the original order
         for dim, reverse_map in enumerate(reverse_indices):
             if reverse_map is not None:
                 result = result.take(reverse_map, axis=dim)
-        
+
         return result
     else:
         # Single-dimensional case
         indices = subset_idx[0]
-        
+
         if isinstance(indices, np.ndarray):
             # Handle boolean arrays
             if indices.dtype == bool:
