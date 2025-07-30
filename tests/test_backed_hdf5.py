@@ -432,6 +432,11 @@ def h5py_test_data(tmp_path):
             "Mixed indexing with slices and arrays"
         ),
         (
+            "mixed_indexing_with_slices_and_lists",
+            (np.array([0, 1, 0]), [1, 2]),
+            "Mixed indexing with arrays and lists"
+        ),
+        (
             "unsorted_indices_with_duplicates",
             np.array([3, 1, 3, 0, 1]),
             "Edge case - unsorted indices with duplicates"
@@ -445,6 +450,7 @@ def h5py_test_data(tmp_path):
         "multi_dim_dup_both",
         "boolean_arrays",
         "mixed_slice_array",
+        "mixed_slice_array_list",
         "unsorted_duplicates"
     ]
 )
