@@ -377,3 +377,102 @@ def test_backed_duplicate_indices(tmp_path):
     mem_result_2d = mem_adata[obs_idx_dup, var_idx_dup]
     backed_result_2d = backed_adata[obs_idx_dup, var_idx_dup]
     assert_equal(mem_result_2d, backed_result_2d)
+
+
+@pytest.fixture
+def h5py_test_data(tmp_path):
+    """Create test HDF5 file with dataset for _safe_fancy_index_h5py tests."""
+    import h5py
+    
+    h5_path = tmp_path / "test_dataset.h5"
+    test_data = np.arange(24).reshape(6, 4)  # 6x4 matrix
+    
+    with h5py.File(h5_path, "w") as f:
+        f.create_dataset("test", data=test_data)
+    
+    return h5_path, test_data
+
+
+@pytest.mark.parametrize(
+    "test_case_name,indices,description",
+    [
+        (
+            "single_dimension_with_duplicates",
+            np.array([0, 1, 0, 2]),
+            "Single dimension with duplicates (0 appears twice)"
+        ),
+        (
+            "multi_dimensional_no_duplicates", 
+            (np.array([0, 1, 2]), np.array([1, 2])),
+            "Multi-dimensional without duplicates"
+        ),
+        (
+            "multi_dimensional_duplicates_first_dim",
+            (np.array([0, 1, 0, 2]), np.array([1, 2])),
+            "Multi-dimensional with duplicates in first dimension"
+        ),
+        (
+            "multi_dimensional_duplicates_second_dim",
+            (np.array([0, 1, 2]), np.array([1, 2, 1])),
+            "Multi-dimensional with duplicates in second dimension"
+        ),
+        (
+            "multi_dimensional_duplicates_both_dims",
+            (np.array([0, 1, 0]), np.array([1, 2, 1])),
+            "Multi-dimensional with duplicates in both dimensions"
+        ),
+        (
+            "boolean_arrays",
+            np.array([True, False, True, False, False, True]),
+            "Boolean arrays (indices 0, 2, 5)"
+        ),
+        (
+            "mixed_indexing_with_slices",
+            (np.array([0, 1, 0]), slice(1, 3)),
+            "Mixed indexing with slices and arrays"
+        ),
+        (
+            "unsorted_indices_with_duplicates",
+            np.array([3, 1, 3, 0, 1]),
+            "Edge case - unsorted indices with duplicates"
+        ),
+    ],
+    ids=[
+        "single_dim_duplicates",
+        "multi_dim_no_duplicates", 
+        "multi_dim_dup_first",
+        "multi_dim_dup_second",
+        "multi_dim_dup_both",
+        "boolean_arrays",
+        "mixed_slice_array",
+        "unsorted_duplicates"
+    ]
+)
+def test_safe_fancy_index_h5py_function(h5py_test_data, test_case_name, indices, description):
+    """Test the _safe_fancy_index_h5py function directly with various indexing patterns."""
+    import h5py
+    from anndata._core.index import _safe_fancy_index_h5py
+    
+    h5_path, test_data = h5py_test_data
+    
+    with h5py.File(h5_path, "r") as f:
+        dataset = f["test"]
+        
+        # Get result from the function
+        result = _safe_fancy_index_h5py(dataset, indices)
+        
+        # Calculate expected result using NumPy
+        if isinstance(indices, tuple) and len(indices) > 1:
+            # Multi-dimensional case - use np.ix_ for fancy indexing
+            if isinstance(indices[1], slice):
+                # Handle mixed case with slice
+                expected = test_data[np.ix_(indices[0], np.arange(indices[1].start, indices[1].stop))]
+            else:
+                expected = test_data[np.ix_(*indices)]
+        else:
+            # Single dimensional case
+            expected = test_data[indices]
+        
+        # Assert arrays are equal
+        np.testing.assert_array_equal(result, expected, 
+                                      err_msg=f"Failed for test case: {description}")
