@@ -201,7 +201,6 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
-    # Multi-dimensional fancy indexing now works with h5py.Dataset after fix
     mem_adata.write(backed_pth)
 
     ### Backed view has same values as in memory view ###
