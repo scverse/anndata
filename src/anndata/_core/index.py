@@ -107,7 +107,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 not_found = indexer[positions < 0]
                 msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or ordered."
+                    "are not valid obs/ var names or indices."
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
@@ -163,7 +163,7 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         if index is Ellipsis:
             index = slice(None)
         return index, slice(None)
-    msg = "invalid number of ordered"
+    msg = "invalid number of indices"
     raise IndexError(msg)
 
 
