@@ -201,14 +201,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
-    if (
-        array_type is asarray
-        and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
-        and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
-    ):
-        pytest.xfail(
-            "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
-        )
+    # Multi-dimensional fancy indexing now works with h5py.Dataset after fix
     mem_adata.write(backed_pth)
 
     ### Backed view has same values as in memory view ###
@@ -355,3 +348,34 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
 #     backed_view = backed_adata[[1,2], :]
 #     backed_view.X = 0
 #     assert np.all(backed_adata.X[[1,2], :] == 0)
+
+
+def test_backed_duplicate_indices(tmp_path):
+    """Test that backed HDF5 datasets handle duplicate indices correctly."""
+    backed_pth = tmp_path / "backed.h5ad"
+    
+    # Create test data
+    mem_adata = gen_adata((6, 4), X_type=asarray, **GEN_ADATA_NO_XARRAY_ARGS)
+    mem_adata.write(backed_pth)
+    
+    # Load backed data
+    backed_adata = ad.read_h5ad(backed_pth, backed="r")
+    
+    # Test simple multi-dimensional fancy indexing
+    obs_idx = np.array([0, 1, 2])  # no duplicates first
+    var_idx = np.array([1, 2])  # no duplicates first
+    mem_result_multi = mem_adata[obs_idx, var_idx]
+    backed_result_multi = backed_adata[obs_idx, var_idx]
+    assert_equal(mem_result_multi, backed_result_multi)
+    
+    # Test duplicate indices in single dimension
+    obs_idx_dup = np.array([0, 1, 0, 2])  # 0 appears twice
+    mem_result_1d = mem_adata[obs_idx_dup, :]
+    backed_result_1d = backed_adata[obs_idx_dup, :]
+    assert_equal(mem_result_1d, backed_result_1d)
+    
+    # Test duplicate indices in both dimensions
+    var_idx_dup = np.array([1, 2, 1])  # 1 appears twice
+    mem_result_2d = mem_adata[obs_idx_dup, var_idx_dup]
+    backed_result_2d = backed_adata[obs_idx_dup, var_idx_dup]
+    assert_equal(mem_result_2d, backed_result_2d)

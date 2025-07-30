@@ -107,7 +107,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 not_found = indexer[positions < 0]
                 msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or indices."
+                    "are not valid obs/ var names or ordered."
                 )
                 raise KeyError(msg)
             return positions  # np.ndarray[int]
@@ -163,7 +163,7 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
         if index is Ellipsis:
             index = slice(None)
         return index, slice(None)
-    msg = "invalid number of indices"
+    msg = "invalid number of ordered"
     raise IndexError(msg)
 
 
@@ -224,8 +224,112 @@ def _subset_dataset(d, subset_idx):
             order = np.argsort(axis_idx)
             ordered[axis] = axis_idx[order]
             rev_order[axis] = np.argsort(order)
+    # check for duplicates or multi-dimensional fancy indexing
+    has_duplicates = False
+    num_array_dims = 0
+    for axis_idx in ordered:
+        if isinstance(axis_idx, np.ndarray):
+            num_array_dims += 1
+            if len(np.unique(axis_idx)) != len(axis_idx):
+                has_duplicates = True
+                break
+    
+    # Use safe indexing if there are duplicates OR multiple array dimensions
+    # (h5py doesn't support multi-dimensional fancy indexing natively)
+    if has_duplicates or num_array_dims > 1:
+        # For multi-dimensional indexing, bypass the sorting logic and use original indices
+        return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
     return d[tuple(ordered)][tuple(rev_order)]
+
+
+def _safe_fancy_index_h5py(dataset, subset_idx):
+    # Handle multi-dimensional indexing while being memory-efficient
+    # This avoids h5py's limitation with multi-dimensional fancy indexing
+    # without loading the entire dataset into memory
+    if not isinstance(subset_idx, tuple):
+        subset_idx = (subset_idx,)
+    
+    if len(subset_idx) > 1:
+        # Multi-dimensional case: use iterative approach to minimize memory usage
+        # Apply indexing one dimension at a time, being careful about h5py requirements
+        
+        # Convert boolean arrays to integer arrays and handle sorting for h5py
+        processed_indices = []
+        reverse_indices = []
+        
+        for idx in subset_idx:
+            if isinstance(idx, np.ndarray):
+                if idx.dtype == bool:
+                    idx = np.where(idx)[0]
+                
+                # For h5py fancy indexing, we need sorted indices
+                # But we also need to track how to reverse the sorting
+                if len(np.unique(idx)) != len(idx):
+                    # Has duplicates - use unique + inverse mapping approach
+                    unique_idx, inverse_map = np.unique(idx, return_inverse=True)
+                    processed_indices.append(unique_idx)
+                    reverse_indices.append(inverse_map)
+                else:
+                    # No duplicates - just sort and track reverse mapping
+                    sort_order = np.argsort(idx)
+                    sorted_idx = idx[sort_order]
+                    reverse_order = np.argsort(sort_order)
+                    processed_indices.append(sorted_idx)
+                    reverse_indices.append(reverse_order)
+            else:
+                # Not an array (slice or integer) - no special processing needed
+                processed_indices.append(idx)
+                reverse_indices.append(None)
+        
+        # Apply first dimension indexing
+        first_idx = processed_indices[0]
+        result = dataset[first_idx]
+        
+        # Apply remaining dimensions
+        for dim_offset, idx in enumerate(processed_indices[1:], 1):
+            axis = dim_offset  # Since we already indexed the first dimension
+            if isinstance(idx, np.ndarray):
+                # Apply fancy indexing for this dimension
+                result = result.take(idx, axis=axis)
+            elif isinstance(idx, slice):
+                # Apply slice indexing
+                slices = [slice(None)] * result.ndim
+                slices[axis] = idx
+                result = result[tuple(slices)]
+            else:
+                # Apply direct indexing (integer)
+                slices = [slice(None)] * result.ndim
+                slices[axis] = idx
+                result = result[tuple(slices)]
+        
+        # Now apply reverse mappings to get the original order
+        for dim, reverse_map in enumerate(reverse_indices):
+            if reverse_map is not None:
+                result = result.take(reverse_map, axis=dim)
+        
+        return result
+    else:
+        # Single-dimensional case
+        indices = subset_idx[0]
+        
+        if isinstance(indices, np.ndarray):
+            # Handle boolean arrays
+            if indices.dtype == bool:
+                indices = np.where(indices)[0]
+            # Check for duplicates
+            if len(np.unique(indices)) != len(indices):
+                # Has duplicates - use safe approach
+                _, inv_idx = np.unique(indices, return_inverse=True)
+                unique_sorted_idx = np.unique(indices)
+                tmp = dataset[unique_sorted_idx]
+                return tmp[inv_idx]
+            else:
+                # No duplicates - can use direct indexing
+                return dataset[indices]
+        else:
+            # Not an array - use direct indexing
+            return dataset[indices]
 
 
 def make_slice(idx, dimidx, n=2):
