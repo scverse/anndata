@@ -394,7 +394,7 @@ def h5py_test_data(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "test_case_name,indices,description",
+    ("test_case_name", "indices", "description"),
     [
         (
             "single_dimension_with_duplicates",
