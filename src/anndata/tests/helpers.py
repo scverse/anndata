@@ -50,9 +50,7 @@ if TYPE_CHECKING:
     from ..compat import Index1D
 
     DT = TypeVar("DT")
-    _SubsetFunc = Callable[
-        [pd.Index[str], int], Index1D | np.matrix | CSMatrix | CSArray
-    ]
+    _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
 
 try:
