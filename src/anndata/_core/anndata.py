@@ -296,7 +296,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
         # self._adata_ref is never a view
-        self._adata_ref: AnnData | None = adata_ref
+        self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
         # the file is the same as of the reference object
@@ -1019,7 +1019,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         write_attribute(self.file._file, attr, value)
 
-    def _normalize_indices(self, index: Index | None) -> tuple[slice, slice]:
+    def _normalize_indices(
+        self, index: Index | None
+    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...

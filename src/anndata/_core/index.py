@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def _normalize_indices(
     index: Index | None, names0: pd.Index, names1: pd.Index
-) -> tuple[Index1DNorm | int, Index1DNorm | int]:
+) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
@@ -37,7 +37,7 @@ def _normalize_indices(
 
 def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: Index1D, index: pd.Index
-) -> Index1DNorm | int:
+) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
