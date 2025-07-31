@@ -34,7 +34,7 @@ class Empty:
     pass
 
 
-Index1DNorm = slice | NDArray[np.bool] | NDArray[np.integer]
+Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
 # TODO: pd.Index[???]
 Index1D = (
     # 0D index
