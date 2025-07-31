@@ -44,8 +44,7 @@ Index1D = (
     # normalized 1D idex
     | Index1DNorm
     # different containers for mask, obs/varnames, or numerical index
-    | pd.Series[bool]
-    | pd.Series[int]
+    | pd.Series  # [bool] and [int]
     | Sequence[int]
     | Sequence[str]
     | pd.Index

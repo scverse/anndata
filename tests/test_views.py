@@ -70,31 +70,44 @@ class NDArraySubclass(np.ndarray):
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
     adata.varm["o"] = np.zeros((100, 50))
     return adata
 
 
+@pytest.fixture(scope="session")
+def adata_gen_session(matrix_type) -> ad.AnnData:
+    adata = gen_adata((30, 15), X_type=matrix_type)
+    adata.raw = adata.copy()
+    return adata
+
+
+@pytest.fixture
+def adata_gen(adata_gen_session: ad.AnnData) -> ad.AnnData:
+    return adata_gen_session.copy()
+
+
 @pytest.fixture(
     params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
+    scope="session",
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS, scope="session")
 def matrix_type_no_gpu(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS, scope="session")
 def matrix_type_base(request):
     return request.param
 
 
-@pytest.fixture(params=["layers", "obsm", "varm"])
+@pytest.fixture(params=["layers", "obsm", "varm"], scope="session")
 def mapping_name(request):
     return request.param
 
@@ -526,10 +539,8 @@ def test_layers_view():
     assert view_hash != joblib.hash(view_adata)
 
 
-# TODO: This can be flaky. Make that stop
-def test_view_of_view(matrix_type, subset_func, subset_func2):
-    adata = gen_adata((30, 15), X_type=matrix_type)
-    adata.raw = adata.copy()
+def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
+    adata = adata_gen
     if subset_func is single_subset:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
