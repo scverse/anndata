@@ -235,7 +235,9 @@ def _index_order_and_reverse(axis_idx: np.ndarray) -> tuple[np.ndarray, np.ndarr
     return ordered_idx, rev_order_idx
 
 
-def _process_index_for_h5py(idx: np.ndarray | slice | list[int] | int) -> tuple[np.ndarray, np.ndarray | None]:
+def _process_index_for_h5py(
+    idx: np.ndarray | slice | list[int] | int,
+) -> tuple[np.ndarray, np.ndarray | None]:
     """Process a single index for h5py compatibility, handling sorting and duplicates."""
     if not isinstance(idx, np.ndarray):
         # Not an array (slice, integer, list) - no special processing needed
@@ -255,7 +257,9 @@ def _process_index_for_h5py(idx: np.ndarray | slice | list[int] | int) -> tuple[
         return _index_order_and_reverse(idx)
 
 
-def _apply_index_to_result(result: h5py.Dataset, idx: np.ndarray, axis: int) -> h5py.Dataset:
+def _apply_index_to_result(
+    result: h5py.Dataset, idx: np.ndarray, axis: int
+) -> h5py.Dataset:
     """Apply an index to a result array along a specific axis."""
     if isinstance(idx, np.ndarray):
         return result.take(idx, axis=axis)
@@ -265,13 +269,17 @@ def _apply_index_to_result(result: h5py.Dataset, idx: np.ndarray, axis: int) -> 
         return result[tuple(slices)]
 
 
-def _safe_fancy_index_h5py(dataset: h5py.Dataset, subset_idx: tuple[Index]) -> h5py.Dataset:
+def _safe_fancy_index_h5py(
+    dataset: h5py.Dataset, subset_idx: tuple[Index]
+) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing
     # without loading the entire dataset into memory
 
     # Convert boolean arrays to integer arrays and handle sorting for h5py
-    processed_indices, reverse_indices = zip(*map(_process_index_for_h5py, subset_idx), strict=False)
+    processed_indices, reverse_indices = zip(
+        *map(_process_index_for_h5py, subset_idx), strict=False
+    )
 
     # Apply first dimension indexing
     first_idx = processed_indices[0]

@@ -354,7 +354,7 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
         pytest.param(np.array([0, 1, 2]), np.array([1, 2]), id="no_dupes"),
         pytest.param(np.array([0, 1, 0, 2]), slice(None), id="1d_dupes"),
         pytest.param(np.array([0, 1, 0, 2]), np.array([1, 2, 1]), id="2d_dupes"),
-    ]
+    ],
 )
 def test_backed_duplicate_indices(tmp_path, obs_idx, var_idx):
     """Test that backed HDF5 datasets handle duplicate indices correctly."""
@@ -391,19 +391,32 @@ def h5py_test_data(tmp_path):
     ("indices", "description"),
     [
         pytest.param((np.array([0, 1, 0, 2]),), "single_dimension_with_duplicates"),
-        pytest.param((np.array([0, 1, 2]), np.array([1, 2])), "multi_dimensional_no_duplicates"),
-        pytest.param((np.array([0, 1, 0, 2]), np.array([1, 2])), "multi_dimensional_duplicates_first_dim"),
-        pytest.param((np.array([0, 1, 2]), np.array([1, 2, 1])), "multi_dimensional_duplicates_second_dim"),
-        pytest.param((np.array([0, 1, 0]), np.array([1, 2, 1])), "multi_dimensional_duplicates_both_dims"),
-        pytest.param((np.array([True, False, True, False, False, True]),), "boolean_arrays"),
+        pytest.param(
+            (np.array([0, 1, 2]), np.array([1, 2])), "multi_dimensional_no_duplicates"
+        ),
+        pytest.param(
+            (np.array([0, 1, 0, 2]), np.array([1, 2])),
+            "multi_dimensional_duplicates_first_dim",
+        ),
+        pytest.param(
+            (np.array([0, 1, 2]), np.array([1, 2, 1])),
+            "multi_dimensional_duplicates_second_dim",
+        ),
+        pytest.param(
+            (np.array([0, 1, 0]), np.array([1, 2, 1])),
+            "multi_dimensional_duplicates_both_dims",
+        ),
+        pytest.param(
+            (np.array([True, False, True, False, False, True]),), "boolean_arrays"
+        ),
         pytest.param((np.array([0, 1, 0]), slice(1, 3)), "mixed_indexing_with_slices"),
-        pytest.param((np.array([0, 1, 0]), [1, 2]), "mixed_indexing_with_slices_and_lists"),
+        pytest.param(
+            (np.array([0, 1, 0]), [1, 2]), "mixed_indexing_with_slices_and_lists"
+        ),
         pytest.param((np.array([3, 1, 3, 0, 1]),), "unsorted_indices_with_duplicates"),
     ],
 )
-def test_safe_fancy_index_h5py_function(
-    h5py_test_data, indices, description
-):
+def test_safe_fancy_index_h5py_function(h5py_test_data, indices, description):
     """Test the _safe_fancy_index_h5py function directly with various indexing patterns."""
     import h5py
 
