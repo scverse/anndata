@@ -30,8 +30,9 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     assert_equal,
     gen_adata,
+    single_int_subset,
     single_subset,
-    slice_subset,
+    slice_int_subset,
     subset_func,
 )
 from anndata.utils import asarray
@@ -329,7 +330,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -357,7 +358,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -405,7 +406,7 @@ def test_set_subset_obsm(adata, subset_func):
     orig_obsm_val = adata.obsm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -428,7 +429,7 @@ def test_set_subset_varm(adata, subset_func):
     orig_varm_val = adata.varm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.var_names)
+        subset_idx = slice_int_subset(adata.var_names)
         if (adata[:, subset_idx]).shape[1] > 2:
             break
     subset = adata[:, subset_idx]
@@ -541,23 +542,25 @@ def test_layers_view():
 
 def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
     adata = adata_gen
-    if subset_func is single_subset:
+    if subset_func in {single_subset, single_int_subset}:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
     adata[:, var_s1].X  # noqa: B018
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
+
     assert var_view2._adata_ref is adata
     assert isinstance(var_view2.X, type(adata.X))
+
     obs_s1 = subset_func(adata.obs_names, min_size=4)
     obs_view1 = adata[obs_s1, :]
     obs_s2 = subset_func2(obs_view1.obs_names)
+
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
     assert isinstance(obs_view1.X, type(adata.X))
 
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
-
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
     assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)

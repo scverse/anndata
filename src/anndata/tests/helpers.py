@@ -467,6 +467,13 @@ def sparray_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_a
     )
 
 
+def single_subset(index: pd.Index[str], min_size: int = 1) -> str:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return index[np.random.randint(0, len(index))]
+
+
 def array_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.str_]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
@@ -491,7 +498,7 @@ def list_int_subset(index: pd.Index[str], min_size: int = 2) -> list[int]:
     return array_int_subset(index, min_size=min_size).tolist()
 
 
-def slice_subset(index: pd.Index[str], min_size: int = 2) -> slice:
+def slice_int_subset(index: pd.Index[str], min_size: int = 2) -> slice:
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
         s = slice(*sorted(points))
@@ -500,19 +507,23 @@ def slice_subset(index: pd.Index[str], min_size: int = 2) -> slice:
     return s
 
 
-def single_subset(index: pd.Index[str], min_size: int = 1) -> str:
+def single_int_subset(index: pd.Index[str], min_size: int = 1) -> int:
     if min_size > 1:
         msg = "max_size must be ≤1"
         raise AssertionError(msg)
-    return index[np.random.randint(0, len(index))]
+    return np.random.randint(0, len(index))
 
 
 _SUBSET_FUNCS: list[_SubsetFunc] = [
-    array_subset,
-    slice_subset,
+    # str (obs/var name)
     single_subset,
+    array_subset,
+    # int (numeric index)
+    single_int_subset,
+    slice_int_subset,
     array_int_subset,
     list_int_subset,
+    # bool (mask)
     array_bool_subset,
     list_bool_subset,
     matrix_bool_subset,
