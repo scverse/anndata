@@ -14,18 +14,18 @@ from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from ..compat import Index, Index1D
+    from ..compat import Index, Index1D, Index1DNorm
 
 
 def _normalize_indices(
     index: Index | None, names0: pd.Index, names1: pd.Index
-) -> tuple[slice, slice]:
+) -> tuple[Index1DNorm | int, Index1DNorm | int]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
     # deal with pd.Series
     if isinstance(index, pd.Series):
-        index: Index = index.values
+        index = index.values
     if isinstance(index, tuple):
         # TODO: The series should probably be aligned first
         index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
@@ -36,15 +36,8 @@ def _normalize_indices(
 
 
 def _normalize_index(  # noqa: PLR0911, PLR0912
-    indexer: slice
-    | np.integer
-    | int
-    | str
-    | Sequence[bool | int | np.integer]
-    | np.ndarray
-    | pd.Index,
-    index: pd.Index,
-) -> slice | int | np.ndarray:  # ndarray of int or bool
+    indexer: Index1D, index: pd.Index
+) -> Index1DNorm | int:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
@@ -212,7 +205,7 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
-def _subset_dataset(d, subset_idx):
+def _subset_dataset(d: h5py.Dataset, subset_idx: Index):
     if not isinstance(subset_idx, tuple):
         subset_idx = (subset_idx,)
     ordered = list(subset_idx)
