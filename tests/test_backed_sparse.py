@@ -17,6 +17,7 @@ from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
+from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
@@ -312,10 +313,10 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     ("subset_func", "subset_func2"),
     product(
         [
-            ad.tests.helpers.array_subset,
-            ad.tests.helpers.slice_subset,
-            ad.tests.helpers.array_int_subset,
-            ad.tests.helpers.array_bool_subset,
+            test_helpers.array_subset,
+            test_helpers.slice_int_subset,
+            test_helpers.array_int_subset,
+            test_helpers.array_bool_subset,
         ],
         repeat=2,
     ),

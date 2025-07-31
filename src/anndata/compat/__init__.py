@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from functools import cache, partial, singledispatch
 from importlib.util import find_spec
 from types import EllipsisType
@@ -12,12 +12,14 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy
+from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
     from typing import Any
+
 
 #############################
 # scipy sparse array comapt #
@@ -32,7 +34,26 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series
+Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
+# TODO: pd.Index[???]
+Index1D = (
+    # 0D index
+    int
+    | str
+    | np.int64
+    # normalized 1D idex
+    | Index1DNorm
+    # different containers for mask, obs/varnames, or numerical index
+    | Sequence[int]
+    | Sequence[str]
+    | Sequence[bool]
+    | pd.Series  # bool, int, str
+    | pd.Index
+    | NDArray[np.str_]
+    | np.matrix  # bool
+    | CSMatrix  # bool
+    | CSArray  # bool
+)
 IndexRest = Index1D | EllipsisType
 Index = (
     IndexRest
