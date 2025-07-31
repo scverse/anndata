@@ -540,6 +540,10 @@ def test_layers_view():
     assert view_hash != joblib.hash(view_adata)
 
 
+# TODO: less combinatoric; split up into 2 tests:
+# 1. each subset func produces the right `oidx`/`vidx` kind (slice, array[int], array[bool])
+# 2. each `oidx`/`vidx` kind can be sliced with each subset func
+# going from #subset_func² to #subset_func × 3 {ov}idx kinds × 2 tests
 def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
     adata = adata_gen
     if subset_func in {single_subset, single_int_subset}:
