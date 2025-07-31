@@ -348,7 +348,15 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
 #     assert np.all(backed_adata.X[[1,2], :] == 0)
 
 
-def test_backed_duplicate_indices(tmp_path):
+@pytest.mark.parametrize(
+    ("obs_idx", "var_idx"),
+    [
+        pytest.param(np.array([0, 1, 2]), np.array([1, 2]), id="no_dupes"),
+        pytest.param(np.array([0, 1, 0, 2]), slice(None), id="1d_dupes"),
+        pytest.param(np.array([0, 1, 0, 2]), np.array([1, 2, 1]), id="2d_dupes"),
+    ]
+)
+def test_backed_duplicate_indices(tmp_path, obs_idx, var_idx):
     """Test that backed HDF5 datasets handle duplicate indices correctly."""
     backed_pth = tmp_path / "backed.h5ad"
 
@@ -359,24 +367,10 @@ def test_backed_duplicate_indices(tmp_path):
     # Load backed data
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
 
-    # Test simple multi-dimensional fancy indexing
-    obs_idx = np.array([0, 1, 2])  # no duplicates first
-    var_idx = np.array([1, 2])  # no duplicates first
+    # Test the indexing
     mem_result_multi = mem_adata[obs_idx, var_idx]
     backed_result_multi = backed_adata[obs_idx, var_idx]
     assert_equal(mem_result_multi, backed_result_multi)
-
-    # Test duplicate indices in single dimension
-    obs_idx_dup = np.array([0, 1, 0, 2])  # 0 appears twice
-    mem_result_1d = mem_adata[obs_idx_dup, :]
-    backed_result_1d = backed_adata[obs_idx_dup, :]
-    assert_equal(mem_result_1d, backed_result_1d)
-
-    # Test duplicate indices in both dimensions
-    var_idx_dup = np.array([1, 2, 1])  # 1 appears twice
-    mem_result_2d = mem_adata[obs_idx_dup, var_idx_dup]
-    backed_result_2d = backed_adata[obs_idx_dup, var_idx_dup]
-    assert_equal(mem_result_2d, backed_result_2d)
 
 
 @pytest.fixture
@@ -394,68 +388,21 @@ def h5py_test_data(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("test_case_name", "indices", "description"),
+    ("indices", "description"),
     [
-        (
-            "single_dimension_with_duplicates",
-            np.array([0, 1, 0, 2]),
-            "Single dimension with duplicates (0 appears twice)",
-        ),
-        (
-            "multi_dimensional_no_duplicates",
-            (np.array([0, 1, 2]), np.array([1, 2])),
-            "Multi-dimensional without duplicates",
-        ),
-        (
-            "multi_dimensional_duplicates_first_dim",
-            (np.array([0, 1, 0, 2]), np.array([1, 2])),
-            "Multi-dimensional with duplicates in first dimension",
-        ),
-        (
-            "multi_dimensional_duplicates_second_dim",
-            (np.array([0, 1, 2]), np.array([1, 2, 1])),
-            "Multi-dimensional with duplicates in second dimension",
-        ),
-        (
-            "multi_dimensional_duplicates_both_dims",
-            (np.array([0, 1, 0]), np.array([1, 2, 1])),
-            "Multi-dimensional with duplicates in both dimensions",
-        ),
-        (
-            "boolean_arrays",
-            np.array([True, False, True, False, False, True]),
-            "Boolean arrays (indices 0, 2, 5)",
-        ),
-        (
-            "mixed_indexing_with_slices",
-            (np.array([0, 1, 0]), slice(1, 3)),
-            "Mixed indexing with slices and arrays",
-        ),
-        (
-            "mixed_indexing_with_slices_and_lists",
-            (np.array([0, 1, 0]), [1, 2]),
-            "Mixed indexing with arrays and lists",
-        ),
-        (
-            "unsorted_indices_with_duplicates",
-            np.array([3, 1, 3, 0, 1]),
-            "Edge case - unsorted indices with duplicates",
-        ),
-    ],
-    ids=[
-        "single_dim_duplicates",
-        "multi_dim_no_duplicates",
-        "multi_dim_dup_first",
-        "multi_dim_dup_second",
-        "multi_dim_dup_both",
-        "boolean_arrays",
-        "mixed_slice_array",
-        "mixed_slice_array_list",
-        "unsorted_duplicates",
+        pytest.param((np.array([0, 1, 0, 2]),), "single_dimension_with_duplicates"),
+        pytest.param((np.array([0, 1, 2]), np.array([1, 2])), "multi_dimensional_no_duplicates"),
+        pytest.param((np.array([0, 1, 0, 2]), np.array([1, 2])), "multi_dimensional_duplicates_first_dim"),
+        pytest.param((np.array([0, 1, 2]), np.array([1, 2, 1])), "multi_dimensional_duplicates_second_dim"),
+        pytest.param((np.array([0, 1, 0]), np.array([1, 2, 1])), "multi_dimensional_duplicates_both_dims"),
+        pytest.param((np.array([True, False, True, False, False, True]),), "boolean_arrays"),
+        pytest.param((np.array([0, 1, 0]), slice(1, 3)), "mixed_indexing_with_slices"),
+        pytest.param((np.array([0, 1, 0]), [1, 2]), "mixed_indexing_with_slices_and_lists"),
+        pytest.param((np.array([3, 1, 3, 0, 1]),), "unsorted_indices_with_duplicates"),
     ],
 )
 def test_safe_fancy_index_h5py_function(
-    h5py_test_data, test_case_name, indices, description
+    h5py_test_data, indices, description
 ):
     """Test the _safe_fancy_index_h5py function directly with various indexing patterns."""
     import h5py
@@ -470,21 +417,21 @@ def test_safe_fancy_index_h5py_function(
         # Get result from the function
         result = _safe_fancy_index_h5py(dataset, indices)
 
-        # Calculate expected result using NumPy
-        if isinstance(indices, tuple) and len(indices) > 1:
-            # Multi-dimensional case - use np.ix_ for fancy indexing
-            if isinstance(indices[1], slice):
-                # Handle mixed case with slice
-                expected = test_data[
-                    np.ix_(indices[0], np.arange(indices[1].start, indices[1].stop))
-                ]
-            else:
-                expected = test_data[np.ix_(*indices)]
+    # Calculate expected result using NumPy
+    if isinstance(indices, tuple) and len(indices) > 1:
+        # Multi-dimensional case - use np.ix_ for fancy indexing
+        if isinstance(indices[1], slice):
+            # Handle mixed case with slice
+            expected = test_data[
+                np.ix_(indices[0], np.arange(indices[1].start, indices[1].stop))
+            ]
         else:
-            # Single dimensional case
-            expected = test_data[indices]
+            expected = test_data[np.ix_(*indices)]
+    else:
+        # Single dimensional case
+        expected = test_data[indices]
 
-        # Assert arrays are equal
-        np.testing.assert_array_equal(
-            result, expected, err_msg=f"Failed for test case: {description}"
-        )
+    # Assert arrays are equal
+    np.testing.assert_array_equal(
+        result, expected, err_msg=f"Failed for test case: {description}"
+    )
