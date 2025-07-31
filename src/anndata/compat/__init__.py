@@ -44,10 +44,12 @@ Index1D = (
     # normalized 1D idex
     | Index1DNorm
     # different containers for mask, obs/varnames, or numerical index
-    | pd.Series  # [bool] and [int]
+    | pd.Series  # bool, int, str
+    | pd.Index
+    | NDArray[np.str_]
     | Sequence[int]
     | Sequence[str]
-    | pd.Index
+    | Sequence[bool]
 )
 IndexRest = Index1D | EllipsisType
 Index = (
