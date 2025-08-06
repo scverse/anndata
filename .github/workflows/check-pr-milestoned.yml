@@ -34,4 +34,4 @@ jobs:
       - name: Check if a milestone is necessary and exists
         uses: flying-sheep/check@v1
         with:
-          success: ${{ github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone') }}
+          success: ${{ github.event.pull_request.user.login == 'pre-commit-ci[bot]' || github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone') }}
