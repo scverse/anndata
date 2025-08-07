@@ -11,6 +11,7 @@ from string import ascii_letters
 from typing import TYPE_CHECKING
 
 import h5py
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -89,6 +90,13 @@ GEN_ADATA_DASK_ARGS = dict(
 GEN_ADATA_NO_XARRAY_ARGS = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
+
+# default array API registry cubed is commented out for now, since it is not yet implemented
+ARRAY_API_REGISTRY = {
+    "numpy": lambda: np,
+    "jax": lambda: jnp,
+    # "cubed": lambda: __import__("cubed.array_api", fromlist=["array_namespace"]).array_namespace,
+}
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -270,10 +278,18 @@ def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
-    X_dtype: np.dtype = np.float32,
+    # by default using numpy, but can be set to jax or cubed
+    # TODO: have a way to handle it better
+    array_namespace: str = "numpy",
+    # X_dtype: np.dtype = np.float32,
+    # so it is not being manually defaulted to numpy from the function signature
+    X_dtype: type | None = None,
+    # controlling column types for obs and var
+    # numpy + pandas only construct
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
+    # numpy + pandas only construct
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
@@ -282,6 +298,7 @@ def gen_adata(  # noqa: PLR0913
     obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
+    # numpy specific
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
 ) -> AnnData:
@@ -316,6 +333,22 @@ def gen_adata(  # noqa: PLR0913
     if random_state is None:
         random_state = np.random.default_rng()
 
+    try:
+        xp = ARRAY_API_REGISTRY[array_namespace]()
+    except KeyError as err:
+        msg = (
+            f"Unsupported array namespace: {array_namespace!r}. "
+            f"Supported: {list(ARRAY_API_REGISTRY)}"
+        )
+        raise ValueError(msg) from err
+
+    print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
+
+    # rewriting to an appropriate xp dtype if X_dtype is None
+    # note - keep it for now, but then expose it later when testing it
+    if X_dtype is None:
+        X_dtype = xp.float64
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -334,17 +367,24 @@ def gen_adata(  # noqa: PLR0913
     if X_type is None:
         X = None
     else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        # splitting this numpy method out as cubed does not have an equivalent but jax does
+        arr = random_state.binomial(100, 0.005, (M, N))
+        # convering to the appropriate array type
+        X = X_type(xp.asarray(arr, dtype=X_dtype))
 
+    # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
-        array=np.random.random((M, 50)),
+        # array=np.random.random((M, 50)),
+        # random_state.random to not interfer with other test code or modules
+        array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     varm = dict(
-        array=np.random.random((N, 50)),
+        # array=np.random.random((N, 50)),
+        array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -374,7 +414,8 @@ def gen_adata(  # noqa: PLR0913
         shape=(N, 100),
     )
     layers = dict(
-        array=np.random.random((M, N)),
+        # array=np.random.random((M, N)),
+        array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -387,14 +428,16 @@ def gen_adata(  # noqa: PLR0913
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)),
+        # array=np.random.random((M, M)),
+        array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
         sparse.random(M, M, format=sparse_fmt, random_state=random_state)
     )
     varp = dict(
-        array=np.random.random((N, N)),
+        # array=np.random.random((N, N)),
+        array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(
@@ -406,7 +449,7 @@ def gen_adata(  # noqa: PLR0913
             scalar_str="str",
             scalar_int=42,
             scalar_float=3.0,
-            nested_further=dict(array=np.arange(5)),
+            nested_further=dict(array=xp.arange(5)),
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),

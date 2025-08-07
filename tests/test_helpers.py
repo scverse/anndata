@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from string import ascii_letters
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,6 +29,11 @@ from anndata.tests.helpers import (
     report_name,
 )
 from anndata.utils import axis_len
+
+jax.config.update(
+    "jax_enable_x64",
+    True,  # noqa: FBT003
+)  # Explicit conversion to JAX float64
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
@@ -326,3 +333,36 @@ def test_as_cupy_dask(dask_matrix_type):
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
+
+
+def test_gen_adata_jax_backend():
+    adata = gen_adata(
+        (5, 5),
+        array_namespace="jax",
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    assert isinstance(adata.X, jnp.ndarray | type(jnp.ones(1)))  # jax.Array
+    assert adata.X.shape == (5, 5)
+    assert adata.X.dtype == jnp.float32
+
+
+def test_gen_adata_jax_subfields():
+    adata = gen_adata(
+        (5, 5),
+        array_namespace="jax",
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    adata.obsm["pca"] = jnp.asarray(adata.X[:, :2], dtype=jnp.float32)
+    adata.varm["gene_scores"] = jnp.asarray(adata.X.T[:3].T, dtype=jnp.float32)
+    adata.layers["counts"] = jnp.asarray(adata.X, dtype=jnp.float32)
+
+    assert isinstance(adata.obsm["pca"], jnp.ndarray)
+    assert adata.obsm["pca"].shape == (5, 2)
+
+    assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
+    assert adata.varm["gene_scores"].shape == (5, 3)
+
+    assert isinstance(adata.layers["counts"], jnp.ndarray)
+    assert adata.layers["counts"].shape == adata.X.shape
