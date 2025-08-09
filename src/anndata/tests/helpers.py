@@ -277,6 +277,43 @@ def maybe_add_sparse_array(
     return mapping
 
 
+# fixing the ndarray issue
+def _is_sparse_like(x):
+    try:
+        import scipy.sparse as sp
+
+        return sp.issparse(x)
+    except ImportError:
+        return False
+
+
+def _is_array_api_dense(x):
+    """Check if x is a dense array-API array."""
+    if isinstance(x, np.ndarray):
+        return True
+    # ignore DataFrame/Series and scipy.sparse
+    if isinstance(x, pd.DataFrame | pd.Series) or _is_sparse_like(x):
+        return False
+    try:
+        import array_api_compat as aac
+
+        # Treat ONLY JAX/CuPy dense arrays as np.ndarray-equivalents.
+        # Exclusing Dask or Awkward in here
+        return aac.is_jax_array(x) or aac.is_cupy_array(x)
+    except ImportError:
+        return False
+
+
+def _keep_for_types(val, allowed_types):
+    import numpy as np
+
+    # exact type allowed
+    if type(val) in allowed_types:
+        return True
+    # if np.ndarray is allowed, also accept any array-API dense array
+    return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
+
+
 # TODO: Use hypothesis for this?
 def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
@@ -403,7 +440,8 @@ def gen_adata(  # noqa: PLR0913
         varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    # obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = {k: v for k, v in obsm.items() if _keep_for_types(v, obsm_types)}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
         types=obsm_types,
@@ -411,7 +449,8 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, 100),
     )
-    varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    # varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    varm = {k: v for k, v in varm.items() if _keep_for_types(v, varm_types)}
     varm = maybe_add_sparse_array(
         mapping=varm,
         types=varm_types,
@@ -432,7 +471,8 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, N),
     )
-    layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    # layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    layers = {k: v for k, v in layers.items() if _keep_for_types(v, layers_types)}
     obsp = dict(
         # array=np.random.random((M, M)),
         array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
@@ -613,6 +653,33 @@ def _assert_equal(a, b):
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
+    try:
+        # handle *any* array API array (JAX, CuPy, …)
+        # importing a helper function to see if a value is an Array API array like JAX, CuPy, etc.
+        from array_api_compat.common._helpers import is_array_api_obj
+
+        if is_array_api_obj(a) or is_array_api_obj(b):
+            import numpy as np
+            from pandas.api.types import is_numeric_dtype
+
+            # convert both to numpy array. For comparing arrays, this is the most reliable way
+            # TODO: check if this can be done better and if switched to jax, then to see if Cubed works
+            a_np = np.asarray(a)
+            b_np = np.asarray(b)
+            if not exact and is_numeric_dtype(a_np) and is_numeric_dtype(b_np):
+                # shape match is required for numerical arrays
+                assert a_np.shape == b_np.shape, format_msg(elem_name)
+                np.testing.assert_allclose(
+                    a_np, b_np, equal_nan=True, err_msg=format_msg(elem_name)
+                )
+            else:
+                # tolerant comparison for non-numerical arrays
+                assert np.array_equal(a_np, b_np), format_msg(elem_name)
+            return
+    except ImportError:
+        # fall back to existing detection/conversion if fails
+        pass
+
     _assert_equal(a, b, _elem_name=elem_name)
 
 

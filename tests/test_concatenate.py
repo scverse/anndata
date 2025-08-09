@@ -1578,6 +1578,7 @@ def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
     )
+
     del getattr(b, f"{axis}m")[elem]
 
     concated = concat(
