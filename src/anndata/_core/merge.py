@@ -647,30 +647,6 @@ class Reindexer:
 
         return out
 
-    # def _is_jax_array(x):
-    #     m = type(x).__module__
-    #     return m.startswith(("jax.", "jaxlib."))
-
-    # def _is_cubed_array(x):
-    #     # using array_api based check
-    #     try:
-    #         import array_api_compat as aac
-
-    #         ns = aac.array_namespace(x)  # returns the namespace module
-    #         name = getattr(ns, "__name__", "")
-    #         if name.startswith("cubed.array_api"):
-    #             return True
-    #     except ImportError:
-    #         pass
-    #     return type(x).__module__.startswith("cubed")
-
-    # def take_allow_fill_backend(el, indexer, axis, fill_value):
-    #     if _is_jax_array(el):
-    #         return jax_take_allow_fill(el, indexer, axis, fill_value)
-    #     if _is_cubed_array(el):
-    #         return cubed_take_allow_fill(el, indexer, axis, fill_value)
-    #     return None  # if not handled
-
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
@@ -681,14 +657,10 @@ class Reindexer:
             return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.idx
-        # Indexes real fast, and does outer indexing
 
-        # backend-native path for JAX/Cubed (no host pull)
-        # handled = take_allow_fill_backend(el, indexer, axis=axis, fill_value=fill_value)
-        # if handled is not None:
-        #     return handled
-
-        # Otherwise, fallback to numpy: keep pandas
+        # Fallback to numpy: keep pandas
+        # Force to NumPy (materializes JAX/Cubed); fine for small tests,
+        # but may be slow or fail on large/lazy arrays
         if not isinstance(el, np.ndarray):
             el = np.asarray(el)  # fine for jax-in-cpu tests
 
