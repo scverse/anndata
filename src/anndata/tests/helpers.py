@@ -11,6 +11,7 @@ from string import ascii_letters
 from typing import TYPE_CHECKING
 
 import h5py
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
@@ -97,6 +98,9 @@ ARRAY_API_REGISTRY = {
     "jax": lambda: jnp,
     # "cubed": lambda: __import__("cubed.array_api", fromlist=["array_namespace"]).array_namespace,
 }
+
+# Enable JAX to use 64-bit floats by default
+jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -333,14 +337,16 @@ def gen_adata(  # noqa: PLR0913
     if random_state is None:
         random_state = np.random.default_rng()
 
-    try:
-        xp = ARRAY_API_REGISTRY[array_namespace]()
-    except KeyError as err:
-        msg = (
-            f"Unsupported array namespace: {array_namespace!r}. "
-            f"Supported: {list(ARRAY_API_REGISTRY)}"
-        )
-        raise ValueError(msg) from err
+    # to intentionally break everything
+    xp = jnp
+    # try:
+    #     xp = ARRAY_API_REGISTRY[array_namespace]()
+    # except KeyError as err:
+    #     msg = (
+    #         f"Unsupported array namespace: {array_namespace!r}. "
+    #         f"Supported: {list(ARRAY_API_REGISTRY)}"
+    #     )
+    #     raise ValueError(msg) from err
 
     print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
 

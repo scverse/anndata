@@ -647,6 +647,30 @@ class Reindexer:
 
         return out
 
+    # def _is_jax_array(x):
+    #     m = type(x).__module__
+    #     return m.startswith(("jax.", "jaxlib."))
+
+    # def _is_cubed_array(x):
+    #     # using array_api based check
+    #     try:
+    #         import array_api_compat as aac
+
+    #         ns = aac.array_namespace(x)  # returns the namespace module
+    #         name = getattr(ns, "__name__", "")
+    #         if name.startswith("cubed.array_api"):
+    #             return True
+    #     except ImportError:
+    #         pass
+    #     return type(x).__module__.startswith("cubed")
+
+    # def take_allow_fill_backend(el, indexer, axis, fill_value):
+    #     if _is_jax_array(el):
+    #         return jax_take_allow_fill(el, indexer, axis, fill_value)
+    #     if _is_cubed_array(el):
+    #         return cubed_take_allow_fill(el, indexer, axis, fill_value)
+    #     return None  # if not handled
+
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
@@ -657,8 +681,17 @@ class Reindexer:
             return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.idx
-
         # Indexes real fast, and does outer indexing
+
+        # backend-native path for JAX/Cubed (no host pull)
+        # handled = take_allow_fill_backend(el, indexer, axis=axis, fill_value=fill_value)
+        # if handled is not None:
+        #     return handled
+
+        # Otherwise, fallback to numpy: keep pandas
+        if not isinstance(el, np.ndarray):
+            el = np.asarray(el)  # fine for jax-in-cpu tests
+
         return pd.api.extensions.take(
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
@@ -1399,6 +1432,37 @@ def concat_dataset2d_on_annot_axis(
     return ds_concat_2d
 
 
+def _is_sparse(x):
+    try:
+        return scipy.sparse.issparse(x)
+    except TypeError:
+        return False
+
+
+def _to_numpy_if_array_api(x):
+    # Leave these as-is
+    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series) or _is_sparse(x):
+        return x
+    try:
+        import array_api_compat as aac
+
+        # If this succeeds, it's an array-API array (e.g. JAX, cubed, cupy, dask)
+        aac.array_namespace(x)
+        return np.asarray(x)
+    except TypeError:
+        # Not an array-API object (or lib not available) → return unchanged
+        return x
+
+
+def _normalize_mapping_to_numpy(m):
+    # Walk a dict-like (layers/obsm/varm/obsp/varp), convert dense values
+    if not isinstance(m, dict):
+        return m
+    for k, v in list(m.items()):
+        m[k] = _to_numpy_if_array_api(v)
+    return m
+
+
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
@@ -1785,6 +1849,13 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "not concatenating `.raw` attributes."
         )
         warn(msg, UserWarning, stacklevel=2)
+
+    layers = _normalize_mapping_to_numpy(layers)
+    concat_mapping = _normalize_mapping_to_numpy(concat_mapping)
+    alt_mapping = _normalize_mapping_to_numpy(alt_mapping)
+    concat_pairwise = _normalize_mapping_to_numpy(concat_pairwise)
+    alt_pairwise = _normalize_mapping_to_numpy(alt_pairwise)
+
     return AnnData(
         **{
             "X": X,
