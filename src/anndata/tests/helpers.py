@@ -376,6 +376,8 @@ def gen_adata(  # noqa: PLR0913
 
     # to intentionally break everything
     xp = jnp
+
+    # actual code to get the array namespace
     # try:
     #     xp = ARRAY_API_REGISTRY[array_namespace]()
     # except KeyError as err:
