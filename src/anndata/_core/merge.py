@@ -1413,7 +1413,9 @@ def _is_sparse(x):
 
 def _to_numpy_if_array_api(x):
     # Leave these as-is
-    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series) or _is_sparse(x):
+    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray) or _is_sparse(
+        x
+    ):
         return x
     try:
         import array_api_compat as aac
