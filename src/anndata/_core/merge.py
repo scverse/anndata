@@ -1428,13 +1428,12 @@ def _to_numpy_if_array_api(x):
         return x
 
 
-def _normalize_mapping_to_numpy(m):
-    # Walk a dict-like (layers/obsm/varm/obsp/varp), convert dense values
-    if not isinstance(m, dict):
-        return m
-    for k, v in list(m.items()):
-        m[k] = _to_numpy_if_array_api(v)
-    return m
+def _normalize_nested(obj):
+    if isinstance(obj, dict):
+        return {k: _normalize_nested(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return type(obj)(_normalize_nested(v) for v in obj)
+    return _to_numpy_if_array_api(obj)
 
 
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
@@ -1797,6 +1796,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     uns = uns_merge([a.uns for a in adatas])
 
+    # TODO: try pandas extension arrays after concat errors are fixed
+    # convering to numpy since pandas does not support array-API arrays
+    # normalizes uns (handles JAX / array-API arrays nested in dicts/lists)
+    uns = _normalize_nested(uns)
+
     raw = None
     has_raw = [a.raw is not None for a in adatas]
     if all(has_raw):
@@ -1824,11 +1828,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         warn(msg, UserWarning, stacklevel=2)
 
-    layers = _normalize_mapping_to_numpy(layers)
-    concat_mapping = _normalize_mapping_to_numpy(concat_mapping)
-    alt_mapping = _normalize_mapping_to_numpy(alt_mapping)
-    concat_pairwise = _normalize_mapping_to_numpy(concat_pairwise)
-    alt_pairwise = _normalize_mapping_to_numpy(alt_pairwise)
+    layers = _normalize_nested(layers)
+    concat_mapping = _normalize_nested(concat_mapping)
+    alt_mapping = _normalize_nested(alt_mapping)
+    concat_pairwise = _normalize_nested(concat_pairwise)
+    alt_pairwise = _normalize_nested(alt_pairwise)
 
     return AnnData(
         **{
