@@ -8,6 +8,12 @@ from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+import numpy as np
+import pandas as pd
+from pandas.api.extensions import ExtensionArray
+from scipy import sparse as sp
+
+from anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
@@ -32,6 +38,48 @@ if TYPE_CHECKING:
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
     LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
+
+
+def is_sparse_like(x):
+    try:
+        return sp.issparse(x)
+    except AttributeError:
+        return False
+
+
+def to_numpy_if_array_api(x):
+    if isinstance(
+        x,
+        np.ndarray
+        | np.generic
+        | pd.DataFrame
+        | pd.Series
+        | pd.Index
+        | ExtensionArray
+        | DaskArray
+        | sp.spmatrix
+        | AnnData,
+    ):
+        return x
+
+    # Try array-API detection only for unknown leaves
+    try:
+        import array_api_compat as aac
+
+        # If this succeeds, it's an array-API array (e.g. JAX, CuPy, torch, …)
+        aac.array_namespace(x)
+        return np.asarray(x)
+    except (ImportError, AttributeError, TypeError):
+        # Not an array-API object (or not supported), so return unchanged
+        return x
+
+
+def normalize_nested(obj):
+    if isinstance(obj, dict):
+        return {k: normalize_nested(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return type(obj)(normalize_nested(v) for v in obj)
+    return to_numpy_if_array_api(obj)
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -385,6 +433,10 @@ class Writer:
                 store.clear()
         elif k in store:
             del store[k]
+
+        # Normalize array-API (e.g., JAX/CuPy) payloads buried in mappings/lists
+        if not isinstance(elem, AnnData):
+            elem = normalize_nested(elem)
 
         write_func = self.find_write_func(dest_type, elem, modifiers)
 
