@@ -298,7 +298,7 @@ def _is_array_api_dense(x):
         import array_api_compat as aac
 
         # Treat ONLY JAX/CuPy dense arrays as np.ndarray-equivalents.
-        # Exclusing Dask or Awkward in here
+        # Excluding Dask or Awkward in here
         return aac.is_jax_array(x) or aac.is_cupy_array(x)
     except ImportError:
         return False
@@ -414,13 +414,13 @@ def gen_adata(  # noqa: PLR0913
     else:
         # splitting this numpy method out as cubed does not have an equivalent but jax does
         arr = random_state.binomial(100, 0.005, (M, N))
-        # convering to the appropriate array type
+        # converting to the appropriate array type
         X = X_type(xp.asarray(arr, dtype=X_dtype))
 
     # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
         # array=np.random.random((M, 50)),
-        # random_state.random to not interfer with other test code or modules
+        # random_state.random to not interfere with other test code or modules
         array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
