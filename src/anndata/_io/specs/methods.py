@@ -21,6 +21,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
+from anndata._core.views import DaskArrayView  ## Required Importe for DaskArrayView
 from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
@@ -40,7 +41,6 @@ from anndata.compat import (
     _read_attr,
     _require_group_write_dataframe,
 )
-from anndata._core.views import DaskArrayView ## Required Importe for DaskArrayView
 
 from ..._settings import settings
 from ...compat import is_zarr_v2
@@ -537,7 +537,7 @@ def write_basic_dask_h5(
 
 # Adding write methods for DaskArrayView (see https://github.com/scverse/anndata/issues/2022)
 @_REGISTRY.register_write(ZarrGroup, DaskArrayView, IOSpec("dask-array", "0.1.0"))
-@_REGISTRY.register_write(H5Group, DaskArrayView, IOSpec("dask-array", "0.1.0"))  
+@_REGISTRY.register_write(H5Group, DaskArrayView, IOSpec("dask-array", "0.1.0"))
 def write_dask_array_view(
     f,
     k: str,
@@ -548,14 +548,14 @@ def write_dask_array_view(
     """Simple Fix: Write DaskArrayView by converting to regular DaskArray first."""
     # Convert the view to a regular DaskArray
     regular_dask_array = dask_view.to_dask_array()
-    
+
     # Find and call the existing DaskArray writer
     from anndata.compat import DaskArray
+
     write_func = _writer.registry.get_write(
         type(f), DaskArray, frozenset(), writer=_writer
     )
     return write_func(f, k, regular_dask_array, dataset_kwargs=dataset_kwargs)
-
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
