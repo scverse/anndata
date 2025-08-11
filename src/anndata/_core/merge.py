@@ -1796,7 +1796,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     uns = uns_merge([a.uns for a in adatas])
 
     # TODO: try pandas extension arrays after concat errors are fixed
-    # convering to numpy since pandas does not support array-API arrays
+    # converting to numpy since pandas does not support array-API arrays
     # normalizes uns (handles JAX / array-API arrays nested in dicts/lists)
     uns = _normalize_nested(uns)
 
