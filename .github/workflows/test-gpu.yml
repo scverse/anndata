@@ -32,7 +32,7 @@ jobs:
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
-    if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
+    if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: flying-sheep/check@v1
