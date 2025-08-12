@@ -208,6 +208,19 @@ class DaskArrayView(_SetItemMixin, DaskArray):
         # it’s a structured array
         return self.dtype.names
 
+    # New Feature to convert DaskArrayView to DaskArray to write easily (see https://github.com/scverse/anndata/issues/2022)
+    def to_dask_array(self) -> DaskArray:
+        """Convert the DaskArrayView to a DaskArray."""
+
+        return DaskArray(
+            dask=self.dask,
+            name=self.name,
+            chunks=self.chunks,
+            dtype=self.dtype,
+            meta=self._meta,
+            shape=self.shape,
+        )
+
 
 # Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
 # do not propagate through subsetting
