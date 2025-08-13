@@ -582,6 +582,11 @@ def _assert_equal(a, b):
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
+    a_handler, b_handler, default_handler = map(
+        assert_equal.dispatch, (type(a), type(b), object)
+    )
+    if (a_handler is default_handler) and (b_handler is not default_handler):
+        return assert_equal(b, a, exact=exact, elem_name=elem_name)
     _assert_equal(a, b, _elem_name=elem_name)
 
 
@@ -712,7 +717,7 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a) == set(b), format_msg(elem_name)
+    assert set(a) == set(b), format_msg(elem_name) + f" {a.keys()} != {b.keys()}"
     for k in a:
         if elem_name is None:
             elem_name = ""
