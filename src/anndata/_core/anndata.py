@@ -667,6 +667,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     ImplicitModificationWarning,
                     stacklevel=2,
                 )
+                dest = self._adata_ref._X
+                # Handles read-only NumPy views from backend arrays like JAX by
+                # making a writable copy so in-place assignment on views can succeed.
+                if isinstance(dest, np.ndarray) and not dest.flags.writeable:
+                    dest = np.array(dest, copy=True)  # make a fresh, writable buffer
+                    self._adata_ref._X = dest
                 self._adata_ref._X[oidx, vidx] = value
             else:
                 self._X = value

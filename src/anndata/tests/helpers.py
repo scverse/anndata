@@ -390,7 +390,7 @@ def gen_adata(  # noqa: PLR0913
     #     )
     #     raise ValueError(msg) from err
 
-    print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
+    # print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
 
     # rewriting to an appropriate xp dtype if X_dtype is None
     # note - keep it for now, but then expose it later when testing it

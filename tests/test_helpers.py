@@ -30,11 +30,6 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import axis_len
 
-jax.config.update(
-    "jax_enable_x64",
-    True,  # noqa: FBT003
-)  # Explicit conversion to JAX float64
-
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
 #
@@ -122,7 +117,13 @@ def test_report_name():
     assert tag in str(e2.value)
 
 
-def test_assert_equal():
+@pytest.fixture
+def enable_jax_float64() -> None:
+    # Explicit conversion to JAX float64
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+
+
+def test_assert_equal(enable_jax_float64):
     # ndarrays
     assert_equal(np.ones((10, 10)), np.ones((10, 10)))
     assert_equal(  # Should this require an exact test?

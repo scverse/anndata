@@ -17,6 +17,7 @@ import pandas as pd
 import scipy
 from natsort import natsorted
 from packaging.version import Version
+from pandas.api.types import is_extension_array_dtype
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -538,6 +539,15 @@ def resolve_merge_strategy(
     return strategy
 
 
+def safe_to_numpy(x):
+    """Convert to numpy array, handling JAX/Cupy arrays."""
+    if isinstance(x, pd.Series | pd.Index) or (
+        hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
+    ):
+        return x
+    return np.asarray(x)
+
+
 #####################
 # Concatenation
 #####################
@@ -659,10 +669,9 @@ class Reindexer:
         indexer = self.idx
 
         # Fallback to numpy: keep pandas
-        # Force to NumPy (materializes JAX/Cubed); fine for small tests,
-        # but may be slow or fail on large/lazy arrays
-        if not isinstance(el, np.ndarray):
-            el = np.asarray(el)  # fine for jax-in-cpu tests
+        # keep pandas EAs/Series/Index as-is; only normalize non-pandas arrays
+
+        el = safe_to_numpy(el)
 
         return pd.api.extensions.take(
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
@@ -1404,17 +1413,8 @@ def concat_dataset2d_on_annot_axis(
     return ds_concat_2d
 
 
-def _is_sparse(x):
-    try:
-        return scipy.sparse.issparse(x)
-    except TypeError:
-        return False
-
-
 def _to_numpy_if_array_api(x):
-    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray) or _is_sparse(
-        x
-    ):
+    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
         return x
     try:
         import array_api_compat as aac
@@ -1425,14 +1425,6 @@ def _to_numpy_if_array_api(x):
     except TypeError:
         # Not an array-API object (or lib not available) → return unchanged
         return x
-
-
-def _normalize_nested(obj):
-    if isinstance(obj, dict):
-        return {k: _normalize_nested(v) for k, v in obj.items()}
-    if isinstance(obj, list | tuple):
-        return type(obj)(_normalize_nested(v) for v in obj)
-    return _to_numpy_if_array_api(obj)
 
 
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
@@ -1795,11 +1787,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     uns = uns_merge([a.uns for a in adatas])
 
-    # TODO: try pandas extension arrays after concat errors are fixed
-    # converting to numpy since pandas does not support array-API arrays
-    # normalizes uns (handles JAX / array-API arrays nested in dicts/lists)
-    uns = _normalize_nested(uns)
-
     raw = None
     has_raw = [a.raw is not None for a in adatas]
     if all(has_raw):
@@ -1826,12 +1813,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "not concatenating `.raw` attributes."
         )
         warn(msg, UserWarning, stacklevel=2)
-
-    layers = _normalize_nested(layers)
-    concat_mapping = _normalize_nested(concat_mapping)
-    alt_mapping = _normalize_nested(alt_mapping)
-    concat_pairwise = _normalize_nested(concat_pairwise)
-    alt_pairwise = _normalize_nested(alt_pairwise)
 
     return AnnData(
         **{

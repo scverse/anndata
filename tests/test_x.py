@@ -13,6 +13,10 @@ from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
+# jax option
+jax = pytest.importorskip("jax")
+jnp = pytest.importorskip("jax.numpy")
+
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
     pytest.param(sparse.csc_matrix, id="csc"),
@@ -41,6 +45,7 @@ def test_repeat_indices_view():
     adata = gen_adata((10, 10), X_type=np.asarray)
     subset = adata[[0, 0, 1, 1], :]
     mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
+
     with pytest.warns(
         FutureWarning,
         match=r"You are attempting to set `X` to a matrix on a view which has non-unique indices",
