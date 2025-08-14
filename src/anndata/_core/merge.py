@@ -17,6 +17,7 @@ import pandas as pd
 import scipy
 from natsort import natsorted
 from packaging.version import Version
+from pandas.api.types import is_extension_array_dtype
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -538,6 +539,15 @@ def resolve_merge_strategy(
     return strategy
 
 
+def safe_to_numpy(x):
+    """Convert to numpy array, handling JAX/Cupy arrays."""
+    if isinstance(x, pd.Series | pd.Index) or (
+        hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
+    ):
+        return x
+    return np.asarray(x)
+
+
 #####################
 # Concatenation
 #####################
@@ -658,7 +668,11 @@ class Reindexer:
 
         indexer = self.idx
 
-        # Indexes real fast, and does outer indexing
+        # Fallback to numpy: keep pandas
+        # keep pandas EAs/Series/Index as-is; only normalize non-pandas arrays
+
+        el = safe_to_numpy(el)
+
         return pd.api.extensions.take(
             el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
         )
@@ -1399,6 +1413,20 @@ def concat_dataset2d_on_annot_axis(
     return ds_concat_2d
 
 
+def _to_numpy_if_array_api(x):
+    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
+        return x
+    try:
+        import array_api_compat as aac
+
+        # If this succeeds, it's an array-API array (e.g. JAX, cubed, cupy, dask)
+        aac.array_namespace(x)
+        return np.asarray(x)
+    except TypeError:
+        # Not an array-API object (or lib not available) → return unchanged
+        return x
+
+
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
@@ -1785,6 +1813,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "not concatenating `.raw` attributes."
         )
         warn(msg, UserWarning, stacklevel=2)
+
     return AnnData(
         **{
             "X": X,
