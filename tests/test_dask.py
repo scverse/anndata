@@ -330,7 +330,10 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 )
 def test_dask_to_disk_view(array_func, diskfmt, tmp_path):
     random_state = np.random.default_rng()
-    orig = ad.AnnData(array_func(random_state.binomial(100, 0.005, (20, 15))))
+    orig = ad.AnnData(
+        # need to change type for cupy
+        array_func(random_state.binomial(100, 0.005, (20, 15)).astype("float32"))
+    )
     orig = orig[orig.shape[0] // 2]
     path = tmp_path / f"test.{diskfmt}"
     getattr(orig, f"write_{diskfmt}")(path)
