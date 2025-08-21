@@ -862,23 +862,24 @@ def write_dask_sparse(
         disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
 
 
-for array_type in [DaskArray, views.DaskArrayView]:
-    for group_type in [H5Group, ZarrGroup]:
-        for cupy_array_type, spec in [
-            (CupyArray, IOSpec("array", "0.2.0")),
-            (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0")),
-            (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0")),
-        ]:
-            _REGISTRY.register_write(group_type, (array_type, cupy_array_type), spec)(
-                write_cupy_dask
-            )
-        for scipy_sparse_type, spec in [
-            (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0")),
-            (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0")),
-        ]:
-            _REGISTRY.register_write(group_type, (array_type, scipy_sparse_type), spec)(
-                write_dask_sparse
-            )
+for array_type, group_type in product(
+    [DaskArray, views.DaskArrayView], [H5Group, ZarrGroup]
+):
+    for cupy_array_type, spec in [
+        (CupyArray, IOSpec("array", "0.2.0")),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0")),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, cupy_array_type), spec)(
+            write_cupy_dask
+        )
+    for scipy_sparse_type, spec in [
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0")),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, scipy_sparse_type), spec)(
+            write_dask_sparse
+        )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
