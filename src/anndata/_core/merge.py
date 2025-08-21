@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
+from contextlib import suppress
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
@@ -51,10 +52,8 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-try:
+with suppress(ImportError):
     import jax.dlpack
-except ImportError:
-    pass  # Optional: fail gracefully if these aren't installed
 
 ###################
 # Utilities
@@ -585,22 +584,6 @@ def _dlpack_from_numpy(x_np, original_xp):
     else:
         msg = f"DLPack back-conversion not implemented for {original_xp.__name__}"
         raise TypeError(msg)
-
-
-# def safe_to_backend(x, *, copy=False):
-#     """
-#     Convert input to an array-api compatible array, keeping backend (NumPy, JAX, CuPy, etc.)
-#     instead of forcing to NumPy.
-
-#     Leaves pandas objects unchanged.
-#     """
-#     if isinstance(x, pd.Series | pd.Index) or (
-#         hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
-#     ):
-#         return x
-
-#     xp = get_namespace(x)  # e.g., numpy, jax.numpy, cupy, etc.
-#     return xp.asarray(x, copy=copy)
 
 
 #####################
