@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
+      - uses: actions/checkout@v5 # TODO: upgrade once cirun image supports node 24
         with:
           fetch-depth: 0
           filter: blob:none
