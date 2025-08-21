@@ -9,7 +9,6 @@ from functools import partial, singledispatch, wraps
 from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
-from contextlib import suppress
 
 import h5py
 import jax
@@ -316,7 +315,7 @@ def _keep_for_types(val, allowed_types):
     return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
 
 
-def _safe_backend_copy(xp, arr, dtype=None, copy):
+def _safe_backend_copy(xp, arr, dtype=None, copy=True):
     # making sure that the copy=True behavior is cosistent across different array libraries
     x = xp.asarray(arr, dtype=dtype)
     if not copy:
