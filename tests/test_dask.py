@@ -17,6 +17,7 @@ from anndata.compat import CupyArray, DaskArray
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
+    as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
     as_sparse_dask_array,
@@ -308,6 +309,36 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     assert isinstance(orig.layers["da"], DaskArray)
     assert isinstance(orig.varm["da"], DaskArray)
     assert isinstance(orig.uns["da"]["da"], DaskArray)
+
+
+@pytest.mark.parametrize(
+    "array_func",
+    [
+        pytest.param(as_dense_dask_array, id="dense_dask_array"),
+        pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+        pytest.param(
+            as_dense_cupy_dask_array,
+            id="cupy_dense_dask_array",
+            marks=pytest.mark.gpu,
+        ),
+        pytest.param(
+            as_cupy_sparse_dask_array,
+            id="cupy_sparse_dask_array",
+            marks=pytest.mark.gpu,
+        ),
+    ],
+)
+def test_dask_to_disk_view(array_func, diskfmt, tmp_path):
+    random_state = np.random.default_rng()
+    orig = ad.AnnData(
+        # need to change type for cupy
+        array_func(random_state.binomial(100, 0.005, (20, 15)).astype("float32"))
+    )
+    orig = orig[orig.shape[0] // 2]
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(orig, f"write_{diskfmt}")(path)
+    roundtrip = getattr(ad.io, f"read_{diskfmt}")(path)
+    assert_equal(roundtrip, orig)
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
