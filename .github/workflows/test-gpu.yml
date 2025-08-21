@@ -69,13 +69,13 @@ jobs:
           python-version: ${{ env.max_python_version }}
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test,cu13]" -c ci/constraints.txt
+        run: uv pip install -e ".[dev,test,cu13]" -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
 
       - name: Run test
-        run: coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
+        run: uv run coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
 
       - uses: codecov/codecov-action@v5
         with:
