@@ -283,12 +283,12 @@ def test_assign_X(adata):
 @pytest.mark.parametrize(
     ("array_func", "mem_type"),
     [
-        pytest.param(as_dense_dask_array, np.ndarray, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
+        pytest.param(as_dense_dask_array, np.ndarray, id="dense"),
+        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
         pytest.param(
             as_dense_cupy_dask_array,
             CupyArray,
-            id="cupy_dense_dask_array",
+            id="cupy_dense",
             marks=pytest.mark.gpu,
         ),
     ],
@@ -319,7 +319,7 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 
 
 @pytest.mark.parametrize(
-    ("to_dask", "inner_func"),
+    ("to_dask", "to_inner"),
     [
         pytest.param(as_dense_dask_array, None, id="dense"),
         pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
