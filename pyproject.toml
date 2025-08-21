@@ -250,17 +250,13 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-# Valid fragments should match conventional commit types (except for `breaking`):
+# Valid fragments should be a subset of conventional commit types (except for `breaking`):
 # https://github.com/commitizen/conventional-commit-types/blob/master/index.json
+# style, refactor, test, build, ci: should not go into changelog
 fragment.feat.name = "Features"
 fragment.fix.name = "Bug fixes"
 fragment.docs.name = "Documentation"
-fragment.style.name = "Stylistic changes"
-fragment.refactor.name = "Code refactoring"
 fragment.perf.name = "Performance"
-fragment.test.name = "Tests"
-fragment.build.name = "Build"
-fragment.ci.name = "Continuous integration"
 fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
 fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
