@@ -6,6 +6,7 @@ import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from functools import partial, singledispatch, wraps
+from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -60,6 +62,14 @@ except ImportError:
         *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
+
+try:
+    import fast_array_utils as _
+except ImportError:
+    # dask natively supports sparray since https://github.com/dask/dask/pull/11750
+    DASK_CAN_SPARRAY = Version(version("dask")) >= Version("2025.3.0")
+else:  # fast-array-utils monkeypatches dask to support sparrays
+    DASK_CAN_SPARRAY = True
 
 
 DEFAULT_KEY_TYPES = (
@@ -878,29 +888,31 @@ def _(a):
 
 
 @singledispatch
-def as_sparse_dask_array(a) -> DaskArray:
+def as_sparse_dask_array(a: NDArray | CSArray | CSMatrix | DaskArray) -> DaskArray:
+    """Convert a to a sparse dask array, preserving sparse format and container (`cs{rc}_{array,matrix}`)."""
+    raise NotImplementedError
+
+
+@as_sparse_dask_array.register(CSArray | CSMatrix | np.ndarray)
+def _(a: CSArray | CSMatrix | NDArray) -> DaskArray:
     import dask.array as da
 
-    return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
-
-
-@as_sparse_dask_array.register(CSMatrix)
-def _(a):
-    import dask.array as da
-
-    return da.from_array(a, _half_chunk_size(a.shape))
-
-
-@as_sparse_dask_array.register(CSArray)
-def _(a):
-    import dask.array as da
-
-    return da.from_array(sparse.csr_matrix(a), _half_chunk_size(a.shape))
+    return da.from_array(_as_sparse_for_dask(a), _half_chunk_size(a.shape))
 
 
 @as_sparse_dask_array.register(DaskArray)
-def _(a):
-    return a.map_blocks(sparse.csr_matrix)
+def _(a: DaskArray) -> DaskArray:
+    return a.map_blocks(_as_sparse_for_dask)
+
+
+def _as_sparse_for_dask(a: NDArray | CSArray | CSMatrix) -> CSArray | CSMatrix:
+    """Convert into a a sparse container that dask supports (or complain)."""
+    if isinstance(a, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
+        msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
+        raise TypeError(msg)
+    if isinstance(a, CSArray | CSMatrix):
+        return a
+    return (sparse.csr_array if DASK_CAN_SPARRAY else sparse.csr_matrix)(a)
 
 
 @singledispatch

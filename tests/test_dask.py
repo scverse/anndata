@@ -4,6 +4,7 @@ For tests using dask
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -16,6 +17,7 @@ from anndata._core.anndata import AnnData
 from anndata.compat import CupyArray, DaskArray
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
+    DASK_CAN_SPARRAY,
     GEN_ADATA_DASK_ARGS,
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
@@ -26,8 +28,13 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Literal
+
+    from numpy.typing import NDArray
+
+    from anndata.compat import CSArray, CSMatrix
 
 
 pytest.importorskip("dask.array")
@@ -312,28 +319,39 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 
 
 @pytest.mark.parametrize(
-    "array_func",
+    ("to_dask", "inner_func"),
     [
-        pytest.param(as_dense_dask_array, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+        pytest.param(as_dense_dask_array, None, id="dense"),
+        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
         pytest.param(
-            as_dense_cupy_dask_array,
-            id="cupy_dense_dask_array",
-            marks=pytest.mark.gpu,
+            as_sparse_dask_array,
+            sparse.csr_array,
+            id="sparse",
+            marks=pytest.mark.skipif(
+                not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+            ),
         ),
         pytest.param(
-            as_cupy_sparse_dask_array,
-            id="cupy_sparse_dask_array",
-            marks=pytest.mark.gpu,
+            as_dense_cupy_dask_array, None, id="cupy_dense", marks=pytest.mark.gpu
+        ),
+        pytest.param(
+            as_cupy_sparse_dask_array, None, id="cupy_sparse", marks=pytest.mark.gpu
         ),
     ],
 )
-def test_dask_to_disk_view(array_func, diskfmt, tmp_path):
+def test_dask_to_disk_view(
+    to_dask: Callable[[CSArray | CSMatrix | NDArray], DaskArray],
+    to_inner: Callable[[NDArray], CSArray | CSMatrix | NDArray] | None,
+    diskfmt: Literal["h5ad", "zarr"],
+    tmp_path: Path,
+) -> None:
     random_state = np.random.default_rng()
-    orig = ad.AnnData(
-        # need to change type for cupy
-        array_func(random_state.binomial(100, 0.005, (20, 15)).astype("float32"))
-    )
+    arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")
+
+    if to_inner is not None:
+        arr = to_inner(arr)
+    # TODO: need to change type for cupy
+    orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]
     path = tmp_path / f"test.{diskfmt}"
     getattr(orig, f"write_{diskfmt}")(path)
