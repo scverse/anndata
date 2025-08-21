@@ -12,6 +12,7 @@ and [the `.feature` fragments](https://github.com/scverse/anndata/tree/main/docs
 :maxdepth: 1
 
 tutorials/index
+guides/index
 api
 concatenation
 fileformat-prose
