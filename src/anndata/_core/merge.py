@@ -14,10 +14,11 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
+import pandas.api.types as pdf
 import scipy
+from array_api_compat import get_namespace
 from natsort import natsorted
 from packaging.version import Version
-from pandas.api.types import is_extension_array_dtype
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -49,6 +50,11 @@ if TYPE_CHECKING:
     from ..compat import XDataArray, XDataset
 
 T = TypeVar("T")
+
+try:
+    import jax.dlpack
+except ImportError:
+    pass  # Optional: fail gracefully if these aren't installed
 
 ###################
 # Utilities
@@ -539,13 +545,62 @@ def resolve_merge_strategy(
     return strategy
 
 
-def safe_to_numpy(x):
-    """Convert to numpy array, handling JAX/Cupy arrays."""
+# def safe_to_numpy(x):
+#     """Convert to numpy array, handling JAX/Cupy arrays."""
+#     if isinstance(x, pd.Series | pd.Index) or (
+#         hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
+#     ):
+#         return x
+#     return np.asarray(x)
+
+
+def _is_pandas(x):
+    return isinstance(x, pd.Series | pd.Index) or (
+        hasattr(x, "dtype") and pdf.is_extension_array_dtype(x.dtype)
+    )
+
+
+def _is_array_api_compatible(x):
+    # not sure if it is needed but kept it for the future
+    try:
+        get_namespace(x)
+        return True
+    except TypeError:
+        return False
+
+
+def _dlpack_to_numpy(x):
+    # Convert array-api-compatible x to NumPy using DLPack.
+    try:
+        return np.from_dlpack(x)
+    except TypeError as e:
+        msg = f"DLPack to NumPy failed: {e}"
+        raise TypeError(msg) from e
+
+
+def _dlpack_from_numpy(x_np, original_xp):
+    # cubed and other array later elif
+    if original_xp.__name__.startswith("jax"):
+        return jax.dlpack.from_dlpack(x_np)
+    else:
+        msg = f"DLPack back-conversion not implemented for {original_xp.__name__}"
+        raise TypeError(msg)
+
+
+def safe_to_backend(x, *, copy=False):
+    """
+    Convert input to an array-api compatible array, keeping backend (NumPy, JAX, CuPy, etc.)
+    instead of forcing to NumPy.
+
+    Leaves pandas objects unchanged.
+    """
     if isinstance(x, pd.Series | pd.Index) or (
         hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
     ):
         return x
-    return np.asarray(x)
+
+    xp = get_namespace(x)  # e.g., numpy, jax.numpy, cupy, etc.
+    return xp.asarray(x, copy=copy)
 
 
 #####################
@@ -660,22 +715,55 @@ class Reindexer:
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        if el.shape[axis] == 0:
-            # Presumably faster since it won't allocate the full array
-            shape = list(el.shape)
-            shape[axis] = len(self.new_idx)
-            return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.idx
 
-        # Fallback to numpy: keep pandas
-        # keep pandas EAs/Series/Index as-is; only normalize non-pandas arrays
+        if _is_pandas(el):
+            # using the behavior that already exists in pandas for Series/Index
+            return pd.api.extensions.take(
+                el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
+            )
+        # e.g., numpy, jax.numpy, cubed, etc.
+        xp = get_namespace(el)
 
-        el = safe_to_numpy(el)
+        # Handling edge case to mimic pandas behavior
+        if el.shape[axis] == 0:
+            shape = list(el.shape)
+            shape[axis] = indexer.shape[0]
+            # convert fill_value to the same type as el - to keep everything in the same dtype
+            # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
+            fv = xp.asarray(fill_value)
+            return xp.broadcast_to(fv, shape)
 
-        return pd.api.extensions.take(
-            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
-        )
+        # Check: is array-api compatible, but not NumPy
+        if not isinstance(el, np.ndarray) and _is_array_api_compatible(el):
+            # Convert to NumPy via DLPack
+            el_np = _dlpack_to_numpy(el)
+
+            # Recursively call this same function
+            out_np = self._apply_to_array(el_np, axis=axis, fill_value=fill_value)
+
+            # TODO: Fix it as moving it back and forth is not ideal, but it allows us to
+            # keep the same interface for all backends.
+            # Convert result back to original backend
+            return _dlpack_from_numpy(out_np, xp)
+
+        # numpy case
+        indexer = xp.asarray(indexer)
+        # marking which positions are missing, so we could use fill_value
+        missing_mask = indexer == -1
+        safe_indexer = xp.where(missing_mask, 0, indexer)
+        taken = xp.take(el, safe_indexer, axis=axis)
+        # Expand mask so we can apply xp.where along the right axis
+        shape = [1] * taken.ndim
+        shape[axis] = missing_mask.shape[0]
+        mask = missing_mask.reshape(shape)
+
+        # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
+        fv = xp.asarray(fill_value)
+        fv_broadcast = xp.broadcast_to(fv, taken.shape)
+
+        return xp.where(mask, fv_broadcast, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
         self, el: CSMatrix | CSArray, *, axis, fill_value=None
@@ -1423,7 +1511,7 @@ def _to_numpy_if_array_api(x):
         aac.array_namespace(x)
         return np.asarray(x)
     except TypeError:
-        # Not an array-API object (or lib not available) → return unchanged
+        # Not an array-API object (or lib not available) = return unchanged
         return x
 
 

@@ -308,8 +308,6 @@ def _is_array_api_dense(x):
 
 
 def _keep_for_types(val, allowed_types):
-    import numpy as np
-
     # exact type allowed
     if type(val) in allowed_types:
         return True
@@ -317,8 +315,21 @@ def _keep_for_types(val, allowed_types):
     return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
 
 
+def _safe_backend_copy(xp, arr, dtype=None, copy=True):
+    # making sure that the copy=True behavior is cosistent across different array libraries
+    x = xp.asarray(arr, dtype=dtype)
+    if not copy:
+        return x
+    try:
+        # NumPy supports this
+        return xp.asarray(x, dtype=dtype, copy=True)
+    except TypeError:
+        # JAX/cubed/etc. don't support copy=, so we force a new buffer
+        return xp.array(x, dtype=dtype)
+
+
 # TODO: Use hypothesis for this?
-def gen_adata(  # noqa: PLR0913
+def gen_adata(
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
@@ -328,6 +339,8 @@ def gen_adata(  # noqa: PLR0913
     # X_dtype: np.dtype = np.float32,
     # so it is not being manually defaulted to numpy from the function signature
     X_dtype: type | None = None,
+    # testing just to see if it is a better way to not share memory and just generate copies instead
+    copy: bool = True,
     # controlling column types for obs and var
     # numpy + pandas only construct
     obs_dtypes: Collection[
@@ -378,17 +391,17 @@ def gen_adata(  # noqa: PLR0913
         random_state = np.random.default_rng()
 
     # to intentionally break everything
-    xp = jnp
+    # xp = jnp
 
     # actual code to get the array namespace
-    # try:
-    #     xp = ARRAY_API_REGISTRY[array_namespace]()
-    # except KeyError as err:
-    #     msg = (
-    #         f"Unsupported array namespace: {array_namespace!r}. "
-    #         f"Supported: {list(ARRAY_API_REGISTRY)}"
-    #     )
-    #     raise ValueError(msg) from err
+    try:
+        xp = ARRAY_API_REGISTRY[array_namespace]()
+    except KeyError as err:
+        msg = (
+            f"Unsupported array namespace: {array_namespace!r}. "
+            f"Supported: {list(ARRAY_API_REGISTRY)}"
+        )
+        raise ValueError(msg) from err
 
     # print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
 
@@ -418,13 +431,17 @@ def gen_adata(  # noqa: PLR0913
         # splitting this numpy method out as cubed does not have an equivalent but jax does
         arr = random_state.binomial(100, 0.005, (M, N))
         # converting to the appropriate array type
-        X = X_type(xp.asarray(arr, dtype=X_dtype))
+        # X = X_type(xp.asarray(arr, dtype=X_dtype))
+        X = X_type(_safe_backend_copy(xp, arr, dtype=X_dtype, copy=copy))
 
     # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
         # array=np.random.random((M, 50)),
         # random_state.random to not interfere with other test code or modules
-        array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
+        # array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
+        array=_safe_backend_copy(
+            xp, random_state.random((M, 50)), dtype=X_dtype, copy=copy
+        ),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
@@ -432,7 +449,10 @@ def gen_adata(  # noqa: PLR0913
     )
     varm = dict(
         # array=np.random.random((N, 50)),
-        array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
+        # array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
+        array=_safe_backend_copy(
+            xp, random_state.random((N, 50)), dtype=X_dtype, copy=copy
+        ),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -465,7 +485,10 @@ def gen_adata(  # noqa: PLR0913
     )
     layers = dict(
         # array=np.random.random((M, N)),
-        array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
+        # array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
+        array=_safe_backend_copy(
+            xp, random_state.random((M, N)), dtype=X_dtype, copy=copy
+        ),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -480,7 +503,10 @@ def gen_adata(  # noqa: PLR0913
     layers = {k: v for k, v in layers.items() if _keep_for_types(v, layers_types)}
     obsp = dict(
         # array=np.random.random((M, M)),
-        array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
+        # array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
+        array=_safe_backend_copy(
+            xp, random_state.random((M, M)), dtype=X_dtype, copy=copy
+        ),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
@@ -488,7 +514,10 @@ def gen_adata(  # noqa: PLR0913
     )
     varp = dict(
         # array=np.random.random((N, N)),
-        array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
+        # array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
+        array=_safe_backend_copy(
+            xp, random_state.random((N, N)), dtype=X_dtype, copy=copy
+        ),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(

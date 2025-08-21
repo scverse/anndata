@@ -351,7 +351,6 @@ def test_gen_adata_jax_backend():
 def test_gen_adata_jax_subfields():
     adata = gen_adata(
         (5, 5),
-        array_namespace="jax",
         X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
     )
 
