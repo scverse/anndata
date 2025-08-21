@@ -286,10 +286,7 @@ def test_assign_X(adata):
         pytest.param(as_dense_dask_array, np.ndarray, id="dense"),
         pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
         pytest.param(
-            as_dense_cupy_dask_array,
-            CupyArray,
-            id="cupy_dense",
-            marks=pytest.mark.gpu,
+            as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
         ),
     ],
 )
