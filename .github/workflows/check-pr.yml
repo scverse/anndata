@@ -24,7 +24,7 @@ env:
 
 jobs:
   check-milestone:
-    name: "Triage: Check Milestone"
+    name: "Triage: Check PR title, milestone, and labels"
     runs-on: ubuntu-latest
     steps:
       - name: Check if merging isn’t blocked
