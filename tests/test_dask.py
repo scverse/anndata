@@ -14,7 +14,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata.compat import CupyArray, DaskArray
+from anndata.compat import CSArray, CSMatrix, CupyArray, DaskArray
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
     DASK_CAN_SPARRAY,
@@ -33,8 +33,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from numpy.typing import NDArray
-
-    from anndata.compat import CSArray, CSMatrix
 
 
 pytest.importorskip("dask.array")
@@ -284,7 +282,7 @@ def test_assign_X(adata):
     ("array_func", "mem_type"),
     [
         pytest.param(as_dense_dask_array, np.ndarray, id="dense"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
+        pytest.param(as_sparse_dask_array, CSArray | CSMatrix, id="sparse"),
         pytest.param(
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
         ),
