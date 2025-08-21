@@ -69,7 +69,7 @@ jobs:
           python-version: ${{ env.max_python_version }}
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test,cu12]" -c ci/constraints.txt
+        run: uv pip install --system -e ".[dev,test,cu13]" -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
