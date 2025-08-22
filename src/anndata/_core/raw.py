@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
-    from ..compat import CSMatrix
+    from ..compat import CSMatrix, Index, Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -123,7 +123,7 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Index) -> Raw:
         oidx, vidx = self._normalize_indices(index)
 
         # To preserve two dimensional shape
@@ -171,7 +171,9 @@ class Raw:
             uns=self._adata.uns.copy(),
         )
 
-    def _normalize_indices(self, packed_index):
+    def _normalize_indices(
+        self, packed_index: Index
+    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
             packed_index = packed_index.values

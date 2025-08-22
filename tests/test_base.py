@@ -769,4 +769,4 @@ def test_create_adata_from_single_axis_elem(
     assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
-    ad.tests.helpers.assert_equal(from_disk, in_memory)
+    assert_equal(from_disk, in_memory)

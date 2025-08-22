@@ -17,6 +17,7 @@ from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched
+from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
 
 if TYPE_CHECKING:
@@ -40,12 +41,12 @@ M = 50
 N = 50
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
     return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
 
 
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
 def zarr_separator():
     return "" if ad.settings.zarr_write_format == 2 else "/c"
 
@@ -312,10 +313,10 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     ("subset_func", "subset_func2"),
     product(
         [
-            ad.tests.helpers.array_subset,
-            ad.tests.helpers.slice_subset,
-            ad.tests.helpers.array_int_subset,
-            ad.tests.helpers.array_bool_subset,
+            test_helpers.array_subset,
+            test_helpers.slice_int_subset,
+            test_helpers.array_int_subset,
+            test_helpers.array_bool_subset,
         ],
         repeat=2,
     ),
@@ -388,7 +389,7 @@ def test_lazy_array_cache(
     store = AccessTrackingStore(path)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
-    f = open_write_group(store, mode="r")
+    f = zarr.open_group(store, mode="r")
     a_disk = sparse_dataset(f["X"], should_cache_indptr=should_cache_indptr)
     a_disk[:1]
     a_disk[3:5]
@@ -513,11 +514,14 @@ def test_data_access(
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
+    kwargs = {}
+    if not is_zarr_v2():
+        kwargs["zarr_format"] = f.metadata.zarr_format
     zarr.array(
         data,
         store=path / "X" / "data",
         chunks=(1,),
-        zarr_format=ad.settings.zarr_write_format,
+        **kwargs,
     )
     store = AccessTrackingStore(path)
     store.initialize_key_trackers(["X/data"])
@@ -550,13 +554,12 @@ def test_wrong_shape(
     sparse_format: Literal["csr", "csc"],
     a_shape: tuple[int, int],
     b_shape: tuple[int, int],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+    path = tmp_path / "test.h5ad"
     a_mem = sparse.random(*a_shape, format=sparse_format)
     b_mem = sparse.random(*b_shape, format=sparse_format)
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = h5py.File(path, "a")
 
     ad.io.write_elem(f, "a", a_mem)
     ad.io.write_elem(f, "b", b_mem)
@@ -579,11 +582,11 @@ def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
         disk_mtx.group = f
 
 
-def test_wrong_formats(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+def test_wrong_formats(tmp_path: Path):
+    path = tmp_path / "test.h5ad"
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = h5py.File(path, "a")
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])

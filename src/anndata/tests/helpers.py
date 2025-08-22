@@ -17,7 +17,6 @@ import pytest
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-import anndata
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
@@ -43,12 +42,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
     from .._types import ArrayStorageType
+    from ..compat import Index1D
 
     DT = TypeVar("DT")
+    _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
 
 try:
@@ -413,10 +415,6 @@ def gen_adata(  # noqa: PLR0913
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    # zarr v3 on-disk does not write structured dtypes
-    if anndata.settings.zarr_write_format == 3:
-        del uns["O_recarray"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
@@ -433,7 +431,7 @@ def gen_adata(  # noqa: PLR0913
     return adata
 
 
-def array_bool_subset(index, min_size=2):
+def array_bool_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.bool_]:
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
         range(len(index)),
@@ -444,11 +442,11 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
-def list_bool_subset(index, min_size=2):
+def list_bool_subset(index: pd.Index[str], min_size: int = 2) -> list[bool]:
     return array_bool_subset(index, min_size=min_size).tolist()
 
 
-def matrix_bool_subset(index, min_size=2):
+def matrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> np.matrix:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PendingDeprecationWarning)
         indexer = np.matrix(
@@ -457,19 +455,26 @@ def matrix_bool_subset(index, min_size=2):
     return indexer
 
 
-def spmatrix_bool_subset(index, min_size=2):
+def spmatrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_matrix:
     return sparse.csr_matrix(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def sparray_bool_subset(index, min_size=2):
+def sparray_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_array:
     return sparse.csr_array(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def array_subset(index, min_size=2):
+def single_subset(index: pd.Index[str], min_size: int = 1) -> str:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return index[np.random.randint(0, len(index))]
+
+
+def array_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.str_]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -478,7 +483,7 @@ def array_subset(index, min_size=2):
     )
 
 
-def array_int_subset(index, min_size=2):
+def array_int_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.int64]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -489,11 +494,11 @@ def array_int_subset(index, min_size=2):
     )
 
 
-def list_int_subset(index, min_size=2):
+def list_int_subset(index: pd.Index[str], min_size: int = 2) -> list[int]:
     return array_int_subset(index, min_size=min_size).tolist()
 
 
-def slice_subset(index, min_size=2):
+def slice_int_subset(index: pd.Index[str], min_size: int = 2) -> slice:
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
         s = slice(*sorted(points))
@@ -502,25 +507,33 @@ def slice_subset(index, min_size=2):
     return s
 
 
-def single_subset(index):
-    return index[np.random.randint(0, len(index))]
+def single_int_subset(index: pd.Index[str], min_size: int = 1) -> int:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return np.random.randint(0, len(index))
 
 
-@pytest.fixture(
-    params=[
-        array_subset,
-        slice_subset,
-        single_subset,
-        array_int_subset,
-        list_int_subset,
-        array_bool_subset,
-        list_bool_subset,
-        matrix_bool_subset,
-        spmatrix_bool_subset,
-        sparray_bool_subset,
-    ]
-)
-def subset_func(request):
+_SUBSET_FUNCS: list[_SubsetFunc] = [
+    # str (obs/var name)
+    single_subset,
+    array_subset,
+    # int (numeric index)
+    single_int_subset,
+    slice_int_subset,
+    array_int_subset,
+    list_int_subset,
+    # bool (mask)
+    array_bool_subset,
+    list_bool_subset,
+    matrix_bool_subset,
+    spmatrix_bool_subset,
+    sparray_bool_subset,
+]
+
+
+@pytest.fixture(params=_SUBSET_FUNCS)
+def subset_func(request: pytest.FixtureRequest) -> _SubsetFunc:
     return request.param
 
 
@@ -1158,6 +1171,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
+
         async def get(
             self,
             key: str,

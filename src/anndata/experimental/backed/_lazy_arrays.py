@@ -3,27 +3,27 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+import numpy as np
 import pandas as pd
 
 from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
-from anndata.compat import H5Array, ZarrArray
 
 from ..._settings import settings
 from ...compat import (
     NULLABLE_NUMPY_STRING_TYPE,
+    H5Array,
     XBackendArray,
     XDataArray,
     XZarrArrayWrapper,
+    ZarrArray,
 )
 from ...compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
-
-    import numpy as np
 
     from anndata._core.index import Index
     from anndata.compat import ZarrGroup
@@ -45,12 +45,34 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
     def __getitem__(self, key: xr.core.indexing.ExplicitIndexer):
         if isinstance(self._array, ZarrArray):
             return super().__getitem__(key)
-        return xr.core.indexing.explicit_indexing_adapter(
+        res = xr.core.indexing.explicit_indexing_adapter(
             key,
             self.shape,
             xr.core.indexing.IndexingSupport.OUTER_1VECTOR,
-            lambda key: self._array[key],
+            self._getitem,
         )
+        return res
+
+    def _getitem(self, key: tuple[int | np.integer | slice | np.ndarray]):
+        if not isinstance(key, tuple):
+            msg = f"`xr.core.indexing.explicit_indexing_adapter` should have produced a tuple, got {type(key)} instead"
+            raise ValueError(msg)
+        if (n_key_dims := len(key)) != 1:
+            msg = f"Backed arrays currently only supported in 1d, got {n_key_dims} dims"
+            raise ValueError(msg)
+        key = key[0]
+        # See https://github.com/h5py/h5py/issues/293 for why we need to convert.
+        # See https://github.com/pydata/xarray/blob/fa03b5b4ae95a366f6de5b60f5cc4eb801cd51ec/xarray/core/indexing.py#L1259-L1263
+        # for why we can expect sorted/deduped indexers (which are needed for hdf5).
+        if (
+            isinstance(key, np.ndarray)
+            and np.issubdtype(key.dtype, np.integer)
+            and isinstance(self._array, H5Array)
+        ):
+            key_mask = np.zeros(self._array.shape).astype("bool")
+            key_mask[key] = True
+            return self._array[key_mask]
+        return self._array[key]
 
 
 class CategoricalArray(XBackendArray, Generic[K]):

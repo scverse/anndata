@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
@@ -27,19 +26,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def _check_rec_array(adata: AnnData) -> None:
-    if settings.zarr_write_format == 3 and (
-        structured_dtype_keys := {
-            k
-            for k, v in adata.uns.items()
-            if isinstance(v, np.recarray)
-            or (isinstance(v, np.ndarray) and v.dtype.fields)
-        }
-    ):
-        msg = f"zarr v3 does not support structured dtypes.  Found keys {structured_dtype_keys}"
-        raise NotImplementedError(msg)
-
-
 @no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
@@ -50,9 +36,6 @@ def write_zarr(
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
-    _check_rec_array(adata)
-    if isinstance(store, Path):
-        store = str(store)
     if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
         if adata.raw is not None:
@@ -89,9 +72,6 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
-    if isinstance(store, Path):
-        store = str(store)
-
     f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
