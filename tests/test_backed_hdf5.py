@@ -305,35 +305,6 @@ def test_backed_modification(adata, backing_h5ad):
     assert np.all(adata.X[2, :] == np.array([7, 13, 9]))
 
 
-def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
-    adata.X[:, 1] = 0  # Make it a little sparse
-    adata.X = sparse_format(adata.X)
-    assert not adata.isbacked
-
-    adata.write(backing_h5ad)
-    adata = ad.read_h5ad(backing_h5ad, backed="r+")
-
-    assert adata.filename == backing_h5ad
-    assert adata.isbacked
-
-    pat = r"__setitem__ for backed sparse will be removed"
-    with pytest.warns(FutureWarning, match=pat):
-        adata.X[0, [0, 2]] = 10
-    with pytest.warns(FutureWarning, match=pat):
-        adata.X[1, [0, 2]] = [11, 12]
-    with (
-        pytest.warns(FutureWarning, match=pat),
-        pytest.raises(ValueError, match=r"cannot change the sparsity structure"),
-    ):
-        adata.X[2, 1] = 13
-
-    assert adata.isbacked
-
-    assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
-    assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
-    assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
-
-
 # TODO: Work around h5py not supporting this
 # def test_backed_view_modification(adata, backing_h5ad):
 #     adata.write(backing_h5ad)
