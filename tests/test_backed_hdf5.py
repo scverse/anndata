@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -20,6 +20,10 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
 
 subset_func2 = subset_func
 
@@ -72,12 +76,12 @@ def sparse_format(request):
 
 
 @pytest.fixture(params=["r+", "r", False])
-def backed_mode(request):
+def backed_mode(request) -> Literal["r+", "r", False]:
     return request.param
 
 
 @pytest.fixture(params=(("X",), ()))
-def as_dense(request):
+def as_dense(request) -> tuple[str] | tuple:
     return request.param
 
 
@@ -90,10 +94,15 @@ def as_dense(request):
 @pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
-def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.h5ad"
-    backed_pth = base_pth / "backed.h5ad"
+def test_read_write_X(
+    tmp_path: Path,
+    mtx_format,
+    backed_mode: Literal["r+", "r", False],
+    *,
+    as_dense: tuple[str] | tuple,
+):
+    orig_pth = tmp_path / "orig.h5ad"
+    backed_pth = tmp_path / "backed.h5ad"
 
     orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
     orig.write(orig_pth)
@@ -106,9 +115,8 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 
-def test_backed_view(tmp_path, backed_mode):
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.h5ad"
+def test_backed_view(tmp_path: Path, backed_mode: Literal["r+", "r", False]):
+    orig_pth = tmp_path / "orig.h5ad"
 
     orig = ad.AnnData(sparse.random(100, 10, format="csr"))
     orig.write(orig_pth)
@@ -173,7 +181,7 @@ def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     adata_subset.write()
 
 
-def test_backing_copy(adata, tmp_path, backing_h5ad):
+def test_backing_copy(adata, tmp_path: Path, backing_h5ad):
     adata.filename = backing_h5ad
     adata.write()
 
@@ -187,7 +195,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 
 
 # TODO: Also test updating the backing file inplace
-def test_backed_raw(tmp_path):
+def test_backed_raw(tmp_path: Path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
@@ -210,7 +218,7 @@ def test_backed_raw(tmp_path):
         pytest.param(sparse.csr_array, id="csr_array"),
     ],
 )
-def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
+def test_backed_raw_subset(tmp_path: Path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
@@ -256,7 +264,7 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
         pytest.param(as_dense_dask_array, id="dask_array"),
     ],
 )
-def test_to_memory_full(tmp_path, array_type):
+def test_to_memory_full(tmp_path: Path, array_type):
     backed_pth = tmp_path / "backed.h5ad"
     mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
