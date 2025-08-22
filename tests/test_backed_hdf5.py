@@ -106,6 +106,19 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
 
 
+def test_backed_view(tmp_path, backed_mode):
+    base_pth = Path(tmp_path)
+    orig_pth = base_pth / "orig.h5ad"
+
+    orig = ad.AnnData(sparse.random(100, 10, format="csr"))
+    orig.write(orig_pth)
+
+    adata = ad.read_h5ad(orig_pth, backed=backed_mode)
+
+    for i in range(0, adata.shape[0], 10):
+        adata[i : i + 5].write_h5ad(tmp_path / f"chunk_{i}.h5ad")
+
+
 # this is very similar to the views test
 @pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
 def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
