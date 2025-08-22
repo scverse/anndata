@@ -42,11 +42,7 @@ from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
-from .views import (
-    DictView,
-    _resolve_idxs,
-    as_view,
-)
+from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -1907,8 +1903,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             compression_opts=compression_opts,
             as_dense=as_dense,
         )
-
-        if self.isbacked:
+        # Only reset the filename if the AnnData object now points to a complete new copy
+        if self.isbacked and not self.is_view:
             self.file.filename = filename
 
     write = write_h5ad  # a shortcut and backwards compat
