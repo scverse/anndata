@@ -492,6 +492,7 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 )
 
 
+@_REGISTRY.register_write(ZarrGroup, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_zarr(
     f: ZarrGroup,
@@ -514,6 +515,7 @@ def write_basic_dask_zarr(
 
 # Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
+@_REGISTRY.register_write(H5Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_h5(
     f: H5Group,
@@ -803,21 +805,7 @@ def write_sparse_dataset(
     f[k].attrs["encoding-version"] = "0.1.0"
 
 
-@_REGISTRY.register_write(H5Group, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
-)
-def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     _writer.write_elem(
         f,
         k,
@@ -826,18 +814,6 @@ def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType(
     )
 
 
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
-)
 def write_dask_sparse(
     f: GroupStorageType,
     k: str,
@@ -884,6 +860,26 @@ def write_dask_sparse(
         chunk_stop += chunk_size
 
         disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
+
+
+for array_type, group_type in product(
+    [DaskArray, views.DaskArrayView], [H5Group, ZarrGroup]
+):
+    for cupy_array_type, spec in [
+        (CupyArray, IOSpec("array", "0.2.0")),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0")),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, cupy_array_type), spec)(
+            write_cupy_dask
+        )
+    for scipy_sparse_type, spec in [
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0")),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, scipy_sparse_type), spec)(
+            write_dask_sparse
+        )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
