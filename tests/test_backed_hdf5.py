@@ -37,7 +37,7 @@ subset_func2 = subset_func
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     X_list = [
         [1, 2, 3],
         [4, 5, 6],
@@ -69,12 +69,16 @@ def adata():
     params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
     ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
-def mtx_format(request):
+def mtx_format(
+    request,
+) -> Callable[
+    [np.ndarray], DaskArray | np.ndarray | sparse.csr_array | sparse.csr_matrix
+]:
     return request.param
 
 
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
-def sparse_format(request):
+def sparse_format(request) -> type[sparse.csr_matrix | sparse.csc_matrix]:
     return request.param
 
 
@@ -100,7 +104,7 @@ def as_dense(request) -> tuple[str] | tuple:
 def test_read_write_X(
     tmp_path: Path,
     mtx_format: Callable[
-        [np.ndarray], DaskArray | sparse.csr_array | sparse.csr_matrix
+        [np.ndarray], DaskArray | np.ndarray | sparse.csr_array | sparse.csr_matrix
     ],
     backed_mode: Literal["r+", "r", False],
     *,
@@ -345,7 +349,9 @@ def test_backed_modification(adata: ad.AnnData, backing_h5ad: Path):
 
 
 def test_backed_modification_sparse(
-    adata: ad.AnnData, backing_h5ad: Path, sparse_format
+    adata: ad.AnnData,
+    backing_h5ad: Path,
+    sparse_format: type[sparse.csr_matrix | sparse.csc_matrix],
 ):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse_format(adata.X)
