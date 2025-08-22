@@ -116,7 +116,10 @@ def test_backed_view(tmp_path, backed_mode):
     adata = ad.read_h5ad(orig_pth, backed=backed_mode)
 
     for i in range(0, adata.shape[0], 10):
+        chunk_path = tmp_path / f"chunk_{i}.h5ad"
         adata[i : i + 5].write_h5ad(tmp_path / f"chunk_{i}.h5ad")
+        chunk = adata[i : i + 5]
+        assert_equal(chunk, ad.read_h5ad(chunk_path))
 
 
 # this is very similar to the views test
