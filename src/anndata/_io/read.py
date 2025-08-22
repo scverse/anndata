@@ -15,16 +15,18 @@ import pandas as pd
 from scipy import sparse
 
 from .. import AnnData
-from ..compat import _deprecate_positional_args
+from ..compat import old_positionals
 from .utils import is_float
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
 
 
+@old_positionals("first_column_names", "dtype")
 def read_csv(
     filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = ",",
+    *,
     first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
@@ -46,7 +48,9 @@ def read_csv(
     dtype
         Numpy data type.
     """
-    return read_text(filename, delimiter, first_column_names, dtype)
+    return read_text(
+        filename, delimiter, first_column_names=first_column_names, dtype=dtype
+    )
 
 
 def read_excel(
@@ -114,7 +118,7 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
     with h5py.File(filename, "r") as f:
         # the following is necessary in Python 3, because only
         # a view and not a list is returned
-        keys = [k for k in f.keys()]
+        keys = list(f)
         if key == "":
             msg = (
                 f"The file {filename} stores the following sheets:\n{keys}\n"
@@ -152,8 +156,19 @@ def _fmt_loom_axis_attrs(
     return axis_df, axis_mapping
 
 
-@_deprecate_positional_args(version="0.9")
-def read_loom(
+@old_positionals(
+    "sparse",
+    "cleanup",
+    "X_name",
+    "obs_names",
+    "obsm_names",
+    "var_names",
+    "varm_names",
+    "dtype",
+    "obsm_mapping",
+    "varm_mapping",
+)
+def read_loom(  # noqa: PLR0912, PLR0913
     filename: PathLike[str] | str,
     *,
     sparse: bool = True,
@@ -216,11 +231,11 @@ def read_loom(
     """
     # Deprecations
     if obsm_names is not None:
-        warn(
+        msg = (
             "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
-            "In 0.9 this will be an error.",
-            FutureWarning,
+            "In 0.9 this will be an error."
         )
+        warn(msg, FutureWarning, stacklevel=2)
         if obsm_mapping != {}:
             msg = (
                 "Received values for both `obsm_names` and `obsm_mapping`. This is "
@@ -229,11 +244,11 @@ def read_loom(
             raise ValueError(msg)
         obsm_mapping = obsm_names
     if varm_names is not None:
-        warn(
+        msg = (
             "Argument varm_names has been deprecated in favour of `varm_mapping`. "
-            "In 0.9 this will be an error.",
-            FutureWarning,
+            "In 0.9 this will be an error."
         )
+        warn(msg, FutureWarning, stacklevel=2)
         if varm_mapping != {}:
             msg = (
                 "Received values for both `varm_names` and `varm_mapping`. This is "
@@ -245,8 +260,14 @@ def read_loom(
     filename = fspath(filename)  # allow passing pathlib.Path objects
     from loompy import connect
 
+    if TYPE_CHECKING:
+        from loompy import LoomConnection
+
+    lc: LoomConnection
     with connect(filename, "r", **kwargs) as lc:
-        if X_name not in lc.layers.keys():
+        assert lc.layers is not None
+
+        if X_name not in lc.layers:
             X_name = ""
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
         X = X.astype(dtype, copy=False)
@@ -256,13 +277,9 @@ def read_loom(
             layers["matrix"] = (
                 lc.layers[""].sparse().T.tocsr() if sparse else lc.layers[""][()].T
             )
-        for key in lc.layers.keys():
+        for key, layer in lc.layers.items():
             if key != "":
-                layers[key] = (
-                    lc.layers[key].sparse().T.tocsr()
-                    if sparse
-                    else lc.layers[key][()].T
-                )
+                layers[key] = layer.sparse().T.tocsr() if sparse else layer[()].T
 
         # TODO: Figure out the singleton obs elements
         obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_mapping)
@@ -318,9 +335,11 @@ def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     return AnnData(X)
 
 
+@old_positionals("first_column_names", "dtype")
 def read_text(
     filename: PathLike[str] | str | Iterator[str],
     delimiter: str | None = None,
+    *,
     first_column_names: bool | None = None,
     dtype: str = "float32",
 ) -> AnnData:
@@ -343,18 +362,26 @@ def read_text(
         Numpy data type.
     """
     if not isinstance(filename, PathLike | str | bytes):
-        return _read_text(filename, delimiter, first_column_names, dtype)
+        return _read_text(
+            filename, delimiter, first_column_names=first_column_names, dtype=dtype
+        )
 
     filename = Path(filename)
     if filename.suffix == ".gz":
         with gzip.open(str(filename), mode="rt") as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
     elif filename.suffix == ".bz2":
         with bz2.open(str(filename), mode="rt") as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
     else:
         with filename.open() as f:
-            return _read_text(f, delimiter, first_column_names, dtype)
+            return _read_text(
+                f, delimiter, first_column_names=first_column_names, dtype=dtype
+            )
 
 
 def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
@@ -365,9 +392,10 @@ def _iter_lines(file_like: Iterable[str]) -> Generator[str, None, None]:
             yield line
 
 
-def _read_text(
+def _read_text(  # noqa: PLR0912, PLR0915
     f: Iterator[str],
     delimiter: str | None,
+    *,
     first_column_names: bool | None,
     dtype: str,
 ) -> AnnData:
@@ -391,13 +419,12 @@ def _read_text(
             if not is_float(line_list[-1]):
                 col_names = line_list
                 # logg.msg("    assuming first line in file stores column names", v=4)
+            elif not is_float(line_list[0]) or first_column_names:
+                first_column_names = True
+                row_names.append(line_list[0])
+                data.append(np.array(line_list[1:], dtype=dtype))
             else:
-                if not is_float(line_list[0]) or first_column_names:
-                    first_column_names = True
-                    row_names.append(line_list[0])
-                    data.append(np.array(line_list[1:], dtype=dtype))
-                else:
-                    data.append(np.array(line_list, dtype=dtype))
+                data.append(np.array(line_list, dtype=dtype))
             break
     if not col_names:
         # try reading col_names from the last comment line

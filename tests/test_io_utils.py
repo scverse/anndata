@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager, suppress
+from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
 import h5py
@@ -19,11 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.mark.parametrize(
     "group_fn",
     [
@@ -40,7 +35,7 @@ def test_key_error(
         raise NotImplementedError()
 
     group = group_fn(tmp_path)
-    with group if isinstance(group, AbstractContextManager) else suppress():
+    with group if isinstance(group, AbstractContextManager) else nullcontext():
         if nested:
             group = group.create_group("nested")
             path = "/nested"

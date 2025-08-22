@@ -12,6 +12,7 @@ __pycache__/
 # Distribution / packaging
 /dist/
 /ci/min-deps.txt
+/ci/pre-deps.txt
 /requirements*.lock
 /.python-version
 

@@ -24,9 +24,10 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
-    from anndata.experimental.backed._compat import Dataset2D
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
+
+    from ..._core.xarray import Dataset2D
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
@@ -208,9 +209,11 @@ class IORegistry(Generic[_R, R]):
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
                 return self.write_specs[typ_meta]
-        elif hasattr(elem, "dtype"):
-            if (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs:
-                return self.write_specs[typ_kind]
+        elif (
+            hasattr(elem, "dtype")
+            and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
+        ):
+            return self.write_specs[typ_kind]
         return self.write_specs[type(elem)]
 
 
@@ -346,6 +349,11 @@ class Writer:
 
         import h5py
 
+        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        if "/" in k.split(store.name)[-1][1:]:
+            msg = "Forward slashes are not allowed in keys."
+            raise ValueError(msg)
+
         if isinstance(store, h5py.File):
             store = store["/"]
 
@@ -353,17 +361,26 @@ class Writer:
 
         # Normalize k to absolute path
         if (
-            (isinstance(store, ZarrGroup) and is_zarr_v2())
-            or isinstance(store, h5py.Group)
-            and not PurePosixPath(k).is_absolute()
-        ):
+            is_zarr_v2_store := (
+                (is_zarr_store := isinstance(store, ZarrGroup)) and is_zarr_v2()
+            )
+        ) or (isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()):
             k = str(PurePosixPath(store.name) / k)
+        is_consolidated = False
+        if is_zarr_v2_store:
+            from zarr.storage import ConsolidatedMetadataStore
 
+            is_consolidated = isinstance(store.store, ConsolidatedMetadataStore)
+        elif is_zarr_store:
+            is_consolidated = store.metadata.consolidated_metadata is not None
+        if is_consolidated:
+            msg = "Cannot overwrite/edit a store with consolidated metadata"
+            raise ValueError(msg)
         if k == "/":
             if isinstance(store, ZarrGroup) and not is_zarr_v2():
-                import asyncio
+                from zarr.core.sync import sync
 
-                asyncio.run(store.store.clear())
+                sync(store.store.clear())
             else:
                 store.clear()
         elif k in store:
@@ -412,7 +429,7 @@ def read_elem_lazy(
     ----------
     elem
         The stored element.
-    chunks, optional
+    chunks
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
        Defaults to `(1000, adata.shape[1])` for CSR sparse,

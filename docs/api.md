@@ -13,6 +13,8 @@ The central class:
    AnnData
 ```
 
+(combining-api)=
+
 ## Combining
 
 Combining {class}`AnnData` objects.
@@ -24,6 +26,8 @@ See also the section on concatenation.
 
    concat
 ```
+
+(reading-api)=
 
 ## Reading
 
@@ -65,6 +69,8 @@ You might have more success by assembling the {class}`AnnData` object yourself f
    io.read_text
    io.read_umi_tools
 ```
+
+(writing-api)=
 
 ## Writing
 
@@ -172,10 +178,34 @@ Types used by the former:
    experimental.ReadCallback
    experimental.WriteCallback
    experimental.StorageType
-   experimental.backed._lazy_arrays.MaskedArray
-   experimental.backed._lazy_arrays.CategoricalArray
-   experimental.backed._xarray.Dataset2D
+   experimental.backed.MaskedArray
+   experimental.backed.CategoricalArray
+   experimental.backed.Dataset2D
+   experimental.Dataset2DIlocIndexer
 ```
+
+(extensions-api)=
+
+## Extensions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   register_anndata_namespace
+
+```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.ExtensionNamespace
+```
+
+(errors-api)=
 
 ## Errors and warnings
 
@@ -186,6 +216,8 @@ Types used by the former:
    ImplicitModificationWarning
 ```
 
+(settings-api)=
+
 ## Settings
 
 ```{eval-rst}
@@ -195,6 +227,8 @@ Types used by the former:
    settings
    settings.override
 ```
+
+(types-api)=
 
 ## Custom Types/Classes for Readable/Writeable Elements
 

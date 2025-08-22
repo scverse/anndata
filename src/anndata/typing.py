@@ -16,6 +16,7 @@ from .compat import (
     CupySparseMatrix,
     DaskArray,
     H5Array,
+    XDataArray,
     ZappyArray,
     ZarrArray,
 )
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["Index", "RWAble", "AxisStorable"]
+__all__ = ["AxisStorable", "Index", "RWAble"]
 
 
 Index = _Index
@@ -45,7 +46,7 @@ XDataType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
-ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray
 
 
 InMemoryArrayOrScalarType: TypeAlias = (

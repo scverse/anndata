@@ -9,10 +9,13 @@ import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
+from anndata.compat import is_zarr_v2
+
 if Version(dask.__version__) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
+
 from filelock import FileLock
 from scipy import sparse
 
@@ -21,12 +24,43 @@ from anndata.tests.helpers import subset_func  # noqa: F401
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
     from types import EllipsisType
 
 
 @pytest.fixture
-def backing_h5ad(tmp_path):
+def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
+
+
+@pytest.fixture(
+    params=[
+        ("h5ad", None),
+        ("zarr", 2),
+        pytest.param(
+            ("zarr", 3),
+            marks=pytest.mark.skipif(
+                is_zarr_v2(), reason="zarr v3 file format not supported with v2 package"
+            ),
+        ),
+    ],
+    ids=["h5ad", "zarr2", "zarr3"],
+)
+def diskfmt(request):
+    if (fmt := request.param[0]) == "h5ad":
+        yield fmt
+    else:
+        with ad.settings.override(zarr_write_format=request.param[1]):
+            yield fmt
+
+
+@pytest.fixture
+def diskfmt2(diskfmt):
+    if diskfmt == "h5ad":
+        with ad.settings.override(zarr_write_format=2):
+            yield "zarr"
+    else:
+        yield "h5ad"
 
 
 @pytest.fixture(

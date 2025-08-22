@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray, CSArray, CSMatrix
+from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -23,6 +23,7 @@ from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
 from .views import as_view, view_update
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -75,6 +76,10 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
                 ExperimentalFeatureWarning,
                 # stacklevel=3,
             )
+        elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
+            val = val.reshape((val.shape[0], 1))
+        elif isinstance(val, XDataset):
+            val = Dataset2D(val)
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue
@@ -94,7 +99,6 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
                     f"Value had shape {actual_shape} while it should have had {right_shape}."
                 )
             raise ValueError(msg)
-
         name = f"{self.attrname.title().rstrip('s')} {key!r}"
         return coerce_array(val, name=name, allow_df=self._allow_df)
 
@@ -274,6 +278,9 @@ class AxisArraysBase(AlignedMappingBase):
                 else:
                     msg = "Index.equals and pd.testing.assert_index_equal disagree"
                     raise AssertionError(msg)
+            val.index.name = (
+                self.dim_names.name
+            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
         return super()._validate_value(val, key)
 
     @property

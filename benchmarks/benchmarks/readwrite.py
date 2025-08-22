@@ -25,6 +25,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from types import MappingProxyType
 
 import numpy as np
 import pooch
@@ -77,9 +78,9 @@ PBMC_3K_URL = "https://falexwolf.de/data/pbmc3k_raw.h5ad"
 
 
 class H5ADInMemorySizeSuite:
-    _urls = dict(pbmc3k=PBMC_3K_URL)
+    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
     params = _urls.keys()
-    param_names = ["input_data"]
+    param_names = ("input_data",)
 
     def setup(self, input_data: str):
         self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
@@ -98,9 +99,9 @@ class H5ADInMemorySizeSuite:
 
 
 class H5ADReadSuite:
-    _urls = dict(pbmc3k=PBMC_3K_URL)
+    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
     params = _urls.keys()
-    param_names = ["input_data"]
+    param_names = ("input_data",)
 
     def setup(self, input_data: str):
         self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
@@ -133,9 +134,9 @@ class H5ADReadSuite:
 
 
 class H5ADWriteSuite:
-    _urls = dict(pbmc3k=PBMC_3K_URL)
+    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
     params = _urls.keys()
-    param_names = ["input_data"]
+    param_names = ("input_data",)
 
     def setup(self, input_data: str):
         mem_recording, adata = memory_usage(
@@ -176,9 +177,9 @@ class H5ADWriteSuite:
 
 
 class H5ADBackedWriteSuite(H5ADWriteSuite):
-    _urls = dict(pbmc3k=PBMC_3K_URL)
+    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
     params = _urls.keys()
-    param_names = ["input_data"]
+    param_names = ("input_data",)
 
     def setup(self, input_data):
         mem_recording, adata = memory_usage(

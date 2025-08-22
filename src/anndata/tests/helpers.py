@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import itertools
 import random
-import re
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
-from contextlib import contextmanager
 from functools import partial, singledispatch, wraps
+from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -22,6 +21,7 @@ from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
+from anndata._core.xarray import Dataset2D
 from anndata.compat import (
     AwkArray,
     CSArray,
@@ -31,6 +31,8 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    XDataArray,
+    XDataset,
     ZarrArray,
     is_zarr_v2,
 )
@@ -40,12 +42,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
     from .._types import ArrayStorageType
+    from ..compat import Index1D
 
     DT = TypeVar("DT")
+    _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
 
 try:
@@ -55,32 +60,6 @@ except ImportError:
         *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
-
-
-# Give this to gen_adata when dask array support is expected.
-GEN_ADATA_DASK_ARGS = dict(
-    obsm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    varm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    layers_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-)
 
 
 DEFAULT_KEY_TYPES = (
@@ -100,6 +79,18 @@ DEFAULT_COL_TYPES = (
     np.bool_,
     pd.BooleanDtype,
     pd.Int32Dtype,
+)
+
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
+)
+
+GEN_ADATA_NO_XARRAY_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
 
@@ -130,7 +121,7 @@ def issubdtype(
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
 
-def gen_random_column(
+def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
     if issubdtype(dtype, pd.CategoricalDtype):
@@ -200,15 +191,11 @@ def _gen_awkward_inner(shape, rng, dtype):
         return dtype(rng.randrange(1000))
     else:
         curr_dim_len = shape[0]
-        lil = []
         if curr_dim_len is None:
             # ragged dimension, set random length
             curr_dim_len = rng.randrange(MAX_RAGGED_DIM_LEN)
 
-        for _ in range(curr_dim_len):
-            lil.append(_gen_awkward_inner(shape[1:], rng, dtype))
-
-        return lil
+        return [_gen_awkward_inner(shape[1:], rng, dtype) for _ in range(curr_dim_len)]
 
 
 def gen_awkward(shape, dtype=np.int32):
@@ -282,7 +269,7 @@ def maybe_add_sparse_array(
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(
+def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
@@ -293,8 +280,10 @@ def gen_adata(
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
-    varm_types: Collection[type] = DEFAULT_KEY_TYPES + (AwkArray,),
+    obs_xdataset: bool = False,
+    var_xdataset: bool = False,
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -339,6 +328,12 @@ def gen_adata(
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if has_xr := find_spec("xarray"):
+        if obs_xdataset:
+            obs = XDataset.from_dataframe(obs)
+        if var_xdataset:
+            var = XDataset.from_dataframe(var)
+
     if X_type is None:
         X = None
     else:
@@ -351,6 +346,20 @@ def gen_adata(
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
+    varm = dict(
+        array=np.random.random((N, 50)),
+        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
+        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
+        awk_2d_ragged=gen_awkward((N, None)),
+        da=da.random.random((N, 50)),
+    )
+    if has_xr:
+        obsm["xdataset"] = XDataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        )
+        varm["xdataset"] = XDataset.from_dataframe(
+            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
@@ -358,13 +367,6 @@ def gen_adata(
         format=sparse_fmt,
         random_state=random_state,
         shape=(M, 100),
-    )
-    varm = dict(
-        array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
-        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
-        awk_2d_ragged=gen_awkward((N, None)),
-        da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
@@ -429,7 +431,7 @@ def gen_adata(
     return adata
 
 
-def array_bool_subset(index, min_size=2):
+def array_bool_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.bool_]:
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
         range(len(index)),
@@ -440,11 +442,11 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
-def list_bool_subset(index, min_size=2):
+def list_bool_subset(index: pd.Index[str], min_size: int = 2) -> list[bool]:
     return array_bool_subset(index, min_size=min_size).tolist()
 
 
-def matrix_bool_subset(index, min_size=2):
+def matrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> np.matrix:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PendingDeprecationWarning)
         indexer = np.matrix(
@@ -453,19 +455,26 @@ def matrix_bool_subset(index, min_size=2):
     return indexer
 
 
-def spmatrix_bool_subset(index, min_size=2):
+def spmatrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_matrix:
     return sparse.csr_matrix(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def sparray_bool_subset(index, min_size=2):
+def sparray_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_array:
     return sparse.csr_array(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def array_subset(index, min_size=2):
+def single_subset(index: pd.Index[str], min_size: int = 1) -> str:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return index[np.random.randint(0, len(index))]
+
+
+def array_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.str_]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -474,7 +483,7 @@ def array_subset(index, min_size=2):
     )
 
 
-def array_int_subset(index, min_size=2):
+def array_int_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.int64]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -485,11 +494,11 @@ def array_int_subset(index, min_size=2):
     )
 
 
-def list_int_subset(index, min_size=2):
+def list_int_subset(index: pd.Index[str], min_size: int = 2) -> list[int]:
     return array_int_subset(index, min_size=min_size).tolist()
 
 
-def slice_subset(index, min_size=2):
+def slice_int_subset(index: pd.Index[str], min_size: int = 2) -> slice:
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
         s = slice(*sorted(points))
@@ -498,25 +507,33 @@ def slice_subset(index, min_size=2):
     return s
 
 
-def single_subset(index):
-    return index[np.random.randint(0, len(index))]
+def single_int_subset(index: pd.Index[str], min_size: int = 1) -> int:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return np.random.randint(0, len(index))
 
 
-@pytest.fixture(
-    params=[
-        array_subset,
-        slice_subset,
-        single_subset,
-        array_int_subset,
-        list_int_subset,
-        array_bool_subset,
-        list_bool_subset,
-        matrix_bool_subset,
-        spmatrix_bool_subset,
-        sparray_bool_subset,
-    ]
-)
-def subset_func(request):
+_SUBSET_FUNCS: list[_SubsetFunc] = [
+    # str (obs/var name)
+    single_subset,
+    array_subset,
+    # int (numeric index)
+    single_int_subset,
+    slice_int_subset,
+    array_int_subset,
+    list_int_subset,
+    # bool (mask)
+    array_bool_subset,
+    list_bool_subset,
+    matrix_bool_subset,
+    spmatrix_bool_subset,
+    sparray_bool_subset,
+]
+
+
+@pytest.fixture(params=_SUBSET_FUNCS)
+def subset_func(request: pytest.FixtureRequest) -> _SubsetFunc:
     return request.param
 
 
@@ -671,6 +688,13 @@ def are_equal_dataframe(
     )
 
 
+@assert_equal.register(Dataset2D)
+def are_equal_dataset2d(
+    a: Dataset2D, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    a.equals(b)
+
+
 @assert_equal.register(AwkArray)
 def assert_equal_awkarray(
     a: AwkArray, b: object, *, exact: bool = False, elem_name: str | None = None
@@ -688,8 +712,8 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a.keys()) == set(b.keys()), format_msg(elem_name)
-    for k in a.keys():
+    assert set(a) == set(b), format_msg(elem_name)
+    for k in a:
         if elem_name is None:
             elem_name = ""
         assert_equal(a[k], b[k], exact=exact, elem_name=f"{elem_name}/{k}")
@@ -739,6 +763,13 @@ def assert_equal_extension_array(
         check_exact=exact,
         _elem_name=elem_name,
     )
+
+
+@assert_equal.register(XDataArray)
+def assert_equal_xarray(
+    a: XDataArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    report_name(a.equals)(b, _elem_name=elem_name)
 
 
 @assert_equal.register(Raw)
@@ -944,40 +975,8 @@ def _(a, format="csr"):
     )
 
 
-@contextmanager
-def pytest_8_raises(exc_cls, *, match: str | re.Pattern = None):
-    """Error handling using pytest 8's support for __notes__.
-
-    See: https://github.com/pytest-dev/pytest/pull/11227
-
-    Remove once pytest 8 is out!
-    """
-
-    with pytest.raises(exc_cls) as exc_info:
-        yield exc_info
-
-    check_error_or_notes_match(exc_info, match)
-
-
-def check_error_or_notes_match(e: pytest.ExceptionInfo, pattern: str | re.Pattern):
-    """
-    Checks whether the printed error message or the notes contains the given pattern.
-
-    DOES NOT WORK IN IPYTHON - because of the way IPython handles exceptions
-    """
-    import traceback
-
-    message = "".join(traceback.format_exception_only(e.type, e.value))
-    assert re.search(pattern, message), (
-        f"Could not find pattern: '{pattern}' in error:\n\n{message}\n"
-    )
-
-
 def resolve_cupy_type(val):
-    if not isinstance(val, type):
-        input_typ = type(val)
-    else:
-        input_typ = val
+    input_typ = type(val) if not isinstance(val, type) else val
 
     if issubclass(input_typ, np.ndarray):
         typ = CupyArray
@@ -1102,10 +1101,16 @@ class AccessTrackingStoreBase(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
+        # Needed for zarr v3 to prevent a read-only copy being made
+        # https://github.com/zarr-developers/zarr-python/pull/3156
+        if not is_zarr_v2() and "read_only" not in kwargs:
+            kwargs["read_only"] = True
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+        self._read_only = True
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1161,26 +1166,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
 
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
         async def get(
             self,
             key: str,

@@ -23,12 +23,17 @@ from ..compat import (
     ZappyArray,
 )
 from .access import ElementRef
+from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
-    from typing import Any
+    from typing import Any, ClassVar
+
+    from numpy.typing import NDArray
 
     from anndata import AnnData
+
+    from ..compat import Index1DNorm
 
 
 @contextmanager
@@ -85,7 +90,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -106,7 +111,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -153,7 +158,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
             results = (results,)
         results = tuple(
             (np.asarray(result) if output is None else output)
-            for result, output in zip(results, outputs)
+            for result, output in zip(results, outputs, strict=True)
         )
         return results[0] if len(results) == 1 else results
 
@@ -178,7 +183,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -244,7 +249,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] = None,
+        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
     ):
         import cupy as cp
 
@@ -266,7 +271,7 @@ class DictView(_ViewMixin, dict):
 
 
 class DataFrameView(_ViewMixin, pd.DataFrame):
-    _metadata = ["_view_args"]
+    _metadata: ClassVar = ["_view_args"]
 
     @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):
@@ -362,6 +367,11 @@ def as_view_cupy_csc(mtx, view_args):
     return CupySparseCSCView(mtx, view_args=view_args)
 
 
+@as_view.register(Dataset2D)
+def _(a: Dataset2D, view_args):
+    return a
+
+
 try:
     import weakref
 
@@ -427,18 +437,24 @@ except ImportError:
         pass
 
 
-def _resolve_idxs(old, new, adata):
-    t = tuple(_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
-    return t
+def _resolve_idxs(
+    old: tuple[Index1DNorm, Index1DNorm],
+    new: tuple[Index1DNorm, Index1DNorm],
+    adata: AnnData,
+) -> tuple[Index1DNorm, Index1DNorm]:
+    o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
+    return o, v
 
 
 @singledispatch
-def _resolve_idx(old, new, l):
-    return old[new]
+def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
+    raise NotImplementedError
 
 
 @_resolve_idx.register(np.ndarray)
-def _resolve_idx_ndarray(old, new, l):
+def _resolve_idx_ndarray(
+    old: NDArray[np.bool_] | NDArray[np.integer], new: Index1DNorm, l: Literal[0, 1]
+) -> NDArray[np.bool_] | NDArray[np.integer]:
     if is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
         mask_new[np.flatnonzero(old)[new]] = True
@@ -448,21 +464,17 @@ def _resolve_idx_ndarray(old, new, l):
     return old[new]
 
 
-@_resolve_idx.register(np.integer)
-@_resolve_idx.register(int)
-def _resolve_idx_scalar(old, new, l):
-    return np.array([old])[new]
-
-
 @_resolve_idx.register(slice)
-def _resolve_idx_slice(old, new, l):
+def _resolve_idx_slice(
+    old: slice, new: Index1DNorm, l: Literal[0, 1]
+) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
     else:
         return np.arange(*old.indices(l))[new]
 
 
-def _resolve_idx_slice_slice(old, new, l):
+def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
     r = range(*old.indices(l))[new]
     # Convert back to slice
     start, stop, step = r.start, r.stop, r.step

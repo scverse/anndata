@@ -10,7 +10,7 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [
@@ -23,11 +23,6 @@ UNLABELLED_ARRAY_TYPES = [
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
-
-
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
 
 
 @pytest.mark.parametrize("shape", SINGULAR_SHAPES)
@@ -123,7 +118,7 @@ def test_init_x_as_none_explicit_shape():
     assert adata.shape == shape
 
 
-@pytest.mark.parametrize("shape", SINGULAR_SHAPES + [pytest.param((5, 3), id="(5, 3)")])
+@pytest.mark.parametrize("shape", [*SINGULAR_SHAPES, pytest.param((5, 3), id="(5, 3)")])
 def test_transpose_with_X_as_none(shape):
     adata = gen_adata(shape, X_type=lambda x: None)
     adataT = adata.transpose()
@@ -161,7 +156,7 @@ def test_io_missing_X(tmp_path, diskfmt):
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
 
-    adata = gen_adata((20, 30))
+    adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
 
     write(adata, file_pth)

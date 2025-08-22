@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING
 
@@ -14,8 +15,14 @@ from scipy.sparse import csr_matrix, issparse
 
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
+from anndata._core.raw import Raw
 from anndata._settings import settings
-from anndata.tests.helpers import assert_equal, gen_adata, get_multiindex_columns_df
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    get_multiindex_columns_df,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -190,7 +197,9 @@ def test_convert_matrix(attr, when):
 
     direct = attr in {"X"}
 
-    with pytest.warns(ImplicitModificationWarning, match=r"np\.ndarray"):
+    with pytest.warns(  # noqa: PT031
+        expected_warning=ImplicitModificationWarning, match=r"np\.ndarray"
+    ):
         if when == "init":
             adata = (
                 AnnData(**{attr: mat})
@@ -228,8 +237,8 @@ def test_names():
         dict(var_names=["a", "b", "c"]),
     )
 
-    assert adata.obs_names.tolist() == "A B".split()
-    assert adata.var_names.tolist() == "a b c".split()
+    assert adata.obs_names.tolist() == ["A", "B"]
+    assert adata.var_names.tolist() == ["a", "b", "c"]
 
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]), var=dict(var_names=["a", "b"]))
     assert adata.var_names.tolist() == ["a", "b"]
@@ -276,11 +285,14 @@ def test_setting_index_names_error(attr):
 
 
 @pytest.mark.parametrize("dim", ["obs", "var"])
-def test_setting_dim_index(dim):
+@pytest.mark.parametrize(
+    ("obs_xdataset", "var_xdataset"), [(False, False), (True, True)]
+)
+def test_setting_dim_index(dim, obs_xdataset, var_xdataset):
     index_attr = f"{dim}_names"
     mapping_attr = f"{dim}m"
 
-    orig = gen_adata((5, 5))
+    orig = gen_adata((5, 5), obs_xdataset=obs_xdataset, var_xdataset=var_xdataset)
     orig.raw = orig.copy()
     curr = orig.copy()
     view = orig[:, :]
@@ -498,28 +510,26 @@ def test_append_col():
     with pytest.raises(
         ValueError, match="Length of values.*does not match length of index"
     ):
-        adata.obs["new4"] = "far too long".split()
+        adata.obs["new4"] = ["far", "too", "long"]
 
 
 def test_delete_col():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
-    assert ["o1", "o2"] == adata.obs_keys()
+    assert adata.obs_keys() == ["o1", "o2"]
 
     del adata.obs["o1"]
-    assert ["o2"] == adata.obs_keys()
-    assert [3, 4] == adata.obs["o2"].tolist()
+    assert adata.obs_keys() == ["o2"]
+    assert adata.obs["o2"].tolist() == [3, 4]
 
 
 def test_set_obs():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
-    assert adata.obs_names.tolist() == [0, 1]
+    assert adata.obs_names.tolist() == ["0", "1"]
 
-    with pytest.raises(ValueError, match="but this AnnData has shape"):
+    with pytest.raises(ValueError, match="`shape` is inconsistent with `obs`"):
         adata.obs = pd.DataFrame(dict(a=[3, 4, 5]))
-    with pytest.raises(ValueError, match="Can only assign pd.DataFrame"):
-        adata.obs = dict(a=[1, 2])
 
 
 def test_multicol():
@@ -541,15 +551,15 @@ def test_equality_comparisons():
     adata1 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     with pytest.raises(NotImplementedError):
-        adata1 == adata1
+        adata1 == adata1  # noqa: B015, PLR0124
     with pytest.raises(NotImplementedError):
-        adata1 == adata2
+        adata1 == adata2  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 != adata2
+        adata1 != adata2  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 == 1
+        adata1 == 1  # noqa: B015
     with pytest.raises(NotImplementedError):
-        adata1 != 1
+        adata1 != 1  # noqa: B015
 
 
 def test_rename_categories():
@@ -613,19 +623,23 @@ def test_convenience():
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, lambda x: x.obs_vector(obs_k, layer=layer)
+            adata, adata_dense, partial(AnnData.obs_vector, k=obs_k, layer=layer)
         )
 
     for obs_k in ["a", "b", "c"]:
-        assert_same_op_result(adata, adata_dense, lambda x: x.raw.obs_vector(obs_k))
+        assert_same_op_result(
+            adata.raw, adata_dense.raw, partial(Raw.obs_vector, k=obs_k)
+        )
 
     for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, lambda x: x.var_vector(var_k, layer=layer)
+            adata, adata_dense, partial(AnnData.var_vector, k=var_k, layer=layer)
         )
 
     for var_k in ["s1", "s2", "anno2"]:
-        assert_same_op_result(adata, adata_dense, lambda x: x.raw.var_vector(var_k))
+        assert_same_op_result(
+            adata.raw, adata_dense.raw, partial(Raw.var_vector, k=var_k)
+        )
 
 
 def test_1d_slice_dtypes():
@@ -711,7 +725,7 @@ def test_copy():
 
     assert adata_sparse is not adata_copy
     assert_eq_not_id(adata_sparse.X, adata_copy.X)
-    for attr in "layers var obs obsm varm".split():
+    for attr in ["layers", "var", "obs", "obsm", "varm"]:
         map_sprs = getattr(adata_sparse, attr)
         map_copy = getattr(adata_copy, attr)
         assert map_sprs is not map_copy
@@ -719,12 +733,12 @@ def test_copy():
             # check that we don’t create too many references
             assert getattr(adata_copy, f"_{attr}") is map_copy._data
         assert_eq_not_id(map_sprs.keys(), map_copy.keys())
-        for key in map_sprs.keys():
+        for key in map_sprs:
             assert_eq_not_id(map_sprs[key], map_copy[key])
 
 
 def test_to_memory_no_copy():
-    adata = gen_adata((3, 5))
+    adata = gen_adata((3, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     mem = adata.to_memory()
 
     assert mem.X is adata.X
@@ -753,4 +767,4 @@ def test_create_adata_from_single_axis_elem(
     assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
-    ad.tests.helpers.assert_equal(from_disk, in_memory)
+    assert_equal(from_disk, in_memory)

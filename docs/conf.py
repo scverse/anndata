@@ -56,7 +56,6 @@ extensions = [
     "sphinx_autodoc_typehints",  # needs to be after napoleon
     "sphinx_issues",
     "sphinx_design",
-    "sphinx_search.extension",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
@@ -100,22 +99,48 @@ def setup(app: Sphinx):
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
+    # TODO: move to scanpydoc
+    if TYPE_CHECKING:
+        from docutils.nodes import TextElement, reference
+        from sphinx.addnodes import pending_xref
+        from sphinx.environment import BuildEnvironment
+
+    def res(
+        app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: TextElement
+    ) -> reference | None:
+        return env.domains["py"].resolve_xref(
+            env,
+            node["refdoc"],
+            app.builder,
+            node["reftype"],
+            node["reftarget"],
+            node,
+            contnode,
+        )
+
+    app.connect("missing-reference", res, priority=502)
+
 
 intersphinx_mapping = dict(
     awkward=("https://awkward-array.org/doc/stable", None),
     cupy=("https://docs.cupy.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
+    fsspec=("https://filesystem-spec.readthedocs.io/en/stable/", None),
     h5py=("https://docs.h5py.org/en/latest", None),
     hdf5plugin=("https://hdf5plugin.readthedocs.io/en/latest", None),
+    kvikio=("https://docs.rapids.ai/api/kvikio/stable/", None),
     loompy=("https://linnarssonlab.org/loompy", None),
     numpy=("https://numpy.org/doc/stable", None),
+    obstore=("https://developmentseed.org/obstore/latest/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
-    zarr=("https://zarr.readthedocs.io/en/stable/", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
+    zarr=("https://zarr.readthedocs.io/en/stable/", None),
+    zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
 )
+
 qualname_overrides = {
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
@@ -123,13 +148,14 @@ qualname_overrides = {
     "anndata._core.anndata.AnnData": "anndata.AnnData",
     **{
         f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
-        for cls in "Layers AxisArrays PairwiseArrays".split()
+        for cls in ["Layers", "AxisArrays", "PairwiseArrays"]
         for kind in ["", "View"]
     },
     "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
     # Buffer is not yet exported, so the buffer class registry is the closest thing
@@ -138,6 +164,8 @@ qualname_overrides = {
     "anndata.compat.DaskArray": "dask.array.Array",
     "anndata.compat.CupyArray": "cupy.ndarray",
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
+    "anndata.compat.XDataArray": "xarray.DataArray",
+    "anndata.compat.XDataset": "xarray.Dataset",
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),

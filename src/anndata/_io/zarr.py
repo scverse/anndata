@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
@@ -37,8 +36,6 @@ def write_zarr(
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
-    if isinstance(store, Path):
-        store = str(store)
     if convert_strings_to_categoricals:
         adata.strings_to_categoricals()
         if adata.raw is not None:
@@ -48,14 +45,16 @@ def write_zarr(
     f.attrs.setdefault("encoding-type", "anndata")
     f.attrs.setdefault("encoding-version", "0.1.0")
 
-    def callback(func, s, k: str, elem, dataset_kwargs, iospec):
+    def callback(
+        write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
+    ) -> None:
         if (
             chunks is not None
             and not isinstance(elem, sparse.spmatrix)
-            and k.lstrip("/") == "X"
+            and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
-        func(s, k, elem, dataset_kwargs=dataset_kwargs)
+        write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
     if is_zarr_v2():
@@ -73,13 +72,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
-    if isinstance(store, Path):
-        store = str(store)
-
-    if isinstance(store, zarr.Group):
-        f = store
-    else:
-        f = zarr.open(store, mode="r")
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
@@ -128,7 +121,7 @@ def read_dataset(dataset: zarr.Array):
     elif len(value.dtype.descr) > 1:  # Compound dtype
         # For backwards compat, now strings are written as variable length
         value = _from_fixed_length_strings(value)
-    if value.shape == ():
+    if value.shape == () and not np.isscalar(value):
         value = value[()]
     return value
 
@@ -137,11 +130,11 @@ def read_dataset(dataset: zarr.Array):
 def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
-    warn(
+    msg = (
         f"'{dataset.name}' was written with a very old version of AnnData. "
-        "Consider rewriting it.",
-        OldFormatWarning,
+        "Consider rewriting it."
     )
+    warn(msg, OldFormatWarning, stacklevel=3)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
@@ -159,10 +152,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
 def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
-    if len({"zarr_version", "zarr_format"}.intersection(kwargs.keys())):
-        msg = "Don’t specify `zarr_version` or `zarr_format` explicitly."
-        raise ValueError(msg)
-    kwargs["zarr_version" if is_zarr_v2() else "zarr_format"] = (
-        settings.zarr_write_format
-    )
+    if not is_zarr_v2() and "zarr_format" not in kwargs:
+        kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)

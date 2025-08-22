@@ -3,11 +3,22 @@ from __future__ import annotations
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
+import numpy as np
+import pandas as pd
 import pytest
+import zarr
 
+from anndata import AnnData
 from anndata.compat import DaskArray
-from anndata.experimental import read_lazy
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, gen_adata
+from anndata.experimental import read_elem_lazy, read_lazy
+from anndata.io import write_elem
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    AccessTrackingStore,
+    assert_equal,
+    gen_adata,
+    gen_typed_df,
+)
 
 from .conftest import ANNDATA_ELEMS
 
@@ -15,8 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from anndata import AnnData
     from anndata._types import AnnDataElem
+
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
@@ -42,7 +53,10 @@ def test_access_count_elem_access(
     # a series of methods that should __not__ read in any data
     elem = getattr(simple_subset_func(adata_remote_tall_skinny), elem_key)
     if sub_key is not None:
-        getattr(elem, sub_key)
+        if elem_key in {"obs", "var"}:
+            elem[sub_key]
+        else:
+            getattr(elem, sub_key)
     remote_store_tall_skinny.assert_access_count(full_path, 0)
     remote_store_tall_skinny.assert_access_count("X", 0)
 
@@ -56,8 +70,8 @@ def test_access_count_subset(
         ["obs/cat/codes", *non_obs_elem_names]
     )
     adata_remote_tall_skinny[adata_remote_tall_skinny.obs["cat"] == "a", :]
-    # all codes read in for subset (from 1 chunk)
-    remote_store_tall_skinny.assert_access_count("obs/cat/codes", 1)
+    # all codes read in for subset (from 4 chunks as set in the fixture)
+    remote_store_tall_skinny.assert_access_count("obs/cat/codes", 4)
     for elem_name in non_obs_elem_names:
         remote_store_tall_skinny.assert_access_count(elem_name, 0)
 
@@ -92,9 +106,9 @@ def test_access_count_dtype(
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
     # This should only cause categories to be read in once
-    adata_remote_tall_skinny.obs["cat"].dtype
-    adata_remote_tall_skinny.obs["cat"].dtype
-    adata_remote_tall_skinny.obs["cat"].dtype
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
 
 
@@ -105,6 +119,21 @@ def test_uns_uses_dask(adata_remote: AnnData):
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
+
+
+def test_access_counts_obsm_df(tmp_path: Path):
+    adata = AnnData(
+        X=np.array(np.random.rand(100, 20)),
+    )
+    adata.obsm["df"] = pd.DataFrame(
+        {"col1": np.random.rand(100), "col2": np.random.rand(100)},
+        index=adata.obs_names,
+    )
+    adata.write_zarr(tmp_path)
+    store = AccessTrackingStore(tmp_path)
+    store.initialize_key_trackers(["obsm/df"])
+    read_lazy(store, load_annotation_index=False)
+    store.assert_access_count("obsm/df", 0)
 
 
 def test_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
@@ -143,8 +172,9 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     )
 
 
+@pytest.mark.zarr_io
 def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format)
+    adata = gen_adata((1000, 1000), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
@@ -155,3 +185,29 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+@pytest.fixture(scope="session")
+def df_group(tmp_path_factory) -> zarr.Group:
+    df = gen_typed_df(120)
+    path = tmp_path_factory.mktemp("foo.zarr")
+    g = zarr.open_group(path, mode="w", zarr_format=2)
+    write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
+    return zarr.open(path, mode="r")["foo"]
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
+    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+)
+def test_chunks_df(
+    tmp_path: Path,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+    df_group: zarr.Group,
+):
+    ds = read_elem_lazy(df_group, chunks=chunks)
+    for k in ds:
+        if isinstance(arr := ds[k].data, DaskArray):
+            assert arr.chunksize == expected_chunks

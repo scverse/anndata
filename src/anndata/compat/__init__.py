@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping
-from functools import cache, partial, singledispatch, wraps
+from collections.abc import Mapping, Sequence
+from functools import cache, partial, singledispatch
 from importlib.util import find_spec
-from inspect import Parameter, signature
 from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
@@ -13,12 +12,14 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy
+from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
     from typing import Any
+
 
 #############################
 # scipy sparse array comapt #
@@ -33,7 +34,26 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series
+Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
+# TODO: pd.Index[???]
+Index1D = (
+    # 0D index
+    int
+    | str
+    | np.int64
+    # normalized 1D idex
+    | Index1DNorm
+    # different containers for mask, obs/varnames, or numerical index
+    | Sequence[int]
+    | Sequence[str]
+    | Sequence[bool]
+    | pd.Series  # bool, int, str
+    | pd.Index
+    | NDArray[np.str_]
+    | np.matrix  # bool
+    | CSMatrix  # bool
+    | CSArray  # bool
+)
 IndexRest = Index1D | EllipsisType
 Index = (
     IndexRest
@@ -63,7 +83,7 @@ def is_zarr_v2() -> bool:
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning)
+    warn(msg, DeprecationWarning, stacklevel=2)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -98,6 +118,37 @@ else:
         @staticmethod
         def __repr__():
             return "mock dask.array.core.Array"
+
+
+if find_spec("xarray") or TYPE_CHECKING:
+    import xarray
+    from xarray import DataArray as XDataArray
+    from xarray import Dataset as XDataset
+    from xarray import Variable as XVariable
+    from xarray.backends import BackendArray as XBackendArray
+    from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
+else:
+    xarray = None
+
+    class XDataArray:
+        def __repr__(self) -> str:
+            return "mock DataArray"
+
+    class XDataset:
+        def __repr__(self) -> str:
+            return "mock Dataset"
+
+    class XVariable:
+        def __repr__(self) -> str:
+            return "mock Variable"
+
+    class XZarrArrayWrapper:
+        def __repr__(self) -> str:
+            return "mock ZarrArrayWrapper"
+
+    class XBackendArray:
+        def __repr__(self) -> str:
+            return "mock BackendArray"
 
 
 # https://github.com/scverse/anndata/issues/1749
@@ -162,6 +213,13 @@ else:
 #############################
 
 
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(np.__version__) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:
@@ -187,15 +245,12 @@ def _read_attr_hdf5(
     attr = attrs[name]
     attr_id = attrs.get_id(name)
     dtype = h5py.check_string_dtype(attr_id.dtype)
-    if dtype is None:
+    if dtype is None or dtype.length is None:  # variable-length string, no problem
         return attr
-    else:
-        if dtype.length is None:  # variable-length string, no problem
-            return attr
-        elif len(attr_id.shape) == 0:  # Python bytestring
-            return attr.decode("utf-8")
-        else:  # NumPy array
-            return [decode(s, "utf-8") for s in attr]
+    elif len(attr_id.shape) == 0:  # Python bytestring
+        return attr.decode("utf-8")
+    else:  # NumPy array
+        return [decode(s, "utf-8") for s in attr]
 
 
 def _from_fixed_length_strings(value):
@@ -254,8 +309,12 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     """\
     Convert variable length strings to fixed length.
 
-    Currently a workaround for
-    https://github.com/zarr-developers/zarr-python/pull/422
+    Formerly a workaround for
+    https://github.com/zarr-developers/zarr-python/pull/422,
+    resolved in https://github.com/zarr-developers/zarr-python/pull/813.
+
+    But if we didn't do this conversion, we would have to use a special codec in v2
+    for objects and v3 doesn't support objects at all.  So we leave this function as-is.
     """
     new_dtype = []
     for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
@@ -278,7 +337,7 @@ def _require_group_write_dataframe(
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, track_order=True, *args, **kwargs)
+        return f.create_group(name, *args, track_order=True, **kwargs)
     return f.require_group(name, *args, **kwargs)
 
 
@@ -327,11 +386,12 @@ def _move_adj_mtx(d):
             and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
-            warn(
-                f"Moving element from .uns['neighbors']['{k}'] to .obsp['{k}'].\n\n"
-                "This is where adjacency matrices should go now.",
-                FutureWarning,
+            msg = (
+                f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
+                "This is where adjacency matrices should go now."
             )
+            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
+            warn(msg, FutureWarning, stacklevel=5)
             obsp[k] = n.pop(k)
 
 
@@ -343,60 +403,6 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
         elif scipy.sparse.issparse(v) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
-
-
-# This function was adapted from scikit-learn
-# github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/validation.py
-def _deprecate_positional_args(func=None, *, version: str = "1.0 (renaming of 0.25)"):
-    """Decorator for methods that issues warnings for positional arguments.
-    Using the keyword-only argument syntax in pep 3102, arguments after the
-    * will issue a warning when passed as a positional argument.
-
-    Parameters
-    ----------
-    func
-        Function to check arguments on.
-    version
-        The version when positional arguments will result in error.
-    """
-
-    def _inner_deprecate_positional_args(f):
-        sig = signature(f)
-        kwonly_args = []
-        all_args = []
-
-        for name, param in sig.parameters.items():
-            if param.kind == Parameter.POSITIONAL_OR_KEYWORD:
-                all_args.append(name)
-            elif param.kind == Parameter.KEYWORD_ONLY:
-                kwonly_args.append(name)
-
-        @wraps(f)
-        def inner_f(*args, **kwargs):
-            extra_args = len(args) - len(all_args)
-            if extra_args <= 0:
-                return f(*args, **kwargs)
-
-            # extra_args > 0
-            args_msg = [
-                f"{name}={arg}"
-                for name, arg in zip(kwonly_args[:extra_args], args[-extra_args:])
-            ]
-            args_msg = ", ".join(args_msg)
-            warn(
-                f"Pass {args_msg} as keyword args. From version {version} passing "
-                "these as positional arguments will result in an error",
-                FutureWarning,
-            )
-            kwargs.update(zip(sig.parameters, args))
-            return f(**kwargs)
-
-        return inner_f
-
-    if func is not None:
-        return _inner_deprecate_positional_args(func)
-
-    return _inner_deprecate_positional_args
 
 
 def _transpose_by_block(dask_array: DaskArray) -> DaskArray:
