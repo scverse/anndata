@@ -19,7 +19,7 @@ def test_transpose_orig():
     adata1.uns["test123"] = 1
     assert "test123" in adata.uns
     assert_equal(adata1.X.shape, (3, 5))
-    assert_equal(adata1.obsp.keys(), adata.varp.keys())
+    assert_equal(adata1.obsp_keys(), adata.varp_keys())
 
 
 def _add_raw(adata, *, var_subset=slice(None)):
