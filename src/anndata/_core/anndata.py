@@ -704,7 +704,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     Return layers’ names::
 
-        adata.layers.keys()
+        adata.layers_keys()
     """
 
     @property
