@@ -940,6 +940,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
+    def layers_keys(self) -> list[str]:
+        """List keys of layers arrays :attr:`layers`."""
+        return list(self.layers.keys())
+
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
