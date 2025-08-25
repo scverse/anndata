@@ -10,19 +10,20 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata.compat import CSArray, CSMatrix, CupyArray, DaskArray
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
+    BASE_MATRIX_PARAMS,
     DASK_CAN_SPARRAY,
+    DASK_MATRIX_PARAMS,
     GEN_ADATA_DASK_ARGS,
-    as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
     as_sparse_dask_array,
+    as_sparse_dask_matrix,
     assert_equal,
     gen_adata,
 )
@@ -282,7 +283,15 @@ def test_assign_X(adata):
     ("array_func", "mem_type"),
     [
         pytest.param(as_dense_dask_array, np.ndarray, id="dense"),
-        pytest.param(as_sparse_dask_array, CSArray | CSMatrix, id="sparse"),
+        pytest.param(as_sparse_dask_matrix, CSMatrix, id="sparse_matrix"),
+        pytest.param(
+            as_sparse_dask_array,
+            CSArray,
+            marks=pytest.mark.skipif(
+                not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+            ),
+            id="sparse_array",
+        ),
         pytest.param(
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
         ),
@@ -313,38 +322,15 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     assert isinstance(orig.uns["da"]["da"], DaskArray)
 
 
-@pytest.mark.parametrize(
-    ("to_dask", "to_inner"),
-    [
-        pytest.param(as_dense_dask_array, None, id="dense"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse"),
-        pytest.param(
-            as_sparse_dask_array,
-            sparse.csr_array,
-            id="sparse",
-            marks=pytest.mark.skipif(
-                not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
-            ),
-        ),
-        pytest.param(
-            as_dense_cupy_dask_array, None, id="cupy_dense", marks=pytest.mark.gpu
-        ),
-        pytest.param(
-            as_cupy_sparse_dask_array, None, id="cupy_sparse", marks=pytest.mark.gpu
-        ),
-    ],
-)
+@pytest.mark.parametrize("to_dask", [*BASE_MATRIX_PARAMS, *DASK_MATRIX_PARAMS])
 def test_dask_to_disk_view(
-    to_dask: Callable[[CSArray | CSMatrix | NDArray], DaskArray],
-    to_inner: Callable[[NDArray], CSArray | CSMatrix | NDArray] | None,
+    to_dask: Callable[[NDArray], DaskArray],
     diskfmt: Literal["h5ad", "zarr"],
     tmp_path: Path,
 ) -> None:
     random_state = np.random.default_rng()
     arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")
 
-    if to_inner is not None:
-        arr = to_inner(arr)
     # TODO: need to change type for cupy
     orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]

@@ -882,31 +882,37 @@ def _(a):
 
 
 @singledispatch
-def as_sparse_dask_array(a: NDArray | CSArray | CSMatrix | DaskArray) -> DaskArray:
+def _as_sparse_dask(
+    a: NDArray | CSArray | CSMatrix | DaskArray, *, typ: type[CSArray | CSMatrix]
+) -> DaskArray:
     """Convert a to a sparse dask array, preserving sparse format and container (`cs{rc}_{array,matrix}`)."""
     raise NotImplementedError
 
 
-@as_sparse_dask_array.register(CSArray | CSMatrix | np.ndarray)
-def _(a: CSArray | CSMatrix | NDArray) -> DaskArray:
+@_as_sparse_dask.register(CSArray | CSMatrix | np.ndarray)
+def _(a: CSArray | CSMatrix | NDArray, *, typ: type[CSArray | CSMatrix]) -> DaskArray:
     import dask.array as da
 
-    return da.from_array(_as_sparse_for_dask(a), _half_chunk_size(a.shape))
+    return da.from_array(_as_sparse_dask_inner(a, typ=typ), _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(DaskArray)
-def _(a: DaskArray) -> DaskArray:
-    return a.map_blocks(_as_sparse_for_dask)
+@_as_sparse_dask.register(DaskArray)
+def _(a: DaskArray, *, typ: type[CSArray | CSMatrix]) -> DaskArray:
+    return a.map_blocks(_as_sparse_dask_inner, typ=typ, dtype=a.dtype, meta=typ((2, 2)))
 
 
-def _as_sparse_for_dask(a: NDArray | CSArray | CSMatrix) -> CSArray | CSMatrix:
+def _as_sparse_dask_inner(
+    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix]
+) -> CSArray | CSMatrix:
     """Convert into a a sparse container that dask supports (or complain)."""
-    if isinstance(a, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
+    if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
-    if isinstance(a, CSArray | CSMatrix):
-        return a
-    return (sparse.csr_array if DASK_CAN_SPARRAY else sparse.csr_matrix)(a)
+    return typ(a)
+
+
+as_sparse_dask_array = partial(_as_sparse_dask, typ=sparse.csr_array)
+as_sparse_dask_matrix = partial(_as_sparse_dask, typ=sparse.csr_matrix)
 
 
 @singledispatch
@@ -955,11 +961,8 @@ except ImportError:
 # We should try and fix this upstream in dask/ cupy
 @singledispatch
 def as_cupy_sparse_dask_array(a, format="csr"):
-    memory_class = format_to_memory_class[format]
-    cpu_da = as_sparse_dask_array(a)
-    return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
-        memory_class, dtype=a.dtype, meta=memory_class(cpu_da._meta)
-    )
+    da = _as_sparse_dask(a, typ=format_to_memory_class[format])
+    return da.rechunk((da.chunks[0], -1))
 
 
 @as_cupy_sparse_dask_array.register(CupyArray)
@@ -1065,7 +1068,14 @@ BASE_MATRIX_PARAMS = [
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
-    pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+    pytest.param(as_sparse_dask_matrix, id="sparse_dask_matrix"),
+    pytest.param(
+        as_sparse_dask_array,
+        marks=pytest.mark.skipif(
+            not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+        ),
+        id="sparse_dask_array",
+    ),
 ]
 
 CUPY_MATRIX_PARAMS = [
