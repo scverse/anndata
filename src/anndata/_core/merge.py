@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
+
+# Enable DLPack interop for JAX, CuPy, etc., only if installed
+with suppress(ImportError):
+    import jax
+    import jax.dlpack
 import pandas as pd
 import pandas.api.types as pdf
 import scipy
@@ -52,9 +57,6 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-with suppress(ImportError):
-    import jax.dlpack
-
 ###################
 # Utilities
 ###################
@@ -62,6 +64,7 @@ with suppress(ImportError):
 
 # Pretty much just for maintaining order of keys
 class OrderedSet(MutableSet):
+    # custom set thet maintains insertion order. Used when merging keys of dicts
     def __init__(self, vals=()):
         self.dict = OrderedDict(zip(vals, repeat(None)))
 
@@ -95,15 +98,19 @@ class OrderedSet(MutableSet):
 
 
 def union_keys(ds: Collection) -> OrderedSet:
+    # return union of all keys in a collection of dict-like objects
     return reduce(or_, ds, OrderedSet())
 
 
 def intersect_keys(ds: Collection) -> OrderedSet:
+    # return intersection of all keys in a collection of dict-like objects
     return reduce(and_, map(OrderedSet, ds))
 
 
 class MissingVal:
     """Represents a missing value."""
+
+    # used in merging to represent missing values
 
 
 def is_missing(v) -> bool:
@@ -123,6 +130,8 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
+    # compares arrays, dataframes, series, sparse arrays, awkward arrays, dask arrays
+    # even if they are of different types
     a = asarray(a)
     b = asarray(b)
     if a.ndim == b.ndim == 0:
@@ -227,6 +236,7 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
+    # makes sure array is scipy sparse array, converting from other types if needed
     if not isinstance(x, CSMatrix | CSArray):
         in_memory_array_class = (
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
@@ -242,6 +252,7 @@ def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:
+    # makes sure array is cupy sparse array, converting from other types/dense if needed
     import cupyx.scipy.sparse as cpsparse
 
     if isinstance(x, cpsparse.spmatrix):
@@ -260,6 +271,7 @@ def unify_dtypes(
 
     For catching cases where pandas would convert to object dtype.
     """
+    # Basically tries to unify column dtypes across dataframes, if possible.
     dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
@@ -304,6 +316,7 @@ def try_unifying_dtype(  # noqa PLR0911, PLR0912
         A list of dtypes to unify. Can be numpy/ pandas dtypes, or None (which denotes
         a missing value)
     """
+    # decides if list of dtype can be safely coerced to a shared dtype
     dtypes: set[pd.CategoricalDtype] = set()
     # Categorical
     if any(isinstance(dtype, pd.CategoricalDtype) for dtype in col):
@@ -386,6 +399,7 @@ def _cp_block_diag(mats, format=None, dtype=None):
     """
     Modified version of scipy.sparse.block_diag for cupy sparse.
     """
+    # used for stacking pairwise matrices
     import cupy as cp
     from cupyx.scipy import sparse as cpsparse
 
@@ -419,6 +433,7 @@ def _cp_block_diag(mats, format=None, dtype=None):
 
 
 def _dask_block_diag(mats):
+    # same as _cp_block_diag but for dask arrays
     from itertools import permutations
 
     import dask.array as da
@@ -455,7 +470,7 @@ def unique_value(vals: Collection[T]) -> T | MissingVal:
 
 def first(vals: Collection[T]) -> T | MissingVal:
     """
-    Given a collection of vals, return the first non-missing one.If they're all missing,
+    Given a collection of vals, return the first non-missing one. If they're all missing,
     return MissingVal.
     """
     for val in vals:
@@ -478,6 +493,7 @@ def only(vals: Collection[T]) -> T | MissingVal:
 
 
 def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Callable):
+    # generic recursive merge for nested dicts
     out = {}
     for k in keys_join(ds):
         v = _merge_nested(ds, k, keys_join, value_join)
@@ -539,6 +555,7 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 def resolve_merge_strategy(
     strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
+    # turning user input into an actual callable merge function
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
     return strategy
@@ -569,6 +586,7 @@ def _is_array_api_compatible(x):
 
 
 def _dlpack_to_numpy(x):
+    ###TODO: FIX
     # Convert array-api-compatible x to NumPy using DLPack.
     try:
         return np.from_dlpack(x)
@@ -578,6 +596,7 @@ def _dlpack_to_numpy(x):
 
 
 def _dlpack_from_numpy(x_np, original_xp):
+    ###TODO: FIX
     # cubed and other array later elif
     if original_xp.__name__.startswith("jax"):
         return jax.dlpack.from_dlpack(x_np)
@@ -592,6 +611,9 @@ def _dlpack_from_numpy(x_np, original_xp):
 
 
 class Reindexer:
+    # class builds mappings to reorder/reindex an array to align with new tows or columns
+    # supports numpy, pandas, cupy, awkward, dask, sparse arrays
+    # missing values are filled with fill_value
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
@@ -847,6 +869,7 @@ class Reindexer:
 
 
 def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
+    # either union or intersection of indices
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -893,6 +916,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
 
 
 def np_bool_to_pd_bool_array(df: pd.DataFrame):
+    # fixes issue where pandas converts bool to object dtype when there are missing values
     for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
             df[col_name] = pd.array(df[col_name].values)
@@ -902,6 +926,9 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 def concat_arrays(  # noqa: PLR0911, PLR0912
     arrays, reindexers, axis=0, index=None, fill_value=None, *, force_lazy: bool = False
 ):
+    # figuring out what kind of arrays are in the input
+    # converts compatible types using helper functions
+    # uses appropriate stacking methods
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -991,6 +1018,9 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
     else:
+        # xp = arrays[0].__array_namespace__()
+        # ref = arrays[0]
+        # arrays = [ref] + s
         return np.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
@@ -1009,6 +1039,7 @@ def inner_concat_aligned_mapping(
     concat_axis=None,
     force_lazy: bool = False,
 ):
+    # concatenate elements across objects that share intersecting keys
     if concat_axis is None:
         concat_axis = axis
     result = {}
@@ -1029,6 +1060,7 @@ def inner_concat_aligned_mapping(
 
 
 def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
+    # returns reindexers for inner join
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -1058,6 +1090,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
 
 
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
+    # reindexers for outer join
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
             (lambda x: x)

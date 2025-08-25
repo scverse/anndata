@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -36,8 +37,8 @@ def axis(request) -> Literal[0, 1]:
     return request.param
 
 
-@pytest.fixture(params=["array", "sparse", "sparse_array"])
-def array_type(request) -> Literal["array", "sparse", "sparse_array"]:
+@pytest.fixture(params=["array", "sparse", "sparse_array", "jax_array"])
+def array_type(request) -> Literal["array", "sparse", "sparse_array", "jax_array"]:
     return request.param
 
 
@@ -107,6 +108,8 @@ def get_array_type(array_type, axis):
         return sparse.csr_array if axis == 0 else sparse.csc_array
     if array_type == "array":
         return asarray
+    if array_type == "jax_array":
+        return jnp.array
     msg = f"array_type {array_type} not implemented"
     raise NotImplementedError(msg)
 
@@ -115,7 +118,7 @@ def get_array_type(array_type, axis):
 def test_anndatas(
     *,
     axis: Literal[0, 1],
-    array_type: Literal["array", "sparse", "sparse_array"],
+    array_type: Literal["array", "sparse", "sparse_array", "jax_array"],
     join_type: Literal["inner", "outer"],
     tmp_path: Path,
     max_loaded_elems: int,

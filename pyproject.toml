@@ -101,7 +101,10 @@ test-min = [
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]", "jax", "jaxlib" ] # TODO: remove jax? own extra?
+test = [
+    "anndata[test-min,lazy]",
+    "anndata[jax]",
+] # JAX is defined as a separate extra to avoid forcing installation for all users
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -110,6 +113,10 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
+jax = [
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
+]
 
 [tool.hatch.version]
 source = "vcs"
