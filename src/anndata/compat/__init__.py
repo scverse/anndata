@@ -11,7 +11,7 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
-import scipy
+import scipy.sparse
 from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401

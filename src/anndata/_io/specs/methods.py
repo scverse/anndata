@@ -876,6 +876,8 @@ for array_type, group_type in product(
     for scipy_sparse_type, spec in [
         (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0")),
         (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0")),
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0")),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0")),
     ]:
         _REGISTRY.register_write(group_type, (array_type, scipy_sparse_type), spec)(
             write_dask_sparse
