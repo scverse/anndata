@@ -960,6 +960,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """List keys of variable annotation :attr:`varm`."""
         return list(self.varm.keys())
 
+    def obsp_keys(self) -> list[str]:
+        """List keys of pairwise observation annotation :attr:`obsp`."""
+        return list(self.obsp.keys())
+
+    def varp_keys(self) -> list[str]:
+        """List keys of pairwise variable annotation :attr:`varp`."""
+        return list(self.varp.keys())
+
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
         return sorted(self._uns.keys())
