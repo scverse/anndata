@@ -638,8 +638,9 @@ def assert_equal_arrayview(
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
+@assert_equal.register(CSArray)
 def assert_equal_sparse(
-    a: BaseCompressedSparseDataset | sparse.spmatrix,
+    a: BaseCompressedSparseDataset | sparse.spmatrix | CSArray,
     b: object,
     *,
     exact: bool = False,
@@ -647,13 +648,6 @@ def assert_equal_sparse(
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
-
-
-@assert_equal.register(CSArray)
-def assert_equal_sparse_array(
-    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
-):
-    return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
@@ -1015,7 +1009,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, CSMatrix):
+        if isinstance(val, CSMatrix | CSArray):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):

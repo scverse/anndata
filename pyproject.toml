@@ -101,7 +101,7 @@ test-min = [
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]", "fast-array-utils" ]
+test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
