@@ -31,8 +31,8 @@ def assert_same_value_and_type(out_value, expected_array, expected_type):
     assert type(out_value) is expected_type
 
 
-@pytest.mark.parametrize(("name1, asarray1"), backends)
-@pytest.mark.parametrize(("name2, asarray2"), backends)
+@pytest.mark.parametrize(("name1", "asarray1"), backends)
+@pytest.mark.parametrize(("name2", "asarray2"), backends)
 def test_concat_uns_same_equal(name1, asarray1, name2, asarray2):
     # Equal arrays: values match, first type wins.
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))
@@ -45,8 +45,8 @@ def test_concat_uns_same_equal(name1, asarray1, name2, asarray2):
     assert_same_value_and_type(out.uns["k"], [1, 2, 3], type(a1.uns["k"]))
 
 
-@pytest.mark.parametrize(("name1, asarray1"), backends)
-@pytest.mark.parametrize(("name2, asarray2"), backends)
+@pytest.mark.parametrize(("name1", "asarray1"), backends)
+@pytest.mark.parametrize(("name2", "asarray2"), backends)
 def test_concat_uns_unique_equal_kept(name1, asarray1, name2, asarray2):
     # Equal arrays across backends: kept, first type wins.
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))
@@ -59,8 +59,8 @@ def test_concat_uns_unique_equal_kept(name1, asarray1, name2, asarray2):
     assert_same_value_and_type(out.uns["k"], [7, 8], type(a1.uns["k"]))
 
 
-@pytest.mark.parametrize(("name1, asarray1"), backends)
-@pytest.mark.parametrize(("name2, asarray2"), backends)
+@pytest.mark.parametrize(("name1", "asarray1"), backends)
+@pytest.mark.parametrize(("name2", "asarray2"), backends)
 def test_concat_uns_unique_conflict_dropped(name1, asarray1, name2, asarray2):
     """Different arrays: dropped."""
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))
@@ -72,8 +72,8 @@ def test_concat_uns_unique_conflict_dropped(name1, asarray1, name2, asarray2):
     assert "k" not in out.uns
 
 
-@pytest.mark.parametrize(("name1, asarray1"), backends)
-@pytest.mark.parametrize(("name2, asarray2"), backends)
+@pytest.mark.parametrize(("name1", "asarray1"), backends)
+@pytest.mark.parametrize(("name2", "asarray2"), backends)
 def test_concat_uns_first_conflict_keeps_first(name1, asarray1, name2, asarray2):
     """Conflict arrays: keep the first's values and type."""
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))
@@ -86,7 +86,7 @@ def test_concat_uns_first_conflict_keeps_first(name1, asarray1, name2, asarray2)
     assert_same_value_and_type(out.uns["k"], [1, 2, 3], type(a1.uns["k"]))
 
 
-@pytest.mark.parametrize(("name, asarray"), backends)
+@pytest.mark.parametrize(("name", "asarray"), backends)
 def test_concat_uns_only_singleton_kept(name, asarray):
     """Present in only one AnnData: kept."""
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))
@@ -98,8 +98,8 @@ def test_concat_uns_only_singleton_kept(name, asarray):
     assert_same_value_and_type(out.uns["k"], [1, 2, 3], type(a1.uns["k"]))
 
 
-@pytest.mark.parametrize(("name1, asarray1"), backends)
-@pytest.mark.parametrize(("name2, asarray2"), backends)
+@pytest.mark.parametrize(("name1", "asarray1"), backends)
+@pytest.mark.parametrize(("name2", "asarray2"), backends)
 def test_concat_uns_only_conflict_drops(name1, asarray1, name2, asarray2):
     # Present in both: dropped even if equal.
     a1, a2 = AnnData(np.ones((1, 1))), AnnData(np.ones((1, 1)))

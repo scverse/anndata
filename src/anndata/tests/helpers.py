@@ -323,21 +323,8 @@ def _keep_for_types(val, allowed_types):
     return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
 
 
-# def _safe_backend_copy(xp, arr, dtype=None, copy=True):
-#     # making sure that the copy=True behavior is cosistent across different array libraries
-#     x = xp.asarray(arr, dtype=dtype)
-#     if not copy:
-#         return x
-#     try:
-#         # NumPy supports this
-#         return xp.asarray(x, dtype=dtype, copy=True)
-#     except TypeError:
-#         # JAX/cubed/etc. don't support copy=, so we force a new buffer
-#         return xp.array(x, dtype=dtype)
-
-
 # TODO: Use hypothesis for this?
-def gen_adata(  # noqa: PLR0915 # noqa: PLR0913
+def gen_adata(  # noqa: PLR0915, PLR0913
     shape: tuple[int, int],
     # X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     X_type: Callable[[Any], object] | None = None,

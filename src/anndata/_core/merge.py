@@ -65,7 +65,7 @@ T = TypeVar("T")
 
 # Pretty much just for maintaining order of keys
 class OrderedSet(MutableSet):
-    # custom set thet maintains insertion order. Used when merging keys of dicts
+    # custom set that maintains insertion order. Used when merging keys of dicts
     def __init__(self, vals=()):
         self.dict = OrderedDict(zip(vals, repeat(None)))
 
