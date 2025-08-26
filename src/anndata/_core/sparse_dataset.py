@@ -46,6 +46,7 @@ from ..compat import (
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
+    from types import ModuleType
     from typing import Any, Literal
 
     from .._types import GroupStorageType
@@ -67,12 +68,8 @@ class CompressedVectors(NamedTuple, Generic[DenseType]):
         cls,
         data: DenseType,
         indices: DenseType,
-        indptr: np.ndarray,
-    ) -> CompressedVectors:
-        if isinstance(data, CupyArray):
-            import cupy as cp
-
-            indptr = cp.array(indptr)
+        indptr: DenseType,
+    ) -> CompressedVectors[DenseType]:
         return cls(data, indices, indptr)
 
 
@@ -88,11 +85,11 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
-SparseMatrixType = CupyCSMatrix | CSMatrix | CSArray
+SparseMatrixType = TypeVar("SparseMatrixType", CupyCSMatrix, CSMatrix, CSArray)
 
 
 @dataclass
-class BackedSparseMatrix:
+class BackedSparseMatrix(Generic[DenseType, SparseMatrixType]):
     """\
     Mixin class for backed sparse matrices.
 
@@ -102,13 +99,13 @@ class BackedSparseMatrix:
 
     data: GroupStorageType
     indices: GroupStorageType
-    indptr: np.ndarray
+    indptr: DenseType
     format: Literal["csr", "csc"]
     shape: tuple[int, int]
 
     @cached_property
-    def memory_format(self) -> type[CupyCSMatrix | CSMatrix | CSArray]:
-        is_gpu = "gpu" in zarr.config.get("ndbuffer")
+    def memory_format(self) -> SparseMatrixType:
+        is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
         if self.format == "csr":
             if is_gpu:
                 return CupyCSRMatrix
@@ -116,6 +113,15 @@ class BackedSparseMatrix:
         if is_gpu:
             return CupyCSCMatrix
         return ss.csc_array if settings.use_sparse_array_on_read else ss.csc_matrix
+
+    @property
+    def np_module(self) -> ModuleType:
+        is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
+        if is_gpu:
+            import cupy as cp
+
+            return cp
+        return np
 
     @property
     def major_axis(self):
@@ -158,50 +164,54 @@ class BackedSparseMatrix:
         msg = f"Unsupported array types {type(self.data)}"
         raise ValueError(msg)
 
-    def _get_contiguous_compressed_slice(self, s: slice) -> CompressedVectors:
-        new_indptr: np.ndarray = self.indptr[s.start : s.stop + 1].copy()
+    def _get_contiguous_compressed_slice(
+        self, s: slice
+    ) -> CompressedVectors[DenseType]:
+        new_indptr: DenseType = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
 
         new_indptr -= start
 
-        new_data: np.ndarray = self.data[start:stop]
-        new_indices: np.ndarray = self.indices[start:stop]
+        new_data: DenseType = self.data[start:stop]
+        new_indices: DenseType = self.indices[start:stop]
 
         return CompressedVectors.from_buffers(new_data, new_indices, new_indptr)
 
-    def get_compressed_vectors(self, row_idxs: Iterable[int]) -> CompressedVectors:
+    def get_compressed_vectors(
+        self, row_idxs: Iterable[int]
+    ) -> CompressedVectors[DenseType]:
         indptr_slices = [slice(*(self.indptr[i : i + 2])) for i in row_idxs]
         # HDF5 cannot handle out-of-order integer indexing
         if isinstance(self.data, ZarrArray):
-            as_np_indptr = np.concatenate(
-                [np.arange(s.start, s.stop) for s in indptr_slices]
+            as_np_indptr = self.np_module.concatenate(
+                [self.np_module.arange(s.start, s.stop) for s in indptr_slices]
             )
-            data: np.ndarray = self.data[as_np_indptr]
-            indices: np.ndarray = self.indices[as_np_indptr]
+            data: DenseType = self.data[as_np_indptr]
+            indices: DenseType = self.indices[as_np_indptr]
         else:
             data: np.ndarray = np.concatenate([self.data[s] for s in indptr_slices])
             indices: np.ndarray = np.concatenate(
                 [self.indices[s] for s in indptr_slices]
             )
-        indptr = np.array(
+        indptr = self.np_module.array(
             list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
         )
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def get_compressed_vectors_for_slices(
         self, slices: Iterable[slice]
-    ) -> CompressedVectors:
+    ) -> CompressedVectors[DenseType]:
         indptr_indices = [self.indptr[slice(s.start, s.stop + 1)] for s in slices]
         indptr_limits = [slice(i[0], i[-1]) for i in indptr_indices]
         # HDF5 cannot handle out-of-order integer indexing
         if isinstance(self.data, ZarrArray):
-            indptr_int = np.concatenate(
-                [np.arange(s.start, s.stop) for s in indptr_limits]
+            indptr_int = self.np_module.concatenate(
+                [self.np_module.arange(s.start, s.stop) for s in indptr_limits]
             )
-            data: np.ndarray = self.data[indptr_int]
-            indices: np.ndarray = self.indices[indptr_int]
+            data: DenseType = self.data[indptr_int]
+            indices: DenseType = self.indices[indptr_int]
         else:
             data = np.concatenate([self.data[s] for s in indptr_limits])
             indices = np.concatenate([self.indices[s] for s in indptr_limits])
@@ -211,17 +221,17 @@ class BackedSparseMatrix:
         start_indptr = indptr_indices[0] - next(offsets)
         if len(slices) < 2:  # there is only one slice so no need to concatenate
             return CompressedVectors.from_buffers(data, indices, start_indptr)
-        end_indptr = np.concatenate(
+        end_indptr = self.np_module.concatenate(
             [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=False)]
         )
-        indptr = np.concatenate([start_indptr, end_indptr])
+        indptr = self.np_module.concatenate([start_indptr, end_indptr])
         return CompressedVectors.from_buffers(data, indices, indptr)
 
-    def get_compressed_vector(self, idx: int) -> CompressedVectors:
+    def get_compressed_vector(self, idx: int) -> CompressedVectors[DenseType]:
         s = slice(*(self.indptr[idx : idx + 2]))
-        data: np.ndarray = self.data[s]
-        indices: np.ndarray = self.indices[s]
-        indptr: np.ndarray = [0, len(data)]
+        data: DenseType = self.data[s]
+        indices: DenseType = self.indices[s]
+        indptr: DenseType = [0, len(data)]
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def __getitem__(self, key):
@@ -295,7 +305,7 @@ class BackedSparseMatrix:
     def _get_arrayXslice(
         self, major_index: Sequence | np.ndarray, minor_index: slice
     ) -> SparseMatrixType:
-        idxs = np.asarray(major_index)
+        idxs = self.np_module.asarray(major_index)
         if len(idxs) == 0:
             return self.memory_format(
                 (0, self.minor_axis_size)
@@ -303,7 +313,7 @@ class BackedSparseMatrix:
                 else (self.minor_axis_size, 0)
             )
         if idxs.dtype == bool:
-            idxs = np.where(idxs)
+            idxs = self.np_module.where(idxs)
         out_shape = (
             (len(idxs), self.minor_axis_size)
             if self.format == "csr"
@@ -556,7 +566,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
                 delattr(self, attr)
 
     @cached_property
-    def _indptr(self) -> np.ndarray:
+    def _indptr(self) -> DenseType:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
@@ -564,8 +574,6 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         """
         if self._should_cache_indptr:
             indptr = self.group["indptr"][...]
-            if isinstance(indptr, CupyArray):
-                return indptr.get()
             return indptr
         return self.group["indptr"]
 
