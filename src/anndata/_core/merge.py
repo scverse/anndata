@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
+from contextlib import suppress
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
@@ -13,7 +14,15 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
+from array_api_compat import get_namespace
+from dask.base import is_dask_collection
+
+# Enable DLPack interop for JAX, CuPy, etc., only if installed
+with suppress(ImportError):
+    import jax
+    import jax.dlpack
 import pandas as pd
+import pandas.api.types as pdf
 import scipy
 from natsort import natsorted
 from packaging.version import Version
@@ -56,6 +65,7 @@ T = TypeVar("T")
 
 # Pretty much just for maintaining order of keys
 class OrderedSet(MutableSet):
+    # custom set that maintains insertion order. Used when merging keys of dicts
     def __init__(self, vals=()):
         self.dict = OrderedDict(zip(vals, repeat(None)))
 
@@ -89,15 +99,19 @@ class OrderedSet(MutableSet):
 
 
 def union_keys(ds: Collection) -> OrderedSet:
+    # return union of all keys in a collection of dict-like objects
     return reduce(or_, ds, OrderedSet())
 
 
 def intersect_keys(ds: Collection) -> OrderedSet:
+    # return intersection of all keys in a collection of dict-like objects
     return reduce(and_, map(OrderedSet, ds))
 
 
 class MissingVal:
     """Represents a missing value."""
+
+    # used in merging to represent missing values
 
 
 def is_missing(v) -> bool:
@@ -106,6 +120,38 @@ def is_missing(v) -> bool:
 
 def not_missing(v) -> bool:
     return v is not MissingVal
+
+
+def _same_backend(x, y, *, copy: bool = True):
+    # for merge implementation
+    # Makes sure two arrays are from the same array backend.
+    # If not, uses from_dlpack() to convert `y` to `x`'s backend.
+    try:
+        # Get the array API "namespace" (i.e., backend) of `x` and `y`.
+        # This tells us whether we are dealing with NumPy, JAX, Cubed, etc.
+        xp_x = get_namespace(x)
+        xp_y = get_namespace(y)
+    except AttributeError as err:
+        # if either x or y does not support __array_namespace__, we cannot do backend detection
+        msg = "Both arrays must support __array_namespace__ for backend detection."
+        raise TypeError(msg) from err
+
+    # Special-case: Dask cannot be converted via DLPack
+    if is_dask_collection(x) or is_dask_collection(y):
+        return x, y
+
+    # if two arrays use different backends, convert y to x's backend using DLPack
+    if xp_x is not xp_y:
+        try:
+            y = xp_x.from_dlpack(y, copy=copy, device=getattr(x, "device", None))
+        except AttributeError as err:
+            msg = "Cannot convert: from_dlpack not supported by source array."
+            raise RuntimeError(msg) from err
+        except ValueError as e:
+            msg = f"Backend conversion failed: {e}"
+            raise RuntimeError(msg) from e
+
+    return x, y
 
 
 # We need to be able to check for equality of arrays to know which are the same.
@@ -117,6 +163,8 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
+    # compares arrays, dataframes, series, sparse arrays, awkward arrays, dask arrays
+    # even if they are of different types
     a = asarray(a)
     b = asarray(b)
     if a.ndim == b.ndim == 0:
@@ -221,6 +269,7 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
+    # makes sure array is scipy sparse array, converting from other types if needed
     if not isinstance(x, CSMatrix | CSArray):
         in_memory_array_class = (
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
@@ -236,6 +285,7 @@ def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:
+    # makes sure array is cupy sparse array, converting from other types/dense if needed
     import cupyx.scipy.sparse as cpsparse
 
     if isinstance(x, cpsparse.spmatrix):
@@ -254,6 +304,7 @@ def unify_dtypes(
 
     For catching cases where pandas would convert to object dtype.
     """
+    # Basically tries to unify column dtypes across dataframes, if possible.
     dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [dict(df.dtypes) for df in dfs]
@@ -298,6 +349,7 @@ def try_unifying_dtype(  # noqa PLR0911, PLR0912
         A list of dtypes to unify. Can be numpy/ pandas dtypes, or None (which denotes
         a missing value)
     """
+    # decides if list of dtype can be safely coerced to a shared dtype
     dtypes: set[pd.CategoricalDtype] = set()
     # Categorical
     if any(isinstance(dtype, pd.CategoricalDtype) for dtype in col):
@@ -380,6 +432,7 @@ def _cp_block_diag(mats, format=None, dtype=None):
     """
     Modified version of scipy.sparse.block_diag for cupy sparse.
     """
+    # used for stacking pairwise matrices
     import cupy as cp
     from cupyx.scipy import sparse as cpsparse
 
@@ -413,6 +466,7 @@ def _cp_block_diag(mats, format=None, dtype=None):
 
 
 def _dask_block_diag(mats):
+    # same as _cp_block_diag but for dask arrays
     from itertools import permutations
 
     import dask.array as da
@@ -449,7 +503,7 @@ def unique_value(vals: Collection[T]) -> T | MissingVal:
 
 def first(vals: Collection[T]) -> T | MissingVal:
     """
-    Given a collection of vals, return the first non-missing one.If they're all missing,
+    Given a collection of vals, return the first non-missing one. If they're all missing,
     return MissingVal.
     """
     for val in vals:
@@ -472,6 +526,7 @@ def only(vals: Collection[T]) -> T | MissingVal:
 
 
 def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Callable):
+    # generic recursive merge for nested dicts
     out = {}
     for k in keys_join(ds):
         v = _merge_nested(ds, k, keys_join, value_join)
@@ -533,9 +588,54 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 def resolve_merge_strategy(
     strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
+    # turning user input into an actual callable merge function
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
     return strategy
+
+
+# def safe_to_numpy(x):
+#     """Convert to numpy array, handling JAX/Cupy arrays."""
+#     if isinstance(x, pd.Series | pd.Index) or (
+#         hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
+#     ):
+#         return x
+#     return np.asarray(x)
+
+
+def _is_pandas(x):
+    return isinstance(x, pd.Series | pd.Index) or (
+        hasattr(x, "dtype") and pdf.is_extension_array_dtype(x.dtype)
+    )
+
+
+def _is_array_api_compatible(x):
+    # not sure if it is needed but kept it for the future
+    try:
+        get_namespace(x)
+        return True
+    except TypeError:
+        return False
+
+
+def _dlpack_to_numpy(x):
+    ###TODO: FIX
+    # Convert array-api-compatible x to NumPy using DLPack.
+    try:
+        return np.from_dlpack(x)
+    except TypeError as e:
+        msg = f"DLPack to NumPy failed: {e}"
+        raise TypeError(msg) from e
+
+
+def _dlpack_from_numpy(x_np, original_xp):
+    ###TODO: FIX
+    # cubed and other array later elif
+    if original_xp.__name__.startswith("jax"):
+        return jax.dlpack.from_dlpack(x_np)
+    else:
+        msg = f"DLPack back-conversion not implemented for {original_xp.__name__}"
+        raise TypeError(msg)
 
 
 #####################
@@ -544,6 +644,9 @@ def resolve_merge_strategy(
 
 
 class Reindexer:
+    # class builds mappings to reorder/reindex an array to align with new tows or columns
+    # supports numpy, pandas, cupy, awkward, dask, sparse arrays
+    # missing values are filled with fill_value
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
@@ -650,18 +753,55 @@ class Reindexer:
     def _apply_to_array(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        if el.shape[axis] == 0:
-            # Presumably faster since it won't allocate the full array
-            shape = list(el.shape)
-            shape[axis] = len(self.new_idx)
-            return np.broadcast_to(fill_value, tuple(shape))
 
         indexer = self.idx
 
-        # Indexes real fast, and does outer indexing
-        return pd.api.extensions.take(
-            el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
-        )
+        if _is_pandas(el):
+            # using the behavior that already exists in pandas for Series/Index
+            return pd.api.extensions.take(
+                el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
+            )
+        # e.g., numpy, jax.numpy, cubed, etc.
+        xp = get_namespace(el)
+
+        # Handling edge case to mimic pandas behavior
+        if el.shape[axis] == 0:
+            shape = list(el.shape)
+            shape[axis] = indexer.shape[0]
+            # convert fill_value to the same type as el - to keep everything in the same dtype
+            # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
+            fv = xp.asarray(fill_value)
+            return xp.broadcast_to(fv, shape)
+
+        # Check: is array-api compatible, but not NumPy
+        if not isinstance(el, np.ndarray) and _is_array_api_compatible(el):
+            # Convert to NumPy via DLPack
+            el_np = _dlpack_to_numpy(el)
+
+            # Recursively call this same function
+            out_np = self._apply_to_array(el_np, axis=axis, fill_value=fill_value)
+
+            # TODO: Fix it as moving it back and forth is not ideal, but it allows us to
+            # keep the same interface for all backends.
+            # Convert result back to original backend
+            return _dlpack_from_numpy(out_np, xp)
+
+        # numpy case
+        indexer = xp.asarray(indexer)
+        # marking which positions are missing, so we could use fill_value
+        missing_mask = indexer == -1
+        safe_indexer = xp.where(missing_mask, 0, indexer)
+        taken = xp.take(el, safe_indexer, axis=axis)
+        # Expand mask so we can apply xp.where along the right axis
+        shape = [1] * taken.ndim
+        shape[axis] = missing_mask.shape[0]
+        mask = missing_mask.reshape(shape)
+
+        # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
+        fv = xp.asarray(fill_value)
+        fv_broadcast = xp.broadcast_to(fv, taken.shape)
+
+        return xp.where(mask, fv_broadcast, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
         self, el: CSMatrix | CSArray, *, axis, fill_value=None
@@ -762,6 +902,7 @@ class Reindexer:
 
 
 def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
+    # either union or intersection of indices
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -769,6 +910,38 @@ def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
     else:
         msg = f"`join` must be one of 'inner' or 'outer', got {join!r}"
         raise ValueError(msg)
+
+
+# def default_fill_value(els):
+#     # Given some arrays, returns what the default fill value should be.
+
+#     if any(
+#         isinstance(el, pd.DataFrame | pd.Series)
+#         for el in els
+#         if el is not None and el is not MissingVal
+#     ):
+#         return pd.NA
+
+#     if any(
+#         isinstance(el, CSMatrix | CSArray)
+#         or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
+#         for el in els
+#     ):
+#         return 0
+
+#     # Pick the namespace of the first valid element
+#     for el in els:
+#         if el is not None and el is not MissingVal:
+#             xp = get_namespace(el)
+#             # Not all backends have `nan` defined (e.g. integer dtypes)
+#             try:
+#                 return xp.nan
+#             except AttributeError:
+#                 # Fall back to 0 if no NaN in this backend
+#                 return xp.asarray(0).item()
+
+#     # Fallback if list was empty or only MissingVal
+#     return np.nan
 
 
 def default_fill_value(els):
@@ -808,6 +981,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
 
 
 def np_bool_to_pd_bool_array(df: pd.DataFrame):
+    # fixes issue where pandas converts bool to object dtype when there are missing values
     for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
             df[col_name] = pd.array(df[col_name].values)
@@ -817,6 +991,9 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 def concat_arrays(  # noqa: PLR0911, PLR0912
     arrays, reindexers, axis=0, index=None, fill_value=None, *, force_lazy: bool = False
 ):
+    # figuring out what kind of arrays are in the input
+    # converts compatible types using helper functions
+    # uses appropriate stacking methods
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -906,13 +1083,22 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
     else:
-        return np.concatenate(
+        # Use the backend of the first array as the reference
+        ref = arrays[0]
+        xp = get_namespace(ref)
+
+        # Convert all arrays to the same backend as `ref`
+        arrays = [ref] + [_same_backend(ref, x, copy=True)[1] for x in arrays[1:]]
+
+        # Concatenate with the backend’s API
+        value = xp.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
                 for f, x in zip(reindexers, arrays, strict=True)
             ],
             axis=axis,
         )
+        return value
 
 
 def inner_concat_aligned_mapping(
@@ -924,6 +1110,7 @@ def inner_concat_aligned_mapping(
     concat_axis=None,
     force_lazy: bool = False,
 ):
+    # concatenate elements across objects that share intersecting keys
     if concat_axis is None:
         concat_axis = axis
     result = {}
@@ -944,6 +1131,7 @@ def inner_concat_aligned_mapping(
 
 
 def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
+    # returns reindexers for inner join
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -973,6 +1161,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
 
 
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
+    # reindexers for outer join
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
             (lambda x: x)
@@ -1399,6 +1588,20 @@ def concat_dataset2d_on_annot_axis(
     return ds_concat_2d
 
 
+def _to_numpy_if_array_api(x):
+    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
+        return x
+    try:
+        import array_api_compat as aac
+
+        # If this succeeds, it's an array-API array (e.g. JAX, cubed, cupy, dask)
+        aac.array_namespace(x)
+        return np.asarray(x)
+    except TypeError:
+        # Not an array-API object (or lib not available) = return unchanged
+        return x
+
+
 def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
@@ -1785,6 +1988,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "not concatenating `.raw` attributes."
         )
         warn(msg, UserWarning, stacklevel=2)
+
     return AnnData(
         **{
             "X": X,
