@@ -63,6 +63,14 @@ except ImportError:
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
 
+# jax extension
+from contextlib import suppress
+
+# Enable DLPack interop for JAX, CuPy, etc., only if installed
+with suppress(ImportError):
+    import jax
+    import jax.dlpack
+
 
 DEFAULT_KEY_TYPES = (
     sparse.csr_matrix,
@@ -315,23 +323,24 @@ def _keep_for_types(val, allowed_types):
     return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
 
 
-def _safe_backend_copy(xp, arr, dtype=None, copy=True):
-    # making sure that the copy=True behavior is cosistent across different array libraries
-    x = xp.asarray(arr, dtype=dtype)
-    if not copy:
-        return x
-    try:
-        # NumPy supports this
-        return xp.asarray(x, dtype=dtype, copy=True)
-    except TypeError:
-        # JAX/cubed/etc. don't support copy=, so we force a new buffer
-        return xp.array(x, dtype=dtype)
+# def _safe_backend_copy(xp, arr, dtype=None, copy=True):
+#     # making sure that the copy=True behavior is cosistent across different array libraries
+#     x = xp.asarray(arr, dtype=dtype)
+#     if not copy:
+#         return x
+#     try:
+#         # NumPy supports this
+#         return xp.asarray(x, dtype=dtype, copy=True)
+#     except TypeError:
+#         # JAX/cubed/etc. don't support copy=, so we force a new buffer
+#         return xp.array(x, dtype=dtype)
 
 
 # TODO: Use hypothesis for this?
 def gen_adata(
     shape: tuple[int, int],
-    X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
+    # X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
+    X_type: Callable[[Any], object] | None = None,
     *,
     # by default using numpy, but can be set to jax or cubed
     # TODO: have a way to handle it better
@@ -425,23 +434,23 @@ def gen_adata(
         if var_xdataset:
             var = XDataset.from_dataframe(var)
 
-    if X_type is None:
-        X = None
+    # splitting this numpy method out as cubed does not have an equivalent but jax does
+    arr = random_state.binomial(100, 0.005, (M, N))
+    # converting to the appropriate array type
+    arr_xp = xp.asarray(arr, dtype=X_dtype)
+
+    if X_type is not None:
+        X = X_type(arr_xp)
+    elif array_namespace == "jax":
+        X = arr_xp  # JAX dense
     else:
-        # splitting this numpy method out as cubed does not have an equivalent but jax does
-        arr = random_state.binomial(100, 0.005, (M, N))
-        # converting to the appropriate array type
-        # X = X_type(xp.asarray(arr, dtype=X_dtype))
-        X = X_type(_safe_backend_copy(xp, arr, dtype=X_dtype, copy=copy))
+        X = sparse.csr_matrix(arr_xp)
 
     # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
         # array=np.random.random((M, 50)),
         # random_state.random to not interfere with other test code or modules
-        # array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
-        array=_safe_backend_copy(
-            xp, random_state.random((M, 50)), dtype=X_dtype, copy=copy
-        ),
+        array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
@@ -449,10 +458,7 @@ def gen_adata(
     )
     varm = dict(
         # array=np.random.random((N, 50)),
-        # array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
-        array=_safe_backend_copy(
-            xp, random_state.random((N, 50)), dtype=X_dtype, copy=copy
-        ),
+        array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -485,10 +491,7 @@ def gen_adata(
     )
     layers = dict(
         # array=np.random.random((M, N)),
-        # array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
-        array=_safe_backend_copy(
-            xp, random_state.random((M, N)), dtype=X_dtype, copy=copy
-        ),
+        array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -503,10 +506,7 @@ def gen_adata(
     layers = {k: v for k, v in layers.items() if _keep_for_types(v, layers_types)}
     obsp = dict(
         # array=np.random.random((M, M)),
-        # array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
-        array=_safe_backend_copy(
-            xp, random_state.random((M, M)), dtype=X_dtype, copy=copy
-        ),
+        array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
@@ -514,10 +514,7 @@ def gen_adata(
     )
     varp = dict(
         # array=np.random.random((N, N)),
-        # array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
-        array=_safe_backend_copy(
-            xp, random_state.random((N, N)), dtype=X_dtype, copy=copy
-        ),
+        array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(
@@ -1202,6 +1199,7 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
+    pytest.param(jnp.asarray, id="jax_array"),
 ]
 
 DASK_MATRIX_PARAMS = [

@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from warnings import warn
 
 import numpy as np
+from array_api_compat import get_namespace
+from dask.base import is_dask_collection
 
 # Enable DLPack interop for JAX, CuPy, etc., only if installed
 with suppress(ImportError):
@@ -22,7 +24,6 @@ with suppress(ImportError):
 import pandas as pd
 import pandas.api.types as pdf
 import scipy
-from array_api_compat import get_namespace
 from natsort import natsorted
 from packaging.version import Version
 from scipy import sparse
@@ -119,6 +120,38 @@ def is_missing(v) -> bool:
 
 def not_missing(v) -> bool:
     return v is not MissingVal
+
+
+def _same_backend(x, y, copy=True):
+    # for merge implementation
+    # Makes sure two arrays are from the same array backend.
+    # If not, uses from_dlpack() to convert `y` to `x`'s backend.
+    try:
+        # Get the array API "namespace" (i.e., backend) of `x` and `y`.
+        # This tells us whether we are dealing with NumPy, JAX, Cubed, etc.
+        xp_x = get_namespace(x)
+        xp_y = get_namespace(y)
+    except AttributeError as err:
+        # if either x or y does not support __array_namespace__, we cannot do backend detection
+        msg = "Both arrays must support __array_namespace__ for backend detection."
+        raise TypeError(msg) from err
+
+    # Special-case: Dask cannot be converted via DLPack
+    if is_dask_collection(x) or is_dask_collection(y):
+        return x, y
+
+    # if two arrays use different backends, convert y to x's backend using DLPack
+    if xp_x is not xp_y:
+        try:
+            y = xp_x.from_dlpack(y, copy=copy, device=getattr(x, "device", None))
+        except AttributeError as err:
+            msg = "Cannot convert: from_dlpack not supported by source array."
+            raise RuntimeError(msg) from err
+        except ValueError as e:
+            msg = f"Backend conversion failed: {e}"
+            raise RuntimeError(msg) from e
+
+    return x, y
 
 
 # We need to be able to check for equality of arrays to know which are the same.
@@ -879,6 +912,38 @@ def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
         raise ValueError(msg)
 
 
+# def default_fill_value(els):
+#     # Given some arrays, returns what the default fill value should be.
+
+#     if any(
+#         isinstance(el, pd.DataFrame | pd.Series)
+#         for el in els
+#         if el is not None and el is not MissingVal
+#     ):
+#         return pd.NA
+
+#     if any(
+#         isinstance(el, CSMatrix | CSArray)
+#         or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
+#         for el in els
+#     ):
+#         return 0
+
+#     # Pick the namespace of the first valid element
+#     for el in els:
+#         if el is not None and el is not MissingVal:
+#             xp = get_namespace(el)
+#             # Not all backends have `nan` defined (e.g. integer dtypes)
+#             try:
+#                 return xp.nan
+#             except AttributeError:
+#                 # Fall back to 0 if no NaN in this backend
+#                 return xp.asarray(0).item()
+
+#     # Fallback if list was empty or only MissingVal
+#     return np.nan
+
+
 def default_fill_value(els):
     """Given some arrays, returns what the default fill value should be.
 
@@ -1018,16 +1083,22 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
     else:
-        # xp = arrays[0].__array_namespace__()
-        # ref = arrays[0]
-        # arrays = [ref] + s
-        return np.concatenate(
+        # Use the backend of the first array as the reference
+        ref = arrays[0]
+        xp = get_namespace(ref)
+
+        # Convert all arrays to the same backend as `ref`
+        arrays = [ref] + [_same_backend(ref, x, copy=True)[1] for x in arrays[1:]]
+
+        # Concatenate with the backend’s API
+        value = xp.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
                 for f, x in zip(reindexers, arrays, strict=True)
             ],
             axis=axis,
         )
+        return value
 
 
 def inner_concat_aligned_mapping(

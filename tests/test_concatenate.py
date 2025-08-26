@@ -9,11 +9,13 @@ from itertools import chain, permutations, product
 from operator import attrgetter
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
 import scipy
 from boltons.iterutils import default_exit, remap, research
+from jaxlib._jax import ArrayImpl as JaxArray
 from numpy import ma
 from packaging.version import Version
 from scipy import sparse
@@ -80,6 +82,11 @@ def _filled_sparse_array(a, fill_value=None):
 def _filled_df(a, fill_value=np.nan):
     # dtype from pd.concat can be unintuitive, this returns something close enough
     return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
+
+
+@filled_like.register(JaxArray)
+def _(a, fill_value=None):
+    return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
@@ -1494,8 +1501,15 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
+@pytest.mark.parametrize("array_namespace", ["numpy", "jax"])
 def test_concat_size_0_axis(
-    axis_name, join_type, merge_strategy, shape, use_xdataset, force_lazy
+    axis_name,
+    join_type,
+    merge_strategy,
+    shape,
+    use_xdataset,
+    force_lazy,
+    array_namespace,
 ):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
@@ -1507,6 +1521,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        array_namespace=array_namespace,
     )
     b = gen_adata(
         shape,
@@ -1514,6 +1529,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        array_namespace=array_namespace,
     )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
