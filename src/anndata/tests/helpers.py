@@ -42,7 +42,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
-    from typing import Literal, TypeGuard, TypeVar
+    from typing import Any, Literal, TypeGuard, TypeVar
 
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
@@ -337,7 +337,7 @@ def _keep_for_types(val, allowed_types):
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(
+def gen_adata(  # noqa: PLR0915 # noqa: PLR0913
     shape: tuple[int, int],
     # X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     X_type: Callable[[Any], object] | None = None,
