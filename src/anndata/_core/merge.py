@@ -122,7 +122,7 @@ def not_missing(v) -> bool:
     return v is not MissingVal
 
 
-def _same_backend(x, y, copy=True):
+def _same_backend(x, y, *, copy: bool = True):
     # for merge implementation
     # Makes sure two arrays are from the same array backend.
     # If not, uses from_dlpack() to convert `y` to `x`'s backend.
