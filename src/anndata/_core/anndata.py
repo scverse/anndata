@@ -451,19 +451,24 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **raw)
+
+        # clean up old formats
+        self._clean_up_old_format(uns)
+
+        # layers
+        if X is not None:
+            if layers is None or not bool(layers):
+                layers = {None: X}
+            elif bool(layers):
+                layers[None] = X
+        self.layers = layers
+
         if not raw:
             self._raw = None
         elif isinstance(raw, Mapping):
             self._raw = Raw(self, **raw)
         else:  # is a Raw from another AnnData
             self._raw = Raw(self, raw.X, raw.var, raw.varm)
-
-        # clean up old formats
-        self._clean_up_old_format(uns)
-
-        # layers
-        self.layers = layers
-        self.X = X
 
     @old_positionals("show_stratified", "with_disk")
     def __sizeof__(
