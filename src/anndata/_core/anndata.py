@@ -456,13 +456,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         self._clean_up_old_format(uns)
 
         # layers
-        if X is not None:
-            if layers is None or not bool(layers):
-                layers = {None: X}
-            elif bool(layers):
-                layers[None] = X
         self.layers = layers
-
+        self.X = X
         if not raw:
             self._raw = None
         elif isinstance(raw, Mapping):
@@ -581,7 +576,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
             oidx, vidx = self._oidx, self._vidx
-        if (
+        if self.isbacked and (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
