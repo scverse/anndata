@@ -10,7 +10,7 @@ import pytest
 from packaging.version import Version
 
 import anndata as ad
-from anndata.tests.helpers import gen_adata
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
@@ -27,18 +27,18 @@ def test_old_format_warning_thrown():
         )
 
     pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+    warnings.simplefilter("default", FutureWarning)
     with (
         pytest.warns(FutureWarning, match=msg_re("distances")),
         pytest.warns(FutureWarning, match=msg_re("connectivities")),
         pytest.warns(ad.OldFormatWarning),
     ):
-        warnings.simplefilter("default", FutureWarning)
         ad.read_h5ad(pth)
 
 
-def test_old_format_warning_not_thrown(tmp_path):
+def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
     pth = tmp_path / "current.h5ad"
-    adata = gen_adata((20, 10))
+    adata = gen_adata((20, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_h5ad(pth)
 
     with warnings.catch_warnings(record=True) as record:

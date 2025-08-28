@@ -12,9 +12,11 @@ from anndata.tests.helpers import gen_typed_df
 from anndata.utils import adapt_vars_like, make_index_unique
 
 
-def test_make_index_unique():
+def test_make_index_unique() -> None:
     index = pd.Index(["val", "val", "val-1", "val-1"])
-    with pytest.warns(UserWarning):
+    with pytest.warns(
+        UserWarning, match=r"Suffix used.*index values difficult to interpret"
+    ):
         result = make_index_unique(index)
     expected = pd.Index(["val", "val-2", "val-1", "val-1-1"])
     assert list(expected) == list(result)

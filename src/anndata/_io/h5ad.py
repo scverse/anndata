@@ -4,7 +4,7 @@ import re
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
 from warnings import warn
 
 import h5py
@@ -36,11 +36,12 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Mapping, Sequence
+    from collections.abc import Callable, Collection, Container, Mapping, Sequence
     from os import PathLike
     from typing import Any, Literal
 
     from .._core.file_backing import AnnDataFileManager
+    from .._core.raw import Raw
 
 T = TypeVar("T")
 
@@ -82,29 +83,18 @@ def write_h5ad(
         # TODO: Use spec writing system for this
         # Currently can't use write_dispatched here because this function is also called to do an
         # inplace update of a backed object, which would delete "/"
-        f = f["/"]
+        f = cast("h5py.Group", f["/"])
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
-        if "X" in as_dense and isinstance(
-            adata.X, CSMatrix | BaseCompressedSparseDataset
-        ):
-            write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        elif not (adata.isbacked and Path(adata.filename) == Path(filepath)):
-            # If adata.isbacked, X should already be up to date
-            write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
-        if "raw/X" in as_dense and isinstance(
-            adata.raw.X, CSMatrix | BaseCompressedSparseDataset
-        ):
-            write_sparse_as_dense(
-                f, "raw/X", adata.raw.X, dataset_kwargs=dataset_kwargs
-            )
-            write_elem(f, "raw/var", adata.raw.var, dataset_kwargs=dataset_kwargs)
-            write_elem(
-                f, "raw/varm", dict(adata.raw.varm), dataset_kwargs=dataset_kwargs
-            )
-        elif adata.raw is not None:
-            write_elem(f, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+        _write_x(
+            f,
+            adata,  # accessing adata.X reopens adata.file if it’s backed
+            is_backed=adata.isbacked and adata.filename == filepath,
+            as_dense=as_dense,
+            dataset_kwargs=dataset_kwargs,
+        )
+        _write_raw(f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs)
         write_elem(f, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
         write_elem(f, "var", adata.var, dataset_kwargs=dataset_kwargs)
         write_elem(f, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
@@ -113,6 +103,41 @@ def write_h5ad(
         write_elem(f, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
         write_elem(f, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
         write_elem(f, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
+
+
+def _write_x(
+    f: h5py.Group,
+    adata: AnnData,
+    *,
+    is_backed: bool,
+    as_dense: Container[str],
+    dataset_kwargs: Mapping[str, Any],
+) -> None:
+    if "X" in as_dense and isinstance(adata.X, CSMatrix | BaseCompressedSparseDataset):
+        write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    elif is_backed:
+        pass  # If adata.isbacked, X should already be up to date
+    elif adata.X is None:
+        f.pop("X", None)
+    else:
+        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+
+
+def _write_raw(
+    f: h5py.Group,
+    raw: Raw,
+    *,
+    as_dense: Container[str],
+    dataset_kwargs: Mapping[str, Any],
+) -> None:
+    if "raw/X" in as_dense and isinstance(
+        raw.X, CSMatrix | BaseCompressedSparseDataset
+    ):
+        write_sparse_as_dense(f, "raw/X", raw.X, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "raw/var", raw.var, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "raw/varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+    elif raw is not None:
+        write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs)
 
 
 @report_write_key_on_error
@@ -176,7 +201,7 @@ def read_h5ad_backed(
 
 def read_h5ad(
     filename: PathLike[str] | str,
-    backed: Literal["r", "r+"] | bool | None = None,
+    backed: Literal["r", "r+"] | bool | None = None,  # noqa: FBT001
     *,
     as_sparse: Sequence[str] = (),
     as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,

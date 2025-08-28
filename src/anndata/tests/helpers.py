@@ -6,6 +6,8 @@ import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from functools import partial, singledispatch, wraps
+from importlib.metadata import version
+from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
 
@@ -13,14 +15,15 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
-import anndata
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
+from anndata._core.xarray import Dataset2D
 from anndata.compat import (
     AwkArray,
     CSArray,
@@ -30,6 +33,8 @@ from anndata.compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    XDataArray,
+    XDataset,
     ZarrArray,
     is_zarr_v2,
 )
@@ -39,12 +44,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
     from .._types import ArrayStorageType
+    from ..compat import Index1D
 
     DT = TypeVar("DT")
+    _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
 
 try:
@@ -55,31 +63,13 @@ except ImportError:
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
 
-
-# Give this to gen_adata when dask array support is expected.
-GEN_ADATA_DASK_ARGS = dict(
-    obsm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    varm_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-    layers_types=(
-        sparse.csr_matrix,
-        np.ndarray,
-        pd.DataFrame,
-        DaskArray,
-        sparse.csr_array,
-    ),
-)
+try:
+    import fast_array_utils as _
+except ImportError:
+    # dask natively supports sparray since https://github.com/dask/dask/pull/11750
+    DASK_CAN_SPARRAY = Version(version("dask")) >= Version("2025.3.0")
+else:  # fast-array-utils monkeypatches dask to support sparrays
+    DASK_CAN_SPARRAY = True
 
 
 DEFAULT_KEY_TYPES = (
@@ -99,6 +89,18 @@ DEFAULT_COL_TYPES = (
     np.bool_,
     pd.BooleanDtype,
     pd.Int32Dtype,
+)
+
+
+# Give this to gen_adata when dask array support is expected.
+GEN_ADATA_DASK_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
+    layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
+)
+
+GEN_ADATA_NO_XARRAY_ARGS = dict(
+    obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
 
@@ -288,8 +290,10 @@ def gen_adata(  # noqa: PLR0913
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
-    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray),
+    obs_xdataset: bool = False,
+    var_xdataset: bool = False,
+    obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
+    varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
@@ -334,6 +338,12 @@ def gen_adata(  # noqa: PLR0913
     obs.rename(columns=dict(cat="obs_cat"), inplace=True)
     var.rename(columns=dict(cat="var_cat"), inplace=True)
 
+    if has_xr := find_spec("xarray"):
+        if obs_xdataset:
+            obs = XDataset.from_dataframe(obs)
+        if var_xdataset:
+            var = XDataset.from_dataframe(var)
+
     if X_type is None:
         X = None
     else:
@@ -346,6 +356,20 @@ def gen_adata(  # noqa: PLR0913
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
+    varm = dict(
+        array=np.random.random((N, 50)),
+        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
+        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
+        awk_2d_ragged=gen_awkward((N, None)),
+        da=da.random.random((N, 50)),
+    )
+    if has_xr:
+        obsm["xdataset"] = XDataset.from_dataframe(
+            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        )
+        varm["xdataset"] = XDataset.from_dataframe(
+            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
@@ -353,13 +377,6 @@ def gen_adata(  # noqa: PLR0913
         format=sparse_fmt,
         random_state=random_state,
         shape=(M, 100),
-    )
-    varm = dict(
-        array=np.random.random((N, 50)),
-        sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
-        df=gen_typed_df(N, var_names, dtypes=var_dtypes),
-        awk_2d_ragged=gen_awkward((N, None)),
-        da=da.random.random((N, 50)),
     )
     varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
@@ -408,10 +425,6 @@ def gen_adata(  # noqa: PLR0913
         awkward_ragged=gen_awkward((12, None, None)),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    # zarr v3 on-disk does not write structured dtypes
-    if anndata.settings.zarr_write_format == 3:
-        del uns["O_recarray"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
@@ -428,7 +441,7 @@ def gen_adata(  # noqa: PLR0913
     return adata
 
 
-def array_bool_subset(index, min_size=2):
+def array_bool_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.bool_]:
     b = np.zeros(len(index), dtype=bool)
     selected = np.random.choice(
         range(len(index)),
@@ -439,11 +452,11 @@ def array_bool_subset(index, min_size=2):
     return b
 
 
-def list_bool_subset(index, min_size=2):
+def list_bool_subset(index: pd.Index[str], min_size: int = 2) -> list[bool]:
     return array_bool_subset(index, min_size=min_size).tolist()
 
 
-def matrix_bool_subset(index, min_size=2):
+def matrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> np.matrix:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PendingDeprecationWarning)
         indexer = np.matrix(
@@ -452,19 +465,26 @@ def matrix_bool_subset(index, min_size=2):
     return indexer
 
 
-def spmatrix_bool_subset(index, min_size=2):
+def spmatrix_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_matrix:
     return sparse.csr_matrix(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def sparray_bool_subset(index, min_size=2):
+def sparray_bool_subset(index: pd.Index[str], min_size: int = 2) -> sparse.csr_array:
     return sparse.csr_array(
         array_bool_subset(index, min_size=min_size).reshape(len(index), 1)
     )
 
 
-def array_subset(index, min_size=2):
+def single_subset(index: pd.Index[str], min_size: int = 1) -> str:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return index[np.random.randint(0, len(index))]
+
+
+def array_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.str_]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -473,7 +493,7 @@ def array_subset(index, min_size=2):
     )
 
 
-def array_int_subset(index, min_size=2):
+def array_int_subset(index: pd.Index[str], min_size: int = 2) -> NDArray[np.int64]:
     if len(index) < min_size:
         msg = f"min_size (={min_size}) must be smaller than len(index) (={len(index)}"
         raise ValueError(msg)
@@ -484,11 +504,11 @@ def array_int_subset(index, min_size=2):
     )
 
 
-def list_int_subset(index, min_size=2):
+def list_int_subset(index: pd.Index[str], min_size: int = 2) -> list[int]:
     return array_int_subset(index, min_size=min_size).tolist()
 
 
-def slice_subset(index, min_size=2):
+def slice_int_subset(index: pd.Index[str], min_size: int = 2) -> slice:
     while True:
         points = np.random.choice(np.arange(len(index) + 1), size=2, replace=False)
         s = slice(*sorted(points))
@@ -497,25 +517,33 @@ def slice_subset(index, min_size=2):
     return s
 
 
-def single_subset(index):
-    return index[np.random.randint(0, len(index))]
+def single_int_subset(index: pd.Index[str], min_size: int = 1) -> int:
+    if min_size > 1:
+        msg = "max_size must be ≤1"
+        raise AssertionError(msg)
+    return np.random.randint(0, len(index))
 
 
-@pytest.fixture(
-    params=[
-        array_subset,
-        slice_subset,
-        single_subset,
-        array_int_subset,
-        list_int_subset,
-        array_bool_subset,
-        list_bool_subset,
-        matrix_bool_subset,
-        spmatrix_bool_subset,
-        sparray_bool_subset,
-    ]
-)
-def subset_func(request):
+_SUBSET_FUNCS: list[_SubsetFunc] = [
+    # str (obs/var name)
+    single_subset,
+    array_subset,
+    # int (numeric index)
+    single_int_subset,
+    slice_int_subset,
+    array_int_subset,
+    list_int_subset,
+    # bool (mask)
+    array_bool_subset,
+    list_bool_subset,
+    matrix_bool_subset,
+    spmatrix_bool_subset,
+    sparray_bool_subset,
+]
+
+
+@pytest.fixture(params=_SUBSET_FUNCS)
+def subset_func(request: pytest.FixtureRequest) -> _SubsetFunc:
     return request.param
 
 
@@ -610,8 +638,9 @@ def assert_equal_arrayview(
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
+@assert_equal.register(CSArray)
 def assert_equal_sparse(
-    a: BaseCompressedSparseDataset | sparse.spmatrix,
+    a: BaseCompressedSparseDataset | sparse.spmatrix | CSArray,
     b: object,
     *,
     exact: bool = False,
@@ -619,13 +648,6 @@ def assert_equal_sparse(
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
-
-
-@assert_equal.register(CSArray)
-def assert_equal_sparse_array(
-    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
-):
-    return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
@@ -668,6 +690,13 @@ def are_equal_dataframe(
         _elem_name=elem_name,
         check_frame_type=False,
     )
+
+
+@assert_equal.register(Dataset2D)
+def are_equal_dataset2d(
+    a: Dataset2D, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    a.equals(b)
 
 
 @assert_equal.register(AwkArray)
@@ -738,6 +767,13 @@ def assert_equal_extension_array(
         check_exact=exact,
         _elem_name=elem_name,
     )
+
+
+@assert_equal.register(XDataArray)
+def assert_equal_xarray(
+    a: XDataArray, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    report_name(a.equals)(b, _elem_name=elem_name)
 
 
 @assert_equal.register(Raw)
@@ -846,29 +882,37 @@ def _(a):
 
 
 @singledispatch
-def as_sparse_dask_array(a) -> DaskArray:
+def _as_sparse_dask(
+    a: NDArray | CSArray | CSMatrix | DaskArray, *, typ: type[CSArray | CSMatrix]
+) -> DaskArray:
+    """Convert a to a sparse dask array, preserving sparse format and container (`cs{rc}_{array,matrix}`)."""
+    raise NotImplementedError
+
+
+@_as_sparse_dask.register(CSArray | CSMatrix | np.ndarray)
+def _(a: CSArray | CSMatrix | NDArray, *, typ: type[CSArray | CSMatrix]) -> DaskArray:
     import dask.array as da
 
-    return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
+    return da.from_array(_as_sparse_dask_inner(a, typ=typ), _half_chunk_size(a.shape))
 
 
-@as_sparse_dask_array.register(CSMatrix)
-def _(a):
-    import dask.array as da
-
-    return da.from_array(a, _half_chunk_size(a.shape))
+@_as_sparse_dask.register(DaskArray)
+def _(a: DaskArray, *, typ: type[CSArray | CSMatrix]) -> DaskArray:
+    return a.map_blocks(_as_sparse_dask_inner, typ=typ, dtype=a.dtype, meta=typ((2, 2)))
 
 
-@as_sparse_dask_array.register(CSArray)
-def _(a):
-    import dask.array as da
+def _as_sparse_dask_inner(
+    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix]
+) -> CSArray | CSMatrix:
+    """Convert into a a sparse container that dask supports (or complain)."""
+    if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
+        msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
+        raise TypeError(msg)
+    return typ(a)
 
-    return da.from_array(sparse.csr_matrix(a), _half_chunk_size(a.shape))
 
-
-@as_sparse_dask_array.register(DaskArray)
-def _(a):
-    return a.map_blocks(sparse.csr_matrix)
+as_sparse_dask_array = partial(_as_sparse_dask, typ=sparse.csr_array)
+as_sparse_dask_matrix = partial(_as_sparse_dask, typ=sparse.csr_matrix)
 
 
 @singledispatch
@@ -917,11 +961,8 @@ except ImportError:
 # We should try and fix this upstream in dask/ cupy
 @singledispatch
 def as_cupy_sparse_dask_array(a, format="csr"):
-    memory_class = format_to_memory_class[format]
-    cpu_da = as_sparse_dask_array(a)
-    return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
-        memory_class, dtype=a.dtype, meta=memory_class(cpu_da._meta)
-    )
+    da = _as_sparse_dask(a, typ=format_to_memory_class[format])
+    return da.rechunk((da.chunks[0], -1))
 
 
 @as_cupy_sparse_dask_array.register(CupyArray)
@@ -971,7 +1012,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, CSMatrix):
+        if isinstance(val, CSMatrix | CSArray):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1027,7 +1068,14 @@ BASE_MATRIX_PARAMS = [
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
-    pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+    pytest.param(as_sparse_dask_matrix, id="sparse_dask_matrix"),
+    pytest.param(
+        as_sparse_dask_array,
+        marks=pytest.mark.skipif(
+            not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+        ),
+        id="sparse_dask_array",
+    ),
 ]
 
 CUPY_MATRIX_PARAMS = [
@@ -1069,10 +1117,16 @@ class AccessTrackingStoreBase(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
+        # Needed for zarr v3 to prevent a read-only copy being made
+        # https://github.com/zarr-developers/zarr-python/pull/3156
+        if not is_zarr_v2() and "read_only" not in kwargs:
+            kwargs["read_only"] = True
         super().__init__(*args, **kwargs)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+        self._read_only = True
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1128,26 +1182,9 @@ if is_zarr_v2():
 else:
 
     class AccessTrackingStore(AccessTrackingStoreBase):
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs, read_only=True)
 
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
         async def get(
             self,
             key: str,

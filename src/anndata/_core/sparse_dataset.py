@@ -165,7 +165,11 @@ class BackedSparseMatrix(_cs_matrix):
     def _get_contiguous_compressed_slice(
         self, s: slice
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1].copy()
+        new_indptr = self.indptr[s.start : s.stop + 1]
+        # If indptr is cached, we need to make a copy of the subset
+        # so as not to alter the underlying cached data.
+        if isinstance(self.indptr, np.ndarray):
+            new_indptr = new_indptr.copy()
 
         start = new_indptr[0]
         stop = new_indptr[-1]
@@ -395,10 +399,12 @@ def validate_indices(
 
 class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
     _group: GroupStorageType
+    _should_cache_indptr: bool
 
-    def __init__(self, group: GroupStorageType):
+    def __init__(self, group: GroupStorageType, *, should_cache_indptr: bool = True):
         type(self)._check_group_format(group)
         self._group = group
+        self._should_cache_indptr = should_cache_indptr
 
     @property
     def group(self) -> GroupStorageType:
@@ -616,8 +622,9 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
 
         It should therefore fit into memory, so we cache it for faster access.
         """
-        arr = self.group["indptr"][...]
-        return arr
+        if self._should_cache_indptr:
+            return self.group["indptr"][...]
+        return self.group["indptr"]
 
     @cached_property
     def _indices(self) -> H5Array | ZarrArray:
@@ -660,13 +667,23 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
-def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
+def sparse_dataset(
+    group: GroupStorageType,
+    *,
+    should_cache_indptr: bool = True,
+) -> abc.CSRDataset | abc.CSCDataset:
     """Generates a backed mode-compatible sparse dataset class.
 
     Parameters
     ----------
     group
         The backing group store.
+    should_cache_indptr
+        Whether or not to cache the indptr for repeated reuse as a :class:`numpy.ndarray`.
+        The default is `True` but one might set it to false if the dataset is repeatedly reopened
+        using this command, and then only a subset is read in before closing again.
+        See https://github.com/scverse/anndata/blob/3c489b979086c39c59d3eb5dad90ebacce3b9a80/src/anndata/_io/specs/lazy_methods.py#L85-L95
+        for the target use-case.
 
     Returns
     -------
@@ -713,9 +730,9 @@ def sparse_dataset(group: GroupStorageType) -> abc.CSRDataset | abc.CSCDataset:
     """
     encoding_type = _get_group_format(group)
     if encoding_type == "csr":
-        return _CSRDataset(group)
+        return _CSRDataset(group, should_cache_indptr=should_cache_indptr)
     elif encoding_type == "csc":
-        return _CSCDataset(group)
+        return _CSCDataset(group, should_cache_indptr=should_cache_indptr)
     msg = f"Unknown encoding type {encoding_type}"
     raise ValueError(msg)
 

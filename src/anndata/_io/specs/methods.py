@@ -24,6 +24,7 @@ from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_datase
 from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
+    NULLABLE_NUMPY_STRING_TYPE,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -274,7 +275,8 @@ def write_anndata(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
+    if adata.X is not None:
+        _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
@@ -431,7 +433,7 @@ def write_basic(
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
-        if isinstance(elem, ZarrArray):
+        if isinstance(elem, ZarrArray | H5Array):
             f[k][...] = elem[...]
         else:
             f[k][...] = elem
@@ -490,6 +492,7 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 )
 
 
+@_REGISTRY.register_write(ZarrGroup, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_zarr(
     f: ZarrGroup,
@@ -512,6 +515,7 @@ def write_basic_dask_zarr(
 
 # Adding this separately because h5py isn't serializable
 # https://github.com/pydata/xarray/issues/4242
+@_REGISTRY.register_write(H5Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_h5(
     f: H5Group,
@@ -622,24 +626,20 @@ def write_vlen_string_array_zarr(
         f[k][:] = elem
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        match (
-            ad.settings.zarr_write_format,
-            Version(np.__version__) >= Version("2.0.0"),
-        ):
-            case 2, _:
-                filters, dtype = [VLenUTF8()], object
-            case 3, True:
-                filters, dtype = None, np.dtypes.StringDType()
-            case 3, False:
-                filters, dtype = None, np.dtypes.ObjectDType()
+        dtype = VariableLengthUTF8()
+        filters, fill_value = None, None
+        if f.metadata.zarr_format == 2:
+            filters, fill_value = [VLenUTF8()], ""
         f.create_array(
             k,
             shape=elem.shape,
             dtype=dtype,
             filters=filters,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         f[k][:] = elem
@@ -698,12 +698,11 @@ def write_recarray_zarr(
     from anndata.compat import _to_fixed_length_strings
 
     elem = _to_fixed_length_strings(elem)
-    if isinstance(f, H5Group) or is_zarr_v2():
+    if is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
     else:
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # TODO: zarr’s on-disk format v3 doesn’t support this dtype
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
 
@@ -806,21 +805,7 @@ def write_sparse_dataset(
     f[k].attrs["encoding-version"] = "0.1.0"
 
 
-@_REGISTRY.register_write(H5Group, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, (DaskArray, CupyArray), IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CupyCSRMatrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, CupyCSCMatrix), IOSpec("csc_matrix", "0.1.0")
-)
-def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
+def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
     _writer.write_elem(
         f,
         k,
@@ -829,18 +814,6 @@ def write_cupy_dask_sparse(f, k, elem, _writer, dataset_kwargs=MappingProxyType(
     )
 
 
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csr_matrix), IOSpec("csr_matrix", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, (DaskArray, sparse.csc_matrix), IOSpec("csc_matrix", "0.1.0")
-)
 def write_dask_sparse(
     f: GroupStorageType,
     k: str,
@@ -887,6 +860,28 @@ def write_dask_sparse(
         chunk_stop += chunk_size
 
         disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
+
+
+for array_type, group_type in product(
+    [DaskArray, views.DaskArrayView], [H5Group, ZarrGroup]
+):
+    for cupy_array_type, spec in [
+        (CupyArray, IOSpec("array", "0.2.0")),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0")),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, cupy_array_type), spec)(
+            write_cupy_dask
+        )
+    for scipy_sparse_type, spec in [
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0")),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0")),
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0")),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0")),
+    ]:
+        _REGISTRY.register_write(group_type, (array_type, scipy_sparse_type), spec)(
+            write_dask_sparse
+        )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
@@ -1041,7 +1036,7 @@ def read_dataframe_partial(
     df = pd.DataFrame(
         {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=columns if len(columns) else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
         df.index.name = idx_key
@@ -1210,7 +1205,10 @@ def _string_array(
     values: np.ndarray, mask: np.ndarray
 ) -> pd.api.extensions.ExtensionArray:
     """Construct a string array from values and mask."""
-    arr = pd.array(values, dtype=pd.StringDtype())
+    arr = pd.array(
+        values.astype(NULLABLE_NUMPY_STRING_TYPE),
+        dtype=pd.StringDtype(),
+    )
     arr[mask] = pd.NA
     return arr
 
@@ -1281,19 +1279,21 @@ def write_scalar_zarr(
         return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
     else:
         from numcodecs import VLenUTF8
+        from zarr.core.dtype import VariableLengthUTF8
 
-        match ad.settings.zarr_write_format, value:
+        match f.metadata.zarr_format, value:
             case 2, str():
-                filters, dtype = [VLenUTF8()], object
+                filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
             case 3, str():
-                filters, dtype = None, np.dtypes.StringDType()
+                filters, dtype, fill_value = None, VariableLengthUTF8(), None
             case _, _:
-                filters, dtype = None, np.array(value).dtype
+                filters, dtype, fill_value = None, np.array(value).dtype, None
         a = f.create_array(
             key,
             shape=(),
             dtype=dtype,
             filters=filters,
+            fill_value=fill_value,
             **dataset_kwargs,
         )
         a[...] = np.array(value)

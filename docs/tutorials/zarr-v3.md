@@ -1,8 +1,25 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format`, with the exception of structured arrays.
+`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format` via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`, with the exception of structured arrays.
 Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.
 Here is a quick guide on some of our learnings so far:
+
+## Consolidated Metadata
+
+All `zarr` stores are now consolidated by default when written via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`.  For more information on this topic, please seee {ref}`the zarr docs <zarr:user-guide-consolidated-metadata>`.  Practcally, this changes means that once a store has been written, it should be treated as immutable **unless you remove the consolidated metadata and/or rewrite after the mutating operation** i.e., if you wish to use `anndata.io.write_elem` to add a column to `obs`, a `layer` etc. to an existing store.  For example, to mutate an existing store on-disk, you may do:
+
+```python
+g = zarr.open_group(orig_path, mode="a", use_consolidated=False)
+ad.io.write_elem(
+    g,
+    "obs",
+    obs,
+    dataset_kwargs=dict(chunks=(250,)),
+)
+zarr.consolidate_metadata(g.store)
+```
+
+In this example, the store was opened unconsolidated (trying to open it as a consolidated store would error out), edited, and then reconsolidated.  Alternatively, one could simple delete the file containing the consolidated metadata first at the root, `.zmetadata`.
 
 ## Remote data
 
@@ -31,7 +48,7 @@ import anndata as ad
 from collections.abc import Mapping
 from typing import Any
 
-ad.settings.zarr_write_format = 3 # Absolutely crucial! Sharding is only for the v3 file format!
+g = zarr.open_group(orig_path, mode="a", use_consolidated=False, zarr_version=3) # zarr_version 3 is default but note that sharding only works with v3!
 
 def write_sharded(group: zarr.Group, adata: ad.AnnData):
     def callback(

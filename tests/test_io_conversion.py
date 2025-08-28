@@ -11,7 +11,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.compat import CSMatrix
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 
 
 @pytest.fixture(
@@ -39,7 +39,7 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
     mem_pth = tmp_path / "orig.h5ad"
     dense_from_mem_pth = tmp_path / "dense_mem.h5ad"
     dense_from_disk_pth = tmp_path / "dense_disk.h5ad"
-    mem = gen_adata((50, 50), mtx_format)
+    mem = gen_adata((50, 50), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     mem.raw = mem.copy()
 
     mem.write_h5ad(mem_pth)
@@ -66,7 +66,7 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
 
 def test_sparse_to_dense_inplace(tmp_path, spmtx_format):
     pth = tmp_path / "adata.h5ad"
-    orig = gen_adata((50, 50), spmtx_format)
+    orig = gen_adata((50, 50), spmtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.raw = orig.copy()
     orig.write(pth)
     backed = ad.read_h5ad(pth, backed="r+")
@@ -97,7 +97,7 @@ def test_sparse_to_dense_errors(tmp_path):
 
 def test_dense_to_sparse_memory(tmp_path, spmtx_format, to_convert):
     dense_path = tmp_path / "dense.h5ad"
-    orig = gen_adata((50, 50), np.array)
+    orig = gen_adata((50, 50), np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.raw = orig.copy()
     orig.write_h5ad(dense_path)
     assert not isinstance(orig.X, CSMatrix)

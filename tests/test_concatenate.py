@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
-from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
+from importlib.util import find_spec
 from itertools import chain, permutations, product
 from operator import attrgetter
 from typing import TYPE_CHECKING
@@ -21,6 +21,7 @@ from scipy import sparse
 from anndata import AnnData, Raw, concat
 from anndata._core import merge
 from anndata._core.index import _subset
+from anndata._core.xarray import Dataset2D
 from anndata.compat import AwkArray, CSArray, CSMatrix, CupySparseMatrix, DaskArray
 from anndata.tests import helpers
 from anndata.tests.helpers import (
@@ -126,6 +127,32 @@ def merge_strategy(request):
     return request.param
 
 
+@pytest.fixture(
+    params=[
+        pytest.param(False, id="pandas"),
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                not find_spec("xarray"), reason="xarray not installed."
+            ),
+            id="xarray",
+        ),
+    ],
+)
+def use_xdataset(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(False, id="concat-in-memory"),
+        pytest.param(True, id="concat-lazy"),
+    ],
+)
+def force_lazy(request):
+    return request.param
+
+
 def fix_known_differences(
     orig: AnnData, result: AnnData, *, backwards_compat: bool = True
 ):
@@ -140,17 +167,40 @@ def fix_known_differences(
     orig = orig.copy()
     result = result.copy()
 
+    if backwards_compat:
+        del orig.varm
+        del orig.varp
+        if isinstance(result.obs, Dataset2D):
+            result.obs = result.obs.ds.drop_vars(["batch"])
+        else:
+            result.obs.drop(columns=["batch"], inplace=True)
+
+    for attrname in ("obs", "var"):
+        if isinstance(getattr(result, attrname), Dataset2D):
+            for adata in (orig, result):
+                df = getattr(adata, attrname).ds.to_dataframe()[
+                    getattr(orig, attrname).columns
+                ]
+                df.index.name = "index"
+                setattr(adata, attrname, df)
+            resattr = getattr(result, attrname)
+            origattr = getattr(orig, attrname)
+            for colname, col in resattr.items():
+                # concatenation of XDatasets happens via Dask arrays and those don't know about Pandas Extension arrays
+                # so categoricals and nullable arrays are all converted to other dtypes
+                if col.dtype != origattr[
+                    colname
+                ].dtype and pd.api.types.is_extension_array_dtype(
+                    origattr[colname].dtype
+                ):
+                    resattr[colname] = col.astype(origattr[colname].dtype)
+
     result.strings_to_categoricals()  # Should this be implicit in concatenation?
 
     # TODO
     # * merge varm, varp similar to uns
     # * merge obsp, but some information should be lost
     del orig.obsp  # TODO
-
-    if backwards_compat:
-        del orig.varm
-        del orig.varp
-        result.obs.drop(columns=["batch"], inplace=True)
 
     # Possibly need to fix this, ordered categoricals lose orderedness
     for get_df in [lambda k: k.obs, lambda k: k.obsm["df"]]:
@@ -162,8 +212,11 @@ def fix_known_differences(
     return orig, result
 
 
-def test_concat_interface_errors():
-    adatas = [gen_adata((5, 10)), gen_adata((5, 10))]
+def test_concat_interface_errors(use_xdataset):
+    adatas = [
+        gen_adata((5, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
+        gen_adata((5, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
+    ]
 
     with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
         concat(adatas, axis=3)
@@ -181,8 +234,23 @@ def test_concat_interface_errors():
         (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
     ],
 )
-def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_compat):
-    adata = gen_adata((100, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+def test_concatenate_roundtrip(
+    join_type,
+    array_type,
+    concat_func,
+    backwards_compat,
+    use_xdataset,
+    force_lazy,
+):
+    if backwards_compat and force_lazy:
+        pytest.skip("unsupported")
+    adata = gen_adata(
+        (100, 10),
+        X_type=array_type,
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
     remaining = adata.obs_names
     subsets = []
@@ -191,8 +259,13 @@ def test_concatenate_roundtrip(join_type, array_type, concat_func, backwards_com
         subset_idx = np.random.choice(remaining, n, replace=False)
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
-
     result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
+    if backwards_compat and use_xdataset:
+        import xarray as xr
+
+        result.var = xr.Dataset.from_dataframe(
+            result.var
+        )  # backwards compat always returns a dataframe
 
     # Correcting for known differences
     orig, result = fix_known_differences(
@@ -497,19 +570,19 @@ def test_concatenate_fill_value(fill_val):
     adata1.obsm = {
         k: v
         for k, v in adata1.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     adata2 = gen_adata((10, 5))
     adata2.obsm = {
         k: v[:, : v.shape[1] // 2]
         for k, v in adata2.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     adata3 = gen_adata((7, 3))
     adata3.obsm = {
         k: v[:, : v.shape[1] // 3]
         for k, v in adata3.obsm.items()
-        if not isinstance(v, pd.DataFrame | AwkArray)
+        if not isinstance(v, pd.DataFrame | AwkArray | Dataset2D)
     }
     # remove AwkArrays from adata.var, as outer joins are not yet implemented for them
     for tmp_ad in [adata1, adata2, adata3]:
@@ -1161,28 +1234,69 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
     assert_equal(merged, result, elem_name="uns")
 
 
-def test_transposed_concat(array_type, axis_name, join_type, merge_strategy):
+def test_transposed_concat(
+    array_type,
+    axis_name,
+    join_type,
+    merge_strategy,
+    use_xdataset,
+    force_lazy,
+):
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    lhs = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
-    rhs = gen_adata((10, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    lhs = gen_adata(
+        (10, 10),
+        X_type=array_type,
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    rhs = gen_adata(
+        (10, 12),
+        X_type=array_type,
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
-    a = concat([lhs, rhs], axis=axis, join=join_type, merge=merge_strategy)
-    b = concat([lhs.T, rhs.T], axis=alt_axis, join=join_type, merge=merge_strategy).T
+    a = concat(
+        [lhs, rhs],
+        axis=axis,
+        join=join_type,
+        merge=merge_strategy,
+        force_lazy=force_lazy,
+    )
+    b = concat(
+        [lhs.T, rhs.T],
+        axis=alt_axis,
+        join=join_type,
+        merge=merge_strategy,
+        force_lazy=force_lazy,
+    ).T
 
     assert_equal(a, b)
 
 
-def test_batch_key(axis_name):
+def test_batch_key(axis_name, use_xdataset, force_lazy):
     """Test that concat only adds a label if the key is provided"""
 
     get_annot = attrgetter(axis_name)
 
-    lhs = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
-    rhs = gen_adata((10, 12), **GEN_ADATA_DASK_ARGS)
+    lhs = gen_adata(
+        (10, 10),
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    rhs = gen_adata(
+        (10, 12),
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
 
     # There is probably a prettier way to do this
-    annot = get_annot(concat([lhs, rhs], axis=axis_name))
+    annot = get_annot(concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy))
     assert (
         list(
             annot.columns.difference(
@@ -1192,7 +1306,9 @@ def test_batch_key(axis_name):
         == []
     )
 
-    batch_annot = get_annot(concat([lhs, rhs], axis=axis_name, label="batch"))
+    batch_annot = get_annot(
+        concat([lhs, rhs], axis=axis_name, label="batch", force_lazy=force_lazy)
+    )
     assert list(
         batch_annot.columns.difference(
             get_annot(lhs).columns.union(get_annot(rhs).columns)
@@ -1200,16 +1316,16 @@ def test_batch_key(axis_name):
     ) == ["batch"]
 
 
-def test_concat_categories_from_mapping():
+def test_concat_categories_from_mapping(use_xdataset, force_lazy):
     mapping = {
-        "a": gen_adata((10, 10)),
-        "b": gen_adata((10, 10)),
+        "a": gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
+        "b": gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
     }
     keys = list(mapping.keys())
     adatas = list(mapping.values())
 
-    mapping_call = partial(concat, mapping)
-    iter_call = partial(concat, adatas, keys=keys)
+    mapping_call = partial(concat, mapping, force_lazy=force_lazy)
+    iter_call = partial(concat, adatas, keys=keys, force_lazy=force_lazy)
 
     assert_equal(mapping_call(), iter_call())
     assert_equal(mapping_call(label="batch"), iter_call(label="batch"))
@@ -1339,15 +1455,17 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-def test_concat_names(axis_name):
+def test_concat_names(axis_name, use_xdataset, force_lazy):
     get_annot = attrgetter(axis_name)
 
-    lhs = gen_adata((10, 10))
-    rhs = gen_adata((10, 10))
+    lhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
+    rhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
 
-    assert not get_annot(concat([lhs, rhs], axis=axis_name)).index.is_unique
+    assert not get_annot(
+        concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy)
+    ).index.is_unique
     assert get_annot(
-        concat([lhs, rhs], axis=axis_name, index_unique="-")
+        concat([lhs, rhs], axis=axis_name, index_unique="-", force_lazy=force_lazy)
     ).index.is_unique
 
 
@@ -1376,33 +1494,39 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
+def test_concat_size_0_axis(
+    axis_name, join_type, merge_strategy, shape, use_xdataset, force_lazy
+):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
     col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
-    a = gen_adata((5, 7), obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
-    b = gen_adata(shape, obs_dtypes=col_dtypes, var_dtypes=col_dtypes)
+    a = gen_adata(
+        (5, 7),
+        obs_dtypes=col_dtypes,
+        var_dtypes=col_dtypes,
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+    )
+    b = gen_adata(
+        shape,
+        obs_dtypes=col_dtypes,
+        var_dtypes=col_dtypes,
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+    )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
 
-    ctx_concat_empty = (
-        pytest.warns(
-            FutureWarning,
-            match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
-        )
-        if shape[axis] == 0 and Version(pd.__version__) >= Version("2.1")
-        else nullcontext()
+    result = concat(
+        {"a": a, "b": b},
+        axis=axis,
+        join=join_type,
+        merge=merge_strategy,
+        pairwise=True,
+        index_unique="-",
+        force_lazy=force_lazy,
     )
-    with ctx_concat_empty:
-        result = concat(
-            {"a": a, "b": b},
-            axis=axis,
-            join=join_type,
-            merge=merge_strategy,
-            pairwise=True,
-            index_unique="-",
-        )
     assert result.shape == expected_size
 
     if join_type == "outer":
@@ -1441,12 +1565,24 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
 
 @pytest.mark.parametrize("elem", ["sparse", "array", "df", "da"])
 @pytest.mark.parametrize("axis", ["obs", "var"])
-def test_concat_outer_aligned_mapping(elem, axis):
-    a = gen_adata((5, 5), **GEN_ADATA_DASK_ARGS)
-    b = gen_adata((3, 5), **GEN_ADATA_DASK_ARGS)
+def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
+    a = gen_adata(
+        (5, 5),
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
+    b = gen_adata(
+        (3, 5),
+        obs_xdataset=use_xdataset,
+        var_xdataset=use_xdataset,
+        **GEN_ADATA_DASK_ARGS,
+    )
     del getattr(b, f"{axis}m")[elem]
 
-    concated = concat({"a": a, "b": b}, join="outer", label="group", axis=axis)
+    concated = concat(
+        {"a": a, "b": b}, join="outer", label="group", axis=axis, force_lazy=force_lazy
+    )
 
     mask = getattr(concated, axis)["group"] == "b"
     result = getattr(
@@ -1469,8 +1605,11 @@ def test_concatenate_size_0_axis():
     assert b.concatenate([a]).shape == (10, 0)
 
 
-def test_concat_null_X():
-    adatas_orig = {k: gen_adata((20, 10)) for k in list("abc")}
+def test_concat_null_X(use_xdataset):
+    adatas_orig = {
+        k: gen_adata((20, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
+        for k in list("abc")
+    }
     adatas_no_X = {}
     for k, v in adatas_orig.items():
         v = v.copy()

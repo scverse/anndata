@@ -13,6 +13,7 @@ import anndata as ad
 from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
+    GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
@@ -107,7 +108,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 # this is very similar to the views test
 @pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
-def test_backing(adata, tmp_path, backing_h5ad):
+def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     assert not adata.isbacked
 
     adata.filename = backing_h5ad
@@ -196,7 +197,7 @@ def test_backed_raw(tmp_path):
 def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), X_type=array_type)
+    mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
@@ -315,13 +316,16 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    with pytest.warns(
-        FutureWarning, match=r"__setitem__ for backed sparse will be removed"
-    ):
+    pat = r"__setitem__ for backed sparse will be removed"
+    with pytest.warns(FutureWarning, match=pat):
         adata.X[0, [0, 2]] = 10
+    with pytest.warns(FutureWarning, match=pat):
         adata.X[1, [0, 2]] = [11, 12]
-        with pytest.raises(ValueError, match=r"cannot change the sparsity structure"):
-            adata.X[2, 1] = 13
+    with (
+        pytest.warns(FutureWarning, match=pat),
+        pytest.raises(ValueError, match=r"cannot change the sparsity structure"),
+    ):
+        adata.X[2, 1] = 13
 
     assert adata.isbacked
 
