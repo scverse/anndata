@@ -252,7 +252,7 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 @pytest.mark.parametrize("as_dask", [False, True])
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
     if as_dask:
-        if isinstance(value, CSMatrix):
+        if isinstance(value, CSMatrix | CSArray):
             value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
         else:
             value = as_dense_cupy_dask_array(value)
