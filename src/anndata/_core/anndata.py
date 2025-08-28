@@ -457,10 +457,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         # layers
         if X is not None:
-            if layers is None or not bool(layers):
-                layers = {None: X}
-            elif bool(layers):
-                layers[None] = X
+            if layers is None:
+                layers = {}
+            layers[None] = X
         self.layers = layers
 
         if not raw:
