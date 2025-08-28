@@ -57,10 +57,22 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
 
     `adata.attr[key1][key2][keyn]...`
     """
+    # from anndata._core.merge import _to_numpy_if_immutable
+
     new = adata_view.copy()
     attr = getattr(new, attr_name)
-    container = reduce(lambda d, k: d[k], keys, attr)
+    # Traverse to the parent container
+    parent = reduce(lambda d, k: d[k], keys[:-1], attr)
+    # key = keys[-1]
+
+    # Get the actual object we want to mutate
+    container = parent
+
+    # Yield it (not yet converted)
     yield container
+
+    # # After yield, check if immutable and convert to mutable before reinserting
+    # parent[key] = _to_numpy_if_immutable(container)
     adata_view._init_as_actual(new)
 
 
@@ -73,6 +85,24 @@ class _SetItemMixin:
 
     _view_args: ElementRef | None
 
+    # def __setitem__(self, idx: Any, value: Any):
+    #     # from anndata._core.merge import _to_numpy_if_immutable
+
+    #     if self._view_args is None:
+    #         super().__setitem__(idx, value)
+    #     else:
+    #         warnings.warn(
+    #             f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
+    #             "initializing view as actual.",
+    #             ImplicitModificationWarning,
+    #             stacklevel=2,
+    #         )
+    #         with view_update(*self._view_args) as container:
+    #             arr = _to_numpy_if_immutable(container)
+    #             arr[idx] = value
+    #             # manually assign back into the parent dict
+    #             parent = reduce(lambda d, k: d[k], self._view_args[:-1])
+    #             parent[self._view_args[-1]] = arr
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)

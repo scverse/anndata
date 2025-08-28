@@ -19,8 +19,7 @@ from dask.base import is_dask_collection
 
 # Enable DLPack interop for JAX, CuPy, etc., only if installed
 with suppress(ImportError):
-    import jax
-    import jax.dlpack
+    pass
 import pandas as pd
 import pandas.api.types as pdf
 import scipy
@@ -123,6 +122,7 @@ def not_missing(v) -> bool:
 
 
 def _same_backend(x, y, *, copy: bool = True):
+    # TODO: convert it so that I could also use it to convert one array to another
     # for merge implementation
     # Makes sure two arrays are from the same array backend.
     # If not, uses from_dlpack() to convert `y` to `x`'s backend.
@@ -619,8 +619,6 @@ def _is_array_api_compatible(x):
 
 
 def _dlpack_to_numpy(x):
-    ###TODO: FIX
-    # Convert array-api-compatible x to NumPy using DLPack.
     try:
         return np.from_dlpack(x)
     except TypeError as e:
@@ -629,13 +627,22 @@ def _dlpack_to_numpy(x):
 
 
 def _dlpack_from_numpy(x_np, original_xp):
-    ###TODO: FIX
-    # cubed and other array later elif
+    # TODO: cubed and other array later elif
+    if hasattr(original_xp, "from_dlpack"):
+        try:
+            return original_xp.from_dlpack(x_np)
+        except Exception as e:
+            msg = f"Failed to call from_dlpack on backend {original_xp.__name__}: {e}"
+            raise TypeError(msg) from e
+
+    # fallback for known backends that put it elsewhere (JAX and later others)
     if original_xp.__name__.startswith("jax"):
+        import jax.dlpack
+
         return jax.dlpack.from_dlpack(x_np)
-    else:
-        msg = f"DLPack back-conversion not implemented for {original_xp.__name__}"
-        raise TypeError(msg)
+
+    msg = f"DLPack back-conversion not implemented for backend {original_xp.__name__}"
+    raise TypeError(msg)
 
 
 #####################
@@ -698,7 +705,7 @@ class Reindexer:
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
         else:
-            return self._apply_to_array(el, axis=axis, fill_value=fill_value)
+            return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
 
     def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
         if fill_value is None:
@@ -750,7 +757,7 @@ class Reindexer:
 
         return out
 
-    def _apply_to_array(self, el, *, axis, fill_value=None):
+    def _apply_to_array_api(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
 
@@ -779,11 +786,9 @@ class Reindexer:
             el_np = _dlpack_to_numpy(el)
 
             # Recursively call this same function
-            out_np = self._apply_to_array(el_np, axis=axis, fill_value=fill_value)
+            out_np = self._apply_to_array_api(el_np, axis=axis, fill_value=fill_value)
 
-            # TODO: Fix it as moving it back and forth is not ideal, but it allows us to
-            # keep the same interface for all backends.
-            # Convert result back to original backend
+            # reverting back to numpy as it is hard to reindex on JAX and others
             return _dlpack_from_numpy(out_np, xp)
 
         # numpy case
@@ -1588,18 +1593,48 @@ def concat_dataset2d_on_annot_axis(
     return ds_concat_2d
 
 
-def _to_numpy_if_array_api(x):
-    if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
-        return x
-    try:
-        import array_api_compat as aac
+# def _to_numpy_if_immutable(x):
+#     print("Initial x:", type(x))
+#     if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
+#         print("x is already a supported mutable type:", type(x))
+#         return x
+#     try:
+#         # checking for mutability
+#         print("Trying np.asarray(x)...")
+#         x_array = np.asarray(x)
+#         print("np.asarray(x) succeeded:", type(x_array))
+#         if x_array.size > 0:
+#             try:
+#                 orig = x_array[0]
+#                 print("Checking mutability: trying in-place write")
+#                 x_array[0] = orig  # test no-op write
+#                 print("In-place mutation succeeded, x is mutable:", type(x))
+#                 return x  # mutation worked, so keep original
+#             except (ValueError, TypeError) as e:
+#                 print("In-place mutation failed:", type(x), "|", repr(e))
+#                 # pass
 
-        # If this succeeds, it's an array-API array (e.g. JAX, cubed, cupy, dask)
-        aac.array_namespace(x)
-        return np.asarray(x)
-    except TypeError:
-        # Not an array-API object (or lib not available) = return unchanged
-        return x
+#     except ValueError:
+#         print("Trying np.from_dlpack(x)...")
+#         result = np.from_dlpack(x)
+#         print("np.from_dlpack(x) succeeded:", type(result))
+#         # pass
+#     # if it is not mutable, we convert to numpy
+#     try:
+#         # trying convert via from_dlpack first
+#         return np.from_dlpack(x)
+#     except TypeError:
+#         try:
+#             # fallback to asarray if from_dlpack not possible
+#             print("Trying fallback np.asarray(x)...")
+#             result = np.asarray(x)
+#             print("Fallback np.asarray(x) succeeded:", type(result))
+#             return result
+#         except ValueError:
+#             # Not an array-API object (or lib not available) = return unchanged
+#             print("Final fallback np.asarray(x) failed:", type(x), "|", repr(e))
+#             print("Returning x as-is:", type(x))
+#             return x
 
 
 def concat(  # noqa: PLR0912, PLR0913, PLR0915

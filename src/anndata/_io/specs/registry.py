@@ -66,9 +66,15 @@ def to_numpy_if_array_api(x):
     try:
         import array_api_compat as aac
 
-        # If this succeeds, it's an array-API array (e.g. JAX, CuPy, torch, …)
-        aac.array_namespace(x)
-        return np.asarray(x)
+        xp = aac.array_namespace(x)
+        # Already a NumPy array
+        if xp.__name__.startswith("numpy"):
+            return x
+        # # If this succeeds, it's an array-API array (e.g. JAX, CuPy, torch, …)
+        # aac.array_namespace(x)
+        # return np.asarray(x)
+        if hasattr(x, "__to_dlpack__"):
+            return np.from_dlpack(x)
     except (ImportError, AttributeError, TypeError):
         # Not an array-API object (or not supported), so return unchanged
         return x

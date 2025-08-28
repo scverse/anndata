@@ -10,6 +10,7 @@ from string import ascii_letters
 from typing import TYPE_CHECKING
 
 import h5py
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -33,6 +34,7 @@ from anndata.compat import (
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
+    as_dense_jax_array,
     assert_equal,
     gen_adata,
 )
@@ -120,7 +122,9 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
+)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -160,7 +164,9 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
+)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -206,7 +212,9 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
+)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
@@ -239,7 +247,9 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
+)
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -250,7 +260,9 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize(
+    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
+)
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -266,7 +278,7 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ", [np.array, jnp.array, csr_matrix, csc_matrix, csr_array, csc_array]
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     h5ad_pth = tmp_path / "adata.h5ad"
@@ -455,7 +467,7 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 
 
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
 @pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
 @pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
 def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
@@ -572,14 +584,14 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
@@ -624,8 +636,9 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize("xp", [np, jnp])  # xp = array namespace
+def test_readwrite_empty(read, write, name, tmp_path, xp):
+    adata = ad.AnnData(uns=dict(empty=xp.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"].shape == (0,)
@@ -708,10 +721,11 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
         getattr(to_write, f"write_{diskfmt}")(adata_pth)
 
 
-def test_write_large_categorical(tmp_path, diskfmt):
+@pytest.mark.parametrize("xp", [np, jnp])  # xp = array namespace
+def test_write_large_categorical(tmp_path, diskfmt, xp):
     M = 30_000
     N = 1000
-    ls = np.array(list(ascii_letters))
+    ls = xp.array(list(ascii_letters))
 
     def random_cats(n):
         cats = {
@@ -722,14 +736,14 @@ def test_write_large_categorical(tmp_path, diskfmt):
             cats |= random_cats(n - len(cats))
         return cats
 
-    cats = np.array(sorted(random_cats(10_000)))
+    cats = xp.array(sorted(random_cats(10_000)))
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
         csr_matrix(([1], ([0], [0])), shape=(M, N)),
         obs=dict(
             cat1=cats[np.random.choice(n_cats, M)],
-            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
+            cat2=pd.Categorical.from_codes(xp.random.choice(n_cats, M), cats),
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)

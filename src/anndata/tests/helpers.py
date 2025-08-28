@@ -1009,6 +1009,22 @@ def _(a):
 
 
 @singledispatch
+def as_dense_jax_array(a):
+    # for cases where jax does not support sparse arrays
+    return jnp.asarray(asarray(a))
+
+
+@as_dense_jax_array.register(CSMatrix)
+def _(a):
+    return jnp.array(a.toarray())
+
+
+@as_dense_jax_array.register(DaskArray)
+def _(a):
+    return jnp.array(a.compute())  # fallback for lazy arrays
+
+
+@singledispatch
 def as_sparse_dask_array(a) -> DaskArray:
     import dask.array as da
 
