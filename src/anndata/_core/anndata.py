@@ -457,7 +457,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         # layers
         self.layers = layers
-        self.X = X
+        if X is not None:
+            self.X = X
         if not raw:
             self._raw = None
         elif isinstance(raw, Mapping):
