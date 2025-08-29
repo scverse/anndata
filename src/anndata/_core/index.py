@@ -277,10 +277,9 @@ def _apply_index_to_result(
     """Apply an index to a result array along a specific axis."""
     if isinstance(idx, np.ndarray):
         return result.take(idx, axis=axis)
-    else:
-        slices = [slice(None)] * result.ndim
-        slices[axis] = idx
-        return result[tuple(slices)]
+    slices = [slice(None)] * result.ndim
+    slices[axis] = idx
+    return result[tuple(slices)]
 
 
 def _safe_fancy_index_h5py(
