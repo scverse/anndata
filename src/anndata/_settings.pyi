@@ -45,5 +45,6 @@ class _AnnDataSettingsManager(SettingsManager):
     zarr_write_format: Literal[2, 3] = 2
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
+    disallow_forward_slash_in_h5ad: bool = False
 
 settings: _AnnDataSettingsManager
