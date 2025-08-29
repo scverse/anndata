@@ -929,8 +929,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # as the data is stored on disk, we can safely set self.X to None
-            del self.X
+            # As the data is stored on disk, we can safely set remove if it previously was
+            # in layers. Setting `X` to `None` now would raise an error because `self.isbacked`.
+            if None in self.layers:
+                self.layers.pop(None)
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
