@@ -590,7 +590,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 X[oidx, vidx] = value
             else:
                 self._set_backed("X", value)
-        self.layers[None] = value
+        # TODO: should we add support for `layers[None] = None`?
+        if value is not None:
+            self.layers[None] = value
+        else:
+            self.layers.pop(None)
 
     @X.deleter
     def X(self) -> None:
