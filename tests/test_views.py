@@ -496,8 +496,15 @@ def test_view_delattr(attr, subset_func):
     delattr(subset, attr)
 
     assert not subset.is_view
-    # Should now have same value as default
-    assert_equal(getattr(subset, attr), getattr(empty, attr))
+    # Should now have same value as default, except for `layers`, which still has the `None` key for `subset`
+    if attr == "layers":
+        assert_equal(
+            {k: v for k, v in getattr(subset, attr).items() if k is not None},
+            getattr(empty, attr),
+        )
+    else:
+        assert_equal(getattr(subset, attr), getattr(empty, attr))
+
     assert orig_hash == tokenize(base)  # Original should not be modified
 
 
