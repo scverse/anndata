@@ -162,8 +162,7 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 @singledispatch
 def _subset(
-    a: np.ndarray | pd.DataFrame,
-    subset_idx: tuple[Index1D] | tuple[Index1D, Index1D],
+    a: np.ndarray | pd.DataFrame, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
 ):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
@@ -184,8 +183,7 @@ def _subset_dask(a: DaskArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
 def _subset_sparse(
-    a: CSMatrix | CSArray,
-    subset_idx: tuple[Index1D] | tuple[Index1D, Index1D],
+    a: CSMatrix | CSArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
 ):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
@@ -199,8 +197,7 @@ def _subset_sparse(
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
 def _subset_df(
-    df: pd.DataFrame | Dataset2D,
-    subset_idx: tuple[Index1D] | tuple[Index1D, Index1D],
+    df: pd.DataFrame | Dataset2D, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
 ):
     return df.iloc[subset_idx]
 
