@@ -161,7 +161,7 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
+def _subset(a: np.ndarray | pd.DataFrame, subset_idx: tuple[Index1DNorm, Index1DNorm]):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, Iterable) for x in subset_idx):
@@ -170,7 +170,7 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
 
 
 @_subset.register(DaskArray)
-def _subset_dask(a: DaskArray, subset_idx: Index):
+def _subset_dask(a: DaskArray, subset_idx: tuple[Index1DNorm, Index1DNorm]):
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -180,7 +180,7 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
-def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
+def _subset_sparse(a: CSMatrix | CSArray, subset_idx: tuple[Index1DNorm, Index1DNorm]):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -192,12 +192,14 @@ def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
-def _subset_df(df: pd.DataFrame | Dataset2D, subset_idx: Index):
+def _subset_df(
+    df: pd.DataFrame | Dataset2D, subset_idx: tuple[Index1DNorm, Index1DNorm]
+):
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
-def _subset_awkarray(a: AwkArray, subset_idx: Index):
+def _subset_awkarray(a: AwkArray, subset_idx: tuple[Index1DNorm, Index1DNorm]):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -205,9 +207,7 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
-def _subset_dataset(d: h5py.Dataset, subset_idx: Index | tuple[Index]):
-    if not isinstance(subset_idx, tuple):
-        subset_idx = (subset_idx,)
+def _subset_dataset(d: h5py.Dataset, subset_idx: tuple[Index1DNorm, Index1DNorm]):
     ordered = list(subset_idx)
     rev_order = [slice(None) for _ in range(len(subset_idx))]
     for axis, axis_idx in enumerate(ordered.copy()):
@@ -297,7 +297,7 @@ def _safe_fancy_index_h5py(
     return result
 
 
-def make_slice(idx, dimidx, n=2):
+def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
     mut = list(repeat(slice(None), n))
     mut[dimidx] = idx
     return tuple(mut)
