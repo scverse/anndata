@@ -848,9 +848,17 @@ def assert_adata_equal(
         "varp",
         "raw",
     ]:
+        a_elem, b_elem = getattr(a, attr), getattr(b, attr)
+        # TODO: This is helpful in backed mode where `X is not None` but `None not in layers`.
+        # Does this filter make sense in general? Is there a case where we explicitly want to check `None in layers`?
+        if attr == "layers" and any(adata.isbacked for adata in [a, b]):
+            a_elem, b_elem = [
+                {k: v for k, v in elem.items() if k is not None}
+                for elem in [a_elem, b_elem]
+            ]
         assert_equal(
-            getattr(a, attr),
-            getattr(b, attr),
+            a_elem,
+            b_elem,
             exact=exact,
             elem_name=fmt_name(attr),
         )
