@@ -140,7 +140,7 @@ def test_assert_equal():
     #     exact=False,
     # )
     adata2 = adata.copy()
-    to_modify = next(iter(adata2.layers.keys()))
+    to_modify = next(iter(adata2.layers_keys()))
     del adata2.layers[to_modify]
     with pytest.raises(AssertionError) as missing_layer_error:
         assert_equal(adata, adata2)

@@ -700,7 +700,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     Return layers’ names::
 
-        adata.layers.keys()
+        adata.layers_keys()
     """
 
     @property
@@ -936,6 +936,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
+    def layers_keys(self) -> list[str]:
+        """List keys of layers arrays :attr:`layers`."""
+        return list(self.layers.keys())
+
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
@@ -951,6 +955,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def varm_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`varm`."""
         return list(self.varm.keys())
+
+    def obsp_keys(self) -> list[str]:
+        """List keys of pairwise observation annotation :attr:`obsp`."""
+        return list(self.obsp.keys())
+
+    def varp_keys(self) -> list[str]:
+        """List keys of pairwise variable annotation :attr:`varp`."""
+        return list(self.varp.keys())
 
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""

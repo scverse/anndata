@@ -24,7 +24,7 @@ def X(request):
 def test_creation(X: np.ndarray | None):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
 
-    assert list(adata.layers.keys()) == ["L"]
+    assert adata.layers_keys() == ["L"]
     assert "L" in adata.layers
     assert "X" not in adata.layers
     assert "some_other_thing" not in adata.layers
@@ -39,12 +39,12 @@ def test_views():
     assert adata_view.layers.is_view
     assert adata_view.layers.parent_mapping == adata.layers
 
-    assert adata_view.layers.keys() == adata.layers.keys()
+    assert adata_view.layers_keys() == adata.layers_keys()
     assert (adata_view.layers["L"] == adata.layers["L"][1:, 1:]).all()
 
     adata.layers["S"] = X_
 
-    assert adata_view.layers.keys() == adata.layers.keys()
+    assert adata_view.layers_keys() == adata.layers_keys()
     assert (adata_view.layers["S"] == adata.layers["S"][1:, 1:]).all()
 
     with pytest.warns(ImplicitModificationWarning):
@@ -79,7 +79,7 @@ def test_readwrite(X: np.ndarray | None, backing_h5ad):
     adata.write(backing_h5ad)
     adata_read = read_h5ad(backing_h5ad)
 
-    assert adata.layers.keys() == adata_read.layers.keys()
+    assert adata.layers_keys() == adata_read.layers_keys()
     assert (adata.layers["L"] == adata_read.layers["L"]).all()
 
 
@@ -100,7 +100,7 @@ def test_readwrite_loom(tmp_path):
         adata.write_loom(loom_path)
     adata_read = read_loom(loom_path, X_name="")
 
-    assert adata.layers.keys() == adata_read.layers.keys()
+    assert adata.layers_keys() == adata_read.layers_keys()
     assert (adata.layers["L"] == adata_read.layers["L"]).all()
 
 

@@ -123,7 +123,7 @@ def test_transpose_with_X_as_none(shape):
     adata = gen_adata(shape, X_type=lambda x: None)
     adataT = adata.transpose()
     assert_equal(adataT.shape, shape[::-1])
-    assert_equal(adataT.obsp.keys(), adata.varp.keys())
+    assert_equal(adataT.obsp_keys(), adata.varp_keys())
     assert_equal(adataT.T, adata)
 
 
