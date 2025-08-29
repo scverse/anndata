@@ -967,13 +967,28 @@ def test_h5py_attr_limit(tmp_path):
 @pytest.mark.parametrize(
     "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
 )
-def test_forward_slash_key(elem_key, tmp_path):
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+def test_forward_slash_key(
+    elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
+    tmp_path: Path,
+    store_type: Literal["zarr", "h5ad"],
+    *,
+    disallow_forward_slash_in_h5ad: bool,
+):
     a = ad.AnnData(np.ones((10, 10)))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
-    with pytest.raises(ValueError, match="Forward slashes"):
-        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
+    with (
+        ad.settings.override(
+            disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
+        ),
+        pytest.raises(ValueError, match=r"Forward slashes")
+        if store_type == "zarr" or disallow_forward_slash_in_h5ad
+        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+    ):
+        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
 
 
 @pytest.mark.skipif(

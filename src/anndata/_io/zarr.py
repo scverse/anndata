@@ -155,3 +155,14 @@ def open_write_group(
     if not is_zarr_v2() and "zarr_format" not in kwargs:
         kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)
+
+
+def is_group_consolidated(group: zarr.Group) -> bool:
+    if not isinstance(group, zarr.Group):
+        msg = f"Expected zarr.Group, got {type(group)}"
+        raise TypeError(msg)
+    if is_zarr_v2():
+        from zarr.storage import ConsolidatedMetadataStore
+
+        return isinstance(group.store, ConsolidatedMetadataStore)
+    return group.metadata.consolidated_metadata is not None
