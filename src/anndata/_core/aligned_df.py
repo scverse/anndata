@@ -78,6 +78,13 @@ def _gen_dataframe_df(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
+    if isinstance(anno.index, pd.MultiIndex):
+        msg = (
+            "pandas.MultiIndex not supported as index for obs or var on declaration.\n\
+            You can set `obs_names` manually although most operations after will error or convert to str.\n\
+            This behavior will likely be clarified in a future breaking release."
+        )
+        raise ValueError(msg)
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
