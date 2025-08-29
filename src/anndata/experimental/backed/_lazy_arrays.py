@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from anndata.compat import ZarrGroup
 
-    from ...compat import Index1D
+    from ...compat import Index1DNorm
 
 
 K = TypeVar("K", H5Array, ZarrArray)
@@ -200,7 +200,9 @@ class MaskedArray(XBackendArray, Generic[K]):
 
 
 @_subset.register(XDataArray)
-def _subset_masked(a: XDataArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]):
+def _subset_masked(
+    a: XDataArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     return a[subset_idx]
 
 

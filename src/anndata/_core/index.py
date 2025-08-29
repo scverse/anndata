@@ -164,7 +164,8 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 @singledispatch
 def _subset(
-    a: np.ndarray | pd.DataFrame, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
+    a: np.ndarray | pd.DataFrame,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
@@ -174,7 +175,9 @@ def _subset(
 
 
 @_subset.register(DaskArray)
-def _subset_dask(a: DaskArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]):
+def _subset_dask(
+    a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -185,7 +188,8 @@ def _subset_dask(a: DaskArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
 def _subset_sparse(
-    a: CSMatrix | CSArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
+    a: CSMatrix | CSArray,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
@@ -199,13 +203,16 @@ def _subset_sparse(
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
 def _subset_df(
-    df: pd.DataFrame | Dataset2D, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
+    df: pd.DataFrame | Dataset2D,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
-def _subset_awkarray(a: AwkArray, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]):
+def _subset_awkarray(
+    a: AwkArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -214,10 +221,10 @@ def _subset_awkarray(a: AwkArray, subset_idx: tuple[Index1D] | tuple[Index1D, In
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
 def _subset_dataset(
-    d: h5py.Dataset, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
+    d: h5py.Dataset, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
-    order: tuple[Index1D] | tuple[Index1D, Index1D]
-    inv_order: tuple[Index1D] | tuple[Index1D, Index1D]
+    order: tuple[NDArray[np.integer] | slice, ...]
+    inv_order: tuple[NDArray[np.integer] | slice, ...]
     order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
     # check for duplicates or multi-dimensional fancy indexing
     array_dims = [i for i in order if isinstance(i, np.ndarray)]
@@ -233,13 +240,13 @@ def _subset_dataset(
 
 @overload
 def _index_order_and_inverse(
-    axis_idx: np.ndarray,
-) -> tuple[NDArray[np.intp], NDArray[np.intp]]: ...
+    axis_idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
 @overload
-def _index_order_and_inverse(axis_idx: Index1D) -> tuple[Index1D, slice]: ...
+def _index_order_and_inverse(axis_idx: slice) -> tuple[slice, slice]: ...
 def _index_order_and_inverse(
-    axis_idx: Index1D,
-) -> tuple[Index1D, NDArray[np.intp] | slice]:
+    axis_idx: Index1DNorm,
+) -> tuple[Index1DNorm, NDArray[np.integer] | slice]:
     """Order and get inverse index array."""
     if not isinstance(axis_idx, np.ndarray):
         return axis_idx, slice(None)
@@ -249,9 +256,15 @@ def _index_order_and_inverse(
     return axis_idx[order], np.argsort(order)
 
 
+@overload
 def _process_index_for_h5py(
-    idx: Index1D,
-) -> tuple[np.ndarray, np.ndarray | None]:
+    idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
+@overload
+def _process_index_for_h5py(idx: slice) -> tuple[slice, None]: ...
+def _process_index_for_h5py(
+    idx: Index1DNorm,
+) -> tuple[Index1DNorm, NDArray[np.integer] | None]:
     """Process a single index for h5py compatibility, handling sorting and duplicates."""
     if not isinstance(idx, np.ndarray):
         # Not an array (slice, integer, list) - no special processing needed
@@ -283,13 +296,16 @@ def _apply_index_to_result(
 
 
 def _safe_fancy_index_h5py(
-    dataset: h5py.Dataset, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
+    dataset: h5py.Dataset,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing
     # without loading the entire dataset into memory
 
     # Convert boolean arrays to integer arrays and handle sorting for h5py
+    processed_indices: tuple[NDArray[np.integer] | slice, ...]
+    reverse_indices: tuple[NDArray[np.integer] | None, ...]
     processed_indices, reverse_indices = zip(
         *map(_process_index_for_h5py, subset_idx), strict=True
     )
