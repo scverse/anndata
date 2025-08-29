@@ -337,6 +337,9 @@ class LayersBase(AlignedMappingBase[str | None]):
     attrname: ClassVar[Literal["layers"]] = "layers"
     axes: ClassVar[tuple[Literal[0], Literal[1]]] = (0, 1)
 
+    def __bool__(self) -> bool:
+        return not self.keys() <= {None}
+
 
 class Layers(AlignedActual[str | None], LayersBase):
     pass
