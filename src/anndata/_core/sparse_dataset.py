@@ -48,8 +48,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
-    from ..compat import H5Array, Index1DNorm
-    from .index import Index, Index1D
+    from ..compat import H5Array, Index, Index1D
 else:
     from scipy.sparse import spmatrix as _cs_matrix
 
@@ -738,5 +737,5 @@ def sparse_dataset(
 
 
 @_subset.register(BaseCompressedSparseDataset)
-def subset_sparsedataset(d, subset_idx: tuple[Index1DNorm, Index1DNorm]):
+def subset_sparsedataset(d, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]):
     return d[subset_idx]

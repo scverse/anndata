@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
+    from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
 
     from anndata._types import Join_T
@@ -560,7 +561,7 @@ class Reindexer:
         Together with `old_pos` this forms a mapping.
     """
 
-    def __init__(self, old_idx, new_idx):
+    def __init__(self, old_idx: pd.Index, new_idx: pd.Index) -> None:
         self.old_idx = old_idx
         self.new_idx = new_idx
         self.no_change = new_idx.equals(old_idx)
@@ -757,7 +758,7 @@ class Reindexer:
             return el[self.idx]
 
     @property
-    def idx(self):
+    def idx(self) -> NDArray[np.intp]:
         return self.old_idx.get_indexer(self.new_idx)
 
 
@@ -786,7 +787,7 @@ def default_fill_value(els):
         return np.nan
 
 
-def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
+def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
     """
     Given a new set of var_names, and a current set, generates a function which will reindex
     a matrix to be aligned with the new set.
@@ -943,7 +944,7 @@ def inner_concat_aligned_mapping(
     return result
 
 
-def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
+def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reindexer]:
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -1020,7 +1021,7 @@ def missing_element(
     axis: Literal[0, 1] = 0,
     fill_value: Any | None = None,
     off_axis_size: int = 0,
-) -> np.ndarray | DaskArray:
+) -> NDArray[np.bool_] | DaskArray:
     """Generates value to use when there is a missing element."""
     should_return_dask = any(isinstance(el, DaskArray) for el in els)
     # 0 sized array for in-memory prevents allocating unnecessary memory while preserving broadcasting.
