@@ -21,6 +21,9 @@ from pandas.api.types import infer_dtype
 from scipy import sparse
 from scipy.sparse import issparse
 
+from anndata._core.access import ElementRef
+from anndata._core.sparse_dataset import sparse_dataset
+
 from .. import utils
 from .._settings import settings
 from ..compat import CSArray, _move_adj_mtx, old_positionals
@@ -34,7 +37,7 @@ from ..utils import (
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, get_vector
+from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import coerce_array
@@ -448,19 +451,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **raw)
-        if not raw:
-            self._raw = None
-        elif isinstance(raw, Mapping):
-            self._raw = Raw(self, **raw)
-        else:  # is a Raw from another AnnData
-            self._raw = Raw(self, raw.X, raw.var, raw.varm)
 
         # clean up old formats
         self._clean_up_old_format(uns)
 
         # layers
         self.layers = layers
-        self.X = X
+        if X is not None:
+            self.X = X
+        if not raw:
+            self._raw = None
+        elif isinstance(raw, Mapping):
+            self._raw = Raw(self, **raw)
+        else:  # is a Raw from another AnnData
+            self._raw = Raw(self, raw.X, raw.var, raw.varm)
 
     @old_positionals("show_stratified", "with_disk")
     def __sizeof__(
@@ -537,15 +541,64 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     @property
     def X(self) -> XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
+        if self.isbacked:
+            if not self.file.is_open:
+                self.file.open()
+            X = self.file["X"]
+            if isinstance(X, h5py.Group):
+                X = sparse_dataset(X)
+            # This is so that we can index into a backed dense dataset with
+            # indices that aren’t strictly increasing
+            if self.is_view:
+                return _subset(X, (self._oidx, self._vidx))
+            return X
+        elif self.is_view and self._adata_ref.X is None:
+            return None
+        elif self.is_view:
+            return as_view(
+                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
+                ElementRef(self, "X"),
+            )
         return self.layers.get(None)
 
     @X.setter
     def X(self, value: XDataType) -> None:
-        self.layers[None] = value
+        if value is None and self.isbacked:
+            msg = "Cannot currently remove data matrix from backed object."
+            raise NotImplementedError(msg)
+        # If indices are both arrays, we need to modify them
+        # so we don’t set values like coordinates
+        # This can occur if there are successive views
+        if (
+            self.is_view
+            and isinstance(self._oidx, np.ndarray)
+            and isinstance(self._vidx, np.ndarray)
+        ):
+            oidx, vidx = np.ix_(self._oidx, self._vidx)
+        else:
+            oidx, vidx = self._oidx, self._vidx
+        if self.isbacked and (
+            np.isscalar(value)
+            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+        ):
+            if self.is_view:
+                X = self.file["X"]
+                if isinstance(X, h5py.Group):
+                    X = sparse_dataset(X)
+                X[oidx, vidx] = value
+            else:
+                self._set_backed("X", value)
+        # TODO: should we add support for `layers[None] = None`?
+        if value is not None:
+            self.layers[None] = value
+        else:
+            self.layers.pop(None)
 
     @X.deleter
     def X(self) -> None:
-        del self.layers[None]
+        self.X = None
 
     layers: AlignedMappingProperty[str | None, Layers | LayersView] = (
         AlignedMappingProperty("layers", Layers)
@@ -880,8 +933,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # as the data is stored on disk, we can safely set self.X to None
-            del self.X
+            # As the data is stored on disk, we can safely set remove if it previously was
+            # in layers. Setting `X` to `None` now would raise an error because `self.isbacked`.
+            if None in self.layers:
+                self.layers.pop(None)
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
@@ -1307,6 +1362,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             }
 
         if self.isbacked:
+            new["layers"][None] = self.X[...]
             self.file.close()
 
         return AnnData(**new)
