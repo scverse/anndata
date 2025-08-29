@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -14,6 +14,8 @@ from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
     from ..compat import Index, Index1D, Index1DNorm
 
 
@@ -189,7 +191,7 @@ def _subset_sparse(
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
         if issubclass(first_idx.dtype.type, np.bool_):
-            first_idx = np.where(first_idx)[0]
+            first_idx = np.flatnonzero(first_idx)
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
 
@@ -214,13 +216,11 @@ def _subset_awkarray(a: AwkArray, subset_idx: tuple[Index1D] | tuple[Index1D, In
 def _subset_dataset(
     d: h5py.Dataset, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
 ):
-    ordered = list(subset_idx)
-    rev_order = [slice(None) for _ in range(len(subset_idx))]
-    for axis, axis_idx in enumerate(ordered.copy()):
-        if isinstance(axis_idx, np.ndarray):
-            ordered[axis], rev_order[axis] = _index_order_and_reverse(axis_idx)
+    order: tuple[Index1D] | tuple[Index1D, Index1D]
+    inv_order: tuple[Index1D] | tuple[Index1D, Index1D]
+    order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
     # check for duplicates or multi-dimensional fancy indexing
-    array_dims = [i for i in ordered if isinstance(i, np.ndarray)]
+    array_dims = [i for i in order if isinstance(i, np.ndarray)]
     has_duplicates = any(len(np.unique(i)) != len(i) for i in array_dims)
     # Use safe indexing if there are duplicates OR multiple array dimensions
     # (h5py doesn't support multi-dimensional fancy indexing natively)
@@ -228,21 +228,29 @@ def _subset_dataset(
         # For multi-dimensional indexing, bypass the sorting logic and use original indices
         return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
-    return d[tuple(ordered)][tuple(rev_order)]
+    return d[order][inv_order]
 
 
-def _index_order_and_reverse(axis_idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Order and reverse an index array."""
+@overload
+def _index_order_and_inverse(
+    axis_idx: np.ndarray,
+) -> tuple[NDArray[np.intp], NDArray[np.intp]]: ...
+@overload
+def _index_order_and_inverse(axis_idx: Index1D) -> tuple[Index1D, slice]: ...
+def _index_order_and_inverse(
+    axis_idx: Index1D,
+) -> tuple[Index1D, NDArray[np.intp] | slice]:
+    """Order and get inverse index array."""
+    if not isinstance(axis_idx, np.ndarray):
+        return axis_idx, slice(None)
     if axis_idx.dtype == bool:
-        axis_idx = np.where(axis_idx)[0]
+        axis_idx = np.flatnonzero(axis_idx)
     order = np.argsort(axis_idx)
-    ordered_idx = axis_idx[order]
-    rev_order_idx = np.argsort(order)
-    return ordered_idx, rev_order_idx
+    return axis_idx[order], np.argsort(order)
 
 
 def _process_index_for_h5py(
-    idx: np.ndarray | slice | list[int] | int,
+    idx: Index1D,
 ) -> tuple[np.ndarray, np.ndarray | None]:
     """Process a single index for h5py compatibility, handling sorting and duplicates."""
     if not isinstance(idx, np.ndarray):
@@ -250,17 +258,17 @@ def _process_index_for_h5py(
         return idx, None
 
     if idx.dtype == bool:
-        idx = np.where(idx)[0]
+        idx = np.flatnonzero(idx)
 
     # For h5py fancy indexing, we need sorted indices
     # But we also need to track how to reverse the sorting
-    if len(np.unique(idx)) != len(idx):
+    return (
         # Has duplicates - use unique + inverse mapping approach
-        unique_idx, inverse_map = np.unique(idx, return_inverse=True)
-        return unique_idx, inverse_map
-    else:
+        np.unique(idx, return_inverse=True)
+        if len(np.unique(idx)) != len(idx)
         # No duplicates - just sort and track reverse mapping
-        return _index_order_and_reverse(idx)
+        else _index_order_and_inverse(idx)
+    )
 
 
 def _apply_index_to_result(
@@ -276,7 +284,7 @@ def _apply_index_to_result(
 
 
 def _safe_fancy_index_h5py(
-    dataset: h5py.Dataset, subset_idx: tuple[Index]
+    dataset: h5py.Dataset, subset_idx: tuple[Index1D] | tuple[Index1D, Index1D]
 ) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing
@@ -284,7 +292,7 @@ def _safe_fancy_index_h5py(
 
     # Convert boolean arrays to integer arrays and handle sorting for h5py
     processed_indices, reverse_indices = zip(
-        *map(_process_index_for_h5py, subset_idx), strict=False
+        *map(_process_index_for_h5py, subset_idx), strict=True
     )
 
     # Apply first dimension indexing
