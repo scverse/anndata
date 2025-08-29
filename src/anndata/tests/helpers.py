@@ -592,6 +592,11 @@ def _assert_equal(a, b):
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
+    a_handler, b_handler, default_handler = map(
+        assert_equal.dispatch, (type(a), type(b), object)
+    )
+    if (a_handler is default_handler) and (b_handler is not default_handler):
+        return assert_equal(b, a, exact=exact, elem_name=elem_name)
     _assert_equal(a, b, _elem_name=elem_name)
 
 
@@ -716,7 +721,7 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a) == set(b), format_msg(elem_name)
+    assert set(a) == set(b), format_msg(elem_name) + f" {a.keys()} != {b.keys()}"
     for k in a:
         if elem_name is None:
             elem_name = ""
@@ -847,9 +852,17 @@ def assert_adata_equal(
         "varp",
         "raw",
     ]:
+        a_elem, b_elem = getattr(a, attr), getattr(b, attr)
+        # TODO: This is helpful in backed mode where `X is not None` but `None not in layers`.
+        # Does this filter make sense in general? Is there a case where we explicitly want to check `None in layers`?
+        if attr == "layers" and any(adata.isbacked for adata in [a, b]):
+            a_elem, b_elem = [
+                {k: v for k, v in elem.items() if k is not None}
+                for elem in [a_elem, b_elem]
+            ]
         assert_equal(
-            getattr(a, attr),
-            getattr(b, attr),
+            a_elem,
+            b_elem,
             exact=exact,
             elem_name=fmt_name(attr),
         )
