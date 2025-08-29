@@ -478,6 +478,14 @@ settings.register(
     get_from_env=check_and_get_int,
 )
 
+settings.register(
+    "disallow_forward_slash_in_h5ad",
+    default_value=False,
+    description="Whether or not to disallow the `/` character in keys for h5ad files",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 
 ##################################################################################
 ##################################################################################

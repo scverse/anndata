@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
@@ -354,8 +355,8 @@ class Writer:
         # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
         is_zarr_group = isinstance(store, ZarrGroup)
         if "/" in k.split(store.name)[-1][1:]:
-            if is_zarr_group:
-                msg = "Forward slashes are not allowed in keys in zarr stores"
+            if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
+                msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
             else:
                 msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
