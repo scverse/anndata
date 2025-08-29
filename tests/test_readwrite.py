@@ -967,14 +967,8 @@ def test_h5py_attr_limit(tmp_path):
 @pytest.mark.parametrize(
     "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
 )
-@pytest.mark.parametrize(
-    ("store_type", "disallow_forward_slash_in_h5ad"),
-    [
-        pytest.param("zarr", False, id="zarr"),
-        pytest.param("h5ad", True, id="h5ad-no-slash-allowed"),
-        pytest.param("h5ad", False, id="h5ad-slash-allowed"),
-    ],
-)
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
 def test_forward_slash_key(
     elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
     tmp_path: Path,
