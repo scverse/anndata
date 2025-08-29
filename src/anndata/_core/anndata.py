@@ -1356,6 +1356,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             }
 
         if self.isbacked:
+            new["layers"][None] = self.X[...]
             self.file.close()
 
         return AnnData(**new)
