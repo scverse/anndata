@@ -315,15 +315,15 @@ def test_concatenate_dense():
     X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
     assert adata.X.astype(int).tolist() == X_combined
     assert adata.layers["Xs"].astype(int).tolist() == X_combined
-    assert adata.obs_keys() == ["anno1", "anno2", "batch"]
-    assert adata.var_keys() == ["annoA-0", "annoA-1", "annoB-2"]
+    assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch"]
+    assert adata.var.columns.tolist() == ["annoA-0", "annoA-1", "annoB-2"]
     assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
-    assert adata.obsm_keys() == ["X_1", "X_2"]
+    assert adata.obsm.keys() == {"X_1", "X_2"}
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
     # with batch_key and batch_categories
     adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
-    assert adata.obs_keys() == ["anno1", "anno2", "batch1"]
+    assert adata.obs.keys() == {"anno1", "anno2", "batch1"}
     adata = adata1.concatenate(adata2, adata3, batch_categories=["a1", "a2", "a3"])
     assert adata.obs["batch"].cat.categories.tolist() == ["a1", "a2", "a3"]
     assert adata.var_names.tolist() == ["b", "c"]
@@ -644,7 +644,7 @@ def test_concatenate_dense_duplicates():
     )
 
     adata = adata1.concatenate(adata2, adata3)
-    assert adata.var_keys() == [
+    assert adata.var.columns.tolist() == [
         "annoA",
         "annoB",
         "annoC-0",
