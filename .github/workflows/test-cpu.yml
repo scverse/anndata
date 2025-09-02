@@ -65,7 +65,10 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+        run: |
+          uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          uvx hatch run ${{ matrix.env.name }}:coverage combine
+          uvx hatch run ${{ matrix.env.name }}:coverage xml
 
       - name: Upload test results
         if: ${{ !cancelled() }}
