@@ -924,7 +924,7 @@ def _as_sparse_dask_inner(
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
     if issubclass(typ, CupySparseMatrix):
-        a = as_cupy(a)  # can’t convert ndarray to cupy
+        a = as_cupy(a)  # can’t Cupy sparse constructors don’t accept numpy ndarrays
     return typ(a)
 
 
