@@ -77,7 +77,10 @@ jobs:
         run: uv pip list
 
       - name: Run test
-        run: uv run coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
+        run: |
+          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage combine
+          uv run coverage xml
 
       - uses: codecov/codecov-action@v5
         with:
