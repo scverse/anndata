@@ -278,10 +278,7 @@ def test_assert_equal_dask_sparse_arrays():
     "input_type", BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS
 )
 @pytest.mark.parametrize(
-    (
-        "as_dask_type",
-        "mem_type",
-    ),
+    ("as_dask_type", "mem_type"),
     [
         pytest.param(
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
