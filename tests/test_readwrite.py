@@ -278,13 +278,14 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, jnp.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array, jnp.array]
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
+    print(f"Running test with X_type = {typ.__module__}.{typ.__name__}")
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 

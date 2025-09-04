@@ -5,6 +5,7 @@ from copy import deepcopy
 from operator import mul
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
 import joblib
 import numpy as np
 import pandas as pd
@@ -174,6 +175,13 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
+    # jax immutability case
+    if "jax" in matrix_type.__module__:
+        msg = (
+            "JAX arrays are immutable; view-modification warning will not be triggered"
+        )
+        pytest.xfail(msg)
+
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
     if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
@@ -327,6 +335,11 @@ def test_set_varm(adata):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_not_set_subset_X(matrix_type_base, subset_func):
     adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
+
+    if isinstance(adata.X, jnp.ndarray):
+        msg = "JAX arrays do not support in-place mutation."
+        pytest.xfail(msg)
+
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -355,6 +368,9 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
+    if isinstance(adata.X, jnp.ndarray):
+        msg = "JAX does not support in-place mutation, so this test is irrelevant."
+        pytest.skip(msg)
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -380,6 +396,9 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_set_scalar_subset_X(matrix_type, subset_func):
+    if "jax" in matrix_type.__module__:
+        msg = "JAX arrays don't support item assignment via boolean indexing (e.g. adata.X[bool_idx] = val)."
+        pytest.xfail(msg)
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)

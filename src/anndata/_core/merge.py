@@ -621,13 +621,13 @@ def _is_array_api_compatible(x):
 def _dlpack_to_numpy(x):
     try:
         return np.from_dlpack(x)
-    except TypeError as e:
-        msg = f"DLPack to NumPy failed: {e}"
-        raise TypeError(msg) from e
+    except TypeError:
+        return np.asarray(x)
 
 
 def _dlpack_from_numpy(x_np, original_xp):
     # TODO: cubed and other array later elif
+    print(x_np, original_xp)
     if hasattr(original_xp, "from_dlpack"):
         try:
             return original_xp.from_dlpack(x_np)
@@ -1591,50 +1591,6 @@ def concat_dataset2d_on_annot_axis(
         del ds_concat[DUMMY_RANGE_INDEX_KEY]
     ds_concat_2d = Dataset2D(ds_concat)
     return ds_concat_2d
-
-
-# def _to_numpy_if_immutable(x):
-#     print("Initial x:", type(x))
-#     if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
-#         print("x is already a supported mutable type:", type(x))
-#         return x
-#     try:
-#         # checking for mutability
-#         print("Trying np.asarray(x)...")
-#         x_array = np.asarray(x)
-#         print("np.asarray(x) succeeded:", type(x_array))
-#         if x_array.size > 0:
-#             try:
-#                 orig = x_array[0]
-#                 print("Checking mutability: trying in-place write")
-#                 x_array[0] = orig  # test no-op write
-#                 print("In-place mutation succeeded, x is mutable:", type(x))
-#                 return x  # mutation worked, so keep original
-#             except (ValueError, TypeError) as e:
-#                 print("In-place mutation failed:", type(x), "|", repr(e))
-#                 # pass
-
-#     except ValueError:
-#         print("Trying np.from_dlpack(x)...")
-#         result = np.from_dlpack(x)
-#         print("np.from_dlpack(x) succeeded:", type(result))
-#         # pass
-#     # if it is not mutable, we convert to numpy
-#     try:
-#         # trying convert via from_dlpack first
-#         return np.from_dlpack(x)
-#     except TypeError:
-#         try:
-#             # fallback to asarray if from_dlpack not possible
-#             print("Trying fallback np.asarray(x)...")
-#             result = np.asarray(x)
-#             print("Fallback np.asarray(x) succeeded:", type(result))
-#             return result
-#         except ValueError:
-#             # Not an array-API object (or lib not available) = return unchanged
-#             print("Final fallback np.asarray(x) failed:", type(x), "|", repr(e))
-#             print("Returning x as-is:", type(x))
-#             return x
 
 
 def concat(  # noqa: PLR0912, PLR0913, PLR0915

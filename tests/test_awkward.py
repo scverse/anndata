@@ -132,6 +132,30 @@ def test_copy(key):
         getattr(adata, key)["awk"]["d"]
 
 
+# @pytest.mark.parametrize("key", ["obsm", "varm"])
+# def test_view(key):
+#     """Check that modifying a view does not modify the original"""
+#     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
+#     getattr(adata, key)["awk"] = ak.Array([{"a": [1], "b": [2], "c": [3]}] * 3)
+#     adata_view = adata[:2, :2]
+
+#     # TODO: is “c” sparse and “d” not? Or what happens here? Use proper names.
+#     with pytest.warns(
+#         ImplicitModificationWarning, match=r"initializing view as actual"
+#     ):
+#         getattr(adata_view, key)["awk"]["c"] = np.full((2, 1), 4)
+#     getattr(adata_view, key)["awk"]["d"] = np.full((2, 1), 5)
+
+#     # values in view were correctly set
+#     npt.assert_equal(getattr(adata_view, key)["awk"]["c"], np.full((2, 1), 4))
+#     npt.assert_equal(getattr(adata_view, key)["awk"]["d"], np.full((2, 1), 5))
+
+#     # values in original were not updated
+#     npt.assert_equal(getattr(adata, key)["awk"]["c"], np.full((3, 1), 3))
+#     with pytest.raises(IndexError):
+#         getattr(adata, key)["awk"]["d"]
+
+
 @pytest.mark.parametrize("key", ["obsm", "varm"])
 def test_view(key):
     """Check that modifying a view does not modify the original"""
