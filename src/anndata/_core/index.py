@@ -285,9 +285,10 @@ def _process_index_for_h5py(
 
 
 def _apply_index_to_result(
-    result: h5py.Dataset, idx: np.ndarray, axis: int
-) -> h5py.Dataset:
+    result: np.ndarray, idx: np.ndarray, axis: int
+) -> np.ndarray:
     """Apply an index to a result array along a specific axis."""
+    assert isinstance(result, np.ndarray)
     if isinstance(idx, np.ndarray):
         return result.take(idx, axis=axis)
     slices = [slice(None)] * result.ndim
@@ -312,9 +313,12 @@ def _safe_fancy_index_h5py(
 
     # Apply first dimension indexing
     first_idx = processed_indices[0]
-    result = dataset[first_idx]
+    result: np.ndarray = dataset[first_idx]
 
-    # Apply remaining dimensions
+    # The first axis is indexed directly on the h5py.Dataset object,
+    # because h5py only supports fancy indexing on one axis at a time.
+    # After this, result is a NumPy array and further axes can be indexed
+    # using _apply_index_to_result (which uses NumPy's advanced indexing).
     for dim_offset, idx in enumerate(processed_indices[1:], 1):
         result = _apply_index_to_result(result, idx, dim_offset)
 
