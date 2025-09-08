@@ -494,18 +494,18 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     else:
         # TODO: this should not be necessary
         assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm_keys()
+    assert "X_a" in adata.obsm
     assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm_keys()
+    assert "X_b" in adata.varm
     assert adata.varm["X_b"].shape[1] == 3
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
     for k, v in obsm_mapping.items():
-        assert k in adata.obsm_keys()
+        assert k in adata.obsm
         assert adata.obsm[k].shape[1] == len(v)
     for k, v in varm_mapping.items():
-        assert k in adata.varm_keys()
+        assert k in adata.varm
         assert adata.varm[k].shape[1] == len(v)
     assert adata.obs_names.name == obs_dim
     assert adata.var_names.name == var_dim
