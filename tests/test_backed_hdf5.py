@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -20,6 +20,13 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+    from typing import Literal
+
+    from anndata.compat import DaskArray
+
 subset_func2 = subset_func
 
 
@@ -29,7 +36,7 @@ subset_func2 = subset_func
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     X_list = [
         [1, 2, 3],
         [4, 5, 6],
@@ -61,22 +68,26 @@ def adata():
     params=[sparse.csr_matrix, sparse.csc_matrix, np.array, as_dense_dask_array],
     ids=["scipy-csr", "scipy-csc", "np-array", "dask_array"],
 )
-def mtx_format(request):
+def mtx_format(
+    request,
+) -> Callable[
+    [np.ndarray], DaskArray | np.ndarray | sparse.csr_array | sparse.csr_matrix
+]:
     return request.param
 
 
 @pytest.fixture(params=[sparse.csr_matrix, sparse.csc_matrix])
-def sparse_format(request):
+def sparse_format(request) -> type[sparse.csr_matrix | sparse.csc_matrix]:
     return request.param
 
 
 @pytest.fixture(params=["r+", "r", False])
-def backed_mode(request):
+def backed_mode(request) -> Literal["r+", "r", False]:
     return request.param
 
 
 @pytest.fixture(params=(("X",), ()))
-def as_dense(request):
+def as_dense(request) -> tuple[str] | tuple:
     return request.param
 
 
@@ -89,10 +100,17 @@ def as_dense(request):
 @pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
-def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
-    base_pth = Path(tmp_path)
-    orig_pth = base_pth / "orig.h5ad"
-    backed_pth = base_pth / "backed.h5ad"
+def test_read_write_X(
+    tmp_path: Path,
+    mtx_format: Callable[
+        [np.ndarray], DaskArray | np.ndarray | sparse.csr_array | sparse.csr_matrix
+    ],
+    backed_mode: Literal["r+", "r", False],
+    *,
+    as_dense: tuple[str] | tuple,
+):
+    orig_pth = tmp_path / "orig.h5ad"
+    backed_pth = tmp_path / "backed.h5ad"
 
     orig = ad.AnnData(mtx_format(asarray(sparse.random(10, 10, format="csr"))))
     orig.write(orig_pth)
@@ -103,6 +121,21 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
     from_backed = ad.read_h5ad(backed_pth)
     assert np.all(asarray(orig.X) == asarray(from_backed.X))
+
+
+def test_backed_view(tmp_path: Path, backed_mode: Literal["r+", "r", False]):
+    orig_pth = tmp_path / "orig.h5ad"
+
+    orig = ad.AnnData(sparse.random(100, 10, format="csr"))
+    orig.write(orig_pth)
+
+    adata = ad.read_h5ad(orig_pth, backed=backed_mode)
+
+    for i in range(0, adata.shape[0], 10):
+        chunk_path = tmp_path / f"chunk_{i}.h5ad"
+        adata[i : i + 5].write_h5ad(tmp_path / f"chunk_{i}.h5ad")
+        chunk = adata[i : i + 5]
+        assert_equal(chunk, ad.read_h5ad(chunk_path))
 
 
 # this is very similar to the views test
@@ -156,7 +189,7 @@ def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     adata_subset.write()
 
 
-def test_backing_copy(adata, tmp_path, backing_h5ad):
+def test_backing_copy(adata, tmp_path: Path, backing_h5ad: Path):
     adata.filename = backing_h5ad
     adata.write()
 
@@ -170,7 +203,7 @@ def test_backing_copy(adata, tmp_path, backing_h5ad):
 
 
 # TODO: Also test updating the backing file inplace
-def test_backed_raw(tmp_path):
+def test_backed_raw(tmp_path: Path):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
@@ -193,7 +226,14 @@ def test_backed_raw(tmp_path):
         pytest.param(sparse.csr_array, id="csr_array"),
     ],
 )
-def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
+def test_backed_raw_subset(
+    tmp_path: Path,
+    array_type: Callable[
+        [np.ndarray], np.ndarray | sparse.csr_array | sparse.csr_matrix
+    ],
+    subset_func: Callable[[ad.AnnData], ad.AnnData],
+    subset_func2: Callable[[ad.AnnData], ad.AnnData],
+):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
     mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
@@ -231,7 +271,10 @@ def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
         pytest.param(as_dense_dask_array, id="dask_array"),
     ],
 )
-def test_to_memory_full(tmp_path, array_type):
+def test_to_memory_full(
+    tmp_path: Path,
+    array_type: Callable[[np.ndarray], np.ndarray | DaskArray | sparse.csr_matrix],
+):
     backed_pth = tmp_path / "backed.h5ad"
     mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
@@ -246,7 +289,7 @@ def test_to_memory_full(tmp_path, array_type):
     assert_equal(mem_adata, backed_adata.to_memory())
 
 
-def test_double_index(adata, backing_h5ad):
+def test_double_index(adata: ad.AnnData, backing_h5ad: Path):
     adata.filename = backing_h5ad
     with pytest.raises(ValueError, match=r"cannot make a view of a view"):
         # no view of view of backed object currently
@@ -256,7 +299,7 @@ def test_double_index(adata, backing_h5ad):
     adata.write()
 
 
-def test_return_to_memory_mode(adata, backing_h5ad):
+def test_return_to_memory_mode(adata: ad.AnnData, backing_h5ad: Path):
     bdata = adata.copy()
     adata.filename = backing_h5ad
     assert adata.isbacked
@@ -274,7 +317,7 @@ def test_return_to_memory_mode(adata, backing_h5ad):
     bdata.filename = None
 
 
-def test_backed_modification(adata, backing_h5ad):
+def test_backed_modification(adata: ad.AnnData, backing_h5ad: Path):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse.csr_matrix(adata.X)
     assert not adata.isbacked
@@ -296,7 +339,11 @@ def test_backed_modification(adata, backing_h5ad):
     assert np.all(adata.X[2, :] == np.array([7, 13, 9]))
 
 
-def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
+def test_backed_modification_sparse(
+    adata: ad.AnnData,
+    backing_h5ad: Path,
+    sparse_format: type[sparse.csr_matrix | sparse.csc_matrix],
+):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse_format(adata.X)
     assert not adata.isbacked

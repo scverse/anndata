@@ -6,6 +6,7 @@ import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from functools import partial, singledispatch, wraps
+from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
 
@@ -60,6 +62,14 @@ except ImportError:
         *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
+
+try:
+    import fast_array_utils as _
+except ImportError:
+    # dask natively supports sparray since https://github.com/dask/dask/pull/11750
+    DASK_CAN_SPARRAY = Version(version("dask")) >= Version("2025.3.0")
+else:  # fast-array-utils monkeypatches dask to support sparrays
+    DASK_CAN_SPARRAY = True
 
 
 DEFAULT_KEY_TYPES = (
@@ -628,8 +638,9 @@ def assert_equal_arrayview(
 
 @assert_equal.register(BaseCompressedSparseDataset)
 @assert_equal.register(sparse.spmatrix)
+@assert_equal.register(CSArray)
 def assert_equal_sparse(
-    a: BaseCompressedSparseDataset | sparse.spmatrix,
+    a: BaseCompressedSparseDataset | sparse.spmatrix | CSArray,
     b: object,
     *,
     exact: bool = False,
@@ -637,13 +648,6 @@ def assert_equal_sparse(
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
-
-
-@assert_equal.register(CSArray)
-def assert_equal_sparse_array(
-    a: CSArray, b: object, *, exact: bool = False, elem_name: str | None = None
-):
-    return assert_equal_sparse(a, b, exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)
@@ -878,29 +882,54 @@ def _(a):
 
 
 @singledispatch
-def as_sparse_dask_array(a) -> DaskArray:
+def _as_sparse_dask(
+    a: NDArray | CSArray | CSMatrix | DaskArray,
+    *,
+    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    chunks: tuple[int, ...] | None = None,
+) -> DaskArray:
+    """Convert a to a sparse dask array, preserving sparse format and container (`cs{rc}_{array,matrix}`)."""
+    raise NotImplementedError
+
+
+@_as_sparse_dask.register(CSArray | CSMatrix | np.ndarray)
+def _(
+    a: CSArray | CSMatrix | NDArray,
+    *,
+    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    chunks: tuple[int, ...] | None = None,
+) -> DaskArray:
     import dask.array as da
 
-    return da.from_array(sparse.csr_matrix(a), chunks=_half_chunk_size(a.shape))
+    chunks = _half_chunk_size(a.shape) if chunks is None else chunks
+    return da.from_array(_as_sparse_dask_inner(a, typ=typ), chunks=chunks)
 
 
-@as_sparse_dask_array.register(CSMatrix)
-def _(a):
-    import dask.array as da
-
-    return da.from_array(a, _half_chunk_size(a.shape))
-
-
-@as_sparse_dask_array.register(CSArray)
-def _(a):
-    import dask.array as da
-
-    return da.from_array(sparse.csr_matrix(a), _half_chunk_size(a.shape))
+@_as_sparse_dask.register(DaskArray)
+def _(
+    a: DaskArray,
+    *,
+    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    chunks: tuple[int, ...] | None = None,
+) -> DaskArray:
+    assert chunks is None  # TODO: if needed we can add a .rechunk(chunks)
+    return a.map_blocks(_as_sparse_dask_inner, typ=typ, dtype=a.dtype, meta=typ((2, 2)))
 
 
-@as_sparse_dask_array.register(DaskArray)
-def _(a):
-    return a.map_blocks(sparse.csr_matrix)
+def _as_sparse_dask_inner(
+    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix | CupyCSRMatrix]
+) -> CSArray | CSMatrix:
+    """Convert into a a sparse container that dask supports (or complain)."""
+    if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
+        msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
+        raise TypeError(msg)
+    if issubclass(typ, CupySparseMatrix):
+        a = as_cupy(a)  # can’t Cupy sparse constructors don’t accept numpy ndarrays
+    return typ(a)
+
+
+as_sparse_dask_array = partial(_as_sparse_dask, typ=sparse.csr_array)
+as_sparse_dask_matrix = partial(_as_sparse_dask, typ=sparse.csr_matrix)
 
 
 @singledispatch
@@ -945,14 +974,11 @@ except ImportError:
     format_to_memory_class = {}
 
 
-# TODO: If there are chunks which divide along columns, then a coo_matrix is returned by compute
-# We should try and fix this upstream in dask/ cupy
 @singledispatch
-def as_cupy_sparse_dask_array(a, format="csr"):
-    memory_class = format_to_memory_class[format]
-    cpu_da = as_sparse_dask_array(a)
-    return cpu_da.rechunk((cpu_da.chunks[0], -1)).map_blocks(
-        memory_class, dtype=a.dtype, meta=memory_class(cpu_da._meta)
+def as_cupy_sparse_dask_array(a, format="csr") -> DaskArray:
+    chunk_rows, _ = _half_chunk_size(a.shape)
+    return _as_sparse_dask(
+        a, typ=format_to_memory_class[format], chunks=(chunk_rows, -1)
     )
 
 
@@ -962,7 +988,8 @@ def _(a, format="csr"):
     import dask.array as da
 
     memory_class = format_to_memory_class[format]
-    return da.from_array(memory_class(a), chunks=(_half_chunk_size(a.shape)[0], -1))
+    chunk_rows, _ = _half_chunk_size(a.shape)
+    return da.from_array(memory_class(a), chunks=(chunk_rows, -1))
 
 
 @as_cupy_sparse_dask_array.register(DaskArray)
@@ -980,9 +1007,9 @@ def resolve_cupy_type(val):
 
     if issubclass(input_typ, np.ndarray):
         typ = CupyArray
-    elif issubclass(input_typ, sparse.csr_matrix):
+    elif issubclass(input_typ, sparse.csr_matrix | sparse.csr_array):
         typ = CupyCSRMatrix
-    elif issubclass(input_typ, sparse.csc_matrix):
+    elif issubclass(input_typ, sparse.csc_matrix | sparse.csc_array):
         typ = CupyCSCMatrix
     else:
         msg = f"No default target type for input type {input_typ}"
@@ -1003,7 +1030,7 @@ def as_cupy(val, typ=None):
     if issubclass(typ, CupyArray):
         import cupy as cp
 
-        if isinstance(val, CSMatrix):
+        if isinstance(val, CSMatrix | CSArray):
             val = val.toarray()
         return cp.array(val)
     elif issubclass(typ, CupyCSRMatrix):
@@ -1059,7 +1086,14 @@ BASE_MATRIX_PARAMS = [
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
-    pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
+    pytest.param(as_sparse_dask_matrix, id="sparse_dask_matrix"),
+    pytest.param(
+        as_sparse_dask_array,
+        marks=pytest.mark.skipif(
+            not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+        ),
+        id="sparse_dask_array",
+    ),
 ]
 
 CUPY_MATRIX_PARAMS = [
