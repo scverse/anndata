@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -284,18 +284,6 @@ def _process_index_for_h5py(
     )
 
 
-def _apply_index_to_result(
-    result: np.ndarray, idx: np.ndarray, axis: int
-) -> np.ndarray:
-    """Apply an index to a result array along a specific axis."""
-    assert isinstance(result, np.ndarray)
-    if isinstance(idx, np.ndarray):
-        return result.take(idx, axis=axis)
-    slices = [slice(None)] * result.ndim
-    slices[axis] = idx
-    return result[tuple(slices)]
-
-
 def _safe_fancy_index_h5py(
     dataset: h5py.Dataset,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
@@ -311,16 +299,9 @@ def _safe_fancy_index_h5py(
         *map(_process_index_for_h5py, subset_idx), strict=True
     )
 
-    # Apply first dimension indexing
-    first_idx = processed_indices[0]
-    result: np.ndarray = dataset[first_idx]
-
-    # The first axis is indexed directly on the h5py.Dataset object,
-    # because h5py only supports fancy indexing on one axis at a time.
-    # After this, result is a NumPy array and further axes can be indexed
-    # using _apply_index_to_result (which uses NumPy's advanced indexing).
-    for dim_offset, idx in enumerate(processed_indices[1:], 1):
-        result = _apply_index_to_result(result, idx, dim_offset)
+    # Apply first index directly to the dataset, then rest all at once to the array
+    result = cast("np.ndarray", dataset[processed_indices[0]])
+    result = result[:, *processed_indices[1:]]
 
     # Now apply reverse mappings to get the original order
     for dim, reverse_map in enumerate(reverse_indices):
