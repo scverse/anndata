@@ -323,7 +323,7 @@ def test_concatenate_dense():
 
     # with batch_key and batch_categories
     adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
-    assert adata.obs.keys() == {"anno1", "anno2", "batch1"}
+    assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch1"]
     adata = adata1.concatenate(adata2, adata3, batch_categories=["a1", "a2", "a3"])
     assert adata.obs["batch"].cat.categories.tolist() == ["a1", "a2", "a3"]
     assert adata.var_names.tolist() == ["b", "c"]
