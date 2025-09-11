@@ -138,6 +138,16 @@ def test_anndatas(
         )
     )
 
+    if array_type == "jax_array":
+        if file_format == "zarr":
+            pytest.xfail(
+                "Zarr cannot preserve JAX arrays in `.X`; results in `X is None` on read."
+            )
+        elif file_format == "h5ad":
+            pytest.xfail(
+                "h5ad I/O cannot preserve JAX arrays; .X becomes None after reload."
+            )
+
     adatas = []
     for i in range(3):
         M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))

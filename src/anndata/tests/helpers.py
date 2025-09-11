@@ -699,7 +699,8 @@ def _assert_equal(a, b, exact):
         if exact:
             assert xp.all(a == b)
         else:
-            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8)
+            # for padding with NaN
+            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
     except TypeError:
         assert a == b
 
