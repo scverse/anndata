@@ -218,7 +218,7 @@ def test_concat_interface_errors(use_xdataset):
         gen_adata((5, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
     ]
 
-    with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
+    with pytest.raises(ValueError, match=r"`axis` must be.*0, 1, 'obs', or 'var'"):
         concat(adatas, axis=3)
     with pytest.raises(ValueError, match="'inner' or 'outer'"):
         concat(adatas, join="not implemented")
@@ -331,27 +331,23 @@ def test_concatenate_dense():
     # outer join
     adata = adata1.concatenate(adata2, adata3, join="outer")
 
-    X_ref = np.array(
-        [
-            [1.0, 2.0, 3.0, np.nan],
-            [4.0, 5.0, 6.0, np.nan],
-            [np.nan, 3.0, 2.0, 1.0],
-            [np.nan, 6.0, 5.0, 4.0],
-            [np.nan, 3.0, 2.0, 1.0],
-            [np.nan, 6.0, 5.0, 4.0],
-        ]
-    )
+    X_ref = np.array([
+        [1.0, 2.0, 3.0, np.nan],
+        [4.0, 5.0, 6.0, np.nan],
+        [np.nan, 3.0, 2.0, 1.0],
+        [np.nan, 6.0, 5.0, 4.0],
+        [np.nan, 3.0, 2.0, 1.0],
+        [np.nan, 6.0, 5.0, 4.0],
+    ])
     np.testing.assert_equal(adata.X, X_ref)
     var_ma = ma.masked_invalid(adata.var.values.tolist())
     var_ma_ref = ma.masked_invalid(
-        np.array(
-            [
-                [0.0, np.nan, np.nan],
-                [1.0, 2.0, 2.0],
-                [2.0, 1.0, 1.0],
-                [np.nan, 0.0, 0.0],
-            ]
-        )
+        np.array([
+            [0.0, np.nan, np.nan],
+            [1.0, 2.0, 2.0],
+            [2.0, 1.0, 1.0],
+            [np.nan, 0.0, 0.0],
+        ])
     )
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
@@ -464,37 +460,33 @@ def test_concatenate_obsm_outer(obsm_adatas, fill_val):
     assert isinstance(outer.obsm["dense"], np.ndarray)
     np.testing.assert_equal(
         outer.obsm["dense"],
-        np.array(
-            [
-                [0, 1, fill_val],
-                [2, 3, fill_val],
-                [4, 5, fill_val],
-                [0, 1, 2],
-                [3, 4, 5],
-                [6, 7, 8],
-                [9, 10, 11],
-                [4, 5, fill_val],
-                [6, 7, fill_val],
-            ]
-        ),
+        np.array([
+            [0, 1, fill_val],
+            [2, 3, fill_val],
+            [4, 5, fill_val],
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [9, 10, 11],
+            [4, 5, fill_val],
+            [6, 7, fill_val],
+        ]),
     )
 
     assert isinstance(outer.obsm["sparse"], CSMatrix)
     np.testing.assert_equal(
         outer.obsm["sparse"].toarray(),
-        np.array(
-            [
-                [0, 1, fill_val, fill_val],
-                [2, 3, fill_val, fill_val],
-                [4, 5, fill_val, fill_val],
-                [fill_val, fill_val, fill_val, fill_val],
-                [fill_val, fill_val, fill_val, fill_val],
-                [fill_val, fill_val, fill_val, fill_val],
-                [fill_val, fill_val, fill_val, fill_val],
-                [0, 1, 2, 3],
-                [4, 5, 6, 7],
-            ]
-        ),
+        np.array([
+            [0, 1, fill_val, fill_val],
+            [2, 3, fill_val, fill_val],
+            [4, 5, fill_val, fill_val],
+            [fill_val, fill_val, fill_val, fill_val],
+            [fill_val, fill_val, fill_val, fill_val],
+            [fill_val, fill_val, fill_val, fill_val],
+            [fill_val, fill_val, fill_val, fill_val],
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+        ]),
     )
 
     # fmt: off
@@ -819,27 +811,23 @@ def test_concatenate_awkward(join_type):
     import awkward as ak
 
     a = ak.Array([[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]])
-    b = ak.Array(
-        [
-            [{"a": 4}, {"a": 5}],
-            [{"a": 6}],
-            [{"a": 7}],
-        ]
-    )
+    b = ak.Array([
+        [{"a": 4}, {"a": 5}],
+        [{"a": 6}],
+        [{"a": 7}],
+    ])
 
     adata_a = AnnData(np.zeros((2, 0), dtype=float), obsm={"awk": a})
     adata_b = AnnData(np.zeros((3, 0), dtype=float), obsm={"awk": b})
 
     if join_type == "inner":
-        expected = ak.Array(
-            [
-                [{"a": 1}],
-                [{"a": 2}, {"a": 3}],
-                [{"a": 4}, {"a": 5}],
-                [{"a": 6}],
-                [{"a": 7}],
-            ]
-        )
+        expected = ak.Array([
+            [{"a": 1}],
+            [{"a": 2}, {"a": 3}],
+            [{"a": 4}, {"a": 5}],
+            [{"a": 6}],
+            [{"a": 7}],
+        ])
     elif join_type == "outer":
         # TODO: This is what we would like to return, but waiting on:
         # * https://github.com/scikit-hep/awkward/issues/2182 and awkward 2.1.0
@@ -853,22 +841,18 @@ def test_concatenate_awkward(join_type):
         #         [{"a": 7, "b": None}],
         #     ]
         # )
-        expected = ak.concatenate(
-            [  # I don't think I can construct a UnionArray directly
-                ak.Array(
-                    [
-                        [{"a": 1, "b": "foo"}],
-                        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
-                    ]
-                ),
-                ak.Array(
-                    [
-                        [{"a": 4}, {"a": 5}],
-                        [{"a": 6}],
-                        [{"a": 7}],
-                    ]
-                ),
-            ]
+        expected = (
+            ak.concatenate([  # I don't think I can construct a UnionArray directly
+                ak.Array([
+                    [{"a": 1, "b": "foo"}],
+                    [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+                ]),
+                ak.Array([
+                    [{"a": 4}, {"a": 5}],
+                    [{"a": 6}],
+                    [{"a": 7}],
+                ]),
+            ])
         )
 
     result = concat([adata_a, adata_b], join=join_type).obsm["awk"]
@@ -887,9 +871,10 @@ def test_concatenate_awkward(join_type):
 def test_awkward_does_not_mix(join_type, other):
     import awkward as ak
 
-    awk = ak.Array(
-        [[{"a": 1, "b": "foo"}], [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}]]
-    )
+    awk = ak.Array([
+        [{"a": 1, "b": "foo"}],
+        [{"a": 2, "b": "bar"}, {"a": 3, "b": "baz"}],
+    ])
 
     adata_a = AnnData(
         np.zeros((2, 3), dtype=float),
@@ -991,9 +976,10 @@ def test_nan_merge(axis_name, join_type, array_type):
 
     assert_equal(getattr(orig1, mapping_attr), getattr(result, mapping_attr))
 
-    orig_nonan = AnnData(
-        **{"X": sparse.csr_matrix(adata_shape), mapping_attr: {"arr": arr}}
-    )
+    orig_nonan = AnnData(**{
+        "X": sparse.csr_matrix(adata_shape),
+        mapping_attr: {"arr": arr},
+    })
     result_nonan = concat([orig1, orig_nonan], axis=axis, merge="same")
 
     assert len(getattr(result_nonan, mapping_attr)) == 0
@@ -1010,17 +996,16 @@ def test_merge_unique():
         "a": {"b": "c"}
     }
 
-    assert merge_unique(
-        [{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]
-    ) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_unique([
+        {"a": {"b": {"c": {"d": "e"}}}},
+        {"a": {"b": {"c": {"d": "e"}}}},
+    ]) == {"a": {"b": {"c": {"d": "e"}}}}
     assert (
-        merge_unique(
-            [
-                {"a": {"b": {"c": {"d": "e"}}}},
-                {"a": {"b": {"c": {"d": "f"}}}},
-                {"a": {"b": {"c": {"d": "e"}}}},
-            ]
-        )
+        merge_unique([
+            {"a": {"b": {"c": {"d": "e"}}}},
+            {"a": {"b": {"c": {"d": "f"}}}},
+            {"a": {"b": {"c": {"d": "e"}}}},
+        ])
         == {}
     )
 
@@ -1050,9 +1035,10 @@ def test_merge_same():
     assert merge_same([{"a": {"b": "c"}, "d": "e"}, {"a": {"b": "c"}, "d": 2}]) == {
         "a": {"b": "c"}
     }
-    assert merge_same(
-        [{"a": {"b": {"c": {"d": "e"}}}}, {"a": {"b": {"c": {"d": "e"}}}}]
-    ) == {"a": {"b": {"c": {"d": "e"}}}}
+    assert merge_same([
+        {"a": {"b": {"c": {"d": "e"}}}},
+        {"a": {"b": {"c": {"d": "e"}}}},
+    ]) == {"a": {"b": {"c": {"d": "e"}}}}
 
     assert merge_same([{"a": 1}, {"b": 2}]) == {}
     assert merge_same([{"a": 1}, {"b": 2}, {"a": 1, "b": {"c": 2, "d": 3}}]) == {}
