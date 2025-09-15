@@ -1,6 +1,6 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format`, with the exception of structured arrays.
+`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format` via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`, with the exception of structured arrays.
 Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.
 Here is a quick guide on some of our learnings so far:
 
@@ -48,7 +48,7 @@ import anndata as ad
 from collections.abc import Mapping
 from typing import Any
 
-ad.settings.zarr_write_format = 3 # Absolutely crucial! Sharding is only for the v3 file format!
+g = zarr.open_group(orig_path, mode="a", use_consolidated=False, zarr_version=3) # zarr_version 3 is default but note that sharding only works with v3!
 
 def write_sharded(group: zarr.Group, adata: ad.AnnData):
     def callback(
@@ -93,11 +93,6 @@ We therefore recommend this pipeline for writing full datasets and reading conti
 The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `zstd`.
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the {class}`zarr.codecs.BloscCodec` to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
-
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
-Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
-
-The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
 
 ## Dask
 

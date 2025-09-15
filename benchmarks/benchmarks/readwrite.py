@@ -171,9 +171,11 @@ class H5ADWriteSuite:
         self.adata.write_h5ad(self.writepth, compression="gzip")
 
     def track_peakmem_write_compressed(self, *_):
-        return get_peak_mem(
-            (sedate(self.adata.write_h5ad), (self.writepth,), {"compression": "gzip"})
-        )
+        return get_peak_mem((
+            sedate(self.adata.write_h5ad),
+            (self.writepth,),
+            {"compression": "gzip"},
+        ))
 
 
 class H5ADBackedWriteSuite(H5ADWriteSuite):

@@ -82,7 +82,7 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "pytest-cov",
+    "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
@@ -101,7 +101,7 @@ test-min = [
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]" ]
+test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -118,17 +118,15 @@ raw-options.version_scheme = "release-branch-semver"
 packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
-data_file = "test-data/coverage"
+data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 concurrency = [ "multiprocessing" ]
-parallel = "true"
-
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = [ "./src", "**/site-packages" ]
-
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:",
@@ -177,6 +175,7 @@ markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve za
 src = [ "src" ]
 
 [tool.ruff.format]
+preview = true
 docstring-code-format = true
 
 [tool.ruff.lint]
@@ -250,10 +249,13 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-fragment.bugfix.name = "Bug fixes"
-fragment.doc.name = "Documentation"
-fragment.feature.name = "Features"
-fragment.misc.name = "Miscellaneous improvements"
-fragment.performance.name = "Performance"
-fragment.breaking.name = "Breaking changes"
-fragment.dev.name = "Development Process"
+# Valid fragments should be a subset of conventional commit types (except for `breaking`):
+# https://github.com/commitizen/conventional-commit-types/blob/master/index.json
+# style, refactor, test, build, ci: should not go into changelog
+fragment.feat.name = "Features"
+fragment.fix.name = "Bug fixes"
+fragment.docs.name = "Documentation"
+fragment.perf.name = "Performance"
+fragment.chore.name = "Miscellaneous changes"
+fragment.revert.name = "Revert"
+fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
