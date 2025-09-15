@@ -313,9 +313,10 @@ def test_read_full_io_error(tmp_path, name, read, write):
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
             # See https://github.com/zarr-developers/zarr-python/pull/2870
-            store["obs"].update_attributes(
-                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
-            )
+            store["obs"].update_attributes({
+                **dict(store["obs"].attrs),
+                "encoding-type": "invalid",
+            })
             zarr.consolidate_metadata(store.store)
         else:
             store["obs"].attrs["encoding-type"] = "invalid"

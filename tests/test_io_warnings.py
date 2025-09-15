@@ -54,9 +54,9 @@ def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
         ad.read_h5ad(pth)
 
     if len(record) != 0:
-        msg_content = "\n".join(
-            [f"\t{w.category.__name__}('{w.message}')" for w in record]
-        )
+        msg_content = "\n".join([
+            f"\t{w.category.__name__}('{w.message}')" for w in record
+        ])
         pytest.fail(
             f"Warnings were thrown when they shouldn't be. Got:\n\n{msg_content}"
         )

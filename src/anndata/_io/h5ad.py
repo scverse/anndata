@@ -264,15 +264,13 @@ def read_h5ad(
 
         def callback(func, elem_name: str, elem, iospec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(
-                    **{
-                        # This is covering up backwards compat in the anndata initializer
-                        # In most cases we should be able to call `func(elen[k])` instead
-                        k: read_dispatched(elem[k], callback)
-                        for k in elem
-                        if not k.startswith("raw.")
-                    }
-                )
+                return AnnData(**{
+                    # This is covering up backwards compat in the anndata initializer
+                    # In most cases we should be able to call `func(elen[k])` instead
+                    k: read_dispatched(elem[k], callback)
+                    for k in elem
+                    if not k.startswith("raw.")
+                })
             elif elem_name.startswith("/raw."):
                 return None
             elif elem_name == "/X" and "X" in as_sparse:
