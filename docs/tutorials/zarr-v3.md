@@ -94,11 +94,6 @@ The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `z
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the {class}`zarr.codecs.BloscCodec` to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
 
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
-Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
-
-The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
-
 ## Dask
 
 Zarr v3 should be compatible with dask, although the default behavior is to use zarr's chunking for dask's own. With sharding, this behavior may be undesirable as shards can often contain many small chunks, thereby slowing down i/o as dask will need to index into the zarr store for every chunk.  Therefore it may be better to customize this behavior by passing `chunks=my_zarr_array.shards` as an argument to {func}`dask.array.from_zarr` or similar.
