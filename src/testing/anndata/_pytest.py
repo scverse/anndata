@@ -93,6 +93,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: Iterable[pytest.Item]
 ):
+    for item in items:
+        if "zarr" in item.name:
+            item.add_marker("zarr_io")
+
     if not config.getoption("--strict-warnings"):
         return
 

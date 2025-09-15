@@ -184,18 +184,6 @@ class Dataset2D:
         Handler class for doing the iloc-style indexing using :meth:`~xarray.Dataset.isel`.
         """
 
-        @dataclass(frozen=True)
-        class IlocGetter:
-            _ds: XDataset
-            _coord: str
-
-            def __getitem__(self, idx) -> Dataset2D:
-                # xarray seems to have some code looking for a second entry in tuples,
-                # so we unpack the tuple
-                if isinstance(idx, tuple) and len(idx) == 1:
-                    idx = idx[0]
-                return Dataset2D(self._ds.isel(**{self._coord: idx}))
-
         return IlocGetter(self.ds, self.index_dim)
 
     # See https://github.com/pydata/xarray/blob/568f3c1638d2d34373408ce2869028faa3949446/xarray/core/dataset.py#L1239-L1248
@@ -245,7 +233,7 @@ class Dataset2D:
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
         for col in set(self.columns) - non_nullable_string_cols:
-            df[col] = pd.array(self[col].data, dtype="string")
+            df[col] = df[col].astype(dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 
@@ -402,3 +390,16 @@ class Dataset2D:
     def _items(self):
         for col in self:
             yield col, self[col]
+
+
+@dataclass(frozen=True)
+class IlocGetter:
+    _ds: XDataset
+    _coord: str
+
+    def __getitem__(self, idx) -> Dataset2D:
+        # xarray seems to have some code looking for a second entry in tuples,
+        # so we unpack the tuple
+        if isinstance(idx, tuple) and len(idx) == 1:
+            idx = idx[0]
+        return Dataset2D(self._ds.isel(**{self._coord: idx}))

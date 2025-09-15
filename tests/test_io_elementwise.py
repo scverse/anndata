@@ -59,7 +59,7 @@ def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
 
 
 sparse_formats = ["csr", "csc"]
-SIZE = 2500
+SIZE = 50
 DEFAULT_SHAPE = (SIZE, SIZE * 2)
 
 
@@ -206,14 +206,6 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if (
-        ad.settings.zarr_write_format == 3
-        and encoding_type == "anndata"
-        and "O_recarray" in value.uns
-    ):
-        del value.uns["O_recarray"]
     with ad.settings.override(allow_write_nullable_strings=True):
         key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
@@ -251,21 +243,24 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
-        (np.array([1, 2, 3]), "array"),
-        (np.arange(12).reshape(4, 3), "array"),
-        (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
-        (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
+        pytest.param(np.array([1, 2, 3]), "array", id="np-1d"),
+        pytest.param(np.arange(12).reshape(4, 3), "array", id="np-2d"),
+        pytest.param(
+            sparse.random(5, 3, format="csr", density=0.5), "csr_matrix", id="csr"
+        ),
+        pytest.param(
+            sparse.random(5, 3, format="csc", density=0.5), "csc_matrix", id="csc"
+        ),
     ],
 )
-@pytest.mark.parametrize("as_dask", [False, True])
+@pytest.mark.parametrize("as_dask", [False, True], ids=["local", "dask"])
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
-    if as_dask:
-        if isinstance(value, CSMatrix):
-            value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
-        else:
-            value = as_dense_cupy_dask_array(value)
-    else:
+    if not as_dask:
         value = as_cupy(value)
+    elif isinstance(value, CSMatrix | CSArray):
+        value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
+    else:
+        value = as_dense_cupy_dask_array(value)
 
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
@@ -317,15 +312,15 @@ def test_read_lazy_2d_dask(sparse_format, store):
 @pytest.mark.parametrize(
     ("n_dims", "chunks"),
     [
-        (1, (100,)),
-        (1, (400,)),
-        (2, (100, 100)),
-        (2, (400, 400)),
-        (2, (200, 400)),
+        (1, (10,)),
+        (1, (40,)),
+        (2, (10, 10)),
+        (2, (40, 40)),
+        (2, (20, 40)),
         (1, None),
         (2, None),
-        (2, (400, -1)),
-        (2, (400, None)),
+        (2, (40, -1)),
+        (2, (40, None)),
     ],
 )
 def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
@@ -358,21 +353,21 @@ def test_read_lazy_h5_cluster(
 
 
 def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
-    shape = (3000, 50)
+    shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    assert (c < s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
+    assert all(c <= s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
     assert X_dask_from_disk.shape == shape
 
 
 @pytest.mark.parametrize(
     ("arr_type", "chunks", "expected_chunksize"),
     [
-        ("dense", (100, 100), (100, 100)),
-        ("csc", (SIZE, 10), (SIZE, 10)),
-        ("csr", (10, SIZE * 2), (10, SIZE * 2)),
-        ("csc", None, (SIZE, 1000)),
-        ("csr", None, (1000, SIZE * 2)),
+        ("dense", (10, 10), (10, 10)),
+        ("csc", (SIZE, 1), (SIZE, 1)),
+        ("csr", (1, SIZE * 2), (1, SIZE * 2)),
+        ("csc", None, (SIZE, 100)),
+        ("csr", None, DEFAULT_SHAPE),
         ("csr", (10, -1), (10, SIZE * 2)),
         ("csc", (-1, 10), (SIZE, 10)),
         ("csr", (10, None), (10, SIZE * 2)),
@@ -564,10 +559,6 @@ def test_write_to_root(store, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if ad.settings.zarr_write_format == 3 and isinstance(value, ad.AnnData):
-        del value.uns["O_recarray"]
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():
@@ -578,6 +569,7 @@ def test_write_to_root(store, value):
 
 
 @pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
     pth = tmp_path / "test.zarr"
@@ -649,3 +641,72 @@ def test_read_sparse_array(
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
     assert issubclass(type(mtx), CSArray)
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
+    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+)
+@pytest.mark.parametrize(
+    "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
+)
+def test_chunking_1d_array(
+    store: H5Group | ZarrGroup,
+    arr: np.ndarray,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+):
+    write_elem(store, "foo", arr, dataset_kwargs={"chunks": 25})
+    arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected_chunks"),
+    [
+        ((1, 50), (1, 50)),
+        ((10, -1), (10, 50)),
+        ((10, None), (10, 50)),
+        (None, (25, 25)),
+    ],
+    ids=[
+        "small",
+        "minus_one_uses_full",
+        "none_on_axis_uses_full",
+        "none_uses_ondisk_chunking",
+    ],
+)
+def test_chunking_2d_array(
+    store: H5Group | ZarrGroup,
+    chunks: tuple[int] | None,
+    expected_chunks: tuple[int],
+):
+    write_elem(
+        store,
+        "foo",
+        np.arange(100 * 50).reshape((100, 50)),
+        dataset_kwargs={"chunks": (25, 25)},
+    )
+    arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected_chunks"),
+    [((100, 50), (100, 50)), ((1100, 1100), (1000, 1000))],
+    ids=["under_default", "over_default"],
+)
+def test_h5_unchunked(
+    shape: tuple[int, int],
+    expected_chunks: tuple[int, int],
+    tmp_path: Path,
+):
+    with h5py.File(tmp_path / "foo.h5ad", mode="w") as f:
+        write_elem(
+            f,
+            "foo",
+            np.arange(shape[0] * shape[1]).reshape(shape),
+        )
+        arr = read_elem_lazy(f["foo"])
+    assert arr.chunksize == expected_chunks

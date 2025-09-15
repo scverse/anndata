@@ -13,7 +13,7 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
-from .compat import old_positionals
+from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -333,7 +333,7 @@ class SettingsManager:
         raise AttributeError(msg)
 
     def __dir__(self) -> Iterable[str]:
-        return sorted((*dir(super()), *self._config.keys()))
+        return sorted((*super().__dir__(), *self._config.keys()))
 
     def reset(self, option: Iterable[str] | str) -> None:
         """
@@ -439,12 +439,15 @@ def validate_zarr_write_format(format: int):
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
+    if format == 3 and is_zarr_v2():
+        msg = "Cannot write v3 format against v2 package"
+        raise ValueError(msg)
 
 
 settings.register(
     "zarr_write_format",
     default_value=2,
-    description="Which version of zarr to write to.",
+    description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
         f"ANNDATA_{name.upper()}",
@@ -473,6 +476,14 @@ settings.register(
     description="Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location",
     validate=validate_int,
     get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "disallow_forward_slash_in_h5ad",
+    default_value=False,
+    description="Whether or not to disallow the `/` character in keys for h5ad files",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
 )
 
 

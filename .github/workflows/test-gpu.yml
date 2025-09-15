@@ -13,10 +13,6 @@ env:
   PYTEST_ADDOPTS: "-v --color=yes"
   FORCE_COLOR: "1"
 
-defaults:
-  run:
-    shell: bash -el {0}
-
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
@@ -32,7 +28,7 @@ jobs:
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
-    if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
+    if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: flying-sheep/check@v1
@@ -48,7 +44,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
         with:
           fetch-depth: 0
           filter: blob:none
@@ -66,28 +62,27 @@ jobs:
           max_version=$(echo "$classifiers" | sort -V | tail -1)
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          # https://github.com/cupy/cupy/issues/8651 cupy does not support python3.13 yet
-          python-version: "3.12"
-
       - name: Install UV
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          python-version: ${{ env.max_python_version }}
 
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test,cu12]" -c ci/constraints.txt
+        run: |
+          uv venv
+          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
 
       - name: Env list
-        run: pip list
+        run: uv pip list
 
       - name: Run test
-        run: coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
+        run: |
+          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage combine
+          uv run coverage xml
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

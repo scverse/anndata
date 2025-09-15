@@ -4,11 +4,13 @@ from types import MappingProxyType
 
 import numpy as np
 import zarr
+from dask.array.core import Array as DaskArray
 from scipy import sparse
 
 from anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs import write_elem
+from anndata.experimental import read_elem_lazy
 
 
 def make_alternating_mask(n):
@@ -37,27 +39,36 @@ class SparseCSRContiguousSlice:
             # (10_000, 500)
         ],
         _slices.keys(),
+        [True, False],
     )
-    param_names = ("shape", "slice")
+    param_names = ("shape", "slice", "use_dask")
 
-    def setup(self, shape: tuple[int, int], slice: str):
+    def setup(self, shape: tuple[int, int], slice: str, use_dask: bool):  # noqa: FBT001
         X = sparse.random(
             *shape, density=0.01, format="csr", random_state=np.random.default_rng(42)
         )
         self.slice = self._slices[slice]
         g = zarr.group()
         write_elem(g, "X", X)
-        self.x = sparse_dataset(g["X"])
+        self.x = read_elem_lazy(g["X"]) if use_dask else sparse_dataset(g["X"])
         self.adata = AnnData(self.x)
 
     def time_getitem(self, *_):
-        self.x[self.slice]
+        res = self.x[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
 
     def peakmem_getitem(self, *_):
-        self.x[self.slice]
+        res = self.x[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
 
     def time_getitem_adata(self, *_):
-        self.adata[self.slice]
+        res = self.adata[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
 
     def peakmem_getitem_adata(self, *_):
-        self.adata[self.slice]
+        res = self.adata[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()

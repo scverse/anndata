@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from functools import cache, partial, singledispatch
 from importlib.util import find_spec
 from types import EllipsisType
@@ -11,13 +11,15 @@ from warnings import warn
 import h5py
 import numpy as np
 import pandas as pd
-import scipy
+import scipy.sparse
+from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
     from typing import Any
+
 
 #############################
 # scipy sparse array comapt #
@@ -32,7 +34,26 @@ class Empty:
     pass
 
 
-Index1D = slice | int | str | np.int64 | np.ndarray | pd.Series
+Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
+# TODO: pd.Index[???]
+Index1D = (
+    # 0D index
+    int
+    | str
+    | np.int64
+    # normalized 1D idex
+    | Index1DNorm
+    # different containers for mask, obs/varnames, or numerical index
+    | Sequence[int]
+    | Sequence[str]
+    | Sequence[bool]
+    | pd.Series  # bool, int, str
+    | pd.Index
+    | NDArray[np.str_]
+    | np.matrix  # bool
+    | CSMatrix  # bool
+    | CSArray  # bool
+)
 IndexRest = Index1D | EllipsisType
 Index = (
     IndexRest
@@ -190,6 +211,13 @@ else:
 #############################
 
 
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(np.__version__) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)
+
+
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
     if default is Empty:
@@ -279,8 +307,12 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     """\
     Convert variable length strings to fixed length.
 
-    Currently a workaround for
-    https://github.com/zarr-developers/zarr-python/pull/422
+    Formerly a workaround for
+    https://github.com/zarr-developers/zarr-python/pull/422,
+    resolved in https://github.com/zarr-developers/zarr-python/pull/813.
+
+    But if we didn't do this conversion, we would have to use a special codec in v2
+    for objects and v3 doesn't support objects at all.  So we leave this function as-is.
     """
     new_dtype = []
     for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
@@ -404,10 +436,3 @@ def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
         return cat.map(str, na_action="ignore")
     else:
         return cat.map(str)
-
-
-NULLABLE_NUMPY_STRING_TYPE = (
-    np.dtype("O")
-    if Version(np.__version__) < Version("2")
-    else np.dtypes.StringDType(na_object=pd.NA)
-)

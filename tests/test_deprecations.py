@@ -134,3 +134,9 @@ def test_warn_on_deprecated__io_module():
         FutureWarning, match=r"Importing read_h5ad from `anndata._io` is deprecated"
     ):
         from anndata._io import read_h5ad  # noqa
+
+
+@pytest.mark.parametrize("name", ["obs", "var", "obsm", "varm", "uns"])
+def test_keys_function_warns(adata: AnnData, name) -> None:
+    with pytest.warns(FutureWarning, match=rf"{name}_keys is deprecated"):
+        getattr(adata, f"{name}_keys")()

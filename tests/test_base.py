@@ -515,10 +515,10 @@ def test_append_col():
 
 def test_delete_col():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
-    assert adata.obs_keys() == ["o1", "o2"]
+    assert adata.obs.columns.tolist() == ["o1", "o2"]
 
     del adata.obs["o1"]
-    assert adata.obs_keys() == ["o2"]
+    assert adata.obs.columns.tolist() == ["o2"]
     assert adata.obs["o2"].tolist() == [3, 4]
 
 
@@ -536,7 +536,7 @@ def test_multicol():
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
     # 'c' keeps the columns as should be
     adata.obsm["c"] = np.array([[0.0, 1.0], [2, 3]])
-    assert adata.obsm_keys() == ["c"]
+    assert adata.obsm.keys() == {"c"}
     assert adata.obsm["c"].tolist() == [[0.0, 1.0], [2, 3]]
 
 
@@ -767,4 +767,4 @@ def test_create_adata_from_single_axis_elem(
     assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
-    ad.tests.helpers.assert_equal(from_disk, in_memory)
+    assert_equal(from_disk, in_memory)
