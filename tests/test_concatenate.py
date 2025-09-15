@@ -957,9 +957,8 @@ def test_nan_merge(axis_name, join_type, array_type):
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
     adata_shape = (20, 10)
-    # TODO: https://github.com/scipy/scipy/issues/23382 for why we can't
-    # do this setting on the dask array directly, where inputs are converted
-    # to scipy-sparse arrays before setting as a result of
+    # TODO: Revert to https://github.com/scverse/anndata/blob/71fdf821919fc5ff3c864dc74c4432c370573984/tests/test_concatenate.py#L961-L970 after https://github.com/scipy/scipy/pull/23626.
+    # The need for this handling arose as a result of
     # https://github.com/dask/dask/pull/11755/files#diff-65211e64fa680da306e9612b92c60f557365507d46486325f0e7e04359bce64fR456-R459
     sparse_arr = sparse.random(adata_shape[alt_axis], 10, density=0.1, format="csr")
     sparse_arr_nan = sparse_arr.copy()
