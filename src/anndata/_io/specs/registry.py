@@ -241,12 +241,9 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
 def get_spec(
     elem: StorageType,
 ) -> IOSpec:
-    return proc_spec(
-        {
-            k: _read_attr(elem.attrs, k, "")
-            for k in ["encoding-type", "encoding-version"]
-        }
-    )
+    return proc_spec({
+        k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
+    })
 
 
 def _iter_patterns(

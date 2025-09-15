@@ -77,13 +77,11 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(
-                **{
-                    k: read_dispatched(v, callback)
-                    for k, v in dict(elem).items()
-                    if not k.startswith("raw.")
-                }
-            )
+            return AnnData(**{
+                k: read_dispatched(v, callback)
+                for k, v in dict(elem).items()
+                if not k.startswith("raw.")
+            })
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:

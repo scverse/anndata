@@ -278,9 +278,9 @@ def get_compressed_vectors(
     indptr_slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
-        as_np_indptr = np.concatenate(
-            [np.arange(s.start, s.stop) for s in indptr_slices]
-        )
+        as_np_indptr = np.concatenate([
+            np.arange(s.start, s.stop) for s in indptr_slices
+        ])
         data = x.data[as_np_indptr]
         indices = x.indices[as_np_indptr]
     else:
@@ -309,9 +309,9 @@ def get_compressed_vectors_for_slices(
     start_indptr = indptr_indices[0] - next(offsets)
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
-    end_indptr = np.concatenate(
-        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)]
-    )
+    end_indptr = np.concatenate([
+        s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)
+    ])
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
 
