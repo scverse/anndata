@@ -66,9 +66,10 @@ def test_access_count_subset(
     adata_remote_tall_skinny: AnnData,
 ):
     non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS)
-    remote_store_tall_skinny.initialize_key_trackers(
-        ["obs/cat/codes", *non_obs_elem_names]
-    )
+    remote_store_tall_skinny.initialize_key_trackers([
+        "obs/cat/codes",
+        *non_obs_elem_names,
+    ])
     adata_remote_tall_skinny[adata_remote_tall_skinny.obs["cat"] == "a", :]
     # all codes read in for subset (from 4 chunks as set in the fixture)
     remote_store_tall_skinny.assert_access_count("obs/cat/codes", 4)

@@ -177,6 +177,7 @@ markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve za
 src = [ "src" ]
 
 [tool.ruff.format]
+preview = true
 docstring-code-format = true
 
 [tool.ruff.lint]
