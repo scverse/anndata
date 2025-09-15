@@ -118,17 +118,15 @@ raw-options.version_scheme = "release-branch-semver"
 packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
-data_file = "test-data/coverage"
+data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 concurrency = [ "multiprocessing" ]
-parallel = "true"
-
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = [ "./src", "**/site-packages" ]
-
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:",
