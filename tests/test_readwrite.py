@@ -264,14 +264,8 @@ def test_maintain_layers(rw):
     assert not np.any((orig.layers["sparse"] != curr.layers["sparse"]).toarray())
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
-)
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
-    if typ is as_dense_jax_array:
-        pytest.xfail(
-            "Writing AnnData with JAX `X` to .h5ad is unsupported (h5py drops the array)."
-        )
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()

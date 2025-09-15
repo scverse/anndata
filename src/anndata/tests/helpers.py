@@ -398,9 +398,6 @@ def gen_adata(  # noqa: PLR0915, PLR0913
     # else:
     #     array_namespace = "numpy"  # fallback
 
-    # to intentionally break everything
-    # xp = jnp
-
     # actual code to get the array namespace
     try:
         xp = ARRAY_API_REGISTRY[array_namespace]()
@@ -710,40 +707,6 @@ def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     _assert_equal(a, b, exact, _elem_name=elem_name)
-
-
-@singledispatch
-# def _assert_equal(
-#     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
-# ):
-#     try:
-#         # handle *any* array API array (JAX, CuPy, …)
-#         # importing a helper function to see if a value is an Array API array like JAX, CuPy, etc.
-#         from array_api_compat.common._helpers import is_array_api_obj
-
-#         if is_array_api_obj(a) or is_array_api_obj(b):
-#             import numpy as np
-#             from pandas.api.types import is_numeric_dtype
-
-#             # convert both to numpy array. For comparing arrays, this is the most reliable way
-#             # TODO: check if this can be done better and if switched to jax, then to see if Cubed works
-#             a_np = np.asarray(a)
-#             b_np = np.asarray(b)
-#             if not exact and is_numeric_dtype(a_np) and is_numeric_dtype(b_np):
-#                 # shape match is required for numerical arrays
-#                 assert a_np.shape == b_np.shape, format_msg(elem_name)
-#                 np.testing.assert_allclose(
-#                     a_np, b_np, equal_nan=True, err_msg=format_msg(elem_name)
-#                 )
-#             else:
-#                 # tolerant comparison for non-numerical arrays
-#                 assert np.array_equal(a_np, b_np), format_msg(elem_name)
-#             return
-#     except ImportError:
-#         # fall back to existing detection/conversion if fails
-#         pass
-
-#     _assert_equal(a, b, _elem_name=elem_name)
 
 
 @assert_equal.register(CupyArray)

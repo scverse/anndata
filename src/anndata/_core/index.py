@@ -39,6 +39,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: Index1D, index: pd.Index
 ) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    # protect aroound weird numeric index
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
@@ -50,6 +51,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             i = index.get_loc(i)
         return i
 
+    # converting start and stop of the slide to the integer positions if they are strings
     if isinstance(indexer, slice):
         start = name_idx(indexer.start)
         stop = name_idx(indexer.stop)
@@ -65,6 +67,8 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     elif isinstance(
         indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
     ):
+        # convert to the 1D if it's accidentally 2D column/row vector
+        # convert sparse into dense arrays if needed
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
@@ -72,10 +76,12 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
+        # if it is something else, convert it to numpy
         if not isinstance(indexer, np.ndarray | pd.Index):
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
+        # if it is a float array or something along those lines, convert it to integers
         if isinstance(indexer, np.ndarray) and np.issubdtype(
             indexer.dtype, np.floating
         ):
@@ -107,10 +113,64 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     elif isinstance(indexer, XDataArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
-        return indexer.data
+        return indexer.dat
+
     elif has_xp(indexer):
-        msg = "Need to implement array api-based indexing"
-        raise NotImplementedError(msg)
+        # getting array's namespace
+        xp = indexer.__array_namespace__()
+
+        # Flatten to 1D
+        if hasattr(indexer, "shape") and (
+            indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0])
+        ):
+            indexer = xp.ravel(
+                indexer
+            )  # flattening to 1D, jax.numpy has it, not sure about cubed
+
+        # Get dtype in array-api-style
+        dtype = getattr(indexer, "dtype", None)
+
+        # if we have like a jax boolean mask array
+        if xp.issubdtype(dtype, xp.bool_):
+            if indexer.shape != index.shape:
+                msg = (
+                    f"Boolean index does not match AnnData’s shape along this dimension. "
+                    f"Boolean index has shape {indexer.shape}, expected {index.shape}"
+                )
+                raise IndexError(msg)
+            return indexer
+
+        # all good, you can return it
+        elif xp.issubdtype(dtype, xp.integer):
+            return indexer
+        # float number case
+        elif xp.issubdtype(dtype, xp.floating):
+            indexer_int = xp.astype(indexer, xp.int32)  # jax default to it
+            # If all floats were “safe” (like 0.0, 1.0, 2.0), return them cast to integers.
+            is_fractional = xp.not_equal(indexer, xp.astype(indexer_int, xp.floating))
+            if xp.any(is_fractional):
+                msg = f"Indexer {indexer!r} has non-integer floating point values."
+                raise IndexError(msg)
+            return indexer_int
+
+        else:
+            try:
+                values = indexer.tolist()  # converting to the list
+            except Exception:
+                msg = f"Could not convert {indexer!r} to list for string lookup."
+                raise IndexError(msg)
+            positions = index.get_indexer(values)
+            if np.any(positions < 0):
+                not_found = [
+                    v for v, p in zip(values, positions, strict=False) if p < 0
+                ]
+                msg = (
+                    f"Values {not_found}, from {values}, "
+                    "are not valid obs/ var names or indices."
+                )
+                raise KeyError(msg)
+            return positions
+
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
 

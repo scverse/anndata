@@ -627,19 +627,12 @@ def _dlpack_to_numpy(x):
 
 def _dlpack_from_numpy(x_np, original_xp):
     # TODO: cubed and other array later elif
-    print(x_np, original_xp)
     if hasattr(original_xp, "from_dlpack"):
         try:
             return original_xp.from_dlpack(x_np)
         except Exception as e:
             msg = f"Failed to call from_dlpack on backend {original_xp.__name__}: {e}"
             raise TypeError(msg) from e
-
-    # fallback for known backends that put it elsewhere (JAX and later others)
-    if original_xp.__name__.startswith("jax"):
-        import jax.dlpack
-
-        return jax.dlpack.from_dlpack(x_np)
 
     msg = f"DLPack back-conversion not implemented for backend {original_xp.__name__}"
     raise TypeError(msg)
@@ -1087,23 +1080,32 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             format="csr",
         )
         return mat
-    else:
-        # Use the backend of the first array as the reference
-        ref = arrays[0]
-        xp = get_namespace(ref)
 
-        # Convert all arrays to the same backend as `ref`
-        arrays = [ref] + [_same_backend(ref, x, copy=True)[1] for x in arrays[1:]]
+    elif all(hasattr(a, "__array_namespace__") for a in arrays):
+        # All arrays are array-api compatible
 
-        # Concatenate with the backend’s API
-        value = xp.concatenate(
+        # use first as a reference to check if all of the arrays are the same type
+        xp = get_namespace(arrays[0])
+
+        if not all(get_namespace(a) is xp or a.shape == 0 for a in arrays):
+            msg = "Cannot concatenate array-api arrays from different backends."
+            raise ValueError(msg)
+
+        return xp.concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
                 for f, x in zip(reindexers, arrays, strict=True)
             ],
             axis=axis,
         )
-        return value
+    else:
+        return np.concatenate(
+            [
+                f(x, fill_value=fill_value, axis=1 - axis)
+                for f, x in zip(reindexers, arrays, strict=True)
+            ],
+            axis=axis,
+        )
 
 
 def inner_concat_aligned_mapping(

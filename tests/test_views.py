@@ -903,22 +903,63 @@ def test_index_into_jax(index):
     assert_equal(adata[index], adata_as_jax[index])
 
 
-# @pytest.mark.parametrize("dim", ["obs", "var"])
-# @pytest.mark.parametrize(
-#     ("idx", "pat"),
-#     [
-#         pytest.param(
-#             [1, "cell_c"], r"Mixed type list indexers not supported", id="mixed"
-#         ),
-#         pytest.param(
-#             [[1, 2], [2]], r"setting an array element with a sequence", id="nested"
-#         ),
-#     ],
-# )
-# def test_subset_errors(dim, idx, pat):
-#     orig = gen_adata((10, 10))
-#     with pytest.raises(ValueError, match=pat):
-#         if dim == "obs":
-#             orig[idx, :].X
-#         elif dim == "var":
-#             orig[:, idx].X
+def test_normalize_index_jax_boolean():
+    import jax.numpy as jnp
+
+    index = pd.Index([f"cell_{i:02d}" for i in range(10)])
+    mask = jnp.array([True, False, True, False, True, False, True, False, True, False])
+    out = _normalize_index(mask, index)
+    assert out.shape == (10,)
+    assert out.dtype == jnp.bool_
+
+
+def test_normalize_index_jax_float_valid():
+    import jax.numpy as jnp
+
+    index = pd.Index([f"cell_{i:02d}" for i in range(10)])
+    idx = jnp.array([0.0, 2.0, 4.0])
+    out = _normalize_index(idx, index)
+    assert (out == jnp.array([0, 2, 4])).all()
+
+
+def test_normalize_index_jax_flatten_2d():
+    import jax.numpy as jnp
+
+    index = pd.Index([f"cell_{i}" for i in range(5)])
+
+    # column vector (5,1)
+    idx_col = jnp.array([[0], [1], [2], [3], [4]])
+    out_col = _normalize_index(idx_col, index)
+    assert out_col.shape == (5,)
+    assert isinstance(out_col, jnp.ndarray)
+    assert (out_col == jnp.array([0, 1, 2, 3, 4])).all()
+
+    # row vector (1,5)
+    idx_row = jnp.array([[0, 1, 2, 3, 4]])
+    out_row = _normalize_index(idx_row, index)
+    assert out_row.shape == (5,)
+    assert isinstance(out_row, jnp.ndarray)
+    assert (out_row == jnp.array([0, 1, 2, 3, 4])).all()
+
+
+def test_double_index_jax(subset_func, subset_func2):
+    import jax.numpy as jnp
+
+    # TODO: still failing
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), array_namespace="jax")
+    # Create JAX indexers
+    obs_subset = jnp.array([0, 2, 4, 6])
+    var_subset = jnp.array([1, 3, 5, 7])
+    # Single-step indexing
+    v1 = adata[obs_subset, var_subset]
+    # Two-step indexing
+    v2 = adata[obs_subset, :][:, var_subset]
+    # Compare data matrices
+    assert np.all(asarray(v1.X) == asarray(v2.X))
+    # Compare metadata (these are still pandas objects, so normal equality works)
+    assert np.all(v1.obs == v2.obs)
+    assert np.all(v1.var == v2.var)
+    # Check if AnnData still holds JAX-backed arrays
+    assert isinstance(v1.X, jnp.ndarray)
+    assert isinstance(v2.X, jnp.ndarray)
