@@ -447,7 +447,7 @@ def validate_zarr_write_format(format: int):
 settings.register(
     "zarr_write_format",
     default_value=2,
-    description="Which version of zarr to write to.",
+    description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
         f"ANNDATA_{name.upper()}",
@@ -476,6 +476,14 @@ settings.register(
     description="Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location",
     validate=validate_int,
     get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "disallow_forward_slash_in_h5ad",
+    default_value=False,
+    description="Whether or not to disallow the `/` character in keys for h5ad files",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
 )
 
 

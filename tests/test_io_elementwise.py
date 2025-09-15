@@ -206,14 +206,6 @@ def create_sparse_store(
     ],
 )
 def test_io_spec(store, value, encoding_type):
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if (
-        ad.settings.zarr_write_format == 3
-        and encoding_type == "anndata"
-        and "O_recarray" in value.uns
-    ):
-        del value.uns["O_recarray"]
     with ad.settings.override(allow_write_nullable_strings=True):
         key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
@@ -251,21 +243,24 @@ def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: 
 @pytest.mark.parametrize(
     ("value", "encoding_type"),
     [
-        (np.array([1, 2, 3]), "array"),
-        (np.arange(12).reshape(4, 3), "array"),
-        (sparse.random(5, 3, format="csr", density=0.5), "csr_matrix"),
-        (sparse.random(5, 3, format="csc", density=0.5), "csc_matrix"),
+        pytest.param(np.array([1, 2, 3]), "array", id="np-1d"),
+        pytest.param(np.arange(12).reshape(4, 3), "array", id="np-2d"),
+        pytest.param(
+            sparse.random(5, 3, format="csr", density=0.5), "csr_matrix", id="csr"
+        ),
+        pytest.param(
+            sparse.random(5, 3, format="csc", density=0.5), "csc_matrix", id="csc"
+        ),
     ],
 )
-@pytest.mark.parametrize("as_dask", [False, True])
+@pytest.mark.parametrize("as_dask", [False, True], ids=["local", "dask"])
 def test_io_spec_cupy(store, value, encoding_type, as_dask):
-    if as_dask:
-        if isinstance(value, CSMatrix):
-            value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
-        else:
-            value = as_dense_cupy_dask_array(value)
-    else:
+    if not as_dask:
         value = as_cupy(value)
+    elif isinstance(value, CSMatrix | CSArray):
+        value = as_cupy_sparse_dask_array(value, format=encoding_type[:3])
+    else:
+        value = as_dense_cupy_dask_array(value)
 
     key = f"key_for_{encoding_type}"
     write_elem(store, key, value, dataset_kwargs={})
@@ -564,10 +559,6 @@ def test_write_to_root(store, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
-    # zarr v3 can't write recarray
-    # https://github.com/zarr-developers/zarr-python/issues/2134
-    if ad.settings.zarr_write_format == 3 and isinstance(value, ad.AnnData):
-        del value.uns["O_recarray"]
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():

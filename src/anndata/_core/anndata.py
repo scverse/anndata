@@ -42,11 +42,7 @@ from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
-from .views import (
-    DictView,
-    _resolve_idxs,
-    as_view,
-)
+from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -56,7 +52,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import Index1D, XDataset
+    from ..compat import Index1D, Index1DNorm, XDataset
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
@@ -197,6 +193,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     _accessors: ClassVar[set[str]] = set()
 
+    # view attributes
+    _adata_ref: AnnData | None
+    _oidx: Index1DNorm | None
+    _vidx: Index1DNorm | None
+
     @old_positionals(
         "obsm",
         "varm",
@@ -226,8 +227,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         asview: bool = False,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1D | None = None,
-        vidx: Index1D | None = None,
+        oidx: Index1DNorm | int | np.integer | None = None,
+        vidx: Index1DNorm | int | np.integer | None = None,
     ):
         # check for any multi-indices that aren’t later checked in coerce_array
         for attr, key in [(obs, "obs"), (var, "var"), (X, "X")]:
@@ -237,6 +238,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(X, AnnData):
                 msg = "`X` has to be an AnnData object."
                 raise ValueError(msg)
+            assert oidx is not None
+            assert vidx is not None
             self._init_as_view(X, oidx, vidx)
         else:
             self._init_as_actual(
@@ -256,7 +259,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 filemode=filemode,
             )
 
-    def _init_as_view(self, adata_ref: AnnData, oidx: Index, vidx: Index):
+    def _init_as_view(
+        self,
+        adata_ref: AnnData,
+        oidx: Index1DNorm | int | np.integer,
+        vidx: Index1DNorm | int | np.integer,
+    ):
         if adata_ref.isbacked and adata_ref.is_view:
             msg = (
                 "Currently, you cannot index repeatedly into a backed AnnData, "
@@ -277,6 +285,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             vidx += adata_ref.n_vars * (vidx < 0)
             vidx = slice(vidx, vidx + 1, 1)
         if adata_ref.is_view:
+            assert adata_ref._adata_ref is not None
+            assert adata_ref._oidx is not None
+            assert adata_ref._vidx is not None
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
@@ -925,22 +936,27 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
+    @deprecated("obs (e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)")
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
 
+    @deprecated("var (e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)")
     def var_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`var`."""
         return self._var.keys().tolist()
 
+    @deprecated("obsm (e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)")
     def obsm_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obsm`."""
         return list(self.obsm.keys())
 
+    @deprecated("varm (e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)")
     def varm_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`varm`."""
         return list(self.varm.keys())
 
+    @deprecated("uns (e.g. `k in adata.uns` or `sorted(adata.uns)`)")
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
         return sorted(self._uns.keys())
@@ -1004,7 +1020,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         write_attribute(self.file._file, attr, value)
 
-    def _normalize_indices(self, index: Index | None) -> tuple[slice, slice]:
+    def _normalize_indices(
+        self, index: Index | None
+    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...
@@ -1890,8 +1908,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             compression_opts=compression_opts,
             as_dense=as_dense,
         )
-
-        if self.isbacked:
+        # Only reset the filename if the AnnData object now points to a complete new copy
+        if self.isbacked and not self.is_view:
             self.file.filename = filename
 
     write = write_h5ad  # a shortcut and backwards compat

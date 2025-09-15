@@ -30,8 +30,9 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     assert_equal,
     gen_adata,
+    single_int_subset,
     single_subset,
-    slice_subset,
+    slice_int_subset,
     subset_func,
 )
 from anndata.utils import asarray
@@ -70,31 +71,44 @@ class NDArraySubclass(np.ndarray):
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
     adata.varm["o"] = np.zeros((100, 50))
     return adata
 
 
+@pytest.fixture(scope="session")
+def adata_gen_session(matrix_type) -> ad.AnnData:
+    adata = gen_adata((30, 15), X_type=matrix_type)
+    adata.raw = adata.copy()
+    return adata
+
+
+@pytest.fixture
+def adata_gen(adata_gen_session: ad.AnnData) -> ad.AnnData:
+    return adata_gen_session.copy()
+
+
 @pytest.fixture(
     params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
+    scope="session",
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS, scope="session")
 def matrix_type_no_gpu(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS, scope="session")
 def matrix_type_base(request):
     return request.param
 
 
-@pytest.fixture(params=["layers", "obsm", "varm"])
+@pytest.fixture(params=["layers", "obsm", "varm"], scope="session")
 def mapping_name(request):
     return request.param
 
@@ -315,7 +329,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -343,7 +357,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -391,7 +405,7 @@ def test_set_subset_obsm(adata, subset_func):
     orig_obsm_val = adata.obsm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -414,7 +428,7 @@ def test_set_subset_varm(adata, subset_func):
     orig_varm_val = adata.varm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.var_names)
+        subset_idx = slice_int_subset(adata.var_names)
         if (adata[:, subset_idx]).shape[1] > 2:
             break
     subset = adata[:, subset_idx]
@@ -525,27 +539,31 @@ def test_layers_view():
     assert view_hash != joblib.hash(view_adata)
 
 
-# TODO: This can be flaky. Make that stop
-def test_view_of_view(matrix_type, subset_func, subset_func2):
-    adata = gen_adata((30, 15), X_type=matrix_type)
-    adata.raw = adata.copy()
-    if subset_func is single_subset:
+# TODO: less combinatoric; split up into 2 tests:
+# 1. each subset func produces the right `oidx`/`vidx` kind (slice, array[int], array[bool])
+# 2. each `oidx`/`vidx` kind can be sliced with each subset func
+# going from #subset_func² to #subset_func × 3 {ov}idx kinds × 2 tests
+def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
+    adata = adata_gen
+    if subset_func in {single_subset, single_int_subset}:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
     adata[:, var_s1].X  # noqa: B018
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
+
     assert var_view2._adata_ref is adata
     assert isinstance(var_view2.X, type(adata.X))
+
     obs_s1 = subset_func(adata.obs_names, min_size=4)
     obs_view1 = adata[obs_s1, :]
     obs_s2 = subset_func2(obs_view1.obs_names)
+
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
     assert isinstance(obs_view1.X, type(adata.X))
 
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
-
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
     assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)
