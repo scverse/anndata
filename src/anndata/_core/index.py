@@ -100,7 +100,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 )
                 raise IndexError(msg)
             return indexer
-        else:  # indexer should be string array
+        else:
             positions = index.get_indexer(indexer)
             if np.any(positions < 0):
                 not_found = indexer[positions < 0]

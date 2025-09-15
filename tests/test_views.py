@@ -945,21 +945,15 @@ def test_normalize_index_jax_flatten_2d():
 def test_double_index_jax(subset_func, subset_func2):
     import jax.numpy as jnp
 
-    # TODO: still failing
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), array_namespace="jax")
-    # Create JAX indexers
     obs_subset = jnp.array([0, 2, 4, 6])
     var_subset = jnp.array([1, 3, 5, 7])
-    # Single-step indexing
     v1 = adata[obs_subset, var_subset]
-    # Two-step indexing
     v2 = adata[obs_subset, :][:, var_subset]
-    # Compare data matrices
+
     assert np.all(asarray(v1.X) == asarray(v2.X))
-    # Compare metadata (these are still pandas objects, so normal equality works)
     assert np.all(v1.obs == v2.obs)
     assert np.all(v1.var == v2.var)
-    # Check if AnnData still holds JAX-backed arrays
     assert isinstance(v1.X, jnp.ndarray)
     assert isinstance(v2.X, jnp.ndarray)

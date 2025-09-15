@@ -6,6 +6,7 @@ from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from typing import TYPE_CHECKING, Literal
 
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
@@ -579,6 +580,20 @@ def _resolve_idx_slice(
         return _resolve_idx_slice_slice(old, new, l)
     else:
         return np.arange(*old.indices(l))[new]
+
+
+@_resolve_idx.register(jnp.ndarray)
+def _resolve_idx_jnp(
+    old: jnp.ndarray, new: Index1DNorm, l: Literal[0, 1]
+) -> jnp.ndarray:
+    # Boolean mask + index
+    if old.dtype == jnp.bool_:
+        old = jnp.where(old)[0]
+
+    if isinstance(new, slice):
+        new = jnp.arange(*new.indices(old.shape[0]))
+
+    return old[new]
 
 
 def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
