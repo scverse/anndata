@@ -218,7 +218,7 @@ def test_concat_interface_errors(use_xdataset):
         gen_adata((5, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset),
     ]
 
-    with pytest.raises(ValueError, match="`axis` must be.*0, 1, 'obs', or 'var'"):
+    with pytest.raises(ValueError, match=r"`axis` must be.*0, 1, 'obs', or 'var'"):
         concat(adatas, axis=3)
     with pytest.raises(ValueError, match="'inner' or 'outer'"):
         concat(adatas, join="not implemented")

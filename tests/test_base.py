@@ -508,7 +508,7 @@ def test_append_col():
     # adata.obs[['new2', 'new3']] = [['A', 'B'], ['c', 'd']]
 
     with pytest.raises(
-        ValueError, match="Length of values.*does not match length of index"
+        ValueError, match=r"Length of values.*does not match length of index"
     ):
         adata.obs["new4"] = ["far", "too", "long"]
 

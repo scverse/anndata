@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
-        Literal[None],
+        None,
         dict[str, Sequence[tuple[int, int]]],
     ]
 
