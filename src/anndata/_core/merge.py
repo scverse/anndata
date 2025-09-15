@@ -617,22 +617,9 @@ class Reindexer:
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
-            # See https://github.com/dask/dask/issues/12026 for the handling
-            # TODO: go back to only using the `else` branch here once the issue is closed.
-            import dask
-
-            if isinstance(sub_el._meta, CSArray | CSMatrix) and Version(
-                dask.__version__
-            ) > Version("2025.1.0"):
-                fill_shape = sub_el[make_slice(indexer == -1, axis, len(shape))].shape
-                if fill_value == 0:
-                    fill_mat = type(sub_el._meta)(fill_shape, dtype=sub_el.dtype)
-                else:
-                    fill_mat = np.full(fill_shape, fill_value=fill_value)
-                sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_mat
-
-            else:
-                sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
+            if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
+                fill_value = np.array([[fill_value]])
+            sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
         return sub_el
 
