@@ -44,8 +44,9 @@ jobs:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
         io_mark: ["zarr_io", "not zarr_io"]
-    env:  # environment variable for use in codecov’s env_vars tagging
+    env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
+      IO_MARK: ${{ matrix.io_mark }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -65,9 +66,11 @@ jobs:
         run: uvx hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
           uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
-          uvx hatch run ${{ matrix.env.name }}:coverage combine
+          uvx hatch run ${{ matrix.env.name }}:cov-combine
           uvx hatch run ${{ matrix.env.name }}:coverage xml
 
       - name: Upload test results
@@ -75,7 +78,7 @@ jobs:
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
+          env_vars: ENV_NAME,IO_MARK
           fail_ci_if_error: true
           file: test-data/test-results.xml
 
@@ -83,7 +86,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
+          env_vars: ENV_NAME,IO_MARK
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
