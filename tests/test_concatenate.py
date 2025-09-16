@@ -1394,17 +1394,6 @@ def test_concat_size_0_axis(axis_name, join_type, merge_strategy, shape):
         if shape[axis] == 0 and Version(pd.__version__) >= Version("2.1")
         else nullcontext()
     )
-
-    # only expect warning if the other axis (not the one we're joining along) is empty
-    # pandas warns about concat w/ all-NA entries on non-join axis (from what I remember)
-    # ctx_concat_empty = (
-    #     pytest.warns(
-    #         FutureWarning,
-    #         match=r"The behavior of DataFrame concatenation with empty or all-NA entries is deprecated",
-    #     )
-    #     if shape[1 - axis] == 0 and Version(pd.__version__) >= Version("2.1")
-    #     else nullcontext()
-    # )
     with ctx_concat_empty:
         result = concat(
             {"a": a, "b": b},
