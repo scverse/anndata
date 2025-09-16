@@ -190,9 +190,19 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         m[0, 0] = 100
     assert not subset.is_view
     # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626.
+    import dask
+
+    is_dask_with_broken_view_setting = (
+        "sparse_dask" in request.node.callspec.id
+        and Version(dask.__version__) >= Version("2025.02.0")
+    )
+    is_sparse_array_in_lower_dask_version = (
+        not is_dask_with_broken_view_setting
+        and "sparse_dask_array" in request.node.callspec.id
+    )
     with (
         pytest.raises(ValueError, match=r"shape mismatch")
-        if "sparse_dask" in request.node.callspec.id
+        if is_sparse_array_in_lower_dask_version or is_dask_with_broken_view_setting
         else nullcontext()
     ):
         assert getattr(subset, mapping_name)["m"][0, 0] == 100
