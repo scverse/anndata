@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from copy import deepcopy
 from operator import mul
 from typing import TYPE_CHECKING
@@ -170,9 +170,6 @@ def test_view_subset_shapes():
 
 
 def test_modify_view_component(matrix_type, mapping_name, request):
-    if "sparse_dask" in request.node.callspec.id:
-        msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
-        pytest.xfail(msg)
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
@@ -192,7 +189,13 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     with pytest.warns(ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"):
         m[0, 0] = 100
     assert not subset.is_view
-    assert getattr(subset, mapping_name)["m"][0, 0] == 100
+    # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626.
+    with (
+        pytest.raises(ValueError, match=r"shape mismatch")
+        if "sparse_dask" in request.node.callspec.id
+        else nullcontext()
+    ):
+        assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == hash_func(adata)
 
