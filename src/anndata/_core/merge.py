@@ -617,6 +617,7 @@ class Reindexer:
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
+            # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
             if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
                 fill_value = np.array([[fill_value]])
             sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
