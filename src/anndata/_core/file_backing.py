@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import h5py
 
-from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
+from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup, is_zarr_v2
 from .sparse_dataset import BaseCompressedSparseDataset
 from .xarray import Dataset2D
 
@@ -183,7 +183,12 @@ def _(x):
 @filename.register(ZarrArray)
 @filename.register(ZarrGroup)
 def _(x):
-    return x.store.path
+    # TODO: zarr v3 does not standardize this information.
+    # For example, FSSpecStore has path https://zarr.readthedocs.io/en/latest/api/zarr/storage/index.html#zarr.storage.FsspecStore.path
+    # but LocalStore has root https://zarr.readthedocs.io/en/latest/api/zarr/storage/index.html#zarr.storage.LocalStore.root
+    if is_zarr_v2() or hasattr(x.store, "path"):
+        return x.store.path
+    return str(x.store.root)
 
 
 @singledispatch
