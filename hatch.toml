@@ -1,9 +1,9 @@
 [envs.default]
 installer = "uv"
-features = ["dev"]
+features = [ "dev" ]
 
 [envs.docs]
-features = ["doc"]
+features = [ "doc" ]
 scripts.build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
@@ -14,21 +14,29 @@ scripts.build = "python3 ci/scripts/towncrier_automation.py {args}"
 scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
 
 [envs.hatch-test]
-default-args = []
-features = ["dev", "test"]
-extra-dependencies = ["ipykernel"]
+default-args = [  ]
+features = [ "dev", "test-min" ]
+extra-dependencies = [ "ipykernel" ]
 env-vars.UV_CONSTRAINT = "ci/constraints.txt"
 overrides.matrix.deps.env-vars = [
-    { if = ["pre"], key = "UV_PRERELEASE", value = "allow" },
-    { if = ["min"], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-deps.txt" },
+    { if = [ "pre" ], key = "UV_PRERELEASE", value = "allow" },
+    { if = [ "pre" ], key = "UV_CONSTRAINT", value = "ci/pre-deps.txt" },
+    { if = [ "min" ], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-deps.txt" },
 ]
 overrides.matrix.deps.pre-install-commands = [
-    { if = ["min"], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
+    { if = [ "min" ], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
+    # To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward
+    { if = [ "pre" ], value = "echo xarray @ git+https://github.com/pydata/xarray.git > ci/pre-deps.txt" },
+
 ]
 overrides.matrix.deps.python = [
-    { if = ["min"], value = "3.10" },
-    { if = ["stable", "pre"], value = "3.12" },
+    { if = [ "min" ], value = "3.11" },
+    { if = [ "stable", "pre" ], value = "3.13" },
 ]
+overrides.matrix.deps.features = [
+    { if = [ "stable", "pre" ], value = "test" },
+]
+overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
 
 [[envs.hatch-test.matrix]]
-deps = ["stable", "pre", "min"]
+deps = [ "stable", "pre", "min" ]

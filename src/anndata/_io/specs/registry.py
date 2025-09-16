@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -8,8 +9,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._types import Read, ReadDask, _ReadDaskInternal, _ReadInternal
-from anndata.compat import DaskArray, _read_attr
+from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -23,10 +24,14 @@ if TYPE_CHECKING:
         WriteCallback,
         _WriteInternal,
     )
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
+
+    from ..._core.xarray import Dataset2D
 
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
+    LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -78,8 +83,8 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadDaskInternal)
-R = TypeVar("R", Read, ReadDask)
+_R = TypeVar("_R", _ReadInternal, _ReadLazyInternal)
+R = TypeVar("R", Read, ReadLazy)
 
 
 class IORegistry(Generic[_R, R]):
@@ -204,14 +209,16 @@ class IORegistry(Generic[_R, R]):
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
                 return self.write_specs[typ_meta]
-        elif hasattr(elem, "dtype"):
-            if (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs:
-                return self.write_specs[typ_kind]
+        elif (
+            hasattr(elem, "dtype")
+            and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
+        ):
+            return self.write_specs[typ_kind]
         return self.write_specs[type(elem)]
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
-_LAZY_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
+_LAZY_REGISTRY: IORegistry[_ReadLazyInternal, ReadLazy] = IORegistry()
 
 
 @singledispatch
@@ -281,24 +288,35 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-class DaskReader(Reader):
+class LazyReader(Reader):
     @report_read_key_on_error
     def read_elem(
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
-    ) -> DaskArray:
+        **kwargs,
+    ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: ReadDask = self.registry.get_read(
+        read_func: ReadLazy = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
             warnings.warn(msg, stacklevel=2)
-        return read_func(elem, chunks=chunks)
+        read_params = inspect.signature(read_func).parameters
+        for kwarg in kwargs:
+            if kwarg not in read_params:
+                msg = (
+                    f"Keyword argument {kwarg} passed to read_elem_lazy are not supported by the "
+                    "registered read function."
+                )
+                raise ValueError(msg)
+        if "chunks" in read_params:
+            kwargs["chunks"] = chunks
+        return read_func(elem, **kwargs)
 
 
 class Writer:
@@ -331,17 +349,40 @@ class Writer:
 
         import h5py
 
+        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        if "/" in k.split(store.name)[-1][1:]:
+            msg = "Forward slashes are not allowed in keys."
+            raise ValueError(msg)
+
         if isinstance(store, h5py.File):
             store = store["/"]
 
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if not PurePosixPath(k).is_absolute():
+        if (
+            is_zarr_v2_store := (
+                (is_zarr_store := isinstance(store, ZarrGroup)) and is_zarr_v2()
+            )
+        ) or (isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()):
             k = str(PurePosixPath(store.name) / k)
+        is_consolidated = False
+        if is_zarr_v2_store:
+            from zarr.storage import ConsolidatedMetadataStore
 
+            is_consolidated = isinstance(store.store, ConsolidatedMetadataStore)
+        elif is_zarr_store:
+            is_consolidated = store.metadata.consolidated_metadata is not None
+        if is_consolidated:
+            msg = "Cannot overwrite/edit a store with consolidated metadata"
+            raise ValueError(msg)
         if k == "/":
-            store.clear()
+            if isinstance(store, ZarrGroup) and not is_zarr_v2():
+                from zarr.core.sync import sync
+
+                sync(store.store.clear())
+            else:
+                store.clear()
         elif k in store:
             del store[k]
 
@@ -374,9 +415,9 @@ def read_elem(elem: StorageType) -> RWAble:
     return Reader(_REGISTRY).read_elem(elem)
 
 
-def read_elem_as_dask(
-    elem: StorageType, chunks: tuple[int, ...] | None = None
-) -> DaskArray:
+def read_elem_lazy(
+    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+) -> LazyDataStructures:
     """
     Read an element from a store lazily.
 
@@ -388,7 +429,7 @@ def read_elem_as_dask(
     ----------
     elem
         The stored element.
-    chunks, optional
+    chunks
        length `n`, the same `n` as the size of the underlying array.
        Note that the minor axis dimension must match the shape for sparse.
        Defaults to `(1000, adata.shape[1])` for CSR sparse,
@@ -398,7 +439,7 @@ def read_elem_as_dask(
 
     Returns
     -------
-        DaskArray
+        A "lazy" elem
 
     Examples
     --------
@@ -420,18 +461,16 @@ def read_elem_as_dask(
     Reading a sparse matrix from a zarr store lazily, with custom chunk size and default:
 
     >>> g = zarr.open(zarr_path)
-    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"])
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"])
     >>> adata.X
     dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(1000, 32738), chunktype=scipy.csr_matrix>
-    >>> adata.X = ad.experimental.read_elem_as_dask(
-    ...     g["X"], chunks=(500, adata.shape[1])
-    ... )
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, adata.shape[1]))
     >>> adata.X
     dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(500, 32738), chunktype=scipy.csr_matrix>
 
     Reading a dense matrix from a zarr store lazily:
 
-    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
     >>> adata.layers["dense"]
     dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
 
@@ -444,17 +483,15 @@ def read_elem_as_dask(
     ...     obsm=ad.io.read_elem(g["obsm"]),
     ...     varm=ad.io.read_elem(g["varm"]),
     ... )
-    >>> adata.X = ad.experimental.read_elem_as_dask(
-    ...     g["X"], chunks=(500, adata.shape[1])
-    ... )
-    >>> adata.layers["dense"] = ad.experimental.read_elem_as_dask(g["layers/dense"])
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, adata.shape[1]))
+    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
 
     We also support using -1 and None as a chunk size to signify the reading the whole axis:
 
-    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, -1))
-    >>> adata.X = ad.experimental.read_elem_as_dask(g["X"], chunks=(500, None))
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, -1))
+    >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, None))
     """
-    return DaskReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks)
+    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
 
 def write_elem(

@@ -93,22 +93,6 @@ def gen_indexer(adata, dim, index_kind, ratio):
     return tuple(subset)
 
 
-def take_view(adata, *, dim, index_kind, ratio=0.5, nviews=100):
-    subset = gen_indexer(adata, dim, index_kind, ratio)
-    views = []
-    for i in range(nviews):
-        views.append(adata[subset])
-
-
-def take_repeated_view(adata, *, dim, index_kind, ratio=0.9, nviews=10):
-    v = adata
-    views = []
-    for i in range(nviews):
-        subset = gen_indexer(v, dim, index_kind, ratio)
-        v = v[subset]
-        views.append(v)
-
-
 def gen_adata(n_obs, n_var, attr_set):
     if "X-csr" in attr_set:
         X = sparse.random(n_obs, n_var, density=0.1, format="csr")

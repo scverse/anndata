@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -14,17 +14,31 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+import zarr.convenience
 from numba.core.errors import NumbaDeprecationWarning
-from scipy import sparse
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata.compat import DaskArray, SpArray, _read_attr
-from anndata.tests.helpers import as_dense_dask_array, assert_equal, gen_adata
+from anndata._io.zarr import open_write_group
+from anndata.compat import (
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    ZarrArray,
+    ZarrGroup,
+    _read_attr,
+    is_zarr_v2,
+)
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    as_dense_dask_array,
+    assert_equal,
+    gen_adata,
+)
 
 if TYPE_CHECKING:
-    from os import PathLike
+    from collections.abc import Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -69,6 +83,7 @@ uns_dict = dict(  # unstructured annotation
         f=np.int32(7),
         g=[1, np.float32(2.5)],
     ),
+    uns5=None,
 )
 
 
@@ -77,26 +92,27 @@ def dataset_kwargs(request):
     return request.param
 
 
-@pytest.fixture(params=["h5ad", "zarr"])
-def diskfmt(request):
-    return request.param
-
-
 @pytest.fixture
 def rw(backing_h5ad):
     M, N = 100, 101
-    orig = gen_adata((M, N))
+    orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
     curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
 
 
+@contextmanager
+def open_store(
+    path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> Generator[h5py.File | zarr.Group, None, None]:
+    f = zarr.open_group(path) if diskfmt == "zarr" else h5py.File(path, "r")
+    with f if isinstance(f, h5py.File) else nullcontext():
+        yield f
+
+
 @pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
 def dtype(request):
     return request.param
-
-
-diskfmt2 = diskfmt
 
 
 # ------------------------------------------------------------------------------
@@ -124,10 +140,26 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     assert_equal(adata2, adata1)
 
 
-needs_zarr = pytest.mark.skipif(not find_spec("zarr"), reason="Zarr is not installed")
+@pytest.mark.zarr_io
+def test_readwrite_roundtrip_async(tmp_path):
+    import asyncio
+
+    async def _do_test():
+        zarr_path = tmp_path / "first.zarr"
+
+        adata1 = ad.AnnData(
+            csr_matrix(X_list), obs=obs_dict, var=var_dict, uns=uns_dict
+        )
+        adata1.write_zarr(zarr_path)
+        adata2 = ad.read_zarr(zarr_path)
+
+        assert_equal(adata2, adata1)
+
+    # This test ensures our file i/o never calls `asyncio.run` internally
+    asyncio.run(_do_test())
 
 
-@pytest.mark.parametrize("storage", ["h5ad", pytest.param("zarr", marks=[needs_zarr])])
+@pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
@@ -141,7 +173,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
-        adata_src.write_zarr(tmp_path / "test_zarr_dir", chunks=True)
+        adata_src.write_zarr(tmp_path / "test_zarr_dir")
         adata = ad.read_zarr(tmp_path / "test_zarr_dir")
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
@@ -158,8 +190,8 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
-    if isinstance(adata_src.raw.X, SpArray):
-        assert isinstance(adata.raw.X, sparse.spmatrix)
+    if isinstance(adata_src.raw.X, CSArray):
+        assert isinstance(adata.raw.X, CSMatrix)
     else:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
@@ -241,7 +273,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
-    adata = gen_adata((M, N), X_type=typ)
+    adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)
@@ -255,7 +287,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
 @contextmanager
 def store_context(path: Path):
     if path.suffix == ".zarr":
-        store = zarr.open(path, "r+")
+        store = open_write_group(path, mode="r+")
     else:
         file = h5py.File(path, "r+")
         store = file["/"]
@@ -272,11 +304,22 @@ def store_context(path: Path):
     ],
 )
 def test_read_full_io_error(tmp_path, name, read, write):
-    adata = gen_adata((4, 3))
+    adata = gen_adata((4, 3), **GEN_ADATA_NO_XARRAY_ARGS)
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        store["obs"].attrs["encoding-type"] = "invalid"
+        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+            # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
+            # with re-opening without syncing attributes explicitly
+            # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
+            # See https://github.com/zarr-developers/zarr-python/pull/2870
+            store["obs"].update_attributes(
+                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
+            )
+            zarr.consolidate_metadata(store.store)
+        else:
+            store["obs"].attrs["encoding-type"] = "invalid"
+
     with pytest.raises(
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
@@ -300,7 +343,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
 def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     # https://github.com/scverse/anndata/issues/497
     pth = Path(tmp_path) / "adata.h5ad"
-    adata = gen_adata((10, 8))
+    adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     kwargs = {}
     if compression is not None:
         kwargs["compression"] = compression
@@ -311,14 +354,12 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     adata.write_h5ad(pth, **kwargs)
 
     def check_compressed(key, value):
-        if isinstance(value, h5py.Dataset) and value.shape != ():
-            if compression is not None and value.compression != compression:
-                not_compressed.append(key)
-            elif (
-                compression_opts is not None
-                and value.compression_opts != compression_opts
-            ):
-                not_compressed.append(key)
+        if not isinstance(value, h5py.Dataset) or value.shape == ():
+            return
+        if (compression is not None and value.compression != compression) or (
+            compression_opts is not None and value.compression_opts != compression_opts
+        ):
+            not_compressed.append(key)
 
     with h5py.File(pth) as f:
         f.visititems(check_compressed)
@@ -335,23 +376,49 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-def test_zarr_compression(tmp_path):
-    from numcodecs import Blosc
-
+@pytest.mark.parametrize("zarr_write_format", [2, 3])
+def test_zarr_compression(tmp_path, zarr_write_format):
+    if zarr_write_format == 3 and is_zarr_v2():
+        pytest.xfail("Cannot write zarr v3 format with v2 package")
+    ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
-    adata = gen_adata((10, 8))
-    compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
+    if zarr_write_format == 2 or is_zarr_v2():
+        from numcodecs import Blosc
+
+        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    else:
+        from zarr.codecs import BloscCodec
+
+        # Typesize is forced to be 1 so that the codecs always match on the roundtrip.
+        # Otherwise this value would vary depending on the datatype.
+        # See github.com/zarr-developers/numcodecs/pull/713 for a related issue/explanation.
+        # In practice, you would never want to set this parameter.
+        compressor = BloscCodec(
+            cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
+        )
     not_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
-    def check_compressed(key, value):
-        if isinstance(value, zarr.Array) and value.shape != ():
-            if value.compressor != compressor:
+    def check_compressed(value, key):
+        if not isinstance(value, ZarrArray) or value.shape == ():
+            return None
+        (read_compressor,) = value.compressors
+        if zarr_write_format == 2:
+            if read_compressor != compressor:
                 not_compressed.append(key)
+            return None
+        if read_compressor.to_dict() != compressor.to_dict():
+            not_compressed.append(key)
 
-    with zarr.open(str(pth), "r") as f:
-        f.visititems(check_compressed)
+    if is_zarr_v2():
+        with zarr.open(pth, "r") as f:
+            f.visititems(check_compressed)
+    else:
+        f = zarr.open(pth, mode="r")
+        for key, value in f.members(max_depth=None):
+            check_compressed(value, key)
 
     if not_compressed:
         sep = "\n\t"
@@ -368,7 +435,7 @@ def test_zarr_compression(tmp_path):
 def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
-    orig = gen_adata((10, 10))
+    orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.obs_names.name = "obs"
     orig.var_names.name = "var"
     modified = orig.copy()
@@ -517,7 +584,7 @@ def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
-    def md5_path(pth: PathLike) -> bytes:
+    def md5_path(pth: Path) -> bytes:
         checksum = hashlib.md5()
         with pth.open("rb") as f:
             while True:
@@ -584,20 +651,26 @@ def test_read_umi_tools():
     assert set(adata.obs_names) == {"ACAAGG", "TTCACG"}
 
 
-def test_write_categorical(tmp_path, diskfmt):
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-    orig = ad.AnnData(
-        obs=pd.DataFrame(
-            dict(
-                cat1=["a", "a", "b", np.nan, np.nan],
-                cat2=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            )
-        ),
-    )
-    getattr(orig, f"write_{diskfmt}")(adata_pth)
-    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
-    assert np.all(orig.obs.notna() == curr.obs.notna())
-    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+@pytest.mark.parametrize("s2c", [True, False], ids=["str2cat", "preserve"])
+def test_write_categorical(
+    *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
+) -> None:
+    with ad.settings.override(allow_write_nullable_strings=True):
+        adata_pth = tmp_path / f"adata.{diskfmt}"
+        obs = dict(
+            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+        )
+        orig = ad.AnnData(obs=pd.DataFrame(obs))
+        getattr(orig, f"write_{diskfmt}")(
+            adata_pth, convert_strings_to_categoricals=s2c
+        )
+        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+        assert np.all(orig.obs.notna() == curr.obs.notna())
+        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+        assert curr.obs["str"].dtype == ("category" if s2c else "string")
+        assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -694,17 +767,30 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
         assert_equal(teststring, _read_attr(attrs, "string"))
 
 
+@pytest.mark.zarr_io
 def test_zarr_chunk_X(tmp_path):
     import zarr
 
     zarr_pth = Path(tmp_path) / "test.zarr"
-    adata = gen_adata((100, 100), X_type=np.array)
+    adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
-    z = zarr.open(str(zarr_pth))  # As of v2.3.2 zarr won’t take a Path
+    z = zarr.open(zarr_pth)
     assert z["X"].chunks == (10, 10)
     from_zarr = ad.read_zarr(zarr_pth)
     assert_equal(from_zarr, adata)
+
+
+def test_write_x_none(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
+    adata = ad.AnnData(shape=(10, 10), obs={"a": np.ones(10)}, var={"b": np.ones(10)})
+    p = tmp_path / f"adata.{diskfmt}"
+    write = getattr(adata, f"write_{diskfmt}")
+
+    write(p)
+    with open_store(p, diskfmt) as f:
+        root_keys = list(f.keys())
+
+    assert "X" not in root_keys
 
 
 ################################
@@ -775,7 +861,10 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
         import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+    with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
+        warnings.filterwarnings(
+            "ignore", r".*first_column_names.*no longer positional", FutureWarning
+        )
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
     # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
@@ -821,13 +910,13 @@ def test_backwards_compat_zarr():
 def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     pth = tmp_path / f"adatas_in_uns.{diskfmt}"
 
-    orig = gen_adata((4, 5))
+    orig = gen_adata((4, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"] = {
-        "a": gen_adata((1, 2)),
-        "b": gen_adata((12, 8)),
+        "a": gen_adata((1, 2), **GEN_ADATA_NO_XARRAY_ARGS),
+        "b": gen_adata((2, 3), **GEN_ADATA_NO_XARRAY_ARGS),
     }
-    another_one = gen_adata((2, 5))
-    another_one.raw = gen_adata((2, 7))
+    another_one = gen_adata((2, 5), **GEN_ADATA_NO_XARRAY_ARGS)
+    another_one.raw = gen_adata((2, 7), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"]["b"].uns["another_one"] = another_one
 
     curr = roundtrip(orig, pth)
@@ -873,3 +962,61 @@ def test_h5py_attr_limit(tmp_path):
         np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
     )
     a.write(tmp_path / "tmp.h5ad")
+
+
+@pytest.mark.parametrize(
+    "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
+)
+def test_forward_slash_key(elem_key, tmp_path):
+    a = ad.AnnData(np.ones((10, 10)))
+    getattr(a, elem_key)["bad/key"] = np.ones(
+        (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    with pytest.raises(ValueError, match="Forward slashes"):
+        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
+
+
+@pytest.mark.skipif(
+    find_spec("xarray"),
+    reason="Xarray is installed so `read_{elem_}lazy` will not error",
+)
+@pytest.mark.parametrize(
+    "func", [ad.experimental.read_lazy, ad.experimental.read_elem_lazy]
+)
+def test_read_lazy_import_error(func, tmp_path):
+    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
+    with pytest.raises(ImportError, match="xarray"):
+        func(
+            zarr.open(
+                tmp_path if func is ad.experimental.read_lazy else tmp_path / "obs"
+            )
+        )
+
+
+@pytest.mark.zarr_io
+def test_write_elem_consolidated(tmp_path: Path):
+    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
+    g = (
+        zarr.convenience.open_consolidated(tmp_path)
+        if is_zarr_v2()
+        else zarr.open(tmp_path)
+    )
+    with pytest.raises(
+        ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
+    ):
+        ad.io.write_elem(g["obs"], "foo", np.arange(10))
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
+def test_write_elem_version_mismatch(tmp_path: Path):
+    zarr_path = tmp_path / "foo.zarr"
+    adata = ad.AnnData(np.ones((10, 10)))
+    g = zarr.open_group(
+        zarr_path,
+        mode="w",
+        zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
+    )
+    ad.io.write_elem(g, "/", adata)
+    adata_roundtripped = ad.read_zarr(g)
+    assert_equal(adata_roundtripped, adata)

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import importlib
 import os
 import re
+import types
 from enum import Enum
+from pathlib import Path
 
 import pytest
 
+import anndata as ad
 from anndata._settings import (
     SettingsManager,
     check_and_get_bool,
@@ -37,9 +41,25 @@ def validate_int_list(val) -> bool:
 @pytest.fixture
 def settings() -> SettingsManager:
     settings = SettingsManager()
-    settings.register(option, default_val, description, validate_bool)
-    settings.register(option_2, default_val_2, description_2, validate_bool)
-    settings.register(option_3, default_val_3, description_3, validate_int_list, type_3)
+    settings.register(
+        option,
+        default_value=default_val,
+        description=description,
+        validate=validate_bool,
+    )
+    settings.register(
+        option_2,
+        default_value=default_val_2,
+        description=description_2,
+        validate=validate_bool,
+    )
+    settings.register(
+        option_3,
+        default_value=default_val_3,
+        description=description_3,
+        validate=validate_int_list,
+        option_type=type_3,
+    )
     return settings
 
 
@@ -57,9 +77,9 @@ def test_register_with_env(settings: SettingsManager, monkeypatch: pytest.Monkey
 
     settings.register(
         option_env,
-        default_val_env,
-        description_env,
-        validate_bool,
+        default_value=default_val_env,
+        description=description_env,
+        validate=validate_bool,
         get_from_env=check_and_get_bool,
     )
 
@@ -86,9 +106,9 @@ def test_register_with_env_enum(
 
     settings.register(
         option_env,
-        default_val_env,
-        description_env,
-        validate_bool,
+        default_value=default_val_env,
+        description=description_env,
+        validate=validate_bool,
         get_from_env=check_and_get_bool_enum,
     )
 
@@ -99,10 +119,10 @@ def test_register_bad_option(settings: SettingsManager):
     with pytest.raises(TypeError, match=r"'foo' is not a valid int list"):
         settings.register(
             "test_var_4",
-            "foo",  # should be a list of ints
-            description_3,
-            validate_int_list,
-            type_3,
+            default_value="foo",  # should be a list of ints
+            description=description_3,
+            validate=validate_int_list,
+            option_type=type_3,
         )
 
 
@@ -158,7 +178,7 @@ def test_deprecation(settings: SettingsManager):
     )
     assert described_option.endswith(warning)
     with pytest.warns(
-        DeprecationWarning,
+        FutureWarning,
         match=r"'test_var' will be removed in 0\.1\.0\. This is a deprecation warning!",
     ):
         assert getattr(settings, option) == default_val
@@ -246,14 +266,16 @@ def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
-def test_use_sparse_array_on_read():
-    import anndata as ad
-
-    if not ad.compat.CAN_USE_SPARSE_ARRAY:
-        with pytest.raises(
-            ValueError,
-            match=r"scipy.sparse.cs{r,c}array is not available in current scipy version",
-        ):
-            ad.settings.use_sparse_array_on_read = True
-    else:
-        ad.settings.use_sparse_array_on_read = True
+def test_hints():
+    settings = ad.settings
+    types_loader = importlib.machinery.SourceFileLoader(
+        "settings_types",
+        Path(ad.__file__).parent / "_settings.pyi",
+    )
+    settings_types_mod = types.ModuleType(types_loader.name)
+    types_loader.exec_module(settings_types_mod)
+    for settings_key in dir(settings):
+        if not settings_key.startswith("_"):
+            assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
+    for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
+        assert hasattr(settings, settings_key)

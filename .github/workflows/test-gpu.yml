@@ -9,6 +9,10 @@ on:
       - opened
       - synchronize
 
+env:
+  PYTEST_ADDOPTS: "-v --color=yes"
+  FORCE_COLOR: "1"
+
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
@@ -24,7 +28,7 @@ jobs:
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
-    if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
+    if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: flying-sheep/check@v1
@@ -39,14 +43,11 @@ jobs:
     # At time of writing, a typical run takes about 5 minutes
     timeout-minutes: 30
 
-    defaults:
-      run:
-        shell: bash -el {0}
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
@@ -61,30 +62,28 @@ jobs:
           max_version=$(echo "$classifiers" | sort -V | tail -1)
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
         with:
+          enable-cache: true
           python-version: ${{ env.max_python_version }}
 
-      - name: Install UV
-        uses: hynek/setup-cached-uv@v2
-        with:
-          cache-dependency-path: pyproject.toml
-
       - name: Install AnnData
-        run: uv pip install --system -e ".[dev,test,cu12]" -c ci/constraints.txt
+        run: |
+          uv venv
+          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
 
       - name: Env list
-        run: pip list
+        run: uv pip list
 
       - name: Run test
-        run: pytest -m gpu --cov --cov-report=xml --cov-context=test
+        run: uv run coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          verbose: true
+          files: test-data/coverage.xml
 
       - name: Remove 'run-gpu-ci' Label
         if: always()

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 import shutil
 from collections.abc import Mapping
 from functools import singledispatch
+from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -68,7 +68,7 @@ def _gen_slice_to_append(
     axis=0,
     fill_value=None,
 ):
-    for ds, ri in zip(datasets, reindexers):
+    for ds, ri in zip(datasets, reindexers, strict=False):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
@@ -100,27 +100,34 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *args, **kwargs) -> ZarrGroup | H5Group:
+def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
 
-@as_group.register(os.PathLike)
+@as_group.register(PathLike)
 @as_group.register(str)
-def _(store: os.PathLike | str, *args, **kwargs) -> ZarrGroup | H5Group:
+def _(store: PathLike[str] | str, *, mode: str) -> ZarrGroup | H5Group:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, *args, **kwargs)
-    import zarr
+        return h5py.File(store, mode=mode)
 
-    return zarr.open_group(store, *args, **kwargs)
+    if mode == "r":  # others all write: r+, a, w, w-
+        import zarr
+
+        return zarr.open_group(store, mode=mode)
+
+    from anndata._io.zarr import open_write_group
+
+    return open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *args, **kwargs):
+def _(store, *, mode: str) -> ZarrGroup | H5Group:
+    del mode
     return store
 
 
@@ -143,7 +150,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in elem.items()}
+            return {k: read_as_backed(v) for k, v in dict(elem).items()}
         else:
             return func(elem)
 
@@ -160,12 +167,12 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
-def write_concat_dense(
+def write_concat_dense(  # noqa: PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer = None,
+    reindexers: Reindexer | None = None,
     fill_value=None,
 ):
     """
@@ -181,7 +188,7 @@ def write_concat_dense(
     res = da.concatenate(
         [
             ri(a, axis=1 - axis, fill_value=fill_value)
-            for a, ri in zip(darrays, reindexers)
+            for a, ri in zip(darrays, reindexers, strict=False)
         ],
         axis=axis,
     )
@@ -191,13 +198,13 @@ def write_concat_dense(
     )
 
 
-def write_concat_sparse(
+def write_concat_sparse(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer = None,
+    reindexers: Reindexer | None = None,
     fill_value=None,
 ):
     """
@@ -221,7 +228,7 @@ def write_concat_sparse(
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(len(d.group["indices"]) for d in datasets)
+    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(
@@ -237,7 +244,7 @@ def write_concat_sparse(
         del temp_elem
 
 
-def _write_concat_mappings(
+def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings,
     output_group: ZarrGroup | H5Group,
     keys,
@@ -272,7 +279,7 @@ def _write_concat_mappings(
         )
 
 
-def _write_concat_arrays(
+def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group,
     output_path,
@@ -316,7 +323,7 @@ def _write_concat_arrays(
         )
 
 
-def _write_concat_sequence(
+def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group,
     output_path,
@@ -388,7 +395,7 @@ def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
     write_elem(output_group, alt_axis_name, alt_annot)
 
 
-def _write_axis_annot(
+def _write_axis_annot(  # noqa: PLR0917
     groups, output_group, axis_name, concat_indices, label, label_col, join
 ):
     concat_annot = pd.concat(
@@ -407,9 +414,9 @@ def _write_uns(groups, output_group, merge):
     write_elem(output_group, "uns", uns)
 
 
-def concat_on_disk(
-    in_files: Collection[str | os.PathLike] | Mapping[str, str | os.PathLike],
-    out_file: str | os.PathLike,
+def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
+    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
+    out_file: PathLike[str] | str,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -515,10 +522,7 @@ def concat_on_disk(
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     with httpx.stream('GET', file_url) as r, out_path.open('wb') as f:
-    ...         r.raise_for_status()
-    ...         for data in r.iter_bytes():
-    ...             f.write(data)
+    ...     out_path.write_bytes(httpx.get(file_url).content)
     ...     return out_path
     >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
     >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
@@ -579,7 +583,7 @@ def concat_on_disk(
     _, alt_axis_name = _resolve_axis(1 - axis)
 
     output_group = as_group(out_file, mode="w")
-    groups = [as_group(f) for f in in_files]
+    groups = [as_group(f, mode="r") for f in in_files]
 
     use_reindexing = False
 

@@ -4,29 +4,32 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
 
-from .compat import (
-    H5Array,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-)
-from .typing import RWAble
+from . import typing
+from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from ._io.specs.registry import DaskReader, IOSpec, Reader, Writer
-    from .compat import DaskArray
+    from anndata._core.xarray import Dataset2D
+
+    from ._io.specs.registry import (
+        IOSpec,
+        LazyDataStructures,
+        LazyReader,
+        Reader,
+        Writer,
+    )
+
 
 __all__ = [
     "ArrayStorageType",
     "GroupStorageType",
     "StorageType",
     "_ReadInternal",
-    "_ReadDaskInternal",
+    "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
@@ -35,26 +38,34 @@ GroupStorageType: TypeAlias = ZarrGroup | H5Group
 StorageType: TypeAlias = ArrayStorageType | GroupStorageType
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
-ContravariantRWAble = TypeVar("ContravariantRWAble", bound=RWAble, contravariant=True)
-CovariantRWAble = TypeVar("CovariantRWAble", bound=RWAble, covariant=True)
-InvariantRWAble = TypeVar("InvariantRWAble", bound=RWAble)
+RWAble_contra = TypeVar("RWAble_contra", bound=typing.RWAble, contravariant=True)
+RWAble_co = TypeVar("RWAble_co", bound=typing.RWAble, covariant=True)
+RWAble = TypeVar("RWAble", bound=typing.RWAble)
 
-SCo = TypeVar("SCo", covariant=True, bound=StorageType)
-SCon = TypeVar("SCon", contravariant=True, bound=StorageType)
-
-
-class _ReadInternal(Protocol[SCon, CovariantRWAble]):
-    def __call__(self, elem: SCon, *, _reader: Reader) -> CovariantRWAble: ...
+S_co = TypeVar("S_co", covariant=True, bound=StorageType)
+S_contra = TypeVar("S_contra", contravariant=True, bound=StorageType)
 
 
-class _ReadDaskInternal(Protocol[SCon]):
+class Dataset2DIlocIndexer(Protocol):
+    def __getitem__(self, idx: Any) -> Dataset2D: ...
+
+
+class _ReadInternal(Protocol[S_contra, RWAble_co]):
+    def __call__(self, elem: S_contra, *, _reader: Reader) -> RWAble_co: ...
+
+
+class _ReadLazyInternal(Protocol[S_contra]):
     def __call__(
-        self, elem: SCon, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray: ...
+        self,
+        elem: S_contra,
+        *,
+        _reader: LazyReader,
+        chunks: tuple[int, ...] | None = None,
+    ) -> LazyDataStructures: ...
 
 
-class Read(Protocol[SCon, CovariantRWAble]):
-    def __call__(self, elem: SCon) -> CovariantRWAble:
+class Read(Protocol[S_contra, RWAble_co]):
+    def __call__(self, elem: S_contra) -> RWAble_co:
         """Low-level reading function for an element.
 
         Parameters
@@ -63,16 +74,16 @@ class Read(Protocol[SCon, CovariantRWAble]):
             The element to read from.
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 
 
-class ReadDask(Protocol[SCon]):
+class ReadLazy(Protocol[S_contra]):
     def __call__(
-        self, elem: SCon, *, chunks: tuple[int, ...] | None = None
-    ) -> DaskArray:
-        """Low-level reading function for a dask element.
+        self, elem: S_contra, *, chunks: tuple[int, ...] | None = None
+    ) -> LazyDataStructures:
+        """Low-level reading function for a lazy element.
 
         Parameters
         ----------
@@ -82,29 +93,29 @@ class ReadDask(Protocol[SCon]):
             The chunk size to be used.
         Returns
         -------
-            The dask element read from the store.
+        The lazy element read from the store.
         """
         ...
 
 
-class _WriteInternal(Protocol[ContravariantRWAble]):
+class _WriteInternal(Protocol[RWAble_contra]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantRWAble,
+        v: RWAble_contra,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None: ...
 
 
-class Write(Protocol[ContravariantRWAble]):
+class Write(Protocol[RWAble_contra]):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: ContravariantRWAble,
+        v: RWAble_contra,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
@@ -124,16 +135,16 @@ class Write(Protocol[ContravariantRWAble]):
         ...
 
 
-class ReadCallback(Protocol[SCo, InvariantRWAble]):
+class ReadCallback(Protocol[S_co, RWAble]):
     def __call__(
         self,
         /,
-        read_func: Read[SCo, InvariantRWAble],
+        read_func: Read[S_co, RWAble],
         elem_name: str,
         elem: StorageType,
         *,
         iospec: IOSpec,
-    ) -> InvariantRWAble:
+    ) -> RWAble:
         """
         Callback used in :func:`anndata.experimental.read_dispatched` to customize reading an element from a store.
 
@@ -150,19 +161,19 @@ class ReadCallback(Protocol[SCo, InvariantRWAble]):
 
         Returns
         -------
-            The element read from the store.
+        The element read from the store.
         """
         ...
 
 
-class WriteCallback(Protocol[InvariantRWAble]):
+class WriteCallback(Protocol[RWAble]):
     def __call__(
         self,
         /,
-        write_func: Write[InvariantRWAble],
+        write_func: Write[RWAble],
         store: StorageType,
         elem_name: str,
-        elem: InvariantRWAble,
+        elem: RWAble,
         *,
         iospec: IOSpec,
         dataset_kwargs: Mapping[str, Any],
@@ -186,3 +197,19 @@ class WriteCallback(Protocol[InvariantRWAble]):
             Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
         """
         ...
+
+
+AnnDataElem = Literal[
+    "obs",
+    "var",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "X",
+    "raw",
+    "uns",
+]
+
+Join_T = Literal["inner", "outer"]

@@ -10,9 +10,10 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import SpArray
+from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
+    GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
@@ -85,6 +86,8 @@ def as_dense(request):
 # -------------------------------------------------------------------------------
 
 
+# h5py internally calls `product` on min-versions
+@pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
 def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
@@ -105,7 +108,7 @@ def test_read_write_X(tmp_path, mtx_format, backed_mode, as_dense):
 
 # this is very similar to the views test
 @pytest.mark.filterwarnings("ignore::anndata.ImplicitModificationWarning")
-def test_backing(adata, tmp_path, backing_h5ad):
+def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     assert not adata.isbacked
 
     adata.filename = backing_h5ad
@@ -194,14 +197,14 @@ def test_backed_raw(tmp_path):
 def test_backed_raw_subset(tmp_path, array_type, subset_func, subset_func2):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), X_type=array_type)
+    mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
     if (
         array_type is asarray
-        and isinstance(obs_idx, list | np.ndarray | sparse.spmatrix | SpArray)
-        and isinstance(var_idx, list | np.ndarray | sparse.spmatrix | SpArray)
+        and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
+        and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
     ):
         pytest.xfail(
             "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
@@ -313,13 +316,16 @@ def test_backed_modification_sparse(adata, backing_h5ad, sparse_format):
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    with pytest.warns(
-        PendingDeprecationWarning, match=r"__setitem__ will likely be removed"
-    ):
+    pat = r"__setitem__ for backed sparse will be removed"
+    with pytest.warns(FutureWarning, match=pat):
         adata.X[0, [0, 2]] = 10
+    with pytest.warns(FutureWarning, match=pat):
         adata.X[1, [0, 2]] = [11, 12]
-        with pytest.raises(ValueError, match=r"cannot change the sparsity structure"):
-            adata.X[2, 1] = 13
+    with (
+        pytest.warns(FutureWarning, match=pat),
+        pytest.raises(ValueError, match=r"cannot change the sparsity structure"),
+    ):
+        adata.X[2, 1] = 13
 
     assert adata.isbacked
 

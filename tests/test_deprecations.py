@@ -14,7 +14,7 @@ import pytest
 from scipy import sparse
 
 import anndata.experimental
-from anndata import AnnData, read
+from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
 
@@ -33,13 +33,13 @@ def adata():
 
 
 def test_get_obsvar_array_warn(adata):
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_obs_array("a")
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         adata._get_var_array("s1")
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_get_obsvar_array(adata):
     assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
     assert np.allclose(
@@ -90,10 +90,10 @@ def test_dtype_warning():
     assert b.X.dtype == np.float64
 
     # Should warn, should copy
+    c_X = np.ones((3, 3), dtype=np.float32)
     with pytest.warns(FutureWarning):
-        c_X = np.ones((3, 3), dtype=np.float32)
         c = AnnData(c_X, dtype=np.float64)
-        assert not record
+    assert not record
     assert c_X is not c.X
     assert c.X.dtype == np.float64
 
@@ -104,27 +104,16 @@ def test_deprecated_write_attribute(tmp_path):
     from anndata._io.utils import read_attribute, write_attribute
     from anndata.io import read_elem
 
-    with h5py.File(pth, "w") as f:
-        with pytest.warns(DeprecationWarning, match=r"write_elem"):
-            write_attribute(f, "written_attribute", A)
+    with h5py.File(pth, "w") as f, pytest.warns(FutureWarning, match=r"write_elem"):
+        write_attribute(f, "written_attribute", A)
 
     with h5py.File(pth, "r") as f:
         elem_A = read_elem(f["written_attribute"])
-        with pytest.warns(DeprecationWarning, match=r"read_elem"):
+        with pytest.warns(FutureWarning, match=r"read_elem"):
             attribute_A = read_attribute(f["written_attribute"])
 
         assert_equal(elem_A, attribute_A)
         assert_equal(A, attribute_A)
-
-
-def test_deprecated_read(tmp_path):
-    memory = AnnData(np.random.randn(20, 10))
-    memory.write_h5ad(tmp_path / "file.h5ad")
-
-    with pytest.warns(FutureWarning, match=r"`anndata.read` is deprecated"):
-        from_disk = read(tmp_path / "file.h5ad")
-
-    assert_equal(memory, from_disk)
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CAN_USE_SPARSE_ARRAY, CupyCSCMatrix, DaskArray
+from anndata.compat import CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -30,8 +30,9 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     assert_equal,
     gen_adata,
+    single_int_subset,
     single_subset,
-    slice_subset,
+    slice_int_subset,
     subset_func,
 )
 from anndata.utils import asarray
@@ -70,31 +71,44 @@ class NDArraySubclass(np.ndarray):
 
 
 @pytest.fixture
-def adata():
+def adata() -> ad.AnnData:
     adata = ad.AnnData(np.zeros((100, 100)))
     adata.obsm["o"] = np.zeros((100, 50))
     adata.varm["o"] = np.zeros((100, 50))
     return adata
 
 
+@pytest.fixture(scope="session")
+def adata_gen_session(matrix_type) -> ad.AnnData:
+    adata = gen_adata((30, 15), X_type=matrix_type)
+    adata.raw = adata.copy()
+    return adata
+
+
+@pytest.fixture
+def adata_gen(adata_gen_session: ad.AnnData) -> ad.AnnData:
+    return adata_gen_session.copy()
+
+
 @pytest.fixture(
     params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS,
+    scope="session",
 )
 def matrix_type(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS, scope="session")
 def matrix_type_no_gpu(request):
     return request.param
 
 
-@pytest.fixture(params=BASE_MATRIX_PARAMS)
+@pytest.fixture(params=BASE_MATRIX_PARAMS, scope="session")
 def matrix_type_base(request):
     return request.param
 
 
-@pytest.fixture(params=["layers", "obsm", "varm"])
+@pytest.fixture(params=["layers", "obsm", "varm"], scope="session")
 def mapping_name(request):
     return request.param
 
@@ -152,7 +166,7 @@ def test_view_subset_shapes():
 
     view = adata[:, ::2]
     assert view.var.shape == (5, 8)
-    assert {k: v.shape[0] for k, v in view.varm.items()} == {k: 5 for k in view.varm}
+    assert {k: v.shape[0] for k, v in view.varm.items()} == dict.fromkeys(view.varm, 5)
 
 
 def test_modify_view_component(matrix_type, mapping_name, request):
@@ -179,7 +193,7 @@ def test_modify_view_component(matrix_type, mapping_name, request):
 
     assert init_hash == hash_func(adata)
 
-    if "sparse_array_dask_array" in request.node.callspec.id and CAN_USE_SPARSE_ARRAY:
+    if "sparse_array_dask_array" in request.node.callspec.id:
         msg = "sparse arrays in dask are generally expected to fail but in this case they do not"
         pytest.fail(msg)
 
@@ -316,7 +330,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -330,7 +344,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -344,7 +358,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -358,7 +372,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(adata.X != orig_X_val))
+    assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == tokenize(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -392,7 +406,7 @@ def test_set_subset_obsm(adata, subset_func):
     orig_obsm_val = adata.obsm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.obs_names)
+        subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
             break
     subset = adata[subset_idx, :]
@@ -415,7 +429,7 @@ def test_set_subset_varm(adata, subset_func):
     orig_varm_val = adata.varm["o"].copy()
 
     while True:
-        subset_idx = slice_subset(adata.var_names)
+        subset_idx = slice_int_subset(adata.var_names)
         if (adata[:, subset_idx]).shape[1] > 2:
             break
     subset = adata[:, subset_idx]
@@ -526,27 +540,31 @@ def test_layers_view():
     assert view_hash != joblib.hash(view_adata)
 
 
-# TODO: This can be flaky. Make that stop
-def test_view_of_view(matrix_type, subset_func, subset_func2):
-    adata = gen_adata((30, 15), X_type=matrix_type)
-    adata.raw = adata.copy()
-    if subset_func is single_subset:
+# TODO: less combinatoric; split up into 2 tests:
+# 1. each subset func produces the right `oidx`/`vidx` kind (slice, array[int], array[bool])
+# 2. each `oidx`/`vidx` kind can be sliced with each subset func
+# going from #subset_func² to #subset_func × 3 {ov}idx kinds × 2 tests
+def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
+    adata = adata_gen
+    if subset_func in {single_subset, single_int_subset}:
         pytest.xfail("Other subset generating functions have trouble with this")
     var_s1 = subset_func(adata.var_names, min_size=4)
     var_view1 = adata[:, var_s1]
-    adata[:, var_s1].X
+    adata[:, var_s1].X  # noqa: B018
     var_s2 = subset_func2(var_view1.var_names)
     var_view2 = var_view1[:, var_s2]
+
     assert var_view2._adata_ref is adata
     assert isinstance(var_view2.X, type(adata.X))
+
     obs_s1 = subset_func(adata.obs_names, min_size=4)
     obs_view1 = adata[obs_s1, :]
     obs_s2 = subset_func2(obs_view1.obs_names)
+
     assert adata[obs_s1, :][:, var_s1][obs_s2, :]._adata_ref is adata
     assert isinstance(obs_view1.X, type(adata.X))
 
     view_of_actual_copy = adata[:, var_s1].copy()[obs_s1, :].copy()[:, var_s2].copy()
-
     view_of_view_copy = adata[:, var_s1][obs_s1, :][:, var_s2].copy()
 
     assert_equal(view_of_actual_copy, view_of_view_copy, exact=True)
@@ -673,9 +691,7 @@ def test_viewness_propagation_allclose(adata):
     assert np.allclose(a.varm["o"], b.varm["o"].copy(), equal_nan=True)
 
 
-spmat = [sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    spmat += [sparse.csr_array, sparse.csc_array]
+spmat = [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
 
 
 @pytest.mark.parametrize("spmat", spmat)
@@ -693,10 +709,7 @@ def test_deepcopy_subset(adata, spmat: type):
     view_type = (
         SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView
     )
-    if CAN_USE_SPARSE_ARRAY:
-        view_type = (
-            SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
-        )
+    view_type = SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
     assert not isinstance(
         adata.obsp["spmat"],
         view_type,
@@ -704,9 +717,13 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["spmat"].shape, (10, 10))
 
 
-array_type = [asarray, sparse.csr_matrix, sparse.csc_matrix]
-if CAN_USE_SPARSE_ARRAY:
-    array_type += [sparse.csr_array, sparse.csc_array]
+array_type = [
+    asarray,
+    sparse.csr_matrix,
+    sparse.csc_matrix,
+    sparse.csr_array,
+    sparse.csc_array,
+]
 
 
 # https://github.com/scverse/anndata/issues/680
@@ -726,12 +743,7 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         getattr(adata, attr)["arr"] = X
 
     view = adata[:50]
-
-    if attr == "X":
-        arr_view = view.X
-    else:
-        arr_view = getattr(view, attr)["arr"]
-
+    arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
     if sparse.issparse(X):

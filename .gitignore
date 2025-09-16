@@ -7,10 +7,12 @@ __pycache__/
 /*cache/
 /node_modules/
 /data/
+/venv/
 
 # Distribution / packaging
 /dist/
 /ci/min-deps.txt
+/ci/pre-deps.txt
 /requirements*.lock
 /.python-version
 
@@ -27,7 +29,6 @@ __pycache__/
 
 # IDEs
 /.idea/
-/.vscode/
 
 # Benchmark
 .asv

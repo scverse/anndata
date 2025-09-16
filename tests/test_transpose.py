@@ -89,9 +89,7 @@ def test_transposed_contents(adata):
     else:
         assert adata.X is t.X is None
 
-    assert_equal(
-        {k: v.T for k, v in adata.layers.items()}, {k: v for k, v in t.layers.items()}
-    )
+    assert_equal({k: v.T for k, v in adata.layers.items()}, dict(t.layers))
     assert_equal(adata.obs, t.var)
     assert_equal(adata.var, t.obs)
     assert_equal(dict(adata.obsm), dict(t.varm))

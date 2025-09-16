@@ -17,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
-    from scipy import sparse
-
+    from ..compat import CSMatrix, Index, Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -31,7 +30,7 @@ class Raw:
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | sparse.spmatrix | None = None,
+        X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
@@ -67,7 +66,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | sparse.spmatrix:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -122,7 +121,7 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Index) -> Raw:
         oidx, vidx = self._normalize_indices(index)
 
         # To preserve two dimensional shape
@@ -131,10 +130,7 @@ class Raw:
         if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
-        if not self._adata.isbacked:
-            X = _subset(self.X, (oidx, vidx))
-        else:
-            X = None
+        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
         new = Raw(self._adata, X=X, var=var)
@@ -173,7 +169,9 @@ class Raw:
             uns=self._adata.uns.copy(),
         )
 
-    def _normalize_indices(self, packed_index):
+    def _normalize_indices(
+        self, packed_index: Index
+    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
             packed_index = packed_index.values

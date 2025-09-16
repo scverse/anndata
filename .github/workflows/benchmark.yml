@@ -6,12 +6,19 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_COLOR: "1"
+
+defaults:
+  run:
+    # Add `-l` to GitHub’s default bash options to activate mamba environments
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
+    # https://github.com/mamba-org/setup-micromamba/#readme
+    shell: bash -elo pipefail {0}
+
 jobs:
   benchmark:
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0} # -e to fail on error, -l for mamba
 
     strategy:
       fail-fast: false
@@ -25,9 +32,10 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          # no blob filter so asv can checkout other commits
 
       - run: git fetch origin main:main
         if: ${{ github.ref_name != 'main' }}
