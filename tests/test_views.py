@@ -22,7 +22,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CupyCSCMatrix, DaskArray
+from anndata.compat import CSArray, CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -198,7 +198,8 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     )
     is_sparse_array_in_lower_dask_version = (
         not is_dask_with_broken_view_setting
-        and "sparse_dask_array" in request.node.callspec.id
+        and isinstance(m, DaskArray)
+        and isinstance(m._meta, CSArray)
     )
     with (
         pytest.raises(ValueError, match=r"shape mismatch")
