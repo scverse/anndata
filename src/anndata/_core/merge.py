@@ -504,63 +504,6 @@ def merge_same(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, intersect_keys, unique_value)
 
 
-def merge_same_strict(ds: Collection[Mapping]) -> Mapping:
-    # only keys shared across all inputs are considered
-    # only identical values are merged with _raise_on_conflict
-    return merge_nested(ds, intersect_keys, _raise_on_conflict)
-
-
-def _harmonize_categories(vals: list[pd.Series]) -> list[pd.Series]:
-    """
-    To make sure that all categorical Series have the same categories (union).
-    """
-    # align categories across all series (only if all are categoricals)
-    if not all(isinstance(v, pd.Series) and v.dtype.name == "category" for v in vals):
-        return vals
-    # build the full set of all categories used across inputs
-    category_union = sorted({cat for v in vals for cat in v.cat.categories})
-
-    harmonized = []
-    for v in vals:
-        # fill with NA if the original had no categories
-        if len(v.cat.categories) == 0:
-            harmonized.append(
-                pd.Series(
-                    [pd.NA] * len(v),
-                    dtype=pd.CategoricalDtype(categories=category_union),
-                )
-            )
-        else:
-            # remap to common category set (union)
-            harmonized.append(v.cat.set_categories(category_union))
-    return harmonized
-
-
-def _raise_on_conflict(vals: list) -> any:
-    # standardize categories first so we can compare fairly
-    vals = _harmonize_categories(vals)
-    lengths = {len(v) for v in vals}
-    if not lengths:
-        # fallback if somehow empty
-        return vals[0]
-    if len(lengths) == 1:
-        # use the first one as the baseline
-        ref = pd.Series(vals[0])
-        # cast all to series just in case
-        series_vals = [pd.Series(v) for v in vals]
-        # if all NA, then return NA
-        if all(s.equals(ref) for s in series_vals):
-            return vals[0]
-        # if non-NA values match (ignoring order/NA), allow
-        if all(s.isna().all() for s in series_vals):
-            return pd.Series([pd.NA] * len(ref), dtype=ref.dtype)
-        if all(set(s.dropna()) == set(ref.dropna()) for s in series_vals):
-            return ref.copy()
-        # if one side empty, then fallback
-        if any(s.isna().all() for s in series_vals):
-            return ref.copy()
-
-
 def merge_first(ds: Collection[Mapping]) -> Mapping:
     return merge_nested(ds, union_keys, first)
 
@@ -579,13 +522,12 @@ def merge_only(ds: Collection[Mapping]) -> Mapping:
 MERGE_STRATEGIES = {
     None: lambda x: {},
     "same": merge_same,
-    "same-strict": merge_same_strict,
     "unique": merge_unique,
     "first": merge_first,
     "only": merge_only,
 }
 
-StrategiesLiteral = Literal["same", "same-strict", "unique", "first", "only"]
+StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
