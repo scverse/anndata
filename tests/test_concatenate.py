@@ -1814,7 +1814,7 @@ def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     X = sparse.random(50, 20, density=0.5, format="csr")
     X_dask = da.from_array(X, chunks=(5, 20))
     var_names_1 = [f"gene_{i}" for i in range(20)]
-    var_names_2 = [f"gene_{i - 20}{'_foo' if (i % 2) else ''}" for i in range(20, 40)]
+    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20)]
 
     ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
     ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
