@@ -193,9 +193,10 @@ def write_concat_dense(  # noqa: PLR0917
         axis=axis,
     )
     write_elem(output_group, output_path, res)
-    output_group[output_path].attrs.update(
-        {"encoding-type": "array", "encoding-version": "0.2.0"}
-    )
+    output_group[output_path].attrs.update({
+        "encoding-type": "array",
+        "encoding-version": "0.2.0",
+    })
 
 
 def write_concat_sparse(  # noqa: PLR0917
@@ -259,12 +260,10 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     Write a list of mappings to a zarr/h5 group.
     """
     mapping_group = output_group.create_group(path)
-    mapping_group.attrs.update(
-        {
-            "encoding-type": "dict",
-            "encoding-version": "0.1.0",
-        }
-    )
+    mapping_group.attrs.update({
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0",
+    })
     for k in keys:
         elems = [m[k] for m in mappings]
         _write_concat_sequence(

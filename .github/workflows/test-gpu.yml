@@ -77,6 +77,8 @@ jobs:
         run: uv pip list
 
       - name: Run test
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
           uv run coverage run -m pytest -m gpu -n auto
           uv run coverage combine
