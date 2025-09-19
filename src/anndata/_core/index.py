@@ -299,9 +299,35 @@ def _safe_fancy_index_h5py(
         *map(_process_index_for_h5py, subset_idx), strict=True
     )
 
-    # Apply first index directly to the dataset, then rest all at once to the array
-    result = cast("np.ndarray", dataset[processed_indices[0]])
-    result = result[:, *processed_indices[1:]]
+    def _get_index_size(idx, dim_size: int) -> int:
+        """Get size for any index type."""
+        if isinstance(idx, slice):
+            return len(range(*idx.indices(dim_size)))
+        elif isinstance(idx, (list, np.ndarray)):
+            return len(idx)
+        elif isinstance(idx, int):
+            return 1
+        else:
+            # For other types, try to get length
+            return len(idx)
+
+    # First find the index that reduces the size of the dataset the most
+    i_min = np.argmin(
+        [
+            _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
+            for i, inds in enumerate(processed_indices)
+        ]
+    )
+
+    # Apply the most selective index first to h5py dataset
+    first_index = [slice(None)] * len(processed_indices)
+    first_index[i_min] = processed_indices[i_min]
+    in_memory_array = cast("np.ndarray", dataset[tuple(first_index)])
+    
+    # Apply remaining indices to the numpy array
+    remaining_indices = list(processed_indices)
+    remaining_indices[i_min] = slice(None)  # Already applied
+    result = in_memory_array[tuple(remaining_indices)]
 
     # Now apply reverse mappings to get the original order
     for dim, reverse_map in enumerate(reverse_indices):
