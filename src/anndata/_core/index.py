@@ -312,18 +312,16 @@ def _safe_fancy_index_h5py(
             return len(idx)
 
     # First find the index that reduces the size of the dataset the most
-    i_min = np.argmin(
-        [
-            _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
-            for i, inds in enumerate(processed_indices)
-        ]
-    )
+    i_min = np.argmin([
+        _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
+        for i, inds in enumerate(processed_indices)
+    ])
 
     # Apply the most selective index first to h5py dataset
     first_index = [slice(None)] * len(processed_indices)
     first_index[i_min] = processed_indices[i_min]
     in_memory_array = cast("np.ndarray", dataset[tuple(first_index)])
-    
+
     # Apply remaining indices to the numpy array
     remaining_indices = list(processed_indices)
     remaining_indices[i_min] = slice(None)  # Already applied
