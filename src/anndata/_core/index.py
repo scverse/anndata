@@ -299,18 +299,6 @@ def _safe_fancy_index_h5py(
         *map(_process_index_for_h5py, subset_idx), strict=True
     )
 
-    def _get_index_size(idx, dim_size: int) -> int:
-        """Get size for any index type."""
-        if isinstance(idx, slice):
-            return len(range(*idx.indices(dim_size)))
-        elif isinstance(idx, (list, np.ndarray)):
-            return len(idx)
-        elif isinstance(idx, int):
-            return 1
-        else:
-            # For other types, try to get length
-            return len(idx)
-
     # First find the index that reduces the size of the dataset the most
     i_min = np.argmin([
         _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
@@ -333,6 +321,16 @@ def _safe_fancy_index_h5py(
             result = result.take(reverse_map, axis=dim)
 
     return result
+
+
+def _get_index_size(idx: Index1DNorm, dim_size: int) -> int:
+    """Get size for any index type."""
+    if isinstance(idx, slice):
+        return len(range(*idx.indices(dim_size)))
+    elif isinstance(idx, int):
+        return 1
+    else:  # For other types, try to get length
+        return len(idx)
 
 
 def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
