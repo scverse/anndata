@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "[0-9]+.[0-9]+.x"
+  pull_request:
+
+env:
+  FORCE_COLOR: "1"
+
+# Cancel the job if new commits are pushed: https://stackoverflow.com/q/66335225/247482
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  get-environments:
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          filter: blob:none
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - id: get-envs
+        run: |
+          ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
+            | map(
+              select(.key | startswith("hatch-test"))
+              | { name: .key, python: .value.python, args: (.value."extra-args" // [] | join(" ")) }
+            )')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
+
+  test:
+    needs: get-environments
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+        io_mark: ["zarr_io", "not zarr_io"]
+    env:  # environment variables for use in codecov’s env_vars tagging
+      ENV_NAME: ${{ matrix.env.name }}
+      IO_MARK: ${{ matrix.io_mark }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Install system dependencies
+        run: sudo apt install -y hdf5-tools
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.env.python }}
+
+      - name: Install dependencies
+        run: uvx hatch -v env create ${{ matrix.env.name }}
+
+      - name: Run tests
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
+        run: |
+          uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          uvx hatch run ${{ matrix.env.name }}:cov-combine
+          uvx hatch run ${{ matrix.env.name }}:coverage xml
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: ENV_NAME,IO_MARK
+          fail_ci_if_error: true
+          file: test-data/test-results.xml
+
+      - name: Upload coverage data
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: ENV_NAME,IO_MARK
+          fail_ci_if_error: true
+          files: test-data/coverage.xml
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: pip
+
+      - name: Install build tools and requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Display installed versions
+        run: pip list
+
+      - name: Build & Twine check
+        run: |
+          python -m build --sdist --wheel .
+          twine check dist/*
+
+      - name: Check runtime version
+        run: |
+          pip install dist/*.whl
+          python -c 'import anndata; print(anndata.__version__)'
+
+  check:
+    if: always()
+    needs:
+      - get-environments
+      - test
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

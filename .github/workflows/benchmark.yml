@@ -2,21 +2,28 @@ name: Benchmark
 
 on:
   push:
-    branches: [main]
+    branches: [main, "[0-9]+.[0-9]+.x"]
   pull_request:
     branches: [main]
+
+env:
+  FORCE_COLOR: "1"
+
+defaults:
+  run:
+    # Add `-l` to GitHub’s default bash options to activate mamba environments
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
+    # https://github.com/mamba-org/setup-micromamba/#readme
+    shell: bash -elo pipefail {0}
 
 jobs:
   benchmark:
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0} # -e to fail on error, -l for mamba
 
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11"]
+        python: ["3.12"]
         os: [ubuntu-latest]
 
     env:
@@ -25,26 +32,29 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          # no blob filter so asv can checkout other commits
 
       - run: git fetch origin main:main
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: asv
           cache-environment: true
+          # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
+          # libmambapy upper bound: https://github.com/airspeed-velocity/asv/issues/1438
           create-args: >-
-            python=3.11
+            python=${{ matrix.python }}
             asv
-            mamba
-            packaging
+            libmambapy<2
+            conda-build
 
       - name: Cache datasets
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache

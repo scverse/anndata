@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from types import MappingProxyType
+
 import numpy as np
 import zarr
+from dask.array.core import Array as DaskArray
 from scipy import sparse
 
-from anndata.experimental import sparse_dataset, write_elem
+from anndata import AnnData
+from anndata._core.sparse_dataset import sparse_dataset
+from anndata._io.specs import write_elem
+from anndata.experimental import read_elem_lazy
 
 
 def make_alternating_mask(n):
@@ -15,32 +21,52 @@ def make_alternating_mask(n):
 
 
 class SparseCSRContiguousSlice:
+    _slices = MappingProxyType({
+        "0:1000": slice(0, 1000),
+        "0:9000": slice(0, 9000),
+        ":9000:-1": slice(None, 9000, -1),
+        "::-2": slice(None, None, 2),
+        "array": np.array([0, 5000, 9999]),
+        "arange": np.arange(0, 1000),
+        "first": 0,
+        "alternating": make_alternating_mask(10),
+    })
     params = (
         [
             (10_000, 10_000),
             # (10_000, 500)
         ],
-        [
-            slice(0, 1000),
-            slice(0, 9000),
-            slice(None, 9000, -1),
-            slice(None, None, 2),
-            make_alternating_mask(10),
-        ],
+        _slices.keys(),
+        [True, False],
     )
-    param_names = ["shape", "slice"]
+    param_names = ("shape", "slice", "use_dask")
 
-    def setup(self, shape, slice):
+    def setup(self, shape: tuple[int, int], slice: str, use_dask: bool):  # noqa: FBT001
         X = sparse.random(
             *shape, density=0.01, format="csr", random_state=np.random.default_rng(42)
         )
-        self.slice = slice
+        self.slice = self._slices[slice]
         g = zarr.group()
         write_elem(g, "X", X)
-        self.x = sparse_dataset(g["X"])
+        self.x = read_elem_lazy(g["X"]) if use_dask else sparse_dataset(g["X"])
+        self.adata = AnnData(self.x)
 
-    def time_getitem(self, shape, slice):
-        self.x[self.slice]
+    def time_getitem(self, *_):
+        res = self.x[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
 
-    def peakmem_getitem(self, shape, slice):
-        self.x[self.slice]
+    def peakmem_getitem(self, *_):
+        res = self.x[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
+
+    def time_getitem_adata(self, *_):
+        res = self.adata[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()
+
+    def peakmem_getitem_adata(self, *_):
+        res = self.adata[self.slice]
+        if isinstance(res, DaskArray):
+            res.compute()

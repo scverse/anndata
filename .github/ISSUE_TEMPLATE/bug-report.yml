@@ -1,7 +1,9 @@
 name: Bug report
 description: anndata doesn’t do what it should? Please help us fix it!
 #title: ...
-labels: ["Bug 🐛"]
+labels:
+  - Bug 🐛
+  - Triage 🩺
 #assignees: []
 body:
   - type: checkboxes
@@ -14,7 +16,7 @@ body:
           required: true
         - label: I have confirmed this bug exists on the latest version of anndata.
           required: true
-        - label: (optional) I have confirmed this bug exists on the master branch of anndata.
+        - label: (optional) I have confirmed this bug exists on the main branch of anndata.
           required: false
   - type: markdown
     attributes:
@@ -51,10 +53,18 @@ body:
       description: |
         Which version of anndata and other related software you used.
 
-        Please install `session-info`, run the following command, then paste the results into the text box below.
+        Please install `session-info2`, run the following command in a notebook,
+        click the “Copy as Markdown” button,
+        then paste the results into the text box below.
 
         ```python
-        >>> import anndata, session_info; session_info.show(html=False, dependencies=True)
+        In[1]: import anndata, session_info2; session_info2.session_info(dependencies=True)
+        ```
+
+        Alternatively, run this in a console:
+
+        ```python
+        >>> import session_info2; print(session_info2.session_info(dependencies=True)._repr_mimebundle_()["text/markdown"])
         ```
       render: python
     validations:

@@ -2,12 +2,16 @@ name: AWS GPU
 
 on:
   push:
-    branches: [main]
+    branches: [main, "[0-9]+.[0-9]+.x"]
   pull_request:
     types:
       - labeled
       - opened
       - synchronize
+
+env:
+  PYTEST_ADDOPTS: "-v --color=yes"
+  FORCE_COLOR: "1"
 
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
@@ -24,7 +28,7 @@ jobs:
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
-    if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
+    if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: flying-sheep/check@v1
@@ -35,41 +39,60 @@ jobs:
     name: GPU Tests
     needs: check
     runs-on: "cirun-aws-gpu--${{ github.run_id }}"
-    defaults:
-      run:
-        shell: bash -el {0}
+    # Setting a timeout of 30 minutes, as the AWS costs money
+    # At time of writing, a typical run takes about 5 minutes
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - uses: mamba-org/setup-micromamba@v1
+      - name: Install yq
+        run: |
+          sudo snap install yq
+
+      - name: Extract max Python version from classifiers
+        run: |
+          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )(\d\.\d+)')
+          max_version=$(echo "$classifiers" | sort -V | tail -1)
+          echo "max_python_version=$max_version" >> $GITHUB_ENV
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
         with:
-          micromamba-version: "1.3.1-0"
-          environment-name: anndata-gpu-ci
-          create-args: >-
-            python=3.11
-            cupy
-            numba
-            pytest
-            pytest-cov
-            pytest-xdist
-          init-shell: >-
-            bash
-          generate-run-shell: false
+          enable-cache: true
+          python-version: ${{ env.max_python_version }}
 
       - name: Install AnnData
-        run: pip install .[dev,test,gpu]
+        run: |
+          uv venv
+          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
 
-      - name: Mamba list
-        run: micromamba list
+      - name: Env list
+        run: uv pip list
 
       - name: Run test
-        run: pytest -m gpu --cov --cov-report=xml --cov-context=test -n 4
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
+        run: |
+          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage combine
+          uv run coverage xml
 
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v5
         with:
-          flags: gpu-tests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          files: test-data/coverage.xml
+
+      - name: Remove 'run-gpu-ci' Label
+        if: always()
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: "run-gpu-ci"
+          github_token: ${{ secrets.GITHUB_TOKEN }}

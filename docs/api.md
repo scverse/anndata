@@ -13,9 +13,12 @@ The central class:
    AnnData
 ```
 
+(combining-api)=
+
 ## Combining
 
-Combining AnnData objects. See also the section on concatenation.
+Combining {class}`AnnData` objects.
+See also the section on concatenation.
 
 ```{eval-rst}
 .. autosummary::
@@ -24,46 +27,88 @@ Combining AnnData objects. See also the section on concatenation.
    concat
 ```
 
+(reading-api)=
+
 ## Reading
 
-Reading anndata’s native file format `.h5ad`.
+Reading anndata’s native formats `.h5ad` and `zarr`.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   read_h5ad
+   io.read_h5ad
+   io.read_zarr
 ```
 
-Reading other file formats.
+Reading individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   read_csv
-   read_excel
-   read_hdf
-   read_loom
-   read_mtx
-   read_text
-   read_umi_tools
-   read_zarr
-
+   io.read_elem
+   io.sparse_dataset
 ```
+
+Reading file formats that cannot represent all aspects of {class}`AnnData` objects.
+
+```{tip}
+You might have more success by assembling the {class}`AnnData` object yourself from the individual parts.
+```
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   io.read_csv
+   io.read_excel
+   io.read_hdf
+   io.read_loom
+   io.read_mtx
+   io.read_text
+   io.read_umi_tools
+```
+
+(writing-api)=
 
 ## Writing
 
-Writing to anndata’s native file format `.h5ad`.
+Writing a complete {class}`AnnData` object to disk in anndata’s native formats `.h5ad` and `zarr`.
+(These functions are also exported as {func}`io.write_h5ad` and {func}`io.write_zarr`.)
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   AnnData.write
+   AnnData.write_h5ad
+   AnnData.write_zarr
+
+
+..
+    .. autosummary::
+       :toctree: generated/
+
+       io.write_h5ad
+       io.write_zarr
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.io.write_h5ad
+   generated/anndata.io.write_zarr
 ```
 
-Writing to other formats.
+Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   io.write_elem
+```
+
+Writing formats that cannot represent all aspects of {class}`AnnData` objects.
 
 ```{eval-rst}
 .. autosummary::
@@ -71,7 +116,6 @@ Writing to other formats.
 
    AnnData.write_csvs
    AnnData.write_loom
-   AnnData.write_zarr
 ```
 
 (experimental-api)=
@@ -79,10 +123,11 @@ Writing to other formats.
 ## Experimental API
 
 ```{warning}
-API's in the experimental module are currently in development and subject to change at any time.
+APIs in the experimental module are currently in development and subject to change at any time.
 ```
 
-Two classes for working with batched access to collections of many `AnnData` objects or `h5ad` files. In paritcular, for pytorch-based models.
+Two classes for working with batched access to collections of many {class}`AnnData` objects or `.h5ad` files.
+In particular, for pytorch-based models.
 
 ```{eval-rst}
 .. autosummary::
@@ -90,17 +135,6 @@ Two classes for working with batched access to collections of many `AnnData` obj
 
    experimental.AnnCollection
    experimental.AnnLoader
-```
-
-Interface for accessing on-disk sparse data:
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   experimental.sparse_dataset
-   experimental.CSRDataset
-   experimental.CSCDataset
 ```
 
 Out of core concatenation
@@ -112,14 +146,14 @@ Out of core concatenation
    experimental.concat_on_disk
 ```
 
-Low level methods for reading and writing elements of an `` AnnData` `` object to a store:
+Low level methods for reading and writing elements of an {class}`AnnData` object to a store:
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
 
-   experimental.read_elem
-   experimental.write_elem
+   experimental.read_elem_lazy
+   experimental.read_lazy
 ```
 
 Utilities for customizing the IO process:
@@ -130,9 +164,48 @@ Utilities for customizing the IO process:
 
    experimental.read_dispatched
    experimental.write_dispatched
+```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
    experimental.IOSpec
+   experimental.Read
+   experimental.Write
+   experimental.ReadCallback
+   experimental.WriteCallback
+   experimental.StorageType
+   experimental.backed.MaskedArray
+   experimental.backed.CategoricalArray
+   experimental.backed.Dataset2D
+   experimental.Dataset2DIlocIndexer
+```
+
+(extensions-api)=
+
+## Extensions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   register_anndata_namespace
 
 ```
+
+Types used by the former:
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.ExtensionNamespace
+```
+
+(errors-api)=
 
 ## Errors and warnings
 
@@ -141,4 +214,31 @@ Utilities for customizing the IO process:
    :toctree: generated/
 
    ImplicitModificationWarning
+```
+
+(settings-api)=
+
+## Settings
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   settings
+   settings.override
+```
+
+(types-api)=
+
+## Custom Types/Classes for Readable/Writeable Elements
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   abc.CSRDataset
+   abc.CSCDataset
+   typing.Index
+   typing.AxisStorable
+   typing.RWAble
 ```

@@ -7,13 +7,14 @@ __pycache__/
 /*cache/
 /node_modules/
 /data/
+/venv/
 
 # Distribution / packaging
 /dist/
-/anndata/_version.py
+/ci/min-deps.txt
+/ci/pre-deps.txt
 /requirements*.lock
 /.python-version
-/hatch.toml
 
 # Test results (nunit/junit) and coverage
 /test-data/
@@ -28,9 +29,9 @@ __pycache__/
 
 # IDEs
 /.idea/
-/.vscode/
 
 # Benchmark
 .asv
 benchmark/benchmarks/data
 benchmarks/benchmarks/data
+benchmarks/pkgs
