@@ -22,7 +22,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import H5PY_V3, check_key, zero_dim_array_as_scalar
+from anndata._io.utils import check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     NULLABLE_NUMPY_STRING_TYPE,
@@ -666,10 +666,9 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
 def read_recarray(d: ArrayStorageType, *, _reader: Reader) -> np.recarray | npt.NDArray:
     value = d[()]
-    dtype = value.dtype
-    value = _from_fixed_length_strings(value)
-    if H5PY_V3:
-        value = _decode_structured_array(value, dtype=dtype)
+    value = _decode_structured_array(
+        _from_fixed_length_strings(value), dtype=value.dtype
+    )
     return value
 
 
