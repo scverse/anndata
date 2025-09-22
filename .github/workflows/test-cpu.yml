@@ -63,15 +63,18 @@ jobs:
           python-version: ${{ matrix.env.python }}
 
       - name: Install dependencies
-        run: uvx hatch -v env create ${{ matrix.env.name }}
+        run: |
+          # https://github.com/pallets/click/issues/3066
+          uv tool install --with='click!=8.3.0' hatch
+          hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
-          uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
-          uvx hatch run ${{ matrix.env.name }}:cov-combine
-          uvx hatch run ${{ matrix.env.name }}:coverage xml
+          hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          hatch run ${{ matrix.env.name }}:cov-combine
+          hatch run ${{ matrix.env.name }}:coverage xml
 
       - name: Upload test results
         if: ${{ !cancelled() }}
