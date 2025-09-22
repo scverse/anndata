@@ -14,9 +14,7 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
-import scipy
 from natsort import natsorted
-from packaging.version import Version
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -185,15 +183,6 @@ def equal_sparse(a, b) -> bool:
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
             a, b = CupyCSRMatrix(a), CupyCSRMatrix(b)
-        if Version(scipy.__version__) >= Version("1.16.0rc1"):
-            # TODO: https://github.com/scipy/scipy/issues/23068
-            return bool(
-                a.format == b.format
-                and (a.shape == b.shape)
-                and np.all(a.indptr == b.indptr)
-                and np.all(a.indices == b.indices)
-                and np.all((a.data == b.data) | (np.isnan(a.data) & np.isnan(b.data)))
-            )
         comp = a != b
         if isinstance(comp, bool):
             return not comp

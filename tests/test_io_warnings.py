@@ -5,9 +5,7 @@ import warnings
 from importlib.util import find_spec
 from pathlib import Path
 
-import h5py
 import pytest
-from packaging.version import Version
 
 import anndata as ad
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
@@ -43,13 +41,6 @@ def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
 
     with warnings.catch_warnings(record=True) as record:
         warnings.simplefilter("always", ad.OldFormatWarning)
-        if Version(h5py.__version__) < Version("3.2"):
-            # https://github.com/h5py/h5py/issues/1808
-            warnings.filterwarnings(
-                "ignore",
-                r"Passing None into shape arguments as an alias for \(\) is deprecated\.",
-                category=DeprecationWarning,
-            )
 
         ad.read_h5ad(pth)
 

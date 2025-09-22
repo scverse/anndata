@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Mapping
 from copy import copy
 from functools import partial
+from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -609,7 +610,7 @@ def write_vlen_string_array_zarr(
     if is_zarr_v2():
         import numcodecs
 
-        if Version(numcodecs.__version__) < Version("0.13"):
+        if Version(version("numcodecs")) < Version("0.13"):
             msg = "Old numcodecs version detected. Please update for improved performance and stability."
             warnings.warn(msg, UserWarning, stacklevel=2)
             # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
