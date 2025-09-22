@@ -6,7 +6,7 @@ from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 from warnings import warn
 
 import h5py
@@ -15,6 +15,7 @@ import pandas as pd
 import scipy.sparse
 from numpy.typing import NDArray
 from packaging.version import Version
+from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 if TYPE_CHECKING:
@@ -427,10 +428,3 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
-
-
-if Version(version("pandas")) >= Version("2.1"):
-    # Argument added in pandas 2.1
-    _map_cat_to_str = partial(pd.Categorical.map, mapper=str, na_action="ignore")
-else:
-    _map_cat_to_str = partial(pd.Categorical.map, mapper=str)

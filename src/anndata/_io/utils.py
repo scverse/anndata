@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 # For allowing h5py v3
 # https://github.com/scverse/anndata/issues/442
-H5PY_V3 = Version(version("h5py")).major >= 3
+H5PY_V3 = Version(version("h5py")) >= Version("3")
 
 # -------------------------------------------------------------------------------
 # Type conversion

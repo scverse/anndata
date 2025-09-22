@@ -28,7 +28,6 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    _map_cat_to_str,
 )
 from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
@@ -1635,7 +1634,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            _map_cat_to_str(label_col), sep=index_unique
+            label_col.map(str, na_action="ignore"), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 
