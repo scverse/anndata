@@ -57,8 +57,6 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # runtime dev version generation
-    "hatch-vcs",
     "anndata[dev-doc]",
 ]
 doc = [
