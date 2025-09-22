@@ -12,12 +12,8 @@ from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_old_format_warning_thrown():
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+def test_old_format_warning_thrown() -> None:
+    import scanpy as sc
 
     def msg_re(entry: str) -> str:
         return re.escape(
