@@ -680,9 +680,6 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     # Write {alt_axis_name}p
     _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
 
-    # Write uns
-    _write_uns(groups, output_group, uns_merge)
-
     # Write X
 
     _write_concat_arrays(
