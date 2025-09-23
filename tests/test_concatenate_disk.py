@@ -92,7 +92,7 @@ def assert_eq_concat_on_disk(
     file_format: Literal["zarr", "h5ad"],
     max_loaded_elems: int | None = None,
     *args,
-    merge_strategy: merge.StrategiesLiteral,
+    merge_strategy: merge.StrategiesLiteral | None = None,
     **kwargs,
 ):
     # create one from the concat function
@@ -192,7 +192,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, merge_strategy)
 
 
 @pytest.fixture
