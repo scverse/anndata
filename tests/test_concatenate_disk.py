@@ -192,7 +192,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format, merge_strategy)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
 @pytest.fixture
