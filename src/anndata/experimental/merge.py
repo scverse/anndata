@@ -173,7 +173,7 @@ def write_concat_dense(  # noqa: PLR0917
     output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
-    fill_value=None,
+    fill_value: Any = None,
 ):
     """
     Writes the concatenation of given dense arrays to disk using dask.
@@ -205,7 +205,7 @@ def write_concat_sparse(  # noqa: PLR0917
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
-    fill_value=None,
+    fill_value: Any = None,
 ):
     """
     Writes and concatenates sparse datasets into a single output dataset.
@@ -245,20 +245,20 @@ def write_concat_sparse(  # noqa: PLR0917
 
 
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
-    mappings,
+    mappings: Collection[dict],
     output_group: ZarrGroup | H5Group,
-    keys,
-    path,
-    max_loaded_elems,
-    axis=0,
-    index=None,
-    reindexers=None,
-    fill_value=None,
+    keys: Collection[str],
+    output_path: str | Path,
+    max_loaded_elems: int,
+    axis: Literal[0, 1] = 0,
+    index: pd.Index = None,
+    reindexers: list[Reindexer] | None = None,
+    fill_value: Any = None,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
     """
-    mapping_group = output_group.create_group(path)
+    mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update(
         {
             "encoding-type": "dict",
@@ -281,13 +281,13 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
-    output_group,
-    output_path,
-    max_loaded_elems,
-    axis=0,
-    reindexers=None,
-    fill_value=None,
-    join="inner",
+    output_group: ZarrGroup | H5Group,
+    output_path: str | Path,
+    max_loaded_elems: int,
+    axis: Literal[0, 1] = 0,
+    reindexers: list[Reindexer] | None = None,
+    fill_value: Any = None,
+    join: Literal["inner", "outer"] = "inner",
 ):
     init_elem = arrays[0]
     init_type = type(init_elem)
@@ -325,14 +325,14 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
 
 def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
-    output_group,
-    output_path,
-    max_loaded_elems,
-    axis=0,
-    index=None,
-    reindexers=None,
-    fill_value=None,
-    join="inner",
+    output_group: ZarrGroup | H5Group,
+    output_path: str | Path,
+    max_loaded_elems: int,
+    axis: Literal[0, 1] = 0,
+    index: pd.Index = None,
+    reindexers: list[Reindexer] | None = None,
+    fill_value: Any = None,
+    join: Literal["inner", "outer"] = "inner",
 ):
     """
     array, dataframe, csc_matrix, csc_matrix
@@ -377,17 +377,32 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         raise NotImplementedError(msg)
 
 
-def _write_alt_mapping(groups, output_group, alt_axis_name, alt_indices, merge):
-    alt_mapping = merge([read_as_backed(g[f"{alt_axis_name}m"]) for g in groups])
-    # If its empty, we need to write an empty dataframe with the correct index
-    if not alt_mapping:
-        alt_df = pd.DataFrame(index=alt_indices)
-        write_elem(output_group, f"{alt_axis_name}m", alt_df)
-    else:
-        write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
+def _write_alt_mapping(
+    groups: Collection[H5Group, ZarrGroup],
+    output_group: ZarrGroup | H5Group,
+    alt_axis_name: Literal["obs", "var"],
+    merge: Callable,
+    reindexers: list[Reindexer],
+):
+    alt_mapping = merge(
+        [
+            {
+                k: r(read_elem(v), axis=0)
+                for k, v in dict(g[f"{alt_axis_name}m"]).items()
+            }
+            for r, g in zip(reindexers, groups, strict=True)
+        ]
+    )
+    write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
 
 
-def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
+def _write_alt_annot(
+    groups: Collection[H5Group, ZarrGroup],
+    output_group: ZarrGroup | H5Group,
+    alt_axis_name: Literal["obs", "var"],
+    alt_indices: pd.Index,
+    merge: Callable,
+):
     # Annotation for other axis
     alt_annot = merge_dataframes(
         [read_elem(g[alt_axis_name]) for g in groups], alt_indices, merge
@@ -396,7 +411,13 @@ def _write_alt_annot(groups, output_group, alt_axis_name, alt_indices, merge):
 
 
 def _write_axis_annot(  # noqa: PLR0917
-    groups, output_group, axis_name, concat_indices, label, label_col, join
+    groups: Collection[H5Group, ZarrGroup],
+    output_group: ZarrGroup | H5Group,
+    axis_name: Literal["obs", "var"],
+    concat_indices: pd.Index,
+    label: str,
+    label_col: str,
+    join: Literal["inner", "outer"],
 ):
     concat_annot = pd.concat(
         unify_dtypes(read_elem(g[axis_name]) for g in groups),
@@ -409,9 +430,30 @@ def _write_axis_annot(  # noqa: PLR0917
     write_elem(output_group, axis_name, concat_annot)
 
 
-def _write_uns(groups, output_group, merge):
+def _write_uns(
+    groups: Collection[H5Group, ZarrGroup], output_group: ZarrGroup | H5Group, merge
+):
     uns = merge([read_elem(g["uns"]) for g in groups])
     write_elem(output_group, "uns", uns)
+
+
+def _write_alt_pairwise(
+    groups: Collection[H5Group, ZarrGroup],
+    output_group: ZarrGroup | H5Group,
+    alt_axis_name: Literal["obs", "var"],
+    merge: Callable,
+    reindexers: list[Reindexer],
+):
+    alt_pairwise = merge(
+        [
+            {
+                k: r(r(read_elem(v), axis=0), axis=1)
+                for k, v in dict(g[f"{alt_axis_name}p"]).items()
+            }
+            for r, g in zip(reindexers, groups, strict=True)
+        ]
+    )
+    write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
 
 
 def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
@@ -496,7 +538,8 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
         DataFrames are padded with missing values.
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
-        This is False by default, since the resulting arrays are often not meaningful.
+        This is False by default, since the resulting arrays are often not meaningful, and is ignored when True.
+        If you are interested in this feature, please open an issue.
 
     Notes
     -----
@@ -640,7 +683,10 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
 
     # Write {alt_axis_name}m
-    _write_alt_mapping(groups, output_group, alt_axis_name, alt_index, merge)
+    _write_alt_mapping(groups, output_group, alt_axis_name, merge, reindexers)
+
+    # Write {alt_axis_name}p
+    _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
 
     # Write uns
     _write_uns(groups, output_group, uns_merge)
