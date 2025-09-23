@@ -82,7 +82,7 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "pytest-cov",
+    "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
@@ -109,7 +109,9 @@ cu11 = [ "cupy-cuda11x" ]
 lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
-dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
+dask = [
+    "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+]
 
 [tool.hatch.version]
 source = "vcs"
@@ -118,17 +120,15 @@ raw-options.version_scheme = "release-branch-semver"
 packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
-data_file = "test-data/coverage"
+data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 concurrency = [ "multiprocessing" ]
-parallel = "true"
-
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = [ "./src", "**/site-packages" ]
-
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:",
@@ -177,6 +177,7 @@ markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve za
 src = [ "src" ]
 
 [tool.ruff.format]
+preview = true
 docstring-code-format = true
 
 [tool.ruff.lint]

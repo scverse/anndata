@@ -313,9 +313,10 @@ def test_read_full_io_error(tmp_path, name, read, write):
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
             # See https://github.com/zarr-developers/zarr-python/pull/2870
-            store["obs"].update_attributes(
-                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
-            )
+            store["obs"].update_attributes({
+                **dict(store["obs"].attrs),
+                "encoding-type": "invalid",
+            })
             zarr.consolidate_metadata(store.store)
         else:
             store["obs"].attrs["encoding-type"] = "invalid"
@@ -494,18 +495,18 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     else:
         # TODO: this should not be necessary
         assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm_keys()
+    assert "X_a" in adata.obsm
     assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm_keys()
+    assert "X_b" in adata.varm
     assert adata.varm["X_b"].shape[1] == 3
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
     for k, v in obsm_mapping.items():
-        assert k in adata.obsm_keys()
+        assert k in adata.obsm
         assert adata.obsm[k].shape[1] == len(v)
     for k, v in varm_mapping.items():
-        assert k in adata.varm_keys()
+        assert k in adata.varm
         assert adata.varm[k].shape[1] == len(v)
     assert adata.obs_names.name == obs_dim
     assert adata.var_names.name == var_dim
@@ -967,13 +968,28 @@ def test_h5py_attr_limit(tmp_path):
 @pytest.mark.parametrize(
     "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
 )
-def test_forward_slash_key(elem_key, tmp_path):
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+def test_forward_slash_key(
+    elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
+    tmp_path: Path,
+    store_type: Literal["zarr", "h5ad"],
+    *,
+    disallow_forward_slash_in_h5ad: bool,
+):
     a = ad.AnnData(np.ones((10, 10)))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
-    with pytest.raises(ValueError, match="Forward slashes"):
-        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
+    with (
+        ad.settings.override(
+            disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
+        ),
+        pytest.raises(ValueError, match=r"Forward slashes")
+        if store_type == "zarr" or disallow_forward_slash_in_h5ad
+        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+    ):
+        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
 
 
 @pytest.mark.skipif(

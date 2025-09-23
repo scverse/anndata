@@ -617,6 +617,9 @@ class Reindexer:
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
+            # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
+            if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
+                fill_value = np.array([[fill_value]])
             sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
         return sub_el
@@ -1748,15 +1751,10 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             for r, a in zip(reindexers, adatas, strict=True)
         ],
     )
-    alt_pairwise = merge(
-        [
-            {
-                k: r(r(v, axis=0), axis=1)
-                for k, v in getattr(a, f"{alt_axis_name}p").items()
-            }
-            for r, a in zip(reindexers, adatas, strict=True)
-        ]
-    )
+    alt_pairwise = merge([
+        {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_axis_name}p").items()}
+        for r, a in zip(reindexers, adatas, strict=True)
+    ])
     uns = uns_merge([a.uns for a in adatas])
 
     raw = None
@@ -1785,17 +1783,15 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "not concatenating `.raw` attributes."
         )
         warn(msg, UserWarning, stacklevel=2)
-    return AnnData(
-        **{
-            "X": X,
-            "layers": layers,
-            axis_name: concat_annot,
-            alt_axis_name: alt_annot,
-            f"{axis_name}m": concat_mapping,
-            f"{alt_axis_name}m": alt_mapping,
-            f"{axis_name}p": concat_pairwise,
-            f"{alt_axis_name}p": alt_pairwise,
-            "uns": uns,
-            "raw": raw,
-        }
-    )
+    return AnnData(**{
+        "X": X,
+        "layers": layers,
+        axis_name: concat_annot,
+        alt_axis_name: alt_annot,
+        f"{axis_name}m": concat_mapping,
+        f"{alt_axis_name}m": alt_mapping,
+        f"{axis_name}p": concat_pairwise,
+        f"{alt_axis_name}p": alt_pairwise,
+        "uns": uns,
+        "raw": raw,
+    })

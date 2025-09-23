@@ -193,9 +193,10 @@ def write_concat_dense(  # noqa: PLR0917
         axis=axis,
     )
     write_elem(output_group, output_path, res)
-    output_group[output_path].attrs.update(
-        {"encoding-type": "array", "encoding-version": "0.2.0"}
-    )
+    output_group[output_path].attrs.update({
+        "encoding-type": "array",
+        "encoding-version": "0.2.0",
+    })
 
 
 def write_concat_sparse(  # noqa: PLR0917
