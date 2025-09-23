@@ -49,7 +49,7 @@ jobs:
           # libmambapy upper bound: https://github.com/airspeed-velocity/asv/issues/1438
           create-args: >-
             python=${{ matrix.python }}
-            asv
+            asv<0.6.5
             libmambapy<2
             conda-build
 
