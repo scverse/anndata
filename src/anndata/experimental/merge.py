@@ -260,12 +260,10 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     Write a list of mappings to a zarr/h5 group.
     """
     mapping_group = output_group.create_group(output_path)
-    mapping_group.attrs.update(
-        {
-            "encoding-type": "dict",
-            "encoding-version": "0.1.0",
-        }
-    )
+    mapping_group.attrs.update({
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0",
+    })
     for k in keys:
         elems = [m[k] for m in mappings]
         _write_concat_sequence(
@@ -385,15 +383,10 @@ def _write_alt_mapping(
     merge: Callable,
     reindexers: list[Reindexer],
 ):
-    alt_mapping = merge(
-        [
-            {
-                k: r(read_elem(v), axis=0)
-                for k, v in dict(g[f"{alt_axis_name}m"]).items()
-            }
-            for r, g in zip(reindexers, groups, strict=True)
-        ]
-    )
+    alt_mapping = merge([
+        {k: r(read_elem(v), axis=0) for k, v in dict(g[f"{alt_axis_name}m"]).items()}
+        for r, g in zip(reindexers, groups, strict=True)
+    ])
     write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
 
 
@@ -445,15 +438,13 @@ def _write_alt_pairwise(
     merge: Callable,
     reindexers: list[Reindexer],
 ):
-    alt_pairwise = merge(
-        [
-            {
-                k: r(r(read_elem(v), axis=0), axis=1)
-                for k, v in dict(g[f"{alt_axis_name}p"]).items()
-            }
-            for r, g in zip(reindexers, groups, strict=True)
-        ]
-    )
+    alt_pairwise = merge([
+        {
+            k: r(r(read_elem(v), axis=0), axis=1)
+            for k, v in dict(g[f"{alt_axis_name}p"]).items()
+        }
+        for r, g in zip(reindexers, groups, strict=True)
+    ])
     write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
 
 
