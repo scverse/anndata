@@ -72,14 +72,14 @@ def normalize_transform(X):
     """Normalize to 10,000 counts per cell and log-transform."""
     # Ensure we have positive values and no NaNs
     X = torch.clamp(X, min=0)
-    
+
     # Normalize to 10,000 counts per cell (sum across genes for each cell)
     row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
     X = X * (1e4 / row_sum)
 
     # Log1p transformation
     X = torch.log1p(X)
-    
+
     # Ensure no NaNs or infinities
     X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
 
@@ -96,7 +96,7 @@ def training_transform(X):
     """Complete preprocessing and augmentation pipeline."""
     # Ensure we have positive values and no NaNs
     X = torch.clamp(X, min=0)
-    
+
     # Normalize to 10k counts per cell (sum across genes for each cell)
     row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
     X = X * (1e4 / row_sum)
@@ -108,7 +108,7 @@ def training_transform(X):
     if torch.rand(1).item() < 0.5:  # 50% chance
         noise = torch.normal(0, 0.01, size=X.shape)  # Reduced noise
         X = X + noise
-    
+
     # Ensure no NaNs or infinities
     X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
 
