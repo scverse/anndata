@@ -11,9 +11,11 @@ notebooks/getting-started
 notebooks/annloader
 notebooks/anncollection
 notebooks/anncollection-annloader
+notebooks/anndataset-demo
 notebooks/anndata_dask_array
 notebooks/awkward-arrays
 notebooks/{read,write}_dispatched
 notebooks/read_lazy
+pytorch-dataset
 zarr-v3
 ```

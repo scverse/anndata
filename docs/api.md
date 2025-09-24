@@ -126,7 +126,7 @@ Writing formats that cannot represent all aspects of {class}`AnnData` objects.
 APIs in the experimental module are currently in development and subject to change at any time.
 ```
 
-Two classes for working with batched access to collections of many {class}`AnnData` objects or `.h5ad` files.
+Classes for working with batched access to collections of many {class}`AnnData` objects or `.h5ad` files.
 In particular, for pytorch-based models.
 
 ```{eval-rst}
@@ -135,6 +135,7 @@ In particular, for pytorch-based models.
 
    experimental.AnnCollection
    experimental.AnnLoader
+   experimental.pytorch.AnnDataset
 ```
 
 Out of core concatenation
