@@ -8,7 +8,7 @@ The `AnnDataset` class is part of the experimental API and may change in future 
 
 ## Key Features
 
-- **Generic transform interface**: Accepts any callable transform function following PyTorch conventions
+- **Transform class interface**: Accepts Transform class instances for multiprocessing-safe data transformations
 - **Memory efficiency**: Streams from backed HDF5 data without loading into memory
 - **Multiprocessing safety**: Safe HDF5 handling following h5py best practices
 - **Configurable chunk processing**: User-defined chunk sizes for memory management
@@ -123,9 +123,21 @@ dataloader = DataLoader(dataset, batch_size=32, num_workers=4)
 ### Index-based Subsetting
 
 ```python
-# Create dataset with specific cell indices
-train_indices = [0, 1, 2, 100, 101, 102]  # Your training indices
+# Create train/test split (80/20)
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+# Get 80% of indices for training
+n_cells = len(adata)
+all_indices = np.arange(n_cells)
+train_indices, test_indices = train_test_split(all_indices, test_size=0.2, random_state=42)
+
+# Create datasets for training and testing
 train_dataset = AnnDataset(adata, obs_subset=train_indices)
+test_dataset = AnnDataset(adata, obs_subset=test_indices)
+
+print(f"Training dataset: {len(train_dataset)} items ({len(train_dataset)/n_cells:.1%})")
+print(f"Test dataset: {len(test_dataset)} items ({len(test_dataset)/n_cells:.1%})")
 ```
 
 ### Large Dataset Configuration
@@ -201,17 +213,17 @@ for epoch in range(num_epochs):
 
 ### Accessing Metadata
 
-The dataset includes observation metadata in the returned samples:
+The dataset includes observation metadata in the returned items:
 
 ```python
-# Sample contains both expression data and metadata
-sample = dataset[0]
-print(f"Available keys: {list(sample.keys())}")
+# Item contains both expression data and metadata
+item = dataset[0]
+print(f"Available keys: {list(item.keys())}")
 
 # Expression data
-X = sample["X"]
+X = item["X"]
 
 # Metadata (if available)
-if "obs_cell_type" in sample:
-    cell_type = sample["obs_cell_type"]
+if "obs_cell_type" in item:
+    cell_type = item["obs_cell_type"]
 ```

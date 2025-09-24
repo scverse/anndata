@@ -21,42 +21,66 @@ except ImportError:
     torch = None
 
 
-# Module-level transform functions for multiprocessing compatibility
-def log_transform(x):
-    """Simple log transform function."""
-    return torch.log1p(x)
+# Module-level transform classes for multiprocessing compatibility
+try:
+    from anndata.experimental.pytorch import Transform
 
+    class LogTransform(Transform):
+        """Simple log transform."""
 
-def training_transform(x):
-    """Training transform with normalization and augmentation."""
-    # Normalize to 10k counts per cell
-    row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
-    x = x * (1e4 / row_sum)
-    # Log transform
-    x = torch.log1p(x)
-    # Add small amount of noise
-    x = x + 0.01 * torch.randn_like(x)
-    return x
+        def __call__(self, x):
+            return torch.log1p(x)
 
+    class TrainingTransform(Transform):
+        """Training transform with normalization and augmentation."""
 
-def normalize_transform(x):
-    """Simple normalization transform."""
-    return torch.log1p(x)
+        def __call__(self, x):
+            # Normalize to 10k counts per cell
+            row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
+            x = x * (1e4 / row_sum)
+            # Log transform
+            x = torch.log1p(x)
+            # Add small amount of noise
+            x = x + 0.01 * torch.randn_like(x)
+            return x
 
+    class NormalizeTransform(Transform):
+        """Simple normalization transform."""
 
-def custom_transform(x):
-    """Simple custom transform function."""
-    return x * 1.5
+        def __call__(self, x):
+            return torch.log1p(x)
 
+    class CustomTransform(Transform):
+        """Simple custom transform."""
 
-def composed_transform(x):
-    """Composed transform with normalization and noise."""
-    # Normalize
-    row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
-    x = x * (1e4 / row_sum)
-    # Add noise
-    x = x + 0.01 * torch.randn_like(x)
-    return x
+        def __call__(self, x):
+            return x * 1.5
+
+    class ComposedTransform(Transform):
+        """Composed transform with normalization and noise."""
+
+        def __call__(self, x):
+            # Normalize
+            row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
+            x = x * (1e4 / row_sum)
+            # Add noise
+            x = x + 0.01 * torch.randn_like(x)
+            return x
+
+    # Create instances for use in tests
+    log_transform = LogTransform()
+    training_transform = TrainingTransform()
+    normalize_transform = NormalizeTransform()
+    custom_transform = CustomTransform()
+    composed_transform = ComposedTransform()
+
+except ImportError:
+    # Fallback for when Transform is not available
+    log_transform = None
+    training_transform = None
+    normalize_transform = None
+    custom_transform = None
+    composed_transform = None
 
 
 class TestAnnDatasetMultiprocessing:

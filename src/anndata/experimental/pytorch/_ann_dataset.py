@@ -29,7 +29,7 @@ from scipy.sparse import issparse
 import anndata as ad
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from ..._core.anndata import AnnData
     from .transforms import Transform
@@ -161,8 +161,6 @@ class AnnDataset(Dataset):
         obs_subset: Sequence[int] | np.ndarray | None = None,
         # Advanced features
         chunk_size: int = 1000,
-        # Collate function
-        collate_fn: Callable | None = None,
     ):
         """Initialize AnnData Dataset.
 
@@ -178,8 +176,6 @@ class AnnDataset(Dataset):
             Subset of observations to include (by index)
         chunk_size
             Chunk size for processing backed data efficiently
-        collate_fn
-            Custom collate function for DataLoader batching
         """
         if not TORCH_AVAILABLE:
             error_msg = (
@@ -195,7 +191,6 @@ class AnnDataset(Dataset):
         self._validate_transform(transform)
         self.transform = transform
         self.chunk_size = chunk_size
-        self.collate_fn = collate_fn
 
         # Handle AnnData input
         if isinstance(adata, (str, Path)):
@@ -218,7 +213,13 @@ class AnnDataset(Dataset):
         self._worker_seed_base = hash((id(self), id(self.transform)))
 
     def _validate_transform(self, transform):
-        """Validate that transform is a Transform object for multiprocessing compatibility."""
+        """Validate that transform is a Transform object for multiprocessing compatibility.
+
+        Transform inheritance is required because:
+        1. Regular functions/lambdas cannot be pickled for multiprocessing
+        2. Transform classes are serializable and work seamlessly across worker processes
+        3. This ensures consistent behavior when using DataLoader with num_workers > 0
+        """
         if transform is not None:
             # Import Transform here to avoid circular imports
             try:
@@ -375,7 +376,7 @@ class AnnDataset(Dataset):
         Parameters
         ----------
         batch_size
-            Number of samples per batch
+            Number of items per batch
         shuffle
             Whether to shuffle the data
         num_workers
@@ -451,7 +452,7 @@ class AnnDataset(Dataset):
 
 
 def _batch_samples(samples: list[dict]) -> dict[str, torch.Tensor]:
-    """Helper function to batch samples into tensors."""
+    """Helper function to batch items into tensors."""
     batch = {}
 
     # Handle expression data
@@ -486,7 +487,7 @@ def _batch_samples(samples: list[dict]) -> dict[str, torch.Tensor]:
 def _ann_dataset_collate_fn(
     batch_samples: list[dict], dataset: AnnDataset = None
 ) -> dict[str, torch.Tensor]:
-    """Collate function for AnnDataset that batches samples efficiently."""
+    """Collate function for AnnDataset that batches items efficiently."""
     if not TORCH_AVAILABLE:
         error_msg = "PyTorch is required for batch collation"
         raise ImportError(error_msg)
@@ -518,7 +519,7 @@ def _optimized_collate_fn(
     # Sort indices for efficient sequential disk access
     sorted_indices = sorted(batch_indices)
 
-    # Load all samples in the batch using sorted indices
+    # Load all items in the batch using sorted indices
     batch_data = [dataset[idx] for idx in sorted_indices]
 
     return _batch_samples(batch_data)

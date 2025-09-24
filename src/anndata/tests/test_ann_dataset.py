@@ -66,10 +66,23 @@ class TestAnnDataset:
         dataset = AnnDataset(adata)
         assert dataset.transform is None
 
-        # Test custom transform
-        def custom_transform(X):
+        # Test that regular functions are rejected
+        def custom_function(X):
             return X * 2
 
+        with pytest.raises(
+            TypeError, match="transform must be an instance of Transform class"
+        ):
+            AnnDataset(adata, transform=custom_function)
+
+        # Test valid Transform class
+        from anndata.experimental.pytorch import Transform
+
+        class CustomTransform(Transform):
+            def __call__(self, X):
+                return X * 2
+
+        custom_transform = CustomTransform()
         dataset = AnnDataset(adata, transform=custom_transform)
         assert dataset.transform == custom_transform
 
@@ -77,10 +90,14 @@ class TestAnnDataset:
         """Test transform application."""
         adata = gen_adata
 
-        # Test transform function
-        def dummy_transform(X):
-            return X * 1.1
+        # Test transform using proper Transform class
+        from anndata.experimental.pytorch import Transform
 
+        class DummyTransform(Transform):
+            def __call__(self, X):
+                return X * 1.1
+
+        dummy_transform = DummyTransform()
         dataset = AnnDataset(adata, transform=dummy_transform)
         sample = dataset[0]
 
@@ -176,9 +193,13 @@ class TestAnnDataset:
         """Test worker generator consistency."""
         adata = gen_adata
 
-        def dummy_transform(X):
-            return X
+        from anndata.experimental.pytorch import Transform
 
+        class DummyTransform(Transform):
+            def __call__(self, X):
+                return X
+
+        dummy_transform = DummyTransform()
         dataset = AnnDataset(
             adata,
             transform=dummy_transform,
@@ -334,10 +355,14 @@ class TestAnnDataset:
         """Test generic preprocessing functionality."""
         adata = gen_adata
 
-        # Test with custom preprocessing function
-        def custom_preprocessing(X):
-            return X * 2 + 1
+        # Test with custom preprocessing Transform class
+        from anndata.experimental.pytorch import Transform
 
+        class CustomPreprocessing(Transform):
+            def __call__(self, X):
+                return X * 2 + 1
+
+        custom_preprocessing = CustomPreprocessing()
         dataset = AnnDataset(adata, transform=custom_preprocessing)
 
         sample = dataset[0]
