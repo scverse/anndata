@@ -259,6 +259,40 @@ class TestTransforms:
             # Cleanup
             Path(temp_path).unlink()
 
+    def test_transform_validation(self, gen_adata):
+        """Test that AnnDataset validates transform parameter correctly."""
+        try:
+            from anndata.experimental.pytorch import AnnDataset, Transform
+        except ImportError:
+            pytest.skip("PyTorch not available")
+
+        # Test that non-Transform objects are rejected
+        with pytest.raises(
+            TypeError, match="transform must be an instance of Transform class"
+        ):
+            AnnDataset(gen_adata, transform=lambda x: x)
+
+        def my_func(x):
+            return x
+
+        with pytest.raises(
+            TypeError, match="transform must be an instance of Transform class"
+        ):
+            AnnDataset(gen_adata, transform=my_func)
+
+        # Test that Transform objects are accepted
+        class ValidTransform(Transform):
+            def __call__(self, x):
+                return x
+
+        # This should work without error
+        dataset = AnnDataset(gen_adata, transform=ValidTransform())
+        assert dataset.transform is not None
+
+        # Test that None is still accepted
+        dataset_none = AnnDataset(gen_adata, transform=None)
+        assert dataset_none.transform is None
+
     def test_transform_pickling(self, gen_adata):
         """Test that Transform classes can be pickled and unpickled."""
         try:

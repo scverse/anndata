@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from ..._core.anndata import AnnData
+    from .transforms import Transform
 
 # Import torch conditionally
 try:
@@ -133,9 +134,12 @@ class AnnDataset(Dataset):
 
     With transform:
 
-    >>> def normalize(X):
-    ...     return torch.log1p(X)
-    >>> dataset = AnnDataset("data.h5ad", transform=normalize)  # doctest: +SKIP
+    >>> class NormalizeTransform(Transform):
+    ...     def __call__(self, X):
+    ...         return torch.log1p(X)
+    >>> dataset = AnnDataset(
+    ...     "data.h5ad", transform=NormalizeTransform()
+    ... )  # doctest: +SKIP
 
     Multiprocessing with subset:
 
@@ -151,8 +155,8 @@ class AnnDataset(Dataset):
         self,
         adata: AnnData | str | Path,
         *,
-        # Transform function or Transform object (following PyTorch conventions)
-        transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        # Transform object (must inherit from Transform base class for multiprocessing compatibility)
+        transform: Transform | None = None,
         # Observation selection
         obs_subset: Sequence[int] | np.ndarray | None = None,
         # Advanced features
@@ -167,10 +171,9 @@ class AnnDataset(Dataset):
         adata
             AnnData object or path to h5ad file
         transform
-            Callable or Transform object to transform loaded data tensors.
-            Should accept a torch.Tensor and return a torch.Tensor.
-            Can be a function, lambda, or a Transform class instance for better
-            multiprocessing compatibility.
+            Transform object to transform loaded data tensors.
+            Must inherit from anndata.experimental.pytorch.Transform and
+            implement __call__ method. This ensures multiprocessing compatibility.
         obs_subset
             Subset of observations to include (by index)
         chunk_size
@@ -188,7 +191,8 @@ class AnnDataset(Dataset):
         # Validate inputs
         self._validate_inputs(transform, obs_subset, chunk_size)
 
-        # Store configuration
+        # Store and validate transform
+        self._validate_transform(transform)
         self.transform = transform
         self.chunk_size = chunk_size
         self.collate_fn = collate_fn
@@ -213,12 +217,26 @@ class AnnDataset(Dataset):
         self._torch_generator = None
         self._worker_seed_base = hash((id(self), id(self.transform)))
 
+    def _validate_transform(self, transform):
+        """Validate that transform is a Transform object for multiprocessing compatibility."""
+        if transform is not None:
+            # Import Transform here to avoid circular imports
+            try:
+                from .transforms import Transform
+            except ImportError:
+                # If transforms module isn't available, we can't validate
+                return
+
+            if not isinstance(transform, Transform):
+                msg = (
+                    "transform must be an instance of Transform class for multiprocessing compatibility. "
+                    f"Got {type(transform)}. Please inherit from anndata.experimental.pytorch.Transform "
+                    "and implement __call__ method."
+                )
+                raise TypeError(msg)
+
     def _validate_inputs(self, transform, obs_subset, chunk_size):
         """Validate dataset inputs and provide helpful error messages."""
-        # Transform validation
-        if transform is not None and not callable(transform):
-            msg = "transform must be callable"
-            raise TypeError(msg)
 
         # Observation subset validation
         if obs_subset is not None:

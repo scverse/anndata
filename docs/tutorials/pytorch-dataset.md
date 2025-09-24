@@ -59,11 +59,11 @@ for batch in dataloader:
 
 ## Data Transformations
 
-The `transform` parameter accepts any callable that takes a {class}`torch.Tensor` and returns a {class}`torch.Tensor`. This follows standard PyTorch Dataset conventions for data preprocessing and augmentation.
+The `transform` parameter accepts only Transform class instances that inherit from {class}`~anndata.experimental.pytorch.Transform`. This unified API ensures all transforms work seamlessly with multiprocessing by design.
 
-For better multiprocessing compatibility, you can use the built-in Transform classes that avoid pickling issues with lambda functions and closures.
+All transforms must inherit from the Transform base class and implement the `__call__` method.
 
-### Using Transform Classes (Recommended for Multiprocessing)
+### Creating Custom Transform Classes
 
 Create your own Transform classes that are serializable and work seamlessly with multiprocessing:
 
@@ -116,63 +116,7 @@ dataset = AnnDataset(adata, transform=training_transform)
 dataloader = DataLoader(dataset, batch_size=32, num_workers=4)
 ```
 
-### Simple Normalization (Function-based)
 
-```python
-import torch
-
-def normalize_transform(X):
-    """Normalize to 10,000 counts per cell and log-transform."""
-    # Ensure we have positive values and no NaNs
-    X = torch.clamp(X, min=0)
-
-    # Normalize to 10,000 counts per cell (sum across genes for each cell)
-    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
-    X = X * (1e4 / row_sum)
-
-    # Log1p transformation
-    X = torch.log1p(X)
-
-    # Ensure no NaNs or infinities
-    X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
-
-    return X
-
-# Create dataset with transform
-dataset = AnnDataset(adata, transform=normalize_transform)
-```
-
-### Training with Augmentation
-
-```python
-def training_transform(X):
-    """Complete preprocessing and augmentation pipeline."""
-    # Ensure we have positive values and no NaNs
-    X = torch.clamp(X, min=0)
-
-    # Normalize to 10k counts per cell (sum across genes for each cell)
-    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
-    X = X * (1e4 / row_sum)
-
-    # Log transformation
-    X = torch.log1p(X)
-
-    # Add small amount of noise for augmentation
-    if torch.rand(1).item() < 0.5:  # 50% chance
-        noise = torch.normal(0, 0.01, size=X.shape)  # Reduced noise
-        X = X + noise
-
-    # Ensure no NaNs or infinities
-    X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
-
-    return X
-
-training_dataset = AnnDataset(
-    adata,
-    transform=training_transform,
-    chunk_size=1000
-)
-```
 
 ## Working with Subsets
 
@@ -223,20 +167,7 @@ transform = MyTransform(param=1e4)
 dataloader = DataLoader(dataset, num_workers=4)  # No pickling issues!
 ```
 
-If using custom transform functions, define them in a separate Python module rather than inline. Functions defined in Jupyter notebooks or the main script cannot be pickled for multiprocessing.
-
-**Function-based pattern (alternative):**
-```python
-# In transforms.py
-def training_transform(X):
-    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
-    X = X * (1e4 / row_sum)
-    return torch.log1p(X)
-
-# In your main script
-from transforms import training_transform
-dataloader = DataLoader(dataset, num_workers=4)
-```
+All transforms must inherit from the Transform base class - this ensures they work seamlessly with multiprocessing without any additional configuration.
 ```
 
 ## Integration with Training Loops
