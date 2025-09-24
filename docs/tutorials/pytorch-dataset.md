@@ -1,5 +1,7 @@
 # PyTorch Dataset for AnnData
 
+**Author:** AnnData Development Team
+
 The {class}`~anndata.experimental.pytorch.AnnDataset` class provides a PyTorch {class}`~torch.utils.data.Dataset` implementation for {class}`~anndata.AnnData` objects, enabling seamless integration with PyTorch DataLoaders and training loops.
 
 ```{warning}
@@ -22,9 +24,10 @@ The `AnnDataset` class is part of the experimental API and may change in future 
 import anndata as ad
 from anndata.experimental.pytorch import AnnDataset
 from torch.utils.data import DataLoader
+import scanpy as sc
 
-# Load your AnnData object
-adata = ad.read_h5ad("data.h5ad")
+# Load real single-cell data
+adata = sc.datasets.pbmc3k_processed()
 
 # Create a basic dataset
 dataset = AnnDataset(adata)
@@ -67,12 +70,18 @@ import torch
 
 def normalize_transform(X):
     """Normalize to 10,000 counts per cell and log-transform."""
-    # Normalize to 10,000 counts per cell
-    row_sum = torch.sum(X) + 1e-8
+    # Ensure we have positive values and no NaNs
+    X = torch.clamp(X, min=0)
+    
+    # Normalize to 10,000 counts per cell (sum across genes for each cell)
+    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
     X = X * (1e4 / row_sum)
 
     # Log1p transformation
     X = torch.log1p(X)
+    
+    # Ensure no NaNs or infinities
+    X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
 
     return X
 
@@ -85,16 +94,23 @@ dataset = AnnDataset(adata, transform=normalize_transform)
 ```python
 def training_transform(X):
     """Complete preprocessing and augmentation pipeline."""
-    # Normalization
-    row_sum = torch.sum(X) + 1e-8
+    # Ensure we have positive values and no NaNs
+    X = torch.clamp(X, min=0)
+    
+    # Normalize to 10k counts per cell (sum across genes for each cell)
+    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # Sum across genes (last dimension)
     X = X * (1e4 / row_sum)
 
     # Log transformation
     X = torch.log1p(X)
 
-    # Add Gaussian noise for data augmentation
-    noise = torch.randn_like(X) * 0.01
-    X = X + noise
+    # Add small amount of noise for augmentation
+    if torch.rand(1).item() < 0.5:  # 50% chance
+        noise = torch.normal(0, 0.01, size=X.shape)  # Reduced noise
+        X = X + noise
+    
+    # Ensure no NaNs or infinities
+    X = torch.nan_to_num(X, nan=0.0, posinf=10.0, neginf=0.0)
 
     return X
 
@@ -122,7 +138,7 @@ For large datasets, configure chunk size and multiprocessing settings:
 
 ```python
 large_dataset = AnnDataset(
-    "large_data.h5ad",  # Can pass file path directly
+    adata,  # Or pass file path: "large_data.h5ad"
     transform=normalize_transform,
     multiprocessing_safe=True,
     chunk_size=2000,  # Larger chunks for better performance
@@ -153,6 +169,25 @@ dataloader = DataLoader(
     num_workers=4,  # Multiple workers work safely
     shuffle=True
 )
+```
+
+### Multiprocessing with Custom Transforms
+
+```{note}
+When using custom transform functions with multiprocessing (`num_workers > 0`), define your transforms in a separate Python module rather than inline. Functions defined in Jupyter notebooks or the main script cannot be pickled for multiprocessing.
+
+**Production pattern:**
+```python
+# In transforms.py
+def training_transform(X):
+    row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
+    X = X * (1e4 / row_sum)
+    return torch.log1p(X)
+
+# In your main script
+from transforms import training_transform
+dataloader = DataLoader(dataset, num_workers=4)  # Now multiprocessing works!
+```
 ```
 
 ## Integration with Training Loops
