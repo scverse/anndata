@@ -13,6 +13,9 @@ For multiprocessing with HDF5 files, this implementation follows h5py recommenda
 "It's advised to open the file independently in each reader process; opening the
 file once and then forking may cause issues."
 See: https://docs.h5py.org/en/stable/mpi.html
+
+Multiprocessing safety is always enabled - each worker process opens HDF5 files
+independently for optimal safety and performance.
 """
 
 from __future__ import annotations
@@ -139,7 +142,6 @@ class AnnDataset(Dataset):
     >>> dataset = AnnDataset(  # doctest: +SKIP
     ...     "data.h5ad",
     ...     obs_subset=train_indices,
-    ...     multiprocessing_safe=True,
     ...     chunk_size=2000,
     ... )
     >>> dataloader = DataLoader(dataset, batch_size=64, num_workers=4)  # doctest: +SKIP
@@ -149,12 +151,11 @@ class AnnDataset(Dataset):
         self,
         adata: AnnData | str | Path,
         *,
-        # Transform function (following PyTorch conventions)
+        # Transform function or Transform object (following PyTorch conventions)
         transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         # Observation selection
         obs_subset: Sequence[int] | np.ndarray | None = None,
         # Advanced features
-        multiprocessing_safe: bool = True,
         chunk_size: int = 1000,
         # Collate function
         collate_fn: Callable | None = None,
@@ -166,12 +167,12 @@ class AnnDataset(Dataset):
         adata
             AnnData object or path to h5ad file
         transform
-            Callable to transform loaded data tensors.
+            Callable or Transform object to transform loaded data tensors.
             Should accept a torch.Tensor and return a torch.Tensor.
+            Can be a function, lambda, or a Transform class instance for better
+            multiprocessing compatibility.
         obs_subset
             Subset of observations to include (by index)
-        multiprocessing_safe
-            Enable safe multiprocessing for backed data following h5py best practices
         chunk_size
             Chunk size for processing backed data efficiently
         collate_fn
@@ -190,7 +191,6 @@ class AnnDataset(Dataset):
         # Store configuration
         self.transform = transform
         self.chunk_size = chunk_size
-        self.multiprocessing_safe = multiprocessing_safe
         self.collate_fn = collate_fn
 
         # Handle AnnData input
@@ -275,36 +275,22 @@ class AnnDataset(Dataset):
         # Get the actual row index
         row_idx = self.obs_indices[idx]
 
-        if self.multiprocessing_safe and (
-            self.adata_path is not None
-            or (self.adata_obj is not None and self.adata_obj.isbacked)
-        ):
-            # Get AnnData object safe for worker access
-            # Following h5py recommendation: each worker opens files independently
-            adata = _get_adata_for_worker(self.adata_path, self.adata_obj)
-            X_raw = adata.X[row_idx]  # Get single row
-            obs_data = (
-                adata.obs.iloc[row_idx].to_dict() if adata.obs.shape[1] > 0 else {}
-            )
-        elif self.adata_obj is None:
+        # For in-memory data, _get_adata_for_worker will return the object directly
+        # For backed data, it will reopen files independently in each worker
+        if self.adata_obj is None:
             # In multiprocessing worker, adata_obj can become None
             if self.adata_path is not None:
                 adata = _get_adata_for_worker(self.adata_path, None)
-                X_raw = adata.X[row_idx]
-                obs_data = (
-                    adata.obs.iloc[row_idx].to_dict() if adata.obs.shape[1] > 0 else {}
-                )
             else:
                 msg = "AnnData object is None and no path available for reloading"
                 raise RuntimeError(msg)
         else:
-            # Direct access for in-memory data
-            X_raw = self.adata_obj.X[row_idx]
-            obs_data = (
-                self.adata_obj.obs.iloc[row_idx].to_dict()
-                if self.adata_obj.obs.shape[1] > 0
-                else {}
-            )
+            # Get AnnData object safe for worker access
+            # Following h5py recommendation: each worker opens files independently
+            adata = _get_adata_for_worker(self.adata_path, self.adata_obj)
+
+        X_raw = adata.X[row_idx]  # Get single row
+        obs_data = adata.obs.iloc[row_idx].to_dict() if adata.obs.shape[1] > 0 else {}
 
         # Convert sparse to dense if needed
         if issparse(X_raw):

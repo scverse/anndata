@@ -101,9 +101,7 @@ class TestAnnDatasetMultiprocessing:
             pytest.skip("PyTorch not available")
 
         # Create dataset with simple transform function
-        dataset = AnnDataset(
-            sample_adata, transform=normalize_transform, multiprocessing_safe=True
-        )
+        dataset = AnnDataset(sample_adata, transform=normalize_transform)
 
         # Test DataLoader with multiprocessing
         dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=2)
@@ -131,7 +129,6 @@ class TestAnnDatasetMultiprocessing:
         dataset = AnnDataset(
             backed_adata,
             transform=training_transform,
-            multiprocessing_safe=True,
             chunk_size=20,
         )
 
@@ -170,9 +167,7 @@ class TestAnnDatasetMultiprocessing:
             sample_adata.write(temp_path)
 
             # Create dataset from file path
-            dataset = AnnDataset(
-                temp_path, transform=log_transform, multiprocessing_safe=True
-            )
+            dataset = AnnDataset(temp_path, transform=log_transform)
 
             # Test DataLoader with multiprocessing
             dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=2)
@@ -195,15 +190,13 @@ class TestAnnDatasetMultiprocessing:
 
     def test_multiprocessing_with_optimized_dataloader(self, sample_adata):
         """Test multiprocessing with optimized DataLoader."""
-        try:
-            from torch.utils.data import DataLoader
-        except ImportError:
+        import importlib.util
+
+        if importlib.util.find_spec("torch") is None:
             pytest.skip("PyTorch not available")
 
         # Create dataset
-        dataset = AnnDataset(
-            sample_adata, transform=training_transform, multiprocessing_safe=True
-        )
+        dataset = AnnDataset(sample_adata, transform=training_transform)
 
         # Test optimized DataLoader with multiprocessing
         optimized_loader = dataset.get_optimized_dataloader(
@@ -237,7 +230,6 @@ class TestAnnDatasetMultiprocessing:
             sample_adata,
             obs_subset=subset_indices,
             transform=log_transform,
-            multiprocessing_safe=True,
         )
 
         # Test DataLoader with multiprocessing
@@ -265,7 +257,8 @@ class TestAnnDatasetMultiprocessing:
 
         # Create dataset with deterministic transform
         dataset = AnnDataset(
-            sample_adata, transform=log_transform, multiprocessing_safe=True
+            sample_adata,
+            transform=log_transform,
         )
 
         # Test with single worker first
@@ -298,7 +291,6 @@ class TestAnnDatasetMultiprocessing:
             AnnDataset(
                 sample_adata,
                 transform=log_transform,
-                multiprocessing_safe=True,
                 chunk_size=0,  # Invalid chunk size
             )
 
@@ -311,7 +303,8 @@ class TestAnnDatasetMultiprocessing:
 
         # Create dataset without multiprocessing
         dataset = AnnDataset(
-            sample_adata, transform=log_transform, multiprocessing_safe=False
+            sample_adata,
+            transform=log_transform,
         )
 
         # Test DataLoader without workers
@@ -334,7 +327,6 @@ class TestAnnDatasetMultiprocessing:
         dataset = AnnDataset(
             sample_adata,
             transform=custom_transform,
-            multiprocessing_safe=True,
         )
 
         # Test DataLoader with multiprocessing
@@ -355,7 +347,8 @@ class TestAnnDatasetMultiprocessing:
 
         # Create dataset with composed transform
         dataset = AnnDataset(
-            sample_adata, transform=composed_transform, multiprocessing_safe=True
+            sample_adata,
+            transform=composed_transform,
         )
 
         # Test DataLoader with multiprocessing

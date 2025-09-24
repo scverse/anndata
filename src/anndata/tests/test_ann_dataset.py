@@ -167,13 +167,8 @@ class TestAnnDataset:
         """Test multiprocessing safety settings."""
         adata = gen_adata
 
-        # Test with multiprocessing_safe=True (default)
-        dataset = AnnDataset(adata, multiprocessing_safe=True)
-        sample = dataset[0]
-        assert isinstance(sample, dict)
-
-        # Test with multiprocessing_safe=False
-        dataset = AnnDataset(adata, multiprocessing_safe=False)
+        # Test dataset creation
+        dataset = AnnDataset(adata)
         sample = dataset[0]
         assert isinstance(sample, dict)
 

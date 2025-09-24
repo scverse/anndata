@@ -1,8 +1,6 @@
 # PyTorch Dataset for AnnData
 
-**Author:** AnnData Development Team
-
-The {class}`~anndata.experimental.pytorch.AnnDataset` class provides a PyTorch {class}`~torch.utils.data.Dataset` implementation for {class}`~anndata.AnnData` objects, enabling seamless integration with PyTorch DataLoaders and training loops.
+The {class}`~anndata.experimental.pytorch.AnnDataset` class provides a PyTorch {class}`~torch.utils.data.Dataset` implementation for {class}`~anndata.AnnData` objects. This enables seamless integration with PyTorch DataLoaders and training workflows for single-cell data analysis.
 
 ```{warning}
 The `AnnDataset` class is part of the experimental API and may change in future versions.
@@ -61,9 +59,64 @@ for batch in dataloader:
 
 ## Data Transformations
 
-The `transform` parameter accepts any callable that takes a {class}`torch.Tensor` and returns a {class}`torch.Tensor`, following standard PyTorch Dataset conventions.
+The `transform` parameter accepts any callable that takes a {class}`torch.Tensor` and returns a {class}`torch.Tensor`. This follows standard PyTorch Dataset conventions for data preprocessing and augmentation.
 
-### Simple Normalization
+For better multiprocessing compatibility, you can use the built-in Transform classes that avoid pickling issues with lambda functions and closures.
+
+### Using Transform Classes (Recommended for Multiprocessing)
+
+Create your own Transform classes that are serializable and work seamlessly with multiprocessing:
+
+```python
+from anndata.experimental.pytorch import Transform, Compose
+import torch
+
+class NormalizeTransform(Transform):
+    """Normalize counts to target sum per cell."""
+    def __init__(self, target_sum=1e4):
+        self.target_sum = target_sum
+
+    def __call__(self, x):
+        # Ensure positive values
+        x = torch.clamp(x, min=0)
+        # Normalize to target sum
+        row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
+        return x * (self.target_sum / row_sum)
+
+    def __repr__(self):
+        return f"NormalizeTransform(target_sum={self.target_sum})"
+
+class LogTransform(Transform):
+    """Apply log1p transformation."""
+    def __call__(self, x):
+        return torch.log1p(x)
+
+class AddNoise(Transform):
+    """Add Gaussian noise for augmentation."""
+    def __init__(self, noise_std=0.01, probability=0.5):
+        self.noise_std = noise_std
+        self.probability = probability
+
+    def __call__(self, x):
+        if torch.rand(1).item() < self.probability:
+            noise = torch.normal(0, self.noise_std, size=x.shape)
+            x = x + noise
+            x = torch.clamp(x, min=0)  # Keep non-negative
+        return x
+
+# Compose transforms
+training_transform = Compose([
+    NormalizeTransform(target_sum=1e4),
+    LogTransform(),
+    AddNoise(noise_std=0.01, probability=0.5)
+])
+
+# Create dataset - works perfectly with multiprocessing!
+dataset = AnnDataset(adata, transform=training_transform)
+dataloader = DataLoader(dataset, batch_size=32, num_workers=4)
+```
+
+### Simple Normalization (Function-based)
 
 ```python
 import torch
@@ -117,7 +170,6 @@ def training_transform(X):
 training_dataset = AnnDataset(
     adata,
     transform=training_transform,
-    multiprocessing_safe=True,
     chunk_size=1000
 )
 ```
@@ -140,7 +192,6 @@ For large datasets, configure chunk size and multiprocessing settings:
 large_dataset = AnnDataset(
     adata,  # Or pass file path: "large_data.h5ad"
     transform=normalize_transform,
-    multiprocessing_safe=True,
     chunk_size=2000,  # Larger chunks for better performance
 )
 
@@ -153,30 +204,28 @@ dataloader = DataLoader(
 )
 ```
 
-## Multiprocessing and Performance
+```{note}
+**Multiprocessing with Transforms**
 
-The `AnnDataset` follows h5py best practices for multiprocessing:
-
-- Each worker process opens HDF5 files independently
-- No complex retry mechanisms needed
-- Safe concurrent access to backed data
+For the best multiprocessing experience, create your own Transform classes:
 
 ```python
-# This is safe and efficient
-dataloader = DataLoader(
-    dataset,
-    batch_size=128,
-    num_workers=4,  # Multiple workers work safely
-    shuffle=True
-)
+from anndata.experimental.pytorch import Transform, Compose
+
+# Transform classes work seamlessly with multiprocessing
+class MyTransform(Transform):
+    def __init__(self, param=1.0):
+        self.param = param
+    def __call__(self, x):
+        return torch.log1p(x * self.param)
+
+transform = MyTransform(param=1e4)
+dataloader = DataLoader(dataset, num_workers=4)  # No pickling issues!
 ```
 
-### Multiprocessing with Custom Transforms
+If using custom transform functions, define them in a separate Python module rather than inline. Functions defined in Jupyter notebooks or the main script cannot be pickled for multiprocessing.
 
-```{note}
-When using custom transform functions with multiprocessing (`num_workers > 0`), define your transforms in a separate Python module rather than inline. Functions defined in Jupyter notebooks or the main script cannot be pickled for multiprocessing.
-
-**Production pattern:**
+**Function-based pattern (alternative):**
 ```python
 # In transforms.py
 def training_transform(X):
@@ -186,7 +235,7 @@ def training_transform(X):
 
 # In your main script
 from transforms import training_transform
-dataloader = DataLoader(dataset, num_workers=4)  # Now multiprocessing works!
+dataloader = DataLoader(dataset, num_workers=4)
 ```
 ```
 
@@ -235,30 +284,3 @@ X = sample["X"]
 if "obs_cell_type" in sample:
     cell_type = sample["obs_cell_type"]
 ```
-
-## Performance Tips
-
-1. **Use appropriate chunk sizes**: Larger chunks (1000-2000) for better I/O performance
-2. **Enable multiprocessing**: Set `multiprocessing_safe=True` for backed data
-3. **Use multiple workers**: DataLoader with `num_workers > 0` for better throughput
-4. **Pin memory**: Use `pin_memory=True` when transferring to GPU
-
-```python
-# Optimized configuration
-dataset = AnnDataset(
-    adata,
-    transform=your_transform,
-    multiprocessing_safe=True,
-    chunk_size=2000
-)
-
-dataloader = DataLoader(
-    dataset,
-    batch_size=128,
-    num_workers=4,
-    pin_memory=True,
-    shuffle=True
-)
-```
-
-This provides a clean, efficient interface for using AnnData objects in PyTorch workflows while maintaining compatibility with standard PyTorch patterns and best practices.
