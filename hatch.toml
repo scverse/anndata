@@ -36,7 +36,8 @@ overrides.matrix.deps.python = [
 overrides.matrix.deps.features = [
     { if = [ "stable", "pre" ], value = "test" },
 ]
-overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
+# TODO: set `--preview` only for `pre` once this is fixed: https://github.com/pypa/hatch/issues/2058
+overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings", "--preview" ] }
 
 [[envs.hatch-test.matrix]]
 deps = [ "stable", "pre", "min" ]

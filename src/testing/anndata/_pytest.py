@@ -14,6 +14,7 @@ import warnings
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, cast
 
+import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
@@ -24,6 +25,9 @@ if TYPE_CHECKING:
 @pytest.fixture(autouse=True)
 def _anndata_test_env(request: pytest.FixtureRequest) -> None:
     import anndata
+
+    if request.config.getoption("--preview"):
+        pd.options.mode.copy_on_write = True
 
     if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
@@ -71,6 +75,13 @@ def pytest_itemcollected(item: pytest.Item) -> None:
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Hook to register custom CLI options and config values"""
+    parser.addoption(
+        "--preview",
+        action="store_true",
+        default=False,
+        help="Enable preview settings like `pd.options.*`.",
+    )
+
     parser.addoption(
         "--strict-warnings",
         action="store_true",
