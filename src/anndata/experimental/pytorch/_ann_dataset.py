@@ -427,12 +427,15 @@ class AnnDataset(Dataset):
 
         Examples
         --------
-        >>> dataset = AnnDataset(adata)  # doctest: +SKIP
-        >>> dataloader = DataLoader(  # doctest: +SKIP
+        .. doctest::
+            :skipif: not TORCH_AVAILABLE
+
+        >>> dataset = AnnDataset(adata)
+        >>> dataloader = DataLoader(
         ...     dataset,
         ...     batch_size=32,
-        ...     collate_fn=dataset.get_collate_fn(),  # doctest: +SKIP
-        ... )  # doctest: +SKIP
+        ...     collate_fn=dataset.get_collate_fn(),
+        ... )
         """
         from functools import partial
 
