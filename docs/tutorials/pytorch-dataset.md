@@ -6,12 +6,26 @@ The {class}`~anndata.experimental.pytorch.AnnDataset` class provides a PyTorch {
 The `AnnDataset` class is part of the experimental API and may change in future versions.
 ```
 
+## Design Philosophy
+
+`AnnDataset` is designed to work efficiently with on-disk data, making it particularly well-suited for large-scale datasets that may not fit entirely in memory.
 ## Key Features
 
-- **Memory efficiency**: Works with both in-memory AnnData objects and streams from backed HDF5 data without loading into memory
+- **Memory-efficient processing**: Large datasets can be processed without loading the entire dataset into RAM
+- **Optimized disk I/O**: Intelligent batching and sequential access patterns minimize disk read overhead
 - **Data transforms**: Applies custom transformations to loaded data
 - **Multiprocessing safety**: Safe HDF5 handling following h5py best practices
-- **Optimized batch loading**: Sorts indices for efficient sequential disk access
+
+
+## AnnDataset vs. AnnLoader
+
+`anndata` provides two classes for PyTorch integration: `AnnDataset` and `AnnLoader`.
+
+- **`AnnDataset` is a `torch.utils.data.Dataset`**: As it implements the standard `Dataset` interface, it can be combined with any PyTorch `DataLoader`, `Sampler`, or other data utilities.
+
+- **`AnnLoader` is a `torch.utils.data.DataLoader`**: It is a utility that can manage and iterate over one or more `AnnData` objects.
+
+The separation of `Dataset` (representing the data) from `DataLoader` (iterating over the data) is a core concept in PyTorch. `AnnDataset` was created to embrace this pattern, offering a flexible and composable building block for users to build their own data loading pipelines.
 
 ## Basic Usage
 
