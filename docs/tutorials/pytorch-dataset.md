@@ -72,7 +72,6 @@ from anndata.experimental.pytorch import Transform, Compose
 import torch
 
 class NormalizeTransform(Transform):
-    """Normalize counts to target sum per cell."""
     def __init__(self, target_sum=1e4):
         self.target_sum = target_sum
 
@@ -83,16 +82,11 @@ class NormalizeTransform(Transform):
         row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
         return x * (self.target_sum / row_sum)
 
-    def __repr__(self):
-        return f"NormalizeTransform(target_sum={self.target_sum})"
-
 class LogTransform(Transform):
-    """Apply log1p transformation."""
     def __call__(self, x):
         return torch.log1p(x)
 
 class AddNoise(Transform):
-    """Add Gaussian noise for augmentation."""
     def __init__(self, noise_std=0.01, probability=0.5):
         self.noise_std = noise_std
         self.probability = probability
