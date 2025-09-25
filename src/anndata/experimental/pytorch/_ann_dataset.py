@@ -430,6 +430,10 @@ class AnnDataset(Dataset):
         .. doctest::
             :skipif: not TORCH_AVAILABLE
 
+        >>> from anndata import AnnData
+        >>> import numpy as np
+        >>> from torch.utils.data import DataLoader
+        >>> adata = AnnData(X=np.random.randn(100, 50))
         >>> dataset = AnnDataset(adata)
         >>> dataloader = DataLoader(
         ...     dataset,
