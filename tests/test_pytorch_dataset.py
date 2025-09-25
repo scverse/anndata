@@ -14,7 +14,7 @@ try:
     import torch
     from torch.utils.data import DataLoader
 
-    from anndata.experimental.pytorch import AnnDataset, Compose, Transform, get_obs_key
+    from anndata.experimental.pytorch import AnnDataset, Compose, Transform
 
     TORCH_AVAILABLE = True
 except ImportError:
@@ -55,8 +55,8 @@ class LabelEncodingTransform(Transform):
         self.mapping = mapping or {"A": 0, "B": 1, "C": 2}
 
     def __call__(self, data_dict):
-        # Use helper function for consistent key formatting
-        obs_key = get_obs_key(self.obs_key)
+        # Access metadata using obs_{column_name} key pattern
+        obs_key = f"obs_{self.obs_key}"
         obs_encoded_key = f"{obs_key}_encoded"
 
         if obs_key in data_dict and isinstance(data_dict[obs_key], str):

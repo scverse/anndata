@@ -12,7 +12,6 @@ if TORCH_AVAILABLE:
     from .transforms import (
         Compose,
         Transform,
-        get_obs_key,
     )
 
     __all__ = [
@@ -21,7 +20,6 @@ if TORCH_AVAILABLE:
         "AnnLoader",
         "Compose",
         "Transform",
-        "get_obs_key",
         "transforms",
     ]
 else:

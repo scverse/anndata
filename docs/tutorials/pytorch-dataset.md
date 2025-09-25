@@ -38,6 +38,18 @@ print(f"observation keys: {list(item.keys())}")
 print(f"Expression data shape: {item['X'].shape}")
 ```
 
+#### Loading from File Paths
+
+AnnDataset can load directly from h5ad file paths, which is useful for large datasets that don't fit in memory:
+
+```python
+# Load from file path (recommended for large backed datasets)
+dataset = AnnDataset("/path/to/large_dataset.h5ad")
+
+# The dataset will automatically handle backed data efficiently
+dataloader = dataset.get_optimized_dataloader(batch_size=64)
+```
+
 ### Using with DataLoader
 
 #### Standard DataLoader (works for all data)
@@ -89,6 +101,27 @@ dataloader = DataLoader(
 )
 ```
 
+## Accessing Metadata
+
+The dataset includes observation metadata in the returned items:
+
+```python
+# Item contains both expression data and metadata
+item = dataset[0]
+print(f"Available keys: {list(item.keys())}")
+
+# Expression data
+X = item["X"]
+
+# Metadata (if available) - prefixed with 'obs_'
+cell_type = item["obs_cell_type"]
+
+# Different data types are handled automatically:
+# - Numeric values: converted to torch.Tensor
+# - String values: kept as strings
+# - Other types: converted to strings
+```
+
 ## Data Transformations
 
 Transforms are applied to the complete data dictionary (including `X` and observation metadata) after it's loaded from the AnnData object. The `transform` parameter accepts only Transform class instances that inherit from {class}`~anndata.experimental.pytorch.Transform`. This unified API ensures all transforms work seamlessly with multiprocessing by design.
@@ -117,7 +150,7 @@ For example, if your `adata.obs` has columns `["cell_type", "batch", "n_genes"]`
 Example:
 
 ```python
-from anndata.experimental.pytorch import Transform, Compose, get_obs_key
+from anndata.experimental.pytorch import Transform, Compose
 import torch
 
 class NormalizeRowSum(Transform):
@@ -143,12 +176,12 @@ class EncodeLabels(Transform):
     """Encode string labels to integers in the data dictionary."""
     def __init__(self, obs_key='cell_type', encoded_key=None, label_encoder=None):
         self.obs_key = obs_key
-        self.encoded_key = encoded_key or f"{get_obs_key(obs_key)}_encoded"
+        self.encoded_key = encoded_key or f"obs_{obs_key}_encoded"
         self.label_encoder = label_encoder
 
     def __call__(self, data_dict):
-        # Use helper function for consistent key formatting
-        obs_key = get_obs_key(self.obs_key)
+        # Access metadata using obs_{column_name} key pattern
+        obs_key = f"obs_{self.obs_key}"
 
         if obs_key in data_dict and self.label_encoder is not None:
             string_label = data_dict[obs_key]  # Get string label from metadata
@@ -205,18 +238,6 @@ train_dataset = AnnDataset(adata, obs_subset=train_idx, transform=transform)
 test_dataset = AnnDataset(adata, obs_subset=test_idx, transform=transform)
 ```
 
-## Loading from File Paths
-
-AnnDataset can load directly from h5ad file paths, which is useful for large datasets that don't fit in memory:
-
-```python
-# Load from file path (recommended for large backed datasets)
-dataset = AnnDataset("/path/to/large_dataset.h5ad")
-
-# The dataset will automatically handle backed data efficiently
-dataloader = dataset.get_optimized_dataloader(batch_size=64)
-```
-
 ## Advanced Configuration
 
 ### Chunk Size Parameter
@@ -240,27 +261,4 @@ The dataset provides useful properties for introspection:
 print(f"Dataset shape: {dataset.shape}")  # (n_obs, n_vars)
 print(f"Number of observations: {len(dataset)}")
 print(f"Number of variables: {dataset.shape[1]}")
-```
-
-
-### Accessing Metadata
-
-The dataset includes observation metadata in the returned items:
-
-```python
-# Item contains both expression data and metadata
-item = dataset[0]
-print(f"Available keys: {list(item.keys())}")
-
-# Expression data
-X = item["X"]
-
-# Metadata (if available) - prefixed with 'obs_'
-if "obs_cell_type" in item:
-    cell_type = item["obs_cell_type"]
-
-# Different data types are handled automatically:
-# - Numeric values: converted to torch.Tensor
-# - String values: kept as strings
-# - Other types: converted to strings
 ```

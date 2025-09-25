@@ -28,26 +28,6 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 
-# Constants for metadata key formatting
-OBS_PREFIX = "obs_"
-
-
-def get_obs_key(column_name: str) -> str:
-    """Get the standardized observation metadata key.
-
-    Parameters
-    ----------
-    column_name : str
-        The original column name from adata.obs
-
-    Returns
-    -------
-    str
-        The standardized key with obs_ prefix
-    """
-    return f"{OBS_PREFIX}{column_name}"
-
-
 class Transform(ABC):
     """Abstract base class for all transforms.
 
