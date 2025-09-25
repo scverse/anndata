@@ -8,14 +8,6 @@ with support for:
 - Multiprocessing-safe I/O following h5py best practices
 - Configurable chunk processing for memory management
 - Optimized batch loading with sorted indices
-
-For multiprocessing with HDF5 files, this implementation follows h5py recommendations:
-"It's advised to open the file independently in each reader process; opening the
-file once and then forking may cause issues."
-See: https://docs.h5py.org/en/stable/mpi.html
-
-Multiprocessing safety is always enabled - each worker process opens HDF5 files
-independently for optimal safety and performance.
 """
 
 from __future__ import annotations
@@ -124,31 +116,6 @@ class AnnDataset(Dataset):
     - Memory-efficient streaming from backed HDF5 data
     - Configurable chunk processing for memory management
     - Optimized batch loading with sorted indices
-
-    Examples
-    --------
-    Basic usage:
-
-    >>> dataset = AnnDataset("data.h5ad")  # doctest: +SKIP
-    >>> dataloader = DataLoader(dataset, batch_size=32)  # doctest: +SKIP
-
-    With transform:
-
-    >>> class NormalizeTransform(Transform):
-    ...     def __call__(self, X):
-    ...         return torch.log1p(X)
-    >>> dataset = AnnDataset(
-    ...     "data.h5ad", transform=NormalizeTransform()
-    ... )  # doctest: +SKIP
-
-    Multiprocessing with subset:
-
-    >>> dataset = AnnDataset(  # doctest: +SKIP
-    ...     "data.h5ad",
-    ...     obs_subset=train_indices,
-    ...     chunk_size=2000,
-    ... )
-    >>> dataloader = DataLoader(dataset, batch_size=64, num_workers=4)  # doctest: +SKIP
     """
 
     def __init__(
@@ -160,7 +127,7 @@ class AnnDataset(Dataset):
         # Observation selection
         obs_subset: Sequence[int] | np.ndarray | None = None,
         # Advanced features
-        chunk_size: int = 1000,
+        chunk_size: int = 6000,
     ):
         """Initialize AnnData Dataset.
 
@@ -175,7 +142,9 @@ class AnnDataset(Dataset):
         obs_subset
             Subset of observations to include (by index)
         chunk_size
-            Chunk size for processing backed data efficiently
+            Used only when loading sparse dataset that is stored as dense. Loading iterates
+            through chunks of the dataset of this row size until it reads the whole dataset.
+            Higher size means higher memory consumption and higher (to a point) loading speed.
         """
         if not TORCH_AVAILABLE:
             error_msg = (
