@@ -60,27 +60,34 @@ for batch in dataloader:
 
 #### Optimized DataLoader for Backed Data
 
-For backed HDF5 data, use the optimized dataloader for better disk I/O performance:
+For backed HDF5 data, AnnDataset provides **two methods** to create optimized DataLoaders with better disk I/O performance.
 
+The optimized data loader provide significant performance improvements for backed data by sorting batch indices for efficient sequential disk access, while maintaining the original batch order in returned data.
+
+
+**Method 1: `get_optimized_dataloader()`** (Recommended)
 ```python
-# Optimized DataLoader - sorts batch indices for sequential disk access
-dataloader = dataset.get_optimized_dataloader(
+optimized_dataloader = dataset.get_optimized_dataloader(
     batch_size=32,
     shuffle=True,
     num_workers=4
 )
+```
 
-# Alternative: Use standard DataLoader with optimized collate function
+**Method 2: Manually pass `get_collate_fn()` to the DataLoader init**
+```python
+# Use standard DataLoader with optimized collate function
+from torch.utils.data import DataLoader
+
+# Alternative: pass collate function
 dataloader = DataLoader(
     dataset,
     batch_size=32,
     shuffle=True,
     num_workers=4,
-    collate_fn=dataset.get_collate_fn()  # Enables sorted index loading
+    collate_fn=dataset.get_collate_fn()
 )
 ```
-
-The optimized methods provide significant performance improvements for backed data by sorting batch indices for efficient sequential disk access, while maintaining the original batch order in returned data.
 
 ## Data Transformations
 
