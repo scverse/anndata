@@ -3,6 +3,7 @@ from __future__ import annotations
 from codecs import decode
 from collections.abc import Mapping, Sequence
 from functools import cache, partial, singledispatch
+from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
 from typing import TYPE_CHECKING, TypeVar
@@ -75,10 +76,9 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    import zarr
     from packaging.version import Version
 
-    return Version(zarr.__version__) < Version("3.0.0")
+    return Version(version("zarr")) < Version("3.0.0")
 
 
 if is_zarr_v2():
@@ -213,7 +213,7 @@ else:
 
 NULLABLE_NUMPY_STRING_TYPE = (
     np.dtype("O")
-    if Version(np.__version__) < Version("2")
+    if Version(version("numpy")) < Version("2")
     else np.dtypes.StringDType(na_object=pd.NA)
 )
 
@@ -428,11 +428,3 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
-
-
-def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
-    if Version(pd.__version__) >= Version("2.1"):
-        # Argument added in pandas 2.1
-        return cat.map(str, na_action="ignore")
-    else:
-        return cat.map(str)
