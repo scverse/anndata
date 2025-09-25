@@ -129,8 +129,9 @@ def read_sparse_as_dask(
 ) -> DaskArray:
     import dask.array as da
 
+    path = Path(filename(elem))
     path_or_sparse_dataset = (
-        Path(filename(elem))
+        path
         if isinstance(elem, H5Group)
         else ad.io.sparse_dataset(elem, should_cache_indptr=False)
     )
@@ -173,6 +174,7 @@ def read_sparse_as_dask(
         dtype=dtype,
         chunks=chunk_layout,
         meta=memory_format((0, 0), dtype=dtype),
+        name=f"{path}/{elem_name}-{dtype}",
     )
     return da_mtx
 
@@ -229,7 +231,11 @@ def read_h5_array(
 
     make_chunk = partial(make_dask_chunk, path, elem_name)
     return da.map_blocks(
-        make_chunk, dtype=dtype, chunks=chunk_layout, meta=np.array([])
+        make_chunk,
+        dtype=dtype,
+        chunks=chunk_layout,
+        meta=np.array([]),
+        name=f"{path}/{elem_name}-{dtype}",
     )
 
 

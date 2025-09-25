@@ -59,3 +59,7 @@ class Dataset2D:
 
     def peakmem_getitem_bool_mask(self, *_):
         self.ds.iloc[np.random.randint(0, self.n_obs, self.n_obs // 2)].to_memory()
+
+    def time_concat(self, *_):
+        adatas = [ad.AnnData(obs=self.ds)] * 50
+        ad.concat(adatas, join="outer")
