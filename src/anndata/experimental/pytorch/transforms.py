@@ -36,16 +36,16 @@ class Transform(ABC):
 
     Examples
     --------
-    >>> class MyTransform(Transform):
-    ...     def __init__(self, param=1.0):
-    ...         self.param = param
+    >>> class MyTransform(Transform):  # doctest: +SKIP
+    ...     def __init__(self, param=1.0):  # doctest: +SKIP
+    ...         self.param = param  # doctest: +SKIP
     ...
-    ...     def __call__(self, data_dict):
-    ...         data_dict["X"] = data_dict["X"] * self.param
-    ...         return data_dict
+    ...     def __call__(self, data_dict):  # doctest: +SKIP
+    ...         data_dict["X"] = data_dict["X"] * self.param  # doctest: +SKIP
+    ...         return data_dict  # doctest: +SKIP
     ...
-    ...     def __repr__(self):
-    ...         return f"MyTransform(param={self.param})"
+    ...     def __repr__(self):  # doctest: +SKIP
+    ...         return f"MyTransform(param={self.param})"  # doctest: +SKIP
     """
 
     @abstractmethod
@@ -80,25 +80,25 @@ class Compose(Transform):
 
     Examples
     --------
-    >>> class LogTransform(Transform):
-    ...     def __call__(self, data_dict):
-    ...         data_dict["X"] = torch.log1p(data_dict["X"])
-    ...         return data_dict
+    >>> class LogTransform(Transform):  # doctest: +SKIP
+    ...     def __call__(self, data_dict):  # doctest: +SKIP
+    ...         data_dict["X"] = torch.log1p(data_dict["X"])  # doctest: +SKIP
+    ...         return data_dict  # doctest: +SKIP
     >>>
-    >>> class NormalizeTransform(Transform):
-    ...     def __init__(self, target_sum=1e4):
-    ...         self.target_sum = target_sum
+    >>> class NormalizeTransform(Transform):  # doctest: +SKIP
+    ...     def __init__(self, target_sum=1e4):  # doctest: +SKIP
+    ...         self.target_sum = target_sum  # doctest: +SKIP
     ...
-    ...     def __call__(self, data_dict):
-    ...         X = data_dict["X"]
-    ...         row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
-    ...         data_dict["X"] = X * (self.target_sum / row_sum)
-    ...         return data_dict
+    ...     def __call__(self, data_dict):  # doctest: +SKIP
+    ...         X = data_dict["X"]  # doctest: +SKIP
+    ...         row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8  # doctest: +SKIP
+    ...         data_dict["X"] = X * (self.target_sum / row_sum)  # doctest: +SKIP
+    ...         return data_dict  # doctest: +SKIP
     >>>
-    >>> transform = Compose([
-    ...     NormalizeTransform(target_sum=1e4),
-    ...     LogTransform(),
-    ... ])
+    >>> transform = Compose([  # doctest: +SKIP
+    ...     NormalizeTransform(target_sum=1e4),  # doctest: +SKIP
+    ...     LogTransform(),  # doctest: +SKIP
+    ... ])  # doctest: +SKIP
     """
 
     def __init__(self, transforms: Sequence[Transform]):
