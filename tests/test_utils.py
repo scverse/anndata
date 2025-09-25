@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from itertools import repeat
 
+import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import gen_typed_df
-from anndata.utils import make_index_unique
+from anndata.utils import adapt_vars_like, make_index_unique
 
 
 def test_make_index_unique() -> None:
@@ -57,3 +58,127 @@ def test_adata_unique_indices():
 
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "expected_X"),
+    [
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["a", "b", "c"])),
+            ad.AnnData(
+                X=np.array([[1, 2, 3]]), var=pd.DataFrame(index=["a", "b", "c"])
+            ),
+            np.array([[1, 2, 3]]),
+            id="exact_match",
+        ),
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["a", "b", "c"])),
+            ad.AnnData(
+                X=np.array([[3, 2, 1]]), var=pd.DataFrame(index=["c", "b", "a"])
+            ),
+            np.array([[1, 2, 3]]),
+            id="different_order",
+        ),
+    ],
+)
+def test_adapt_vars(source, target, expected_X):
+    output = adapt_vars_like(source, target)
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == list(source.var_names)
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "fill_value", "expected_X"),
+    [
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 2)), var=pd.DataFrame(index=["g1", "g2"])),
+            ad.AnnData(X=np.array([[7, 8]]), var=pd.DataFrame(index=["g3", "g4"])),
+            0.5,
+            np.array([[0.5, 0.5]]),
+            id="no_shared_genes",
+        ),
+        pytest.param(
+            ad.AnnData(X=np.ones((1, 3)), var=pd.DataFrame(index=["g1", "g2", "g3"])),
+            ad.AnnData(X=np.array([[1, 3]]), var=pd.DataFrame(index=["g1", "g3"])),
+            -1,
+            np.array([[1, -1, 3]]),
+            id="missing_genes",
+        ),
+    ],
+)
+def test_adapt_vars_with_fill_value(source, target, fill_value, expected_X):
+    output = adapt_vars_like(source, target, fill_value=fill_value)
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == list(source.var_names)
+
+
+def test_adapt_vars_target_X_none():
+    source = ad.AnnData(
+        X=np.ones((2, 2)),
+        var=pd.DataFrame(index=["g1", "g2"]),
+    )
+    target = ad.AnnData(
+        X=None,
+        var=pd.DataFrame(index=["g2", "g3"]),
+        obs=pd.DataFrame(index=["cell1", "cell2"]),
+    )
+    output = adapt_vars_like(source, target, fill_value=-1)
+    assert output.X is None
+    assert list(output.var_names) == list(source.var_names)
+
+
+def test_adapt_vars_all_objects():
+    source = ad.AnnData(
+        X=np.ones((2, 3)),
+        var=gen_typed_df(3, index=pd.Index(["a", "b", "c"])),
+    )
+
+    target = ad.AnnData(
+        X=np.array([[1, 3], [2, 4]]),
+        var=gen_typed_df(2, index=pd.Index(["a", "c"])),
+        obs=pd.DataFrame(index=["cell1", "cell2"]),
+        varm={"varm_key": np.array([[10, 11], [30, 31]])},
+        varp={"varp_key": np.array([[1, 2], [3, 4]])},
+        obsp={"obsp_key": np.array([[5, 6], [7, 8]])},
+        layers={"layer1": np.array([[1000, 3000], [1001, 3001]])},
+    )
+
+    output = adapt_vars_like(source, target, fill_value=-1)
+
+    expected_X = np.array(
+        [
+            [1, -1, 3],
+            [2, -1, 4],
+        ]
+    )
+    np.testing.assert_array_equal(output.X, expected_X)
+    assert list(output.var_names) == ["a", "b", "c"]
+
+    expected_layer = np.array(
+        [
+            [1000, -1, 3000],
+            [1001, -1, 3001],
+        ]
+    )
+    np.testing.assert_array_equal(output.layers["layer1"], expected_layer)
+
+    expected_varm = np.array(
+        [
+            [10, 11],
+            [-1, -1],
+            [30, 31],
+        ]
+    )
+    np.testing.assert_array_equal(output.varm["varm_key"], expected_varm)
+
+    expected_varp = np.array(
+        [
+            [1, -1, 2],
+            [-1, -1, -1],
+            [3, -1, 4],
+        ]
+    )
+    np.testing.assert_array_equal(output.varp["varp_key"], expected_varp)
+
+    expected_obsp = np.array([[5, 6], [7, 8]])
+    np.testing.assert_array_equal(output.obsp["obsp_key"], expected_obsp)
