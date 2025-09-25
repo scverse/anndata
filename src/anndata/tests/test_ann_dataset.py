@@ -397,3 +397,205 @@ class TestAnnDataset:
         assert isinstance(sample, dict)
         assert "X" in sample
         assert dataset.chunk_size == 1000
+
+    def test_batch_order_preservation_with_identifiable_data(self):
+        """Test that batch order is preserved in optimized collate function."""
+        # Create AnnData where each row has a unique identifier
+        n_obs, n_vars = 20, 10
+        X = np.zeros((n_obs, n_vars))
+        for i in range(n_obs):
+            X[i, 0] = i  # First column identifies the row
+
+        obs = {
+            "row_id": [f"row_{i}" for i in range(n_obs)],
+            "row_index": list(range(n_obs)),
+        }
+        adata = ad.AnnData(X=X, obs=obs)
+        dataset = AnnDataset(adata)
+
+        # Test regular collate function preserves order
+        collate_fn = dataset.get_collate_fn()
+
+        # Test with sequential indices
+        sequential_samples = [dataset[i] for i in range(5)]
+        batch = collate_fn(sequential_samples)
+        expected_order = [0, 1, 2, 3, 4]
+        actual_order = batch["X"][:, 0].numpy().astype(int).tolist()
+        assert actual_order == expected_order, (
+            f"Expected {expected_order}, got {actual_order}"
+        )
+
+        # Test with non-sequential indices - this exposes the bug
+        non_sequential_indices = [4, 1, 3, 0, 2]
+        non_sequential_samples = [dataset[i] for i in non_sequential_indices]
+        batch = collate_fn(non_sequential_samples)
+        expected_order = [4, 1, 3, 0, 2]  # Should preserve original order
+        actual_order = batch["X"][:, 0].numpy().astype(int).tolist()
+        # This will likely fail due to the bug in _optimized_collate_fn
+        assert actual_order == expected_order, (
+            f"Batch order not preserved! Expected {expected_order}, got {actual_order}"
+        )
+
+    def test_optimized_dataloader_vs_regular_dataloader_consistency(self):
+        """Test that optimized and regular DataLoaders produce equivalent results."""
+        # Create identifiable test data
+        n_obs, n_vars = 15, 8
+        X = np.zeros((n_obs, n_vars))
+        for i in range(n_obs):
+            X[i, 0] = i  # Row identifier
+
+        adata = ad.AnnData(X=X)
+        dataset = AnnDataset(adata)
+
+        # Regular DataLoader
+        from torch.utils.data import DataLoader
+
+        regular_loader = DataLoader(dataset, batch_size=5, shuffle=False)
+
+        # Optimized DataLoader
+        optimized_loader = dataset.get_optimized_dataloader(batch_size=5, shuffle=False)
+
+        # Compare first batch from each
+        regular_batch = next(iter(regular_loader))
+        optimized_batch = next(iter(optimized_loader))
+
+        # Both should have the same data (though order might differ due to bug)
+        regular_ids = set(regular_batch["X"][:, 0].numpy().astype(int))
+        optimized_ids = set(optimized_batch["X"][:, 0].numpy().astype(int))
+
+        assert regular_ids == optimized_ids, (
+            "Regular and optimized loaders should contain same data"
+        )
+
+        # Order should be the same (this will fail due to the bug)
+        regular_order = regular_batch["X"][:, 0].numpy().astype(int).tolist()
+        optimized_order = optimized_batch["X"][:, 0].numpy().astype(int).tolist()
+        assert regular_order == optimized_order, (
+            f"Order mismatch: regular={regular_order}, optimized={optimized_order}"
+        )
+
+    def test_obs_subset_index_mapping_correctness(self):
+        """Test that obs_subset correctly maps dataset indices to AnnData indices."""
+        # Create test data with identifiable rows
+        n_obs, n_vars = 20, 5
+        X = np.zeros((n_obs, n_vars))
+        for i in range(n_obs):
+            X[i, 0] = i  # Row identifier
+
+        obs = {"original_index": list(range(n_obs))}
+        adata = ad.AnnData(X=X, obs=obs)
+
+        # Create subset with non-sequential indices
+        obs_subset = [15, 3, 8, 12, 1]  # AnnData row indices
+        dataset = AnnDataset(adata, obs_subset=obs_subset)
+
+        # Verify dataset maps correctly
+        for dataset_idx in range(len(obs_subset)):
+            sample = dataset[dataset_idx]
+            expected_anndata_idx = obs_subset[dataset_idx]
+            actual_row_id = sample["X"][0].item()
+
+            assert actual_row_id == expected_anndata_idx, (
+                f"Dataset index {dataset_idx} should map to AnnData index {expected_anndata_idx}, got {actual_row_id}"
+            )
+
+            # Verify obs metadata matches
+            expected_obs_index = expected_anndata_idx
+            actual_obs_index = sample["obs_original_index"]
+            assert actual_obs_index == expected_obs_index, (
+                f"Obs metadata mismatch: expected {expected_obs_index}, got {actual_obs_index}"
+            )
+
+    def test_obs_subset_batch_order_preservation(self):
+        """Test batch order preservation with obs_subset."""
+        # Create identifiable test data
+        n_obs, n_vars = 25, 6
+        X = np.zeros((n_obs, n_vars))
+        for i in range(n_obs):
+            X[i, 0] = i  # Row identifier
+
+        adata = ad.AnnData(X=X)
+
+        # Create subset
+        obs_subset = [20, 5, 15, 10, 0]  # Non-sequential AnnData indices
+        dataset = AnnDataset(adata, obs_subset=obs_subset)
+
+        # Test collate function with subset
+        collate_fn = dataset.get_collate_fn()
+
+        # Get samples in specific dataset order
+        dataset_indices = [0, 2, 1, 4, 3]  # Non-sequential dataset indices
+        samples = [dataset[i] for i in dataset_indices]
+        batch = collate_fn(samples)
+
+        # Expected: dataset_indices [0,2,1,4,3] map to obs_subset [20,15,5,0,10]
+        expected_anndata_indices = [
+            obs_subset[i] for i in dataset_indices
+        ]  # [20,15,5,0,10]
+        actual_order = batch["X"][:, 0].numpy().astype(int).tolist()
+
+        assert actual_order == expected_anndata_indices, (
+            f"Batch order not preserved with obs_subset! Expected {expected_anndata_indices}, got {actual_order}"
+        )
+
+    def test_optimized_collate_fn_direct_call(self):
+        """Test _optimized_collate_fn directly to isolate the bug."""
+        from anndata.experimental.pytorch._ann_dataset import _optimized_collate_fn
+
+        # Create identifiable test data
+        n_obs, n_vars = 10, 4
+        X = np.zeros((n_obs, n_vars))
+        for i in range(n_obs):
+            X[i, 0] = i  # Row identifier
+
+        adata = ad.AnnData(X=X)
+        dataset = AnnDataset(adata)
+
+        # Test direct call to _optimized_collate_fn
+        batch_indices = [7, 2, 5, 1, 8]  # Non-sequential order
+        batch = _optimized_collate_fn(batch_indices, dataset)
+
+        # The function should preserve the original batch order
+        expected_order = [7, 2, 5, 1, 8]
+        actual_order = batch["X"][:, 0].numpy().astype(int).tolist()
+
+        # This test will expose the bug - actual order will be sorted [1,2,5,7,8]
+        assert actual_order == expected_order, (
+            f"_optimized_collate_fn should preserve batch order! Expected {expected_order}, got {actual_order}"
+        )
+
+    def test_metadata_consistency_with_batch_ordering(self):
+        """Test that metadata remains consistent with X data in batches."""
+        # Create test data with metadata
+        n_obs, n_vars = 12, 3
+        X = np.zeros((n_obs, n_vars))
+        obs_data = {}
+
+        for i in range(n_obs):
+            X[i, 0] = i  # Row identifier in X
+            obs_data[f"cell_{i}"] = [f"value_{j}" for j in range(n_obs)]
+
+        # Add row identifier to obs as well
+        obs_data["row_id"] = list(range(n_obs))
+        adata = ad.AnnData(X=X, obs=obs_data)
+        dataset = AnnDataset(adata)
+
+        # Test with non-sequential batch
+        collate_fn = dataset.get_collate_fn()
+        batch_indices = [9, 3, 6, 1]
+        samples = [dataset[i] for i in batch_indices]
+        batch = collate_fn(samples)
+
+        # Verify X data matches obs metadata
+        x_row_ids = batch["X"][:, 0].numpy().astype(int).tolist()
+        obs_row_ids = [int(val) for val in batch["obs_row_id"]]
+
+        assert x_row_ids == obs_row_ids, (
+            f"X data and obs metadata order mismatch! X: {x_row_ids}, obs: {obs_row_ids}"
+        )
+
+        # Both should match the expected order
+        expected_order = batch_indices
+        assert x_row_ids == expected_order, (
+            f"Batch order not preserved! Expected {expected_order}, got {x_row_ids}"
+        )

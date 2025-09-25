@@ -480,15 +480,30 @@ class _IndexDataset:
 def _optimized_collate_fn(
     batch_indices: list[int], dataset: AnnDataset
 ) -> dict[str, torch.Tensor]:
-    """Optimized collate function that sorts indices for efficient disk access."""
+    """Optimized collate function that sorts indices for efficient disk access.
+
+    This function sorts indices for efficient sequential disk access while
+    preserving the original batch order in the returned data.
+    """
     if not TORCH_AVAILABLE:
         error_msg = "PyTorch is required for batch collation"
         raise ImportError(error_msg)
 
-    # Sort indices for efficient sequential disk access
-    sorted_indices = sorted(batch_indices)
+    # Convert to numpy for efficient operations
+    batch_indices_np = np.array(batch_indices)
+
+    # Get sort permutation - argsort gives us the indices that would sort the array
+    sort_perm = np.argsort(batch_indices_np)
+
+    # Create sorted indices for efficient disk access
+    sorted_indices = batch_indices_np[sort_perm]
 
     # Load all items in the batch using sorted indices
-    batch_data = [dataset[idx] for idx in sorted_indices]
+    sorted_batch_data = [dataset[idx] for idx in sorted_indices]
+
+    # Restore original order using inverse permutation
+    # argsort(argsort(x)) gives the inverse permutation
+    restore_perm = np.argsort(sort_perm)
+    batch_data = [sorted_batch_data[i] for i in restore_perm]
 
     return _batch_samples(batch_data)
