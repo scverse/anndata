@@ -21,13 +21,45 @@ import anndata as ad
 from anndata.experimental.pytorch import (
     TORCH_AVAILABLE,
     AnnDataset,
-    Compose,
-    Transform,
 )
 
 if TORCH_AVAILABLE:
     import torch
     from torch.utils.data import DataLoader
+
+    from anndata.experimental.pytorch import (
+        Compose,
+        Transform,
+    )
+
+    # Transform classes for testing
+    class LogTransform(Transform):
+        """Simple log transform for testing."""
+
+        def __call__(self, data_dict):
+            data_dict["X"] = torch.log1p(data_dict["X"])
+            return data_dict
+
+    class NormalizeTransform(Transform):
+        """Normalization transform for testing."""
+
+        def __init__(self, target_sum=1e4):
+            self.target_sum = target_sum
+
+        def __call__(self, data_dict):
+            X = data_dict["X"]
+            X = torch.clamp(X, min=0)
+            row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
+            data_dict["X"] = X * (self.target_sum / row_sum)
+            return data_dict
+
+    class DictTransform(Transform):
+        """Transform that modifies both X and metadata."""
+
+        def __call__(self, data_dict):
+            data_dict["X"] = data_dict["X"] * 2
+            data_dict["obs_transformed"] = torch.tensor(1.0)
+            return data_dict
 
 
 @pytest.fixture
@@ -46,38 +78,6 @@ def gen_sparse_adata(shape=(100, 50)):
     obs = {"cell_type": np.random.choice(["A", "B", "C"], shape[0])}
     var = {"gene_name": [f"Gene_{i}" for i in range(shape[1])]}
     return ad.AnnData(X=X, obs=obs, var=var)
-
-
-# Transform classes for testing
-class LogTransform(Transform):
-    """Simple log transform for testing."""
-
-    def __call__(self, data_dict):
-        data_dict["X"] = torch.log1p(data_dict["X"])
-        return data_dict
-
-
-class NormalizeTransform(Transform):
-    """Normalization transform for testing."""
-
-    def __init__(self, target_sum=1e4):
-        self.target_sum = target_sum
-
-    def __call__(self, data_dict):
-        X = data_dict["X"]
-        X = torch.clamp(X, min=0)
-        row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
-        data_dict["X"] = X * (self.target_sum / row_sum)
-        return data_dict
-
-
-class DictTransform(Transform):
-    """Transform that modifies both X and metadata."""
-
-    def __call__(self, data_dict):
-        data_dict["X"] = data_dict["X"] * 2
-        data_dict["obs_transformed"] = torch.tensor(1.0)
-        return data_dict
 
 
 @pytest.mark.skipif(
