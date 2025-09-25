@@ -91,39 +91,81 @@ dataloader = DataLoader(
 
 ## Data Transformations
 
-Transforms are applied to the expression data (`X`) after it's loaded from the AnnData object. The `transform` parameter accepts only Transform class instances that inherit from {class}`~anndata.experimental.pytorch.Transform`. This unified API ensures all transforms work seamlessly with multiprocessing by design.
+Transforms are applied to the complete data dictionary (including `X` and observation metadata) after it's loaded from the AnnData object. The `transform` parameter accepts only Transform class instances that inherit from {class}`~anndata.experimental.pytorch.Transform`. This unified API ensures all transforms work seamlessly with multiprocessing by design.
 
 ### Creating Custom Transform Classes
 
-Transform classes receive the loaded expression data as a PyTorch tensor and return the transformed tensor:
+Transform classes receive the complete data dictionary containing expression data (`X`) and observation metadata and return the transformed dictionary:
+
+The data dictionary has the following structure:
+- `"X"`: Expression data as a PyTorch tensor (shape: `[n_vars]`)
+- `"obs_{column_name}"`: Observation metadata from `adata.obs` columns
+  - Numeric columns (int, float, bool) → PyTorch tensors
+  - String columns → Python strings
+  - Other types → converted to strings
+
+For example, if your `adata.obs` has columns `["cell_type", "batch", "n_genes"]`, the data dictionary will contain:
+```python
+{
+    "X": torch.tensor([...]),           # Expression data
+    "obs_cell_type": "T_cell",          # String metadata
+    "obs_batch": torch.tensor(1),       # Numeric metadata
+    "obs_n_genes": torch.tensor(2500)   # Numeric metadata
+}
+```
 
 Example:
 
 ```python
-from anndata.experimental.pytorch import Transform, Compose
+from anndata.experimental.pytorch import Transform, Compose, get_obs_key
 import torch
 
 class NormalizeRowSum(Transform):
     def __init__(self, target_sum=1e4):
         self.target_sum = target_sum
 
-    def __call__(self, x):
-        x = torch.clamp(x, min=0)  # Ensure positive values
-        row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
-        return x * (self.target_sum / row_sum)
+    def __call__(self, data_dict):
+        X = data_dict["X"]
+        X = torch.clamp(X, min=0)  # Ensure positive values
+        row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
+        data_dict["X"] = X * (self.target_sum / row_sum)
+        return data_dict
 
     def __repr__(self):
         return f"NormalizeRowSum(target_sum={self.target_sum})"
 
 class LogTransform(Transform):
-    def __call__(self, x):
-        return torch.log1p(x)
+    def __call__(self, data_dict):
+        data_dict["X"] = torch.log1p(data_dict["X"])
+        return data_dict
 
+class EncodeLabels(Transform):
+    """Encode string labels to integers in the data dictionary."""
+    def __init__(self, obs_key='cell_type', encoded_key=None, label_encoder=None):
+        self.obs_key = obs_key
+        self.encoded_key = encoded_key or f"{get_obs_key(obs_key)}_encoded"
+        self.label_encoder = label_encoder
+
+    def __call__(self, data_dict):
+        # Use helper function for consistent key formatting
+        obs_key = get_obs_key(self.obs_key)
+
+        if obs_key in data_dict and self.label_encoder is not None:
+            string_label = data_dict[obs_key]  # Get string label from metadata
+            encoded_label = self.label_encoder.transform([string_label])[0]
+            data_dict[self.encoded_key] = torch.tensor(encoded_label, dtype=torch.long)
+        return data_dict
+
+# Set up label encoder
+from sklearn.preprocessing import LabelEncoder
+label_encoder = LabelEncoder()
+label_encoder.fit(adata.obs['cell_type'].values)
 
 # Compose transforms
 training_transform = Compose([
     NormalizeRowSum(target_sum=1e4),
     LogTransform(),
+    EncodeLabels(obs_key='cell_type', label_encoder=label_encoder)
 ])
 
 # Create dataset
@@ -131,6 +173,12 @@ dataset = AnnDataset(adata, transform=training_transform)
 
 # Use optimized dataloader for backed data
 dataloader = dataset.get_optimized_dataloader(batch_size=32, num_workers=4)
+
+# Access both processed data and encoded labels
+for batch in dataloader:
+    X = batch["X"]  # Normalized and log-transformed expression data
+    y = batch["obs_cell_type_encoded"]  # Encoded labels as integers
+    # Your training code here
 ```
 
 

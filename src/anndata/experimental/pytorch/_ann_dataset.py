@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from ..._core.anndata import AnnData
     from .transforms import Transform
 
+# Constants for metadata key formatting
+OBS_PREFIX = "obs_"
+
 # Import torch conditionally
 try:
     import torch
@@ -136,9 +139,10 @@ class AnnDataset(Dataset):
         adata
             AnnData object or path to h5ad file
         transform
-            Transform object to transform loaded data tensors.
+            Transform object to transform loaded data dictionary.
             Must inherit from anndata.experimental.pytorch.Transform and
-            implement __call__ method. This ensures multiprocessing compatibility.
+            implement __call__ method that receives dict with 'X' and metadata.
+            This ensures multiprocessing compatibility.
         obs_subset
             Subset of observations to include (by index)
         chunk_size
@@ -291,43 +295,58 @@ class AnnDataset(Dataset):
         X_tensor = torch.from_numpy(X_raw).float()
         return X_tensor, obs_data
 
-    def _apply_transform(self, X: torch.Tensor) -> torch.Tensor:
-        """Apply transform function to expression data."""
+    def _apply_transform(self, data_dict: dict) -> dict:
+        """Apply transform function to data dictionary."""
         if self.transform is not None:
-            X = self.transform(X)
-        return X
+            result = self.transform(data_dict)
+            if not isinstance(result, dict):
+                msg = f"Transform must return dict, got {type(result)}"
+                raise TypeError(msg)
+            return result
+        return data_dict
 
     def __len__(self) -> int:
         """Return number of observations."""
         return self.n_obs
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor | str]:
         """Get a single observation with full preprocessing pipeline."""
 
         # Load raw data
         X_raw, obs_data = self._load_observation(idx)
 
-        # Apply transform
-        X = self._apply_transform(X_raw)
-
-        # Prepare output
-        result = {"X": X}
+        # Build complete data dictionary
+        result = {"X": X_raw}
 
         # Add observation metadata if available
         if obs_data:
-            for key, value in obs_data.items():
-                if isinstance(value, (int, float, bool)):
-                    result[f"obs_{key}"] = torch.tensor(value)
-                elif isinstance(value, str):
-                    # For string values, store as string (tests expect this)
-                    result[f"obs_{key}"] = value
-                elif isinstance(value, np.number):
-                    result[f"obs_{key}"] = torch.tensor(float(value))
-                else:
-                    # For other types, convert to string
-                    result[f"obs_{key}"] = str(value)
+            self._add_metadata_to_result(result, obs_data)
+
+        # Apply transform to entire data dictionary
+        result = self._apply_transform(result)
 
         return result
+
+    def _add_metadata_to_result(self, result: dict, obs_data: dict) -> None:
+        """Add observation metadata to result dictionary with proper key formatting."""
+        for key, value in obs_data.items():
+            # Use a more structured approach for metadata keys
+            metadata_key = self._format_metadata_key(key)
+
+            if isinstance(value, (int, float, bool)):
+                result[metadata_key] = torch.tensor(value)
+            elif isinstance(value, str):
+                # For string values, store as string (tests expect this)
+                result[metadata_key] = value
+            elif isinstance(value, np.number):
+                result[metadata_key] = torch.tensor(float(value))
+            else:
+                # For other types, convert to string
+                result[metadata_key] = str(value)
+
+    def _format_metadata_key(self, key: str) -> str:
+        """Format observation metadata key with consistent prefix."""
+        return f"{OBS_PREFIX}{key}"
 
     def get_optimized_dataloader(
         self,
@@ -431,7 +450,7 @@ def _batch_samples(samples: list[dict]) -> dict[str, torch.Tensor]:
     # Handle metadata (if present)
     metadata_keys = set()
     for sample in samples:
-        metadata_keys.update(k for k in sample if k.startswith("obs_"))
+        metadata_keys.update(k for k in sample if k.startswith(OBS_PREFIX))
 
     for key in metadata_keys:
         values = []

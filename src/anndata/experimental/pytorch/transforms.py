@@ -28,6 +28,26 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 
+# Constants for metadata key formatting
+OBS_PREFIX = "obs_"
+
+
+def get_obs_key(column_name: str) -> str:
+    """Get the standardized observation metadata key.
+
+    Parameters
+    ----------
+    column_name : str
+        The original column name from adata.obs
+
+    Returns
+    -------
+    str
+        The standardized key with obs_ prefix
+    """
+    return f"{OBS_PREFIX}{column_name}"
+
+
 class Transform(ABC):
     """Abstract base class for all transforms.
 
@@ -40,16 +60,28 @@ class Transform(ABC):
     ...     def __init__(self, param=1.0):
     ...         self.param = param
     ...
-    ...     def __call__(self, x):
-    ...         return x * self.param
+    ...     def __call__(self, data_dict):
+    ...         data_dict["X"] = data_dict["X"] * self.param
+    ...         return data_dict
     ...
     ...     def __repr__(self):
     ...         return f"MyTransform(param={self.param})"
     """
 
     @abstractmethod
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply the transform to the input tensor."""
+    def __call__(self, data_dict: dict) -> dict:
+        """Apply the transform to the input data dictionary.
+
+        Parameters
+        ----------
+        data_dict : dict
+            Complete data dictionary with 'X' and metadata keys (obs_*)
+
+        Returns
+        -------
+        dict
+            Transformed data dictionary
+        """
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -69,16 +101,19 @@ class Compose(Transform):
     Examples
     --------
     >>> class LogTransform(Transform):
-    ...     def __call__(self, x):
-    ...         return torch.log1p(x)
+    ...     def __call__(self, data_dict):
+    ...         data_dict["X"] = torch.log1p(data_dict["X"])
+    ...         return data_dict
     >>>
     >>> class NormalizeTransform(Transform):
     ...     def __init__(self, target_sum=1e4):
     ...         self.target_sum = target_sum
     ...
-    ...     def __call__(self, x):
-    ...         row_sum = torch.sum(x, dim=-1, keepdim=True) + 1e-8
-    ...         return x * (self.target_sum / row_sum)
+    ...     def __call__(self, data_dict):
+    ...         X = data_dict["X"]
+    ...         row_sum = torch.sum(X, dim=-1, keepdim=True) + 1e-8
+    ...         data_dict["X"] = X * (self.target_sum / row_sum)
+    ...         return data_dict
     >>>
     >>> transform = Compose([
     ...     NormalizeTransform(target_sum=1e4),
@@ -93,11 +128,11 @@ class Compose(Transform):
 
         self.transforms = list(transforms)
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+    def __call__(self, data_dict: dict) -> dict:
         """Apply all transforms in sequence."""
         for transform in self.transforms:
-            x = transform(x)
-        return x
+            data_dict = transform(data_dict)
+        return data_dict
 
     def __repr__(self) -> str:
         format_string = f"{self.__class__.__name__}("
