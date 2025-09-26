@@ -12,7 +12,6 @@ from anndata._io.specs.lazy_methods import get_chunksize
 
 from ..._settings import settings
 from ...compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     H5Array,
     XBackendArray,
     XDataArray,
@@ -192,8 +191,7 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
-            # https://github.com/pydata/xarray/issues/10419
-            return NULLABLE_NUMPY_STRING_TYPE
+            return pd.StringDtype()  # TODO: na_value?
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
 

@@ -26,17 +26,15 @@ if TYPE_CHECKING:
 def _anndata_test_env(request: pytest.FixtureRequest) -> None:
     import anndata
 
-    if request.config.getoption("--preview"):
-        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
-        pd.options.future.infer_string = True
-        pd.options.mode.copy_on_write = True
-
     if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
-    # TODO: remove before merging the PR?
+
     if request.config.getoption("--preview"):
+        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
+        pd.options.future.infer_string = True
+        pd.options.mode.copy_on_write = True
         anndata.settings.allow_write_nullable_strings = True
 
 

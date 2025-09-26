@@ -211,12 +211,6 @@ else:
 #############################
 
 
-NULLABLE_NUMPY_STRING_TYPE = (
-    np.dtype("O")
-    if Version(version("numpy")) < Version("2")
-    else np.dtypes.StringDType(na_object=pd.NA)
-)
-
 PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
     pd.arrays.StringArray,
     pd.arrays.ArrowStringArray,

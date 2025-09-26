@@ -25,7 +25,6 @@ from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_datase
 from anndata._io.utils import check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -1174,6 +1173,14 @@ def write_nullable(
         )
         raise RuntimeError(msg)
     g = f.require_group(k)
+    if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        if v.dtype.na_value is pd.NA:
+            g.attrs["na_value"] = "pandas.NA"
+        elif np.isnan(v.dtype.na_value):
+            g.attrs["na_value"] = "numpy.nan"
+        else:
+            msg = f"Cannot write {v.dtype.na_value} as na_value for pandas StringArray"
+            raise ValueError(msg)
     values = (
         v.to_numpy(na_value="")
         if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
@@ -1204,18 +1211,6 @@ def _read_nullable(
     )
 
 
-def _string_array(
-    values: np.ndarray, mask: np.ndarray
-) -> pd.api.extensions.ExtensionArray:
-    """Construct a string array from values and mask."""
-    arr = pd.array(
-        values.astype(NULLABLE_NUMPY_STRING_TYPE),
-        dtype=pd.StringDtype(),
-    )
-    arr[mask] = pd.NA
-    return arr
-
-
 _REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
     read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
 )
@@ -1230,12 +1225,22 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean
 )
 
-_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))(
-    read_nullable_string := partial(_read_nullable, array_type=_string_array)
-)
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
-    read_nullable_string
-)
+
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
+def _read_nullable_string(
+    elem: GroupStorageType, *, _reader: Reader
+) -> pd.api.extensions.ExtensionArray:
+    values = _reader.read_elem(elem["values"])
+    mask = _reader.read_elem(elem["mask"])
+    na_value = pd.NA if _read_attr(elem.attrs, "na_value") == "pandas.NA" else np.nan
+
+    arr = pd.array(
+        values.astype(np.dtypes.StringDType(na_object=na_value)),  # TODO: why?
+        dtype=pd.StringDtype(na_value=na_value),
+    )
+    arr[mask] = pd.NA
+    return arr
 
 
 ###########
