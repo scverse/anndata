@@ -36,7 +36,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.1.0, !=2.1.2",
+    "pandas >=2.2.2",
     "numpy>=2",
     # https://github.com/scverse/anndata/issues/1434
     "scipy >=1.13",
