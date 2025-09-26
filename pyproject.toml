@@ -38,9 +38,8 @@ classifiers = [
 dependencies = [
     "pandas >=2.2.2",
     "numpy>=2",
-    # https://github.com/scverse/anndata/issues/1434
     "scipy >=1.13",
-    "h5py>=3.8",
+    "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
     "array_api_compat>=1.7.1",
@@ -69,7 +68,7 @@ doc = [
     "sphinxext.opengraph",
     "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.3",
-    "awkward>=2.3",
+    "awkward>=2.6.4",
     "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
@@ -108,7 +107,7 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [
-    "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
 
 [tool.hatch.version]
