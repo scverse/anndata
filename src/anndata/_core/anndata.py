@@ -1054,8 +1054,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            with pd.option_context("mode.chained_assignment", None):
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
