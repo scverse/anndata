@@ -15,7 +15,6 @@ from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     DaskArray,
     H5Array,
     H5Group,
@@ -269,7 +268,7 @@ def _gen_xarray_dict_iterator_from_elems(
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
                     "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
+                    and v.dtype == "string",
                 },
             )
         elif k == dim_name:
