@@ -1233,7 +1233,11 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
-    na_value = pd.NA if _read_attr(elem.attrs, "na_value") == "pandas.NA" else np.nan
+    na_value = (
+        pd.NA
+        if _read_attr(elem.attrs, "na_value", default="pandas.NA") == "pandas.NA"
+        else np.nan
+    )
 
     arr = pd.array(
         values.astype(np.dtypes.StringDType(na_object=na_value)),  # TODO: why?
