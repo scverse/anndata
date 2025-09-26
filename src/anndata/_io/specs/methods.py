@@ -1139,6 +1139,18 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 ####################
 
 
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+)
+@_REGISTRY.register_write(
+    H5Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+)
+@_REGISTRY.register_write(
+    ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+)
 def write_nullable(
     f: GroupStorageType,
     k: str,
@@ -1171,10 +1183,7 @@ def write_nullable(
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
 
 
-for store_type, array_type in product(
-    [H5Group, ZarrGroup],
-    [*PANDAS_STRING_ARRAY_TYPES, pd.arrays.IntegerArray, pd.arrays.BooleanArray],
-):
+for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_TYPES):
     _REGISTRY.register_write(
         store_type, array_type, IOSpec("nullable-string-array", "0.1.0")
     )(write_nullable)
