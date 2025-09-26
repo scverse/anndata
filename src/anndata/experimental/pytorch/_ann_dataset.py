@@ -450,22 +450,26 @@ def _batch_samples(samples: list[dict]) -> dict[str, torch.Tensor]:
     """Helper function to batch items into tensors."""
     batch = {}
 
+    # Handle empty samples
+    if not samples:
+        return batch
+
     # Handle expression data
     X_list = [sample["X"] for sample in samples]
     batch["X"] = torch.stack(X_list, dim=0)
 
-    # Handle metadata (if present)
-    metadata_keys = set()
+    # Handle all other keys (metadata and custom transform keys)
+    all_keys = set()
     for sample in samples:
-        metadata_keys.update(k for k in sample if k.startswith(OBS_PREFIX))
+        all_keys.update(k for k in sample if k != "X")  # Skip X as it's already handled
 
-    for key in metadata_keys:
+    for key in all_keys:
         values = []
         for sample in samples:
             if key in sample:
                 values.append(sample[key])
             else:
-                values.append(None)  # Default value for missing metadata
+                values.append(None)  # Default value for missing keys
 
         # Check if all values are tensors
         if values and all(isinstance(v, torch.Tensor) for v in values if v is not None):
