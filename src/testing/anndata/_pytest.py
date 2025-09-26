@@ -27,6 +27,8 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
     import anndata
 
     if request.config.getoption("--preview"):
+        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
+        pd.options.future.infer_string = True
         pd.options.mode.copy_on_write = True
 
     if isinstance(request.node, pytest.DoctestItem):
