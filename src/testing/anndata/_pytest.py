@@ -35,6 +35,9 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
         request.getfixturevalue("_doctest_env")
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
+    # TODO: remove before merging the PR?
+    if request.config.getoption("--preview"):
+        anndata.settings.allow_write_nullable_strings = True
 
 
 @pytest.fixture

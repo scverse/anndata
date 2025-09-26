@@ -235,11 +235,11 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     --------
     >>> from anndata import AnnData
     >>> adata = AnnData(np.ones((2, 3)), var=pd.DataFrame(index=["a", "a", "b"]))
-    >>> adata.var_names
-    Index(['a', 'a', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a', 'b'], dtype='string')
     >>> adata.var_names_make_unique()
-    >>> adata.var_names
-    Index(['a', 'a-1', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a-1', 'b'], dtype='string')
     """
     if index.is_unique:
         return index

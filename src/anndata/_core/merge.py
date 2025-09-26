@@ -1517,15 +1517,18 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> inner
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
-    >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
-    (Index(['s1', 's2', 's3', 's4'], dtype='object'),
-    Index(['var1', 'var2'], dtype='object'))
+    >>> (
+    ...     inner.obs_names.astype("string"),
+    ...     inner.var_names.astype("string"),
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    (Index(['s1', 's2', 's3', 's4'], dtype='string'),
+    Index(['var1', 'var2'], dtype='string'))
     >>> outer = ad.concat([a, b], join="outer")  # Joining on union of variables
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
-    >>> outer.var_names
-    Index(['var1', 'var2', 'var3'], dtype='object')
+    >>> outer.var_names.astype("string")
+    Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
         var1  var2  var3
     s1     0     1     0
@@ -1630,7 +1633,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(axis_indices(a, axis=axis)) for a in adatas], ignore_index=True
+        [axis_indices(a, axis=axis).to_series() for a in adatas], ignore_index=True
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
