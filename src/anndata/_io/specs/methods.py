@@ -42,7 +42,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES, is_zarr_v2
+from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE, is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1233,15 +1233,18 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
-    na_value = (
-        pd.NA
-        if _read_attr(elem.attrs, "na_value", default="pandas.NA") == "pandas.NA"
-        else np.nan
-    )
+    if PANDAS_SUPPORTS_NA_VALUE:
+        dtype = pd.StringDtype(
+            na_value=pd.NA
+            if _read_attr(elem.attrs, "na_value", default="pandas.NA") == "pandas.NA"
+            else np.nan
+        )
+    else:
+        dtype = pd.StringDtype()
 
     arr = pd.array(
-        values.astype(np.dtypes.StringDType(na_object=na_value)),  # TODO: why?
-        dtype=pd.StringDtype(na_value=na_value),
+        values.astype(np.dtypes.StringDType(na_object=dtype.na_value)),  # TODO: why?
+        dtype=dtype,
     )
     arr[mask] = pd.NA
     return arr

@@ -215,7 +215,7 @@ PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
     pd.arrays.StringArray,
     pd.arrays.ArrowStringArray,
 ]
-if Version(version("pandas")) >= Version("2.3"):
+if PANDAS_SUPPORTS_NA_VALUE := (Version(version("pandas")) >= Version("2.3")):
     PANDAS_STRING_ARRAY_TYPES += [
         type(pd.array([], dtype=pd.StringDtype(storage=storage, na_value=np.nan)))
         for storage in ["python", "pyarrow"]
