@@ -77,7 +77,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "loompy>=3.0.5",
+    "loompy>=3.0.8",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
