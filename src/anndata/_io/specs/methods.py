@@ -43,7 +43,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import is_zarr_v2
+from ...compat import PANDAS_STRING_ARRAY_TYPES, is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1139,39 +1139,24 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 ####################
 
 
-@_REGISTRY.register_write(
-    H5Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
-)
-@_REGISTRY.register_write(
-    H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
-)
 def write_nullable(
     f: GroupStorageType,
     k: str,
-    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
+    v: pd.arrays.IntegerArray
+    | pd.arrays.BooleanArray
+    | pd.arrays.StringArray
+    | pd.arrays.ArrowStringArray,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     if (
-        isinstance(v, pd.arrays.StringArray)
+        isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
         and not settings.allow_write_nullable_strings
     ):
         msg = (
             "`anndata.settings.allow_write_nullable_strings` is False, "
-            "because writing of `pd.arrays.StringArray` is new "
+            "because writing of `pd.arrays.[Arrow]StringArray` is new "
             "and not supported in anndata < 0.11, still use by many people. "
             "Opt-in to writing these arrays by toggling the setting to True."
         )
@@ -1179,11 +1164,20 @@ def write_nullable(
     g = f.require_group(k)
     values = (
         v.to_numpy(na_value="")
-        if isinstance(v, pd.arrays.StringArray)
+        if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
         else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
+
+
+for store_type, array_type in product(
+    [H5Group, ZarrGroup],
+    [*PANDAS_STRING_ARRAY_TYPES, pd.arrays.IntegerArray, pd.arrays.BooleanArray],
+):
+    _REGISTRY.register_write(
+        store_type, array_type, IOSpec("nullable-string-array", "0.1.0")
+    )(write_nullable)
 
 
 def _read_nullable(

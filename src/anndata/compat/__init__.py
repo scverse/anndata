@@ -217,6 +217,16 @@ NULLABLE_NUMPY_STRING_TYPE = (
     else np.dtypes.StringDType(na_object=pd.NA)
 )
 
+PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
+    pd.arrays.StringArray,
+    pd.arrays.ArrowStringArray,
+]
+if Version(version("pandas")) >= Version("2.3"):
+    PANDAS_STRING_ARRAY_TYPES += [
+        type(pd.array([], dtype=pd.StringDtype(storage=storage, na_value=np.nan)))
+        for storage in ["python", "pyarrow"]
+    ]
+
 
 @singledispatch
 def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
