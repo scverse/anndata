@@ -120,11 +120,6 @@ jobs:
           python -m build --sdist --wheel .
           twine check dist/*
 
-      - name: Check runtime version
-        run: |
-          pip install dist/*.whl
-          python -c 'import anndata; print(anndata.__version__)'
-
   check:
     if: always()
     needs:

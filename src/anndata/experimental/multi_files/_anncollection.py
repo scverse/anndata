@@ -16,7 +16,7 @@ from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
-from ...compat import _map_cat_to_str, old_positionals
+from ...compat import old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -731,7 +731,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                _map_cat_to_str(label_col), sep=index_unique
+                label_col.map(str, na_action="ignore"), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
