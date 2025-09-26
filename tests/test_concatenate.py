@@ -4,6 +4,7 @@ import warnings
 from collections.abc import Hashable
 from copy import deepcopy
 from functools import partial, singledispatch
+from importlib.metadata import version
 from importlib.util import find_spec
 from itertools import chain, permutations, product
 from operator import attrgetter
@@ -12,7 +13,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-import scipy
 from boltons.iterutils import default_exit, remap, research
 from numpy import ma
 from packaging.version import Version
@@ -1634,7 +1634,7 @@ def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
         if sparse_indexer_type == np.int64 and (
             (
                 (issubclass(cpu_array_type, CSArray) or adata.X.format == "csc")
-                and Version(scipy.__version__) < Version("1.15.0")
+                and Version(version("scipy")) < Version("1.15.0")
             )
             or issubclass(cpu_array_type, CSMatrix)
         ):

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from functools import partial
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
-import dask
 import joblib
 import pytest
 from dask.base import normalize_token, tokenize
@@ -11,7 +11,7 @@ from packaging.version import Version
 
 from anndata.compat import is_zarr_v2
 
-if Version(dask.__version__) < Version("2024.8.0"):
+if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
