@@ -27,7 +27,7 @@ from .._core.merge import (
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
 from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
-from . import read_dispatched
+from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Sequence
@@ -440,7 +440,7 @@ def _write_alt_pairwise(
 ):
     alt_pairwise = merge([
         {
-            k: r(r(read_elem(v), axis=0), axis=1)
+            k: r(r(read_elem_lazy(v), axis=0), axis=1)
             for k, v in dict(g[f"{alt_axis_name}p"]).items()
         }
         for r, g in zip(reindexers, groups, strict=True)
