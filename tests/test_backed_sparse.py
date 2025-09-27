@@ -623,6 +623,22 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     assert_equal(adata.X, base)
 
 
+def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    base = sparse.random(10, 10, format="csr")
+
+    f = (
+        open_write_group(tmp_path / f"parent_store.{diskfmt}", mode="a")
+        if diskfmt == "zarr"
+        else h5py.File(tmp_path / f"parent_store.{diskfmt}", "a")
+    )
+
+    ad.io.write_elem(f, "a_sparse_matrix", base)
+    adata = ad.AnnData(sparse_dataset(f["a_sparse_matrix"]))
+    ad.io.write_elem(f, "adata", adata)
+    adata_roundtripped = ad.io.read_elem(f["adata"])
+    assert_equal(adata_roundtripped.X, base)
+
+
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
 ):

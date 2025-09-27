@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import h5py
 import pytest
+import scipy.sparse as sp
 import zarr
 
 import anndata as ad
@@ -91,6 +92,19 @@ def test_read_dispatched_null_case(tmp_path: Path):
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
 
     assert_equal(expected, actual)
+
+
+@pytest.mark.zarr_io
+def test_write_dispatched_csr_dataset(tmp_path: Path):
+    ad.io.write_elem(
+        open_write_group(tmp_path / "arr.zarr"), "/", sp.random(10, 10, format="csr")
+    )
+    X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
+
+    def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
+        assert "csr_matrix" in iospec.encoding_type
+
+    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
 
 
 @pytest.mark.zarr_io
