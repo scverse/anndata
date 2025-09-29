@@ -1191,6 +1191,8 @@ def make_dask_col_from_extension_dtype(
     A :class:`dask.Array`: representation of the column.
     """
     import dask.array as da
+    import xarray as xr
+    from xarray.core.indexing import LazilyIndexedArray
 
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
@@ -1198,7 +1200,6 @@ def make_dask_col_from_extension_dtype(
         maybe_open_h5,
     )
     from anndata.compat import XDataArray
-    from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
@@ -1221,9 +1222,7 @@ def make_dask_col_from_extension_dtype(
             # reopening is important to get around h5py's unserializable lock in processes
             with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
                 v = read_elem_lazy(f)
-                variable = xr.Variable(
-                    data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
-                )
+                variable = xr.Variable(data=LazilyIndexedArray(v), dims=dims)
                 data_array = XDataArray(
                     variable,
                     coords=coords,
@@ -1315,9 +1314,10 @@ def concat_dataset2d_on_annot_axis(
     -------
     Concatenated :class:`~anndata.experimental.backed.Dataset2D`
     """
+    import xarray as xr
+
     from anndata._core.xarray import Dataset2D
     from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
-    from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
     have_backed = any(a.is_backed for a in annotations)

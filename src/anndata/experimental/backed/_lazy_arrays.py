@@ -18,11 +18,13 @@ from ...compat import (
     XZarrArrayWrapper,
     ZarrArray,
 )
-from ...compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
+
+    from xarray.core.extension_array import PandasExtensionArray
+    from xarray.core.indexing import ExplicitIndexer
 
     from anndata._core.index import Index
     from anndata.compat import ZarrGroup
@@ -41,14 +43,13 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
         self.shape = self._array.shape
         self.dtype = self._array.dtype
 
-    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer):
+    def __getitem__(self, key: ExplicitIndexer):
+        from xarray.core.indexing import IndexingSupport, explicit_indexing_adapter
+
         if isinstance(self._array, ZarrArray):
             return super().__getitem__(key)
-        res = xr.core.indexing.explicit_indexing_adapter(
-            key,
-            self.shape,
-            xr.core.indexing.IndexingSupport.OUTER_1VECTOR,
-            self._getitem,
+        res = explicit_indexing_adapter(
+            key, self.shape, IndexingSupport.OUTER_1VECTOR, self._getitem
         )
         return res
 
@@ -113,16 +114,16 @@ class CategoricalArray(XBackendArray, Generic[K]):
 
         return read_dataset(self._categories)
 
-    def __getitem__(
-        self, key: xr.core.indexing.ExplicitIndexer
-    ) -> xr.core.extension_array.PandasExtensionArray:
+    def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
+        from xarray.core.extension_array import PandasExtensionArray
+
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
         if settings.remove_unused_categories:
             categorical_array = categorical_array.remove_unused_categories()
-        return xr.core.extension_array.PandasExtensionArray(categorical_array)
+        return PandasExtensionArray(categorical_array)
 
     @cached_property
     def dtype(self):
@@ -161,9 +162,9 @@ class MaskedArray(XBackendArray, Generic[K]):
         self.file_format = "zarr" if isinstance(mask, ZarrArray) else "h5"
         self.elem_name = elem_name
 
-    def __getitem__(
-        self, key: xr.core.indexing.ExplicitIndexer
-    ) -> xr.core.extension_array.PandasExtensionArray | np.ndarray:
+    def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray | np.ndarray:
+        from xarray.core.extension_array import PandasExtensionArray
+
         values = self._values[key]
         mask = self._mask[key]
         if self._dtype_str == "nullable-integer":
@@ -172,14 +173,13 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
-            # https://github.com/pydata/xarray/issues/10419
-            values = values.astype(self.dtype)
+            extension_array = pd.array(values, dtype=self.dtype)
             values[mask] = pd.NA
             return values
         else:
             msg = f"Invalid dtype_str {self._dtype_str}"
             raise RuntimeError(msg)
-        return xr.core.extension_array.PandasExtensionArray(extension_array)
+        return PandasExtensionArray(extension_array)
 
     @cached_property
     def dtype(self):
