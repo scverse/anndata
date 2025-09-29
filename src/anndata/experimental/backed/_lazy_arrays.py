@@ -173,7 +173,8 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
-            extension_array = pd.array(values, dtype=self.dtype)
+            # https://github.com/pydata/xarray/issues/10419
+            extension_array = values.astype(self.dtype)
             values[mask] = pd.NA
             return values
         else:
@@ -191,7 +192,8 @@ class MaskedArray(XBackendArray, Generic[K]):
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":
-            return pd.StringDtype()  # TODO: na_value?
+            # https://github.com/pydata/xarray/issues/10419
+            return np.dtypes.StringDType(na_object=pd.NA)
         msg = f"Invalid dtype_str {self._dtype_str}"
         raise RuntimeError(msg)
 
