@@ -22,7 +22,7 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
-    from typing import TypeAlias, Union
+    from typing import Any, TypeAlias, Union
 
     from scipy.sparse import spmatrix
 
@@ -118,6 +118,40 @@ def _convert_on_top(
     return new_convert
 
 
+class _WorkerCollateWrapper:
+    """Picklable wrapper for batch_converter to use in multiprocessing workers."""
+
+    def __init__(self, batch_converter):
+        self.batch_converter = batch_converter
+
+    def __call__(self, batch):
+        # First, create a batch from AnnCollectionView objects by concatenating them
+        if len(batch) == 0:
+            return batch
+
+        # Assume all samples are AnnCollectionView objects
+        first_sample = batch[0]
+        if not hasattr(first_sample, "reference"):
+            # Not an AnnCollectionView, fallback to default collate
+            from torch.utils.data._utils.collate import default_collate
+
+            return default_collate(batch)
+
+        # Create a batch view by concatenating the indices
+        reference = first_sample.reference
+        all_oidx = []
+        all_vidx = first_sample.vidx  # Assume same variables for all samples
+
+        for sample in batch:
+            all_oidx.extend(sample.oidx)
+
+        # Create a new view with all the indices
+        batch_view = reference[all_oidx, all_vidx]
+
+        # Apply the batch converter to the combined view
+        return self.batch_converter(batch_view)
+
+
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
 class AnnLoader(DataLoader):
     """\
@@ -143,6 +177,9 @@ class AnnLoader(DataLoader):
     use_cuda
         Transfer pytorch tensors to the default cuda device after conversion.
         Only works if `use_default_converter=True`
+    batch_converter
+        Optional callable to transform each batch after collation.
+        Note: Only works with `num_workers=0` due to `AnnCollectionView` serialization constraints.
     **kwargs
         Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
         arguments for `AnnCollection` initialization.
@@ -157,6 +194,7 @@ class AnnLoader(DataLoader):
         shuffle: bool = False,
         use_default_converter: bool = True,
         use_cuda: bool = False,
+        batch_converter: Callable[[Any], Any] | None = None,
         **kwargs,
     ):
         if isinstance(adatas, AnnData):
@@ -199,6 +237,20 @@ class AnnLoader(DataLoader):
                 dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
             )
 
+        # Remove in case user passed via **kwargs (for forward-compat)
+        batch_converter = kwargs.pop("batch_converter", batch_converter)
+        self._batch_converter = batch_converter
+
+        # If workers >0 and user supplied a converter, apply it inside worker via custom collate
+        num_workers = kwargs.get("num_workers", 0)
+        if (
+            batch_converter is not None
+            and num_workers > 0
+            and "collate_fn" not in kwargs
+        ):
+            kwargs["collate_fn"] = _WorkerCollateWrapper(batch_converter)
+            # Set batch_converter to None so main process doesn't apply it again
+            self._batch_converter = None
         has_sampler = "sampler" in kwargs
         has_batch_sampler = "batch_sampler" in kwargs
 
@@ -232,3 +284,11 @@ class AnnLoader(DataLoader):
             super().__init__(dataset, batch_size=None, sampler=sampler, **kwargs)
         else:
             super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
+
+    def __iter__(self):  # type: ignore[override]
+        for batch in super().__iter__():
+            yield (
+                self._batch_converter(batch)
+                if self._batch_converter is not None
+                else batch
+            )
