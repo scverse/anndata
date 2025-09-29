@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
-import torch
+import pytest
 
 import anndata as ad
+
+pytest.importorskip("torch")
+
+import torch
+
 from anndata.experimental.pytorch import AnnLoader, batch_dict_converter
 
 

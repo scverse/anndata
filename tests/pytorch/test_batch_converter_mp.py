@@ -4,6 +4,9 @@ import numpy as np
 import pytest
 
 import anndata as ad
+
+pytest.importorskip("torch")
+
 from anndata.experimental.pytorch import AnnLoader, batch_dict_converter
 
 

@@ -7,14 +7,16 @@ This module provides convenience converters that can be passed to the
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from importlib.util import find_spec
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-import torch
 
-try:  # keep mypy happy when torch not present for docs build
+if find_spec("torch") or TYPE_CHECKING:
+    import torch
     from torch import Tensor
-except ImportError:  # pragma: no cover
+else:
+    torch = None  # type: ignore
     Tensor = Any  # type: ignore
 
 __all__ = ["to_tensor_dict"]
@@ -25,6 +27,9 @@ def _to_tensor(arr) -> Tensor | Any:
 
     Falls back to returning *arr* unchanged if torch or numpy is not available.
     """
+    if torch is None:
+        return arr
+
     if isinstance(arr, torch.Tensor):
         return arr
     try:
