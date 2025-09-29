@@ -17,6 +17,7 @@ from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_ad
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.mark.zarr_io
@@ -95,14 +96,19 @@ def test_read_dispatched_null_case(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_dispatched_csr_dataset(tmp_path: Path):
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_write_dispatched_csr_dataset(
+    tmp_path: Path, sparse_format: Literal["csr", "csc"]
+):
     ad.io.write_elem(
-        open_write_group(tmp_path / "arr.zarr"), "/", sp.random(10, 10, format="csr")
+        open_write_group(tmp_path / "arr.zarr"),
+        "/",
+        sp.random(10, 10, format=sparse_format),
     )
     X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
 
     def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
-        assert "csr_matrix" in iospec.encoding_type
+        assert iospec.encoding_type == f"{sparse_format}_matrix"
 
     write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
 
