@@ -26,7 +26,7 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
-from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup, _map_cat_to_str
+from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched
 
 if TYPE_CHECKING:
@@ -609,7 +609,7 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            _map_cat_to_str(label_col), sep=index_unique
+            label_col.map(str, na_action="ignore"), sep=index_unique
         )
 
     # Resulting indices for {axis_name} and {alt_axis_name}
