@@ -147,7 +147,7 @@ def equal_dask_array(a, b) -> bool:
         if isinstance(a._meta, CupySparseMatrix | CSMatrix | CSArray):
             # TODO: Maybe also do this in the other case?
             return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
-        return da.equal(a, b, where=~(da.isnan(a) * da.isnan(b))).all().compute()
+        return da.equal(a, b, where=~(da.isnan(a) & da.isnan(b))).all().compute()
     return equal(a.compute(), b.compute())
 
 
