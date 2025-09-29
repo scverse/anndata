@@ -424,13 +424,6 @@ def _write_axis_annot(  # noqa: PLR0917
     write_elem(output_group, axis_name, concat_annot)
 
 
-def _write_uns(
-    groups: Collection[H5Group, ZarrGroup], output_group: ZarrGroup | H5Group, merge
-):
-    uns = merge([read_elem(g["uns"]) for g in groups])
-    write_elem(output_group, "uns", uns)
-
-
 def _write_alt_pairwise(
     groups: Collection[H5Group, ZarrGroup],
     output_group: ZarrGroup | H5Group,
