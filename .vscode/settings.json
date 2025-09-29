@@ -21,7 +21,7 @@
         "--color=yes",
         "-vv",
         "--strict-warnings",
-        "--preview",
+        //"--preview",
         //"-nauto",
     ],
     "python.terminal.activateEnvironment": true,
