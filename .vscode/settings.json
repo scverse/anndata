@@ -24,5 +24,4 @@
         //"-nauto",
     ],
     "python.terminal.activateEnvironment": true,
-    "cursorpyright.analysis.typeCheckingMode": "basic",
 }
