@@ -14,9 +14,7 @@ from warnings import warn
 
 import numpy as np
 import pandas as pd
-import scipy
 from natsort import natsorted
-from packaging.version import Version
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
@@ -30,7 +28,6 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    _map_cat_to_str,
 )
 from ..utils import asarray, axis_len, warn_once
 from .anndata import AnnData
@@ -185,15 +182,6 @@ def equal_sparse(a, b) -> bool:
             # Comparison broken for CSC matrices
             # https://github.com/cupy/cupy/issues/7757
             a, b = CupyCSRMatrix(a), CupyCSRMatrix(b)
-        if Version(scipy.__version__) >= Version("1.16.0rc1"):
-            # TODO: https://github.com/scipy/scipy/issues/23068
-            return bool(
-                a.format == b.format
-                and (a.shape == b.shape)
-                and np.all(a.indptr == b.indptr)
-                and np.all(a.indices == b.indices)
-                and np.all((a.data == b.data) | (np.isnan(a.data) & np.isnan(b.data)))
-            )
         comp = a != b
         if isinstance(comp, bool):
             return not comp
@@ -1647,7 +1635,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            _map_cat_to_str(label_col), sep=index_unique
+            label_col.map(str, na_action="ignore"), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 
