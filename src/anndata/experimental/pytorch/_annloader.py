@@ -179,7 +179,7 @@ class AnnLoader(DataLoader):
         Only works if `use_default_converter=True`
     batch_converter
         Optional callable to transform each batch after collation.
-        Note: Only works with `num_workers=0` due to `AnnCollectionView` serialization constraints.
+        Works with both single-threaded and multi-threaded data loading.
     **kwargs
         Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
         arguments for `AnnCollection` initialization.
