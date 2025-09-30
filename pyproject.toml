@@ -147,6 +147,7 @@ filterwarnings = [
     "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
+    "ignore:'oneOf' deprecated - use 'one_of':DeprecationWarning",                # pyparsing deprecation in matplotlib
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -161,6 +162,7 @@ filterwarnings_when_strict = [
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:'oneOf' deprecated - use 'one_of':DeprecationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [
