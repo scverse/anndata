@@ -148,7 +148,7 @@ filterwarnings = [
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     "ignore:'oneOf' deprecated - use 'one_of':DeprecationWarning",                # pyparsing deprecation in matplotlib
-    "ignore:'parseString' deprecated - use 'parse_string':DeprecationWarning",     # pyparsing deprecation in matplotlib
+    "ignore:'parseString' deprecated - use 'parse_string':DeprecationWarning",    # pyparsing deprecation in matplotlib
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
