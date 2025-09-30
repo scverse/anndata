@@ -149,6 +149,7 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     "ignore:'oneOf' deprecated - use 'one_of':DeprecationWarning",                # pyparsing deprecation in matplotlib
     "ignore:'parseString' deprecated - use 'parse_string':DeprecationWarning",    # pyparsing deprecation in matplotlib
+    "ignore:'resetCache' deprecated - use 'reset_cache':DeprecationWarning",      # pyparsing deprecation in matplotlib
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -165,6 +166,7 @@ filterwarnings_when_strict = [
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:'oneOf' deprecated - use 'one_of':DeprecationWarning",
     "default:'parseString' deprecated - use 'parse_string':DeprecationWarning",
+    "default:'resetCache' deprecated - use 'reset_cache':DeprecationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [
