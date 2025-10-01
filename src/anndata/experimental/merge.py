@@ -523,7 +523,7 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
         DataFrames are padded with missing values.
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
-        This is False by default, since the resulting arrays are often not meaningful, and is ignored when True.
+        This is False by default, since the resulting arrays are often not meaningful, and raises {class}`NotImplementedError` when True.
         If you are interested in this feature, please open an issue.
 
     Notes
