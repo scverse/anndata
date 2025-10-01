@@ -119,6 +119,7 @@ def get_array_type(array_type, axis):
 
 
 @pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+@pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
 def test_anndatas(
     *,
     axis: Literal[0, 1],
