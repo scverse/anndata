@@ -780,10 +780,10 @@ for store_type, (cls, spec, func) in product(
     _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
-@_REGISTRY.register_write(H5Group, _CSRDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("", "0.1.0"))
+@_REGISTRY.register_write(H5Group, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
 def write_sparse_dataset(
     f: GroupStorageType,
     k: str,
@@ -800,9 +800,6 @@ def write_sparse_dataset(
         fmt=elem.format,
         dataset_kwargs=dataset_kwargs,
     )
-    # TODO: Cleaner way to do this
-    f[k].attrs["encoding-type"] = f"{elem.format}_matrix"
-    f[k].attrs["encoding-version"] = "0.1.0"
 
 
 def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
