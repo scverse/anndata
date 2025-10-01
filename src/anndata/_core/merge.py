@@ -148,6 +148,8 @@ def equal_dask_array(a, b) -> bool:
             # TODO: Maybe also do this in the other case?
             return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
         return da.equal(a, b, where=~(da.isnan(a) & da.isnan(b))).all().compute()
+    msg = "Misaligned chunks detected when checking for merge equality of dask arrays.  Reading full arrays into memory."
+    warn(msg, UserWarning, stacklevel=3)
     return equal(a.compute(), b.compute())
 
 
