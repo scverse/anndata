@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from contextlib import contextmanager
 from functools import partial, singledispatch
 from pathlib import Path
@@ -129,9 +130,8 @@ def read_sparse_as_dask(
 ) -> DaskArray:
     import dask.array as da
 
-    path = Path(filename(elem))
     path_or_sparse_dataset = (
-        path
+        Path(filename(elem))
         if isinstance(elem, H5Group)
         else ad.io.sparse_dataset(elem, should_cache_indptr=False)
     )
@@ -174,7 +174,7 @@ def read_sparse_as_dask(
         dtype=dtype,
         chunks=chunk_layout,
         meta=memory_format((0, 0), dtype=dtype),
-        name=f"{path}/{elem_name}-{dtype}",
+        name=f"{uuid.uuid4()}/{path_or_sparse_dataset}/{elem_name}-{dtype}",
     )
     return da_mtx
 
@@ -235,7 +235,7 @@ def read_h5_array(
         dtype=dtype,
         chunks=chunk_layout,
         meta=np.array([]),
-        name=f"{path}/{elem_name}-{dtype}",
+        name=f"{uuid.uuid4()}/{path}/{elem_name}-{dtype}",
     )
 
 
