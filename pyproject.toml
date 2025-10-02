@@ -39,7 +39,7 @@ dependencies = [
     "numpy>=1.26",
     # https://github.com/scverse/anndata/issues/1434
     "scipy >=1.13",
-    "h5py>=3.8",
+    "h5py>=3.10",
     "natsort",
     "packaging>=24.2",
     "array_api_compat>=1.7.1",
