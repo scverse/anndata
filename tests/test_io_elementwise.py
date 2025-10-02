@@ -76,7 +76,7 @@ def create_dense_store(
     return store
 
 
-def create_sparse_store(
+def create_sparse_store[G: (H5Group, ZarrGroup)](
     sparse_format: Literal["csc", "csr"], store: G, shape=DEFAULT_SHAPE
 ) -> G:
     """Returns a store
@@ -225,7 +225,9 @@ def test_io_spec(store, value, encoding_type):
         pytest.param(np.asarray("test"), "string", id="scalar_string"),
     ],
 )
-def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: str):
+def test_io_spec_compressed_scalars(
+    store: H5Group | ZarrGroup, value: np.ndarray, encoding_type: str
+):
     key = f"key_for_{encoding_type}"
     write_elem(
         store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5}

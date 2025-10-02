@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
@@ -84,13 +84,13 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadLazyInternal)
+RI = TypeVar("RI", _ReadInternal, _ReadLazyInternal)
 R = TypeVar("R", Read, ReadLazy)
 
 
-class IORegistry(Generic[_R, R]):
+class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], _R] = {}
+        self.read: dict[tuple[type, IOSpec, frozenset[str]], RI] = {}
         self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
         self.write: dict[
             tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
@@ -155,7 +155,7 @@ class IORegistry(Generic[_R, R]):
         src_type: type,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_R], _R]:
+    ) -> Callable[[RI], RI]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 

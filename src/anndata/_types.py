@@ -11,7 +11,7 @@ from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any, TypeAlias
+    from typing import Any
 
     from anndata._core.xarray import Dataset2D
 
@@ -33,9 +33,9 @@ __all__ = [
     "_WriteInternal",
 ]
 
-ArrayStorageType: TypeAlias = ZarrArray | H5Array
-GroupStorageType: TypeAlias = ZarrGroup | H5Group
-StorageType: TypeAlias = ArrayStorageType | GroupStorageType
+type ArrayStorageType = ZarrArray | H5Array
+type GroupStorageType = ZarrGroup | H5Group
+type StorageType = ArrayStorageType | GroupStorageType
 
 # NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
 RWAble_contra = TypeVar("RWAble_contra", bound=typing.RWAble, contravariant=True)
