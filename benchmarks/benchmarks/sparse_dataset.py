@@ -85,12 +85,19 @@ class SparseCSRDask:
         self.tmpdir = tempfile.TemporaryDirectory("tmp.zarr")
         self.group = zarr.group(self.tmpdir.name)
         write_elem(self.group, "X", X)
+        self.adata = AnnData(X=read_elem_lazy(self.group["X"]))
 
-    def time_concat_many(self):
-        concat([AnnData(X=read_elem_lazy(self.group["X"])) for i in range(100)])
+    def time_concat(self):
+        concat([self.adata for i in range(100)])
 
-    def peakmem_concat_many(self):
-        concat([AnnData(X=read_elem_lazy(self.group["X"])) for i in range(100)])
+    def peakmem_concat(self):
+        concat([self.adata for i in range(100)])
+
+    def time_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def peakmem_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
 
     def teardown(self):
         self.tmpdir.cleanup()
