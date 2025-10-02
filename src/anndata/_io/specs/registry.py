@@ -459,11 +459,11 @@ def read_elem_lazy(
 
     >>> g = zarr.open(zarr_path)
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"])
-    >>> adata.X.chunksize  # default chunk settings
-    (1000, 32738)
+    >>> adata.X
+    dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(1000, 32738), chunktype=scipy.csr_matrix>
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, adata.shape[1]))
-    >>> adata.X.chunksize  # with new chunk settings
-    (500, 32738)
+    >>> adata.X
+    dask.array<make_dask_chunk, shape=(2700, 32738), dtype=float32, chunksize=(500, 32738), chunktype=scipy.csr_matrix>
 
     Reading a dense matrix from a zarr store lazily:
 
