@@ -428,7 +428,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value(vals: Collection[T]) -> T | MissingVal:
+def unique_value[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -440,7 +440,7 @@ def unique_value(vals: Collection[T]) -> T | MissingVal:
     return unique_val
 
 
-def first(vals: Collection[T]) -> T | MissingVal:
+def first[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -451,7 +451,7 @@ def first(vals: Collection[T]) -> T | MissingVal:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> T | MissingVal:
+def only[T](vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]

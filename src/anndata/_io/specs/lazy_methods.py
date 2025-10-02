@@ -53,9 +53,9 @@ def maybe_open_h5(
 ) -> Generator[H5File, None, None]: ...
 @overload
 @contextmanager
-def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
+def maybe_open_h5[D](path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
 @contextmanager
-def maybe_open_h5(
+def maybe_open_h5[D](
     path_or_other: H5File | D, elem_name: str
 ) -> Generator[H5File | D, None, None]:
     if not isinstance(path_or_other, Path):
@@ -81,7 +81,7 @@ def compute_chunk_layout_for_axis_size(
     return chunk
 
 
-def make_dask_chunk(
+def make_dask_chunk[D](
     path_or_sparse_dataset: Path | D,
     elem_name: str,
     block_info: BlockInfo | None = None,

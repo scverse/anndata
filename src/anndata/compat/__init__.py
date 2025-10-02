@@ -330,7 +330,7 @@ Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe(
+def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
     f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):

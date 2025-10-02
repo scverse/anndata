@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints, overload
+from typing import TYPE_CHECKING, TypeVar, get_type_hints, overload
 from warnings import warn
 
 from ..types import ExtensionNamespace
@@ -60,7 +60,7 @@ NameSpT = TypeVar("NameSpT", bound=ExtensionNamespace)
 T = TypeVar("T")
 
 
-class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
+class AccessorNameSpace[NameSpT: ExtensionNamespace](ExtensionNamespace):
     """Establish property-like namespace object for user-defined functionality."""
 
     def __init__(self, name: str, namespace: type[NameSpT]) -> None:
