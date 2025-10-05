@@ -144,7 +144,7 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",                            # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
