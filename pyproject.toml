@@ -57,8 +57,6 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # runtime dev version generation
-    "hatch-vcs",
     "anndata[dev-doc]",
 ]
 doc = [
@@ -146,7 +144,12 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",     # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
+    "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
+    "ignore:`__version__` is deprecated:FutureWarning:scanpy",
+    # https://github.com/matplotlib/matplotlib/pull/30589
+    "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [

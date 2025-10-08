@@ -811,6 +811,11 @@ def roundtrip(diskfmt):
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
+@pytest.fixture
+def roundtrip2(diskfmt2):
+    return partial(_do_roundtrip, diskfmt=diskfmt2)
+
+
 def test_write_string_types(tmp_path, diskfmt, roundtrip):
     # https://github.com/scverse/anndata/issues/456
     adata_pth = tmp_path / f"adata.{diskfmt}"
@@ -829,24 +834,17 @@ def test_write_string_types(tmp_path, diskfmt, roundtrip):
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
-    roundtrip2 = partial(_do_roundtrip, diskfmt=diskfmt2)
-
-    filepth1 = tmp_path / f"test1.{diskfmt}"
-    filepth2 = tmp_path / f"test2.{diskfmt2}"
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
+    import scanpy as sc
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
 
-    from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
-    from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip
+    # Do we read okay
+    from_disk1 = roundtrip(pbmc, tmp_path / f"test1.{diskfmt}")
+    # Can we round trip
+    from_disk2 = roundtrip2(from_disk1, tmp_path / f"test2.{diskfmt2}")
 
     assert_equal(pbmc, from_disk1)  # Not expected to be exact due to `nan`s
     assert_equal(pbmc, from_disk2)
@@ -854,12 +852,7 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
-    filepth = tmp_path / f"test.{diskfmt}"
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+    import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
@@ -871,7 +864,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
     # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
     orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):
-        curr = roundtrip(orig, filepth)
+        curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
 
     assert_equal(orig, curr, exact=True)
 
@@ -884,12 +877,8 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
     reason="File not present.",
 )
-def test_backwards_compat_zarr():
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+def test_backwards_compat_zarr() -> None:
+    import scanpy as sc
     import zarr
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()

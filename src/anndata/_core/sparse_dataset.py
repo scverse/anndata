@@ -16,6 +16,7 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
+from importlib.metadata import version
 from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
@@ -23,7 +24,6 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
-import scipy
 import scipy.sparse as ss
 from packaging.version import Version
 from scipy.sparse import _sparsetools
@@ -53,7 +53,7 @@ else:
     from scipy.sparse import spmatrix as _cs_matrix
 
 
-SCIPY_1_15 = Version(scipy.__version__) >= Version("1.15rc0")
+SCIPY_1_15 = Version(version("scipy")) >= Version("1.15rc0")
 
 
 class BackedFormat(NamedTuple):
