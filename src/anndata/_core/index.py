@@ -275,10 +275,11 @@ def _process_index_for_h5py(
 
     # For h5py fancy indexing, we need sorted indices
     # But we also need to track how to reverse the sorting
+    unique, inverse = np.unique(idx, return_inverse=True)
     return (
         # Has duplicates - use unique + inverse mapping approach
-        np.unique(idx, return_inverse=True)
-        if len(np.unique(idx)) != len(idx)
+        (unique, inverse)
+        if len(unique) != len(idx)
         # No duplicates - just sort and track reverse mapping
         else _index_order_and_inverse(idx)
     )
