@@ -4,6 +4,7 @@ Code for merging/ concatenating AnnData objects.
 
 from __future__ import annotations
 
+import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
@@ -1250,6 +1251,7 @@ def make_dask_col_from_extension_dtype(
             chunks=chunk_size,
             meta=np.array([], dtype=dtype),
             dtype=dtype,
+            name=f"{uuid.uuid4()}/{base_path_or_zarr_group}/{elem_name}-{dtype}",
         )
 
     return da.from_array(col.values, chunks=-1)  # in-memory
