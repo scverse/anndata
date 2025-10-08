@@ -164,6 +164,10 @@ filterwarnings_when_strict = [
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:'oneOf' deprecated - use 'one_of':DeprecationWarning",
+    "default:'parseString' deprecated - use 'parse_string':DeprecationWarning",
+    "default:'resetCache' deprecated - use 'reset_cache':DeprecationWarning",
+    "default:'enablePackrat' deprecated - use 'enable_packrat':DeprecationWarning",
 ]
 python_files = "test_*.py"
 testpaths = [

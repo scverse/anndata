@@ -135,6 +135,7 @@ In particular, for pytorch-based models.
 
    experimental.AnnCollection
    experimental.AnnLoader
+   experimental.pytorch.batch_dict_converter
 ```
 
 Out of core concatenation
