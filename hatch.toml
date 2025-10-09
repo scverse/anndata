@@ -30,7 +30,7 @@ overrides.matrix.deps.pre-install-commands = [
 
 ]
 overrides.matrix.deps.python = [
-    { if = [ "min" ], value = "3.11" },
+    { if = [ "min" ], value = "3.12" },
     { if = [ "stable", "pre" ], value = "3.13" },
 ]
 overrides.matrix.deps.features = [

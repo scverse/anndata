@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 K = TypeVar("K", H5Array, ZarrArray)
 
 
-class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
+class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
     def __init__(self, array: K):
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
@@ -75,7 +75,7 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
         return self._array[key]
 
 
-class CategoricalArray(XBackendArray, Generic[K]):
+class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy categorical data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -130,7 +130,7 @@ class CategoricalArray(XBackendArray, Generic[K]):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-class MaskedArray(XBackendArray, Generic[K]):
+class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
