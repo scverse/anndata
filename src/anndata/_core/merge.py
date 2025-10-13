@@ -687,6 +687,8 @@ class Reindexer:
         """
         if self.no_change and (axis_len(el, axis) == len(self.old_idx)):
             return el
+        if _is_pandas(el) or isinstance(el, pd.DataFrame):
+            return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         if isinstance(el, pd.DataFrame | Dataset2D):
             return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
@@ -753,16 +755,8 @@ class Reindexer:
     def _apply_to_array_api(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-
-        indexer = self.idx
-
-        if _is_pandas(el):
-            # using the behavior that already exists in pandas for Series/Index
-            return pd.api.extensions.take(
-                el, indexer, axis=axis, allow_fill=True, fill_value=fill_value
-            )
-        # e.g., numpy, jax.numpy, cubed, etc.
         xp = get_namespace(el)
+        indexer = xp.asarray(self.idx)
 
         # Handling edge case to mimic pandas behavior
         if el.shape[axis] == 0:
@@ -777,15 +771,11 @@ class Reindexer:
         if not isinstance(el, np.ndarray) and _is_array_api_compatible(el):
             # Convert to NumPy via DLPack
             el_np = _dlpack_to_numpy(el)
-
             # Recursively call this same function
             out_np = self._apply_to_array_api(el_np, axis=axis, fill_value=fill_value)
-
             # reverting back to numpy as it is hard to reindex on JAX and others
             return _dlpack_from_numpy(out_np, xp)
 
-        # numpy case
-        indexer = xp.asarray(indexer)
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
@@ -908,38 +898,6 @@ def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
     else:
         msg = f"`join` must be one of 'inner' or 'outer', got {join!r}"
         raise ValueError(msg)
-
-
-# def default_fill_value(els):
-#     # Given some arrays, returns what the default fill value should be.
-
-#     if any(
-#         isinstance(el, pd.DataFrame | pd.Series)
-#         for el in els
-#         if el is not None and el is not MissingVal
-#     ):
-#         return pd.NA
-
-#     if any(
-#         isinstance(el, CSMatrix | CSArray)
-#         or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
-#         for el in els
-#     ):
-#         return 0
-
-#     # Pick the namespace of the first valid element
-#     for el in els:
-#         if el is not None and el is not MissingVal:
-#             xp = get_namespace(el)
-#             # Not all backends have `nan` defined (e.g. integer dtypes)
-#             try:
-#                 return xp.nan
-#             except AttributeError:
-#                 # Fall back to 0 if no NaN in this backend
-#                 return xp.asarray(0).item()
-
-#     # Fallback if list was empty or only MissingVal
-#     return np.nan
 
 
 def default_fill_value(els):

@@ -64,20 +64,37 @@ def to_numpy_if_array_api(x):
 
     # Try array-API detection only for unknown leaves
     try:
+        # importing the array API compatibility layer
         import array_api_compat as aac
 
+        # getting the array namespace
         xp = aac.array_namespace(x)
-        # Already a NumPy array
+        # Skip if it's already NumPy
         if xp.__name__.startswith("numpy"):
             return x
-        # # If this succeeds, it's an array-API array (e.g. JAX, CuPy, torch, …)
-        # aac.array_namespace(x)
-        # return np.asarray(x)
+        # If the array has a `.device` attribute, check if it's on GPU
+        if hasattr(x, "device"):
+            device = x.device
+            # if the device has a `.type` field, use it
+            if hasattr(device, "type"):
+                if device.type != "cpu":
+                    # move the array to CPU if it's on GPU
+                    x = xp.to_device(
+                        x, "cpu"
+                    )  # not sure about this, would we want to move the entire array to CPU?
+            # otherwise, if the device is not a string, check if it's not "cpu"
+            elif str(device) != "cpu":
+                x = xp.to_device(x, "cpu")
+
+        # Convert to NumPy using DLPack (safe now)
         if hasattr(x, "__to_dlpack__"):
             return np.from_dlpack(x)
-    except (ImportError, AttributeError, TypeError):
-        # Not an array-API object (or not supported), so return unchanged
+
+    except (ImportError, AttributeError, TypeError, RuntimeError):
+        # Could not detect or convert – return unchanged
         return x
+
+    return x
 
 
 def normalize_nested(obj):

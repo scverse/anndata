@@ -1833,12 +1833,11 @@ def test_error_on_mixed_device():
         concat(p)
 
 
-@pytest.mark.xfail(
-    condition=lambda: array_type is jnp.asarray,
-    reason="concat across different array backends is not supported",
-)
 def test_concat_on_var_outer_join(array_type):
     # https://github.com/scverse/anndata/issues/1286
+    if array_type is jnp.asarray:
+        pytest.xfail("concat across different array backends is not supported")
+
     a = AnnData(
         obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
         var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10)]),

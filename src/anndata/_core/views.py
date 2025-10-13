@@ -6,7 +6,6 @@ from copy import deepcopy
 from functools import reduce, singledispatch, wraps
 from typing import TYPE_CHECKING, Literal
 
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
@@ -116,7 +115,6 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
 
 def _replace_field(container, idx, value):
     import awkward as ak
-    import numpy as np
 
     # JAX-style immutable array
     if hasattr(container, "at"):
@@ -556,7 +554,42 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
-    raise NotImplementedError
+    import array_api_compat as aac
+
+    from ..compat import has_xp
+
+    # handling array-API–compatible arrays (e.g. JAX, etc)
+    if has_xp(old):
+        xp = aac.array_namespace(old)
+        # skip early if numpy
+        if xp.__name__.startswith("numpy"):
+            return old[new]
+
+        # handle boolean mask; i.e. checking whether old is a boolean array
+        if hasattr(old, "dtype") and str(old.dtype) in ("bool", "bool_", "boolean"):
+            # retrieving the where function (like np.where or jnp.where)
+            where_fn = getattr(xp, "where", None)
+            # if where exists, use it to convert the boolean mask to integer indices
+            if where_fn is not None:
+                old = where_fn(old)[0]
+            else:
+                # if no where function is found, fallback to NumPy
+                old = np.where(np.asarray(old))[0]
+
+        # if new is a slice object, converting it into a range of indices using arange
+        if isinstance(new, slice):
+            # trying to get arange from the backend
+            arange_fn = getattr(xp, "arange", None)
+            # if arange exists, apply it to the resolved slice range
+            if arange_fn is not None:
+                new = arange_fn(*new.indices(old.shape[0]))
+            else:
+                new = np.arange(*new.indices(old.shape[0]))
+
+        return old[new]
+
+    msg = f"_resolve_idx not implemented for type {type(old)}"
+    raise NotImplementedError(msg)
 
 
 @_resolve_idx.register(np.ndarray)
@@ -580,20 +613,6 @@ def _resolve_idx_slice(
         return _resolve_idx_slice_slice(old, new, l)
     else:
         return np.arange(*old.indices(l))[new]
-
-
-@_resolve_idx.register(jnp.ndarray)
-def _resolve_idx_jnp(
-    old: jnp.ndarray, new: Index1DNorm, l: Literal[0, 1]
-) -> jnp.ndarray:
-    # Boolean mask + index
-    if old.dtype == jnp.bool_:
-        old = jnp.where(old)[0]
-
-    if isinstance(new, slice):
-        new = jnp.arange(*new.indices(old.shape[0]))
-
-    return old[new]
 
 
 def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:

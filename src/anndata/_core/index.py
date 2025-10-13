@@ -113,7 +113,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     elif isinstance(indexer, XDataArray):
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
-        return indexer.dat
+        return indexer.data
 
     elif has_xp(indexer):
         # getting array's namespace
