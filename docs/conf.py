@@ -133,6 +133,7 @@ intersphinx_mapping = dict(
     numpy=("https://numpy.org/doc/stable", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
+    # TODO: switch to `/3` once docs are built with Python 3.14
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
