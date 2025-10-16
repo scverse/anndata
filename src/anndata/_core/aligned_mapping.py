@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -135,7 +135,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         return dict(self)
 
 
-class AlignedView(AlignedMappingBase, Generic[P, I]):
+class AlignedView[P: "AlignedMappingBase", I: (OneDIdx, TwoDIdx)](AlignedMappingBase):
     is_view: ClassVar[Literal[True]] = True
 
     # override docstring
@@ -394,7 +394,7 @@ T = TypeVar("T", bound=AlignedMapping)
 
 
 @dataclass
-class AlignedMappingProperty(property, Generic[T]):
+class AlignedMappingProperty[T: AlignedMapping](property):
     """A :class:`property` that creates an ephemeral AlignedMapping.
 
     The actual data is stored as `f'_{self.name}'` in the parent object.

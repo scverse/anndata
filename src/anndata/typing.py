@@ -32,7 +32,8 @@ __all__ = ["AxisStorable", "Index", "RWAble"]
 Index = _Index
 """1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
-XDataType: TypeAlias = (
+# Both of the following two types are used with `get_args` hence the need for `TypeAlias`
+XDataType: TypeAlias = (  # noqa: UP040
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
@@ -46,20 +47,18 @@ XDataType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
-ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray  # noqa: UP040
 
 
-InMemoryArrayOrScalarType: TypeAlias = (
+type InMemoryArrayOrScalarType = (
     pd.DataFrame | np.number | str | ArrayDataStructureTypes
 )
 
 
-AxisStorable: TypeAlias = (
+type AxisStorable = (
     InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]
 )
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-RWAble: TypeAlias = (
-    AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
-)
+type RWAble = AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
 """A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
