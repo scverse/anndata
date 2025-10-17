@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from contextlib import contextmanager
 from functools import partial, singledispatch
 from pathlib import Path
@@ -207,7 +208,11 @@ def read_h5_string_array(
     from anndata._io.h5ad import read_dataset
 
     chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
-    return da.from_array(read_dataset(elem), chunks=chunks)
+    return da.from_array(
+        read_dataset(elem),
+        chunks=chunks,
+        name=f"{uuid.uuid4()}/{Path(filename(elem))}/{elem.name}-{elem.dtype}",
+    )
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -304,7 +309,7 @@ def read_dataframe(
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times
-        index = elem_dict[dim_name].compute()
+        index = ad.io.read_elem(elem[dim_name])
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
