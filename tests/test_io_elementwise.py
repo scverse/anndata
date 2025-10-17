@@ -424,6 +424,58 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        pytest.param(
+            np.uint64,
+            marks=pytest.mark.skip(
+                reason="scipy sparse does not support bigger than max(int64) values in indices."
+            ),
+        ),
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+    ],
+)
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_write_indices_min(
+    store: H5Group | ZarrGroup, dtype: np.dtype, format: Literal["csr", "csc"]
+):
+    num_minor_axis = np.iinfo(dtype).max - 1
+    minor_axis_index = np.array([num_minor_axis - 1])
+    major_axis_index = np.array([10], dtype=minor_axis_index.dtype)
+    row_cols = (
+        (minor_axis_index, major_axis_index)
+        if format == "csc"
+        else (major_axis_index, minor_axis_index)
+    )
+    shape = [num_minor_axis, 20] if format == "csc" else [20, num_minor_axis]
+    X = getattr(sparse, f"{format}_array")(
+        (np.array([10]), row_cols),
+        shape=shape,
+    )
+    with ad.settings.override(write_csr_csc_indices_with_min_possible_dtype=True):
+        write_elem(store, "X", X)
+
+    assert store["X/indices"].dtype == np.min_scalar_type(num_minor_axis)
+    with ad.settings.override(use_sparse_array_on_read=True):
+        result = read_elem(store["X"])
+    assert_equal(result.data, X.data)
+    assert_equal(result.indices, X.indices)
+    assert_equal(result.indptr, X.indptr)
+    assert result.shape == X.shape
+    # Comparison converts to csr, which is bad for really big csc matrices and errors out with
+    # ValueError: array is too big; `arr.size * arr.dtype.itemsize` is larger than the maximum possible size.
+    # The above tests should be enough to capture the desired equality checks so this is mostly for being extra sure.
+    if format != "csc" and dtype != np.int64:
+        assert (result != X).nnz == 0
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()

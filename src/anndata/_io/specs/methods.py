@@ -734,6 +734,15 @@ def write_sparse_compressed(
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
+        if (
+            attr_name == "indices"
+            and settings.write_csr_csc_indices_with_min_possible_dtype
+        ):
+            # np.min_scalar_type can return things like np.ulonglong which zarr doesn't understand
+            # TODO: should we just write our own custom logic for this?
+            dtype = np.dtype(
+                np.min_scalar_type(np.array(value.shape[value.format == "csr"])).name
+            )
         if isinstance(f, H5Group) or is_zarr_v2():
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
