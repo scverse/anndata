@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from contextlib import contextmanager
 from functools import partial, singledispatch
 from pathlib import Path
@@ -217,7 +218,11 @@ def read_h5_array(
 
     make_chunk = partial(make_dask_chunk, path, elem_name)
     return da.map_blocks(
-        make_chunk, dtype=dtype, chunks=chunk_layout, meta=np.array([])
+        make_chunk,
+        dtype=dtype,
+        chunks=chunk_layout,
+        meta=np.array([]),
+        name=f"{uuid.uuid4()}/{Path(filename(elem))}/{elem.name}-{elem.dtype}",
     )
 
 
