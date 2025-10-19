@@ -105,7 +105,7 @@ def make_dask_chunk(
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
-        if f.attrs["encoding-type"] == "string-array" and isinstance(f, h5py.Dataset):
+        if isinstance(f, h5py.Dataset) and f.attrs["encoding-type"] == "string-array":
             mtx = mtx.asstr()
         chunk = mtx[idx]
     return chunk
