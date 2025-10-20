@@ -52,7 +52,7 @@ class Dataset2D:
             index=[f"cell{i}" for i in range(self.n_obs)],
         )
         # Force writing string-array format to check read performance
-        if (
+        if writing_string_array_on_disk := (
             isinstance(self.arr_generator[gen_array_key](1), np.ndarray)
             and df["a"].dtype == "string"
         ):
@@ -60,6 +60,8 @@ class Dataset2D:
         self.store = gen_store()
         with ad.settings.override(allow_write_nullable_strings=True):
             ad.io.write_elem(self.store, "obs", df)
+            if writing_string_array_on_disk:
+                assert self.store["obs"]["a"].attrs["encoding-type"] == "string-array"
         self.ds = ad.experimental.read_elem_lazy(self.store["obs"], chunks=chunks)
 
     def time_read_lazy_default(self, *_):
