@@ -739,10 +739,18 @@ def write_sparse_compressed(
             and settings.write_csr_csc_indices_with_min_possible_dtype
         ):
             # np.min_scalar_type can return things like np.ulonglong which zarr doesn't understand
-            # TODO: should we just write our own custom logic for this?
-            dtype = np.dtype(
-                np.min_scalar_type(np.array(value.shape[value.format == "csr"])).name
-            )
+            # and I find this clearer as to what the result type is i.e., unsigned or signed.
+            # For example `np.iinfo(np.uint16).max + 1` could be either `uint32` or `int32`.
+            if (minor_axis_size := value.shape[value.format == "csr"]) <= np.iinfo(
+                np.uint8
+            ).max:
+                dtype = np.uint8
+            elif minor_axis_size <= np.iinfo(np.uint16).max:
+                dtype = np.uint16
+            elif minor_axis_size <= np.iinfo(np.uint32).max:
+                dtype = np.uint32
+            elif minor_axis_size <= np.iinfo(np.uint64).max:
+                dtype = np.uint64
         if isinstance(f, H5Group) or is_zarr_v2():
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs

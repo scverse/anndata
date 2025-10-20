@@ -489,7 +489,7 @@ settings.register(
 settings.register(
     "write_csr_csc_indices_with_min_possible_dtype",
     default_value=False,
-    description="Write a csr or csc matrix with the minimum possible data type for `indices`",
+    description="Write a csr or csc matrix with the minimum possible data type for `indices`, always unsigned integer.",
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
