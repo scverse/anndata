@@ -427,27 +427,30 @@ def test_write_indptr_dtype_override(store, sparse_format):
 @pytest.mark.parametrize(
     "dtype",
     [
-        np.uint8,
-        np.uint16,
-        np.uint32,
+        np.dtype("uint8"),
+        np.dtype("uint16"),
+        np.dtype("uint32"),
         pytest.param(
-            np.uint64,
+            np.dtype("uint64"),
             marks=pytest.mark.skip(
                 reason="scipy sparse does not support bigger than max(int64) values in indices."
             ),
         ),
-        np.int8,
-        np.int16,
-        np.int32,
-        np.int64,
+        np.dtype("int8"),
+        np.dtype("int16"),
+        np.dtype("int32"),
+        np.dtype("int64"),
     ],
+    ids=lambda x: x.name,
 )
 @pytest.mark.parametrize("format", ["csr", "csc"])
 def test_write_indices_min(
     store: H5Group | ZarrGroup, dtype: np.dtype, format: Literal["csr", "csc"]
 ):
     num_minor_axis = np.iinfo(dtype).max - 1
-    minor_axis_index = np.array([num_minor_axis - 1])
+    minor_axis_index = np.array([num_minor_axis - 1], dtype=dtype)
+    assert minor_axis_index.dtype == dtype
+    assert minor_axis_index.item() == (num_minor_axis - 1)
     major_axis_index = np.array([10], dtype=minor_axis_index.dtype)
     row_cols = (
         (minor_axis_index, major_axis_index)
@@ -459,6 +462,7 @@ def test_write_indices_min(
         (np.array([10]), row_cols),
         shape=shape,
     )
+    assert X.nnz == 1
     with ad.settings.override(write_csr_csc_indices_with_min_possible_dtype=True):
         write_elem(store, "X", X)
 
