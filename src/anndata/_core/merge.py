@@ -687,8 +687,6 @@ class Reindexer:
         """
         if self.no_change and (axis_len(el, axis) == len(self.old_idx)):
             return el
-        if _is_pandas(el) or isinstance(el, pd.DataFrame):
-            return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         if isinstance(el, pd.DataFrame | Dataset2D):
             return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
@@ -699,8 +697,11 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        else:
+        elif _is_array_api_compatible(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
+        else:
+            msg = "Cannot reindex element of unsupported type."
+            raise TypeError(msg)
 
     def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
         if fill_value is None:
@@ -766,16 +767,6 @@ class Reindexer:
             # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
             fv = xp.asarray(fill_value)
             return xp.broadcast_to(fv, shape)
-
-        # Check: is array-api compatible, but not NumPy
-        if not isinstance(el, np.ndarray) and _is_array_api_compatible(el):
-            # Convert to NumPy via DLPack
-            el_np = _dlpack_to_numpy(el)
-            # Recursively call this same function
-            out_np = self._apply_to_array_api(el_np, axis=axis, fill_value=fill_value)
-            # reverting back to numpy as it is hard to reindex on JAX and others
-            return _dlpack_from_numpy(out_np, xp)
-
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
@@ -1043,11 +1034,11 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         # All arrays are array-api compatible
 
         # use first as a reference to check if all of the arrays are the same type
-        xp = get_namespace(arrays[0])
-
-        if not all(get_namespace(a) is xp or a.shape == 0 for a in arrays):
+        try:
+            xp = get_namespace(arrays[0])
+        except TypeError as err:
             msg = "Cannot concatenate array-api arrays from different backends."
-            raise ValueError(msg)
+            raise ValueError(msg) from err
 
         return xp.concatenate(
             [

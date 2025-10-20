@@ -558,38 +558,24 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
 
     from ..compat import has_xp
 
-    # handling array-API–compatible arrays (e.g. JAX, etc)
-    if has_xp(old):
-        xp = aac.array_namespace(old)
-        # skip early if numpy
-        if xp.__name__.startswith("numpy"):
-            return old[new]
+    # error out to make sure that object is array-API compatible, will xFAIL it later
+    if not has_xp(old):
+        msg = f"Expected array-API–compatible array, got {type(old)}"
+        raise TypeError(msg)
 
-        # handle boolean mask; i.e. checking whether old is a boolean array
-        if hasattr(old, "dtype") and str(old.dtype) in ("bool", "bool_", "boolean"):
-            # retrieving the where function (like np.where or jnp.where)
-            where_fn = getattr(xp, "where", None)
-            # if where exists, use it to convert the boolean mask to integer indices
-            if where_fn is not None:
-                old = where_fn(old)[0]
-            else:
-                # if no where function is found, fallback to NumPy
-                old = np.where(np.asarray(old))[0]
+    xp = aac.array_namespace(old)
 
-        # if new is a slice object, converting it into a range of indices using arange
-        if isinstance(new, slice):
-            # trying to get arange from the backend
-            arange_fn = getattr(xp, "arange", None)
-            # if arange exists, apply it to the resolved slice range
-            if arange_fn is not None:
-                new = arange_fn(*new.indices(old.shape[0]))
-            else:
-                new = np.arange(*new.indices(old.shape[0]))
+    # handle boolean mask; check dtype string representation for bool-like types
+    # not sure what is causing it but i get the error stating that array_api_compat does not have isdtype (can't seem to resolve the issue)
+    # I have 2023 version of array_api_compat installed
+    if hasattr(old, "dtype") and str(old.dtype) in ("bool", "bool_", "boolean"):
+        old = xp.nonzero(old)[0]
 
-        return old[new]
+    # handle slice indexing by converting to array indices
+    if isinstance(new, slice):
+        new = xp.arange(*new.indices(old.shape[0]))
 
-    msg = f"_resolve_idx not implemented for type {type(old)}"
-    raise NotImplementedError(msg)
+    return old[new]
 
 
 @_resolve_idx.register(np.ndarray)

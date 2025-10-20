@@ -107,7 +107,7 @@ GEN_ADATA_NO_XARRAY_ARGS = dict(
 ARRAY_API_REGISTRY = {
     "numpy": lambda: np,
     "jax": lambda: jnp,
-    # "cubed": lambda: __import__("cubed.array_api", fromlist=["array_namespace"]).array_namespace,
+    # "cubed": lambda: __import__("cubed.array_api", fromlist=[""]),
 }
 
 # Enable JAX to use 64-bit floats by default
@@ -438,7 +438,7 @@ def gen_adata(  # noqa: PLR0915, PLR0913
     if X_type is not None:
         X = X_type(arr_xp)
     elif array_namespace == "jax":
-        X = arr_xp  # JAX dense
+        X = arr_xp
     else:
         X = sparse.csr_matrix(arr_xp)
 

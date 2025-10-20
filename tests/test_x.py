@@ -13,7 +13,7 @@ from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
-# jax option
+# jax option (more later)
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
@@ -23,6 +23,7 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
+    pytest.param(jnp.asarray, id="jax"),
 ]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
@@ -62,6 +63,9 @@ def test_setter_view(orig_array_type, new_array_type):
     if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
         # https://github.com/scverse/anndata/issues/500
         pytest.xfail("Cannot set a dense array with a sparse array")
+
+    if isinstance(orig_X, jnp.ndarray) or isinstance(to_assign, jnp.ndarray):
+        pytest.xfail("JAX arrays are immutable and do not support in-place assignment")
     view = adata[:9, :9]
     view.X = to_assign
     np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))

@@ -30,6 +30,8 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
+    from anndata._core.merge import _is_array_api_compatible
+
     from ..typing import ArrayDataStructureTypes
 
     # If value is a scalar and we allow that, return it
@@ -44,6 +46,8 @@ def coerce_array(
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warnings.warn(msg, ImplicitModificationWarning, stacklevel=3)
             value = value.A
+        return value
+    if _is_array_api_compatible(value):
         return value
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))

@@ -47,7 +47,7 @@ def is_sparse_like(x):
         return False
 
 
-def to_numpy_if_array_api(x):
+def to_writeable(x):
     if isinstance(
         x,
         np.ndarray
@@ -69,9 +69,6 @@ def to_numpy_if_array_api(x):
 
         # getting the array namespace
         xp = aac.array_namespace(x)
-        # Skip if it's already NumPy
-        if xp.__name__.startswith("numpy"):
-            return x
         # If the array has a `.device` attribute, check if it's on GPU
         if hasattr(x, "device"):
             device = x.device
@@ -102,7 +99,7 @@ def normalize_nested(obj):
         return {k: normalize_nested(v) for k, v in obj.items()}
     if isinstance(obj, list | tuple):
         return type(obj)(normalize_nested(v) for v in obj)
-    return to_numpy_if_array_api(obj)
+    return to_writeable(obj)
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -457,9 +454,8 @@ class Writer:
         elif k in store:
             del store[k]
 
-        # Normalize array-API (e.g., JAX/CuPy) payloads buried in mappings/lists
-        if not isinstance(elem, AnnData):
-            elem = normalize_nested(elem)
+        # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
+        elem = normalize_nested(elem)
 
         write_func = self.find_write_func(dest_type, elem, modifiers)
 
