@@ -526,6 +526,7 @@ def test_write_indices_min(
     # ValueError: array is too big; `arr.size * arr.dtype.itemsize` is larger than the maximum possible size.
     # Because the old, very large, minor axis is now the major axis and so either it fails to create or the indptr is very big.
     # The above tests should be enough to capture the desired equality checks so this is mostly for being extra sure.
+    # See https://github.com/scipy/scipy/issues/23826
     if not (format == "csc" and num_minor_axis > np.iinfo(np.uint16).max + 1):
         assert (result != X).nnz == 0
 
