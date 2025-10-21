@@ -92,6 +92,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata._core.raw.Raw"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # TODO: remove once https://github.com/sphinx-doc/sphinx/pull/13508 is released
+    ("py:class", "anndata.typing.TypeAliasType"),
 ]
 
 
