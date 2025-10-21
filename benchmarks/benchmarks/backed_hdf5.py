@@ -60,27 +60,35 @@ class BackedHDF5:
 
     def time_slice_obs(self, *_):
         """Time slicing observations from backed HDF5"""
-        self.adata_backed[0 : (self.n_obs // 2), :].X
+        self.adata_backed[0 : (self.n_obs // 2), :]
+
+    def time_slice_obs_to_memory(self, *_):
+        """Time slicing observations from backed HDF5"""
+        self.adata_backed[0 : (self.n_obs // 2), :].to_memory()
 
     def peakmem_slice_obs(self, *_):
         """Peak memory for slicing observations from backed HDF5"""
-        self.adata_backed[0 : (self.n_obs // 2), :].X
+        self.adata_backed[0 : (self.n_obs // 2), :]
 
     def time_fancy_index_no_dupes(self, *_):
         """Time fancy indexing without duplicates"""
-        self.adata_backed[self.obs_idx_no_dupes, self.var_idx_no_dupes].X
+        self.adata_backed[self.obs_idx_no_dupes, self.var_idx_no_dupes]
 
     def peakmem_fancy_index_no_dupes(self, *_):
         """Peak memory for fancy indexing without duplicates"""
-        self.adata_backed[self.obs_idx_no_dupes, self.var_idx_no_dupes].X
+        self.adata_backed[self.obs_idx_no_dupes, self.var_idx_no_dupes]
 
-    def time_fancy_index_with_dupes_obs(self, *_):
+    def time_fancy_index_no_dupes_to_memory(self, *_):
+        """Time fancy indexing without duplicates"""
+        self.adata_backed[self.obs_idx_no_dupes, self.var_idx_no_dupes].to_memory()
+
+    def time_index_with_dupes_obs(self, *_):
         """Time fancy indexing with duplicate observation indices"""
-        self.adata_backed[self.obs_idx_with_dupes, :].X
+        self.adata_backed[self.obs_idx_with_dupes, :]
 
-    def peakmem_fancy_index_with_dupes_obs(self, *_):
+    def peakmem_index_with_dupes_obs(self, *_):
         """Peak memory for fancy indexing with duplicate observation indices"""
-        self.adata_backed[self.obs_idx_with_dupes, :].X
+        self.adata_backed[self.obs_idx_with_dupes, :]
 
     def time_to_memory_subset(self, *_):
         """Time converting subset to memory"""
