@@ -91,8 +91,13 @@ jobs:
           files: test-data/coverage.xml
 
       - name: Remove 'run-gpu-ci' Label
+        uses: "actions/github-script@v8"
         if: always()
-        uses: actions-ecosystem/action-remove-labels@v1
         with:
-          labels: "run-gpu-ci"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              name: 'run-gpu-ci'
+            });
