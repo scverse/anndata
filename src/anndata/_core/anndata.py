@@ -1054,6 +1054,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
+            # TODO: this mode is going away
             with pd.option_context("mode.chained_assignment", None):
                 df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
@@ -1623,8 +1624,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         annoA-1  NaN  2.0  1.0  0.0
         annoA-2  NaN  3.0  2.0  0.0
         annoB-2  NaN  2.0  1.0  0.0
-        >>> outer.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> outer.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> outer.X
         array([[ 1.,  2.,  3., nan],
                [ 4.,  5.,  6., nan],
@@ -1706,8 +1707,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata = adata1.concatenate(adata2, adata3, join='outer')
-        >>> adata.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> adata.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> adata.X.toarray()
         array([[0., 2., 3., 0.],
                [0., 5., 6., 0.],
