@@ -744,13 +744,13 @@ def write_sparse_compressed(
             if (minor_axis_size := value.shape[value.format == "csr"]) <= np.iinfo(
                 np.uint8
             ).max:
-                dtype = np.uint8
+                dtype = np.dtype("uint8")
             elif minor_axis_size <= np.iinfo(np.uint16).max:
-                dtype = np.uint16
+                dtype = np.dtype("uint16")
             elif minor_axis_size <= np.iinfo(np.uint32).max:
-                dtype = np.uint32
+                dtype = np.dtype("uint32")
             elif minor_axis_size <= np.iinfo(np.uint64).max:
-                dtype = np.uint64
+                dtype = np.dtype("uint64")
         if isinstance(f, H5Group) or is_zarr_v2():
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
