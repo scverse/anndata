@@ -11,7 +11,6 @@ import anndata as ad
 
 
 class BackedHDF5:
-
     def setup(self):
         n_obs, n_vars = 10000, 5000
         self.n_obs = n_obs
