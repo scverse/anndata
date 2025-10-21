@@ -38,13 +38,9 @@ def get_anndata_memsize(adata):
     return diff
 
 
-def get_peak_mem(op, interval=0.001, num_replicates=10):
-    vals = []
-    for _ in range(num_replicates):
-        gc.collect()
-        recording = memory_usage(op, interval=interval)
-        vals.append(np.max(recording) - np.min(recording))
-    return np.median(vals)
+def get_peak_mem(op, interval=0.001):
+    recording = memory_usage(op, interval=interval)
+    return np.max(recording) - np.min(recording)
 
 
 def sedate(func, naplength=0.05):
