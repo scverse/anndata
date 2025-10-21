@@ -740,7 +740,8 @@ def write_sparse_compressed(
         ):
             # np.min_scalar_type can return things like np.ulonglong which zarr doesn't understand
             # and I find this clearer as to what the result type is i.e., unsigned or signed.
-            # For example `np.iinfo(np.uint16).max + 1` could be either `uint32` or `int32`.
+            # For example `np.iinfo(np.uint16).max + 1` could be either `uint32` or `int32`,
+            # and there's nothing in numpy's docs disallowing this output to change.
             if (minor_axis_size := value.shape[value.format == "csr"]) <= np.iinfo(
                 np.uint8
             ).max:
