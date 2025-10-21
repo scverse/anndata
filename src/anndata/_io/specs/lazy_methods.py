@@ -105,8 +105,6 @@ def make_dask_chunk(
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
-        if isinstance(f, h5py.Dataset) and f.attrs["encoding-type"] == "string-array":
-            mtx = mtx.asstr()
         chunk = mtx[idx]
     return chunk
 
@@ -198,6 +196,20 @@ def resolve_chunks(
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+def read_h5_string_array(
+    elem: H5Array,
+    *,
+    _reader: LazyReader,
+    chunks: tuple[int] | None = None,
+) -> DaskArray:
+    import dask.array as da
+
+    from anndata._io.h5ad import read_dataset
+
+    chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
+    return da.from_array(read_dataset(elem), chunks=chunks)
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
     elem: H5Array, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
