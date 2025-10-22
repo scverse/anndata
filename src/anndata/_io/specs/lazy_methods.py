@@ -25,7 +25,7 @@ from anndata.compat import (
     ZarrGroup,
 )
 
-from .registry import _LAZY_REGISTRY, IOSpec
+from .registry import _LAZY_REGISTRY, IOSpec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
@@ -102,8 +102,6 @@ def make_dask_chunk(
             if isinstance(f, H5Group)
             else f
         )
-        if isinstance(f, h5py.Dataset) and f.attrs["encoding-type"] == "string-array":
-            mtx = mtx.asstr()
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
@@ -197,7 +195,22 @@ def resolve_chunks(
     return elem.chunks
 
 
+# TODO: `map_blocks` of a string array in h5py is so insanely slow on benchmarking that in the case someone has
+# a pure string annotation (not categoricals! or nullables strings!), it's probably better to pay the memory penalty.
+# In the long run, it might be good to figure out what exactly is going on here but for now, this will do.
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+def read_h5_string_array(
+    elem: H5Array,
+    *,
+    _reader: LazyReader,
+    chunks: tuple[int] | None = None,
+) -> DaskArray:
+    import dask.array as da
+
+    chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
+    return da.from_array(read_elem(elem), chunks=chunks)
+
+
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
     elem: H5Array, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
