@@ -31,12 +31,15 @@ class SparseCSRContiguousSlice:
         "first": 0,
         "alternating": make_alternating_mask(10),
     })
+    filepath = "data.zarr"
     params = (
-        _indexers.keys(),
+        list(_indexers.keys()),
         [True, False],
     )
-    filepath = "data.zarr"
-    param_names = ("index", "use_dask")
+    param_names = (
+        "index",
+        "use_dask",
+    )
 
     def setup_cache(self):
         X = sparse.random(
