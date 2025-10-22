@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
@@ -12,35 +10,39 @@ import zarr
 import anndata as ad
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from typing import Literal
 
 
 class Dataset2D:
-    param_names = ("gen_store", "chunks")
+    param_names = ("store_type", "chunks")
     params = (
-        (
-            lambda: h5py.File(Path(tempfile.mkdtemp()) / "data.h5ad", mode="w"),
-            lambda: zarr.open(
-                Path(tempfile.mkdtemp()) / "data.zarr", mode="w", zarr_version=2
-            ),
-        ),
+        ("zarr", "h5ad"),
         ((-1,), None),
     )
 
-    def setup(
-        self, gen_store: Callable[[], zarr.Group | h5py.File], chunks: None | tuple[int]
-    ):
-        self.n_obs = 100000
+    def setup_cache(self):
+        n_obs = 100000
         df = pd.DataFrame(
             {
-                "a": pd.Categorical(np.array(["a"] * self.n_obs)),
-                "b": np.arange(self.n_obs),
+                "a": pd.Categorical(np.array(["a"] * n_obs)),
+                "b": np.arange(n_obs),
             },
-            index=[f"cell{i}" for i in range(self.n_obs)],
+            index=[f"cell{i}" for i in range(n_obs)],
         )
-        store = gen_store()
-        ad.io.write_elem(store, "obs", df)
+        for store in [
+            h5py.File("data.h5ad", mode="w"),
+            zarr.open("data.zarr", mode="w", zarr_version=2),
+        ]:
+            ad.io.write_elem(store, "obs", df)
+
+    def setup(self, store_type: Literal["zarr", "h5ad"], chunks: None | tuple[int]):
+        store = (
+            h5py.File("data.h5ad", mode="r")
+            if store_type == "h5ad"
+            else zarr.open("data.zarr")
+        )
         self.ds = ad.experimental.read_elem_lazy(store["obs"], chunks=chunks)
+        self.n_obs = self.ds.shape[0]
 
     def time_getitem_slice(self, *_):
         self.ds.iloc[0 : (self.n_obs // 2)].to_memory()
