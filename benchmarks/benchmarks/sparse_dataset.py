@@ -21,7 +21,7 @@ def make_alternating_mask(n):
 
 
 class SparseCSRContiguousSlice:
-    _slices = MappingProxyType({
+    _indexers = MappingProxyType({
         "0:1000": slice(0, 1000),
         "0:9000": slice(0, 9000),
         ":9000:-1": slice(None, 9000, -1),
@@ -31,42 +31,49 @@ class SparseCSRContiguousSlice:
         "first": 0,
         "alternating": make_alternating_mask(10),
     })
+    filepath = "data.zarr"
     params = (
-        [
-            (10_000, 10_000),
-            # (10_000, 500)
-        ],
-        _slices.keys(),
+        list(_indexers.keys()),
         [True, False],
     )
-    param_names = ("shape", "slice", "use_dask")
+    param_names = (
+        "index",
+        "use_dask",
+    )
 
-    def setup(self, shape: tuple[int, int], slice: str, use_dask: bool):  # noqa: FBT001
+    def setup_cache(self):
         X = sparse.random(
-            *shape, density=0.01, format="csr", random_state=np.random.default_rng(42)
+            10_000,
+            10_000,
+            density=0.01,
+            format="csr",
+            random_state=np.random.default_rng(42),
         )
-        self.slice = self._slices[slice]
-        g = zarr.group()
+        g = zarr.group(self.filepath)
         write_elem(g, "X", X)
+
+    def setup(self, index: str, use_dask: bool):  # noqa: FBT001
+        g = zarr.open(self.filepath)
         self.x = read_elem_lazy(g["X"]) if use_dask else sparse_dataset(g["X"])
         self.adata = AnnData(self.x)
+        self.index = self._indexers[index]
 
     def time_getitem(self, *_):
-        res = self.x[self.slice]
+        res = self.x[self.index]
         if isinstance(res, DaskArray):
             res.compute()
 
     def peakmem_getitem(self, *_):
-        res = self.x[self.slice]
+        res = self.x[self.index]
         if isinstance(res, DaskArray):
             res.compute()
 
     def time_getitem_adata(self, *_):
-        res = self.adata[self.slice]
+        res = self.adata[self.index]
         if isinstance(res, DaskArray):
             res.compute()
 
     def peakmem_getitem_adata(self, *_):
-        res = self.adata[self.slice]
+        res = self.adata[self.index]
         if isinstance(res, DaskArray):
             res.compute()
