@@ -297,18 +297,21 @@ def read_dataframe(
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
     elem_dict = {
-        k: _reader.read_elem(elem[k], chunks=chunks)
-        for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
+        k: _reader.read_elem(elem[k], chunks=chunks) for k in elem.attrs["column-order"]
     }
     # If we use a range index, the coord axis needs to have the special dim name
     # which is used below as well.
     if not use_range_index:
         dim_name = elem.attrs["_index"]
-        # no sense in reading this in multiple times
+        # no sense in reading this in multiple times since xarray requires an in-memory index
         index = ad.io.read_elem(elem[dim_name])
+        elem_dict[dim_name] = index
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
+        elem_dict[elem.attrs["_index"]] = _reader.read_elem(
+            elem[dim_name], chunks=chunks
+        )
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
