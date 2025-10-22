@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from types import MappingProxyType
 
 import numpy as np
@@ -7,7 +8,7 @@ import zarr
 from dask.array.core import Array as DaskArray
 from scipy import sparse
 
-from anndata import AnnData
+from anndata import AnnData, concat
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs import write_elem
 from anndata.experimental import read_elem_lazy
@@ -70,3 +71,33 @@ class SparseCSRContiguousSlice:
         res = self.adata[self.slice]
         if isinstance(res, DaskArray):
             res.compute()
+
+
+class SparseCSRDask:
+    def setup(self):
+        X = sparse.random(
+            10_000,
+            10_000,
+            density=0.01,
+            format="csr",
+            random_state=np.random.default_rng(42),
+        )
+        self.tmpdir = tempfile.TemporaryDirectory("tmp.zarr")
+        self.group = zarr.group(self.tmpdir.name)
+        write_elem(self.group, "X", X)
+        self.adata = AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def time_concat(self):
+        concat([self.adata for i in range(100)])
+
+    def peakmem_concat(self):
+        concat([self.adata for i in range(100)])
+
+    def time_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def peakmem_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def teardown(self):
+        self.tmpdir.cleanup()
