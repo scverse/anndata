@@ -308,10 +308,11 @@ def read_dataframe(
         elem_dict[dim_name] = index
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
-        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
         elem_dict[elem.attrs["_index"]] = _reader.read_elem(
             elem[dim_name], chunks=chunks
         )
+        index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
+
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
