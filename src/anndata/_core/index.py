@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from functools import singledispatch
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -14,6 +14,8 @@ from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
     from ..compat import Index, Index1D, Index1DNorm
 
 
@@ -161,7 +163,10 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 @singledispatch
-def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
+def _subset(
+    a: np.ndarray | pd.DataFrame,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, Iterable) for x in subset_idx):
@@ -170,7 +175,9 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
 
 
 @_subset.register(DaskArray)
-def _subset_dask(a: DaskArray, subset_idx: Index):
+def _subset_dask(
+    a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -180,24 +187,32 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
-def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
+def _subset_sparse(
+    a: CSMatrix | CSArray,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
         if issubclass(first_idx.dtype.type, np.bool_):
-            first_idx = np.where(first_idx)[0]
+            first_idx = np.flatnonzero(first_idx)
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
 
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
-def _subset_df(df: pd.DataFrame | Dataset2D, subset_idx: Index):
+def _subset_df(
+    df: pd.DataFrame | Dataset2D,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+):
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
-def _subset_awkarray(a: AwkArray, subset_idx: Index):
+def _subset_awkarray(
+    a: AwkArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -205,23 +220,121 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
-def _subset_dataset(d: h5py.Dataset, subset_idx: Index):
-    if not isinstance(subset_idx, tuple):
-        subset_idx = (subset_idx,)
-    ordered = list(subset_idx)
-    rev_order = [slice(None) for _ in range(len(subset_idx))]
-    for axis, axis_idx in enumerate(ordered.copy()):
-        if isinstance(axis_idx, np.ndarray):
-            if axis_idx.dtype == bool:
-                axis_idx = np.where(axis_idx)[0]
-            order = np.argsort(axis_idx)
-            ordered[axis] = axis_idx[order]
-            rev_order[axis] = np.argsort(order)
+def _subset_dataset(
+    d: h5py.Dataset, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
+    order: tuple[NDArray[np.integer] | slice, ...]
+    inv_order: tuple[NDArray[np.integer] | slice, ...]
+    order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
+    # check for duplicates or multi-dimensional fancy indexing
+    array_dims = [i for i in order if isinstance(i, np.ndarray)]
+    has_duplicates = any(len(np.unique(i)) != len(i) for i in array_dims)
+    # Use safe indexing if there are duplicates OR multiple array dimensions
+    # (h5py doesn't support multi-dimensional fancy indexing natively)
+    if has_duplicates or len(array_dims) > 1:
+        # For multi-dimensional indexing, bypass the sorting logic and use original indices
+        return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
-    return d[tuple(ordered)][tuple(rev_order)]
+    return d[order][inv_order]
 
 
-def make_slice(idx, dimidx, n=2):
+@overload
+def _index_order_and_inverse(
+    axis_idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
+@overload
+def _index_order_and_inverse(axis_idx: slice) -> tuple[slice, slice]: ...
+def _index_order_and_inverse(
+    axis_idx: Index1DNorm,
+) -> tuple[Index1DNorm, NDArray[np.integer] | slice]:
+    """Order and get inverse index array."""
+    if not isinstance(axis_idx, np.ndarray):
+        return axis_idx, slice(None)
+    if axis_idx.dtype == bool:
+        axis_idx = np.flatnonzero(axis_idx)
+    order = np.argsort(axis_idx)
+    return axis_idx[order], np.argsort(order)
+
+
+@overload
+def _process_index_for_h5py(
+    idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
+@overload
+def _process_index_for_h5py(idx: slice) -> tuple[slice, None]: ...
+def _process_index_for_h5py(
+    idx: Index1DNorm,
+) -> tuple[Index1DNorm, NDArray[np.integer] | None]:
+    """Process a single index for h5py compatibility, handling sorting and duplicates."""
+    if not isinstance(idx, np.ndarray):
+        # Not an array (slice, integer, list) - no special processing needed
+        return idx, None
+
+    if idx.dtype == bool:
+        idx = np.flatnonzero(idx)
+
+    # For h5py fancy indexing, we need sorted indices
+    # But we also need to track how to reverse the sorting
+    unique, inverse = np.unique(idx, return_inverse=True)
+    return (
+        # Has duplicates - use unique + inverse mapping approach
+        (unique, inverse)
+        if len(unique) != len(idx)
+        # No duplicates - just sort and track reverse mapping
+        else _index_order_and_inverse(idx)
+    )
+
+
+def _safe_fancy_index_h5py(
+    dataset: h5py.Dataset,
+    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+) -> h5py.Dataset:
+    # Handle multi-dimensional indexing of h5py dataset
+    # This avoids h5py's limitation with multi-dimensional fancy indexing
+    # without loading the entire dataset into memory
+
+    # Convert boolean arrays to integer arrays and handle sorting for h5py
+    processed_indices: tuple[NDArray[np.integer] | slice, ...]
+    reverse_indices: tuple[NDArray[np.integer] | None, ...]
+    processed_indices, reverse_indices = zip(
+        *map(_process_index_for_h5py, subset_idx), strict=True
+    )
+
+    # First find the index that reduces the size of the dataset the most
+    i_min = np.argmin([
+        _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
+        for i, inds in enumerate(processed_indices)
+    ])
+
+    # Apply the most selective index first to h5py dataset
+    first_index = [slice(None)] * len(processed_indices)
+    first_index[i_min] = processed_indices[i_min]
+    in_memory_array = cast("np.ndarray", dataset[tuple(first_index)])
+
+    # Apply remaining indices to the numpy array
+    remaining_indices = list(processed_indices)
+    remaining_indices[i_min] = slice(None)  # Already applied
+    result = in_memory_array[tuple(remaining_indices)]
+
+    # Now apply reverse mappings to get the original order
+    for dim, reverse_map in enumerate(reverse_indices):
+        if reverse_map is not None:
+            result = result.take(reverse_map, axis=dim)
+
+    return result
+
+
+def _get_index_size(idx: Index1DNorm, dim_size: int) -> int:
+    """Get size for any index type."""
+    if isinstance(idx, slice):
+        return len(range(*idx.indices(dim_size)))
+    elif isinstance(idx, int):
+        return 1
+    else:  # For other types, try to get length
+        return len(idx)
+
+
+def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
     mut = list(repeat(slice(None), n))
     mut[dimidx] = idx
     return tuple(mut)
