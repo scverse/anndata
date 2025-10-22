@@ -40,7 +40,8 @@ class SparseCSRContiguousSlice:
 
     def setup_cache(self):
         X = sparse.random(
-            (10_000, 10_000),
+            10_000,
+            10_000,
             density=0.01,
             format="csr",
             random_state=np.random.default_rng(42),
