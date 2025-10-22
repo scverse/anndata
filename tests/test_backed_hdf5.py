@@ -10,6 +10,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
+from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -240,6 +241,14 @@ def test_backed_raw_subset(
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
+    if (
+        array_type is asarray
+        and isinstance(obs_idx, list | np.ndarray | CSMatrix | CSArray)
+        and isinstance(var_idx, list | np.ndarray | CSMatrix | CSArray)
+    ):
+        pytest.xfail(
+            "Fancy indexing does not work with multiple arrays on a h5py.Dataset"
+        )
     mem_adata.write(backed_pth)
 
     ### Backed view has same values as in memory view ###
@@ -393,105 +402,3 @@ def test_backed_modification_sparse(
 #     backed_view = backed_adata[[1,2], :]
 #     backed_view.X = 0
 #     assert np.all(backed_adata.X[[1,2], :] == 0)
-
-
-@pytest.mark.parametrize(
-    ("obs_idx", "var_idx"),
-    [
-        pytest.param(np.array([0, 1, 2]), np.array([1, 2]), id="no_dupes"),
-        pytest.param(np.array([0, 1, 0, 2]), slice(None), id="1d_dupes"),
-        pytest.param(np.array([0, 1, 0, 2]), np.array([1, 2, 1]), id="2d_dupes"),
-    ],
-)
-def test_backed_duplicate_indices(tmp_path, obs_idx, var_idx):
-    """Test that backed HDF5 datasets handle duplicate indices correctly."""
-    backed_pth = tmp_path / "backed.h5ad"
-
-    # Create test data
-    mem_adata = gen_adata((6, 4), X_type=asarray, **GEN_ADATA_NO_XARRAY_ARGS)
-    mem_adata.write(backed_pth)
-
-    # Load backed data
-    backed_adata = ad.read_h5ad(backed_pth, backed="r")
-
-    # Test the indexing
-    mem_result_multi = mem_adata[obs_idx, var_idx]
-    backed_result_multi = backed_adata[obs_idx, var_idx]
-    assert_equal(mem_result_multi, backed_result_multi)
-
-
-@pytest.fixture
-def h5py_test_data(tmp_path):
-    """Create test HDF5 file with dataset for _safe_fancy_index_h5py tests."""
-    import h5py
-
-    h5_path = tmp_path / "test_dataset.h5"
-    test_data = np.arange(24).reshape(6, 4)  # 6x4 matrix
-
-    with h5py.File(h5_path, "w") as f:
-        f.create_dataset("test", data=test_data)
-
-    return h5_path, test_data
-
-
-@pytest.mark.parametrize(
-    ("indices", "description"),
-    [
-        pytest.param((np.array([0, 1, 0, 2]),), "single_dimension_with_duplicates"),
-        pytest.param(
-            (np.array([0, 1, 2]), np.array([1, 2])), "multi_dimensional_no_duplicates"
-        ),
-        pytest.param(
-            (np.array([0, 1, 0, 2]), np.array([1, 2])),
-            "multi_dimensional_duplicates_first_dim",
-        ),
-        pytest.param(
-            (np.array([0, 1, 2]), np.array([1, 2, 1])),
-            "multi_dimensional_duplicates_second_dim",
-        ),
-        pytest.param(
-            (np.array([0, 1, 0]), np.array([1, 2, 1])),
-            "multi_dimensional_duplicates_both_dims",
-        ),
-        pytest.param(
-            (np.array([True, False, True, False, False, True]),), "boolean_arrays"
-        ),
-        pytest.param((np.array([0, 1, 0]), slice(1, 3)), "mixed_indexing_with_slices"),
-        pytest.param(
-            (np.array([0, 1, 0]), [1, 2]), "mixed_indexing_with_slices_and_lists"
-        ),
-        pytest.param((np.array([3, 1, 3, 0, 1]),), "unsorted_indices_with_duplicates"),
-    ],
-)
-def test_safe_fancy_index_h5py_function(h5py_test_data, indices, description):
-    """Test the _safe_fancy_index_h5py function directly with various indexing patterns."""
-    import h5py
-
-    from anndata._core.index import _safe_fancy_index_h5py
-
-    h5_path, test_data = h5py_test_data
-
-    with h5py.File(h5_path, "r") as f:
-        dataset = f["test"]
-
-        # Get result from the function
-        result = _safe_fancy_index_h5py(dataset, indices)
-
-    # Calculate expected result using NumPy
-    if isinstance(indices, tuple) and len(indices) > 1:
-        # Multi-dimensional case - use np.ix_ for fancy indexing
-        if isinstance(indices[1], slice):
-            # Handle mixed case with slice
-            expected = test_data[
-                np.ix_(indices[0], np.arange(indices[1].start, indices[1].stop))
-            ]
-        else:
-            expected = test_data[np.ix_(*indices)]
-    else:
-        # Single dimensional case
-        expected = test_data[indices]
-
-    # Assert arrays are equal
-    np.testing.assert_array_equal(
-        result, expected, err_msg=f"Failed for test case: {description}"
-    )

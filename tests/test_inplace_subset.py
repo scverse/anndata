@@ -90,7 +90,6 @@ def test_inplace_subset_no_X(subset_func, dim):
     subset_idx = subset_func(getattr(orig, f"{dim}_names"))
 
     modified = orig.copy()
-    # TODO: apart from this test, `_subset` is never called with strings, lists, …
     from_view = subset_dim(orig, **{dim: subset_idx}).copy()
     getattr(modified, f"_inplace_subset_{dim}")(subset_idx)
 
