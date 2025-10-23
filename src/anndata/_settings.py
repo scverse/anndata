@@ -486,6 +486,14 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+settings.register(
+    "auto_shard_zarr_v3",
+    default_value=False,
+    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 
 ##################################################################################
 ##################################################################################

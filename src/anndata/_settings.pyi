@@ -46,5 +46,6 @@ class _AnnDataSettingsManager(SettingsManager):
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
     disallow_forward_slash_in_h5ad: bool = False
+    auto_shard_zarr_v3: bool = False
 
 settings: _AnnDataSettingsManager

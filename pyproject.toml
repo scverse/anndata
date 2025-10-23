@@ -164,6 +164,7 @@ filterwarnings_when_strict = [
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:Automatic shard shape inference is experimental",
 ]
 python_files = "test_*.py"
 testpaths = [
