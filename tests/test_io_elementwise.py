@@ -505,7 +505,7 @@ def test_write_indices_min(
         if format == "csc"
         else (major_axis_index, minor_axis_index)
     )
-    shape = [num_minor_axis, 20] if format == "csc" else [20, num_minor_axis]
+    shape = (num_minor_axis, 20) if format == "csc" else (20, num_minor_axis)
     X = getattr(sparse, f"{format}_array")(
         (np.array([10]), row_cols),
         shape=shape,
