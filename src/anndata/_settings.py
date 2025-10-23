@@ -444,6 +444,13 @@ def validate_zarr_write_format(format: int):
         raise ValueError(msg)
 
 
+def validate_zarr_sharding(auto_shard: bool):  # noqa: FBT001
+    validate_bool(auto_shard)
+    if auto_shard and is_zarr_v2():
+        msg = "Cannot shard v2 data. Please set `anndata.settings.zarr_write_format` to 3."
+        raise ValueError(msg)
+
+
 settings.register(
     "zarr_write_format",
     default_value=2,
@@ -490,7 +497,7 @@ settings.register(
     "auto_shard_zarr_v3",
     default_value=False,
     description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
-    validate=validate_bool,
+    validate=validate_zarr_sharding,
     get_from_env=check_and_get_bool,
 )
 
