@@ -84,18 +84,12 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-RI = TypeVar("RI", _ReadInternal, _ReadLazyInternal)
-R = TypeVar("R", Read, ReadLazy)
-
 
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
-    def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], RI] = {}
-        self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
-        self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
-        ] = {}
-        self.write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
+    read: dict[tuple[type, IOSpec, frozenset[str]], RI] = {}
+    read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
+    write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal] = {}
+    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
 
     def register_write(
         self,
