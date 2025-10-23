@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
@@ -15,7 +15,7 @@ from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, ClassVar, TypeVar
 
     from anndata._types import (
         GroupStorageType,
@@ -85,12 +85,14 @@ def write_spec(spec: IOSpec):
 
 
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
-    read: dict[tuple[type, IOSpec, frozenset[str]], RI] = {}
-    read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
-    write: dict[
-        tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
+    read: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], RI]] = {}
+    read_partial: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], Callable]] = {}
+    write: ClassVar[
+        dict[
+            tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
+        ]
     ] = {}
-    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
+    write_specs: ClassVar[dict[type | tuple[type, str] | tuple[type, type], IOSpec]] = {}
 
     def register_write(
         self,
