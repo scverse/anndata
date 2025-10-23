@@ -24,9 +24,13 @@ overrides.matrix.deps.env-vars = [
     { if = [ "min" ], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-deps.txt" },
 ]
 overrides.matrix.deps.pre-install-commands = [
-    { if = [ "min" ], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
-    # To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward
-    { if = [ "pre" ], value = "echo xarray @ git+https://github.com/pydata/xarray.git > ci/pre-deps.txt" },
+    { if = [
+        "min",
+    ], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
+    # To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward, and test against zarr as well
+    { if = [
+        "pre",
+    ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git\nzarr @ git+https://github.com/zarr-developers/zarr-python.git' > ci/pre-deps.txt" },
 
 ]
 overrides.matrix.deps.python = [
