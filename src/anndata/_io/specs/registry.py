@@ -88,11 +88,11 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     read: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], RI]] = {}
     read_partial: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], Callable]] = {}
     write: ClassVar[
-        dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
-        ]
+        dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
     ] = {}
-    write_specs: ClassVar[dict[type | tuple[type, str] | tuple[type, type], IOSpec]] = {}
+    write_specs: ClassVar[
+        dict[type | tuple[type, str] | tuple[type, type], IOSpec]
+    ] = {}
 
     def register_write(
         self,
