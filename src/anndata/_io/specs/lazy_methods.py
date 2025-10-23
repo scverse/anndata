@@ -309,7 +309,7 @@ def read_dataframe(
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         elem_dict[elem.attrs["_index"]] = _reader.read_elem(
-            elem[dim_name], chunks=chunks
+            elem[elem.attrs["_index"]], chunks=chunks
         )
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
 
