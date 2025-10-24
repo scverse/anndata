@@ -60,6 +60,12 @@ if TYPE_CHECKING:
 
     from .registry import Reader, Writer
 
+try:
+    from dask.utils import SerializableLock as Lock
+except ImportError:
+    from threading import Lock
+GLOBAL_LOCK = Lock()
+
 ####################
 # Dispatch methods #
 ####################
@@ -503,13 +509,17 @@ def write_basic_dask_dask_dense(
         raise ValueError(msg)
 
     dataset_kwargs = dataset_kwargs.copy()
+    store_kwargs = {}
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        # See https://github.com/scverse/anndata/pull/1079
+        if is_zarr_v2():
+            store_kwargs["lock"] = GLOBAL_LOCK
     if is_zarr_v2() or is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g)
+    da.store(elem, g, **store_kwargs)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
