@@ -61,18 +61,6 @@ if TYPE_CHECKING:
     from .registry import Reader, Writer
 
 ####################
-# Dask utils       #
-####################
-
-try:
-    from dask.utils import SerializableLock as Lock
-except ImportError:
-    from threading import Lock
-
-# to fix https://github.com/dask/distributed/issues/780
-GLOBAL_LOCK = Lock()
-
-####################
 # Dispatch methods #
 ####################
 
@@ -511,7 +499,7 @@ def write_basic_dask_zarr(
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g, lock=GLOBAL_LOCK)
+    da.store(elem, g)
 
 
 # Adding this separately because h5py isn't serializable
