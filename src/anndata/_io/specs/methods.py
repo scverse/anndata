@@ -496,9 +496,9 @@ def write_basic_dask_dask_dense(
     import dask.array as da
     import dask.config as dc
 
-    if dc.get("scheduler", None) == "dask.distributed" and (
-        is_h5 := isinstance(f, H5Group)
-    ):
+    if (is_h5 := isinstance(f, H5Group)) and dc.get(
+        "scheduler", None
+    ) == "dask.distributed":
         msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
         raise ValueError(msg)
 
