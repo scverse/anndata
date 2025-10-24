@@ -36,6 +36,7 @@ from anndata.compat import (
     XDataArray,
     XDataset,
     ZarrArray,
+    ZarrGroup,
     is_zarr_v2,
 )
 from anndata.utils import asarray
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard, TypeVar
 
+    import zarr
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
@@ -1221,3 +1223,14 @@ def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
             + list(itertools.product(["b"], range(shape[1] // 2)))
         ),
     )
+
+
+def visititems_zarr(
+    z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
+) -> None:
+    for key in z:
+        maybe_group = z[key]
+        if isinstance(maybe_group, ZarrGroup):
+            visititems_zarr(maybe_group, visitor)
+        else:
+            visitor(key, maybe_group)
