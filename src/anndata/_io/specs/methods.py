@@ -709,9 +709,8 @@ def write_recarray_zarr(
     else:
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # TODO: Not working for recarrays
-        # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
-        #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
+        if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
+            dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
 
