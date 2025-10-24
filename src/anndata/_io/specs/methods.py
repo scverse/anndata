@@ -60,10 +60,16 @@ if TYPE_CHECKING:
 
     from .registry import Reader, Writer
 
+####################
+# Dask utils       #
+####################
+
 try:
     from dask.utils import SerializableLock as Lock
 except ImportError:
     from threading import Lock
+
+# to fix https://github.com/dask/distributed/issues/780
 GLOBAL_LOCK = Lock()
 
 ####################
