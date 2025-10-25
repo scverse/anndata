@@ -1,4 +1,4 @@
-name: Run mypy
+name: mypy
 
 on:
   push:
