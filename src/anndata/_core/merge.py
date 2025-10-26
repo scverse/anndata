@@ -335,6 +335,8 @@ def try_unifying_dtype(  # noqa PLR0911, PLR0912
                     if same_orders:
                         return next(iter(dtypes))
                     return object
+        else:
+            return None
     # Boolean
     elif all(pd.api.types.is_bool_dtype(dtype) or dtype is None for dtype in col):
         if any(dtype is None for dtype in col):
