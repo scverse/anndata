@@ -713,9 +713,13 @@ def test_h5_unchunked(
 @pytest.mark.zarr_io
 def test_write_auto_sharded(tmp_path: Path):
     if is_zarr_v2():
-        with pytest.raises(ValueError, match=r"Cannot shard v2 data."):  # noqa: SIM117
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                pass
+        with (
+            pytest.raises(
+                ValueError, match=r"Cannot use sharding with `zarr-python<3`."
+            ),
+            ad.settings.override(auto_shard_zarr_v3=True),
+        ):
+            pass
     else:
         path = tmp_path / "check.zarr"
         adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
@@ -727,6 +731,25 @@ def test_write_auto_sharded(tmp_path: Path):
                 assert array.shards is not None, key
 
         visititems_zarr(zarr.open(path), visitor)
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_write_auto_sharded_against_v2_format():
+    with pytest.raises(ValueError, match=r"Cannot shard v2 data."):  # noqa: PT012, SIM117
+        with ad.settings.override(zarr_zarr_write_format=2):
+            with ad.settings.override(auto_shard_zarr_v3=True):
+                pass
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_write_auto_cannot_set_v2_format_after_sharding():
+    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
+        with ad.settings.override(zarr_write_format=3):
+            with ad.settings.override(auto_shard_zarr_v3=True):
+                with ad.settings.override(zarr_write_format=2):
+                    pass
 
 
 @pytest.mark.zarr_io

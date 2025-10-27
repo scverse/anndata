@@ -2,7 +2,7 @@ from collections.abc import Callable as Callable
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, TypeVar
+from typing import Literal, Self, TypeVar
 
 _T = TypeVar("_T")
 
@@ -25,7 +25,7 @@ class SettingsManager:
         *,
         default_value: _T,
         description: str,
-        validate: Callable[[_T], None],
+        validate: Callable[[_T, Self], None],
         option_type: object | None = None,
         get_from_env: Callable[[str, _T], _T] = ...,
     ) -> None: ...
