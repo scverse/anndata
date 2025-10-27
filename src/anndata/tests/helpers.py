@@ -12,8 +12,6 @@ from string import ascii_letters
 from typing import TYPE_CHECKING
 
 import h5py
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -72,6 +70,7 @@ from contextlib import suppress
 with suppress(ImportError):
     import jax
     import jax.dlpack
+    import jax.numpy as jnp
 
 # handle fast-array-utils presence for dask sparray support
 try:

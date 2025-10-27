@@ -204,6 +204,9 @@ def test_fail_on_non_csr_csc_matrix():
 
 
 def test_create_anndata_with_jax():
-    import jax.numpy as jnp
+    from contextlib import suppress
+
+    with suppress(ImportError):
+        import jax.numpy as jnp
 
     ad.AnnData(X=jnp.ones((10, 10)))

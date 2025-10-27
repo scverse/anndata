@@ -328,7 +328,10 @@ def test_dask_to_disk_view(
     diskfmt: Literal["h5ad", "zarr"],
     tmp_path: Path,
 ) -> None:
-    import jax
+    from contextlib import suppress
+
+    with suppress(ImportError):
+        import jax
 
     random_state = np.random.default_rng()
     arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")

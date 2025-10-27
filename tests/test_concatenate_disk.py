@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,6 +16,9 @@ from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
+
+with suppress(ImportError):
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from pathlib import Path

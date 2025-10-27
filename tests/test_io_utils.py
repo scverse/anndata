@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager, nullcontext
+from contextlib import AbstractContextManager, nullcontext, suppress
 from typing import TYPE_CHECKING
 
 import h5py
@@ -10,9 +10,13 @@ import pytest
 import zarr
 
 import anndata as ad
-from anndata._io.specs.registry import IORegistryError
+from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
+
+with suppress(ImportError):
+    import jax
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -110,3 +114,38 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
 
     with pytest.raises(IORegistryError, match=pattern):
         ad.io.read_elem(group)
+
+
+def test_to_writeable_numpy_passthrough():
+    x = np.array([1, 2, 3])
+    result = to_writeable(x)
+    assert result is x
+
+
+def test_to_writeable_pandas_passthrough():
+    x = pd.Series([1, 2, 3])
+    result = to_writeable(x)
+    assert result is x
+
+
+def test_to_writeable_list_fallback():
+    x = [1, 2, 3]  # Not array-api compatible, no __to_dlpack__
+    result = to_writeable(x)
+    assert result is x
+
+
+@pytest.mark.skipif(
+    not any(d.device_kind == "GPU" for d in jax.devices()), reason="No GPU available"
+)
+def test_to_writeable_jax_gpu_array():
+    x = jax.device_put(jnp.array([1.0, 2.0]), device=jax.devices("gpu")[0])
+    result = to_writeable(x)
+    assert isinstance(result, np.ndarray)
+    np.testing.assert_array_equal(result, np.array([1.0, 2.0]))
+
+
+def test_to_writeable_does_not_recurse():
+    x = {"a": jnp.array([1.0, 2.0])}
+    result = to_writeable(x)
+    # since dict is not supported, it should return unchanged
+    assert result is x

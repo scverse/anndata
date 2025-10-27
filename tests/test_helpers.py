@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from string import ascii_letters
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,6 +29,10 @@ from anndata.tests.helpers import (
     report_name,
 )
 from anndata.utils import axis_len
+
+with suppress(ImportError):
+    import jax
+    import jax.numpy as jnp
 
 # Testing to see if all error types can have the key name appended.
 # Currently fails for 22/118 since they have required arguments. Not sure what to do about that.

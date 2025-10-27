@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
+from contextlib import suppress
 from copy import deepcopy
 from functools import partial, singledispatch
 from importlib.metadata import version
@@ -10,7 +11,6 @@ from itertools import chain, permutations, product
 from operator import attrgetter
 from typing import TYPE_CHECKING
 
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -38,6 +38,9 @@ from anndata.tests.helpers import (
     gen_vstr_recarray,
 )
 from anndata.utils import asarray
+
+with suppress(ImportError):
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from collections.abc import Callable

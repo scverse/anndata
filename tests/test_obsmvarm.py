@@ -145,7 +145,10 @@ def test_setting_daskarray(adata: AnnData):
 
 
 def test_setting_jax(adata: AnnData):
-    import jax.numpy as jnp
+    from contextlib import suppress
+
+    with suppress(ImportError):
+        import jax.numpy as jnp
 
     adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
     assert isinstance(adata.obsm["jax"], jnp.ndarray)

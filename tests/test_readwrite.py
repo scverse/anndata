@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -10,7 +10,6 @@ from string import ascii_letters
 from typing import TYPE_CHECKING
 
 import h5py
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
@@ -38,6 +37,9 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
 )
+
+with suppress(ImportError):
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from collections.abc import Generator

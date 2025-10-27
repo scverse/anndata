@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from copy import deepcopy
 from importlib.metadata import version
 from operator import mul
 from typing import TYPE_CHECKING
 
-import jax.numpy as jnp
 import joblib
 import numpy as np
 import pandas as pd
@@ -38,6 +37,9 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
+
+with suppress(ImportError):
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from types import EllipsisType
