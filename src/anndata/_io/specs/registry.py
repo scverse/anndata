@@ -68,10 +68,10 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
-def write_spec[W: _WriteInternal](spec: IOSpec):
+def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
+        def wrapper(g: GroupStorageType, k: str, *args, **kwargs) -> None:
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -116,7 +116,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func):
+        def _register(func: _WriteInternal[T]) -> _WriteInternal[T]:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
@@ -156,7 +156,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
-        def _register(func):
+        def _register(func: RI) -> RI:
             self.read[(src_type, spec, modifiers)] = func
             return func
 
