@@ -208,20 +208,25 @@ def write_concat_sparse(  # noqa: PLR0917
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
-):
-    """
-    Writes and concatenates sparse datasets into a single output dataset.
+) -> None:
+    """Writes and concatenates sparse datasets into a single output dataset.
 
-    Args:
-        datasets (Sequence[BaseCompressedSparseDataset]): A sequence of BaseCompressedSparseDataset objects to be concatenated.
-        output_group (Union[ZarrGroup, H5Group]): The output group where the concatenated dataset will be written.
-        output_path (Union[ZarrGroup, H5Group]): The output path where the concatenated dataset will be written.
-        max_loaded_elems (int): The maximum number of sparse elements to load at once.
-        axis (Literal[0, 1], optional): The axis along which the datasets should be concatenated.
-            Defaults to 0.
-        reindexers (Reindexer, optional): A reindexer object that defines the reindexing operation to be applied.
-            Defaults to None.
-        fill_value (Any, optional): The fill value to use for missing elements. Defaults to None.
+    Parameters
+    ----------
+    datasets
+        A sequence of BaseCompressedSparseDataset objects to be concatenated.
+    output_group
+        The output group where the concatenated dataset will be written.
+    output_path
+        The output path where the concatenated dataset will be written.
+    max_loaded_elems
+        The maximum number of sparse elements to load at once.
+    axis
+        The axis along which the datasets should be concatenated.
+    reindexers
+        A reindexer object that defines the reindexing operation to be applied.
+    fill_value
+        The fill value to use for missing elements. Defaults to None.
     """
     elems = None
     if all(ri.no_change for ri in reindexers):
