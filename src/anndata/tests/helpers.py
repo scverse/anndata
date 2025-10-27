@@ -72,6 +72,9 @@ with suppress(ImportError):
     import jax.dlpack
     import jax.numpy as jnp
 
+    # Enable JAX to use 64-bit floats by default
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+
 # handle fast-array-utils presence for dask sparray support
 try:
     import fast_array_utils as _
@@ -119,9 +122,6 @@ ARRAY_API_REGISTRY = {
     "jax": lambda: jnp,
     # "cubed": lambda: __import__("cubed.array_api", fromlist=[""]),
 }
-
-# Enable JAX to use 64-bit floats by default
-jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
 def gen_vstr_recarray(m, n, dtype=None):
