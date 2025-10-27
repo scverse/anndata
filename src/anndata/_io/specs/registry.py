@@ -15,6 +15,7 @@ from scipy import sparse as sp
 
 from anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
@@ -308,12 +309,9 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
 def get_spec(
     elem: StorageType,
 ) -> IOSpec:
-    return proc_spec(
-        {
-            k: _read_attr(elem.attrs, k, "")
-            for k in ["encoding-type", "encoding-version"]
-        }
-    )
+    return proc_spec({
+        k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
+    })
 
 
 def _iter_patterns(
@@ -417,10 +415,17 @@ class Writer:
 
         import h5py
 
+        from anndata._io.zarr import is_group_consolidated
+
         # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        is_zarr_group = isinstance(store, ZarrGroup)
         if "/" in k.split(store.name)[-1][1:]:
-            msg = "Forward slashes are not allowed in keys."
-            raise ValueError(msg)
+            if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
+                msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                raise ValueError(msg)
+            else:
+                msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
+                warnings.warn(msg, FutureWarning, stacklevel=2)
 
         if isinstance(store, h5py.File):
             store = store["/"]
@@ -428,19 +433,11 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (
-            is_zarr_v2_store := (
-                (is_zarr_store := isinstance(store, ZarrGroup)) and is_zarr_v2()
-            )
-        ) or (isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()):
+        if (is_zarr_group and is_zarr_v2()) or (
+            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
+        ):
             k = str(PurePosixPath(store.name) / k)
-        is_consolidated = False
-        if is_zarr_v2_store:
-            from zarr.storage import ConsolidatedMetadataStore
-
-            is_consolidated = isinstance(store.store, ConsolidatedMetadataStore)
-        elif is_zarr_store:
-            is_consolidated = store.metadata.consolidated_metadata is not None
+        is_consolidated = is_group_consolidated(store) if is_zarr_group else False
         if is_consolidated:
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)

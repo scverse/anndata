@@ -53,12 +53,10 @@ from anndata.utils import axis_len
         ),
         # UnionType of two regular types with same dimension
         (
-            ak.concatenate(
-                [
-                    ak.Array(np.ones((2, 2))),
-                    ak.Array(np.array([["a", "a"], ["a", "a"]])),
-                ]
-            ),
+            ak.concatenate([
+                ak.Array(np.ones((2, 2))),
+                ak.Array(np.array([["a", "a"], ["a", "a"]])),
+            ]),
             (4, 2),
         ),
         # Array of string types
@@ -224,44 +222,40 @@ def test_view_of_awkward_array_with_custom_behavior():
         # UnionType of two regular types with different dimensions
         ak.concatenate([ak.Array(np.ones((2, 2))), ak.Array(np.ones((2, 3)))]),
         # UnionType of two regular types with same dimension
-        ak.concatenate(
-            [
-                ak.Array(np.ones((2, 2))),
-                ak.Array(np.array([["a", "a"], ["a", "a"]])),
-            ]
-        ),
+        ak.concatenate([
+            ak.Array(np.ones((2, 2))),
+            ak.Array(np.array([["a", "a"], ["a", "a"]])),
+        ]),
         # categorical array
         ak.str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
         ak.str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
         # tyical record type with AIRR data consisting of different dtypes
-        ak.Array(
+        ak.Array([
             [
-                [
-                    {
-                        "v_call": "TRV1",
-                        "junction_aa": "ADDEEKK",
-                        "productive": True,
-                        "locus": None,
-                        "consensus_count": 3,
-                    },
-                    {
-                        "v_call": "TRV2",
-                        "productive": False,
-                        "locus": "TRA",
-                        "consensus_count": 4,
-                    },
-                ],
-                [
-                    {
-                        "v_call": None,
-                        "junction_aa": "ADDEKK",
-                        "productive": None,
-                        "locus": "IGK",
-                        "consensus_count": 3,
-                    }
-                ],
-            ]
-        ),
+                {
+                    "v_call": "TRV1",
+                    "junction_aa": "ADDEEKK",
+                    "productive": True,
+                    "locus": None,
+                    "consensus_count": 3,
+                },
+                {
+                    "v_call": "TRV2",
+                    "productive": False,
+                    "locus": "TRA",
+                    "consensus_count": 4,
+                },
+            ],
+            [
+                {
+                    "v_call": None,
+                    "junction_aa": "ADDEKK",
+                    "productive": None,
+                    "locus": "IGK",
+                    "consensus_count": 3,
+                }
+            ],
+        ]),
     ],
 )
 def test_awkward_io(tmp_path, array):
@@ -304,9 +298,11 @@ def test_awkward_io_view(tmp_path):
         pytest.param(
             [ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]), None],
             "outer",
-            ak.Array(
-                [{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, None, None, None]
-            ),
+            ak.Array([
+                {"a": [1, 2], "b": [1, 2]},
+                {"a": [3], "b": [4]},
+                *[None, None, None],
+            ]),
             # maybe should return: ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}, {}, {}, {}]),
             id="awk:recordoflists_null-outer",
         ),
@@ -326,9 +322,11 @@ def test_awkward_io_view(tmp_path):
         pytest.param(
             [None, ak.Array([{"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}])],
             "outer",
-            ak.Array(
-                [None, None, None, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]
-            ),
+            ak.Array([
+                *[None, None, None],
+                {"a": [1, 2], "b": [1, 2]},
+                {"a": [3], "b": [4]},
+            ]),
             # maybe should return: ak.Array([{}, {}, {}, {"a": [1, 2], "b": [1, 2]}, {"a": [3], "b": [4]}]),
             id="null_awk:recordoflists-outer",
         ),

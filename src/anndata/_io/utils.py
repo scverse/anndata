@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 from warnings import warn
-
-import h5py
-from packaging.version import Version
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 
@@ -21,9 +19,6 @@ if TYPE_CHECKING:
 
     Storage = StorageType | BaseCompressedSparseDataset
 
-# For allowing h5py v3
-# https://github.com/scverse/anndata/issues/442
-H5PY_V3 = Version(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion

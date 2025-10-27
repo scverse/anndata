@@ -83,12 +83,9 @@ def ondisk_equivalent_adata(
             # Read with handling for backwards compat
             def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                    return AnnData(
-                        **{
-                            k: read_dispatched(v, callback)
-                            for k, v in dict(elem).items()
-                        }
-                    )
+                    return AnnData(**{
+                        k: read_dispatched(v, callback) for k, v in dict(elem).items()
+                    })
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem)
                 return func(elem)
@@ -624,6 +621,22 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
+
+
+def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    base = sparse.random(10, 10, format="csr")
+
+    f = (
+        open_write_group(tmp_path / f"parent_store.{diskfmt}", mode="a")
+        if diskfmt == "zarr"
+        else h5py.File(tmp_path / f"parent_store.{diskfmt}", "a")
+    )
+
+    ad.io.write_elem(f, "a_sparse_matrix", base)
+    adata = ad.AnnData(sparse_dataset(f["a_sparse_matrix"]))
+    ad.io.write_elem(f, "adata", adata)
+    adata_roundtripped = ad.io.read_elem(f["adata"])
+    assert_equal(adata_roundtripped.X, base)
 
 
 def test_backed_sizeof(

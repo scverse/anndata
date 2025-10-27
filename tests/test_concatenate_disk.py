@@ -10,6 +10,7 @@ import pytest
 from scipy import sparse
 
 from anndata import AnnData, concat
+from anndata._core import merge
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
@@ -30,6 +31,11 @@ GEN_ADATA_OOC_CONCAT_ARGS = dict(
     varm_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
     layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
 )
+
+
+@pytest.fixture(params=list(merge.MERGE_STRATEGIES.keys()))
+def merge_strategy(request):
+    return request.param
 
 
 @pytest.fixture(params=[0, 1])
@@ -87,16 +93,17 @@ def assert_eq_concat_on_disk(
     file_format: Literal["zarr", "h5ad"],
     max_loaded_elems: int | None = None,
     *args,
+    merge_strategy: merge.StrategiesLiteral | None = None,
     **kwargs,
 ):
     # create one from the concat function
-    res1 = concat(adatas, *args, **kwargs)
+    res1 = concat(adatas, *args, merge=merge_strategy, **kwargs)
     # create one from the on disk concat function
     paths = _adatas_to_paths(adatas, tmp_path, file_format)
     out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, **kwargs)
+    concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
     res2 = read_elem(as_group(out_name, mode="r"))
     assert_equal(res1, res2, exact=False)
 
@@ -115,6 +122,7 @@ def get_array_type(array_type, axis):
 
 
 @pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+@pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
 def test_anndatas(
     *,
     axis: Literal[0, 1],
@@ -124,6 +132,7 @@ def test_anndatas(
     max_loaded_elems: int,
     file_format: Literal["zarr", "h5ad"],
     reindex: bool,
+    merge_strategy: merge.StrategiesLiteral,
 ):
     _, off_axis_name = _resolve_axis(1 - axis)
     random_axes = {0, 1} if reindex else {axis}
@@ -172,6 +181,7 @@ def test_anndatas(
         max_loaded_elems,
         axis=axis,
         join=join_type,
+        merge_strategy=merge_strategy,
     )
 
 

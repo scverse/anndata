@@ -11,7 +11,10 @@ env:
 
 defaults:
   run:
-    shell: bash -el {0}
+    # Add `-l` to GitHub’s default bash options to activate mamba environments
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
+    # https://github.com/mamba-org/setup-micromamba/#readme
+    shell: bash -elo pipefail {0}
 
 jobs:
   benchmark:
@@ -29,9 +32,10 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          # no blob filter so asv can checkout other commits
 
       - run: git fetch origin main:main
         if: ${{ github.ref_name != 'main' }}
@@ -42,11 +46,10 @@ jobs:
           environment-name: asv
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
-          # libmambapy upper bound: https://github.com/airspeed-velocity/asv/issues/1438
           create-args: >-
             python=${{ matrix.python }}
             asv
-            libmambapy<2
+            py_rattler
             conda-build
 
       - name: Cache datasets

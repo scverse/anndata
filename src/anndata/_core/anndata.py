@@ -42,11 +42,7 @@ from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
-from .views import (
-    DictView,
-    _resolve_idxs,
-    as_view,
-)
+from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -946,22 +942,27 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
+    @deprecated("obs (e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)")
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
 
+    @deprecated("var (e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)")
     def var_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`var`."""
         return self._var.keys().tolist()
 
+    @deprecated("obsm (e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)")
     def obsm_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obsm`."""
         return list(self.obsm.keys())
 
+    @deprecated("varm (e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)")
     def varm_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`varm`."""
         return list(self.varm.keys())
 
+    @deprecated("uns (e.g. `k in adata.uns` or `sorted(adata.uns)`)")
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
         return sorted(self._uns.keys())
@@ -1913,8 +1914,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             compression_opts=compression_opts,
             as_dense=as_dense,
         )
-
-        if self.isbacked:
+        # Only reset the filename if the AnnData object now points to a complete new copy
+        if self.isbacked and not self.is_view:
             self.file.filename = filename
 
     write = write_h5ad  # a shortcut and backwards compat

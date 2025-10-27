@@ -20,6 +20,7 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
+    as_sparse_dask_array,
     asarray,
     assert_equal,
     gen_adata,
@@ -286,10 +287,7 @@ def test_assert_equal_dask_sparse_arrays():
     "input_type", BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS
 )
 @pytest.mark.parametrize(
-    (
-        "as_dask_type",
-        "mem_type",
-    ),
+    ("as_dask_type", "mem_type"),
     [
         pytest.param(
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
@@ -321,12 +319,11 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     assert_equal(asarray(X_computed), X_source)
 
 
-@pytest.mark.parametrize(
-    "dask_matrix_type",
-    DASK_MATRIX_PARAMS,
-)
+@pytest.mark.parametrize("dask_matrix_type", DASK_MATRIX_PARAMS)
 @pytest.mark.gpu
-def test_as_cupy_dask(dask_matrix_type):
+def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
+    if dask_matrix_type is as_sparse_dask_array:
+        request.applymarker(pytest.mark.xfail(reason="cupy does not support CSArray"))
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
     X_cpu = dask_matrix_type(rng.normal(size=SHAPE))

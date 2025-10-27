@@ -57,8 +57,6 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # runtime dev version generation
-    "hatch-vcs",
     "anndata[dev-doc]",
 ]
 doc = [
@@ -82,7 +80,7 @@ dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
     "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
-    "pytest-cov",
+    "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
@@ -104,38 +102,40 @@ test-min = [
 test = [
     "anndata[test-min,lazy]",
     "anndata[jax]",
-] # JAX is defined as a separate extra to avoid forcing installation for all users
+    "fast-array-utils>=1.2.3",
+] # JAX is separate to avoid forcing installation for all users
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
 lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
-# https://github.com/dask/dask/issues/11290
-# https://github.com/dask/dask/issues/11752
-dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
+
+dask = [
+    "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+]
 jax = [
     "jax>=0.6.0",
     "jaxlib>=0.6.0",
 ]
 
 [tool.hatch.version]
+# https://github.com/dask/dask/issues/11290
+# https://github.com/dask/dask/issues/11752
 source = "vcs"
 raw-options.version_scheme = "release-branch-semver"
 [tool.hatch.build.targets.wheel]
 packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
-data_file = "test-data/coverage"
+data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 concurrency = [ "multiprocessing" ]
-parallel = "true"
-
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = [ "./src", "**/site-packages" ]
-
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:",
@@ -153,7 +153,12 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",     # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
+    "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
+    "ignore:`__version__` is deprecated:FutureWarning:scanpy",
+    # https://github.com/matplotlib/matplotlib/pull/30589
+    "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -184,6 +189,7 @@ markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve za
 src = [ "src" ]
 
 [tool.ruff.format]
+preview = true
 docstring-code-format = true
 
 [tool.ruff.lint]
@@ -257,10 +263,13 @@ single_file = false
 package_dir = "src"
 issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
-fragment.bugfix.name = "Bug fixes"
-fragment.doc.name = "Documentation"
-fragment.feature.name = "Features"
-fragment.misc.name = "Miscellaneous improvements"
-fragment.performance.name = "Performance"
-fragment.breaking.name = "Breaking changes"
-fragment.dev.name = "Development Process"
+# Valid fragments should be a subset of conventional commit types (except for `breaking`):
+# https://github.com/commitizen/conventional-commit-types/blob/master/index.json
+# style, refactor, test, build, ci: should not go into changelog
+fragment.feat.name = "Features"
+fragment.fix.name = "Bug fixes"
+fragment.docs.name = "Documentation"
+fragment.perf.name = "Performance"
+fragment.chore.name = "Miscellaneous changes"
+fragment.revert.name = "Revert"
+fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)

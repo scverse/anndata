@@ -347,9 +347,10 @@ def test_read_full_io_error(tmp_path, name, read, write):
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
             # See https://github.com/zarr-developers/zarr-python/pull/2870
-            store["obs"].update_attributes(
-                {**dict(store["obs"].attrs), "encoding-type": "invalid"}
-            )
+            store["obs"].update_attributes({
+                **dict(store["obs"].attrs),
+                "encoding-type": "invalid",
+            })
             zarr.consolidate_metadata(store.store)
         else:
             store["obs"].attrs["encoding-type"] = "invalid"
@@ -527,18 +528,23 @@ def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
         cleanup=True,
     )
 
-    assert "X_a" in adata.obsm_keys()
+    if isinstance(X, np.ndarray):
+        assert np.allclose(adata.X, X)
+    else:
+        # TODO: this should not be necessary
+        assert np.allclose(adata.X.toarray(), X.toarray())
+    assert "X_a" in adata.obsm
     assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm_keys()
+    assert "X_b" in adata.varm
     assert adata.varm["X_b"].shape[1] == 3
     # as we called with `cleanup=True`
     assert "oanno1b" in adata.uns["loom-obs"]
     assert "vanno2" in adata.uns["loom-var"]
     for k, v in obsm_mapping.items():
-        assert k in adata.obsm_keys()
+        assert k in adata.obsm
         assert adata.obsm[k].shape[1] == len(v)
     for k, v in varm_mapping.items():
-        assert k in adata.varm_keys()
+        assert k in adata.varm
         assert adata.varm[k].shape[1] == len(v)
     assert adata.obs_names.name == obs_dim
     assert adata.var_names.name == var_dim
@@ -859,6 +865,11 @@ def roundtrip(diskfmt):
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
+@pytest.fixture
+def roundtrip2(diskfmt2):
+    return partial(_do_roundtrip, diskfmt=diskfmt2)
+
+
 def test_write_string_types(tmp_path, diskfmt, roundtrip):
     # https://github.com/scverse/anndata/issues/456
     adata_pth = tmp_path / f"adata.{diskfmt}"
@@ -877,24 +888,17 @@ def test_write_string_types(tmp_path, diskfmt, roundtrip):
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
-    roundtrip2 = partial(_do_roundtrip, diskfmt=diskfmt2)
-
-    filepth1 = tmp_path / f"test1.{diskfmt}"
-    filepth2 = tmp_path / f"test2.{diskfmt2}"
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
+    import scanpy as sc
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         pbmc = sc.datasets.pbmc68k_reduced()
 
-    from_disk1 = roundtrip(pbmc, filepth1)  # Do we read okay
-    from_disk2 = roundtrip2(from_disk1, filepth2)  # Can we round trip
+    # Do we read okay
+    from_disk1 = roundtrip(pbmc, tmp_path / f"test1.{diskfmt}")
+    # Can we round trip
+    from_disk2 = roundtrip2(from_disk1, tmp_path / f"test2.{diskfmt2}")
 
     assert_equal(pbmc, from_disk1)  # Not expected to be exact due to `nan`s
     assert_equal(pbmc, from_disk2)
@@ -902,12 +906,7 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2):
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
-    filepth = tmp_path / f"test.{diskfmt}"
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+    import scanpy as sc
 
     # TODO: this should be fixed in scanpy instead
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
@@ -919,7 +918,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
     # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
     orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
     with pytest.warns(UserWarning, match=r"Observation names are not unique"):
-        curr = roundtrip(orig, filepth)
+        curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
 
     assert_equal(orig, curr, exact=True)
 
@@ -932,12 +931,8 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),
     reason="File not present.",
 )
-def test_backwards_compat_zarr():
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        import scanpy as sc
+def test_backwards_compat_zarr() -> None:
+    import scanpy as sc
     import zarr
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()
@@ -1016,13 +1011,28 @@ def test_h5py_attr_limit(tmp_path):
 @pytest.mark.parametrize(
     "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
 )
-def test_forward_slash_key(elem_key, tmp_path):
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+def test_forward_slash_key(
+    elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
+    tmp_path: Path,
+    store_type: Literal["zarr", "h5ad"],
+    *,
+    disallow_forward_slash_in_h5ad: bool,
+):
     a = ad.AnnData(np.ones((10, 10)))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
-    with pytest.raises(ValueError, match="Forward slashes"):
-        a.write_h5ad(tmp_path / "does_not_matter_the_path.h5ad")
+    with (
+        ad.settings.override(
+            disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
+        ),
+        pytest.raises(ValueError, match=r"Forward slashes")
+        if store_type == "zarr" or disallow_forward_slash_in_h5ad
+        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+    ):
+        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
 
 
 @pytest.mark.skipif(

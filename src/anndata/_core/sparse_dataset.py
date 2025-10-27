@@ -16,6 +16,7 @@ import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
+from importlib.metadata import version
 from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
@@ -23,7 +24,6 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import h5py
 import numpy as np
-import scipy
 import scipy.sparse as ss
 from packaging.version import Version
 from scipy.sparse import _sparsetools
@@ -48,13 +48,12 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
-    from ..compat import H5Array
-    from .index import Index, Index1D
+    from ..compat import H5Array, Index, Index1D, Index1DNorm
 else:
     from scipy.sparse import spmatrix as _cs_matrix
 
 
-SCIPY_1_15 = Version(scipy.__version__) >= Version("1.15rc0")
+SCIPY_1_15 = Version(version("scipy")) >= Version("1.15rc0")
 
 
 class BackedFormat(NamedTuple):
@@ -278,9 +277,9 @@ def get_compressed_vectors(
     indptr_slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
     # HDF5 cannot handle out-of-order integer indexing
     if isinstance(x.data, ZarrArray):
-        as_np_indptr = np.concatenate(
-            [np.arange(s.start, s.stop) for s in indptr_slices]
-        )
+        as_np_indptr = np.concatenate([
+            np.arange(s.start, s.stop) for s in indptr_slices
+        ])
         data = x.data[as_np_indptr]
         indices = x.indices[as_np_indptr]
     else:
@@ -309,9 +308,9 @@ def get_compressed_vectors_for_slices(
     start_indptr = indptr_indices[0] - next(offsets)
     if len(slices) < 2:  # there is only one slice so no need to concatenate
         return data, indices, start_indptr
-    end_indptr = np.concatenate(
-        [s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)]
-    )
+    end_indptr = np.concatenate([
+        s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)
+    ])
     indptr = np.concatenate([start_indptr, end_indptr])
     return data, indices, indptr
 
@@ -738,5 +737,7 @@ def sparse_dataset(
 
 
 @_subset.register(BaseCompressedSparseDataset)
-def subset_sparsedataset(d, subset_idx):
+def subset_sparsedataset(
+    d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     return d[subset_idx]
