@@ -495,31 +495,10 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 
 @_REGISTRY.register_write(ZarrGroup, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_zarr(
-    f: ZarrGroup,
-    k: str,
-    elem: DaskArray,
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    import dask.array as da
-
-    dataset_kwargs = dataset_kwargs.copy()
-    dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-    if is_zarr_v2():
-        g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    else:
-        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g, lock=GLOBAL_LOCK)
-
-
-# Adding this separately because h5py isn't serializable
-# https://github.com/pydata/xarray/issues/4242
 @_REGISTRY.register_write(H5Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-def write_basic_dask_h5(
-    f: H5Group,
+def write_basic_dask_dask_dense(
+    f: ZarrGroup | H5Group,
     k: str,
     elem: DaskArray,
     *,
@@ -529,11 +508,23 @@ def write_basic_dask_h5(
     import dask.array as da
     import dask.config as dc
 
-    if dc.get("scheduler", None) == "dask.distributed":
+    is_distributed = dc.get("scheduler", None) == "dask.distributed"
+    is_h5 = isinstance(f, H5Group)
+    if is_distributed and is_h5:
         msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
         raise ValueError(msg)
 
-    g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    dataset_kwargs = dataset_kwargs.copy()
+    if not is_h5:
+        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        # See https://github.com/dask/dask/issues/12109
+        if Version(version("dask")) < Version("2025.4.0") and is_distributed:
+            msg = "Writing dense data with a distributed scheduler to zarr could produce corrupted data with a Lock and will error without one when dask is older than 2025.4.0: https://github.com/dask/dask/issues/12109"
+            raise RuntimeError(msg)
+    if is_zarr_v2() or is_h5:
+        g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    else:
+        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g)
 
 
