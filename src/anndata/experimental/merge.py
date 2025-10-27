@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._core.merge import Reindexer, StrategiesLiteral
+    from .._types import Join_T
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -286,7 +287,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     axis: Literal[0, 1] = 0,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
-    join: Literal["inner", "outer"] = "inner",
+    join: Join_T = "inner",
 ):
     init_elem = arrays[0]
     init_type = type(init_elem)
@@ -328,10 +329,10 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     output_path: str | Path,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    index: pd.Index = None,
+    index: pd.Index | None = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
-    join: Literal["inner", "outer"] = "inner",
+    join: Join_T = "inner",
 ):
     """
     array, dataframe, csc_matrix, csc_matrix
@@ -411,7 +412,7 @@ def _write_axis_annot(  # noqa: PLR0917
     concat_indices: pd.Index,
     label: str,
     label_col: str,
-    join: Literal["inner", "outer"],
+    join: Join_T,
 ):
     concat_annot = pd.concat(
         unify_dtypes(read_elem(g[axis_name]) for g in groups),
@@ -447,7 +448,7 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
-    join: Literal["inner", "outer"] = "inner",
+    join: Join_T = "inner",
     merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
     uns_merge: (
         StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None

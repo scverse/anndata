@@ -4,7 +4,7 @@ Defines some useful types for this library. Should probably be cleaned up before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Protocol, TypeVar
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from . import typing
 from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
@@ -37,35 +37,31 @@ type ArrayStorageType = ZarrArray | H5Array
 type GroupStorageType = ZarrGroup | H5Group
 type StorageType = ArrayStorageType | GroupStorageType
 
-# NOTE: If you change these, be sure to update `autodoc_type_aliases` in docs/conf.py!
-RWAble_contra = TypeVar("RWAble_contra", bound=typing.RWAble, contravariant=True)
-RWAble_co = TypeVar("RWAble_co", bound=typing.RWAble, covariant=True)
-RWAble = TypeVar("RWAble", bound=typing.RWAble)
-
-S_co = TypeVar("S_co", covariant=True, bound=StorageType)
-S_contra = TypeVar("S_contra", contravariant=True, bound=StorageType)
+# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+type S = StorageType
+type RWAble = typing.RWAble
 
 
 class Dataset2DIlocIndexer(Protocol):
     def __getitem__(self, idx: Any) -> Dataset2D: ...
 
 
-class _ReadInternal(Protocol[S_contra, RWAble_co]):
-    def __call__(self, elem: S_contra, *, _reader: Reader) -> RWAble_co: ...
+class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
+    def __call__(self, elem: S, *, _reader: Reader) -> RWAble: ...
 
 
-class _ReadLazyInternal(Protocol[S_contra]):
+class _ReadLazyInternal[S: StorageType](Protocol):
     def __call__(
         self,
-        elem: S_contra,
+        elem: S,
         *,
         _reader: LazyReader,
         chunks: tuple[int, ...] | None = None,
     ) -> LazyDataStructures: ...
 
 
-class Read(Protocol[S_contra, RWAble_co]):
-    def __call__(self, elem: S_contra) -> RWAble_co:
+class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
+    def __call__(self, elem: S) -> RWAble:
         """Low-level reading function for an element.
 
         Parameters
@@ -79,9 +75,9 @@ class Read(Protocol[S_contra, RWAble_co]):
         ...
 
 
-class ReadLazy(Protocol[S_contra]):
+class ReadLazy[S](Protocol):
     def __call__(
-        self, elem: S_contra, *, chunks: tuple[int, ...] | None = None
+        self, elem: S, *, chunks: tuple[int, ...] | None = None
     ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 
@@ -98,24 +94,24 @@ class ReadLazy(Protocol[S_contra]):
         ...
 
 
-class _WriteInternal(Protocol[RWAble_contra]):
+class _WriteInternal[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: RWAble_contra,
+        v: RWAble,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None: ...
 
 
-class Write(Protocol[RWAble_contra]):
+class Write[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
         f: StorageType,
         k: str,
-        v: RWAble_contra,
+        v: RWAble,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
@@ -135,11 +131,11 @@ class Write(Protocol[RWAble_contra]):
         ...
 
 
-class ReadCallback(Protocol[S_co, RWAble]):
+class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
         /,
-        read_func: Read[S_co, RWAble],
+        read_func: Read[S, RWAble],
         elem_name: str,
         elem: StorageType,
         *,
@@ -166,7 +162,7 @@ class ReadCallback(Protocol[S_co, RWAble]):
         ...
 
 
-class WriteCallback(Protocol[RWAble]):
+class WriteCallback[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
         /,
@@ -199,7 +195,7 @@ class WriteCallback(Protocol[RWAble]):
         ...
 
 
-AnnDataElem = Literal[
+type AnnDataElem = Literal[
     "obs",
     "var",
     "obsm",
@@ -212,4 +208,4 @@ AnnDataElem = Literal[
     "uns",
 ]
 
-Join_T = Literal["inner", "outer"]
+type Join_T = Literal["inner", "outer"]

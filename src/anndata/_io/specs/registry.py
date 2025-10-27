@@ -15,7 +15,7 @@ from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, ClassVar
+    from typing import Any
 
     from anndata._types import (
         GroupStorageType,
@@ -83,14 +83,16 @@ def write_spec[W: _WriteInternal](spec: IOSpec):
 
 
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
-    read: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], RI]] = {}
-    read_partial: ClassVar[dict[tuple[type, IOSpec, frozenset[str]], Callable]] = {}
-    write: ClassVar[
-        dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
-    ] = {}
-    write_specs: ClassVar[
-        dict[type | tuple[type, str] | tuple[type, type], IOSpec]
-    ] = {}
+    read: dict[tuple[type, IOSpec, frozenset[str]], RI]
+    read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
+    write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
+    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec]
+
+    def __init__(self) -> None:
+        self.read = {}
+        self.read_partial = {}
+        self.write = {}
+        self.write_specs = {}
 
     def register_write[T](
         self,

@@ -11,14 +11,13 @@ import pytest
 import anndata as ad
 from anndata._core.file_backing import to_memory
 from anndata.experimental import read_lazy
+from anndata.experimental.backed._io import ANNDATA_ELEMS
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
-
-from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Literal
 
@@ -27,6 +26,26 @@ if TYPE_CHECKING:
     from anndata import AnnData
     from anndata._types import AnnDataElem, Join_T
     from anndata.tests.helpers import AccessTrackingStore
+
+
+def get_key_trackers_for_columns_on_axis(
+    adata: AnnData, axis: Literal["obs", "var"]
+) -> Generator[str, None, None]:
+    """Generate keys for tracking, using `codes` from categorical columns instead of the column name
+
+    Parameters
+    ----------
+    adata
+        Object to get keys from
+    axis
+        Axis to get keys from
+
+    Yields
+    ------
+    Keys for tracking
+    """
+    for col in getattr(adata, axis).columns:
+        yield f"{axis}/{col}" if "cat" not in col else f"{axis}/{col}/codes"
 
 
 def unify_extension_dtypes(
