@@ -1222,8 +1222,12 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
-    pytest.param(jnp.asarray, id="jax_array"),
 ]
+
+with suppress(ImportError):
+    import jax.numpy as jnp
+
+    BASE_MATRIX_PARAMS.append(pytest.param(jnp.asarray, id="jax_array"))
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
