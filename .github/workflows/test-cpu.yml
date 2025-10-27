@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-        io_mark: ["zarr_io", "not zarr_io"]
+        io_mark: ["zarr_io", "not zarr_io", "dask_distributed"]
     env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}

@@ -505,12 +505,13 @@ def write_basic_dask_dask_dense(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    import dask
     import dask.array as da
     import dask.config as dc
 
-    if (is_h5 := isinstance(f, H5Group)) and dc.get(
-        "scheduler", None
-    ) == "dask.distributed":
+    is_distributed = dc.get("scheduler", None) == "dask.distributed"
+    is_h5 = isinstance(f, H5Group)
+    if is_distributed and is_h5:
         msg = "Cannot write dask arrays to hdf5 when using distributed scheduler"
         raise ValueError(msg)
 
@@ -518,9 +519,10 @@ def write_basic_dask_dask_dense(
     store_kwargs = {}
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # See https://github.com/scverse/anndata/pull/1079
-        if is_zarr_v2():
-            store_kwargs["lock"] = GLOBAL_LOCK
+        # See https://github.com/dask/dask/issues/12109
+        if Version(dask.__version__) < Version("2025.4.0") and is_distributed:
+            msg = "Writing dense data with a distributed scheduler to zarr could produce corrupted data with a Lock and will error without one when dask is older than 2025.4.0: https://github.com/dask/dask/issues/12109"
+            raise RuntimeError(msg)
     if is_zarr_v2() or is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:

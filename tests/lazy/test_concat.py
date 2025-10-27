@@ -218,12 +218,13 @@ def test_concat_to_memory_var(
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData, join: Join_T, local_cluster_addr: str
+    adata_remote: AnnData, join: Join_T, local_cluster_addr: str, worker_id: str
 ) -> None:
     import dask.distributed as dd
 
-    with dd.Client(local_cluster_addr):
+    with dd.Client(local_cluster_addr if worker_id != "master" else None):
         ad.concat([adata_remote, adata_remote], join=join).to_memory()
 
 
