@@ -218,6 +218,7 @@ def test_concat_to_memory_var(
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
 def test_concat_data_with_cluster_to_memory(
     adata_remote: AnnData, join: Join_T, local_cluster_addr: str
 ) -> None:
