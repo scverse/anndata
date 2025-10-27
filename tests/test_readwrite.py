@@ -389,15 +389,11 @@ def test_zarr_compression(tmp_path, zarr_write_format):
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
     else:
-        from zarr.codecs import BloscCodec
+        from zarr.codecs import ZstdCodec
 
-        # Typesize is forced to be 1 so that the codecs always match on the roundtrip.
-        # Otherwise this value would vary depending on the datatype.
-        # See github.com/zarr-developers/numcodecs/pull/713 for a related issue/explanation.
-        # In practice, you would never want to set this parameter.
-        compressor = BloscCodec(
-            cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
-        )
+        # Don't use Blosc since it's defaults can change:
+        # https://github.com/zarr-developers/zarr-python/pull/3545
+        compressor = ZstdCodec(level=3, checksum=True)
     not_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
@@ -411,6 +407,7 @@ def test_zarr_compression(tmp_path, zarr_write_format):
                 not_compressed.append(key)
             return None
         if read_compressor.to_dict() != compressor.to_dict():
+            print(read_compressor.to_dict(), compressor.to_dict())
             not_compressed.append(key)
 
     if is_zarr_v2():
