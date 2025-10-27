@@ -4,11 +4,14 @@ For tests using dask
 
 from __future__ import annotations
 
+from importlib.metadata import version
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -107,6 +110,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
 def test_dask_distributed_write(
     adata: AnnData,
     tmp_path: Path,
@@ -126,8 +130,15 @@ def test_dask_distributed_write(
         adata.obsm["b"] = da.random.random((M, 10))
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
-        if diskfmt == "h5ad":
-            with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
+        is_h5 = diskfmt == "h5ad"
+        is_corrupted_dask = Version(version("dask")) < Version("2025.4.0")
+        if is_corrupted_dask or is_h5:
+            with pytest.raises(
+                ValueError if is_h5 else RuntimeError,
+                match=r"Cannot write dask arrays to hdf5"
+                if is_h5
+                else r"Writing dense data with a distributed scheduler to zarr",
+            ):
                 ad.io.write_elem(g, "", orig)
             return
         ad.io.write_elem(g, "", orig)
@@ -140,6 +151,7 @@ def test_dask_distributed_write(
 
     assert_equal(curr.varm["a"], orig.varm["a"])
     assert_equal(curr.obsm["a"], orig.obsm["a"])
+    assert_equal(curr.X, orig.X)
 
     assert isinstance(curr.X, np.ndarray)
     assert isinstance(curr.obsm["a"], np.ndarray)
