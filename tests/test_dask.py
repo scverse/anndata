@@ -121,7 +121,6 @@ def test_dask_distributed_write(
     tmp_path: Path,
     diskfmt: Literal["h5ad", "zarr"],
     local_cluster_addr: str,
-    worker_id: str,
 ) -> None:
     import dask.array as da
     import dask.distributed as dd
@@ -130,7 +129,7 @@ def test_dask_distributed_write(
     pth = tmp_path / f"test_write.{diskfmt}"
     g = as_group(pth, mode="w")
 
-    with dd.Client(local_cluster_addr if worker_id != "master" else None):
+    with dd.Client(local_cluster_addr):
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))

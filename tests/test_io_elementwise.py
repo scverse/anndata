@@ -342,7 +342,6 @@ def test_read_lazy_h5_cluster(
     sparse_format: Literal["csr", "csc"],
     tmp_path: Path,
     local_cluster_addr: str,
-    worker_id: str,
 ) -> None:
     import dask.distributed as dd
 
@@ -351,7 +350,7 @@ def test_read_lazy_h5_cluster(
         arr_store = create_sparse_store(sparse_format, store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"])
         X_from_disk = read_elem(arr_store["X"])
-    with dd.Client(local_cluster_addr if worker_id != "master" else None):
+    with dd.Client(local_cluster_addr):
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
