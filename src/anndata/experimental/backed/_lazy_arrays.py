@@ -128,6 +128,10 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
+# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+type K = H5Array | ZarrArray
+
+
 class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
