@@ -37,7 +37,7 @@ def _normalize_indices(
     return ax0, ax1
 
 
-def _normalize_index(  # noqa: PLR0911, PLR0912
+def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
     indexer: Index1D, index: pd.Index
 ) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
@@ -158,9 +158,9 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         else:
             try:
                 values = indexer.tolist()  # converting to the list
-            except Exception:
+            except Exception as err:
                 msg = f"Could not convert {indexer!r} to list for string lookup."
-                raise IndexError(msg)
+                raise IndexError(msg) from err
             positions = index.get_indexer(values)
             if np.any(positions < 0):
                 not_found = [

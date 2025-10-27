@@ -335,7 +335,7 @@ def _keep_for_types(val, allowed_types):
 
 
 # TODO: Use hypothesis for this?
-def gen_adata(  # noqa: PLR0915, PLR0913
+def gen_adata(  # noqa: PLR0915, PLR0913, PLR0912
     shape: tuple[int, int],
     # X_type: Callable[[np.ndarray], object] = sparse.csr_matrix, = both are on CPU
     X_type: Callable[[Any], object] | None = None,
