@@ -29,7 +29,7 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Literal, ParamSpec, TypeVar
+    from typing import Literal
 
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
@@ -40,10 +40,6 @@ if TYPE_CHECKING:
         None,
         dict[str, Sequence[tuple[int, int]]],
     ]
-
-    P = ParamSpec("P")
-    R = TypeVar("R")
-    D = TypeVar("D")
 
 
 @overload
@@ -81,8 +77,8 @@ def compute_chunk_layout_for_axis_size(
     return chunk
 
 
-def make_dask_chunk[D](
-    path_or_sparse_dataset: Path | D,
+def make_dask_chunk(
+    path_or_sparse_dataset: Path | object,
     elem_name: str,
     block_info: BlockInfo | None = None,
 ) -> CSMatrix | CSArray:

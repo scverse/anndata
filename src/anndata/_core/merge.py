@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import numpy as np
@@ -45,7 +45,6 @@ if TYPE_CHECKING:
 
     from ..compat import XDataArray, XDataset
 
-T = TypeVar("T")
 
 ###################
 # Utilities
@@ -279,7 +278,7 @@ def unify_dtypes(
 
 def try_unifying_dtype(  # noqa PLR0911, PLR0912
     col: Sequence[np.dtype | ExtensionDtype],
-) -> pd.core.dtypes.base.ExtensionDtype | None:
+) -> ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
 

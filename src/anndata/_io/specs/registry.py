@@ -15,7 +15,7 @@ from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, ClassVar, TypeVar
+    from typing import Any, ClassVar
 
     from anndata._types import (
         GroupStorageType,
@@ -30,9 +30,7 @@ if TYPE_CHECKING:
 
     from ..._core.xarray import Dataset2D
 
-    T = TypeVar("T")
-    W = TypeVar("W", bound=_WriteInternal)
-    LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
+    type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -70,7 +68,7 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
-def write_spec(spec: IOSpec):
+def write_spec[W: _WriteInternal](spec: IOSpec):
     def decorator(func: W) -> W:
         @wraps(func)
         def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
@@ -94,7 +92,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         dict[type | tuple[type, str] | tuple[type, type], IOSpec]
     ] = {}
 
-    def register_write(
+    def register_write[T](
         self,
         dest_type: type,
         src_type: type | tuple[type, str],

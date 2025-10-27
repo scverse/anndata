@@ -11,15 +11,13 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias
-from typing import TYPE_CHECKING, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from typing import Any, TypeGuard
-
-T = TypeVar("T")
 
 
 class DeprecatedOption(NamedTuple):
@@ -200,7 +198,7 @@ class SettingsManager:
         )
 
     @old_positionals("default_value", "description", "validate", "option_type")
-    def register(
+    def register[T](
         self,
         option: str,
         *,
@@ -391,7 +389,6 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
-V = TypeVar("V")
 
 
 def gen_validator[V](_type: type[V]) -> Callable[[V], None]:

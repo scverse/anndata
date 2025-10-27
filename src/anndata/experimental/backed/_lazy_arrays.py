@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -30,11 +30,8 @@ if TYPE_CHECKING:
     from ...compat import Index1DNorm
 
 
-K = TypeVar("K", H5Array, ZarrArray)
-
-
 class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
-    def __init__(self, array: K):
+    def __init__(self, array: K) -> None:
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
             super().__init__(array)

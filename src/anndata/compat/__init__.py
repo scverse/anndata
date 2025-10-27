@@ -6,7 +6,7 @@ from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import h5py
@@ -323,9 +323,6 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
         else:
             new_dtype.append((dt_name, dt_type))
     return value.astype(new_dtype)
-
-
-Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
 
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
