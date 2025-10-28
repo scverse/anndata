@@ -212,3 +212,15 @@ def test_chunks_df(
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.zarr_io
+def test_categorical_idx(tmp_path: Path):
+    adata = AnnData(shape=[10, 20])
+    adata.obs.index = adata.obs.index.astype("category")
+    orig_pth = tmp_path / "categorical_id.zarr"
+    adata.write_zarr(orig_pth)
+    with pytest.warns(UserWarning, match=r"non-string indices"):
+        remote = read_lazy(orig_pth)
+    remote_to_memory = remote.to_memory()
+    assert_equal(adata, remote_to_memory)
