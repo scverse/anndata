@@ -6,13 +6,13 @@ from ._io.read import (
     read_csv,
     read_excel,
     read_hdf,
-    read_loom,
+    read_loom,  # noqa: F401
     read_mtx,
     read_text,
     read_umi_tools,
 )
 from ._io.specs import read_elem, write_elem
-from ._io.write import write_csvs, write_loom
+from ._io.write import write_csvs, write_loom  # noqa: F401
 from ._io.zarr import read_zarr, write_zarr
 
 __all__ = [
@@ -21,7 +21,6 @@ __all__ = [
     "read_excel",
     "read_h5ad",
     "read_hdf",
-    "read_loom",
     "read_mtx",
     "read_text",
     "read_umi_tools",
@@ -30,6 +29,5 @@ __all__ = [
     "write_csvs",
     "write_elem",
     "write_h5ad",
-    "write_loom",
     "write_zarr",
 ]

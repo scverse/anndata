@@ -2,12 +2,10 @@ from collections.abc import Callable as Callable
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, TypeVar
-
-_T = TypeVar("_T")
+from typing import Literal
 
 @dataclass
-class SettingsManager:
+class SettingsManager[T]:
     __doc_tmpl__: str = ...
     def describe(
         self,
@@ -23,11 +21,11 @@ class SettingsManager:
         self,
         option: str,
         *,
-        default_value: _T,
+        default_value: T,
         description: str,
-        validate: Callable[[_T], None],
+        validate: Callable[[T], None],
         option_type: object | None = None,
-        get_from_env: Callable[[str, _T], _T] = ...,
+        get_from_env: Callable[[str, T], T] = ...,
     ) -> None: ...
     def __setattr__(self, option: str, val: object) -> None: ...
     def __getattr__(self, option: str) -> object: ...

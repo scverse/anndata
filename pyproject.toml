@@ -5,7 +5,7 @@ requires = [ "hatchling", "hatch-vcs" ]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "BSD-3-Clause"
 authors = [
     { name = "Philipp Angerer" },
@@ -29,18 +29,16 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.1.0, !=2.1.2",
-    "numpy>=1.26",
-    # https://github.com/scverse/anndata/issues/1434
-    "scipy >=1.12",
-    "h5py>=3.8",
+    "pandas >=2.2.2",
+    "numpy>=2",
+    "scipy >=1.13",
+    "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
     "array_api_compat>=1.7.1",
@@ -69,7 +67,7 @@ doc = [
     "sphinxext.opengraph",
     "myst-nb",
     "scanpydoc[theme,typehints] >=0.15.3",
-    "awkward>=2.3",
+    "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
@@ -78,7 +76,6 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "loompy>=3.0.5",
     "pytest>=8.2,<8.3.4",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
@@ -95,7 +92,7 @@ test-min = [
     # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
-    "awkward>=2.3.2",
+    "awkward>=2.6.3",
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
 ]
@@ -108,7 +105,7 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [
-    "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
 
 [tool.hatch.version]
@@ -174,7 +171,11 @@ testpaths = [
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
-markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve zarr io" ]
+markers = [
+    "gpu: mark test to run on GPU",
+    "zarr_io: mark tests that involve zarr io",
+    "dask_distributed: tests that need a distributed client with multiple processes",
+]
 
 [tool.ruff]
 src = [ "src" ]
