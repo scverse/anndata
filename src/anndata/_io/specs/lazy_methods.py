@@ -25,7 +25,7 @@ from anndata.compat import (
     ZarrGroup,
 )
 
-from .registry import _LAZY_REGISTRY, IOSpec
+from .registry import _LAZY_REGISTRY, IOSpec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
@@ -191,6 +191,9 @@ def resolve_chunks(
     return elem.chunks
 
 
+# TODO: `map_blocks` of a string array in h5py is so insanely slow on benchmarking that in the case someone has
+# a pure string annotation (not categoricals! or nullables strings!), it's probably better to pay the memory penalty.
+# In the long run, it might be good to figure out what exactly is going on here but for now, this will do.
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
     elem: H5Array,
@@ -200,10 +203,8 @@ def read_h5_string_array(
 ) -> DaskArray:
     import dask.array as da
 
-    from anndata._io.h5ad import read_dataset
-
     chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
-    return da.from_array(read_dataset(elem), chunks=chunks)
+    return da.from_array(read_elem(elem), chunks=chunks)
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -299,7 +300,7 @@ def read_dataframe(
     # which is used below as well.
     if not use_range_index:
         dim_name = elem.attrs["_index"]
-        # no sense in reading this in multiple times
+        # no sense in reading this in multiple times since xarray requires an in-memory index
         index = elem_dict[dim_name].compute()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
