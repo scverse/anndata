@@ -369,8 +369,8 @@ class SettingsManager:
         try:
             # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding
             for k in self._config:
-                if v := overrides.get(k, False):
-                    setattr(self, k, v)
+                if k in overrides:
+                    setattr(self, k, overrides.get(k))
             yield None
         finally:
             # TODO: does the order need to be preserved when restoring?
@@ -477,7 +477,7 @@ settings.register(
 )
 
 
-def validate_sparse_settings(val: Any, remove_unused_categories) -> None:
+def validate_sparse_settings(val: Any, remove_unused_categories: bool) -> None:  # noqa: FBT001
     validate_bool(val, remove_unused_categories)
 
 
