@@ -291,6 +291,43 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         self._convert_X = None
         self.convert = convert
 
+    # ------------------------------------------------------------------
+    # Pickling support (worker-safe)
+    # ------------------------------------------------------------------
+
+    def __getstate__(self):
+        """Return minimal state for safe pickling across processes.
+
+        We only serialise lightweight metadata – the on-disk store is reopened
+        in the child worker to avoid passing an open HDF5 handle.
+        """
+        return {
+            "reference_state": self.reference.__getstate__()
+            if hasattr(self.reference, "__getstate__")
+            else None,
+            "oidx": self.oidx,
+            "vidx": self.vidx,
+            "convert": self.convert,
+        }
+
+    def __setstate__(self, state):
+        from anndata.experimental.multi_files import (
+            AnnCollection,  # local import to avoid circular
+        )
+
+        # Rebuild from saved reference_state (in-memory collections)
+        parent = AnnCollection.__new__(AnnCollection)
+        if state["reference_state"] is not None:
+            parent.__setstate__(state["reference_state"])
+        else:
+            msg = "Cannot restore AnnCollectionView without reference state"
+            raise ValueError(msg)
+
+        # Recreate the view via slicing to reuse internal helpers
+        view = parent[state["oidx"], state["vidx"]]
+        self.__dict__.update(view.__dict__)
+        self.convert = state["convert"]
+
     def _lazy_init_attr(self, attr: str, *, set_vidx: bool = False):
         if getattr(self, f"_{attr}_view") is not None:
             return
@@ -779,7 +816,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 ai_attr = getattr(a, attr)
                 a0_attr = getattr(adatas[0], attr)
                 new_keys = []
-                for key in keys:
+                for key in keys or []:
                     if key in ai_attr:
                         a0_ashape = a0_attr[key].shape
                         ai_ashape = ai_attr[key].shape
@@ -805,6 +842,35 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             self._dtypes = _harmonize_types(self._view_attrs_keys, self.adatas)
 
         self.indices_strict = indices_strict
+
+    # ------------------------------------------------------------------
+    # Pickling support (worker-safe)
+    # ------------------------------------------------------------------
+
+    def __getstate__(self):
+        """Return state for pickling. For in-memory collections, we serialize all data."""
+        return {
+            "adatas": self.adatas,
+            "join_obs": getattr(self, "_join_obs", "inner"),
+            "join_obsm": getattr(self, "_join_obsm", None),
+            "join_vars": getattr(self, "_join_vars", None),
+            "convert": self._convert,
+            "harmonize_dtypes": getattr(self, "_harmonize_dtypes", True),
+            "indices_strict": self.indices_strict,
+        }
+
+    def __setstate__(self, state):
+        """Restore state from pickling."""
+        # Reconstruct AnnCollection from saved adatas and parameters
+        self.__init__(
+            state["adatas"],
+            join_obs=state["join_obs"],
+            join_obsm=state["join_obsm"],
+            join_vars=state["join_vars"],
+            convert=state["convert"],
+            harmonize_dtypes=state["harmonize_dtypes"],
+            indices_strict=state["indices_strict"],
+        )
 
     def __getitem__(self, index: Index):
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
