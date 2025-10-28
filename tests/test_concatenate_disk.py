@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from anndata._types import Join_T
+
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
     obsm_types=(
@@ -125,7 +127,7 @@ def test_anndatas(
     *,
     axis: Literal[0, 1],
     array_type: Literal["array", "sparse", "sparse_array"],
-    join_type: Literal["inner", "outer"],
+    join_type: Join_T,
     tmp_path: Path,
     max_loaded_elems: int,
     file_format: Literal["zarr", "h5ad"],

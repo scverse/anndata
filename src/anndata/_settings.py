@@ -12,15 +12,13 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias
-from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from typing import Any, Self, TypeGuard
-
-T = TypeVar("T")
 
 
 class DeprecatedOption(NamedTuple):
@@ -52,7 +50,7 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-class RegisteredOption(NamedTuple, Generic[T]):
+class RegisteredOption[T](NamedTuple):
     option: str
     default_value: T
     description: str
@@ -62,7 +60,7 @@ class RegisteredOption(NamedTuple, Generic[T]):
     describe = describe
 
 
-def check_and_get_environ_var(
+def check_and_get_environ_var[T](
     key: str,
     default_value: str,
     allowed_values: Sequence[str] | None = None,
@@ -205,7 +203,7 @@ class SettingsManager:
         )
 
     @old_positionals("default_value", "description", "validate", "option_type")
-    def register(
+    def register[T](
         self,
         option: str,
         *,
@@ -399,10 +397,9 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
-V = TypeVar("V")
 
 
-def gen_validator(_type: type[V]) -> Callable[[V, SettingsManager], None]:
+def gen_validator[V](_type: type[V]) -> Callable[[V, SettingsManager], None]:
     def validate_type(val: V, settings: SettingsManager) -> None:
         if not isinstance(val, _type):
             msg = f"{val} not valid {_type}"

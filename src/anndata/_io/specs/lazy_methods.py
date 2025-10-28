@@ -29,7 +29,7 @@ from .registry import _LAZY_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Literal, ParamSpec, TypeVar
+    from typing import Literal
 
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
@@ -41,10 +41,6 @@ if TYPE_CHECKING:
         dict[str, Sequence[tuple[int, int]]],
     ]
 
-    P = ParamSpec("P")
-    R = TypeVar("R")
-    D = TypeVar("D")
-
 
 @overload
 @contextmanager
@@ -53,9 +49,9 @@ def maybe_open_h5(
 ) -> Generator[H5File, None, None]: ...
 @overload
 @contextmanager
-def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
+def maybe_open_h5[D](path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
 @contextmanager
-def maybe_open_h5(
+def maybe_open_h5[D](
     path_or_other: H5File | D, elem_name: str
 ) -> Generator[H5File | D, None, None]:
     if not isinstance(path_or_other, Path):
@@ -82,7 +78,7 @@ def compute_chunk_layout_for_axis_size(
 
 
 def make_dask_chunk(
-    path_or_sparse_dataset: Path | D,
+    path_or_sparse_dataset: Path | object,
     elem_name: str,
     block_info: BlockInfo | None = None,
 ) -> CSMatrix | CSArray:
