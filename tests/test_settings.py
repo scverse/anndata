@@ -31,7 +31,7 @@ description_3 = "My doc string 3!"
 type_3 = list[int]
 
 
-def validate_int_list(val) -> bool:
+def validate_int_list(val: list, settings: SettingsManager) -> bool:
     if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
         msg = f"{val!r} is not a valid int list"
         raise TypeError(msg)
