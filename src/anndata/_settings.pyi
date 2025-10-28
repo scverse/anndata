@@ -2,7 +2,7 @@ from collections.abc import Callable as Callable
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Self
 
 @dataclass
 class SettingsManager[T]:
