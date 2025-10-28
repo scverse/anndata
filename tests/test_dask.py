@@ -4,14 +4,12 @@ For tests using dask
 
 from __future__ import annotations
 
-from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -136,13 +134,10 @@ def test_dask_distributed_write(
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
         is_h5 = diskfmt == "h5ad"
-        is_corrupted_dask = Version(version("dask")) < Version("2025.4.0")
-        if is_corrupted_dask or is_h5:
+        if is_h5:
             with pytest.raises(
-                ValueError if is_h5 else RuntimeError,
-                match=r"Cannot write dask arrays to hdf5"
-                if is_h5
-                else r"Writing dense data with a distributed scheduler to zarr",
+                ValueError,
+                match=r"Cannot write dask arrays to hdf5",
             ):
                 ad.io.write_elem(g, "", orig)
             return

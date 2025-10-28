@@ -519,15 +519,11 @@ def write_basic_dask_dask_dense(
     dataset_kwargs = dataset_kwargs.copy()
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # See https://github.com/dask/dask/issues/12109
-        if Version(version("dask")) < Version("2025.4.0") and is_distributed:
-            msg = "Writing dense data with a distributed scheduler to zarr could produce corrupted data with a Lock and will error without one when dask is older than 2025.4.0: https://github.com/dask/dask/issues/12109"
-            raise RuntimeError(msg)
     if is_zarr_v2() or is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g)
+    da.store(elem, g, scheduler="threads")
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
