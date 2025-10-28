@@ -108,9 +108,9 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     def categories(self) -> np.ndarray:
         if isinstance(self._categories, ZarrArray):
             return self._categories[...]
-        from ..._io.h5ad import read_dataset
+        from anndata.io import read_elem
 
-        return read_dataset(self._categories)
+        return read_elem(self._categories)
 
     def __getitem__(
         self, key: xr.core.indexing.ExplicitIndexer
