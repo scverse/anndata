@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 from types import MappingProxyType
 
 import numpy as np
@@ -81,7 +80,9 @@ class SparseCSRContiguousSlice:
 
 
 class SparseCSRDask:
-    def setup(self):
+    filepath = "data.zarr"
+
+    def setup_cache(self):
         X = sparse.random(
             10_000,
             10_000,
@@ -89,9 +90,11 @@ class SparseCSRDask:
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        self.tmpdir = tempfile.TemporaryDirectory("tmp.zarr")
-        self.group = zarr.group(self.tmpdir.name)
-        write_elem(self.group, "X", X)
+        g = zarr.group(self.filepath)
+        write_elem(g, "X", X)
+
+    def setup(self):
+        self.group = zarr.group(self.filepath)
         self.adata = AnnData(X=read_elem_lazy(self.group["X"]))
 
     def time_concat(self):
@@ -105,6 +108,3 @@ class SparseCSRDask:
 
     def peakmem_read(self):
         AnnData(X=read_elem_lazy(self.group["X"]))
-
-    def teardown(self):
-        self.tmpdir.cleanup()
