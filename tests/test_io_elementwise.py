@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -19,7 +19,7 @@ import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr, is_zarr_v2
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -32,19 +32,18 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
-    from typing import Literal, TypeVar
+    from typing import Literal
 
     from anndata.compat import H5Group
 
-    G = TypeVar("G", H5Group, ZarrGroup)
-
 
 @pytest.fixture
-def store(diskfmt, tmp_path) -> H5Group | ZarrGroup:
+def store(diskfmt, tmp_path) -> Generator[H5Group | ZarrGroup, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
-        store = file["/"]
+        store = cast("H5Group", file["/"])
     elif diskfmt == "zarr":
         store = open_write_group(tmp_path / "test.zarr")
     else:
@@ -68,7 +67,7 @@ def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
 
 
 def create_dense_store(
-    store: str, *, shape: tuple[int, ...] = DEFAULT_SHAPE
+    store: H5Group | ZarrGroup, *, shape: tuple[int, ...] = DEFAULT_SHAPE
 ) -> H5Group | ZarrGroup:
     X = np.random.randn(*shape)
 
@@ -76,7 +75,7 @@ def create_dense_store(
     return store
 
 
-def create_sparse_store(
+def create_sparse_store[G: (H5Group, ZarrGroup)](
     sparse_format: Literal["csc", "csr"], store: G, shape=DEFAULT_SHAPE
 ) -> G:
     """Returns a store
@@ -225,7 +224,9 @@ def test_io_spec(store, value, encoding_type):
         pytest.param(np.asarray("test"), "string", id="scalar_string"),
     ],
 )
-def test_io_spec_compressed_scalars(store: G, value: np.ndarray, encoding_type: str):
+def test_io_spec_compressed_scalars(
+    store: H5Group | ZarrGroup, value: np.ndarray, encoding_type: str
+):
     key = f"key_for_{encoding_type}"
     write_elem(
         store, key, value, dataset_kwargs={"compression": "gzip", "compression_opts": 5}
@@ -322,7 +323,7 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (40, None)),
     ],
 )
-def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
+def test_read_lazy_subsets_nd_dask(store: H5Group | ZarrGroup, n_dims, chunks) -> None:
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
     X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
@@ -337,8 +338,11 @@ def test_read_lazy_subsets_nd_dask(store, n_dims, chunks):
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
 def test_read_lazy_h5_cluster(
-    sparse_format: Literal["csr", "csc"], tmp_path: Path, local_cluster_addr: str
+    sparse_format: Literal["csr", "csc"],
+    tmp_path: Path,
+    local_cluster_addr: str,
 ) -> None:
     import dask.distributed as dd
 
@@ -351,7 +355,7 @@ def test_read_lazy_h5_cluster(
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
-def test_undersized_shape_to_default(store: H5Group | ZarrGroup):
+def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
     shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
@@ -382,7 +386,7 @@ def test_read_lazy_2d_chunk_kwargs(
     arr_type: Literal["csr", "csc", "dense"],
     chunks: None | tuple[int | None, int | None],
     expected_chunksize: tuple[int, int],
-):
+) -> None:
     if arr_type == "dense":
         arr_store = create_dense_store(store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)

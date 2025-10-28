@@ -15,6 +15,7 @@ from anndata._io.utils import no_write_dataset_2d
 from .._warnings import WriteWarning
 from ..compat import old_positionals
 from ..logging import get_logger
+from ..utils import deprecated
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -83,6 +84,10 @@ def write_csvs(
         )
 
 
+@deprecated(
+    "write_h5ad",
+    add_msg="Loom isn’t well-maintained and supports only a subset of anndata features.",
+)
 @no_write_dataset_2d
 @old_positionals("write_obsm_varm")
 def write_loom(

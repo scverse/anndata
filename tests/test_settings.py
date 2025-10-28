@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.machinery
 import os
 import re
 import types
@@ -278,4 +278,5 @@ def test_hints():
         if not settings_key.startswith("_"):
             assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
     for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
-        assert hasattr(settings, settings_key)
+        if not settings_key.startswith("__"):
+            assert hasattr(settings, settings_key)

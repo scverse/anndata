@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
-
-T = TypeVar("T")
 
 
 @no_write_dataset_2d

@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TypeVar
-
-F = TypeVar("F", bound=Callable)
 
 
-def doctest_needs(mod: str) -> Callable[[F], F]:
+def doctest_needs[F: Callable](mod: str) -> Callable[[F], F]:
     """Mark function with doctest dependency."""
 
     def decorator(func: F) -> F:

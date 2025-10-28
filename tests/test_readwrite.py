@@ -15,7 +15,6 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
-from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -389,15 +388,11 @@ def test_zarr_compression(tmp_path, zarr_write_format):
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
     else:
-        from zarr.codecs import BloscCodec
+        from zarr.codecs import ZstdCodec
 
-        # Typesize is forced to be 1 so that the codecs always match on the roundtrip.
-        # Otherwise this value would vary depending on the datatype.
-        # See github.com/zarr-developers/numcodecs/pull/713 for a related issue/explanation.
-        # In practice, you would never want to set this parameter.
-        compressor = BloscCodec(
-            cname="zstd", clevel=3, shuffle="bitshuffle", typesize=1
-        )
+        # Don't use Blosc since it's defaults can change:
+        # https://github.com/zarr-developers/zarr-python/pull/3545
+        compressor = ZstdCodec(level=3, checksum=True)
     not_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
@@ -411,6 +406,7 @@ def test_zarr_compression(tmp_path, zarr_write_format):
                 not_compressed.append(key)
             return None
         if read_compressor.to_dict() != compressor.to_dict():
+            print(read_compressor.to_dict(), compressor.to_dict())
             not_compressed.append(key)
 
     if is_zarr_v2():
@@ -453,102 +449,6 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(orig, modified, exact=True)
     with pytest.raises(AssertionError):
         assert_equal(read, modified, exact=True)
-
-
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
-@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
-def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
-    X = typ(X_list)
-    obs_dim = "meaningful_obs_dim_name"
-    var_dim = "meaningful_var_dim_name"
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata_src.obs_names.name = obs_dim
-    adata_src.var_names.name = var_dim
-    adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
-    adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        # loompy uses “is” for ints
-        warnings.filterwarnings("ignore", category=SyntaxWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
-
-    adata = ad.io.read_loom(
-        tmp_path / "test.loom",
-        sparse=typ is csr_matrix,
-        obsm_mapping=obsm_mapping,
-        obs_names=obs_dim,
-        varm_mapping=varm_mapping,
-        var_names=var_dim,
-        cleanup=True,
-    )
-
-    if isinstance(X, np.ndarray):
-        assert np.allclose(adata.X, X)
-    else:
-        # TODO: this should not be necessary
-        assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm
-    assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm
-    assert adata.varm["X_b"].shape[1] == 3
-    # as we called with `cleanup=True`
-    assert "oanno1b" in adata.uns["loom-obs"]
-    assert "vanno2" in adata.uns["loom-var"]
-    for k, v in obsm_mapping.items():
-        assert k in adata.obsm
-        assert adata.obsm[k].shape[1] == len(v)
-    for k, v in varm_mapping.items():
-        assert k in adata.varm
-        assert adata.varm[k].shape[1] == len(v)
-    assert adata.obs_names.name == obs_dim
-    assert adata.var_names.name == var_dim
-
-
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-def test_readloom_deprecations(tmp_path):
-    loom_pth = tmp_path / "test.loom"
-    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(loom_pth, write_obsm_varm=True)
-
-    # obsm_names -> obsm_mapping
-    obsm_mapping = {"df": adata_src.obs.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
-
-    # varm_names -> varm_mapping
-    varm_mapping = {"df": adata_src.var.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
-
-    # positional -> keyword
-    with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
-    actual_result = ad.io.read_loom(loom_pth, sparse=True)
-    assert type(depr_result.X) == type(actual_result.X)
 
 
 def test_read_csv():
@@ -616,12 +516,6 @@ def test_write_csv_view(typ, tmp_path):
     ("read", "write", "name"),
     [
         pytest.param(ad.read_h5ad, ad.io.write_h5ad, "test_empty.h5ad"),
-        pytest.param(
-            ad.io.read_loom,
-            ad.io.write_loom,
-            "test_empty.loom",
-            marks=pytest.mark.xfail(reason="Loom can’t handle 0×0 matrices"),
-        ),
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )

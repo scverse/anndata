@@ -38,52 +38,15 @@ from .utils import get_actualsize, get_peak_mem, sedate
 
 PBMC_3K_URL = "https://falexwolf.de/data/pbmc3k_raw.h5ad"
 
-# PBMC_3K_PATH = Path(__file__).parent / "data/pbmc3k_raw.h5ad"
-# PBMC_REDUCED_PATH = Path(__file__).parent / "10x_pbmc68k_reduced.h5ad"
-# BM_43K_CSR_PATH = Path(__file__).parent.parent / "datasets/BM2_43k-cells.h5ad"
-# BM_43K_CSC_PATH = Path(__file__).parent.parent / "datasets/BM2_43k-cells_CSC.h5ad"
-
-
-# class ZarrReadSuite:
-#     params = []
-#     param_names = ["input_url"]
-
-#     def setup(self, input_url):
-#         self.filepath = pooch.retrieve(url=input_url, known_hash=None)
-
-#     def time_read_full(self, input_url):
-#         anndata.read_zarr(self.filepath)
-
-#     def peakmem_read_full(self, input_url):
-#         anndata.read_zarr(self.filepath)
-
-#     def mem_readfull_object(self, input_url):
-#         return anndata.read_zarr(self.filepath)
-
-#     def track_read_full_memratio(self, input_url):
-#         mem_recording = memory_usage(
-#             (sedate(anndata.read_zarr, 0.005), (self.filepath,)), interval=0.001
-#         )
-#         adata = anndata.read_zarr(self.filepath)
-#         base_size = mem_recording[-1] - mem_recording[0]
-#         print(np.max(mem_recording) - np.min(mem_recording))
-#         print(base_size)
-#         return (np.max(mem_recording) - np.min(mem_recording)) / base_size
-
-#     def peakmem_read_backed(self, input_url):
-#         anndata.read_zarr(self.filepath, backed="r")
-
-#     def mem_read_backed_object(self, input_url):
-#         return anndata.read_zarr(self.filepath, backed="r")
-
 
 class H5ADInMemorySizeSuite:
-    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
-    params = _urls.keys()
-    param_names = ("input_data",)
+    filepath = "pbmc_in_mem.h5ad"
 
-    def setup(self, input_data: str):
-        self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
+    def setup_cache(self):
+        # Need to specify path because the working directory is special for asv
+        pooch.retrieve(
+            url=PBMC_3K_URL, known_hash=None, path=Path.cwd(), fname=self.filepath
+        )
 
     def track_in_memory_size(self, *_):
         adata = anndata.read_h5ad(self.filepath)
@@ -99,12 +62,13 @@ class H5ADInMemorySizeSuite:
 
 
 class H5ADReadSuite:
-    _urls = MappingProxyType(dict(pbmc3k=PBMC_3K_URL))
-    params = _urls.keys()
-    param_names = ("input_data",)
+    filepath = "pbmc_read.h5ad"
 
-    def setup(self, input_data: str):
-        self.filepath = pooch.retrieve(url=self._urls[input_data], known_hash=None)
+    def setup_cache(self):
+        # Need to specify path because the working directory is special for asv
+        pooch.retrieve(
+            url=PBMC_3K_URL, known_hash=None, path=Path.cwd(), fname=self.filepath
+        )
 
     def time_read_full(self, *_):
         anndata.read_h5ad(self.filepath)

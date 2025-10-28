@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal
 from warnings import warn
 
 import numpy as np
@@ -39,13 +39,13 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
+    from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
 
     from anndata._types import Join_T
 
     from ..compat import XDataArray, XDataset
 
-T = TypeVar("T")
 
 ###################
 # Utilities
@@ -279,7 +279,7 @@ def unify_dtypes(
 
 def try_unifying_dtype(  # noqa PLR0911, PLR0912
     col: Sequence[np.dtype | ExtensionDtype],
-) -> pd.core.dtypes.base.ExtensionDtype | None:
+) -> ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
 
@@ -429,7 +429,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value(vals: Collection[T]) -> T | MissingVal:
+def unique_value[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -441,7 +441,7 @@ def unique_value(vals: Collection[T]) -> T | MissingVal:
     return unique_val
 
 
-def first(vals: Collection[T]) -> T | MissingVal:
+def first[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -452,7 +452,7 @@ def first(vals: Collection[T]) -> T | MissingVal:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> T | MissingVal:
+def only[T](vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -554,7 +554,7 @@ class Reindexer:
         Together with `old_pos` this forms a mapping.
     """
 
-    def __init__(self, old_idx, new_idx):
+    def __init__(self, old_idx: pd.Index, new_idx: pd.Index) -> None:
         self.old_idx = old_idx
         self.new_idx = new_idx
         self.no_change = new_idx.equals(old_idx)
@@ -754,7 +754,7 @@ class Reindexer:
             return el[self.idx]
 
     @property
-    def idx(self):
+    def idx(self) -> NDArray[np.intp]:
         return self.old_idx.get_indexer(self.new_idx)
 
 
@@ -783,7 +783,7 @@ def default_fill_value(els):
         return np.nan
 
 
-def gen_reindexer(new_var: pd.Index, cur_var: pd.Index):
+def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
     """
     Given a new set of var_names, and a current set, generates a function which will reindex
     a matrix to be aligned with the new set.
@@ -940,7 +940,7 @@ def inner_concat_aligned_mapping(
     return result
 
 
-def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0):
+def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reindexer]:
     alt_axis = 1 - axis
     if axis == 0:
         df_indices = lambda x: x.columns
@@ -1017,7 +1017,7 @@ def missing_element(
     axis: Literal[0, 1] = 0,
     fill_value: Any | None = None,
     off_axis_size: int = 0,
-) -> np.ndarray | DaskArray:
+) -> NDArray[np.bool_] | DaskArray:
     """Generates value to use when there is a missing element."""
     should_return_dask = any(isinstance(el, DaskArray) for el in els)
     # 0 sized array for in-memory prevents allocating unnecessary memory while preserving broadcasting.
