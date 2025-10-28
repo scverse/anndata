@@ -96,6 +96,8 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
 .. toctree::
    :hidden:
 
+   generated/anndata.io.read_loom
+   generated/anndata.AnnData.write_loom
    generated/anndata.io.write_h5ad
    generated/anndata.io.write_zarr
 ```
