@@ -111,7 +111,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     io.read_csv
     io.read_excel
     io.read_hdf
-    io.read_loom
     io.read_zarr
     io.read_mtx
     io.read_text
@@ -1937,6 +1936,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
+    @deprecated(
+        "write_h5ad",
+        add_msg="Loom isn’t well-maintained and supports only a subset of anndata features.",
+    )
     @old_positionals("write_obsm_varm")
     def write_loom(
         self, filename: PathLike[str] | str, *, write_obsm_varm: bool = False

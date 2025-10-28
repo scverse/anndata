@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from ..._core.index import Index
+    from ..._types import Join_T
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -676,7 +677,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self,
         adatas: Sequence[AnnData] | dict[str, AnnData],
         *,
-        join_obs: Literal["inner", "outer"] | None = "inner",
+        join_obs: Join_T | None = "inner",
         join_obsm: Literal["inner"] | None = None,
         join_vars: Literal["inner"] | None = None,
         label: str | None = None,

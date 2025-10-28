@@ -42,7 +42,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
-    from typing import Literal, TypeGuard, TypeVar
+    from typing import Literal, TypeGuard
 
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
@@ -51,8 +51,7 @@ if TYPE_CHECKING:
     from .._types import ArrayStorageType
     from ..compat import Index1D
 
-    DT = TypeVar("DT")
-    _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
+    type _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
 
 try:
@@ -115,7 +114,7 @@ def gen_vstr_recarray(m, n, dtype=None):
     )
 
 
-def issubdtype(
+def issubdtype[DT](
     a: np.dtype | pd.api.extensions.ExtensionDtype | type,
     b: type[DT] | tuple[type[DT], ...],
 ) -> TypeGuard[DT]:

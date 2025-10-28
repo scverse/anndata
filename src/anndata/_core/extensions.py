@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints, overload
+from typing import TYPE_CHECKING, get_type_hints, overload
 from warnings import warn
 
 from ..types import ExtensionNamespace
@@ -56,11 +56,8 @@ def find_stacklevel() -> int:
 # and all current attributes of AnnData
 _reserved_namespaces: set[str] = set(dir(AnnData))
 
-NameSpT = TypeVar("NameSpT", bound=ExtensionNamespace)
-T = TypeVar("T")
 
-
-class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
+class AccessorNameSpace[NameSpT: ExtensionNamespace](ExtensionNamespace):
     """Establish property-like namespace object for user-defined functionality."""
 
     def __init__(self, name: str, namespace: type[NameSpT]) -> None:
@@ -68,12 +65,12 @@ class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
         self._ns = namespace
 
     @overload
-    def __get__(self, instance: None, cls: type[T]) -> type[NameSpT]: ...
+    def __get__[T](self, instance: None, cls: type[T]) -> type[NameSpT]: ...
 
     @overload
-    def __get__(self, instance: T, cls: type[T]) -> NameSpT: ...
+    def __get__[T](self, instance: T, cls: type[T]) -> NameSpT: ...
 
-    def __get__(self, instance: T | None, cls: type[T]) -> NameSpT | type[NameSpT]:
+    def __get__[T](self, instance: T | None, cls: type[T]) -> NameSpT | type[NameSpT]:
         if instance is None:
             return self._ns
 
@@ -159,7 +156,7 @@ def _check_namespace_signature(ns_class: type) -> None:
             raise TypeError(msg)
 
 
-def _create_namespace(
+def _create_namespace[NameSpT: ExtensionNamespace](
     name: str, cls: type[AnnData]
 ) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Register custom namespace against the underlying AnnData class."""
@@ -182,7 +179,7 @@ def _create_namespace(
     return namespace
 
 
-def register_anndata_namespace(
+def register_anndata_namespace[NameSpT: ExtensionNamespace](
     name: str,
 ) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Decorator for registering custom functionality with an :class:`~anndata.AnnData` object.

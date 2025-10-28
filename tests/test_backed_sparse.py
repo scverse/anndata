@@ -414,7 +414,7 @@ def test_lazy_array_cache(
         )
 
 
-Kind = Literal["slice", "int", "array", "mask"]
+type Kind = Literal["slice", "int", "array", "mask"]
 
 
 def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
@@ -446,7 +446,9 @@ def width_idx_kinds(
     *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
 ) -> Generator[ParameterSet, None, None]:
     """Convert major (first) index into various identical kinds of indexing."""
-    for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, get_args(Kind)):
+    for (idx_maj_raw, idx_min, exp), maj_kind in product(
+        idxs, get_args(Kind.__value__)
+    ):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
         id_ = "-".join(map(idify, [idx_maj_raw, idx_min, maj_kind]))
