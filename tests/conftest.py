@@ -118,11 +118,14 @@ def local_cluster_addr(
     # Adapted from https://pytest-xdist.readthedocs.io/en/latest/how-to.html#making-session-scoped-fixtures-execute-only-once
     import dask.distributed as dd
 
-    def make_cluster() -> dd.LocalCluster:
-        return dd.LocalCluster(n_workers=1, threads_per_worker=1)
+    def make_cluster(worker_id: str) -> dd.LocalCluster:
+        # If we're not using multiple pytest-xdist workers, let the cluster have multiple workers.
+        return dd.LocalCluster(
+            n_workers=1 if worker_id != "master" else 2, threads_per_worker=1
+        )
 
     if worker_id == "master":
-        with make_cluster() as cluster:
+        with make_cluster(worker_id) as cluster:
             yield cluster.scheduler_address
             return
 
@@ -138,7 +141,7 @@ def local_cluster_addr(
         yield address
         return
 
-    with make_cluster() as cluster:
+    with make_cluster(worker_id) as cluster:
         fn.write_text(cluster.scheduler_address)
         lock.release()
         yield cluster.scheduler_address
