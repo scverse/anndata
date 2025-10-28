@@ -63,7 +63,7 @@ jobs:
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
+        uses: astral-sh/setup-uv@v7 # TODO: upgrade once cirun image supports node 24
         with:
           enable-cache: true
           python-version: ${{ env.max_python_version }}
