@@ -741,7 +741,7 @@ def test_write_auto_sharded(tmp_path: Path):
 @pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_against_v2_format():
     with pytest.raises(ValueError, match=r"Cannot shard v2 data."):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_zarr_write_format=2):
+        with ad.settings.override(zarr_write_format=2):
             with ad.settings.override(auto_shard_zarr_v3=True):
                 pass
 
