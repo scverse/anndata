@@ -30,7 +30,7 @@ body:
       label: Report
       description: |
         Describe the bug you encountered, and what you were trying to do. Please use [github markdown][] features for readability.
-        Provide a reproducible code sample. Must list dependencies in [inline script metadata][]. When put in a file named `issue.py` calling `[uv run][] issue.py` should show the issue.
+        Provide a reproducible code sample. Must list dependencies in [inline script metadata][]. When put in a file named `issue.py` calling [uv run][] i.e., `uv run issue.py`, should show the issue.
 
         [uv run]: https://docs.astral.sh/uv/guides/scripts/#running-a-script-with-dependencies
         [inline script metadata]: https://packaging.python.org/en/latest/specifications/inline-script-metadata/#example
