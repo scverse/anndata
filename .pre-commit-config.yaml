@@ -40,7 +40,23 @@ repos:
         additional_dependencies:
           - tomli
 # See https://github.com/scverse/anndata/pull/2174
-#  - repo: https://github.com/pre-commit/mirrors-mypy
-#    rev: v1.18.2
-#    hooks:
-#      - id: mypy
+# Running `pre-commit run -a` gives the following error:
+# tests/conftest.py: error: Duplicate module named "conftest" (also at "./tests/lazy/conftest.py")
+# tests/conftest.py: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#mapping-file-paths-to-modules for more info
+# This seems to be the same failure we get on the prec-commit.ci
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml, .]
+        pass_filenames: false
+        additional_dependencies:
+          - pandas
+          - numpy
+          - scipy
+          - h5py
+          - natsort
+          - packaging
+          - array_api_compat
+          - legacy-api-wrap
+          - zarr
