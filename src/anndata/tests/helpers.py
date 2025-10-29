@@ -15,6 +15,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
@@ -45,7 +46,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from typing import Literal, TypeGuard
 
-    import zarr
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
@@ -1233,3 +1233,12 @@ def visititems_zarr(
             visititems_zarr(maybe_group, visitor)
         else:
             visitor(key, maybe_group)
+
+
+def check_all_sharded(g: ZarrGroup):
+    def visit(key: str, arr: zarr.Array | zarr.Group):
+        # Check for recarray via https://numpy.org/doc/stable/user/basics.rec.html#manipulating-and-displaying-structured-datatypes
+        if isinstance(arr, zarr.Array) and arr.shape != () and arr.dtype.names is None:
+            assert arr.shards is not None
+
+    visititems_zarr(g, visitor=visit)

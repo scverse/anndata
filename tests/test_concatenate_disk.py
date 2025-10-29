@@ -14,7 +14,7 @@ from anndata._core.merge import _resolve_axis
 from anndata.compat import is_zarr_v2
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, gen_adata, visititems_zarr
+from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -269,7 +269,7 @@ def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
         if isinstance(arr, zarr.Array) and arr.shape != ():
             assert arr.shards is not None
 
-    visititems_zarr(g, visitor=visit)
+    check_all_sharded(g)
 
 
 def test_output_dir_exists(tmp_path):

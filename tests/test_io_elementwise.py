@@ -28,6 +28,7 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
+    check_all_sharded,
     gen_adata,
     visititems_zarr,
 )
@@ -730,11 +731,7 @@ def test_write_auto_sharded(tmp_path: Path):
         with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
             adata.write_zarr(path)
 
-        def visitor(key: str, array: zarr.Array):
-            if len(array.chunks) and "recarray" not in key:
-                assert array.shards is not None, key
-
-        visititems_zarr(zarr.open(path), visitor)
+        check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
