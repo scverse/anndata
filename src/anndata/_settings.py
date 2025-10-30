@@ -4,7 +4,6 @@ import inspect
 import os
 import textwrap
 import warnings
-from collections import OrderedDict
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
@@ -135,13 +134,9 @@ For boolean environment variable setting, use 1 for `True` and 0 for `False`.
 
 @dataclass
 class SettingsManager:
-    _registered_options: OrderedDict[str, RegisteredOption] = field(
-        default_factory=OrderedDict
-    )
-    _deprecated_options: OrderedDict[str, DeprecatedOption] = field(
-        default_factory=OrderedDict
-    )
-    _config: OrderedDict[str, object] = field(default_factory=OrderedDict)
+    _registered_options: dict[str, RegisteredOption] = field(default_factory=dict)
+    _deprecated_options: dict[str, DeprecatedOption] = field(default_factory=dict)
+    _config: dict[str, object] = field(default_factory=dict)
     __doc_tmpl__: str = _docstring
 
     def describe(
@@ -477,8 +472,8 @@ settings.register(
 )
 
 
-def validate_sparse_settings(val: Any, remove_unused_categories: bool) -> None:  # noqa: FBT001
-    validate_bool(val, remove_unused_categories)
+def validate_sparse_settings(val: Any, settings: SettingsManager) -> None:
+    validate_bool(val, settings)
 
 
 settings.register(
