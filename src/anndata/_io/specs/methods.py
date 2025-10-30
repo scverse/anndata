@@ -518,6 +518,7 @@ def write_basic_dask_dask_dense(
     is_h5 = isinstance(f, H5Group)
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
     if is_zarr_v2() or is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:

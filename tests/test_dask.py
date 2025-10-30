@@ -117,7 +117,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
 @pytest.mark.dask_distributed
 @pytest.mark.parametrize(
     "auto_shard_zarr_v3",
-    [True, False],
+    [pytest.param(True, id="shard"), pytest.param(False, id="no-shard")],
 )
 def test_dask_distributed_write(
     adata: AnnData,
