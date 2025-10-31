@@ -21,7 +21,7 @@ jobs:
           python-version: ${{ env.max_python_version }}
       - name: Install mypy
         run: |
-          pip install mypy
+          pip install 'mypy @ https://github.com/python/mypy.git'
       - name: Run mypy
         run: |
           mypy --show-traceback src
