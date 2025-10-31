@@ -7,7 +7,7 @@ import zarr
 from dask.array.core import Array as DaskArray
 from scipy import sparse
 
-from anndata import AnnData
+from anndata import AnnData, concat
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs import write_elem
 from anndata.experimental import read_elem_lazy
@@ -77,3 +77,34 @@ class SparseCSRContiguousSlice:
         res = self.adata[self.index]
         if isinstance(res, DaskArray):
             res.compute()
+
+
+class SparseCSRDask:
+    filepath = "data.zarr"
+
+    def setup_cache(self):
+        X = sparse.random(
+            10_000,
+            10_000,
+            density=0.01,
+            format="csr",
+            random_state=np.random.default_rng(42),
+        )
+        g = zarr.group(self.filepath)
+        write_elem(g, "X", X)
+
+    def setup(self):
+        self.group = zarr.group(self.filepath)
+        self.adata = AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def time_concat(self):
+        concat([self.adata for i in range(100)])
+
+    def peakmem_concat(self):
+        concat([self.adata for i in range(100)])
+
+    def time_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
+
+    def peakmem_read(self):
+        AnnData(X=read_elem_lazy(self.group["X"]))
