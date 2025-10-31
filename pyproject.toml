@@ -12,9 +12,9 @@ authors = [
     { name = "Alex Wolf" },
     { name = "Isaac Virshup" },
     { name = "Sergei Rybakov" },
+    { name = "Ilan Gold" },
 ]
 maintainers = [
-    { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
     { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
