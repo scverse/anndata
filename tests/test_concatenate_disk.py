@@ -24,7 +24,6 @@ with suppress(ImportError):
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Literal
 
     from anndata._types import Join_T
 
