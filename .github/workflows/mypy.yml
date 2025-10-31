@@ -23,4 +23,4 @@ jobs:
           pip install mypy
       - name: Run mypy
         run: |
-          mypy src
+          mypy --show-traceback src
