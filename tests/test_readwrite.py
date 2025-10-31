@@ -675,6 +675,7 @@ if jnp is not None:
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
+@pytest.mark.parametrize("xp", XP)
 def test_readwrite_empty(read, write, name, tmp_path, xp):
     # JAX arrays are not not directly serializable by h5py
     raw_array = xp.array([], dtype=float)
