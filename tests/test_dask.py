@@ -4,14 +4,12 @@ For tests using dask
 
 from __future__ import annotations
 
-from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -27,6 +25,7 @@ from anndata.tests.helpers import (
     as_sparse_dask_array,
     as_sparse_dask_matrix,
     assert_equal,
+    check_all_sharded,
     gen_adata,
 )
 
@@ -116,12 +115,20 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
 @pytest.mark.xdist_group("dask")
 @pytest.mark.dask_distributed
+@pytest.mark.parametrize(
+    "auto_shard_zarr_v3",
+    [pytest.param(True, id="shard"), pytest.param(False, id="no-shard")],
+)
 def test_dask_distributed_write(
     adata: AnnData,
     tmp_path: Path,
     diskfmt: Literal["h5ad", "zarr"],
     local_cluster_addr: str,
+    *,
+    auto_shard_zarr_v3: bool,
 ) -> None:
+    if auto_shard_zarr_v3 and ad.settings.zarr_write_format == 2:
+        pytest.skip(reason="Cannot shard v2 data")
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
@@ -135,20 +142,12 @@ def test_dask_distributed_write(
         adata.obsm["b"] = da.random.random((M, 10))
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
-        is_h5 = diskfmt == "h5ad"
-        is_corrupted_dask = Version(version("dask")) < Version("2025.4.0")
-        if is_corrupted_dask or is_h5:
-            with pytest.raises(
-                ValueError if is_h5 else RuntimeError,
-                match=r"Cannot write dask arrays to hdf5"
-                if is_h5
-                else r"Writing dense data with a distributed scheduler to zarr",
-            ):
-                ad.io.write_elem(g, "", orig)
-            return
-        ad.io.write_elem(g, "", orig)
+        with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
+            ad.io.write_elem(g, "", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         g = as_group(pth, mode="r")
+        if auto_shard_zarr_v3:
+            check_all_sharded(g)
         curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
