@@ -35,7 +35,8 @@ overrides.matrix.deps.pre-install-commands = [
 ]
 overrides.matrix.deps.python = [
     { if = [ "min" ], value = "3.12" },
-    { if = [ "stable", "pre" ], value = "3.13" },
+    { if = [ "stable" ], value = "3.13" }, # transitive test dep numba doesn’t support 3.14
+    { if = [ "pre" ], value = "3.14" },
 ]
 overrides.matrix.deps.features = [
     { if = [ "stable", "pre" ], value = "test" },

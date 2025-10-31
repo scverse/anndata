@@ -31,6 +31,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -92,8 +93,8 @@ test-min = [
     # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
-    "awkward>=2.6.3",
-    "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
+    "awkward>=2.8.6",
+    "pyarrow",
     "anndata[dask]",
 ]
 test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
