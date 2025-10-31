@@ -44,7 +44,8 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
-    from typing import Any, Literal, TypeGuard, TypeVar
+    from typing import Any, Literal, TypeGuard
+
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
