@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from functools import partial
 
 import joblib
@@ -11,6 +12,10 @@ from scipy import sparse
 from anndata import AnnData
 from anndata.compat import CupyArray
 from anndata.tests.helpers import as_cupy, get_multiindex_columns_df
+
+jnp = None
+with suppress(ImportError):
+    import jax.numpy as jnp
 
 M, N = (100, 100)
 
@@ -144,12 +149,8 @@ def test_setting_daskarray(adata: AnnData):
     assert h == joblib.hash(adata)
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_setting_jax(adata: AnnData):
-    from contextlib import suppress
-
-    with suppress(ImportError):
-        import jax.numpy as jnp
-
     adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
     assert isinstance(adata.obsm["jax"], jnp.ndarray)
 

@@ -30,34 +30,11 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import axis_len
 
+jax = None
+jnp = None
 with suppress(ImportError):
     import jax
     import jax.numpy as jnp
-
-# Testing to see if all error types can have the key name appended.
-# Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
-#
-# @singledispatch
-# def iswarning(x):
-#     return iswarning(type(x))
-
-# @iswarning.register(type)
-# def _notwarning(x):
-#     return False
-
-# @iswarning.register(Warning)
-# def _iswarning(x):
-#     return True
-
-# @pytest.mark.parametrize("exception", list(filter(lambda t: not iswarning(t), Exception.__subclasses__())))
-# def test_report_name_types(exception):
-#     def throw(e):
-#         raise e()
-#     tag = "".join(np.random.permutation(list(ascii_letters)))
-
-#     with pytest.raises(exception) as err:
-#         report_name(throw)(exception, _elem_name=tag)
-#     assert tag in str(err.value)
 
 
 @pytest.fixture
@@ -122,6 +99,7 @@ def test_report_name():
 
 
 @pytest.fixture
+@pytest.mark.skipif(jax is None, reason="JAX not installed")
 def enable_jax_float64() -> None:
     # Explicit conversion to JAX float64
     jax.config.update("jax_enable_x64", True)  # noqa: FBT003
@@ -336,6 +314,7 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
 
 
+@pytest.mark.skipif(jax is None, reason="JAX not installed")
 def test_gen_adata_jax_backend():
     adata = gen_adata(
         (5, 5),
@@ -348,6 +327,7 @@ def test_gen_adata_jax_backend():
     assert adata.X.dtype == jnp.float32
 
 
+@pytest.mark.skipif(jax is None, reason="JAX not installed")
 def test_gen_adata_jax_subfields():
     adata = gen_adata(
         (5, 5),

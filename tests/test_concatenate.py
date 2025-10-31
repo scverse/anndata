@@ -40,6 +40,7 @@ from anndata.utils import asarray
 
 JaxArray = None
 jax = None
+jnp = None
 with suppress(ImportError):
     import jax.numpy as jnp
     from jaxlib._jax import ArrayImpl as JaxArray
@@ -371,7 +372,7 @@ def test_concatenate_dense():
 
 @mark_legacy_concatenate
 def test_concatenate_layers(array_type, join_type):
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
@@ -539,7 +540,7 @@ def test_concat_annot_join(obsm_adatas, join_type):
 
 @mark_legacy_concatenate
 def test_concatenate_layers_misaligned(array_type, join_type):
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
@@ -557,7 +558,7 @@ def test_concatenate_layers_misaligned(array_type, join_type):
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
 
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices via `asarray()`")
 
     a = AnnData(
@@ -919,7 +920,7 @@ def test_awkward_does_not_mix(join_type, other):
 
 
 def test_pairwise_concat(axis_name, array_type):
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices to arrays")
     axis, axis_name = merge._resolve_axis(axis_name)
     _, alt_axis_name = merge._resolve_axis(1 - axis)
@@ -979,7 +980,7 @@ def test_pairwise_concat(axis_name, array_type):
 
 
 def test_nan_merge(axis_name, join_type, array_type):
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices")
 
     axis, _ = merge._resolve_axis(axis_name)
@@ -1697,7 +1698,7 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     import anndata as ad
 
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
 
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
@@ -1833,7 +1834,7 @@ def test_error_on_mixed_device():
 
 def test_concat_on_var_outer_join(array_type):
     # https://github.com/scverse/anndata/issues/1286
-    if array_type is jnp.asarray:
+    if jnp is not None and array_type is jnp.asarray:
         pytest.xfail("concat across different array backends is not supported")
 
     a = AnnData(

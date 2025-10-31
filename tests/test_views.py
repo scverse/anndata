@@ -38,6 +38,8 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
+jnp = None
+jax = None
 with suppress(ImportError):
     import jax.numpy as jnp
 
@@ -337,7 +339,7 @@ def test_set_varm(adata):
 def test_not_set_subset_X(matrix_type_base, subset_func):
     adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
 
-    if isinstance(adata.X, jnp.ndarray):
+    if jnp is not None and isinstance(adata.X, jnp.ndarray):
         msg = "JAX arrays do not support in-place mutation."
         pytest.xfail(msg)
 
@@ -369,7 +371,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
-    if isinstance(adata.X, jnp.ndarray):
+    if jnp is not None and isinstance(adata.X, jnp.ndarray):
         msg = "JAX does not support in-place mutation, so this test is irrelevant."
         pytest.skip(msg)
     init_hash = tokenize(adata)
@@ -862,9 +864,8 @@ def test_index_float_sequence_raises_error(index):
         gen_adata((10, 10))[index]
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_jax_indexer():
-    import jax.numpy as jnp
-
     index = np.array([0, 3, 6])
     index_jax = jnp.array(index)
     adata = gen_adata((10, 10))
@@ -896,17 +897,15 @@ def test_jax_indexer():
         "mixed-array-type",
     ],
 )
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_index_into_jax(index):
-    import jax.numpy as jnp
-
     adata = ad.AnnData(X=np.ones((10, 10)))
     adata_as_jax = ad.AnnData(X=jnp.ones((10, 10)))
     assert_equal(adata[index], adata_as_jax[index])
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_normalize_index_jax_boolean():
-    import jax.numpy as jnp
-
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     mask = jnp.array([True, False, True, False, True, False, True, False, True, False])
     out = _normalize_index(mask, index)
@@ -914,18 +913,16 @@ def test_normalize_index_jax_boolean():
     assert out.dtype == jnp.bool_
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_normalize_index_jax_float_valid():
-    import jax.numpy as jnp
-
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     idx = jnp.array([0, 2, 4])
     out = _normalize_index(idx, index)
     assert (out == jnp.array([0, 2, 4])).all()
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_normalize_index_jax_flatten_2d():
-    import jax.numpy as jnp
-
     index = pd.Index([f"cell_{i}" for i in range(5)])
 
     # column vector (5,1)
@@ -943,9 +940,8 @@ def test_normalize_index_jax_flatten_2d():
     assert (out_row == jnp.array([0, 1, 2, 3, 4])).all()
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_double_index_jax(subset_func, subset_func2):
-    import jax.numpy as jnp
-
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), array_namespace="jax")
     obs_subset = jnp.array([0, 2, 4, 6])
