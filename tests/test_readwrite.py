@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
+from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -32,9 +33,17 @@ from anndata.compat import (
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
+    as_dense_jax_array,
     assert_equal,
     gen_adata,
 )
+
+jax = None
+jnp = None
+
+with suppress(ImportError):
+    import jax
+    import jax.numpy as jnp
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -119,8 +128,21 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+TYPES = [np.array, csr_matrix, csr_array, as_dense_dask_array]
+if jax is not None:
+    TYPES.append(as_dense_jax_array)
+
+
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
+    if typ is as_dense_jax_array:
+        if diskfmt == "h5ad":
+            pytest.xfail("JAX arrays cannot be written to .h5ad via h5py")
+        if diskfmt == "zarr":
+            pytest.xfail(
+                "zarr3 doesn't natively provide direct support for JAX arrays."
+            )
+
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
@@ -159,8 +181,13 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+    if typ is as_dense_jax_array:
+        if storage == "zarr":
+            pytest.xfail("Zarr I/O does not support .raw containing JAX arrays")
+        elif storage == "h5ad":
+            pytest.xfail("h5ad I/O does not support .raw containing JAX arrays")
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -205,8 +232,12 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+    if typ is as_dense_jax_array:
+        pytest.xfail(
+            "h5py cannot preserve dtype of JAX arrays because they cannot be written"
+        )
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
@@ -249,8 +280,11 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_backed(typ, backing_h5ad):
+    if typ.__name__ == "as_dense_jax_array":
+        pytest.xfail("JAX arrays are not supported in backed HDF5 mode.")
+
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -264,14 +298,21 @@ def test_readwrite_backed(typ, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
-)
+TYPES_h5ad_zarr = [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+if jnp is not None:
+    TYPES_h5ad_zarr.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_h5ad_zarr)
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+    if typ.__module__.startswith("jax"):
+        pytest.xfail("JAX arrays cannot be written to .h5ad via h5py")
+
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
+    print(f"Running test with X_type = {typ.__module__}.{typ.__name__}")
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
@@ -451,6 +492,111 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
+TYPES_loom = [np.array, csr_matrix]
+if jnp is not None:
+    TYPES_loom.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_loom)
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
+@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
+def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
+    X = typ(X_list)
+
+    if isinstance(X, jnp.ndarray):
+        pytest.xfail("JAX arrays cannot be written to .loom")
+
+    obs_dim = "meaningful_obs_dim_name"
+    var_dim = "meaningful_var_dim_name"
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.obs_names.name = obs_dim
+    adata_src.var_names.name = var_dim
+    adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
+    adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        # loompy uses “is” for ints
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
+
+    adata = ad.io.read_loom(
+        tmp_path / "test.loom",
+        sparse=typ is csr_matrix,
+        obsm_mapping=obsm_mapping,
+        obs_names=obs_dim,
+        varm_mapping=varm_mapping,
+        var_names=var_dim,
+        cleanup=True,
+    )
+
+    if isinstance(X, np.ndarray):
+        assert np.allclose(adata.X, X)
+    else:
+        # TODO: this should not be necessary
+        assert np.allclose(adata.X.toarray(), X.toarray())
+    assert "X_a" in adata.obsm
+    assert adata.obsm["X_a"].shape[1] == 2
+    assert "X_b" in adata.varm
+    assert adata.varm["X_b"].shape[1] == 3
+    # as we called with `cleanup=True`
+    assert "oanno1b" in adata.uns["loom-obs"]
+    assert "vanno2" in adata.uns["loom-var"]
+    for k, v in obsm_mapping.items():
+        assert k in adata.obsm
+        assert adata.obsm[k].shape[1] == len(v)
+    for k, v in varm_mapping.items():
+        assert k in adata.varm
+        assert adata.varm[k].shape[1] == len(v)
+    assert adata.obs_names.name == obs_dim
+    assert adata.var_names.name == var_dim
+
+
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+def test_readloom_deprecations(tmp_path):
+    loom_pth = tmp_path / "test.loom"
+    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    # obsm_names -> obsm_mapping
+    obsm_mapping = {"df": adata_src.obs.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
+        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
+
+    # varm_names -> varm_mapping
+    varm_mapping = {"df": adata_src.var.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
+        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
+
+    # positional -> keyword
+    with pytest.warns(FutureWarning, match=r"sparse"):
+        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
+    actual_result = ad.io.read_loom(loom_pth, sparse=True)
+    assert type(depr_result.X) == type(actual_result.X)
+
+
 def test_read_csv():
     adata = ad.io.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
@@ -473,14 +619,19 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+TYPES_CSV = [np.array, csr_matrix]
+if jnp is not None:
+    TYPES_CSV.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_CSV)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", TYPES_CSV)
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
@@ -512,6 +663,11 @@ def test_write_csv_view(typ, tmp_path):
     assert hash_dir_contents(view_pth) == hash_dir_contents(copy_pth)
 
 
+XP = [np]
+if jnp is not None:
+    XP.append(jnp)
+
+
 @pytest.mark.parametrize(
     ("read", "write", "name"),
     [
@@ -519,10 +675,22 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize("xp", XP)
+def test_readwrite_empty(read, write, name, tmp_path, xp):
+    # JAX arrays are not not directly serializable by h5py
+    raw_array = xp.array([], dtype=float)
+    # convert array to numpy to make it serializable
+    if isinstance(raw_array, np.ndarray):
+        empty_arr = raw_array
+    elif hasattr(raw_array, "__dlpack__"):
+        empty_arr = np.from_dlpack(raw_array)
+    else:
+        empty_arr = np.asarray(raw_array)
+
+    adata = ad.AnnData(uns=dict(empty=empty_arr))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
+    assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
 
@@ -603,10 +771,14 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
         getattr(to_write, f"write_{diskfmt}")(adata_pth)
 
 
-def test_write_large_categorical(tmp_path, diskfmt):
+@pytest.mark.parametrize("xp", [np, jnp])  # xp = array namespace
+def test_write_large_categorical(tmp_path, diskfmt, xp):
+    if xp is jnp:
+        pytest.xfail("JAX does not support string/categorical arrays.")
+
     M = 30_000
     N = 1000
-    ls = np.array(list(ascii_letters))
+    ls = xp.array(list(ascii_letters))
 
     def random_cats(n):
         cats = {
@@ -617,14 +789,14 @@ def test_write_large_categorical(tmp_path, diskfmt):
             cats |= random_cats(n - len(cats))
         return cats
 
-    cats = np.array(sorted(random_cats(10_000)))
+    cats = xp.array(sorted(random_cats(10_000)))
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
         csr_matrix(([1], ([0], [0])), shape=(M, N)),
         obs=dict(
             cat1=cats[np.random.choice(n_cats, M)],
-            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
+            cat2=pd.Categorical.from_codes(xp.random.choice(n_cats, M), cats),
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)

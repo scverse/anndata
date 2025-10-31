@@ -44,7 +44,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
-    from typing import Literal, TypeGuard
+    from typing import Any, Literal, TypeGuard
 
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
@@ -64,6 +64,19 @@ except ImportError:
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
 
+# jax extension
+from contextlib import suppress
+
+# Enable DLPack interop for JAX, CuPy, etc., only if installed
+with suppress(ImportError):
+    import jax
+    import jax.dlpack
+    import jax.numpy as jnp
+
+    # Enable JAX to use 64-bit floats by default
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+
+# handle fast-array-utils presence for dask sparray support
 try:
     import fast_array_utils as _
 except ImportError:
@@ -103,6 +116,13 @@ GEN_ADATA_DASK_ARGS = dict(
 GEN_ADATA_NO_XARRAY_ARGS = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
+
+# default array API registry cubed is commented out for now, since it is not yet implemented
+ARRAY_API_REGISTRY = {
+    "numpy": lambda: np,
+    "jax": lambda: jnp,
+    # "cubed": lambda: __import__("cubed.array_api", fromlist=[""]),
+}
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -279,15 +299,61 @@ def maybe_add_sparse_array(
     return mapping
 
 
+# fixing the ndarray issue
+def _is_sparse_like(x):
+    try:
+        import scipy.sparse as sp
+
+        return sp.issparse(x)
+    except ImportError:
+        return False
+
+
+def _is_array_api_dense(x):
+    """Check if x is a dense array-API array."""
+    if isinstance(x, np.ndarray):
+        return True
+    # ignore DataFrame/Series and scipy.sparse
+    if isinstance(x, pd.DataFrame | pd.Series) or _is_sparse_like(x):
+        return False
+    try:
+        import array_api_compat as aac
+
+        # Treat ONLY JAX/CuPy dense arrays as np.ndarray-equivalents.
+        # Excluding Dask or Awkward in here
+        return aac.is_jax_array(x) or aac.is_cupy_array(x)
+    except ImportError:
+        return False
+
+
+def _keep_for_types(val, allowed_types):
+    # exact type allowed
+    if type(val) in allowed_types:
+        return True
+    # if np.ndarray is allowed, also accept any array-API dense array
+    return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
+
+
 # TODO: Use hypothesis for this?
-def gen_adata(  # noqa: PLR0913
+def gen_adata(  # noqa: PLR0915, PLR0913, PLR0912
     shape: tuple[int, int],
-    X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
+    # X_type: Callable[[np.ndarray], object] = sparse.csr_matrix, = both are on CPU
+    X_type: Callable[[Any], object] | None = None,
     *,
-    X_dtype: np.dtype = np.float32,
+    # by default using numpy, but can be set to jax or cubed
+    # TODO: have a way to handle it better
+    array_namespace: str = "numpy",
+    # X_dtype: np.dtype = np.float32,
+    # so it is not being manually defaulted to numpy from the function signature
+    X_dtype: type | None = None,
+    # testing just to see if it is a better way to not share memory and just generate copies instead
+    copy: bool = True,
+    # controlling column types for obs and var
+    # numpy + pandas only construct
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
+    # numpy + pandas only construct
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
@@ -296,6 +362,7 @@ def gen_adata(  # noqa: PLR0913
     obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
+    # numpy specific
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
 ) -> AnnData:
@@ -330,6 +397,35 @@ def gen_adata(  # noqa: PLR0913
     if random_state is None:
         random_state = np.random.default_rng()
 
+    if X_type is not None:
+        mod = getattr(X_type, "__module__", "")
+        if mod.startswith("jax"):
+            array_namespace = "jax"
+        elif "cupy" in mod:
+            array_namespace = "cupy"
+        elif "cubed" in mod:
+            # for future
+            array_namespace = "cubed"
+    # else:
+    #     array_namespace = "numpy"  # fallback
+
+    # actual code to get the array namespace
+    try:
+        xp = ARRAY_API_REGISTRY[array_namespace]()
+    except KeyError as err:
+        msg = (
+            f"Unsupported array namespace: {array_namespace!r}. "
+            f"Supported: {list(ARRAY_API_REGISTRY)}"
+        )
+        raise ValueError(msg) from err
+
+    # print(f"Generating AnnData with array backend: {array_namespace} ({xp.__name__})")
+
+    # rewriting to an appropriate xp dtype if X_dtype is None
+    # note - keep it for now, but then expose it later when testing it
+    if X_dtype is None:
+        X_dtype = xp.float64
+
     M, N = shape
     obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
     var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
@@ -345,20 +441,31 @@ def gen_adata(  # noqa: PLR0913
         if var_xdataset:
             var = XDataset.from_dataframe(var)
 
-    if X_type is None:
-        X = None
-    else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+    # splitting this numpy method out as cubed does not have an equivalent but jax does
+    arr = random_state.binomial(100, 0.005, (M, N))
+    # converting to the appropriate array type
+    arr_xp = xp.asarray(arr, dtype=X_dtype)
 
+    if X_type is not None:
+        X = X_type(arr_xp)
+    elif array_namespace == "jax":
+        X = arr_xp
+    else:
+        X = sparse.csr_matrix(arr_xp)
+
+    # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
-        array=np.random.random((M, 50)),
+        # array=np.random.random((M, 50)),
+        # random_state.random to not interfere with other test code or modules
+        array=xp.asarray(random_state.random((M, 50)), dtype=X_dtype),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     varm = dict(
-        array=np.random.random((N, 50)),
+        # array=np.random.random((N, 50)),
+        array=xp.asarray(random_state.random((N, 50)), dtype=X_dtype),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -371,7 +478,8 @@ def gen_adata(  # noqa: PLR0913
         varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    # obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = {k: v for k, v in obsm.items() if _keep_for_types(v, obsm_types)}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
         types=obsm_types,
@@ -379,7 +487,8 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, 100),
     )
-    varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    # varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    varm = {k: v for k, v in varm.items() if _keep_for_types(v, varm_types)}
     varm = maybe_add_sparse_array(
         mapping=varm,
         types=varm_types,
@@ -388,7 +497,8 @@ def gen_adata(  # noqa: PLR0913
         shape=(N, 100),
     )
     layers = dict(
-        array=np.random.random((M, N)),
+        # array=np.random.random((M, N)),
+        array=xp.asarray(random_state.random((M, N)), dtype=X_dtype),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -399,16 +509,19 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, N),
     )
-    layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    # layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    layers = {k: v for k, v in layers.items() if _keep_for_types(v, layers_types)}
     obsp = dict(
-        array=np.random.random((M, M)),
+        # array=np.random.random((M, M)),
+        array=xp.asarray(random_state.random((M, M)), dtype=X_dtype),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
         sparse.random(M, M, format=sparse_fmt, random_state=random_state)
     )
     varp = dict(
-        array=np.random.random((N, N)),
+        # array=np.random.random((N, N)),
+        array=xp.asarray(random_state.random((N, N)), dtype=X_dtype),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(
@@ -420,7 +533,7 @@ def gen_adata(  # noqa: PLR0913
             scalar_str="str",
             scalar_int=42,
             scalar_float=3.0,
-            nested_further=dict(array=np.arange(5)),
+            nested_further=dict(array=xp.arange(5)),
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
@@ -584,16 +697,27 @@ def report_name(func):
 
 
 @report_name
-def _assert_equal(a, b):
+def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    assert a == b
+    from array_api_compat import get_namespace
+
+    try:
+        xp = get_namespace(a)
+
+        if exact:
+            assert xp.all(a == b)
+        else:
+            # for padding with NaN
+            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
+    except TypeError:
+        assert a == b
 
 
 @singledispatch
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    _assert_equal(a, b, _elem_name=elem_name)
+    _assert_equal(a, b, exact, _elem_name=elem_name)
 
 
 @assert_equal.register(CupyArray)
@@ -883,6 +1007,22 @@ def _(a):
 
 
 @singledispatch
+def as_dense_jax_array(a):
+    # for cases where jax does not support sparse arrays
+    return jnp.asarray(asarray(a))
+
+
+@as_dense_jax_array.register(CSMatrix)
+def _(a):
+    return jnp.array(a.toarray())
+
+
+@as_dense_jax_array.register(DaskArray)
+def _(a):
+    return jnp.array(a.compute())  # fallback for lazy arrays
+
+
+@singledispatch
 def _as_sparse_dask(
     a: NDArray | CSArray | CSMatrix | DaskArray,
     *,
@@ -1084,6 +1224,11 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]
+
+with suppress(ImportError):
+    import jax.numpy as jnp
+
+    BASE_MATRIX_PARAMS.append(pytest.param(jnp.asarray, id="jax_array"))
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),

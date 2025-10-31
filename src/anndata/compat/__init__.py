@@ -13,6 +13,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
+from array_api_compat import get_namespace as array_api_get_namespace
 from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
@@ -425,3 +426,19 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
+    if Version(pd.__version__) >= Version("2.1"):
+        # Argument added in pandas 2.1
+        return cat.map(str, na_action="ignore")
+    else:
+        return cat.map(str)
+
+
+def has_xp(mod):
+    try:
+        array_api_get_namespace(mod)
+        return True
+    except TypeError:
+        return False
