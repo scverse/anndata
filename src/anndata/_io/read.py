@@ -16,6 +16,7 @@ from scipy import sparse
 
 from .. import AnnData
 from ..compat import old_positionals
+from ..utils import deprecated
 from .utils import is_float
 
 if TYPE_CHECKING:
@@ -156,6 +157,10 @@ def _fmt_loom_axis_attrs(
     return axis_df, axis_mapping
 
 
+@deprecated(
+    "{write,read}_h5ad",
+    add_msg="Loom isn’t well-maintained and supports only a subset of anndata features.",
+)
 @old_positionals(
     "sparse",
     "cleanup",

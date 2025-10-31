@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.machinery
 import os
 import re
 import types
@@ -31,7 +31,7 @@ description_3 = "My doc string 3!"
 type_3 = list[int]
 
 
-def validate_int_list(val) -> bool:
+def validate_int_list(val: list, settings: SettingsManager) -> bool:
     if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
         msg = f"{val!r} is not a valid int list"
         raise TypeError(msg)
@@ -278,4 +278,5 @@ def test_hints():
         if not settings_key.startswith("_"):
             assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
     for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
-        assert hasattr(settings, settings_key)
+        if not settings_key.startswith("__"):
+            assert hasattr(settings, settings_key)

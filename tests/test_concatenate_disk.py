@@ -9,12 +9,13 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from anndata import AnnData, concat
+from anndata import AnnData, concat, settings
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
+from anndata.compat import is_zarr_v2
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, gen_adata
+from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
 from anndata.utils import asarray
 
 with suppress(ImportError):
@@ -23,6 +24,8 @@ with suppress(ImportError):
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
+
+    from anndata._types import Join_T
 
 
 GEN_ADATA_OOC_CONCAT_ARGS = dict(
@@ -130,7 +133,7 @@ def test_anndatas(
     *,
     axis: Literal[0, 1],
     array_type: Literal["array", "sparse", "sparse_array", "jax_array"],
-    join_type: Literal["inner", "outer"],
+    join_type: Join_T,
     tmp_path: Path,
     max_loaded_elems: int,
     file_format: Literal["zarr", "h5ad"],
@@ -246,7 +249,7 @@ def xxxm_adatas():
             X=sparse.csr_matrix((2, 100)),
             obs=pd.DataFrame(index=gen_index(2)),
             obsm={
-                "sparse": np.arange(8).reshape(2, 4),
+                "sparse": sparse.csr_matrix(np.arange(8).reshape(2, 4)),
                 "dense": np.arange(4, 8).reshape(2, 2),
                 "df": pd.DataFrame(
                     {
@@ -267,6 +270,22 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
             xxxm_adatas[i] = xxxm_adatas[i].T
             xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
+
+
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
+    import zarr
+
+    with settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+        assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
+    g = zarr.open(tmp_path)
+    assert g.metadata.zarr_format == 3
+
+    def visit(key: str, arr: zarr.Array | zarr.Group):
+        if isinstance(arr, zarr.Array) and arr.shape != ():
+            assert arr.shards is not None
+
+    check_all_sharded(g)
 
 
 def test_output_dir_exists(tmp_path):
