@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from anndata._types import Read, StorageType
 
 
+ANNDATA_ELEMS: tuple[AnnDataElem, ...] = typing.get_args(AnnDataElem.__value__)
+
+
 @doctest_needs("xarray")
 @requires_xarray
 def read_lazy(
@@ -114,13 +117,11 @@ def read_lazy(
             iter_object = (
                 dict(elem).items()
                 if has_keys
-                else (
+                else tuple(
                     (k, v)
-                    for k, v in (
-                        (k, elem.get(k, None)) for k in typing.get_args(AnnDataElem)
-                    )
-                    if v
-                    is not None  # need to do this instead of `k in elem` to prevent unnecessary metadata accesses
+                    for k, v in ((k, elem.get(k, None)) for k in ANNDATA_ELEMS)
+                    # need to do this instead of `k in elem` to prevent unnecessary metadata accesses
+                    if v is not None
                 )
             )
             return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})

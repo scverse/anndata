@@ -4,7 +4,7 @@ import re
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 from warnings import warn
 
 import h5py
@@ -41,8 +41,6 @@ if TYPE_CHECKING:
 
     from .._core.file_backing import AnnDataFileManager
     from .._core.raw import Raw
-
-T = TypeVar("T")
 
 
 @no_write_dataset_2d

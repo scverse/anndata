@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -38,12 +38,8 @@ TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
 Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
-P = TypeVar("P", bound="AlignedMappingBase")
-"""Parent mapping an AlignedView is based on."""
-I = TypeVar("I", OneDIdx, TwoDIdx)
 
-
-class AlignedMappingBase(MutableMapping[str, Value], ABC):
+class AlignedMappingBase[I: OneDIdx](MutableMapping[str, Value], ABC):
     """\
     An abstract base class for Mappings containing array-like values aligned
     to either one or both AnnData axes.
@@ -135,7 +131,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         return dict(self)
 
 
-class AlignedView(AlignedMappingBase, Generic[P, I]):
+class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx)](AlignedMappingBase):
     is_view: ClassVar[Literal[True]] = True
 
     # override docstring
@@ -151,7 +147,7 @@ class AlignedView(AlignedMappingBase, Generic[P, I]):
     subset_idx: I
     """The subset of the parent to view."""
 
-    def __init__(self, parent_mapping: P, parent_view: AnnData, subset_idx: I):
+    def __init__(self, parent_mapping: P, parent_view: AnnData, subset_idx: I) -> None:
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
@@ -381,7 +377,7 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
-AlignedMapping = (
+type AlignedMapping = (
     AxisArrays
     | AxisArraysView
     | Layers
@@ -389,12 +385,11 @@ AlignedMapping = (
     | PairwiseArrays
     | PairwiseArraysView
 )
-T = TypeVar("T", bound=AlignedMapping)
 """Pair of types to be aligned."""
 
 
 @dataclass
-class AlignedMappingProperty(property, Generic[T]):
+class AlignedMappingProperty[T: AlignedMapping](property):
     """A :class:`property` that creates an ephemeral AlignedMapping.
 
     The actual data is stored as `f'_{self.name}'` in the parent object.

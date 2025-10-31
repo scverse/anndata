@@ -11,6 +11,7 @@ import zarr
 from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
+from anndata.experimental.backed._io import ANNDATA_ELEMS
 from anndata.io import write_elem
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -19,8 +20,6 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_typed_df,
 )
-
-from .conftest import ANNDATA_ELEMS
 
 if TYPE_CHECKING:
     from collections.abc import Callable

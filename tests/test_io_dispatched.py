@@ -12,10 +12,14 @@ import anndata as ad
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    visititems_zarr,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
     from typing import Literal
 
@@ -180,18 +184,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
     if is_zarr_v2():
         z.visititems(check_chunking)
     else:
-
-        def visititems(
-            z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
-        ) -> None:
-            for key in z:
-                maybe_group = z[key]
-                if isinstance(maybe_group, ZarrGroup):
-                    visititems(maybe_group, visitor)
-                else:
-                    visitor(key, maybe_group)
-
-        visititems(z, check_chunking)
+        visititems_zarr(z, check_chunking)
 
 
 @pytest.mark.zarr_io
