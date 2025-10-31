@@ -105,7 +105,7 @@ def enable_jax_float64() -> None:
     jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
-def test_assert_equal(enable_jax_float64):
+def test_assert_equal():
     # ndarrays
     assert_equal(np.ones((10, 10)), np.ones((10, 10)))
     assert_equal(  # Should this require an exact test?
