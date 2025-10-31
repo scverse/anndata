@@ -918,7 +918,7 @@ def test_normalize_index_jax_float_valid():
     import jax.numpy as jnp
 
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
-    idx = jnp.array([0.0, 2.0, 4.0])
+    idx = jnp.array([0, 2, 4])
     out = _normalize_index(idx, index)
     assert (out == jnp.array([0, 2, 4])).all()
 

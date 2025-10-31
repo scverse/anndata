@@ -330,6 +330,7 @@ def test_dask_to_disk_view(
 ) -> None:
     from contextlib import suppress
 
+    jax = None
     with suppress(ImportError):
         import jax
 
@@ -340,7 +341,7 @@ def test_dask_to_disk_view(
     orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]
     path = tmp_path / f"test.{diskfmt}"
-    if isinstance(orig.X, jax.Array):
+    if jax is not None and isinstance(orig.X, jax.Array):
         pytest.xfail("JAX arrays aren’t supported for h5ad or zarr writes yet")
     getattr(orig, f"write_{diskfmt}")(path)
     roundtrip = getattr(ad.io, f"read_{diskfmt}")(path)

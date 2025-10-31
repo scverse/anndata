@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from boltons.iterutils import default_exit, remap, research
-from jaxlib._jax import ArrayImpl as JaxArray
 from numpy import ma
 from packaging.version import Version
 from scipy import sparse
@@ -41,6 +40,7 @@ from anndata.utils import asarray
 
 with suppress(ImportError):
     import jax.numpy as jnp
+    from jaxlib._jax import ArrayImpl as JaxArray
 
 if TYPE_CHECKING:
     from collections.abc import Callable

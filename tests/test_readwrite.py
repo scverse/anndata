@@ -38,7 +38,11 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 
+jax = None
+jnp = None
+
 with suppress(ImportError):
+    import jax
     import jax.numpy as jnp
 
 if TYPE_CHECKING:
@@ -124,9 +128,12 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
-)
+TYPES = [np.array, csr_matrix, csr_array, as_dense_dask_array]
+if jax is not None:
+    TYPES.append(as_dense_jax_array)
+
+
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     if typ is as_dense_jax_array:
         if diskfmt == "h5ad":
@@ -174,9 +181,7 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
-)
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     if typ is as_dense_jax_array:
         if storage == "zarr":
@@ -227,9 +232,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
-)
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     if typ is as_dense_jax_array:
         pytest.xfail(
@@ -277,9 +280,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csr_array, as_dense_dask_array, as_dense_jax_array]
-)
+@pytest.mark.parametrize("typ", TYPES)
 def test_readwrite_backed(typ, backing_h5ad):
     if typ.__name__ == "as_dense_jax_array":
         pytest.xfail("JAX arrays are not supported in backed HDF5 mode.")
@@ -297,9 +298,12 @@ def test_readwrite_backed(typ, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array, jnp.array]
-)
+TYPES_h5ad_zarr = [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+if jnp is not None:
+    TYPES_h5ad_zarr.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_h5ad_zarr)
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     if typ.__module__.startswith("jax"):
         pytest.xfail("JAX arrays cannot be written to .h5ad via h5py")
@@ -491,8 +495,13 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
+TYPES_loom = [np.array, csr_matrix]
+if jnp is not None:
+    TYPES_loom.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_loom)
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
 @pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
 @pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
 def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
@@ -652,6 +661,11 @@ def test_write_csv_view(typ, tmp_path):
     assert hash_dir_contents(view_pth) == hash_dir_contents(copy_pth)
 
 
+XP = [np]
+if jnp is not None:
+    XP.append(jnp)
+
+
 @pytest.mark.parametrize(
     ("read", "write", "name"),
     [
@@ -665,7 +679,6 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-@pytest.mark.parametrize("xp", [np, jnp])  # xp = array namespace
 def test_readwrite_empty(read, write, name, tmp_path, xp):
     # JAX arrays are not not directly serializable by h5py
     raw_array = xp.array([], dtype=float)

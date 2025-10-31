@@ -14,6 +14,9 @@ from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
 
+jax = None
+jnp = None
+
 with suppress(ImportError):
     import jax
     import jax.numpy as jnp
@@ -134,9 +137,13 @@ def test_to_writeable_list_fallback():
     assert result is x
 
 
-@pytest.mark.skipif(
-    not any(d.device_kind == "GPU" for d in jax.devices()), reason="No GPU available"
+skip_if_no_jax_gpu = pytest.mark.skipif(
+    jax is None or not any(d.device_kind == "GPU" for d in jax.devices()),
+    reason="No GPU available",
 )
+
+
+@skip_if_no_jax_gpu
 def test_to_writeable_jax_gpu_array():
     x = jax.device_put(jnp.array([1.0, 2.0]), device=jax.devices("gpu")[0])
     result = to_writeable(x)
@@ -144,6 +151,7 @@ def test_to_writeable_jax_gpu_array():
     np.testing.assert_array_equal(result, np.array([1.0, 2.0]))
 
 
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_to_writeable_does_not_recurse():
     x = {"a": jnp.array([1.0, 2.0])}
     result = to_writeable(x)
