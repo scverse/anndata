@@ -398,7 +398,7 @@ V = TypeVar("V")
 
 
 def gen_validator(_type: type[V]) -> Callable[[V], None]:
-    def validate_type(val: V) -> None:
+    def validate_type(val: V, settings: SettingsManager) -> None:
         if not isinstance(val, _type):
             msg = f"{val} not valid {_type}"
             raise TypeError(msg)
