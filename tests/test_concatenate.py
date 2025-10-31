@@ -41,6 +41,7 @@ from anndata.utils import asarray
 JaxArray = None
 jax = None
 jnp = None
+
 with suppress(ImportError):
     import jax.numpy as jnp
     from jaxlib._jax import ArrayImpl as JaxArray
@@ -1510,10 +1511,15 @@ def expected_shape(
     return tuple(shape)
 
 
+array_namespaces_contact_size_0_axis = ["numpy"]
+if jax is not None:
+    array_namespaces_contact_size_0_axis.append("jax")
+
+
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-@pytest.mark.parametrize("array_namespace", ["numpy", "jax"])
+@pytest.mark.parametrize("array_namespace", array_namespaces_contact_size_0_axis)
 def test_concat_size_0_axis(
     axis_name,
     join_type,
