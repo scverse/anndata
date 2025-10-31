@@ -18,6 +18,7 @@ from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
 from anndata.utils import asarray
 
+jnp = None
 with suppress(ImportError):
     import jax.numpy as jnp
 
@@ -49,8 +50,14 @@ def axis(request) -> Literal[0, 1]:
     return request.param
 
 
-@pytest.fixture(params=["array", "sparse", "sparse_array", "jax_array"])
-def array_type(request) -> Literal["array", "sparse", "sparse_array", "jax_array"]:
+if jnp is not None:
+    ArrayType = Literal["array", "sparse", "sparse_array", "jax_array"]
+else:
+    ArrayType = Literal["array", "sparse", "sparse_array"]
+
+
+@pytest.fixture(params=ArrayType.__args__)
+def array_type(request) -> ArrayType:
     return request.param
 
 
@@ -132,7 +139,7 @@ def get_array_type(array_type, axis):
 def test_anndatas(
     *,
     axis: Literal[0, 1],
-    array_type: Literal["array", "sparse", "sparse_array", "jax_array"],
+    array_type: ArrayType,
     join_type: Join_T,
     tmp_path: Path,
     max_loaded_elems: int,
