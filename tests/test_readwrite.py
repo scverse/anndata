@@ -619,14 +619,19 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
+TYPES_CSV = [np.array, csr_matrix]
+if jnp is not None:
+    TYPES_CSV.append(jnp.array)
+
+
+@pytest.mark.parametrize("typ", TYPES_CSV)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, jnp.array, csr_matrix])
+@pytest.mark.parametrize("typ", TYPES_CSV)
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib

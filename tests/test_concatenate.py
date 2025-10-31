@@ -38,6 +38,8 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
+JaxArray = None
+jax = None
 with suppress(ImportError):
     import jax.numpy as jnp
     from jaxlib._jax import ArrayImpl as JaxArray
@@ -89,9 +91,11 @@ def _filled_df(a, fill_value=np.nan):
     return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
 
 
-@filled_like.register(JaxArray)
-def _(a, fill_value=None):
-    return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
+if JaxArray is not None:
+
+    @filled_like.register(JaxArray)
+    def _(a, fill_value=None):
+        return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
