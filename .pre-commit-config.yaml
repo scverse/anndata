@@ -49,15 +49,16 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
-        args: [--config-file=pyproject.toml, .]
+        args: [--config-file=pyproject.toml, --tb, .]
         pass_filenames: false
         additional_dependencies:
-          - pandas
-          - numpy
-          - scipy
+          - array-api-compat
           - h5py
-          - natsort
-          - packaging
-          - array_api_compat
           - legacy-api-wrap
+          - natsort
+          - numpy
+          - packaging
+          - pandas
+          - scipy
+          - types-docutils
           - zarr

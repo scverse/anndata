@@ -271,8 +271,9 @@ exclude = [
     '^src/testing/anndata/__init__\.py$',
     '^src/testing/anndata/_doctest\.py$',
 ]
-
+explicit_package_bases = true
 ignore_missing_imports = true
+mypy_path = [ '$MYPY_CONFIG_FILE_DIR/src' ]
 
 [[tool.mypy.overrides]]
 module = [ "anndata/*" ]
