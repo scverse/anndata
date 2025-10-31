@@ -102,6 +102,12 @@ def zarr_v3_compressor_compat(dataset_kwargs) -> dict:
     return dataset_kwargs
 
 
+def zarr_v3_sharding(dataset_kwargs) -> dict:
+    if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
+        dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
+    return dataset_kwargs
+
+
 def _to_cpu_mem_wrapper(write_func):
     """
     Wrapper to bring cupy types into cpu memory before writing.
@@ -432,6 +438,7 @@ def write_basic(
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
         if isinstance(elem, ZarrArray | H5Array):
@@ -511,6 +518,7 @@ def write_basic_dask_dask_dense(
     is_h5 = isinstance(f, H5Group)
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
     if is_zarr_v2() or is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
@@ -616,6 +624,7 @@ def write_vlen_string_array_zarr(
         filters, fill_value = None, None
         if f.metadata.zarr_format == 2:
             filters, fill_value = [VLenUTF8()], ""
+        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
         f.create_array(
             k,
             shape=elem.shape,
@@ -684,6 +693,9 @@ def write_recarray_zarr(
     else:
         dataset_kwargs = dataset_kwargs.copy()
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        # https://github.com/zarr-developers/zarr-python/issues/3546
+        # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
+        #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
         f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
         f[k][...] = elem
 
@@ -720,6 +732,7 @@ def write_sparse_compressed(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
         else:
+            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
             arr = g.create_array(
                 attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )

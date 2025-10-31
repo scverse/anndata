@@ -2,7 +2,7 @@ from collections.abc import Callable as Callable
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Literal, TypeVar
+from typing import Literal, Self, TypeVar
 
 _T = TypeVar("_T")
 
@@ -25,7 +25,7 @@ class SettingsManager:
         *,
         default_value: _T,
         description: str,
-        validate: Callable[[_T], None],
+        validate: Callable[[_T, Self], None],
         option_type: object | None = None,
         get_from_env: Callable[[str, _T], _T] = ...,
     ) -> None: ...
@@ -46,5 +46,6 @@ class _AnnDataSettingsManager(SettingsManager):
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
     disallow_forward_slash_in_h5ad: bool = False
+    auto_shard_zarr_v3: bool = False
 
 settings: _AnnDataSettingsManager

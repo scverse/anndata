@@ -28,7 +28,9 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
+    check_all_sharded,
     gen_adata,
+    visititems_zarr,
 )
 
 if TYPE_CHECKING:
@@ -707,3 +709,69 @@ def test_h5_unchunked(
         )
         arr = read_elem_lazy(f["foo"])
     assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.zarr_io
+def test_write_auto_sharded(tmp_path: Path):
+    if is_zarr_v2():
+        with (
+            pytest.raises(
+                ValueError, match=r"Cannot use sharding with `zarr-python<3`."
+            ),
+            ad.settings.override(auto_shard_zarr_v3=True),
+        ):
+            pass
+    else:
+        path = tmp_path / "check.zarr"
+        adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
+        with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+            adata.write_zarr(path)
+
+        check_all_sharded(zarr.open(path))
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_write_auto_sharded_against_v2_format():
+    with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
+        with ad.settings.override(zarr_write_format=2):
+            with ad.settings.override(auto_shard_zarr_v3=True):
+                pass
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_write_auto_cannot_set_v2_format_after_sharding():
+    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
+        with ad.settings.override(zarr_write_format=3):
+            with ad.settings.override(auto_shard_zarr_v3=True):
+                with ad.settings.override(zarr_write_format=2):
+                    pass
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+def test_write_auto_sharded_does_not_override(tmp_path: Path):
+    z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
+    X = sparse.random(
+        100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
+    )
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+        ad.io.write_elem(z, "X_default", X)
+        shards_default = z["X_default"]["indices"].shards
+        new_shards = shards_default[0] // 2
+        new_shards = int(new_shards - new_shards % 2)
+        ad.io.write_elem(
+            z,
+            "X_manually_set",
+            X,
+            dataset_kwargs={
+                "shards": (new_shards,),
+                "chunks": (int(new_shards / 2),),
+            },
+        )
+
+    def visitor(key: str, array: zarr.Array):
+        assert array.shards == (new_shards,)
+
+    visititems_zarr(z["X_manually_set"], visitor)
