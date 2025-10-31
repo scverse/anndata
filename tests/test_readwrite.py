@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
+from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
