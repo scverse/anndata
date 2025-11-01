@@ -21,7 +21,7 @@ env-vars.UV_CONSTRAINT = "ci/constraints.txt"
 overrides.matrix.deps.env-vars = [
     { if = [ "pre" ], key = "UV_PRERELEASE", value = "allow" },
     { if = [ "pre" ], key = "UV_CONSTRAINT", value = "ci/pre-deps.txt" },
-    { if = [ "min" ], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-deps.txt" },
+    { if = [ "min" ], key = "UV_CONSTRAINT", value = "ci/constraints.txt ci/min-constraints.txt ci/min-deps.txt" },
 ]
 overrides.matrix.deps.pre-install-commands = [
     { if = [

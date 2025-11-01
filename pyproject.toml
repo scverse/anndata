@@ -93,7 +93,7 @@ test-min = [
     # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
-    "awkward>=2.8.6",
+    "awkward>=2.6.3",
     "pyarrow",
     "anndata[dask]",
 ]
