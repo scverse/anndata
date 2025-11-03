@@ -66,7 +66,8 @@ jobs:
         uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
         with:
           enable-cache: true
-          python-version: ${{ env.max_python_version }}
+          # Any Cuda 14+ will support Python 3.14: https://github.com/cupy/cupy/issues/9346
+          python-version: '3.13'  # ${{ env.max_python_version }}
 
       - name: Install AnnData
         run: |
