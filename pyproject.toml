@@ -95,6 +95,7 @@ test-min = [
     "awkward>=2.6.3",
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
+    "anndata[jax]",
 ]
 test = [
     "anndata[test-min,lazy]",
@@ -185,6 +186,7 @@ markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
+    "jax: mark tests to run with jax backend",
 ]
 
 [tool.ruff]
