@@ -95,7 +95,6 @@ test-min = [
     "awkward>=2.6.3",
     "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
     "anndata[dask]",
-    "anndata[jax]",
 ]
 test = [
     "anndata[test-min,lazy]",
