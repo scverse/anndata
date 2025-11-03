@@ -428,14 +428,6 @@ def _safe_transpose(x):
         return x.T
 
 
-def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
-    if Version(pd.__version__) >= Version("2.1"):
-        # Argument added in pandas 2.1
-        return cat.map(str, na_action="ignore")
-    else:
-        return cat.map(str)
-
-
 def has_xp(mod):
     try:
         array_api_get_namespace(mod)

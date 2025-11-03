@@ -1594,12 +1594,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             obs: 'anno1', 'anno2', 'batch'
             var: 'annoA-0', 'annoA-1', 'annoA-2', 'annoB-2'
         >>> adata.X
-        array([[2, 3],
-               [5, 6],
-               [3, 2],
-               [6, 5],
-               [3, 2],
-               [6, 5]])
+        array([[2., 3.],
+               [5., 6.],
+               [3., 2.],
+               [6., 5.],
+               [3., 2.],
+               [6., 5.]])
         >>> adata.obs
              anno1 anno2 batch
         s1-0    c1   NaN     0
