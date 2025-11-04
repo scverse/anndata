@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -21,7 +20,6 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
-    as_sparse_dask_array,
     assert_equal,
     check_all_sharded,
     gen_adata,
@@ -288,7 +286,6 @@ def test_assign_X(adata):
     ("array_func", "mem_type"),
     [
         pytest.param(as_dense_dask_array, np.ndarray, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
         pytest.param(
             as_dense_cupy_dask_array,
             CupyArray,
@@ -326,7 +323,6 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     "array_func",
     [
         pytest.param(as_dense_dask_array, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
         pytest.param(
             as_dense_cupy_dask_array,
             id="cupy_dense_dask_array",
