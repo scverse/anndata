@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
@@ -10,6 +9,7 @@ from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset
+from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ def _gen_dataframe_df(
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         msg = "Transforming to str index."
-        warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
+        warn(msg, ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
     if not len(anno.columns):
         anno.columns = anno.columns.astype(str)

@@ -46,10 +46,10 @@ def _doctest_env(
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
         func = import_name(request.node.name)
-        warning_detail: tuple[type[Warning], str, bool] | None
-        if warning_detail := getattr(func, "__deprecated", None):
-            cat, msg, _ = warning_detail
-            warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
+        if msg := getattr(func, "__deprecated__", None):
+            warnings.filterwarnings(
+                "ignore", category=FutureWarning, message=re.escape(msg)
+            )
         if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
             mod
         ):

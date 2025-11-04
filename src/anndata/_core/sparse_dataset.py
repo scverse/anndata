@@ -12,7 +12,6 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
-import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
@@ -30,6 +29,7 @@ from scipy.sparse import _sparsetools
 
 from .. import abc
 from .._settings import settings
+from .._warnings import warn
 from ..compat import (
     CSArray,
     CSMatrix,
@@ -507,7 +507,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         msg = (
             "__setitem__ for backed sparse will be removed in the next anndata release."
         )
-        warnings.warn(msg, FutureWarning, stacklevel=2)
+        warn(msg, FutureWarning)
         row, col = self._normalize_index(index)
         mock_matrix = self._to_backed()
         mock_matrix[row, col] = value
