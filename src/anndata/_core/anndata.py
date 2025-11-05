@@ -963,7 +963,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     @property
     def isbacked(self) -> bool:
         """`True` if object is backed on disk, `False` otherwise."""
-        return self.filename is not None
+        is_filename_None = self.filename is not None
+        is_X_None = (
+            getattr(self._adata_ref if self._is_view else self, "_X", None) is None
+        )
+        return is_filename_None and is_X_None
 
     @property
     def is_view(self) -> bool:
@@ -1417,7 +1421,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     @old_positionals("copy")
     def to_memory(self, *, copy: bool = False) -> AnnData:
-        """Return a new AnnData object with all backed arrays loaded into memory.
+        """Return a new AnnData object with all non-in-memory arrays loaded into memory.
 
         Params
         ------
