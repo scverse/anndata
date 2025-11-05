@@ -29,13 +29,22 @@ class AnnDataFileManager:
         adata: anndata.AnnData,
         filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
+        file_obj: h5py.File | None = None,
     ):
+        if file_obj is not None and (filename is not None or filemode is not None):
+            msg = "Cannot provide both a h5py.File and the name and/or mode arguments to constructor"
+            raise ValueError(msg)
         self._adata_ref = weakref.ref(adata)
-        self.filename = filename
-        self._filemode = filemode
-        self._file = None
-        if filename:
-            self.open()
+        if file_obj is not None:
+            self.filename = file_obj.name
+            self._filemode = file_obj.mode
+            self._file = file_obj
+        else:
+            self.filename = filename
+            self._filemode = filemode
+            self._file = file_obj
+            if filename and not self._file:
+                self.open()
 
     def __getstate__(self):
         state = self.__dict__.copy()
