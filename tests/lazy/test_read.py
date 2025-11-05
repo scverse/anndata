@@ -187,7 +187,6 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
-@pytest.mark.zarr_io
 def test_h5_file_obj(tmp_path: Path):
     adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "adata.h5ad"
