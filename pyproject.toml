@@ -12,9 +12,9 @@ authors = [
     { name = "Alex Wolf" },
     { name = "Isaac Virshup" },
     { name = "Sergei Rybakov" },
+    { name = "Ilan Gold" },
 ]
 maintainers = [
-    { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
     { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
@@ -32,6 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -96,7 +97,7 @@ test-min = [
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.3.2",
-    "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
+    "pyarrow",
     "anndata[dask]",
 ]
 test = [ "anndata[test-min,lazy]" ]
