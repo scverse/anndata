@@ -193,6 +193,7 @@ def test_h5_file_obj(tmp_path: Path):
     adata.write_h5ad(orig_pth)
     remote = read_lazy(orig_pth)
     assert remote.file.is_open
+    assert remote.filename == orig_pth
     assert_equal(remote.to_memory(), adata)
 
 
