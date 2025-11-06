@@ -175,7 +175,7 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 @pytest.mark.zarr_io
 def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
+    adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
@@ -186,6 +186,16 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+def test_h5_file_obj(tmp_path: Path):
+    adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    orig_pth = tmp_path / "adata.h5ad"
+    adata.write_h5ad(orig_pth)
+    remote = read_lazy(orig_pth)
+    assert remote.file.is_open
+    assert remote.filename == orig_pth
+    assert_equal(remote.to_memory(), adata)
 
 
 @pytest.fixture(scope="session")
