@@ -44,16 +44,16 @@ def test_creation():
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2, format="csr"))
     AnnData(sp.csr_array([[1, 0], [0, 1]]))
-    X = np.array([[1, 2, 3], [4, 5, 6]])
+    x = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
-        X=X,
+        X=x,
         obs=dict(Obs=["A", "B"]),
         var=dict(Feat=["a", "b", "c"]),
         obsm=dict(X_pca=np.array([[1, 2], [3, 4]])),
-        raw=dict(X=X, var=dict(var_names=["a", "b", "c"])),
+        raw=dict(X=x, var=dict(var_names=["a", "b", "c"])),
     )
 
-    assert adata.raw.X.tolist() == X.tolist()
+    assert adata.raw.X.tolist() == x.tolist()
     assert adata.raw.var_names.tolist() == ["a", "b", "c"]
 
     # init with empty data matrix
@@ -111,11 +111,11 @@ def test_invalid_x() -> None:
         AnnData("string is not a valid X")
 
 
-def test_create_with_dfs():
-    X = np.ones((6, 3))
+def test_create_with_dfs() -> None:
+    x = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
     obs_copy = obs.copy()
-    adata = AnnData(X=X, obs=obs)
+    adata = AnnData(X=x, obs=obs)
     assert obs.index.equals(obs_copy.index)
     assert obs.index.astype(str).equals(adata.obs.index)
 
@@ -562,10 +562,10 @@ def test_equality_comparisons():
         adata1 != 1  # noqa: B015
 
 
-def test_rename_categories():
-    X = np.ones((6, 3))
+def test_rename_categories() -> None:
+    x = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
-    adata = AnnData(X=X, obs=obs)
+    adata = AnnData(X=x, obs=obs)
     adata.uns["tool"] = {}
     adata.uns["tool"]["cat_array"] = np.rec.fromarrays(
         [np.ones(2) for cat in adata.obs["cat_anno"].cat.categories],
@@ -676,10 +676,10 @@ def test_1d_slice_dtypes() -> None:
     assert np.all(new_var_df == var_df)
 
 
-def test_to_df_sparse():
-    X = adata_sparse.X.toarray()
+def test_to_df_sparse() -> None:
+    x = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
-    assert df.values.tolist() == X.tolist()
+    assert df.values.tolist() == x.tolist()
 
 
 def test_to_df_no_x() -> None:

@@ -71,9 +71,8 @@ def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
 def create_dense_store(
     store: H5Group | ZarrGroup, *, shape: tuple[int, ...] = DEFAULT_SHAPE
 ) -> H5Group | ZarrGroup:
-    X = np.random.randn(*shape)
-
-    write_elem(store, "X", X)
+    x = np.random.randn(*shape)
+    write_elem(store, "X", x)
     return store
 
 
@@ -420,8 +419,10 @@ def test_read_lazy_bad_chunk_kwargs(tmp_path):
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
-def test_write_indptr_dtype_override(store, sparse_format):
-    X = sparse.random(
+def test_write_indptr_dtype_override(
+    store: H5Group | ZarrGroup, sparse_format: Literal["csr", "csc"]
+) -> None:
+    x = sparse.random(
         100,
         100,
         format=sparse_format,
@@ -429,11 +430,11 @@ def test_write_indptr_dtype_override(store, sparse_format):
         random_state=np.random.default_rng(),
     )
 
-    write_elem(store, "X", X, dataset_kwargs=dict(indptr_dtype="int64"))
+    write_elem(store, "X", x, dataset_kwargs=dict(indptr_dtype="int64"))
 
     assert store["X/indptr"].dtype == np.int64
-    assert X.indptr.dtype == np.int32
-    np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
+    assert x.indptr.dtype == np.int32
+    np.testing.assert_array_equal(store["X/indptr"][...], x.indptr)
 
 
 def test_io_spec_raw(store):
@@ -763,18 +764,18 @@ def test_write_auto_cannot_set_v2_format_after_sharding():
 @pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
-    X = sparse.random(
+    x = sparse.random(
         100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
     )
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        ad.io.write_elem(z, "X_default", X)
+        ad.io.write_elem(z, "X_default", x)
         shards_default = z["X_default"]["indices"].shards
         new_shards = shards_default[0] // 2
         new_shards = int(new_shards - new_shards % 2)
         ad.io.write_elem(
             z,
             "X_manually_set",
-            X,
+            x,
             dataset_kwargs={
                 "shards": (new_shards,),
                 "chunks": (int(new_shards / 2),),

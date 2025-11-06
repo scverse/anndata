@@ -1706,7 +1706,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         alt_annot.true_index_dim = "merge_index"
 
-    X = concat_xs(adatas, reindexers, axis=axis, fill_value=fill_value)
+    x = concat_xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
@@ -1779,7 +1779,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         warn(msg, UserWarning, stacklevel=2)
     return AnnData(**{
-        "X": X,
+        "X": x,
         "layers": layers,
         axis_name: concat_annot,
         alt_axis_name: alt_annot,

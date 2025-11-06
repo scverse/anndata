@@ -211,7 +211,7 @@ def read_partial(  # noqa: PLR0913
     *,
     obs_idx=slice(None),
     var_idx=slice(None),
-    X=True,
+    X=True,  # noqa: N803
     obs=None,
     var=None,
     obsm=None,

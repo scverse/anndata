@@ -41,8 +41,8 @@ class SparseCSRContiguousSlice:
         "use_dask",
     )
 
-    def setup_cache(self):
-        X = sparse.random(
+    def setup_cache(self) -> None:
+        x = sparse.random(
             10_000,
             10_000,
             density=0.01,
@@ -50,7 +50,7 @@ class SparseCSRContiguousSlice:
             random_state=np.random.default_rng(42),
         )
         g = zarr.group(self.filepath)
-        write_elem(g, "X", X)
+        write_elem(g, "X", x)
 
     def setup(self, index: str, use_dask: bool):  # noqa: FBT001
         g = zarr.open(self.filepath)
@@ -82,8 +82,8 @@ class SparseCSRContiguousSlice:
 class SparseCSRDask:
     filepath = "data.zarr"
 
-    def setup_cache(self):
-        X = sparse.random(
+    def setup_cache(self) -> None:
+        x = sparse.random(
             10_000,
             10_000,
             density=0.01,
@@ -91,7 +91,7 @@ class SparseCSRDask:
             random_state=np.random.default_rng(42),
         )
         g = zarr.group(self.filepath)
-        write_elem(g, "X", X)
+        write_elem(g, "X", x)
 
     def setup(self):
         self.group = zarr.group(self.filepath)

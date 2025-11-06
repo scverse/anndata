@@ -42,7 +42,7 @@ def adata() -> ad.AnnData:
         [4, 5, 6],
         [7, 8, 9],
     ]  # data matrix of shape n_obs x n_vars
-    X = np.array(x_list)
+    x = np.array(x_list)
     obs_dict = dict(  # annotation of observations / rows
         row_names=["name1", "name2", "name3"],  # row annotation
         oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
@@ -54,13 +54,13 @@ def adata() -> ad.AnnData:
         oanno1_colors=["#000000", "#FFFFFF"], uns2=["some annotation"]
     )
     return ad.AnnData(
-        X,
+        x,
         obs=obs_dict,
         var=var_dict,
         uns=uns_dict,
-        obsm=dict(o1=np.zeros((X.shape[0], 10))),
-        varm=dict(v1=np.ones((X.shape[1], 20))),
-        layers=dict(float=X.astype(float), sparse=sparse.csr_matrix(X)),
+        obsm=dict(o1=np.zeros((x.shape[0], 10))),
+        varm=dict(v1=np.ones((x.shape[1], 20))),
+        layers=dict(float=x.astype(float), sparse=sparse.csr_matrix(x)),
     )
 
 

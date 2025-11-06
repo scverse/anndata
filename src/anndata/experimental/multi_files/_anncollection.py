@@ -345,28 +345,28 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 continue
 
             adata = self.adatas[i]
-            X = adata.X
+            x = adata.X
             vidx = self.adatas_vidx[i]
 
-            if isinstance(X, Dataset):
+            if isinstance(x, Dataset):
                 reverse = None
                 if oidx.size > 1 and np.any(oidx[:-1] >= oidx[1:]):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
                 # TODO: fix memory inefficient approach of X[oidx][:, vidx]
-                arr = X[oidx, vidx] if isinstance(vidx, slice) else X[oidx][:, vidx]
+                arr = x[oidx, vidx] if isinstance(vidx, slice) else x[oidx][:, vidx]
                 xs.append(arr if reverse is None else arr[reverse])
-            elif isinstance(X, BaseCompressedSparseDataset):
+            elif isinstance(x, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays
                 if isinstance(vidx, slice) or len(vidx) <= 1000:
-                    xs.append(X[oidx, vidx])
+                    xs.append(x[oidx, vidx])
                 else:
-                    xs.append(X[oidx][:, vidx])
+                    xs.append(x[oidx][:, vidx])
             else:
                 # if vidx is present it is less memory efficient
                 idx = oidx, vidx
                 idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
-                xs.append(X[idx])
+                xs.append(x[idx])
 
         if len(xs) > 1:
             _x = _merge(xs)
@@ -382,7 +382,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return _x
 
     @property
-    def X(self):
+    def X(self):  # noqa: N802
         """Lazy subset of data matrix.
 
         The data matrix formed from the `.X` attributes of the underlying `adatas`,
@@ -565,13 +565,13 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
             warn(msg, FutureWarning)
             ignore_x = ignore_X
         if ignore_x:
-            X = None
+            x = None
             shape = self.shape
         else:
-            X = self._gather_x()
+            x = self._gather_x()
             shape = None
 
-        adata = AnnData(X, obs=obs, obsm=obsm, layers=layers, shape=shape)
+        adata = AnnData(x, obs=obs, obsm=obsm, layers=layers, shape=shape)
         adata.obs_names = self.obs_names
         adata.var_names = self.var_names
         return adata

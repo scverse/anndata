@@ -193,9 +193,9 @@ def test_set_dense_x_view_from_sparse():
 
 
 def test_fail_on_non_csr_csc_matrix():
-    X = sparse.eye(100, format="coo")
+    x = sparse.eye(100, format="coo")
     with pytest.raises(
         ValueError,
         match=r"Only CSR and CSC.*",
     ):
-        ad.AnnData(X=X)
+        ad.AnnData(X=x)

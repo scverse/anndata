@@ -59,14 +59,14 @@ def adata(sizes: tuple[tuple[int, int], tuple[int, int]]) -> AnnData:
     import numpy as np
 
     (m, n), chunks = sizes
-    X = da.random.random((m, n), chunks=chunks)
+    x = da.random.random((m, n), chunks=chunks)
     obs = pd.DataFrame(
         {"batch": np.random.choice(["a", "b"], m)},
         index=[f"cell{i:03d}" for i in range(m)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(n)])
 
-    return AnnData(X, obs=obs, var=var)
+    return AnnData(x, obs=obs, var=var)
 
 
 def test_dask_x_view() -> None:

@@ -74,10 +74,10 @@ def read_excel(
     from pandas import read_excel
 
     df = read_excel(fspath(filename), sheet)
-    X = df.values[:, 1:]
+    x = df.values[:, 1:]
     row = dict(row_names=df.iloc[:, 0].values.astype(str))
     col = dict(col_names=np.array(df.columns[1:], dtype=str))
-    return AnnData(X, row, col)
+    return AnnData(x, row, col)
 
 
 def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
@@ -93,14 +93,14 @@ def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
     # import gzip to read a gzipped file :-)
     table = pd.read_table(filename, dtype={"gene": "category", "cell": "category"})
 
-    X = sparse.csr_matrix(
+    x = sparse.csr_matrix(
         (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes)),
         dtype=dtype,
     )
     obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
     var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
 
-    return AnnData(X=X, obs=obs, var=var)
+    return AnnData(X=x, obs=obs, var=var)
 
 
 def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
@@ -127,13 +127,13 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
             )
             raise ValueError(msg)
         # read array
-        X = f[key][()]
+        x = f[key][()]
         # try to find row and column names
         rows_cols = [{}, {}]
         for iname, name in enumerate(["row_names", "col_names"]):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
-    adata = AnnData(X, rows_cols[0], rows_cols[1])
+    adata = AnnData(x, rows_cols[0], rows_cols[1])
     return adata
 
 
@@ -274,8 +274,8 @@ def read_loom(  # noqa: PLR0912, PLR0913
 
         if X_name not in lc.layers:
             X_name = ""  # noqa: N806
-        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
-        X = X.astype(dtype, copy=False)
+        x = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
+        x = x.astype(dtype, copy=False)
 
         layers = OrderedDict()
         if X_name != "":
@@ -308,7 +308,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
                 uns["loom-var"] = uns_var
 
         adata = AnnData(
-            X,
+            x,
             obs=obs,
             var=var,
             layers=layers,
@@ -333,11 +333,11 @@ def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     from scipy.io import mmread
 
     # could be rewritten accounting for dtype to be more performant
-    X = mmread(fspath(filename)).astype(dtype)
+    x = mmread(fspath(filename)).astype(dtype)
     from scipy.sparse import csr_matrix
 
-    X = csr_matrix(X)
-    return AnnData(X)
+    x = csr_matrix(x)
+    return AnnData(x)
 
 
 @old_positionals("first_column_names", "dtype")

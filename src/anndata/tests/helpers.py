@@ -346,9 +346,9 @@ def gen_adata(  # noqa: PLR0913
             var = XDataset.from_dataframe(var)
 
     if x_type is None:
-        X = None
+        x = None
     else:
-        X = x_type(random_state.binomial(100, 0.005, (m, n)).astype(x_dtype))
+        x = x_type(random_state.binomial(100, 0.005, (m, n)).astype(x_dtype))
 
     obsm = dict(
         array=np.random.random((m, 50)),
@@ -429,7 +429,7 @@ def gen_adata(  # noqa: PLR0913
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalFeatureWarning)
         adata = AnnData(
-            X=X,
+            X=x,
             obs=obs,
             var=var,
             obsm=obsm,

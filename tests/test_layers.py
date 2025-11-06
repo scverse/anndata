@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -9,17 +10,21 @@ import pytest
 from anndata import AnnData, ImplicitModificationWarning, read_h5ad
 from anndata.tests.helpers import gen_typed_df_t2_size
 
-X_ = np.arange(12).reshape((3, 4))
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+X = np.arange(12).reshape((3, 4))
 L = np.arange(12).reshape((3, 4)) + 12
 
 
-@pytest.fixture(params=[X_, None])
-def X(request):
+@pytest.fixture(params=[X, None])
+def x(request):
     return request.param
 
 
-def test_creation(X: np.ndarray | None):
-    adata = AnnData(X=X, layers=dict(L=L.copy()))
+def test_creation(x: np.ndarray | None) -> None:
+    adata = AnnData(x, layers=dict(L=L.copy()))
 
     assert list(adata.layers.keys()) == ["L"]
     assert "L" in adata.layers
@@ -29,8 +34,8 @@ def test_creation(X: np.ndarray | None):
     assert adata.shape == L.shape
 
 
-def test_views():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+def test_views() -> None:
+    adata = AnnData(X, layers=dict(L=L.copy()))
     adata_view = adata[1:, 1:]
 
     assert adata_view.layers.is_view
@@ -39,13 +44,13 @@ def test_views():
     assert adata_view.layers.keys() == adata.layers.keys()
     assert (adata_view.layers["L"] == adata.layers["L"][1:, 1:]).all()
 
-    adata.layers["S"] = X_
+    adata.layers["S"] = X
 
     assert adata_view.layers.keys() == adata.layers.keys()
     assert (adata_view.layers["S"] == adata.layers["S"][1:, 1:]).all()
 
     with pytest.warns(ImplicitModificationWarning):
-        adata_view.layers["T"] = X_[1:, 1:]
+        adata_view.layers["T"] = X[1:, 1:]
 
     assert not adata_view.layers.is_view
     assert not adata_view.is_view
@@ -54,12 +59,14 @@ def test_views():
 @pytest.mark.parametrize(
     ("df", "homogenous", "dtype"),
     [
-        (lambda: gen_typed_df_t2_size(*X_.shape), True, np.object_),
-        (lambda: pd.DataFrame(X_**2), False, np.int_),
+        (lambda: gen_typed_df_t2_size(*X.shape), True, np.object_),
+        (lambda: pd.DataFrame(X**2), False, np.int_),
     ],
 )
-def test_set_dataframe(homogenous, df, dtype):
-    adata = AnnData(X_)
+def test_set_dataframe(
+    *, homogenous: bool, df: Callable[[], pd.DataFrame], dtype: type[np.generic]
+) -> None:
+    adata = AnnData(X)
     if homogenous:
         with pytest.warns(UserWarning, match=r"Layer 'df'.*dtype object"):
             adata.layers["df"] = df()
@@ -71,8 +78,8 @@ def test_set_dataframe(homogenous, df, dtype):
     assert np.issubdtype(adata.layers["df"].dtype, dtype)
 
 
-def test_readwrite(X: np.ndarray | None, backing_h5ad):
-    adata = AnnData(X=X, layers=dict(L=L.copy()))
+def test_readwrite(x: np.ndarray | None, backing_h5ad: Path) -> None:
+    adata = AnnData(x, layers=dict(L=L.copy()))
     adata.write(backing_h5ad)
     adata_read = read_h5ad(backing_h5ad)
 
@@ -86,7 +93,7 @@ def test_backed():
 
 
 def test_copy():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    adata = AnnData(X=X, layers=dict(L=L.copy()))
     bdata = adata.copy()
     # check that we don’t create too many references
     assert bdata._layers is bdata.layers._data
@@ -96,7 +103,7 @@ def test_copy():
 
 
 def test_shape_error():
-    adata = AnnData(X=X_)
+    adata = AnnData(X=X)
     with pytest.raises(
         ValueError,
         match=(
@@ -105,4 +112,4 @@ def test_shape_error():
             r"Value had shape \(4, 4\) while it should have had \(3, 4\)\."
         ),
     ):
-        adata.layers["L"] = np.zeros((X_.shape[0] + 1, X_.shape[1]))
+        adata.layers["L"] = np.zeros((X.shape[0] + 1, X.shape[1]))

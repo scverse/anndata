@@ -29,14 +29,14 @@ def array_type(request):
 
 
 @pytest.fixture
-def adata():
-    X = np.zeros((M, N))
+def adata() -> AnnData:
+    x = np.zeros((M, N))
     obs = pd.DataFrame(
         dict(batch=np.array(["a", "b"])[np.random.randint(0, 2, M)]),
         index=[f"cell{i:03d}" for i in range(N)],
     )
     var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
-    return AnnData(X, obs=obs, var=var)
+    return AnnData(x, obs=obs, var=var)
 
 
 def test_assignment_dict(adata: AnnData):

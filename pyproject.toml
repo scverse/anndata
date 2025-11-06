@@ -242,8 +242,6 @@ extend-immutable-calls = [ "slice" ]
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true
-[tool.ruff.lint.pep8-naming]
-extend-ignore-names = [ "X" ]
 [tool.ruff.lint.pylint]
 max-args = 7
 max-positional-args = 5

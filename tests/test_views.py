@@ -122,9 +122,9 @@ def mapping_name(request):
 # ------------------------------------------------------------------------------
 
 
-def test_views():
-    X = np.array(X_list, dtype="int32")
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+def test_views() -> None:
+    x = np.array(X_list, dtype="int32")
+    adata = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
@@ -517,9 +517,9 @@ def test_view_setattr_machinery(attr, subset_func, subset_func2):
 
 
 def test_layers_view() -> None:
-    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     layer = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
-    real_adata = ad.AnnData(X)
+    real_adata = ad.AnnData(x)
     real_adata.layers["L"] = layer
     view_adata = real_adata[1:, 1:]
     real_hash = joblib.hash(real_adata)
@@ -738,17 +738,17 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         var=pd.DataFrame(index=np.arange(n).astype(str)),
     )
 
-    X = array_type(sparse.eye(n, n).multiply(np.arange(1, n + 1)))
+    x = array_type(sparse.eye(n, n).multiply(np.arange(1, n + 1)))
     if attr == "X":
-        adata.X = X
+        adata.X = x
     else:
-        getattr(adata, attr)["arr"] = X
+        getattr(adata, attr)["arr"] = x
 
     view = adata[:50]
     arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
-    if sparse.issparse(X):
+    if sparse.issparse(x):
         assert not np.shares_memory(arr_view.indices, arr_view_copy.indices)
         assert not np.shares_memory(arr_view.indptr, arr_view_copy.indptr)
         assert not np.shares_memory(arr_view.data, arr_view_copy.data)

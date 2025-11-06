@@ -48,9 +48,9 @@ HERE = Path(__file__).parent
 # ------------------------------------------------------------------------------
 
 
-X_sp = csr_matrix([[1, 0, 0], [3, 0, 0], [5, 6, 0], [0, 0, 0], [0, 0, 0]])
+X_SP = csr_matrix([[1, 0, 0], [3, 0, 0], [5, 6, 0], [0, 0, 0], [0, 0, 0]])
 
-X_list = [[1, 0], [3, 0], [5, 6]]  # data matrix of shape n_obs x n_vars
+X_LIST = [[1, 0], [3, 0], [5, 6]]  # data matrix of shape n_obs x n_vars
 
 obs_dict = dict(  # annotation of observations / rows
     row_names=["name1", "name2", "name3"],  # row annotation
@@ -128,7 +128,7 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
     read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
 
-    adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata1 = ad.AnnData(typ(X_LIST), obs=obs_dict, var=var_dict, uns=uns_dict)
     write1(adata1)
     adata2 = read1()
     write2(adata2)
@@ -147,7 +147,7 @@ def test_readwrite_roundtrip_async(tmp_path):
         zarr_path = tmp_path / "first.zarr"
 
         adata1 = ad.AnnData(
-            csr_matrix(X_list), obs=obs_dict, var=var_dict, uns=uns_dict
+            csr_matrix(X_LIST), obs=obs_dict, var=var_dict, uns=uns_dict
         )
         adata1.write_zarr(zarr_path)
         adata2 = ad.read_zarr(zarr_path)
@@ -160,9 +160,15 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+def test_readwrite_kitchensink(
+    tmp_path: Path,
+    storage: Literal["h5ad", "zarr"],
+    typ,
+    backing_h5ad: Path,
+    dataset_kwargs,
+) -> None:
+    x = typ(X_LIST)
+    adata_src = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
     adata_src.raw = adata_src.copy()
 
@@ -206,9 +212,9 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_x_dtype(typ, backing_h5ad):
-    X = typ(X_list).astype("int8")
-    adata_src = ad.AnnData(X)
+def test_readwrite_maintain_x_dtype(typ, backing_h5ad: Path) -> None:
+    x = typ(X_LIST).astype("int8")
+    adata_src = ad.AnnData(x)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
@@ -239,9 +245,9 @@ def test_maintain_layers(rw):
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+def test_readwrite_h5ad_one_dimension(typ, backing_h5ad: Path) -> None:
+    x = typ(X_LIST)
+    adata_src = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_one = adata_src[:, 0].copy()
     adata_one.write(backing_h5ad)
     adata = ad.read_h5ad(backing_h5ad)
@@ -251,8 +257,8 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
 def test_readwrite_backed(typ, backing_h5ad):
-    X = typ(X_list)
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    x = typ(X_LIST)
+    adata_src = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
     adata_src.write()
 
@@ -455,14 +461,14 @@ def test_read_csv():
     adata = ad.io.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
-    assert adata.X.tolist() == X_list
+    assert adata.X.tolist() == X_LIST
 
 
 def test_read_tsv_strpath():
     adata = ad.io.read_text(str(HERE / "data" / "adata-comments.tsv"), "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
-    assert adata.X.tolist() == X_list
+    assert adata.X.tolist() == X_LIST
 
 
 def test_read_tsv_iter():
@@ -470,13 +476,13 @@ def test_read_tsv_iter():
         adata = ad.io.read_text(f, "\t")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
     assert adata.var_names.tolist() == ["c1", "c2"]
-    assert adata.X.tolist() == X_list
+    assert adata.X.tolist() == X_LIST
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_write_csv(typ, tmp_path):
-    X = typ(X_list)
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+def test_write_csv(typ, tmp_path: Path) -> None:
+    x = typ(X_LIST)
+    adata = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
@@ -501,7 +507,7 @@ def test_write_csv_view(typ, tmp_path):
             str(k)[len(root_pth) :]: md5_path(k) for k in dir.rglob("*") if k.is_file()
         }
 
-    adata = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata = ad.AnnData(typ(X_LIST), obs=obs_dict, var=var_dict, uns=uns_dict)
 
     # Test writing a view
     view_pth = tmp_path / "test_view_csv_dir"
@@ -534,7 +540,7 @@ def test_read_excel():
             category=DeprecationWarning,
         )
         adata = ad.io.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
-    assert adata.X.tolist() == X_list
+    assert adata.X.tolist() == X_LIST
 
 
 def test_read_umi_tools():
