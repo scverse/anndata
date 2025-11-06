@@ -44,7 +44,7 @@ def read_lazy(
     ----------
     store
         A store-like object to be read in.  If :class:`zarr.Group`, it is best for it to be consolidated.
-        If a path to an h5ad file is provided, the open h5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user's responsibility to close it when done with the returned object.
+        If a path to an ``.h5ad`` file is provided, the open HDF5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user’s responsibility to close it when done with the returned object.
         For this reason, it is recommended to use an {class}`h5py.File` as the `store` argument when working with h5 files.
         It must remain open for at least as long as this returned object is in use.
     load_annotation_index
@@ -91,10 +91,10 @@ def read_lazy(
         obs: 'donor_id', 'self_reported_ethnicity_ontology_term_id', 'organism_ontology_term_id'...
     """
     is_store_arg_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
-    is_store_arg_h5_string = (
+    is_store_arg_h5_path = (
         isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad"
     )
-    is_h5 = is_store_arg_h5_string or is_store_arg_h5_store
+    is_h5 = is_store_arg_h5_path or is_store_arg_h5_store
 
     has_keys = True  # true if consolidated or h5ad
     if not is_h5:
@@ -158,6 +158,6 @@ def read_lazy(
 
     with settings.override(check_uniqueness=load_annotation_index):
         adata: AnnData = read_dispatched(f, callback=callback)
-    if is_store_arg_h5_string and (not is_store_arg_h5_store):
+    if is_store_arg_h5_path and not is_store_arg_h5_store:
         adata.file = AnnDataFileManager(adata, file_obj=f)
     return adata

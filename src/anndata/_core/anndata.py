@@ -963,11 +963,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     @property
     def isbacked(self) -> bool:
         """`True` if object is backed on disk, `False` otherwise."""
-        is_filename_None = self.filename is not None
-        is_X_None = (
+        is_filename_none = self.filename is not None
+        is_x_none = (
             getattr(self._adata_ref if self._is_view else self, "_X", None) is None
         )
-        return is_filename_None and is_X_None
+        return is_filename_none and is_x_none
 
     @property
     def is_view(self) -> bool:
