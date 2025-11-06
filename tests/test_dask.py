@@ -326,7 +326,7 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     "array_func",
     [
         pytest.param(as_dense_dask_array, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_matrix, id="sparse_dask_array"),
+        pytest.param(as_sparse_dask_matrix, id="sparse_dask_matrix"),
         pytest.param(
             as_dense_cupy_dask_array,
             id="cupy_dense_dask_array",
