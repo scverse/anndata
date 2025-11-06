@@ -44,7 +44,7 @@ def read_lazy(
     ----------
     store
         A store-like object to be read in.  If :class:`zarr.Group`, it is best for it to be consolidated.
-        If a path to an h5ad file is provided, the open h5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user's responsibility to close it when done with the returned object.
+        If a path to an ``.h5ad`` file is provided, the open HDF5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user’s responsibility to close it when done with the returned object.
         For this reason, it is recommended to use an {class}`h5py.File` as the `store` argument when working with h5 files.
         It must remain open for at least as long as this returned object is in use.
     load_annotation_index
