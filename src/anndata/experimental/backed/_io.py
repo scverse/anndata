@@ -158,6 +158,6 @@ def read_lazy(
 
     with settings.override(check_uniqueness=load_annotation_index):
         adata: AnnData = read_dispatched(f, callback=callback)
-    if is_store_arg_h5_string and (not is_store_arg_h5_store):
+    if is_store_arg_h5_path and not is_store_arg_h5_store:
         adata.file = AnnDataFileManager(adata, file_obj=f)
     return adata
