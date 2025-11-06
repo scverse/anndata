@@ -14,9 +14,12 @@ from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from numpy.typing import NDArray
 
     from ..compat import Index, Index1D, Index1DNorm
+    from .anndata import AnnData
 
 
 def _normalize_indices(
@@ -340,7 +343,13 @@ def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
     return tuple(mut)
 
 
-def get_vector(adata, k, coldim, idxdim, layer=None):
+def get_vector(
+    adata: AnnData,
+    k: str,
+    coldim: Literal["obs", "var"],
+    idxdim: Literal["obs", "var"],
+    layer: str | None = None,
+):
     # adata could be self if Raw and AnnData shared a parent
     dims = ("obs", "var")
     col = getattr(adata, coldim).columns
@@ -360,7 +369,7 @@ def get_vector(adata, k, coldim, idxdim, layer=None):
     elif in_idx:
         selected_dim = dims.index(idxdim)
         idx = adata._normalize_indices(make_slice(k, selected_dim))
-        a = adata._get_X(layer=layer)[idx]
+        a = adata._get_x(layer=layer)[idx]
     if issparse(a):
         a = a.toarray()
     return np.ravel(a)

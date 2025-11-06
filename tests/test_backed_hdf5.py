@@ -37,12 +37,12 @@ subset_func2 = subset_func
 
 @pytest.fixture
 def adata() -> ad.AnnData:
-    X_list = [
+    x_list = [
         [1, 2, 3],
         [4, 5, 6],
         [7, 8, 9],
     ]  # data matrix of shape n_obs x n_vars
-    X = np.array(X_list)
+    X = np.array(x_list)
     obs_dict = dict(  # annotation of observations / rows
         row_names=["name1", "name2", "name3"],  # row annotation
         oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
@@ -100,7 +100,7 @@ def as_dense(request) -> tuple[str] | tuple:
 @pytest.mark.filterwarnings("ignore:`product` is deprecated as of NumPy 1.25.0")
 # TODO: Check to make sure obs, obsm, layers, ... are written and read correctly as well
 @pytest.mark.filterwarnings("error")
-def test_read_write_X(
+def test_read_write_x(
     tmp_path: Path,
     mtx_format: Callable[
         [np.ndarray], DaskArray | np.ndarray | sparse.csr_array | sparse.csr_matrix
@@ -236,7 +236,7 @@ def test_backed_raw_subset(
 ):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
-    mem_adata = gen_adata((10, 10), X_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
+    mem_adata = gen_adata((10, 10), x_type=array_type, **GEN_ADATA_NO_XARRAY_ARGS)
     mem_adata.raw = mem_adata
     obs_idx = subset_func(mem_adata.obs_names)
     var_idx = subset_func2(mem_adata.var_names)
@@ -276,8 +276,8 @@ def test_to_memory_full(
     array_type: Callable[[np.ndarray], np.ndarray | DaskArray | sparse.csr_matrix],
 ):
     backed_pth = tmp_path / "backed.h5ad"
-    mem_adata = gen_adata((15, 10), X_type=array_type, **GEN_ADATA_DASK_ARGS)
-    mem_adata.raw = gen_adata((15, 12), X_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata = gen_adata((15, 10), x_type=array_type, **GEN_ADATA_DASK_ARGS)
+    mem_adata.raw = gen_adata((15, 12), x_type=array_type, **GEN_ADATA_DASK_ARGS)
     mem_adata.write_h5ad(backed_pth, compression="lzf")
 
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
@@ -408,7 +408,7 @@ def test_backed_duplicate_indices(tmp_path, obs_idx, var_idx):
     backed_pth = tmp_path / "backed.h5ad"
 
     # Create test data
-    mem_adata = gen_adata((6, 4), X_type=asarray, **GEN_ADATA_NO_XARRAY_ARGS)
+    mem_adata = gen_adata((6, 4), x_type=asarray, **GEN_ADATA_NO_XARRAY_ARGS)
     mem_adata.write(backed_pth)
 
     # Load backed data

@@ -178,7 +178,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
     *,
     sparse: bool = True,
     cleanup: bool = False,
-    X_name: str = "spliced",
+    X_name: str = "spliced",  # noqa: N803
     obs_names: str = "CellID",
     obsm_names: Mapping[str, Iterable[str]] | None = None,
     var_names: str = "Gene",
@@ -273,7 +273,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
         assert lc.layers is not None
 
         if X_name not in lc.layers:
-            X_name = ""
+            X_name = ""  # noqa: N806
         X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
         X = X.astype(dtype, copy=False)
 

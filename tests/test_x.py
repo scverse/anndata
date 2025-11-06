@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,6 +14,11 @@ from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
+
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
@@ -30,7 +37,7 @@ SINGULAR_SHAPES = [
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
 def test_setter_singular_dim(shape, orig_array_type, new_array_type):
     # https://github.com/scverse/anndata/issues/500
-    adata = gen_adata(shape, X_type=orig_array_type)
+    adata = gen_adata(shape, x_type=orig_array_type)
     to_assign = new_array_type(np.ones(shape))
     adata.X = to_assign
     np.testing.assert_equal(asarray(adata.X), 1)
@@ -38,7 +45,7 @@ def test_setter_singular_dim(shape, orig_array_type, new_array_type):
 
 
 def test_repeat_indices_view():
-    adata = gen_adata((10, 10), X_type=np.asarray)
+    adata = gen_adata((10, 10), x_type=np.asarray)
     subset = adata[[0, 0, 1, 1], :]
     mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
     with pytest.warns(
@@ -51,16 +58,16 @@ def test_repeat_indices_view():
 @pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
 def test_setter_view(orig_array_type, new_array_type):
-    adata = gen_adata((10, 10), X_type=orig_array_type)
-    orig_X = adata.X
+    adata = gen_adata((10, 10), x_type=orig_array_type)
+    orig_x = adata.X
     to_assign = new_array_type(np.ones((9, 9)))
-    if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
+    if isinstance(orig_x, np.ndarray) and sparse.issparse(to_assign):
         # https://github.com/scverse/anndata/issues/500
         pytest.xfail("Cannot set a dense array with a sparse array")
     view = adata[:9, :9]
     view.X = to_assign
     np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
-    assert isinstance(view.X, type(orig_X))
+    assert isinstance(view.X, type(orig_x))
 
 
 ###############################
@@ -75,7 +82,7 @@ def test_set_x_is_none():
     assert adata.X is None
 
 
-def test_del_set_equiv_X():
+def test_del_set_equiv_x() -> None:
     """Tests that `del adata.X` is equivalent to `adata.X = None`"""
     # test setter and deleter
     orig = gen_adata((10, 10))
@@ -119,12 +126,12 @@ def test_init_x_as_none_explicit_shape():
 
 
 @pytest.mark.parametrize("shape", [*SINGULAR_SHAPES, pytest.param((5, 3), id="(5, 3)")])
-def test_transpose_with_X_as_none(shape):
-    adata = gen_adata(shape, X_type=lambda x: None)
-    adataT = adata.transpose()
-    assert_equal(adataT.shape, shape[::-1])
-    assert_equal(adataT.obsp.keys(), adata.varp.keys())
-    assert_equal(adataT.T, adata)
+def test_transpose_with_x_as_none(shape: tuple[int, int]) -> None:
+    adata = gen_adata(shape, x_type=lambda x: None)
+    adata_t = adata.transpose()
+    assert_equal(adata_t.shape, shape[::-1])
+    assert_equal(adata_t.obsp.keys(), adata.varp.keys())
+    assert_equal(adata_t.T, adata)
 
 
 def test_copy():
@@ -151,7 +158,7 @@ def test_copy_view():
 ############
 
 
-def test_io_missing_X(tmp_path, diskfmt):
+def test_io_missing_x(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
     file_pth = tmp_path / f"x_none_adata.{diskfmt}"
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)

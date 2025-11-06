@@ -129,7 +129,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         )
 
     adata = gen_adata((100, 50), **GEN_ADATA_NO_XARRAY_ARGS)
-    M, N = 13, 8
+    m, n = 13, 8
 
     def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
         def set_copy(d, **kwargs):
@@ -143,15 +143,15 @@ def test_write_dispatched_chunks(tmp_path: Path):
             elem, CSMatrix | CSArray | ad.AnnData
         ):
             if re.match(r"^/((X)|(layers)).*", path):
-                chunks = (M, N)
+                chunks = (m, n)
             elif path.startswith("/obsp"):
-                chunks = (M, M)
+                chunks = (m, m)
             elif path.startswith("/obs"):
-                chunks = (M,)
+                chunks = (m,)
             elif path.startswith("/varp"):
-                chunks = (N, N)
+                chunks = (n, n)
             elif path.startswith("/var"):
-                chunks = (N,)
+                chunks = (n,)
             else:
                 chunks = dataset_kwargs.get("chunks", ())
             func(
@@ -177,9 +177,9 @@ def test_write_dispatched_chunks(tmp_path: Path):
         ):
             return
         if re.match(r"obs[mp]?/\w+", k):
-            assert v.chunks[0] == M
+            assert v.chunks[0] == m
         elif re.match(r"var[mp]?/\w+", k):
-            assert v.chunks[0] == N
+            assert v.chunks[0] == n
 
     if is_zarr_v2():
         z.visititems(check_chunking)

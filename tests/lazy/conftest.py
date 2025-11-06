@@ -122,16 +122,15 @@ def adata_remote_with_store_tall_skinny_path(
     worker_id: str = "serial",
 ) -> Path:
     orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
-    M = 1000
-    N = 5
-    obs_names = pd.Index(f"cell{i}" for i in range(M))
-    var_names = pd.Index(f"gene{i}" for i in range(N))
-    obs = gen_typed_df(M, obs_names)
-    var = gen_typed_df(N, var_names)
+    m, n = 1000, 5
+    obs_names = pd.Index(f"cell{i}" for i in range(m))
+    var_names = pd.Index(f"gene{i}" for i in range(n))
+    obs = gen_typed_df(m, obs_names)
+    var = gen_typed_df(n, var_names)
     orig = AnnData(
         obs=obs,
         var=var,
-        X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
+        X=mtx_format(np.random.binomial(100, 0.005, (m, n)).astype(np.float32)),
     )
     orig.raw = orig.copy()
     orig.write_zarr(orig_path)
@@ -153,24 +152,23 @@ def adatas_paths_var_indices_for_concatenation(
     adatas = []
     var_indices = []
     paths = []
-    M = 1000
-    N = 50
+    m, n = 1000, 50
     n_datasets = 3
     for dataset_index in range(n_datasets):
         orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}_{dataset_index}.zarr")
         paths.append(orig_path)
-        obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(M))
+        obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(m))
         var_names = pd.Index(
             f"gene_{i}{f'_{dataset_index}_ds' if are_vars_different and (i % 2) else ''}"
-            for i in range(N)
+            for i in range(n)
         )
         var_indices.append(var_names)
-        obs = gen_typed_df(M, obs_names)
-        var = gen_typed_df(N, var_names)
+        obs = gen_typed_df(m, obs_names)
+        var = gen_typed_df(n, var_names)
         orig = AnnData(
             obs=obs,
             var=var,
-            X=np.random.binomial(100, 0.005, (M, N)).astype(np.float32),
+            X=np.random.binomial(100, 0.005, (m, n)).astype(np.float32),
         )
         orig.write_zarr(orig_path)
         adatas.append(orig)

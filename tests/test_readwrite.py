@@ -93,8 +93,8 @@ def dataset_kwargs(request):
 
 @pytest.fixture
 def rw(backing_h5ad):
-    M, N = 100, 101
-    orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
+    m, n = 100, 101
+    orig = gen_adata((m, n), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
     curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
@@ -206,7 +206,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
 
 @pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+def test_readwrite_maintain_x_dtype(typ, backing_h5ad):
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
@@ -271,8 +271,8 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
-    M, N = 100, 101
-    adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
+    m, n = 100, 101
+    adata = gen_adata((m, n), x_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)
@@ -604,8 +604,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
-    M = 30_000
-    N = 1000
+    m, n = 30_000, 1_000
     ls = np.array(list(ascii_letters))
 
     def random_cats(n):
@@ -621,10 +620,10 @@ def test_write_large_categorical(tmp_path, diskfmt):
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
-        csr_matrix(([1], ([0], [0])), shape=(M, N)),
+        csr_matrix(([1], ([0], [0])), shape=(m, n)),
         obs=dict(
-            cat1=cats[np.random.choice(n_cats, M)],
-            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
+            cat1=cats[np.random.choice(n_cats, m)],
+            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, m), cats),
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
@@ -663,11 +662,11 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
 
 
 @pytest.mark.zarr_io
-def test_zarr_chunk_X(tmp_path):
+def test_zarr_chunk_x(tmp_path: Path) -> None:
     import zarr
 
     zarr_pth = Path(tmp_path) / "test.zarr"
-    adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
+    adata = gen_adata((100, 100), x_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
 
     z = zarr.open(zarr_pth)
@@ -839,11 +838,11 @@ def test_io_dtype(tmp_path, diskfmt, dtype, roundtrip):
     assert curr.X.dtype == dtype
 
 
-def test_h5py_attr_limit(tmp_path):
-    N = 10_000
+def test_h5py_attr_limit(tmp_path: Path) -> None:
+    n = 10_000
     a = ad.AnnData(np.ones((5, 10)))
     a.obsm["df"] = pd.DataFrame(
-        np.ones((5, N)), index=a.obs_names, columns=[str(i) for i in range(N)]
+        np.ones((5, n)), index=a.obs_names, columns=[str(i) for i in range(n)]
     )
     a.write(tmp_path / "tmp.h5ad")
 

@@ -248,7 +248,7 @@ def test_concatenate_roundtrip(
         pytest.skip("unsupported")
     adata = gen_adata(
         (100, 10),
-        X_type=array_type,
+        x_type=array_type,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
@@ -284,44 +284,44 @@ def test_concatenate_roundtrip(
 
 
 @mark_legacy_concatenate
-def test_concatenate_dense():
+def test_concatenate_dense() -> None:
     # dense data
-    X1 = np.array([[1, 2, 3], [4, 5, 6]])
-    X2 = np.array([[1, 2, 3], [4, 5, 6]])
-    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+    x1 = np.array([[1, 2, 3], [4, 5, 6]])
+    x2 = np.array([[1, 2, 3], [4, 5, 6]])
+    x3 = np.array([[1, 2, 3], [4, 5, 6]])
 
     adata1 = AnnData(
-        X1,
+        x1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
-        layers=dict(Xs=X1),
+        obsm=dict(X_1=x1, X_2=x2, X_3=x3),
+        layers=dict(Xs=x1),
     )
     adata2 = AnnData(
-        X2,
+        x2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2, X_3=X3),
-        layers={"Xs": X2},
+        obsm=dict(X_1=x1, X_2=x2, X_3=x3),
+        layers={"Xs": x2},
     )
     adata3 = AnnData(
-        X3,
+        x3,
         dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
         dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
-        obsm=dict(X_1=X1, X_2=X2),
-        layers=dict(Xs=X3),
+        obsm=dict(X_1=x1, X_2=x2),
+        layers=dict(Xs=x3),
     )
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
-    X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
-    assert adata.X.astype(int).tolist() == X_combined
-    assert adata.layers["Xs"].astype(int).tolist() == X_combined
+    x_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
+    assert adata.X.astype(int).tolist() == x_combined
+    assert adata.layers["Xs"].astype(int).tolist() == x_combined
     assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch"]
     assert adata.var.columns.tolist() == ["annoA-0", "annoA-1", "annoB-2"]
     assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
     assert adata.obsm.keys() == {"X_1", "X_2"}
-    assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
+    assert adata.obsm["X_1"].tolist() == np.concatenate([x1, x1, x1]).tolist()
 
     # with batch_key and batch_categories
     adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
@@ -333,7 +333,7 @@ def test_concatenate_dense():
     # outer join
     adata = adata1.concatenate(adata2, adata3, join="outer")
 
-    X_ref = np.array([
+    x_ref = np.array([
         [1.0, 2.0, 3.0, np.nan],
         [4.0, 5.0, 6.0, np.nan],
         [np.nan, 3.0, 2.0, 1.0],
@@ -341,7 +341,7 @@ def test_concatenate_dense():
         [np.nan, 3.0, 2.0, 1.0],
         [np.nan, 6.0, 5.0, 4.0],
     ])
-    np.testing.assert_equal(adata.X, X_ref)
+    np.testing.assert_equal(adata.X, x_ref)
     var_ma = ma.masked_invalid(adata.var.values.tolist())
     var_ma_ref = ma.masked_invalid(
         np.array([
@@ -598,14 +598,14 @@ def test_concatenate_fill_value(fill_val):
 
 
 @mark_legacy_concatenate
-def test_concatenate_dense_duplicates():
-    X1 = np.array([[1, 2, 3], [4, 5, 6]])
-    X2 = np.array([[1, 2, 3], [4, 5, 6]])
-    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+def test_concatenate_dense_duplicates() -> None:
+    x1 = np.array([[1, 2, 3], [4, 5, 6]])
+    x2 = np.array([[1, 2, 3], [4, 5, 6]])
+    x3 = np.array([[1, 2, 3], [4, 5, 6]])
 
     # inner join duplicates
     adata1 = AnnData(
-        X1,
+        x1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(
             var_names=["a", "b", "c"],
@@ -616,7 +616,7 @@ def test_concatenate_dense_duplicates():
         ),
     )
     adata2 = AnnData(
-        X2,
+        x2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(
             var_names=["a", "b", "c"],
@@ -627,7 +627,7 @@ def test_concatenate_dense_duplicates():
         ),
     )
     adata3 = AnnData(
-        X3,
+        x3,
         dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
         dict(
             var_names=["a", "b", "c"],
@@ -650,38 +650,38 @@ def test_concatenate_dense_duplicates():
 
 
 @mark_legacy_concatenate
-def test_concatenate_sparse():
+def test_concatenate_sparse() -> None:
     # sparse data
     from scipy.sparse import csr_matrix
 
-    X1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
-    X2 = csr_matrix([[0, 2, 3], [0, 5, 6]])
-    X3 = csr_matrix([[1, 2, 0], [0, 5, 6]])
+    x1 = csr_matrix([[0, 2, 3], [0, 5, 6]])
+    x2 = csr_matrix([[0, 2, 3], [0, 5, 6]])
+    x3 = csr_matrix([[1, 2, 0], [0, 5, 6]])
 
     adata1 = AnnData(
-        X1,
+        x1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["a", "b", "c"]),
-        layers=dict(Xs=X1),
+        layers=dict(Xs=x1),
     )
     adata2 = AnnData(
-        X2,
+        x2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(var_names=["d", "c", "b"]),
-        layers=dict(Xs=X2),
+        layers=dict(Xs=x2),
     )
     adata3 = AnnData(
-        X3,
+        x3,
         dict(obs_names=["s5", "s6"], anno2=["d3", "d4"]),
         dict(var_names=["d", "c", "b"]),
-        layers=dict(Xs=X3),
+        layers=dict(Xs=x3),
     )
 
     # inner join
     adata = adata1.concatenate(adata2, adata3)
-    X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
-    assert adata.X.toarray().astype(int).tolist() == X_combined
-    assert adata.layers["Xs"].toarray().astype(int).tolist() == X_combined
+    x_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
+    assert adata.X.toarray().astype(int).tolist() == x_combined
+    assert adata.layers["Xs"].toarray().astype(int).tolist() == x_combined
 
     # outer join
     adata = adata1.concatenate(adata2, adata3, join="outer")
@@ -696,34 +696,34 @@ def test_concatenate_sparse():
 
 
 @mark_legacy_concatenate
-def test_concatenate_mixed():
-    X1 = sparse.csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
-    X2 = sparse.csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
-    X3 = sparse.csr_matrix(np.array([[1, 0, 3], [0, 0, 6], [0, 8, 0]]))
-    X4 = np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]])
+def test_concatenate_mixed() -> None:
+    x1 = sparse.csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
+    x2 = sparse.csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
+    x3 = sparse.csr_matrix(np.array([[1, 0, 3], [0, 0, 6], [0, 8, 0]]))
+    x4 = np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]])
     adata1 = AnnData(
-        X1,
+        x1,
         dict(obs_names=["s1", "s2", "s3"], anno1=["c1", "c2", "c3"]),
         dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
-        layers=dict(counts=X1),
+        layers=dict(counts=x1),
     )
     adata2 = AnnData(
-        X2,
+        x2,
         dict(obs_names=["s4", "s5", "s6"], anno1=["c3", "c4", "c5"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        layers=dict(counts=X4),  # sic
+        layers=dict(counts=x4),  # sic
     )
     adata3 = AnnData(
-        X3,
+        x3,
         dict(obs_names=["s7", "s8", "s9"], anno2=["d3", "d4", "d5"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 2, 3], annoB=[0, 1, 2]),
-        layers=dict(counts=X3),
+        layers=dict(counts=x3),
     )
     adata4 = AnnData(
-        X4,
+        x4,
         dict(obs_names=["s4", "s5", "s6"], anno1=["c3", "c4", "c5"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        layers=dict(counts=X2),  # sic
+        layers=dict(counts=x2),  # sic
     )
 
     adata_all = AnnData.concatenate(adata1, adata2, adata3, adata4)
@@ -732,38 +732,38 @@ def test_concatenate_mixed():
 
 
 @mark_legacy_concatenate
-def test_concatenate_with_raw():
+def test_concatenate_with_raw() -> None:
     # dense data
-    X1 = np.array([[1, 2, 3], [4, 5, 6]])
-    X2 = np.array([[1, 2, 3], [4, 5, 6]])
-    X3 = np.array([[1, 2, 3], [4, 5, 6]])
+    x1 = np.array([[1, 2, 3], [4, 5, 6]])
+    x2 = np.array([[1, 2, 3], [4, 5, 6]])
+    x3 = np.array([[1, 2, 3], [4, 5, 6]])
 
-    X4 = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+    x4 = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
 
     adata1 = AnnData(
-        X1,
+        x1,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["a", "b", "c"], annoA=[0, 1, 2]),
-        layers=dict(Xs=X1),
+        layers=dict(Xs=x1),
     )
     adata2 = AnnData(
-        X2,
+        x2,
         dict(obs_names=["s3", "s4"], anno1=["c3", "c4"]),
         dict(var_names=["d", "c", "b"], annoA=[0, 1, 2]),
-        layers=dict(Xs=X2),
+        layers=dict(Xs=x2),
     )
     adata3 = AnnData(
-        X3,
+        x3,
         dict(obs_names=["s1", "s2"], anno2=["d3", "d4"]),
         dict(var_names=["d", "c", "b"], annoB=[0, 1, 2]),
-        layers=dict(Xs=X3),
+        layers=dict(Xs=x3),
     )
 
     adata4 = AnnData(
-        X4,
+        x4,
         dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
         dict(var_names=["a", "b", "c", "z"], annoA=[0, 1, 2, 3]),
-        layers=dict(Xs=X4),
+        layers=dict(Xs=x4),
     )
 
     adata1.raw = adata1.copy()
@@ -902,7 +902,7 @@ def test_pairwise_concat(axis_name, array_type):
     axis_sizes = [[100, 200, 50], [50, 50, 50]]
     if axis_name == "var":
         axis_sizes.reverse()
-    Ms, Ns = axis_sizes
+    ms, ns = axis_sizes
     axis_attr = f"{axis_name}p"
     alt_attr = f"{alt_axis_name}p"
 
@@ -915,7 +915,7 @@ def test_pairwise_concat(axis_name, array_type):
             obsp={"arr": gen_axis_array(m)},
             varp={"arr": gen_axis_array(n)},
         )
-        for k, m, n in zip("abc", Ms, Ns, strict=True)
+        for k, m, n in zip("abc", ms, ns, strict=True)
     }
 
     w_pairwise = concat(adatas, axis=axis, label="orig", pairwise=True)
@@ -1237,14 +1237,14 @@ def test_transposed_concat(
     alt_axis = 1 - axis
     lhs = gen_adata(
         (10, 10),
-        X_type=array_type,
+        x_type=array_type,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
     )
     rhs = gen_adata(
         (10, 12),
-        X_type=array_type,
+        x_type=array_type,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
@@ -1596,27 +1596,27 @@ def test_concatenate_size_0_axis():
     assert b.concatenate([a]).shape == (10, 0)
 
 
-def test_concat_null_X(use_xdataset):
+def test_concat_null_x(*, use_xdataset: bool) -> None:
     adatas_orig = {
         k: gen_adata((20, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
         for k in list("abc")
     }
-    adatas_no_X = {}
+    adatas_no_x = {}
     for k, v in adatas_orig.items():
         v = v.copy()
         del v.X
-        adatas_no_X[k] = v
+        adatas_no_x[k] = v
 
     orig = concat(adatas_orig, index_unique="-")
-    no_X = concat(adatas_no_X, index_unique="-")
+    no_x = concat(adatas_no_x, index_unique="-")
     del orig.X
 
-    assert_equal(no_X, orig)
+    assert_equal(no_x, orig)
 
 
 # https://github.com/scverse/ehrapy/issues/151#issuecomment-1016753744
 @pytest.mark.parametrize("sparse_indexer_type", [np.int64, np.int32])
-def test_concat_X_dtype(cpu_array_type, sparse_indexer_type):
+def test_concat_x_dtype(cpu_array_type, sparse_indexer_type):
     adatas_orig = {
         k: AnnData(cpu_array_type(np.ones((20, 10), dtype=np.int8)))
         for k in list("abc")
@@ -1813,16 +1813,16 @@ def test_concat_on_var_outer_join(array_type):
 def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
     import dask.array as da
 
-    X = sparse.random(50, 20, density=0.5, format="csr")
-    X_dask = da.from_array(X, chunks=(5, 20))
+    x = sparse.random(50, 20, density=0.5, format="csr")
+    x_dask = da.from_array(x, chunks=(5, 20))
     var_names_1 = [f"gene_{i}" for i in range(20)]
     var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20)]
 
-    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
-    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+    ad1 = AnnData(X=x, var=pd.DataFrame(index=var_names_1))
+    ad2 = AnnData(X=x, var=pd.DataFrame(index=var_names_2))
 
-    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
-    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+    ad1_dask = AnnData(X=x_dask, var=pd.DataFrame(index=var_names_1))
+    ad2_dask = AnnData(X=x_dask, var=pd.DataFrame(index=var_names_2))
 
     res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
     res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)

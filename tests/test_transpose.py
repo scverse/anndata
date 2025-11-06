@@ -37,7 +37,7 @@ def _add_raw(adata, *, var_subset=slice(None)):
         pytest.param(gen_adata((50, 20)), id="csr_X"),
         pytest.param(gen_adata((50, 20), sparse.csc_matrix), id="csc_X"),
         pytest.param(_add_raw(gen_adata((50, 20))), id="with_raw"),
-        pytest.param(gen_adata((20, 10), X_type=None), id="None_X"),
+        pytest.param(gen_adata((20, 10), x_type=None), id="None_X"),
     ]
 )
 def adata(request):

@@ -148,16 +148,16 @@ class BackedSparseMatrix(_cs_matrix):
     def _offsets(
         self, i: Iterable[int], j: Iterable[int], n_samples: int
     ) -> np.ndarray:
-        i, j, M, N = self._prepare_indices(i, j)
+        i, j, m, n = self._prepare_indices(i, j)
         offsets = np.empty(n_samples, dtype=self.indices.dtype)
         ret = _sparsetools.csr_sample_offsets(
-            M, N, self.indptr, self.indices, n_samples, i, j, offsets
+            m, n, self.indptr, self.indices, n_samples, i, j, offsets
         )
         if ret == 1:
             # rinse and repeat
             self.sum_duplicates()
             _sparsetools.csr_sample_offsets(
-                M, N, self.indptr, self.indices, n_samples, i, j, offsets
+                m, n, self.indptr, self.indices, n_samples, i, j, offsets
             )
         return offsets
 
@@ -181,13 +181,13 @@ class BackedSparseMatrix(_cs_matrix):
         return new_data, new_indices, new_indptr
 
 
-class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
-    def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
+class BackedCSRMatrix(BackedSparseMatrix, ss.csr_matrix):
+    def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:  # noqa: N802
         return ss.csr_matrix(
             get_compressed_vector(self, row), shape=(1, self.shape[1])
         )[:, col]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:  # noqa: N802
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -205,7 +205,7 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )
         return res if out_shape[1] == self.shape[1] else res[:, col]
 
-    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
+    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:  # noqa: N802
         idxs = np.asarray(row)
         if len(idxs) == 0:
             return ss.csr_matrix((0, self.shape[1]))
@@ -216,13 +216,13 @@ class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
         )[:, col]
 
 
-class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
-    def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:
+class BackedCSCMatrix(BackedSparseMatrix, ss.csc_matrix):
+    def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:  # noqa: N802
         return ss.csc_matrix(
             get_compressed_vector(self, col), shape=(self.shape[0], 1)
         )[row, :]
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
+    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:  # noqa: N802
         row = _fix_slice_bounds(row, self.shape[0])
         col = _fix_slice_bounds(col, self.shape[1])
 
@@ -240,7 +240,7 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
         )
         return res if out_shape[0] == self.shape[0] else res[row, :]
 
-    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
+    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:  # noqa: N802
         idxs = np.asarray(col)
         if len(idxs) == 0:
             return ss.csc_matrix((self.shape[0], 0))
@@ -252,10 +252,10 @@ class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
 
 
 FORMATS = [
-    BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
-    BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
-    BackedFormat("csr", backed_csr_matrix, ss.csr_array),
-    BackedFormat("csc", backed_csc_matrix, ss.csc_array),
+    BackedFormat("csr", BackedCSRMatrix, ss.csr_matrix),
+    BackedFormat("csc", BackedCSCMatrix, ss.csc_matrix),
+    BackedFormat("csr", BackedCSRMatrix, ss.csr_array),
+    BackedFormat("csc", BackedCSCMatrix, ss.csc_array),
 ]
 
 

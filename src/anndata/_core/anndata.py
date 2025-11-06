@@ -1267,7 +1267,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """
         if layer is not None:
             X = self.layers[layer]
-        elif not self._has_X():
+        elif not self._has_x():
             msg = "X is None, cannot convert to dataframe."
             raise ValueError(msg)
         else:
@@ -1276,7 +1276,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_X(self, *, use_raw: bool = False, layer: str | None = None):
+    def _get_x(self, *, use_raw: bool = False, layer: str | None = None):
         """\
         Convenience method for getting expression values
         with common arguments and error handling.
@@ -1403,7 +1403,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 new[key] = getattr(self, key).copy()
         if "X" in kwargs:
             new["X"] = kwargs["X"]
-        elif self._has_X():
+        elif self._has_x():
             new["X"] = self.X.copy()
         if "uns" in kwargs:
             new["uns"] = kwargs["uns"]
@@ -1464,7 +1464,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view and self._has_X():
+            if self.is_view and self._has_x():
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don’t have to have a view type
                 # defined for the matrix, which is needed for some of the
@@ -1992,7 +1992,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             convert_strings_to_categoricals=convert_strings_to_categoricals,
         )
 
-    def chunked_X(self, chunk_size: int | None = None):
+    def chunked_X(self, chunk_size: int | None = None):  # noqa: N802
         """\
         Return an iterator over the rows of the data matrix :attr:`X`.
 
@@ -2014,7 +2014,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             yield (self.X[start:n], start, n)
 
     @old_positionals("replace")
-    def chunk_X(
+    def chunk_X(  # noqa: N802
         self,
         select: int | Sequence[int] | np.ndarray = 1000,
         *,
@@ -2059,7 +2059,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         selection = selection.toarray() if issparse(selection) else selection
         return selection if reverse is None else selection[reverse]
 
-    def _has_X(self) -> bool:
+    def _has_x(self) -> bool:
         """
         Check if X is None.
 

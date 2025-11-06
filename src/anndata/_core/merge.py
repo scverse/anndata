@@ -1156,7 +1156,7 @@ def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
 
 
 # TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
-def concat_Xs(adatas, reindexers, axis, fill_value):
+def concat_xs(adatas, reindexers, axis, fill_value):
     """
     Shimy until support for some missing X's is implemented.
 
@@ -1165,10 +1165,10 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
     This is not done inline in `concat` because we don't want to maintain references
     to the values of a.X.
     """
-    Xs = [a.X for a in adatas]
-    if all(X is None for X in Xs):
+    xs = [a.X for a in adatas]
+    if all(X is None for X in xs):
         return None
-    elif any(X is None for X in Xs):
+    elif any(X is None for X in xs):
         msg = (
             "Some (but not all) of the AnnData's to be concatenated had no .X value. "
             "Concatenation is currently only implemented for cases where all or none of"
@@ -1176,7 +1176,7 @@ def concat_Xs(adatas, reindexers, axis, fill_value):
         )
         raise NotImplementedError(msg)
     else:
-        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
+        return concat_arrays(xs, reindexers, axis=axis, fill_value=fill_value)
 
 
 def make_dask_col_from_extension_dtype(
@@ -1706,7 +1706,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         alt_annot.true_index_dim = "merge_index"
 
-    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
+    X = concat_xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping

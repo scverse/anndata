@@ -147,12 +147,12 @@ def test_anndatas(
         )
     )
 
-    adatas = []
+    adatas: list[AnnData] = []
     for i in range(3):
-        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        m, n = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
         a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
+            (m, n),
+            x_type=get_array_type(array_type, axis),
             sparse_fmt=sparse_fmt,
             obs_dtypes=[pd.CategoricalDtype(ordered=False)],
             var_dtypes=[pd.CategoricalDtype(ordered=False)],

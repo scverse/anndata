@@ -60,7 +60,7 @@ class Raw:
             msg = "Cannot specify X if adata is backed"
             raise ValueError(msg)
 
-    def _get_X(self, layer=None):
+    def _get_x(self, layer=None):
         if layer is not None:
             raise ValueError()
         return self.X

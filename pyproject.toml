@@ -198,6 +198,7 @@ select = [
     "I",    # isort
     "ICN",  # Follow import conventions
     "ISC",  # Implicit string concatenation
+    "N",    # Naming conventions
     "PERF", # Performance
     "PIE",  # Syntax simplifications
     "PTH",  # Pathlib instead of os.path
@@ -241,6 +242,8 @@ extend-immutable-calls = [ "slice" ]
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true
+[tool.ruff.lint.pep8-naming]
+extend-ignore-names = [ "X" ]
 [tool.ruff.lint.pylint]
 max-args = 7
 max-positional-args = 5
