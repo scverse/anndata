@@ -27,23 +27,23 @@ class AnnDataFileManager:
     def __init__(
         self,
         adata: anndata.AnnData,
-        filename: PathLike[str] | str | None = None,
-        filemode: Literal["r", "r+"] | None = None,
+        file_name: PathLike[str] | str | None = None,
+        file_mode: Literal["r", "r+"] | None = None,
         file_obj: h5py.File | None = None,
     ):
-        if file_obj is not None and (filename is not None or filemode is not None):
+        if file_obj is not None and (file_name is not None or file_mode is not None):
             msg = "Cannot provide both a h5py.File and the name and/or mode arguments to constructor"
             raise ValueError(msg)
         self._adata_ref = weakref.ref(adata)
         if file_obj is not None:
-            self.filename = file_obj.name
+            self.filename = filename(file_obj)
             self._filemode = file_obj.mode
             self._file = file_obj
         else:
-            self.filename = filename
-            self._filemode = filemode
+            self.filename = file_name
+            self._filemode = file_mode
             self._file = file_obj
-            if filename and not self._file:
+            if file_name and not self._file:
                 self.open()
 
     def __getstate__(self):
@@ -91,16 +91,16 @@ class AnnDataFileManager:
         return self._filename
 
     @filename.setter
-    def filename(self, filename: PathLike[str] | str | None):
-        self._filename = None if filename is None else Path(filename)
+    def filename(self, file_name: PathLike[str] | str | None):
+        self._filename = None if file_name is None else Path(file_name)
 
     def open(
         self,
-        filename: PathLike[str] | str | None = None,
+        file_name: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
     ):
-        if filename is not None:
-            self.filename = filename
+        if file_name is not None:
+            self.filename = file_name
         if filemode is not None:
             self._filemode = filemode
         if self.filename is None:
