@@ -654,11 +654,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     self._adata_ref._X, np.ndarray
                 ):
                     msg = (
-                        "Trying to set a dense array with a sparse array on a view."
-                        "Densifying the sparse array."
+                        "Trying to set a dense array with a sparse array on a view. "
+                        "Densifying the sparse array. "
                         "This may incur excessive memory usage"
                     )
-                    warn(msg, RuntimeWarning)
+                    warn(msg, UserWarning)
                     value = value.toarray()
                 msg = "Modifying `X` on a view results in data being overridden"
                 warn(msg, ImplicitModificationWarning)
