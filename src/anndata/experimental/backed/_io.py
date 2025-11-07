@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing
-import warnings
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +16,7 @@ from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
 from ...compat import ZarrGroup, is_zarr_v2
+from ...utils import warn
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ def read_lazy(
                 f = zarr.open_consolidated(store, mode="r")
             except err_cls:
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
-                warnings.warn(msg, UserWarning, stacklevel=2)
+                warn(msg, UserWarning)
                 has_keys = False
                 f = zarr.open_group(store, mode="r")
         else:

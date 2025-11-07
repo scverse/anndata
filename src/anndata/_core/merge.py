@@ -11,7 +11,6 @@ from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import TYPE_CHECKING, Literal
-from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -30,7 +29,7 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
 )
-from ..utils import asarray, axis_len, warn_once
+from ..utils import asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -152,7 +151,7 @@ def equal_dask_array(a, b) -> bool:
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
     msg = "Misaligned chunks detected when checking for merge equality of dask arrays.  Reading full arrays into memory."
-    warn(msg, UserWarning, stacklevel=3)
+    warn(msg, UserWarning)
     return equal(a.compute(), b.compute())
 
 
@@ -983,12 +982,12 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
-        warn_once(
+        msg = (
             "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
-            "https://github.com/scverse/anndata/issues/898",
-            ExperimentalFeatureWarning,
+            "https://github.com/scverse/anndata/issues/898"
         )
+        warn_once(msg, ExperimentalFeatureWarning)
         # all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = []
         for el in els:
@@ -1777,7 +1776,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."
         )
-        warn(msg, UserWarning, stacklevel=2)
+        warn(msg, UserWarning)
     return AnnData(**{
         "X": X,
         "layers": layers,

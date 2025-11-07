@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -44,7 +45,11 @@ def test_read_partial_X(tmp_path, typ, diskfmt):
 def test_read_partial_adata(tmp_path, diskfmt):
     import scanpy as sc
 
-    adata = sc.datasets.pbmc68k_reduced()
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", r"Moving element.*uns.*to.*obsp", FutureWarning
+        )
+        adata = sc.datasets.pbmc68k_reduced()
 
     path = Path(tmp_path) / ("test_rp." + diskfmt)
 
