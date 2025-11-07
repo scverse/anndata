@@ -7,6 +7,8 @@ import pytest
 import anndata as ad
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     import pandas as pd
 
 pytest.importorskip("pytest_memray")
@@ -39,18 +41,18 @@ def give_chunks(request):
 # Does some stuff so that dask can cache the
 # subclasscheck before the run.
 @pytest.fixture
-def _alloc_cache():
+def _alloc_cache() -> None:
     import dask.array as da
 
-    N = 2**6
-    size = ((N, N), (N, N))
+    n = 2**6
+    size = ((n, n), (n, n))
 
     adata = ad.AnnData(
         da.random.random(*size),
         layers=dict(m=da.random.random(*size)),
         obsm=dict(m=da.random.random(*size)),
-        obs=dict(m=da.random.random(N)),
-        var=dict(m=da.random.random(N)),
+        obs=dict(m=da.random.random(n)),
+        var=dict(m=da.random.random(n)),
         varm=dict(m=da.random.random(*size)),
     )
     subset = adata[:10, :][:, :10]
@@ -73,11 +75,13 @@ def _alloc_cache():
 # TODO: Why?
 @pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("2.2 MB")
-def test_size_of_view(mapping_name, give_chunks):
+def test_size_of_view(
+    *, mapping_name: Literal["layers", "obsm", "varm"], give_chunks: bool
+) -> None:
     import dask.array as da
 
-    N = 2**8
-    size = ((N, N), (N, N)) if give_chunks else ((N, N), "auto")
+    n = 2**8
+    size = ((n, n), (n, n)) if give_chunks else ((n, n), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
@@ -94,19 +98,20 @@ def test_size_of_view(mapping_name, give_chunks):
 # for index this should be ok
 @pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
-def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
+def test_modify_view_mapping_component_memory(
+    *, mapping_name: Literal["layers", "obsm", "varm"], give_chunks: bool
+) -> None:
     import dask.array as da
 
-    N = 2**8
-    M = 2**9
+    m, n = 2**9, 2**8
 
-    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
+    size = ((m, m), (m, m)) if give_chunks else ((m, m), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :N]
+    subset = adata[:n, :n]
     assert subset.is_view
     m = getattr(subset, mapping_name)["m"]
     m[0, 0] = 100
@@ -120,26 +125,27 @@ def test_modify_view_mapping_component_memory(mapping_name, give_chunks):
 # for index this should be ok
 @pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
-def test_modify_view_X_memory(mapping_name, give_chunks):
+def test_modify_view_x_memory(
+    *, mapping_name: Literal["layers", "obsm", "varm"], give_chunks: bool
+) -> None:
     import dask.array as da
 
-    N = 2**8
-    M = 2**9
+    m, n = 2**9, 2**8
 
-    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
+    size = ((m, m), (m, m)) if give_chunks else ((m, m), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
         **{mapping_name: dict(m=da.random.random(*size))},
     )
-    subset = adata[:N, :N]
+    subset = adata[:n, :n]
     assert subset.is_view
-    m = subset.X
+    x = subset.X
     with pytest.warns(
         ad.ImplicitModificationWarning,
         match=r"Trying to modify attribute `.X` of view, initializing view as actual.",
     ):
-        m[0, 0] = 100
+        x[0, 0] = 100
 
 
 # Normally should expect something around 90 kbs
@@ -150,19 +156,20 @@ def test_modify_view_X_memory(mapping_name, give_chunks):
 # for index this should be ok
 @pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("1.5 MB")
-def test_modify_view_mapping_obs_var_memory(attr_name, give_chunks):
+def test_modify_view_mapping_obs_var_memory(
+    *, attr_name: Literal["obs", "var"], give_chunks: bool
+) -> None:
     import dask.array as da
 
-    N = 2**8
-    M = 2**9
+    m, n = 2**9, 2**8
 
-    size = ((M, M), (M, M)) if give_chunks else ((M, M), "auto")
+    size = ((m, m), (m, m)) if give_chunks else ((m, m), "auto")
 
     adata = ad.AnnData(
         da.random.random(*size),
-        **{attr_name: dict(m=da.random.random(M))},
+        **{attr_name: dict(m=da.random.random(m))},
     )
-    subset = adata[:N, :N]
+    subset = adata[:n, :n]
     assert subset.is_view
     m: pd.Series = getattr(subset, attr_name)["m"]
     m.iloc[0] = 100

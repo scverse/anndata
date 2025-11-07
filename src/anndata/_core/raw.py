@@ -30,7 +30,7 @@ class Raw:
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | CSMatrix | None = None,
+        X: np.ndarray | CSMatrix | None = None,  # noqa: N803
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ):
@@ -60,13 +60,13 @@ class Raw:
             msg = "Cannot specify X if adata is backed"
             raise ValueError(msg)
 
-    def _get_X(self, layer=None):
+    def _get_x(self, layer=None):
         if layer is not None:
             raise ValueError()
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:  # noqa: N802
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -74,24 +74,24 @@ class Raw:
             self._adata.file.open()
         # Handle legacy file formats:
         if "raw/X" in self._adata.file:
-            X = self._adata.file["raw/X"]
+            x = self._adata.file["raw/X"]
         elif "raw.X" in self._adata.file:
-            X = self._adata.file["raw.X"]  # Backwards compat
+            x = self._adata.file["raw.X"]  # Backwards compat
         else:
             msg = (
                 f"Could not find dataset for raw X in file: "
                 f"{self._adata.file.filename}."
             )
             raise AttributeError(msg)
-        if isinstance(X, h5py.Group):
-            X = sparse_dataset(X)
+        if isinstance(x, h5py.Group):
+            x = sparse_dataset(x)
         # Check if we need to subset
         if self._adata.is_view:
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
-            return _subset(X, (self._adata._oidx, slice(None)))
+            return _subset(x, (self._adata._oidx, slice(None)))
         else:
-            return X
+            return x
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -130,10 +130,10 @@ class Raw:
         if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
-        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
+        x = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
+        new = Raw(self._adata, X=x, var=var)
         if self.varm is not None:
             # Since there is no view of raws
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()

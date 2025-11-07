@@ -95,7 +95,7 @@ def gen_indexer(adata, dim, index_kind, ratio):
 
 def gen_adata(n_obs, n_var, attr_set):
     if "X-csr" in attr_set:
-        X = sparse.random(
+        x = sparse.random(
             n_obs,
             n_var,
             density=0.1,
@@ -103,24 +103,24 @@ def gen_adata(n_obs, n_var, attr_set):
             random_state=np.random.default_rng(42),
         )
     elif "X-dense" in attr_set:
-        X = sparse.random(
+        x = sparse.random(
             n_obs,
             n_var,
             density=0.1,
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        X = X.toarray()
+        x = x.toarray()
     else:
         # TODO: There's probably a better way to do this
-        X = sparse.random(
+        x = sparse.random(
             n_obs,
             n_var,
             density=0,
             format="csr",
             random_state=np.random.default_rng(42),
         )
-    adata = AnnData(X)
+    adata = AnnData(x)
     if "obs,var" in attr_set:
         adata.obs = pd.DataFrame(
             {k: np.random.randint(0, 100, n_obs) for k in ascii_lowercase},

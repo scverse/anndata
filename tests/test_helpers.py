@@ -293,22 +293,22 @@ def test_assert_equal_dask_sparse_arrays():
         ),
     ],
 )
-def test_as_dask_functions(input_type, as_dask_type, mem_type):
-    SHAPE = (1000, 100)
+def test_as_dask_functions(input_type, as_dask_type, mem_type) -> None:
+    shape = (1000, 100)
 
     rng = np.random.default_rng(42)
-    X_source = rng.poisson(size=SHAPE).astype(np.float32)
-    X_input = input_type(X_source)
-    X_output = as_dask_type(X_input)
-    X_computed = X_output.compute()
+    x_source = rng.poisson(size=shape).astype(np.float32)
+    x_input = input_type(x_source)
+    x_output = as_dask_type(x_input)
+    x_computed = x_output.compute()
 
-    assert isinstance(X_output, DaskArray)
-    assert X_output.shape == SHAPE
-    assert X_output.dtype == X_input.dtype
+    assert isinstance(x_output, DaskArray)
+    assert x_output.shape == shape
+    assert x_output.dtype == x_input.dtype
 
-    assert isinstance(X_computed, mem_type)
+    assert isinstance(x_computed, mem_type)
 
-    assert_equal(asarray(X_computed), X_source)
+    assert_equal(asarray(x_computed), x_source)
 
 
 @pytest.mark.parametrize("dask_matrix_type", DASK_MATRIX_PARAMS)
@@ -316,10 +316,10 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
 def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     if dask_matrix_type is as_sparse_dask_array:
         request.applymarker(pytest.mark.xfail(reason="cupy does not support CSArray"))
-    SHAPE = (100, 10)
+    shape = (100, 10)
     rng = np.random.default_rng(42)
-    X_cpu = dask_matrix_type(rng.normal(size=SHAPE))
-    X_gpu_roundtripped = as_cupy(X_cpu).map_blocks(lambda x: x.get(), meta=X_cpu._meta)
-    assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
-    assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
-    assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
+    x_cpu = dask_matrix_type(rng.normal(size=shape))
+    x_gpu_roundtripped = as_cupy(x_cpu).map_blocks(lambda x: x.get(), meta=x_cpu._meta)
+    assert isinstance(x_gpu_roundtripped._meta, type(x_cpu._meta))
+    assert isinstance(x_gpu_roundtripped.compute(), type(x_cpu.compute()))
+    assert_equal(x_gpu_roundtripped.compute(), x_cpu.compute())

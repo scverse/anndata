@@ -17,6 +17,7 @@ from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import old_positionals
+from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -334,54 +335,54 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
             ),
         )
 
-    def _gather_X(self):
+    def _gather_x(self):
         if self._X is not None:
             return self._X
 
-        Xs = []
+        xs = []
         for i, oidx in enumerate(self.adatas_oidx):
             if oidx is None:
                 continue
 
             adata = self.adatas[i]
-            X = adata.X
+            x = adata.X
             vidx = self.adatas_vidx[i]
 
-            if isinstance(X, Dataset):
+            if isinstance(x, Dataset):
                 reverse = None
                 if oidx.size > 1 and np.any(oidx[:-1] >= oidx[1:]):
                     oidx, reverse = np.unique(oidx, return_inverse=True)
 
                 # TODO: fix memory inefficient approach of X[oidx][:, vidx]
-                arr = X[oidx, vidx] if isinstance(vidx, slice) else X[oidx][:, vidx]
-                Xs.append(arr if reverse is None else arr[reverse])
-            elif isinstance(X, BaseCompressedSparseDataset):
+                arr = x[oidx, vidx] if isinstance(vidx, slice) else x[oidx][:, vidx]
+                xs.append(arr if reverse is None else arr[reverse])
+            elif isinstance(x, BaseCompressedSparseDataset):
                 # very slow indexing with two arrays
                 if isinstance(vidx, slice) or len(vidx) <= 1000:
-                    Xs.append(X[oidx, vidx])
+                    xs.append(x[oidx, vidx])
                 else:
-                    Xs.append(X[oidx][:, vidx])
+                    xs.append(x[oidx][:, vidx])
             else:
                 # if vidx is present it is less memory efficient
                 idx = oidx, vidx
                 idx = np.ix_(*idx) if not isinstance(vidx, slice) else idx
-                Xs.append(X[idx])
+                xs.append(x[idx])
 
-        if len(Xs) > 1:
-            _X = _merge(Xs)
+        if len(xs) > 1:
+            _x = _merge(xs)
             # todo: get rid of reverse for dense arrays
-            _X = _X if self.reverse is None else _X[self.reverse]
+            _x = _x if self.reverse is None else _x[self.reverse]
         else:
-            _X = Xs[0]
+            _x = xs[0]
             if self._dtypes is not None:
-                _X = _X.astype(self._dtypes["X"], copy=False)
+                _x = _x.astype(self._dtypes["X"], copy=False)
 
-        self._X = _X
+        self._X = _x
 
-        return _X
+        return _x
 
     @property
-    def X(self):
+    def X(self):  # noqa: N802
         """Lazy subset of data matrix.
 
         The data matrix formed from the `.X` attributes of the underlying `adatas`,
@@ -389,13 +390,13 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         Nothing is copied until `.X` is accessed, no real concatenation of the
         underlying `.X` attributes is done.
         """
-        # inconsistent behavior here, _X can be changed,
+        # inconsistent behavior here, _x can be changed,
         # but the other attributes can't be changed.
-        # maybe do return ... _X.copy() or _X.setflags(write=False)
+        # maybe do return ... _x.copy() or _x.setflags(write=False)
 
-        _X = self._gather_X()
+        _x = self._gather_x()
 
-        return self._convert_X(_X) if self._convert_X is not None else _X
+        return self._convert_X(_x) if self._convert_X is not None else _x
 
     @property
     def layers(self):
@@ -531,7 +532,14 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return descr
 
     @old_positionals("ignore_X", "ignore_layers")
-    def to_adata(self, *, ignore_X: bool = False, ignore_layers: bool = False):
+    def to_adata(
+        self,
+        *,
+        ignore_x: bool = False,
+        ignore_layers: bool = False,
+        # deprecated
+        ignore_X: bool | None = None,  # noqa: N803
+    ) -> AnnData:
         """Convert this AnnCollectionView object to an AnnData object.
 
         Parameters
@@ -552,14 +560,18 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
             else pd.DataFrame(self.obs.to_dict(use_convert=False))
         )
 
-        if ignore_X:
-            X = None
+        if ignore_X is not None:
+            msg = "ignore_X is deprecated, use ignore_x instead"
+            warn(msg, FutureWarning)
+            ignore_x = ignore_X
+        if ignore_x:
+            x = None
             shape = self.shape
         else:
-            X = self._gather_X()
+            x = self._gather_x()
             shape = None
 
-        adata = AnnData(X, obs=obs, obsm=obsm, layers=layers, shape=shape)
+        adata = AnnData(x, obs=obs, obsm=obsm, layers=layers, shape=shape)
         adata.obs_names = self.obs_names
         adata.var_names = self.var_names
         return adata

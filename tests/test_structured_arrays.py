@@ -12,19 +12,22 @@ from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import gen_vstr_recarray
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from typing import Literal
 
 
-def assert_str_contents_equal(A, B):
-    lA = [
-        [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in a]
-        for a in A
+def assert_str_contents_equal(
+    a: Iterable[Iterable[object]], b: Iterable[Iterable[object]]
+) -> None:
+    l_a = [
+        [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in row]
+        for row in a
     ]
-    lB = [
-        [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in b]
-        for b in B
+    l_b = [
+        [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in row]
+        for row in b
     ]
-    assert lA == lB
+    assert l_a == l_b
 
 
 def test_io(

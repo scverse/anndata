@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 from scipy import sparse
@@ -10,6 +12,11 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from typing import Literal
+
+    from anndata.tests.helpers import _SubsetFunc
 
 
 @pytest.fixture(
@@ -43,7 +50,7 @@ def subset_dim(adata, *, obs=slice(None), var=slice(None)):
 
 # TODO: Test values of .uns
 def test_inplace_subset_var(matrix_type, subset_func):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+    orig = gen_adata((30, 30), x_type=matrix_type)
     subset_idx = subset_func(orig.var_names)
 
     modified = orig.copy()
@@ -63,7 +70,7 @@ def test_inplace_subset_var(matrix_type, subset_func):
 
 
 def test_inplace_subset_obs(matrix_type, subset_func):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+    orig = gen_adata((30, 30), x_type=matrix_type)
     subset_idx = subset_func(orig.obs_names)
 
     modified = orig.copy()
@@ -83,7 +90,9 @@ def test_inplace_subset_obs(matrix_type, subset_func):
 
 
 @pytest.mark.parametrize("dim", ["obs", "var"])
-def test_inplace_subset_no_X(subset_func, dim):
+def test_inplace_subset_no_x(
+    subset_func: _SubsetFunc, dim: Literal["obs", "var"]
+) -> None:
     orig = gen_adata((30, 30))
     del orig.X
 

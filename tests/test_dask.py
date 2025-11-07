@@ -49,35 +49,35 @@ pytest.importorskip("dask.array")
         [(20, 10), (1, 1)],
     ]
 )
-def sizes(request):
+def sizes(request: pytest.FixtureRequest) -> tuple[tuple[int, int], tuple[int, int]]:
     return request.param
 
 
 @pytest.fixture
-def adata(sizes):
+def adata(sizes: tuple[tuple[int, int], tuple[int, int]]) -> AnnData:
     import dask.array as da
     import numpy as np
 
-    (M, N), chunks = sizes
-    X = da.random.random((M, N), chunks=chunks)
+    (m, n), chunks = sizes
+    x = da.random.random((m, n), chunks=chunks)
     obs = pd.DataFrame(
-        {"batch": np.random.choice(["a", "b"], M)},
-        index=[f"cell{i:03d}" for i in range(M)],
+        {"batch": np.random.choice(["a", "b"], m)},
+        index=[f"cell{i:03d}" for i in range(m)],
     )
-    var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(N)])
+    var = pd.DataFrame(index=[f"gene{i:03d}" for i in range(n)])
 
-    return AnnData(X, obs=obs, var=var)
+    return AnnData(x, obs=obs, var=var)
 
 
-def test_dask_X_view():
+def test_dask_x_view() -> None:
     import dask.array as da
 
-    M, N = 50, 30
+    m, n = 50, 30
     adata = ad.AnnData(
-        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(M)]),
-        var=pd.DataFrame(index=[f"gene{i:02}" for i in range(N)]),
+        obs=pd.DataFrame(index=[f"cell{i:02}" for i in range(m)]),
+        var=pd.DataFrame(index=[f"gene{i:02}" for i in range(n)]),
     )
-    adata.X = da.ones((M, N))
+    adata.X = da.ones((m, n))
     view = adata[:30]
     view.copy()
 
@@ -90,10 +90,10 @@ def test_dask_write(adata, tmp_path, diskfmt):
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
 
-    M, N = adata.X.shape
-    adata.obsm["a"] = da.random.random((M, 10))
-    adata.obsm["b"] = da.random.random((M, 10))
-    adata.varm["a"] = da.random.random((N, 10))
+    m, n = adata.X.shape
+    adata.obsm["a"] = da.random.random((m, 10))
+    adata.obsm["b"] = da.random.random((m, 10))
+    adata.varm["a"] = da.random.random((n, 10))
 
     orig = adata
     write(orig, pth)
@@ -137,10 +137,10 @@ def test_dask_distributed_write(
     g = as_group(pth, mode="w")
 
     with dd.Client(local_cluster_addr):
-        M, N = adata.X.shape
-        adata.obsm["a"] = da.random.random((M, 10))
-        adata.obsm["b"] = da.random.random((M, 10))
-        adata.varm["a"] = da.random.random((N, 10))
+        m, n = adata.X.shape
+        adata.obsm["a"] = da.random.random((m, 10))
+        adata.obsm["b"] = da.random.random((m, 10))
+        adata.varm["a"] = da.random.random((n, 10))
         orig = adata
         with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
             ad.io.write_elem(g, "", orig)
@@ -173,10 +173,10 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
 
-    M, N = adata.X.shape
-    adata.obsm["a"] = da.random.random((M, 10))
-    adata.obsm["b"] = da.random.random((M, 10))
-    adata.varm["a"] = da.random.random((N, 10))
+    m, n = adata.X.shape
+    adata.obsm["a"] = da.random.random((m, 10))
+    adata.obsm["b"] = da.random.random((m, 10))
+    adata.varm["a"] = da.random.random((n, 10))
 
     orig = adata
     write(orig, pth)
@@ -215,10 +215,10 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
 
-    M, N = adata.X.shape
-    adata.obsm["a"] = da.random.random((M, 10))
-    adata.obsm["b"] = da.random.random((M, 10))
-    adata.varm["a"] = da.random.random((N, 10))
+    m, n = adata.X.shape
+    adata.obsm["a"] = da.random.random((m, 10))
+    adata.obsm["b"] = da.random.random((m, 10))
+    adata.varm["a"] = da.random.random((n, 10))
 
     orig = adata
     write(orig, pth)
@@ -245,13 +245,13 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_copy_check_array_types(adata):
+def test_dask_copy_check_array_types(adata: AnnData) -> None:
     import dask.array as da
 
-    M, N = adata.X.shape
-    adata.obsm["a"] = da.random.random((M, 10))
-    adata.obsm["b"] = da.random.random((M, 10))
-    adata.varm["a"] = da.random.random((N, 10))
+    m, n = adata.X.shape
+    adata.obsm["a"] = da.random.random((m, 10))
+    adata.obsm["b"] = da.random.random((m, 10))
+    adata.varm["a"] = da.random.random((n, 10))
 
     orig = adata
     curr = adata.copy()
@@ -270,7 +270,7 @@ def test_dask_copy_check_array_types(adata):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_assign_X(adata):
+def test_assign_x(adata: AnnData) -> None:
     """Check if assignment works"""
     import dask.array as da
     import numpy as np
@@ -308,7 +308,7 @@ def test_assign_X(adata):
     ],
 )
 def test_dask_to_memory_unbacked(array_func, mem_type):
-    orig = gen_adata((15, 10), X_type=array_func, **GEN_ADATA_DASK_ARGS)
+    orig = gen_adata((15, 10), x_type=array_func, **GEN_ADATA_DASK_ARGS)
     orig.uns = {"da": {"da": array_func(np.ones((4, 12)))}}
 
     assert isinstance(orig.X, DaskArray)
@@ -354,7 +354,7 @@ def test_dask_to_disk_view(
 def test_dask_to_memory_copy_unbacked():
     import numpy as np
 
-    orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
+    orig = gen_adata((15, 10), x_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)
     orig.uns = {"da": {"da": as_dense_dask_array(np.ones(12))}}
 
     curr = orig.to_memory(copy=True)

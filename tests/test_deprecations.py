@@ -7,6 +7,7 @@ This includes correct behaviour as well as throwing warnings.
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -16,6 +17,9 @@ from scipy import sparse
 import anndata.experimental
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -59,7 +63,7 @@ def test_get_obsvar_array(adata):
     )
 
 
-def test_obsvar_vector_Xlayer(adata):
+def test_obsvar_vector_x_layer(adata: AnnData) -> None:
     with pytest.warns(FutureWarning):
         adata.var_vector("s1", layer="X")
     with pytest.warns(FutureWarning):
@@ -83,37 +87,37 @@ def test_dtype_warning():
 
     # This shouldn't warn, shouldn't copy
     with warnings.catch_warnings(record=True) as record:
-        b_X = np.ones((3, 3), dtype=np.float64)
-        b = AnnData(b_X)
+        b_x = np.ones((3, 3), dtype=np.float64)
+        b = AnnData(b_x)
         assert not record
-    assert b_X is b.X
+    assert b_x is b.X
     assert b.X.dtype == np.float64
 
     # Should warn, should copy
-    c_X = np.ones((3, 3), dtype=np.float32)
+    c_x = np.ones((3, 3), dtype=np.float32)
     with pytest.warns(FutureWarning):
-        c = AnnData(c_X, dtype=np.float64)
+        c = AnnData(c_x, dtype=np.float64)
     assert not record
-    assert c_X is not c.X
+    assert c_x is not c.X
     assert c.X.dtype == np.float64
 
 
-def test_deprecated_write_attribute(tmp_path):
+def test_deprecated_write_attribute(tmp_path: Path) -> None:
     pth = tmp_path / "file.h5"
-    A = np.random.randn(20, 10)
+    arr = np.random.randn(20, 10)
     from anndata._io.utils import read_attribute, write_attribute
     from anndata.io import read_elem
 
     with h5py.File(pth, "w") as f, pytest.warns(FutureWarning, match=r"write_elem"):
-        write_attribute(f, "written_attribute", A)
+        write_attribute(f, "written_attribute", arr)
 
     with h5py.File(pth, "r") as f:
-        elem_A = read_elem(f["written_attribute"])
+        elem_a = read_elem(f["written_attribute"])
         with pytest.warns(FutureWarning, match=r"read_elem"):
-            attribute_A = read_attribute(f["written_attribute"])
+            attribute_a = read_attribute(f["written_attribute"])
 
-        assert_equal(elem_A, attribute_A)
-        assert_equal(A, attribute_A)
+        assert_equal(elem_a, attribute_a)
+        assert_equal(arr, attribute_a)
 
 
 @pytest.mark.parametrize(

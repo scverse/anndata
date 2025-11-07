@@ -44,16 +44,16 @@ def test_creation():
     AnnData(ma.array([[1, 2], [3, 4]]), uns=dict(mask=[0, 1, 1, 0]))
     AnnData(sp.eye(2, format="csr"))
     AnnData(sp.csr_array([[1, 0], [0, 1]]))
-    X = np.array([[1, 2, 3], [4, 5, 6]])
+    x = np.array([[1, 2, 3], [4, 5, 6]])
     adata = AnnData(
-        X=X,
+        X=x,
         obs=dict(Obs=["A", "B"]),
         var=dict(Feat=["a", "b", "c"]),
         obsm=dict(X_pca=np.array([[1, 2], [3, 4]])),
-        raw=dict(X=X, var=dict(var_names=["a", "b", "c"])),
+        raw=dict(X=x, var=dict(var_names=["a", "b", "c"])),
     )
 
-    assert adata.raw.X.tolist() == X.tolist()
+    assert adata.raw.X.tolist() == x.tolist()
     assert adata.raw.var_names.tolist() == ["a", "b", "c"]
 
     # init with empty data matrix
@@ -103,7 +103,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
         AnnData(**{src: src_arg, dim: dim_arg(dim)})
 
 
-def test_invalid_X():
+def test_invalid_x() -> None:
     with pytest.raises(
         ValueError,
         match=r"X needs to be of one of <class 'numpy.ndarray'>.*not <class 'str'>\.",
@@ -111,11 +111,11 @@ def test_invalid_X():
         AnnData("string is not a valid X")
 
 
-def test_create_with_dfs():
-    X = np.ones((6, 3))
+def test_create_with_dfs() -> None:
+    x = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
     obs_copy = obs.copy()
-    adata = AnnData(X=X, obs=obs)
+    adata = AnnData(X=x, obs=obs)
     assert obs.index.equals(obs_copy.index)
     assert obs.index.astype(str).equals(adata.obs.index)
 
@@ -562,10 +562,10 @@ def test_equality_comparisons():
         adata1 != 1  # noqa: B015
 
 
-def test_rename_categories():
-    X = np.ones((6, 3))
+def test_rename_categories() -> None:
+    x = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
-    adata = AnnData(X=X, obs=obs)
+    adata = AnnData(X=x, obs=obs)
     adata.uns["tool"] = {}
     adata.uns["tool"]["cat_array"] = np.rec.fromarrays(
         [np.ones(2) for cat in adata.obs["cat_anno"].cat.categories],
@@ -590,14 +590,14 @@ def test_pickle():
     assert adata2.obsm.parent is adata2
 
 
-def test_to_df_dense():
-    X_df = adata_dense.to_df()
+def test_to_df_dense() -> None:
+    x_df = adata_dense.to_df()
     layer_df = adata_dense.to_df(layer="test")
 
     np.testing.assert_array_equal(adata_dense.layers["test"], layer_df.values)
-    np.testing.assert_array_equal(adata_dense.X, X_df.values)
-    pd.testing.assert_index_equal(X_df.columns, layer_df.columns)
-    pd.testing.assert_index_equal(X_df.index, layer_df.index)
+    np.testing.assert_array_equal(adata_dense.X, x_df.values)
+    pd.testing.assert_index_equal(x_df.columns, layer_df.columns)
+    pd.testing.assert_index_equal(x_df.index, layer_df.index)
 
 
 def test_convenience():
@@ -642,27 +642,27 @@ def test_convenience():
         )
 
 
-def test_1d_slice_dtypes():
-    N, M = 10, 20
+def test_1d_slice_dtypes() -> None:
+    n, m = 10, 20
     obs_df = pd.DataFrame(
         dict(
-            cat=pd.Categorical(np.arange(N, dtype=int)),
-            int=np.arange(N, dtype=int),
-            float=np.arange(N, dtype=float),
-            obj=[str(i) for i in np.arange(N, dtype=int)],
+            cat=pd.Categorical(np.arange(n, dtype=int)),
+            int=np.arange(n, dtype=int),
+            float=np.arange(n, dtype=float),
+            obj=[str(i) for i in np.arange(n, dtype=int)],
         ),
-        index=[f"cell{i}" for i in np.arange(N, dtype=int)],
+        index=[f"cell{i}" for i in np.arange(n, dtype=int)],
     )
     var_df = pd.DataFrame(
         dict(
-            cat=pd.Categorical(np.arange(M, dtype=int)),
-            int=np.arange(M, dtype=int),
-            float=np.arange(M, dtype=float),
-            obj=[str(i) for i in np.arange(M, dtype=int)],
+            cat=pd.Categorical(np.arange(m, dtype=int)),
+            int=np.arange(m, dtype=int),
+            float=np.arange(m, dtype=float),
+            obj=[str(i) for i in np.arange(m, dtype=int)],
         ),
-        index=[f"gene{i}" for i in np.arange(M, dtype=int)],
+        index=[f"gene{i}" for i in np.arange(m, dtype=int)],
     )
-    adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
+    adata = AnnData(X=np.random.random((n, m)), obs=obs_df, var=var_df)
 
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
@@ -676,13 +676,13 @@ def test_1d_slice_dtypes():
     assert np.all(new_var_df == var_df)
 
 
-def test_to_df_sparse():
-    X = adata_sparse.X.toarray()
+def test_to_df_sparse() -> None:
+    x = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
-    assert df.values.tolist() == X.tolist()
+    assert df.values.tolist() == x.tolist()
 
 
-def test_to_df_no_X():
+def test_to_df_no_x() -> None:
     adata = AnnData(
         obs=pd.DataFrame(index=[f"cell-{i:02}" for i in range(20)]),
         var=pd.DataFrame(index=[f"gene-{i:02}" for i in range(30)]),

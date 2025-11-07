@@ -13,18 +13,18 @@ class BackedHDF5Indexing:
     param_names = ("arr_type",)
     params = ("sparse",)
 
-    def setup_cache(self):
-        X_sparse = sparse.random(
+    def setup_cache(self) -> None:
+        x_sparse = sparse.random(
             10000,
             50000,
             density=0.01,
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        for X, arr_type in [
-            (X_sparse, "sparse"),
+        for x, arr_type in [
+            (x_sparse, "sparse"),
         ]:
-            n_obs, n_var = X.shape
+            n_obs, n_var = x.shape
 
             # Create obs and var dataframes
             obs = pd.DataFrame(
@@ -45,7 +45,7 @@ class BackedHDF5Indexing:
             )
 
             # Create AnnData object and save to HDF5
-            adata = ad.AnnData(X=X, obs=obs, var=var)
+            adata = ad.AnnData(X=x, obs=obs, var=var)
 
             # Create temporary file
             adata.write_h5ad(file_paths[arr_type])

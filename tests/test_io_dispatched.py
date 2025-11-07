@@ -103,18 +103,18 @@ def test_read_dispatched_null_case(tmp_path: Path):
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
 def test_write_dispatched_csr_dataset(
     tmp_path: Path, sparse_format: Literal["csr", "csc"]
-):
+) -> None:
     ad.io.write_elem(
         open_write_group(tmp_path / "arr.zarr"),
         "/",
         sp.random(10, 10, format=sparse_format),
     )
-    X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
+    x = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
 
     def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
         assert iospec.encoding_type == f"{sparse_format}_matrix"
 
-    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
+    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", x, zarr_writer)
 
 
 @pytest.mark.zarr_io
@@ -129,7 +129,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         )
 
     adata = gen_adata((100, 50), **GEN_ADATA_NO_XARRAY_ARGS)
-    M, N = 13, 8
+    m, n = 13, 8
 
     def write_chunked(func, store, k, elem, dataset_kwargs, iospec):
         def set_copy(d, **kwargs):
@@ -143,15 +143,15 @@ def test_write_dispatched_chunks(tmp_path: Path):
             elem, CSMatrix | CSArray | ad.AnnData
         ):
             if re.match(r"^/((X)|(layers)).*", path):
-                chunks = (M, N)
+                chunks = (m, n)
             elif path.startswith("/obsp"):
-                chunks = (M, M)
+                chunks = (m, m)
             elif path.startswith("/obs"):
-                chunks = (M,)
+                chunks = (m,)
             elif path.startswith("/varp"):
-                chunks = (N, N)
+                chunks = (n, n)
             elif path.startswith("/var"):
-                chunks = (N,)
+                chunks = (n,)
             else:
                 chunks = dataset_kwargs.get("chunks", ())
             func(
@@ -177,9 +177,9 @@ def test_write_dispatched_chunks(tmp_path: Path):
         ):
             return
         if re.match(r"obs[mp]?/\w+", k):
-            assert v.chunks[0] == M
+            assert v.chunks[0] == m
         elif re.match(r"var[mp]?/\w+", k):
-            assert v.chunks[0] == N
+            assert v.chunks[0] == n
 
     if is_zarr_v2():
         z.visititems(check_chunking)

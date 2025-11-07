@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -13,15 +14,26 @@ from anndata import AnnData
 from anndata._io.specs.registry import read_elem_partial
 from anndata.io import read_elem, write_h5ad, write_zarr
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Literal
+
+    from anndata.compat import CSMatrix
+
+
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
-X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
+X_CHECK = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
 
 WRITER = dict(h5ad=write_h5ad, zarr=write_zarr)
 READER = dict(h5ad=h5py.File, zarr=zarr.open)
 
 
 @pytest.mark.parametrize("typ", [np.asarray, csr_matrix])
-def test_read_partial_X(tmp_path, typ, diskfmt):
+def test_read_partial_x(
+    tmp_path: Path,
+    typ: Callable[[np.ndarray], np.ndarray | CSMatrix],
+    diskfmt: Literal["h5ad", "zarr"],
+) -> None:
     adata = AnnData(X=typ(X))
 
     path = Path(tmp_path) / ("test_tp_X." + diskfmt)
@@ -30,14 +42,14 @@ def test_read_partial_X(tmp_path, typ, diskfmt):
 
     store = READER[diskfmt](path, mode="r")
     if diskfmt == "zarr":
-        X_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
+        x_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
     else:
         # h5py doesn't allow fancy indexing across multiple dimensions
-        X_part = read_elem_partial(store["X"], indices=([1, 2],))
-        X_part = X_part[:, [0, 1]]
+        x_part = read_elem_partial(store["X"], indices=([1, 2],))
+        x_part = x_part[:, [0, 1]]
         store.close()
 
-    assert np.all(X_check == X_part)
+    assert np.all(x_part == X_CHECK)
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")

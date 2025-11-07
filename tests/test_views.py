@@ -41,6 +41,9 @@ from anndata.utils import asarray
 if TYPE_CHECKING:
     from types import EllipsisType
 
+    from anndata.tests.helpers import _SubsetFunc
+
+
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
 )
@@ -81,7 +84,7 @@ def adata() -> ad.AnnData:
 
 @pytest.fixture(scope="session")
 def adata_gen_session(matrix_type) -> ad.AnnData:
-    adata = gen_adata((30, 15), X_type=matrix_type)
+    adata = gen_adata((30, 15), x_type=matrix_type)
     adata.raw = adata.copy()
     return adata
 
@@ -119,9 +122,9 @@ def mapping_name(request):
 # ------------------------------------------------------------------------------
 
 
-def test_views():
-    X = np.array(X_list, dtype="int32")
-    adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+def test_views() -> None:
+    x = np.array(X_list, dtype="int32")
+    adata = ad.AnnData(x, obs=obs_dict, var=var_dict, uns=uns_dict)
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
@@ -324,10 +327,10 @@ def test_set_varm(adata):
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_not_set_subset_X(matrix_type_base, subset_func):
+def test_not_set_subset_x(matrix_type_base, subset_func: _SubsetFunc) -> None:
     adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
     init_hash = joblib.hash(adata)
-    orig_X_val = adata.X.copy()
+    orig_x_val = adata.X.copy()
     while True:
         subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
@@ -343,7 +346,7 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(orig_X_val != adata.X))
+    assert not np.any(asarray(orig_x_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
@@ -352,10 +355,10 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
 # TODO: Determine if this is the intended behavior,
 #       or just the behaviour we’ve had for a while
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
+def test_not_set_subset_x_dask(matrix_type_no_gpu, subset_func: _SubsetFunc) -> None:
     adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
     init_hash = tokenize(adata)
-    orig_X_val = adata.X.copy()
+    orig_x_val = adata.X.copy()
     while True:
         subset_idx = slice_int_subset(adata.obs_names)
         if len(adata[subset_idx, :]) > 2:
@@ -371,16 +374,16 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
     assert not subset.is_view
-    assert not np.any(asarray(orig_X_val != adata.X))
+    assert not np.any(asarray(orig_x_val != adata.X))
 
     assert init_hash == tokenize(adata)
     assert isinstance(subset.X, type(adata.X))
 
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_set_scalar_subset_X(matrix_type, subset_func):
+def test_set_scalar_subset_x(matrix_type, subset_func: _SubsetFunc) -> None:
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
-    orig_X_val = adata.X.copy()
+    orig_x_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
@@ -392,11 +395,11 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     if isinstance(adata.X, CupyCSCMatrix):
         # Comparison broken for CSC matrices
         # https://github.com/cupy/cupy/issues/7757
-        assert asarray(orig_X_val.tocsr() != adata.X.tocsr()).sum() == mul(
+        assert asarray(orig_x_val.tocsr() != adata.X.tocsr()).sum() == mul(
             *adata_subset.shape
         )
     else:
-        assert asarray(orig_X_val != adata.X).sum() == mul(*adata_subset.shape)
+        assert asarray(orig_x_val != adata.X).sum() == mul(*adata_subset.shape)
 
 
 # TODO: Use different kind of subsetting for adata and view
@@ -513,11 +516,11 @@ def test_view_setattr_machinery(attr, subset_func, subset_func2):
     assert_equal(actual, view, exact=True)
 
 
-def test_layers_view():
-    X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
-    real_adata = ad.AnnData(X)
-    real_adata.layers["L"] = L
+def test_layers_view() -> None:
+    x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    layer = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
+    real_adata = ad.AnnData(x)
+    real_adata.layers["L"] = layer
     view_adata = real_adata[1:, 1:]
     real_hash = joblib.hash(real_adata)
     view_hash = joblib.hash(view_adata)
@@ -525,14 +528,14 @@ def test_layers_view():
     assert view_adata.is_view
 
     with pytest.raises(ValueError, match=r"incorrect shape"):
-        view_adata.layers["L2"] = L + 2
+        view_adata.layers["L2"] = layer + 2
 
     assert view_adata.is_view  # Failing to set layer item makes adata not view
     assert real_hash == joblib.hash(real_adata)
     assert view_hash == joblib.hash(view_adata)
 
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*layers.*"):
-        view_adata.layers["L2"] = L[1:, 1:] + 2
+        view_adata.layers["L2"] = layer[1:, 1:] + 2
 
     assert not view_adata.is_view
     assert real_hash == joblib.hash(real_adata)
@@ -598,7 +601,7 @@ def test_double_index(subset_func, subset_func2):
 
 
 def test_view_different_type_indices(matrix_type):
-    orig = gen_adata((30, 30), X_type=matrix_type)
+    orig = gen_adata((30, 30), x_type=matrix_type)
     boolean_array_mask = np.random.randint(0, 2, 30).astype("bool")
     boolean_list_mask = boolean_array_mask.tolist()
     integer_array_mask = np.where(boolean_array_mask)[0]
@@ -729,23 +732,23 @@ array_type = [
 @pytest.mark.parametrize("array_type", array_type)
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
 def test_view_mixin_copies_data(adata, array_type: type, attr):
-    N = 100
+    n = 100
     adata = ad.AnnData(
-        obs=pd.DataFrame(index=np.arange(N).astype(str)),
-        var=pd.DataFrame(index=np.arange(N).astype(str)),
+        obs=pd.DataFrame(index=np.arange(n).astype(str)),
+        var=pd.DataFrame(index=np.arange(n).astype(str)),
     )
 
-    X = array_type(sparse.eye(N, N).multiply(np.arange(1, N + 1)))
+    x = array_type(sparse.eye(n, n).multiply(np.arange(1, n + 1)))
     if attr == "X":
-        adata.X = X
+        adata.X = x
     else:
-        getattr(adata, attr)["arr"] = X
+        getattr(adata, attr)["arr"] = x
 
     view = adata[:50]
     arr_view = view.X if attr == "X" else getattr(view, attr)["arr"]
     arr_view_copy = arr_view.copy()
 
-    if sparse.issparse(X):
+    if sparse.issparse(x):
         assert not np.shares_memory(arr_view.indices, arr_view_copy.indices)
         assert not np.shares_memory(arr_view.indptr, arr_view_copy.indptr)
         assert not np.shares_memory(arr_view.data, arr_view_copy.data)
@@ -759,7 +762,7 @@ def test_view_mixin_copies_data(adata, array_type: type, attr):
         assert not np.array_equal(arr_view_copy, arr_view)
 
 
-def test_copy_X_dtype():
+def test_copy_x_dtype() -> None:
     adata = ad.AnnData(sparse.eye(50, dtype=np.float64, format="csr"))
     adata_c = adata[::2].copy()
     assert adata_c.X.dtype == adata.X.dtype
@@ -806,7 +809,7 @@ def test_ellipsis_index(
     equivalent_ellipsis_index: tuple[slice, slice],
     matrix_type,
 ):
-    adata = gen_adata((10, 10), X_type=matrix_type, **GEN_ADATA_DASK_ARGS)
+    adata = gen_adata((10, 10), x_type=matrix_type, **GEN_ADATA_DASK_ARGS)
     subset_ellipsis = adata[ellipsis_index]
     subset = adata[equivalent_ellipsis_index]
     assert_equal(subset_ellipsis, subset)

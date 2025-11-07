@@ -161,10 +161,10 @@ def is_cupy_importable() -> bool:
 
 
 if is_cupy_importable() or TYPE_CHECKING:
-    from cupy import ndarray as CupyArray
-    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
-    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
-    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
+    from cupy import ndarray as CupyArray  # noqa: N812
+    from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix  # noqa: N812
+    from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix  # noqa: N812
+    from cupyx.scipy.sparse import spmatrix as CupySparseMatrix  # noqa: N812
 
     try:
         import dask.array as da

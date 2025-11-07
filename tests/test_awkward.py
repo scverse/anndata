@@ -160,16 +160,16 @@ def test_view_of_awkward_array_with_custom_behavior():
 
     from uuid import uuid4
 
-    BEHAVIOUR_ID = str(uuid4())
+    behavior_id = str(uuid4())
 
     class ReversibleArray(ak.Array):
         def reversed(self):
             return self[..., ::-1]
 
-    ak.behavior[BEHAVIOUR_ID] = ReversibleArray
+    ak.behavior[behavior_id] = ReversibleArray
     adata = gen_adata((3, 3), varm_types=(), obsm_types=(), layers_types=())
     adata.obsm["awk_string"] = ak.with_parameter(
-        ak.Array(["AAA", "BBB", "CCC"]), "__list__", BEHAVIOUR_ID
+        ak.Array(["AAA", "BBB", "CCC"]), "__list__", behavior_id
     )
     adata_view = adata[:2]
 

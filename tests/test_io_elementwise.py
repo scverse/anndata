@@ -71,9 +71,8 @@ def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
 def create_dense_store(
     store: H5Group | ZarrGroup, *, shape: tuple[int, ...] = DEFAULT_SHAPE
 ) -> H5Group | ZarrGroup:
-    X = np.random.randn(*shape)
-
-    write_elem(store, "X", X)
+    x = np.random.randn(*shape)
+    write_elem(store, "X", x)
     return store
 
 
@@ -93,20 +92,20 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
     """
     import dask.array as da
 
-    X = sparse.random(
+    x = sparse.random(
         shape[0],
         shape[1],
         format=sparse_format,
         density=0.01,
         random_state=np.random.default_rng(),
     )
-    X_dask = da.from_array(
-        X,
+    x_dask = da.from_array(
+        x,
         chunks=(100 if format == "csr" else SIZE, SIZE * 2 if format == "csr" else 100),
     )
 
-    write_elem(store, "X", X)
-    write_elem(store, "X_dask", X_dask)
+    write_elem(store, "X", x)
+    write_elem(store, "X_dask", x_dask)
     return store
 
 
@@ -274,37 +273,41 @@ def test_io_spec_cupy(store, value, encoding_type, as_dask):
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
-def test_dask_write_sparse(sparse_format, store):
+def test_dask_write_sparse(
+    sparse_format: Literal["csr", "csc"], store: H5Group | ZarrGroup
+) -> None:
     x_sparse_store = create_sparse_store(sparse_format, store)
-    X_from_disk = read_elem(x_sparse_store["X"])
-    X_dask_from_disk = read_elem(x_sparse_store["X_dask"])
+    x_from_disk = read_elem(x_sparse_store["X"])
+    x_dask_from_disk = read_elem(x_sparse_store["X_dask"])
 
-    assert_equal(X_from_disk, X_dask_from_disk)
+    assert_equal(x_from_disk, x_dask_from_disk)
     assert_equal(dict(x_sparse_store["X"].attrs), dict(x_sparse_store["X_dask"].attrs))
 
     assert x_sparse_store["X_dask/indptr"].dtype == np.int64
     assert x_sparse_store["X_dask/indices"].dtype == np.int64
 
 
-def test_read_lazy_2d_dask(sparse_format, store):
+def test_read_lazy_2d_dask(
+    sparse_format: Literal["csr", "csc"], store: H5Group | ZarrGroup
+) -> None:
     arr_store = create_sparse_store(sparse_format, store)
-    X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    X_from_disk = read_elem(arr_store["X"])
+    x_dask_from_disk = read_elem_lazy(arr_store["X"])
+    x_from_disk = read_elem(arr_store["X"])
 
-    assert_equal(X_from_disk, X_dask_from_disk)
+    assert_equal(x_from_disk, x_dask_from_disk)
     random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
     random_int_indices.sort()
     index_slice = slice(0, SIZE // 10)
     for index in [random_int_indices, index_slice]:
-        assert_equal(X_from_disk[index, :], X_dask_from_disk[index, :])
-        assert_equal(X_from_disk[:, index], X_dask_from_disk[:, index])
+        assert_equal(x_from_disk[index, :], x_dask_from_disk[index, :])
+        assert_equal(x_from_disk[:, index], x_dask_from_disk[:, index])
     random_bool_mask = np.random.randn(SIZE) > 0
     assert_equal(
-        X_from_disk[random_bool_mask, :], X_dask_from_disk[random_bool_mask, :]
+        x_from_disk[random_bool_mask, :], x_dask_from_disk[random_bool_mask, :]
     )
     random_bool_mask = np.random.randn(SIZE * 2) > 0
     assert_equal(
-        X_from_disk[:, random_bool_mask], X_dask_from_disk[:, random_bool_mask]
+        x_from_disk[:, random_bool_mask], x_dask_from_disk[:, random_bool_mask]
     )
 
     assert arr_store["X_dask/indptr"].dtype == np.int64
@@ -325,18 +328,20 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (40, None)),
     ],
 )
-def test_read_lazy_subsets_nd_dask(store: H5Group | ZarrGroup, n_dims, chunks) -> None:
+def test_read_lazy_subsets_nd_dask(
+    store: H5Group | ZarrGroup, n_dims: int, chunks: tuple[int | None] | None
+) -> None:
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
-    X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
-    X_from_disk = read_elem(arr_store["X"])
-    assert_equal(X_from_disk, X_dask_from_disk)
+    x_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
+    x_from_disk = read_elem(arr_store["X"])
+    assert_equal(x_from_disk, x_dask_from_disk)
 
     random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
     random_int_indices.sort()
     random_bool_mask = np.random.randn(SIZE) > 0
     index_slice = slice(0, SIZE // 10)
     for index in [random_int_indices, index_slice, random_bool_mask]:
-        assert_equal(X_from_disk[index], X_dask_from_disk[index])
+        assert_equal(x_from_disk[index], x_dask_from_disk[index])
 
 
 @pytest.mark.xdist_group("dask")
@@ -351,18 +356,18 @@ def test_read_lazy_h5_cluster(
     with h5py.File(tmp_path / "test.h5", "w") as file:
         store = file["/"]
         arr_store = create_sparse_store(sparse_format, store)
-        X_dask_from_disk = read_elem_lazy(arr_store["X"])
-        X_from_disk = read_elem(arr_store["X"])
+        x_dask_from_disk = read_elem_lazy(arr_store["X"])
+        x_from_disk = read_elem(arr_store["X"])
     with dd.Client(local_cluster_addr):
-        assert_equal(X_from_disk, X_dask_from_disk)
+        assert_equal(x_from_disk, x_dask_from_disk)
 
 
 def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
     shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
-    X_dask_from_disk = read_elem_lazy(arr_store["X"])
-    assert all(c <= s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
-    assert X_dask_from_disk.shape == shape
+    x_dask_from_disk = read_elem_lazy(arr_store["X"])
+    assert all(c <= s for c, s in zip(x_dask_from_disk.chunksize, shape, strict=True))
+    assert x_dask_from_disk.shape == shape
 
 
 @pytest.mark.parametrize(
@@ -391,13 +396,13 @@ def test_read_lazy_2d_chunk_kwargs(
 ) -> None:
     if arr_type == "dense":
         arr_store = create_dense_store(store)
-        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
+        x_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     else:
         arr_store = create_sparse_store(arr_type, store)
-        X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
-    assert X_dask_from_disk.chunksize == expected_chunksize
-    X_from_disk = read_elem(arr_store["X"])
-    assert_equal(X_from_disk, X_dask_from_disk)
+        x_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
+    assert x_dask_from_disk.chunksize == expected_chunksize
+    x_from_disk = read_elem(arr_store["X"])
+    assert_equal(x_from_disk, x_dask_from_disk)
 
 
 def test_read_lazy_bad_chunk_kwargs(tmp_path):
@@ -414,8 +419,10 @@ def test_read_lazy_bad_chunk_kwargs(tmp_path):
 
 
 @pytest.mark.parametrize("sparse_format", ["csr", "csc"])
-def test_write_indptr_dtype_override(store, sparse_format):
-    X = sparse.random(
+def test_write_indptr_dtype_override(
+    store: H5Group | ZarrGroup, sparse_format: Literal["csr", "csc"]
+) -> None:
+    x = sparse.random(
         100,
         100,
         format=sparse_format,
@@ -423,11 +430,11 @@ def test_write_indptr_dtype_override(store, sparse_format):
         random_state=np.random.default_rng(),
     )
 
-    write_elem(store, "X", X, dataset_kwargs=dict(indptr_dtype="int64"))
+    write_elem(store, "X", x, dataset_kwargs=dict(indptr_dtype="int64"))
 
     assert store["X/indptr"].dtype == np.int64
-    assert X.indptr.dtype == np.int32
-    np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
+    assert x.indptr.dtype == np.int32
+    np.testing.assert_array_equal(store["X/indptr"][...], x.indptr)
 
 
 def test_io_spec_raw(store):
@@ -757,18 +764,18 @@ def test_write_auto_cannot_set_v2_format_after_sharding():
 @pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
-    X = sparse.random(
+    x = sparse.random(
         100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
     )
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        ad.io.write_elem(z, "X_default", X)
+        ad.io.write_elem(z, "X_default", x)
         shards_default = z["X_default"]["indices"].shards
         new_shards = shards_default[0] // 2
         new_shards = int(new_shards - new_shards % 2)
         ad.io.write_elem(
             z,
             "X_manually_set",
-            X,
+            x,
             dataset_kwargs={
                 "shards": (new_shards,),
                 "chunks": (int(new_shards / 2),),

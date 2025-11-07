@@ -635,11 +635,11 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Read the backed objects of Xs
-    Xs = [read_as_backed(g["X"]) for g in groups]
+    xs = [read_as_backed(g["X"]) for g in groups]
 
     # Label column
     label_col = pd.Categorical.from_codes(
-        np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
+        np.repeat(np.arange(len(groups)), [x.shape[axis] for x in xs]),
         categories=keys,
     )
 
@@ -682,7 +682,7 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     # Write X
 
     _write_concat_arrays(
-        arrays=Xs,
+        arrays=xs,
         output_group=output_group,
         output_path="X",
         axis=axis,

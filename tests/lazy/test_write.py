@@ -25,8 +25,8 @@ def test_write_error(
     key: Literal["obs", "var", "obsm", "varm"],
 ):
     path = tmp_path / "adata.h5ad"
-    X = np.random.random((4, 4))
-    adata = AnnData(X=X)
+    x = np.random.random((4, 4))
+    adata = AnnData(X=x)
     if key.endswith("m"):
         elem = {"df": getattr(adata, key[:-1])}
         setattr(adata, key, elem)
