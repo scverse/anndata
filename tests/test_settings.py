@@ -266,7 +266,7 @@ def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
-def test_hints():
+def test_hints() -> None:
     settings = ad.settings
     types_loader = importlib.machinery.SourceFileLoader(
         "settings_types",

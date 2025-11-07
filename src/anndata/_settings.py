@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 import os
 import textwrap
-import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
@@ -13,6 +12,7 @@ from inspect import Parameter, signature
 from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
+from ._warnings import warn
 from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ def check_and_get_environ_var(
             f"Value {environ_value_or_default_value!r} is not in allowed {allowed_values} for environment variable {key}. "
             f"Default {default_value} will be used."
         )
-        warnings.warn(msg, UserWarning, stacklevel=3)
+        warn(msg, UserWarning)
         environ_value_or_default_value = default_value
     return (
         cast(environ_value_or_default_value)
@@ -326,7 +326,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, FutureWarning, stacklevel=2)
+            warn(msg, FutureWarning)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."

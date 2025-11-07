@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable, Mapping
 from functools import reduce
 from itertools import chain, pairwise
@@ -10,6 +9,8 @@ import numpy as np
 import pandas as pd
 from h5py import Dataset
 
+from testing.anndata._doctest import doctest_filterwarnings
+
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_index, _normalize_indices
@@ -17,6 +18,7 @@ from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import old_positionals
+from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -573,6 +575,7 @@ DictCallable = dict[str, Callable]
 ConvertType = Callable | dict[str, Callable | DictCallable]
 
 
+@doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     """\
     Lazily concatenate AnnData objects along the `obs` axis.
@@ -737,7 +740,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
         if not self.obs_names.is_unique:
             msg = "Observation names are not unique."
-            warnings.warn(msg, UserWarning, stacklevel=2)
+            warn(msg, UserWarning)
 
         view_attrs = ATTRS.copy()
 

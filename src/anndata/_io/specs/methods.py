@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from copy import copy
 from functools import partial
@@ -8,7 +7,6 @@ from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING
-from warnings import warn
 
 import h5py
 import numpy as np
@@ -44,6 +42,7 @@ from anndata.compat import (
 
 from ..._settings import settings
 from ...compat import is_zarr_v2
+from ...utils import warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -145,11 +144,8 @@ def read_basic(
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import h5ad
 
-    warn(
-        f"Element '{elem.name}' was written without encoding metadata.",
-        OldFormatWarning,
-        stacklevel=3,
-    )
+    msg = f"Element '{elem.name}' was written without encoding metadata."
+    warn(msg, OldFormatWarning)
 
     if isinstance(elem, Mapping):
         # Backwards compat sparse arrays
@@ -167,11 +163,8 @@ def read_basic_zarr(
 ) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import zarr
 
-    warn(
-        f"Element '{elem.name}' was written without encoding metadata.",
-        OldFormatWarning,
-        stacklevel=3,
-    )
+    msg = f"Element '{elem.name}' was written without encoding metadata."
+    warn(msg, OldFormatWarning)
     if isinstance(elem, ZarrGroup):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
@@ -601,7 +594,7 @@ def write_vlen_string_array_zarr(
 
         if Version(version("numcodecs")) < Version("0.13"):
             msg = "Old numcodecs version detected. Please update for improved performance and stability."
-            warnings.warn(msg, UserWarning, stacklevel=2)
+            warn(msg, UserWarning)
             # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
             if hasattr(elem, "flags") and not elem.flags.writeable:
                 elem = elem.copy()

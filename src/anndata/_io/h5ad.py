@@ -5,7 +5,6 @@ from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeVar, cast
-from warnings import warn
 
 import h5py
 import numpy as np
@@ -24,6 +23,7 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
+from ..utils import warn
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
 from .utils import (
@@ -322,7 +322,7 @@ def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
         f"{dataset.name!r} was written with a very old version of AnnData. "
         "Consider rewriting it."
     )
-    warn(msg, OldFormatWarning, stacklevel=2)
+    warn(msg, OldFormatWarning)
     df = pd.DataFrame(
         _decode_structured_array(
             _from_fixed_length_strings(dataset[()]), dtype=dataset.dtype

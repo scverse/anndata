@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
 from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints, overload
-from warnings import warn
 
 from ..types import ExtensionNamespace
+from ..utils import warn
 from .anndata import AnnData
 
 if TYPE_CHECKING:
@@ -16,40 +15,6 @@ if TYPE_CHECKING:
 # https://github.com/pola-rs/polars/blob/main/py-polars/polars/api.py
 
 __all__ = ["register_anndata_namespace"]
-
-
-def find_stacklevel() -> int:
-    """
-    Find the first place in the stack that is not inside AnnData.
-
-    Taken from:
-    https://github.com/pola-rs/polars/blob/main/py-polars/polars/_utils/various.py#L447
-    """
-
-    pkg_dir = str(Path(__file__).parent.parent)
-
-    # https://stackoverflow.com/questions/17407119/python-inspect-stack-is-slow
-    frame = inspect.currentframe()
-    n = 0
-    try:
-        while frame:
-            fname = inspect.getfile(frame)
-            if fname.startswith(pkg_dir) or (
-                (qualname := getattr(frame.f_code, "co_qualname", None))
-                # ignore @singledispatch wrappers
-                and qualname.startswith("singledispatch.")
-            ):
-                frame = frame.f_back
-                n += 1
-            else:
-                break
-    finally:
-        # https://docs.python.org/3/library/inspect.html
-        # > Though the cycle detector will catch these, destruction of the frames
-        # > (and local variables) can be made deterministic by removing the cycle
-        # > in a finally clause.
-        del frame
-    return n
 
 
 # Reserved namespaces include accessors built into AnnData (currently there are none)
@@ -173,7 +138,6 @@ def _create_namespace(
             warn(
                 f"Overriding existing custom namespace {name!r} (on {cls.__name__!r})",
                 UserWarning,
-                stacklevel=find_stacklevel(),
             )
         setattr(cls, name, AccessorNameSpace(name, ns_class))
         cls._accessors.add(name)
