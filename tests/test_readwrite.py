@@ -731,7 +731,7 @@ def test_write_string_types(tmp_path, diskfmt, roundtrip):
 def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
     import scanpy as sc
 
-    # TODO: remove filters once https://github.com/scverse/scanpy/issues/3879 is fixed
+    # TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
         warnings.filterwarnings(
