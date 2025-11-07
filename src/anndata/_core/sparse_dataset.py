@@ -27,6 +27,8 @@ import scipy.sparse as ss
 from packaging.version import Version
 from scipy.sparse import _sparsetools
 
+from testing.anndata._doctest import doctest_filterwarnings
+
 from .. import abc
 from .._settings import settings
 from .._warnings import warn
@@ -666,6 +668,7 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
+@doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 def sparse_dataset(
     group: GroupStorageType,
     *,

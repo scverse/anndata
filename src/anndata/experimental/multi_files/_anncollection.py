@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from h5py import Dataset
 
+from testing.anndata._doctest import doctest_filterwarnings
+
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_index, _normalize_indices
@@ -574,6 +576,7 @@ DictCallable = dict[str, Callable]
 ConvertType = Callable | dict[str, Callable | DictCallable]
 
 
+@doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     """\
     Lazily concatenate AnnData objects along the `obs` axis.

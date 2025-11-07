@@ -369,11 +369,8 @@ def _clean_uns(adata: AnnData):  # noqa: F821
         del adata.uns[cats_name]
 
 
-def _move_adj_mtx(d):
-    """
-    Read-time fix for moving adjacency matrices from uns to obsp
-    """
-
+def _move_adj_mtx(d) -> None:
+    """Read-time fix for moving adjacency matrices from uns to obsp."""
     n = d.get("uns", {}).get("neighbors", {})
     obsp = d.setdefault("obsp", {})
 

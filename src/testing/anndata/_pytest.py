@@ -17,8 +17,10 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Sequence
     from pathlib import Path
+
+    from ._doctest import WarningFilter
 
 
 @pytest.fixture(autouse=True)
@@ -46,14 +48,18 @@ def _doctest_env(
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
         func = import_name(request.node.name)
-        if msg := getattr(func, "__deprecated__", None):
+        if msg := cast("str | None", getattr(func, "__deprecated__", None)):
             warnings.filterwarnings(
                 "ignore", category=FutureWarning, message=re.escape(msg)
             )
-        if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
-            mod
-        ):
+        if (
+            mod := cast("str | None", getattr(func, "_doctest_needs", None))
+        ) is not None and not find_spec(mod):
             request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
+        for filter in cast(
+            "Sequence[WarningFilter]", getattr(func, "_doctest_warning_filter", ())
+        ):
+            warnings.filterwarnings(*filter)
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield
