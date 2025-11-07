@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from anndata._types import Join_T
 
 mark_legacy_concatenate = pytest.mark.filterwarnings(
-    r"ignore:.*concatenate is deprecated:FutureWarning"
+    r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"
 )
 
 

@@ -1514,7 +1514,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     @deprecated(
         deprecation_msg(
-            *("concatenate", "anndata.concat"),
+            *("AnnData.concatenate", "anndata.concat"),
             "See the tutorial for concat at: "
             "https://anndata.readthedocs.io/en/latest/concatenation.html",
         )
