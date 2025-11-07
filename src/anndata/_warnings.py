@@ -4,11 +4,16 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import legacy_api_wrap
+
 if TYPE_CHECKING:
     from typing import Any
 
 
-_FILE_PREFIXES: tuple[str, ...] = (str(Path(__file__).parent),)
+_FILE_PREFIXES: tuple[str, ...] = (
+    str(Path(__file__).parent),
+    str(Path(legacy_api_wrap.__file__).parent),
+)
 
 __all__ = [
     "ExperimentalFeatureWarning",

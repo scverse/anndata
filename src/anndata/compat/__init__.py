@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
+from legacy_api_wrap import legacy_api  # noqa: TID251
 from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
@@ -197,14 +198,7 @@ else:
             return "mock cupy.ndarray"
 
 
-if find_spec("legacy_api_wrap") or TYPE_CHECKING:
-    from legacy_api_wrap import legacy_api  # noqa: TID251
-
-    old_positionals = partial(legacy_api, category=FutureWarning)
-else:
-
-    def old_positionals(*old_positionals):
-        return lambda func: func
+old_positionals = partial(legacy_api, category=FutureWarning)
 
 
 #############################
