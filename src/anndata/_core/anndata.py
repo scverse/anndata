@@ -4,6 +4,7 @@ Main class and helper functions.
 
 from __future__ import annotations
 
+import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
