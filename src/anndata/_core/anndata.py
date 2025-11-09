@@ -661,7 +661,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
                     warn(msg, UserWarning)
                     value = value.toarray()
-                warnings.warn(
+                warnings.warn(  # noqa: TID251
                     "Modifying `X` on a view results in data being overridden",
                     ImplicitModificationWarning,
                     stacklevel=2,
