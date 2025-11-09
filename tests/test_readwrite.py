@@ -903,8 +903,12 @@ def test_write_string_types(tmp_path, diskfmt, roundtrip):
 def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
     import scanpy as sc
 
+    # TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ad.OldFormatWarning)
+        warnings.filterwarnings(
+            "ignore", r"Moving element.*uns.*to.*obsp", FutureWarning
+        )
         pbmc = sc.datasets.pbmc68k_reduced()
 
     # Do we read okay
@@ -938,6 +942,7 @@ def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
 # Checking if we can read legacy zarr files
 # TODO: Check how I should add this file to the repo
 @pytest.mark.filterwarnings("ignore::anndata.OldFormatWarning")
+@pytest.mark.filterwarnings(r"ignore:Moving element.*uns.*to.*obsp:FutureWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 @pytest.mark.skipif(
     not Path(HERE / "data/pbmc68k_reduced_legacy.zarr.zip").is_file(),

@@ -12,9 +12,9 @@ authors = [
     { name = "Alex Wolf" },
     { name = "Isaac Virshup" },
     { name = "Sergei Rybakov" },
+    { name = "Ilan Gold" },
 ]
 maintainers = [
-    { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
     { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
@@ -31,6 +31,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -93,7 +94,7 @@ test-min = [
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.6.3",
-    "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
+    "pyarrow",
     "anndata[dask]",
 ]
 test = [
@@ -247,6 +248,7 @@ extend-immutable-calls = [ "slice" ]
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 "legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
+"warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true

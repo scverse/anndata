@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
@@ -18,6 +17,8 @@ from anndata._io.utils import report_read_key_on_error, report_write_key_on_erro
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+
+from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -368,7 +369,7 @@ class LazyReader(Reader):
         )
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
-            warnings.warn(msg, stacklevel=2)
+            warn(msg, UserWarning)
         read_params = inspect.signature(read_func).parameters
         for kwarg in kwargs:
             if kwarg not in read_params:
@@ -422,7 +423,7 @@ class Writer:
                 raise ValueError(msg)
             else:
                 msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
-                warnings.warn(msg, FutureWarning, stacklevel=2)
+                warn(msg, FutureWarning)
 
         if isinstance(store, h5py.File):
             store = store["/"]

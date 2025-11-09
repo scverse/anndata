@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, get_args
 
 import numpy as np
@@ -15,6 +14,7 @@ from ..utils import (
     ensure_df_homogeneous,
     join_english,
     raise_value_error_if_multiindex_columns,
+    warn,
 )
 from .xarray import Dataset2D
 
@@ -44,7 +44,7 @@ def coerce_array(
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
-            warnings.warn(msg, ImplicitModificationWarning, stacklevel=3)
+            warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
     if _is_array_api_compatible(value):
