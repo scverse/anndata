@@ -142,7 +142,6 @@ def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
                 raise IndexError(msg)
             return indexer
 
-        # all good, you can return it
         elif xp.issubdtype(dtype, xp.integer):
             return indexer
         # float number case

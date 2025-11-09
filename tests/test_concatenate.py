@@ -1883,3 +1883,18 @@ def test_1d_concat():
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)
+
+
+# def test_concatenate_dtype():
+#     X1 = np.array([[1, 2, 3], [4, 5, 6]], dtype=int)
+#     X2 = np.array([[3, 2, 1], [6, 5, 4]], dtype=int)
+#     X3 = np.array([[3, 2], [6, 5]], dtype=int)
+#     adata1 = AnnData(X1, dict(obs_names=["s1", "s2"]), dict(var_names=["a", "b", "c"]))
+#     adata2 = AnnData(X2, dict(obs_names=["s3", "s4"]), dict(var_names=["a", "b", "c"]))
+#     adata3 = AnnData(X3, dict(obs_names=["s5", "s6"]), dict(var_names=["b", "c"]))
+#     adata_inner = concat([adata1, adata2, adata3], join="inner")
+#     assert adata_inner.X.dtype == np.int64, (
+#         "dtype should be int unexpectedly in inner join"
+#     )
+#     adata_outer = adata1.concatenate(adata2, adata3, join="outer")
+#     assert adata_outer.X.dtype == np.float64, "dtype should be float after outer join"

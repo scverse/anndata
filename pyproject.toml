@@ -185,7 +185,7 @@ markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
-    "jax: mark tests to run with jax backend",
+    "jax: mark test to run with jax backend",
 ]
 
 [tool.ruff]

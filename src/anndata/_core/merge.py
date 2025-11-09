@@ -750,30 +750,33 @@ class Reindexer:
         return out
 
     def _apply_to_array_api(self, el, *, axis, fill_value=None):
-        if fill_value is None:
-            fill_value = default_fill_value([el])
         xp = get_namespace(el)
         indexer = xp.asarray(self.idx)
+        dtype = getattr(el, "dtype", None)
+
+        # Compute default fill_value if needed
+        if fill_value is None:
+            fill_value = default_fill_value([el])
 
         # Handling edge case to mimic pandas behavior
         if el.shape[axis] == 0:
             shape = list(el.shape)
             shape[axis] = indexer.shape[0]
             # convert fill_value to the same type as el - to keep everything in the same dtype
-            # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
-            fv = xp.asarray(fill_value)
+            fv = xp.asarray(fill_value, dtype=dtype)
             return xp.broadcast_to(fv, shape)
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
         taken = xp.take(el, safe_indexer, axis=axis)
+        if not xp.any(missing_mask):
+            return taken
         # Expand mask so we can apply xp.where along the right axis
         shape = [1] * taken.ndim
         shape[axis] = missing_mask.shape[0]
         mask = missing_mask.reshape(shape)
 
-        # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
-        fv = xp.asarray(fill_value)
+        fv = xp.asarray(fill_value, dtype=dtype)
         fv_broadcast = xp.broadcast_to(fv, taken.shape)
 
         return xp.where(mask, fv_broadcast, taken)
@@ -892,14 +895,19 @@ def default_fill_value(els):
 
     This is largely due to backwards compat, and might not be the ideal solution.
     """
-    if any(
-        isinstance(el, CSMatrix | CSArray)
-        or (isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray))
-        for el in els
-    ):
-        return 0
-    else:
-        return np.nan
+
+    for el in els:
+        if isinstance(el, CSMatrix | CSArray) or (
+            isinstance(el, DaskArray) and isinstance(el._meta, CSMatrix | CSArray)
+        ):
+            return 0
+
+        # checking dtype for array-api-compatible arrays
+        dtype = getattr(el, "dtype", None)
+        if dtype is not None and np.issubdtype(dtype, np.integer):
+            return -1  # avoiding 0 in this case to prevent confusion with sparse arrays
+    # fallback for unknown or float
+    return np.nan
 
 
 def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
@@ -1849,6 +1857,17 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
+    # Due to the initial way, which used as a quick shape check to skip filling easily miss real missing values
+    # Had to introduce this hacky check to convert initially placed -1 to np.nan
+
+    # Convert -1 to np.nan if .X is integer type and contains -1
+    if (
+        isinstance(X, np.ndarray)
+        and np.issubdtype(X.dtype, np.integer)
+        and (X == -1).any()
+    ):
+        X = X.astype(float)
+        X[X == -1] = np.nan
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
