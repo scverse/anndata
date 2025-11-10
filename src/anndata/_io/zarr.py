@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
-from warnings import warn
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -13,6 +12,7 @@ from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
+from ..utils import warn
 from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
-
-T = TypeVar("T")
 
 
 @no_write_dataset_2d
@@ -129,10 +127,10 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     msg = (
-        f"'{dataset.name}' was written with a very old version of AnnData. "
+        f"{dataset.name!r} was written with a very old version of AnnData. "
         "Consider rewriting it."
     )
-    warn(msg, OldFormatWarning, stacklevel=3)
+    warn(msg, OldFormatWarning)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df

@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 import os
 import textwrap
-import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
@@ -11,15 +10,14 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias
-from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
+from ._warnings import warn
 from .compat import is_zarr_v2, old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
-    from typing import Any, TypeGuard
-
-T = TypeVar("T")
+    from typing import Any, Self, TypeGuard
 
 
 class DeprecatedOption(NamedTuple):
@@ -51,17 +49,17 @@ def describe(self: RegisteredOption, *, as_rst: bool = False) -> str:
     return textwrap.dedent(doc)
 
 
-class RegisteredOption(NamedTuple, Generic[T]):
+class RegisteredOption[T](NamedTuple):
     option: str
     default_value: T
     description: str
-    validate: Callable[[T], None]
+    validate: Callable[[T, SettingsManager], None]
     type: object
 
     describe = describe
 
 
-def check_and_get_environ_var(
+def check_and_get_environ_var[T](
     key: str,
     default_value: str,
     allowed_values: Sequence[str] | None = None,
@@ -93,7 +91,7 @@ def check_and_get_environ_var(
             f"Value {environ_value_or_default_value!r} is not in allowed {allowed_values} for environment variable {key}. "
             f"Default {default_value} will be used."
         )
-        warnings.warn(msg, UserWarning, stacklevel=3)
+        warn(msg, UserWarning)
         environ_value_or_default_value = default_value
     return (
         cast(environ_value_or_default_value)
@@ -200,13 +198,13 @@ class SettingsManager:
         )
 
     @old_positionals("default_value", "description", "validate", "option_type")
-    def register(
+    def register[T](
         self,
         option: str,
         *,
         default_value: T,
         description: str,
-        validate: Callable[[T], None],
+        validate: Callable[[T, Self], None],
         option_type: object | None = None,
         get_from_env: Callable[[str, T], T] = lambda x, y: y,
     ) -> None:
@@ -229,7 +227,7 @@ class SettingsManager:
             Default behavior is to return `default_value` without checking the environment.
         """
         try:
-            validate(default_value)
+            validate(default_value, self)
         except (ValueError, TypeError) as e:
             e.add_note(f"for option {option!r}")
             raise e
@@ -307,7 +305,7 @@ class SettingsManager:
             )
             raise AttributeError(msg)
         registered_option = self._registered_options[option]
-        registered_option.validate(val)
+        registered_option.validate(val, self)
         self._config[option] = val
 
     def __getattr__(self, option: str) -> object:
@@ -326,7 +324,7 @@ class SettingsManager:
         if option in self._deprecated_options:
             deprecated = self._deprecated_options[option]
             msg = f"{option!r} will be removed in {deprecated.removal_version}. {deprecated.message}"
-            warnings.warn(msg, FutureWarning, stacklevel=2)
+            warn(msg, FutureWarning)
         if option in self._config:
             return self._config[option]
         msg = f"{option} not found."
@@ -364,10 +362,13 @@ class SettingsManager:
         """
         restore = {a: getattr(self, a) for a in overrides}
         try:
-            for attr, value in overrides.items():
-                setattr(self, attr, value)
+            # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding
+            for k in self._config:
+                if k in overrides:
+                    setattr(self, k, overrides.get(k))
             yield None
         finally:
+            # TODO: does the order need to be preserved when restoring?
             for attr, value in restore.items():
                 setattr(self, attr, value)
 
@@ -391,11 +392,10 @@ settings = SettingsManager()
 ##################################################################################
 # PLACE REGISTERED SETTINGS HERE SO THEY CAN BE PICKED UP FOR DOCSTRING CREATION #
 ##################################################################################
-V = TypeVar("V")
 
 
-def gen_validator(_type: type[V]) -> Callable[[V], None]:
-    def validate_type(val: V) -> None:
+def gen_validator[V](_type: type[V]) -> Callable[[V, SettingsManager], None]:
+    def validate_type(val: V, settings: SettingsManager) -> None:
         if not isinstance(val, _type):
             msg = f"{val} not valid {_type}"
             raise TypeError(msg)
@@ -434,14 +434,28 @@ settings.register(
 )
 
 
-def validate_zarr_write_format(format: int):
-    validate_int(format)
+def validate_zarr_write_format(format: int, settings: SettingsManager):
+    validate_int(format, settings)
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
     if format == 3 and is_zarr_v2():
         msg = "Cannot write v3 format against v2 package"
         raise ValueError(msg)
+    if format == 2 and getattr(settings, "auto_shard_zarr_v3", False):
+        msg = "Cannot set `zarr_write_format` to 2 with autosharding on.  Please set to `False` `anndata.settings.auto_shard_zarr_v3`"
+        raise ValueError(msg)
+
+
+def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
+    validate_bool(auto_shard, settings)
+    if auto_shard:
+        if is_zarr_v2():
+            msg = "Cannot use sharding with `zarr-python<3`. Please upgrade package and set `anndata.settings.zarr_write_format` to 3."
+            raise ValueError(msg)
+        if settings.zarr_write_format == 2:
+            msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
+            raise ValueError(msg)
 
 
 settings.register(
@@ -458,8 +472,8 @@ settings.register(
 )
 
 
-def validate_sparse_settings(val: Any) -> None:
-    validate_bool(val)
+def validate_sparse_settings(val: Any, settings: SettingsManager) -> None:
+    validate_bool(val, settings)
 
 
 settings.register(
@@ -483,6 +497,14 @@ settings.register(
     default_value=False,
     description="Whether or not to disallow the `/` character in keys for h5ad files",
     validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "auto_shard_zarr_v3",
+    default_value=False,
+    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
+    validate=validate_zarr_sharding,
     get_from_env=check_and_get_bool,
 )
 

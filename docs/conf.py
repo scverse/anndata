@@ -92,6 +92,10 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata._core.raw.Raw"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # TODO: remove once https://github.com/sphinx-doc/sphinx/pull/13508 is released
+    ("py:class", "anndata.typing.TypeAliasType"),
+    ("py:class", "anndata._types.TypeAliasType"),
+    ("py:class", "anndata._io.specs.registry.TypeAliasType"),
 ]
 
 
@@ -134,6 +138,7 @@ intersphinx_mapping = dict(
     obstore=("https://developmentseed.org/obstore/latest/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     # TODO: switch to `/3` once docs are built with Python 3.14
+    # https://github.com/readthedocs/readthedocs.org/issues/12523
     python=("https://docs.python.org/3.13", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
@@ -178,10 +183,6 @@ qualname_overrides = {
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
-    **{
-        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
-        for v in ["In", "Co", "Contra"]
-    },
 )
 
 # -- Social cards ---------------------------------------------------------

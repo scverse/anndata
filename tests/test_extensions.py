@@ -46,18 +46,6 @@ def adata() -> ad.AnnData:
     return ad.AnnData(X=rng.poisson(1, size=(10, 10)))
 
 
-def test_find_stacklevel() -> None:
-    """Test that find_stacklevel returns a positive integer.
-
-    This function helps determine the correct stacklevel for warnings, so
-    we just need to verify it returns a sensible value.
-    """
-    level = extensions.find_stacklevel()
-    assert isinstance(level, int)
-    # It should be at least 1, otherwise something is wrong.
-    assert level > 0
-
-
 def test_accessor_namespace() -> None:
     """Test the behavior of the AccessorNameSpace descriptor.
 

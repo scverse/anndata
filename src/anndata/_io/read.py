@@ -7,7 +7,6 @@ from os import PathLike, fspath
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
-from warnings import warn
 
 import h5py
 import numpy as np
@@ -16,6 +15,7 @@ from scipy import sparse
 
 from .. import AnnData
 from ..compat import old_positionals
+from ..utils import deprecated, warn
 from .utils import is_float
 
 if TYPE_CHECKING:
@@ -156,6 +156,10 @@ def _fmt_loom_axis_attrs(
     return axis_df, axis_mapping
 
 
+@deprecated(
+    "Deprecated in favor of other formats, e.g. (`write_h5ad` and then) `read_h5ad`. "
+    "Loom isn’t well-maintained and supports only a subset of anndata features.",
+)
 @old_positionals(
     "sparse",
     "cleanup",
@@ -235,7 +239,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
             "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
             "In 0.9 this will be an error."
         )
-        warn(msg, FutureWarning, stacklevel=2)
+        warn(msg, FutureWarning)
         if obsm_mapping != {}:
             msg = (
                 "Received values for both `obsm_names` and `obsm_mapping`. This is "
@@ -248,7 +252,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
             "Argument varm_names has been deprecated in favour of `varm_mapping`. "
             "In 0.9 this will be an error."
         )
-        warn(msg, FutureWarning, stacklevel=2)
+        warn(msg, FutureWarning)
         if varm_mapping != {}:
             msg = (
                 "Received values for both `varm_names` and `varm_mapping`. This is "

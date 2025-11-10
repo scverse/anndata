@@ -6,17 +6,19 @@ from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING, TypeVar
-from warnings import warn
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
+from legacy_api_wrap import legacy_api  # noqa: TID251
 from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
+
+from .._warnings import warn
 
 if TYPE_CHECKING:
     from typing import Any
@@ -83,7 +85,7 @@ def is_zarr_v2() -> bool:
 
 if is_zarr_v2():
     msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning, stacklevel=2)
+    warn(msg, DeprecationWarning)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -196,14 +198,7 @@ else:
             return "mock cupy.ndarray"
 
 
-if find_spec("legacy_api_wrap") or TYPE_CHECKING:
-    from legacy_api_wrap import legacy_api  # noqa: TID251
-
-    old_positionals = partial(legacy_api, category=FutureWarning)
-else:
-
-    def old_positionals(*old_positionals):
-        return lambda func: func
+old_positionals = partial(legacy_api, category=FutureWarning)
 
 
 #############################
@@ -325,12 +320,9 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
-
-
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe(
+def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
     f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
@@ -371,10 +363,8 @@ def _clean_uns(adata: AnnData):  # noqa: F821
         del adata.uns[cats_name]
 
 
-def _move_adj_mtx(d):
-    """
-    Read-time fix for moving adjacency matrices from uns to obsp
-    """
+def _move_adj_mtx(d) -> None:
+    """Read-time fix for moving adjacency matrices from uns to obsp."""
     n = d.get("uns", {}).get("neighbors", {})
     obsp = d.setdefault("obsp", {})
 
@@ -388,8 +378,7 @@ def _move_adj_mtx(d):
                 f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
                 "This is where adjacency matrices should go now."
             )
-            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
-            warn(msg, FutureWarning, stacklevel=5)
+            warn(msg, FutureWarning)
             obsp[k] = n.pop(k)
 
 

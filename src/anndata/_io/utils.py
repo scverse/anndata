@@ -4,9 +4,9 @@ from collections.abc import Callable
 from functools import WRAPPER_ASSIGNMENTS, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, cast
-from warnings import warn
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -128,7 +128,7 @@ def read_attribute(*args, **kwargs):
     from .specs import read_elem
 
     msg = "This internal function has been deprecated, please use read_elem instead"
-    warn(msg, FutureWarning, stacklevel=2)
+    warn(msg, FutureWarning)
     return read_elem(*args, **kwargs)
 
 
@@ -136,7 +136,7 @@ def write_attribute(*args, **kwargs):
     from .specs import write_elem
 
     msg = "This internal function has been deprecated, please use write_elem instead"
-    warn(msg, FutureWarning, stacklevel=2)
+    warn(msg, FutureWarning)
     return write_elem(*args, **kwargs)
 
 

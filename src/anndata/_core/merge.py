@@ -4,13 +4,13 @@ Code for merging/ concatenating AnnData objects.
 
 from __future__ import annotations
 
+import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, TypeVar
-from warnings import warn
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -29,7 +29,7 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
 )
-from ..utils import asarray, axis_len, warn_once
+from ..utils import asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -45,7 +45,6 @@ if TYPE_CHECKING:
 
     from ..compat import XDataArray, XDataset
 
-T = TypeVar("T")
 
 ###################
 # Utilities
@@ -152,7 +151,7 @@ def equal_dask_array(a, b) -> bool:
         # TODO: Maybe also do this in the other case?
         return da.map_blocks(equal, a, b, drop_axis=(0, 1)).all()
     msg = "Misaligned chunks detected when checking for merge equality of dask arrays.  Reading full arrays into memory."
-    warn(msg, UserWarning, stacklevel=3)
+    warn(msg, UserWarning)
     return equal(a.compute(), b.compute())
 
 
@@ -279,7 +278,7 @@ def unify_dtypes(
 
 def try_unifying_dtype(  # noqa PLR0911, PLR0912
     col: Sequence[np.dtype | ExtensionDtype],
-) -> pd.core.dtypes.base.ExtensionDtype | None:
+) -> ExtensionDtype | None:
     """
     If dtypes can be unified, returns the dtype they would be unified to.
 
@@ -429,7 +428,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value(vals: Collection[T]) -> T | MissingVal:
+def unique_value[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -441,7 +440,7 @@ def unique_value(vals: Collection[T]) -> T | MissingVal:
     return unique_val
 
 
-def first(vals: Collection[T]) -> T | MissingVal:
+def first[T](vals: Collection[T]) -> T | MissingVal:
     """
     Given a collection of vals, return the first non-missing one.If they're all missing,
     return MissingVal.
@@ -452,7 +451,7 @@ def first(vals: Collection[T]) -> T | MissingVal:
     return MissingVal
 
 
-def only(vals: Collection[T]) -> T | MissingVal:
+def only[T](vals: Collection[T]) -> T | MissingVal:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -983,12 +982,12 @@ def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
-        warn_once(
+        msg = (
             "Outer joins on awkward.Arrays will have different return values in the future. "
             "For details, and to offer input, please see:\n\n\t"
-            "https://github.com/scverse/anndata/issues/898",
-            ExperimentalFeatureWarning,
+            "https://github.com/scverse/anndata/issues/898"
         )
+        warn_once(msg, ExperimentalFeatureWarning)
         # all_keys = union_keys(el.fields for el in els if not_missing(el))
         reindexers = []
         for el in els:
@@ -1251,6 +1250,7 @@ def make_dask_col_from_extension_dtype(
             chunks=chunk_size,
             meta=np.array([], dtype=dtype),
             dtype=dtype,
+            name=f"{uuid.uuid4()}/{base_path_or_zarr_group}/{elem_name}-{dtype}",
         )
 
     return da.from_array(col.values, chunks=-1)  # in-memory
@@ -1776,7 +1776,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."
         )
-        warn(msg, UserWarning, stacklevel=2)
+        warn(msg, UserWarning)
     return AnnData(**{
         "X": X,
         "layers": layers,
