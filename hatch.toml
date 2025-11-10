@@ -42,7 +42,7 @@ overrides.matrix.deps.python = [
 ]
 overrides.matrix.deps.features = [
     { if = [ "stable", "pre" ], value = "test" },
-    { if = [ "array-api" ], value = [ "test-min", "jax" ] },
+    { if = [ "array-api" ], value = "test-array-api" },
 ]
 overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
 
