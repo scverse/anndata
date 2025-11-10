@@ -47,4 +47,4 @@ overrides.matrix.deps.features = [
 overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
 
 [[envs.hatch-test.matrix]]
-deps = [ "stable", "pre", "min", "array-api" ]
+deps = [ "stable", "pre", "min", "array_api" ]
