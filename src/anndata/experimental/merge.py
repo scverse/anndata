@@ -101,15 +101,6 @@ def _gen_slice_to_append(
 ###################
 
 
-class ListContextManager(list):
-    def __enter__(self) -> list:
-        return [v.__enter__() for v in self]
-
-    def __exit__(self, *exc):
-        for v in self:
-            v.__exit__(*exc)
-
-
 @singledispatch
 @contextmanager
 def as_group(store, *, mode: str) -> Generator[ZarrGroup | H5Group]:
