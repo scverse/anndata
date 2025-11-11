@@ -86,6 +86,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: hatch-test.stable,gpu
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
