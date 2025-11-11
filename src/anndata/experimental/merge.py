@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping
+from contextlib import contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
@@ -30,7 +31,7 @@ from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
     from typing import Any, Literal
 
     from .._core.merge import Reindexer, StrategiesLiteral
@@ -100,36 +101,52 @@ def _gen_slice_to_append(
 ###################
 
 
+class ListContextManager(list):
+    def __enter__(self) -> list:
+        return [v.__enter__() for v in self]
+
+    def __exit__(self, *exc):
+        for v in self:
+            v.__exit__(*exc)
+
+
 @singledispatch
-def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def as_group(store, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
 
 @as_group.register(PathLike)
 @as_group.register(str)
-def _(store: PathLike[str] | str, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def _(store: PathLike[str] | str, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, mode=mode)
+        f = h5py.File(store, mode=mode)
+        try:
+            yield f
+        finally:
+            f.close()
 
-    if mode == "r":  # others all write: r+, a, w, w-
+    elif mode == "r":  # others all write: r+, a, w, w-
         import zarr
 
-        return zarr.open_group(store, mode=mode)
+        yield zarr.open_group(store, mode=mode)
+    else:
+        from anndata._io.zarr import open_write_group
 
-    from anndata._io.zarr import open_write_group
-
-    return open_write_group(store, mode=mode)
+        yield open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def _(store: ZarrGroup | H5Group, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     del mode
-    return store
+    yield store
 
 
 ###################
@@ -448,8 +465,9 @@ def _write_alt_pairwise(
 
 
 def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
-    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
-    out_file: PathLike[str] | str,
+    in_files: Collection[PathLike[str] | str | H5Group | ZarrGroup]
+    | Mapping[str, PathLike[str] | str | H5Group | ZarrGroup],
+    out_file: PathLike[str] | str | H5Group | ZarrGroup,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -590,10 +608,11 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    out_file = Path(out_file)
-    if not out_file.parent.exists():
-        msg = f"Parent directory of {out_file} does not exist."
-        raise FileNotFoundError(msg)
+    if is_out_path_like := isinstance(out_file, str | PathLike):
+        out_file = Path(out_file)
+        if not out_file.parent.exists():
+            msg = f"Parent directory of {out_file} does not exist."
+            raise FileNotFoundError(msg)
 
     if isinstance(in_files, Mapping):
         if keys is not None:
@@ -606,7 +625,11 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     else:
         in_files = list(in_files)
 
-    if len(in_files) == 1:
+    if (
+        len(in_files) == 1
+        and isinstance(in_files[0], str | PathLike)
+        and is_out_path_like
+    ):
         shutil.copy2(in_files[0], out_file)
         return
 
@@ -616,101 +639,105 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     axis, axis_name = _resolve_axis(axis)
     _, alt_axis_name = _resolve_axis(1 - axis)
 
-    output_group = as_group(out_file, mode="w")
-    groups = [as_group(f, mode="r") for f in in_files]
+    with (
+        as_group(out_file, mode="w") as output_group,
+        ListContextManager([as_group(f, mode="r") for f in in_files]) as groups,
+    ):
+        use_reindexing = False
 
-    use_reindexing = False
+        alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
+        # All {axis_name}_names must be equal if reindexing not applied
+        if not _indices_equal(alt_idxs):
+            use_reindexing = True
 
-    alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
-    # All {axis_name}_names must be equal if reindexing not applied
-    if not _indices_equal(alt_idxs):
-        use_reindexing = True
+        # All groups must be anndata
+        if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
+            msg = "All groups must be anndata"
+            raise ValueError(msg)
 
-    # All groups must be anndata
-    if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
-        msg = "All groups must be anndata"
-        raise ValueError(msg)
+        # Write metadata
+        output_group.attrs.update({
+            "encoding-type": "anndata",
+            "encoding-version": "0.1.0",
+        })
 
-    # Write metadata
-    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
+        # Read the backed objects of Xs
+        Xs = [read_as_backed(g["X"]) for g in groups]
 
-    # Read the backed objects of Xs
-    Xs = [read_as_backed(g["X"]) for g in groups]
-
-    # Label column
-    label_col = pd.Categorical.from_codes(
-        np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
-        categories=keys,
-    )
-
-    # Combining indexes
-    concat_indices = pd.concat(
-        [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
-    )
-    if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
+        # Label column
+        label_col = pd.Categorical.from_codes(
+            np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
+            categories=keys,
         )
 
-    # Resulting indices for {axis_name} and {alt_axis_name}
-    concat_indices = pd.Index(concat_indices)
+        # Combining indexes
+        concat_indices = pd.concat(
+            [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
+        )
+        if index_unique is not None:
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str, na_action="ignore"), sep=index_unique
+            )
 
-    alt_index = merge_indices(alt_idxs, join=join)
+        # Resulting indices for {axis_name} and {alt_axis_name}
+        concat_indices = pd.Index(concat_indices)
 
-    reindexers = None
-    if use_reindexing:
-        reindexers = [
-            gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
-        ]
-    else:
-        reindexers = [IdentityReindexer()] * len(groups)
+        alt_index = merge_indices(alt_idxs, join=join)
 
-    # Write {axis_name}
-    _write_axis_annot(
-        groups, output_group, axis_name, concat_indices, label, label_col, join
-    )
+        reindexers = None
+        if use_reindexing:
+            reindexers = [
+                gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
+            ]
+        else:
+            reindexers = [IdentityReindexer()] * len(groups)
 
-    # Write {alt_axis_name}
-    _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
+        # Write {axis_name}
+        _write_axis_annot(
+            groups, output_group, axis_name, concat_indices, label, label_col, join
+        )
 
-    # Write {alt_axis_name}m
-    _write_alt_mapping(groups, output_group, alt_axis_name, merge, reindexers)
+        # Write {alt_axis_name}
+        _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
 
-    # Write {alt_axis_name}p
-    _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
+        # Write {alt_axis_name}m
+        _write_alt_mapping(groups, output_group, alt_axis_name, merge, reindexers)
 
-    # Write X
+        # Write {alt_axis_name}p
+        _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
 
-    _write_concat_arrays(
-        arrays=Xs,
-        output_group=output_group,
-        output_path="X",
-        axis=axis,
-        reindexers=reindexers,
-        fill_value=fill_value,
-        max_loaded_elems=max_loaded_elems,
-    )
+        # Write X
 
-    # Write Layers and {axis_name}m
-    mapping_names = [
-        (
-            f"{axis_name}m",
-            concat_indices,
-            0,
-            None if use_reindexing else [IdentityReindexer()] * len(groups),
-        ),
-        ("layers", None, axis, reindexers),
-    ]
-    for m, m_index, m_axis, m_reindexers in mapping_names:
-        maps = [read_as_backed(g[m]) for g in groups]
-        _write_concat_mappings(
-            maps,
-            output_group,
-            intersect_keys(maps),
-            m,
-            max_loaded_elems=max_loaded_elems,
-            axis=m_axis,
-            index=m_index,
-            reindexers=m_reindexers,
+        _write_concat_arrays(
+            arrays=Xs,
+            output_group=output_group,
+            output_path="X",
+            axis=axis,
+            reindexers=reindexers,
             fill_value=fill_value,
+            max_loaded_elems=max_loaded_elems,
         )
+
+        # Write Layers and {axis_name}m
+        mapping_names = [
+            (
+                f"{axis_name}m",
+                concat_indices,
+                0,
+                None if use_reindexing else [IdentityReindexer()] * len(groups),
+            ),
+            ("layers", None, axis, reindexers),
+        ]
+        for m, m_index, m_axis, m_reindexers in mapping_names:
+            maps = [read_as_backed(g[m]) for g in groups]
+            _write_concat_mappings(
+                maps,
+                output_group,
+                intersect_keys(maps),
+                m,
+                max_loaded_elems=max_loaded_elems,
+                axis=m_axis,
+                index=m_index,
+                reindexers=m_reindexers,
+                fill_value=fill_value,
+            )
