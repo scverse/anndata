@@ -509,9 +509,6 @@ def merge_only(ds: Collection[Mapping]) -> Mapping:
 # Interface
 ###################
 
-# Leaving out for now, it's ugly in the rendered docs and would be adding a dependency.
-# from typing_extensions import Literal
-# UNS_STRATEGIES_TYPE = Literal[None, "same", "unique", "first", "only"]
 MERGE_STRATEGIES = {
     None: lambda x: {},
     "same": merge_same,
