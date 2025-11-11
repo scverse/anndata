@@ -22,6 +22,10 @@ ARCHIVE_PTH = Path(__file__).parent / "data/archives"
 
 @pytest.fixture(params=list(ARCHIVE_PTH.glob("v*")), ids=lambda x: x.name)
 def archive_dir(request: pytest.FixtureRequest) -> Path:
+    assert isinstance(request.param, Path)
+    if request.param.name == "v0.5.0":
+        reason = "v0.5.0 has no zarr and very different format"
+        request.applymarker(pytest.mark.xfail(reason=reason))
     return request.param
 
 

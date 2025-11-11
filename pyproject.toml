@@ -67,9 +67,9 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.15.3",
+    "scanpydoc[theme,typehints] >=0.16",
     "awkward>=2.6.3",
-    "IPython",                             # For syntax highlighting in notebooks
+    "IPython",                           # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     # for unreleased changes
@@ -238,6 +238,7 @@ extend-immutable-calls = [ "slice" ]
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 "legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
+"warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true

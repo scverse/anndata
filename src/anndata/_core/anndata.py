@@ -4,7 +4,6 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
@@ -31,8 +30,10 @@ from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
     deprecated,
+    deprecation_msg,
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
+    warn,
 )
 from .access import ElementRef
 from .aligned_df import _gen_dataframe
@@ -171,6 +172,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     .. _statsmodels: http://www.statsmodels.org/stable/index.html
     .. _scikit-learn: http://scikit-learn.org/
     """
+
+    _DONT_HIDE_DEPRECATED: ClassVar = {"concatenate"}
 
     _BACKED_ATTRS: ClassVar[list[str]] = ["X", "raw.X"]
 
@@ -405,7 +408,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 msg = (
                     "The dtype argument is deprecated and will be removed in late 2024."
                 )
-                warnings.warn(msg, FutureWarning, stacklevel=3)
+                warn(msg, FutureWarning)
                 if issparse(X) or isinstance(X, ma.MaskedArray):
                     # TODO: maybe use view on data attribute of sparse matrix
                     #       as in readwrite.read_10x_h5
@@ -625,7 +628,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                         "To avoid this potential issue, please make a copy of the data first. "
                         "In the future, this operation will throw an error."
                     )
-                    warnings.warn(msg, FutureWarning, stacklevel=1)
+                    warn(msg, FutureWarning)
                 if self.shape != value.shape:
                     # For assigning vector of values to 2d array or matrix
                     # Not necessary for row of 2d array
@@ -650,18 +653,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 elif sparse.issparse(value) and isinstance(
                     self._adata_ref._X, np.ndarray
                 ):
-                    warnings.warn(
-                        "Trying to set a dense array with a sparse array on a view."
-                        "Densifying the sparse array."
-                        "This may incur excessive memory usage",
-                        stacklevel=2,
+                    msg = (
+                        "Trying to set a dense array with a sparse array on a view. "
+                        "Densifying the sparse array. "
+                        "This may incur excessive memory usage"
                     )
+                    warn(msg, UserWarning)
                     value = value.toarray()
-                warnings.warn(
-                    "Modifying `X` on a view results in data being overridden",
-                    ImplicitModificationWarning,
-                    stacklevel=2,
-                )
+                msg = "Modifying `X` on a view results in data being overridden"
+                warn(msg, ImplicitModificationWarning)
                 self._adata_ref._X[oidx, vidx] = value
             else:
                 self._X = value
@@ -806,7 +806,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     Inferred to be: {infer_dtype(value)}
                 """
             )
-            warnings.warn(msg, stacklevel=2)
+            warn(msg, UserWarning)
         return value
 
     def _set_dim_index(self, value: pd.Index, attr: str):
@@ -935,27 +935,51 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    @deprecated("obs (e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)")
+    @deprecated(
+        deprecation_msg(
+            *("obs_keys", "obs"),
+            "(e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)",
+        )
+    )
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
         return self._obs.keys().tolist()
 
-    @deprecated("var (e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)")
+    @deprecated(
+        deprecation_msg(
+            *("var_keys", "var"),
+            "(e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)",
+        )
+    )
     def var_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`var`."""
         return self._var.keys().tolist()
 
-    @deprecated("obsm (e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)")
+    @deprecated(
+        deprecation_msg(
+            *("obsm_keys", "obsm"),
+            "(e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)",
+        )
+    )
     def obsm_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obsm`."""
         return list(self.obsm.keys())
 
-    @deprecated("varm (e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)")
+    @deprecated(
+        deprecation_msg(
+            *("varm_keys", "varm"),
+            "(e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)",
+        )
+    )
     def varm_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`varm`."""
         return list(self.varm.keys())
 
-    @deprecated("uns (e.g. `k in adata.uns` or `sorted(adata.uns)`)")
+    @deprecated(
+        deprecation_msg(
+            "uns_keys", "uns", "(e.g. `k in adata.uns` or `sorted(adata.uns)`)"
+        )
+    )
     def uns_keys(self) -> list[str]:
         """List keys of unstructured annotation."""
         return sorted(self._uns.keys())
@@ -963,7 +987,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     @property
     def isbacked(self) -> bool:
         """`True` if object is backed on disk, `False` otherwise."""
-        return self.filename is not None
+        is_filename_none = self.filename is not None
+        is_x_none = (
+            getattr(self._adata_ref if self._is_view else self, "_X", None) is None
+        )
+        return is_filename_none and is_x_none
 
     @property
     def is_view(self) -> bool:
@@ -1326,7 +1354,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     "In a future version of AnnData, access to `.X` by passing"
                     " `layer='X'` will be removed. Instead pass `layer=None`."
                 )
-                warnings.warn(msg, FutureWarning, stacklevel=2)
+                warn(msg, FutureWarning)
                 layer = None
         return get_vector(self, k, "obs", "var", layer=layer)
 
@@ -1358,11 +1386,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     "In a future version of AnnData, access to `.X` by passing "
                     "`layer='X'` will be removed. Instead pass `layer=None`."
                 )
-                warnings.warn(msg, FutureWarning, stacklevel=2)
+                warn(msg, FutureWarning)
                 layer = None
         return get_vector(self, k, "var", "obs", layer=layer)
 
-    @deprecated("obs_vector")
+    @deprecated(deprecation_msg("_get_obs_array", "obs_vector"))
     def _get_obs_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
         """\
         Get an array from the layer (default layer='X') along the :attr:`obs`
@@ -1373,7 +1401,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         else:
             return self.raw.obs_vector(k)
 
-    @deprecated("var_vector")
+    @deprecated(deprecation_msg("_get_var_array", "var_vector"))
     def _get_var_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
         """\
         Get an array from the layer (default layer='X') along the :attr:`var`
@@ -1417,7 +1445,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     @old_positionals("copy")
     def to_memory(self, *, copy: bool = False) -> AnnData:
-        """Return a new AnnData object with all backed arrays loaded into memory.
+        """Return a new AnnData object with all non-in-memory arrays loaded into memory.
 
         Params
         ------
@@ -1489,10 +1517,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             return read_h5ad(filename, backed=mode)
 
     @deprecated(
-        "anndata.concat",
-        add_msg="See the tutorial for concat at: "
-        "https://anndata.readthedocs.io/en/latest/concatenation.html",
-        hide=False,
+        deprecation_msg(
+            *("AnnData.concatenate", "anndata.concat"),
+            "See the tutorial for concat at: "
+            "https://anndata.readthedocs.io/en/latest/concatenation.html",
+        )
     )
     def concatenate(
         self,
@@ -1937,8 +1966,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     @deprecated(
-        "write_h5ad",
-        add_msg="Loom isn’t well-maintained and supports only a subset of anndata features.",
+        "Deprecated in favor of other formats, e.g. `write_h5ad`. "
+        "Loom isn’t well-maintained and supports only a subset of anndata features."
     )
     @old_positionals("write_obsm_varm")
     def write_loom(
@@ -2076,8 +2105,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     # --------------------------------------------------------------------------
 
     @property
-    @deprecated("is_view")
-    def isview(self):
+    @deprecated(deprecation_msg("isview", "is_view"))
+    def isview(self) -> bool:
         return self.is_view
 
     def _clean_up_old_format(self, uns):
