@@ -134,20 +134,19 @@ def test_dask_distributed_write(
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
-    with as_group(pth, mode="w") as g:
-        with dd.Client(local_cluster_addr):
-            M, N = adata.X.shape
-            adata.obsm["a"] = da.random.random((M, 10))
-            adata.obsm["b"] = da.random.random((M, 10))
-            adata.varm["a"] = da.random.random((N, 10))
-            orig = adata
-            with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
-                ad.io.write_elem(g, "", orig)
-            # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
-            with as_group(pth, mode="r") as g:
-                if auto_shard_zarr_v3:
-                    check_all_sharded(g)
-                curr = ad.io.read_elem(g)
+    with as_group(pth, mode="w") as g, dd.Client(local_cluster_addr):
+        M, N = adata.X.shape
+        adata.obsm["a"] = da.random.random((M, 10))
+        adata.obsm["b"] = da.random.random((M, 10))
+        adata.varm["a"] = da.random.random((N, 10))
+        orig = adata
+        with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
+            ad.io.write_elem(g, "", orig)
+        # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
+        with as_group(pth, mode="r") as g:
+            if auto_shard_zarr_v3:
+                check_all_sharded(g)
+            curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
