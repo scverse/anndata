@@ -264,8 +264,10 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype == "string",
+                    "is_nullable_string": (
+                        isinstance(v, MaskedArray)
+                        and isinstance(v.dtype, pd.StringDtype | np.dtypes.StringDType)
+                    ),
                 },
             )
         elif k == dim_name:

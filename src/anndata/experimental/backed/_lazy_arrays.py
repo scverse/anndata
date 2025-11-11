@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from pandas._libs.missing import NAType
+    from pandas.core.dtypes.base import ExtensionDtype
     from xarray.core.extension_array import PandasExtensionArray
     from xarray.core.indexing import ExplicitIndexer
 
@@ -185,7 +187,7 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
         return PandasExtensionArray(extension_array)
 
     @cached_property
-    def dtype(self):
+    def dtype(self) -> np.dtypes.StringDType[NAType] | ExtensionDtype:
         if self._dtype_str == "nullable-integer":
             return pd.array(
                 [],
