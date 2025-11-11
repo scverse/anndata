@@ -149,19 +149,19 @@ def test_dask_distributed_write(
                     check_all_sharded(g)
                 curr = ad.io.read_elem(g)
 
-        with pytest.raises(AssertionError):
-            assert_equal(curr.obsm["a"], curr.obsm["b"])
+    with pytest.raises(AssertionError):
+        assert_equal(curr.obsm["a"], curr.obsm["b"])
 
-        assert_equal(curr.varm["a"], orig.varm["a"])
-        assert_equal(curr.obsm["a"], orig.obsm["a"])
-        assert_equal(curr.X, orig.X)
+    assert_equal(curr.varm["a"], orig.varm["a"])
+    assert_equal(curr.obsm["a"], orig.obsm["a"])
+    assert_equal(curr.X, orig.X)
 
-        assert isinstance(curr.X, np.ndarray)
-        assert isinstance(curr.obsm["a"], np.ndarray)
-        assert isinstance(curr.varm["a"], np.ndarray)
-        assert isinstance(orig.X, DaskArray)
-        assert isinstance(orig.obsm["a"], DaskArray)
-        assert isinstance(orig.varm["a"], DaskArray)
+    assert isinstance(curr.X, np.ndarray)
+    assert isinstance(curr.obsm["a"], np.ndarray)
+    assert isinstance(curr.varm["a"], np.ndarray)
+    assert isinstance(orig.X, DaskArray)
+    assert isinstance(orig.obsm["a"], DaskArray)
+    assert isinstance(orig.varm["a"], DaskArray)
 
 
 def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
