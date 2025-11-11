@@ -19,7 +19,7 @@ def test_old_format_warning_thrown() -> None:
             f"Moving element from .uns['neighbors'][{entry!r}] to .obsp[{entry!r}]."
         )
 
-    pth = DATA_DIR / "10x_pbmc68k_reduced_legacy.h5ad"
+    pth = DATA_DIR / "archives/v0.5.0/adata.h5ad"
     warnings.simplefilter("default", FutureWarning)
     with (
         pytest.warns(FutureWarning, match=msg_re("distances")),
