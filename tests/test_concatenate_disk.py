@@ -316,7 +316,7 @@ def test_no_open_h5_file_handles_after_error(tmp_path):
             f.close()
 
 
-def test_write_using_paths(tmp_path, file_format):
+def test_write_using_groups(tmp_path, file_format):
     in_pth = tmp_path / f"in.{file_format}"
     in_pth2 = tmp_path / f"in2.{file_format}"
     out_pth = tmp_path / f"out.{file_format}"
@@ -325,8 +325,6 @@ def test_write_using_paths(tmp_path, file_format):
     getattr(adata, f"write_{file_format}")(in_pth)
     getattr(adata, f"write_{file_format}")(in_pth2)
 
-    # Intentionally write an unsupported array type, which could leave dangling file handles:
-    # https://github.com/scverse/anndata/issues/2198
     with (
         as_group(in_pth, mode="r") as f1,
         as_group(in_pth2, mode="r") as f2,
