@@ -176,7 +176,7 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            extension_array = values.astype(self.dtype)
+            values = values.astype(self.dtype)
             values[mask] = pd.NA
             return values
         else:
