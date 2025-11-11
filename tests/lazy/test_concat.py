@@ -236,6 +236,7 @@ def test_concat_to_memory_var(
         stores_for_concat[store_idx].reset_key_trackers()
 
 
+@pytest.mark.filterwarnings("default:Dtype inference.*pandas.*deprecated:FutureWarning")
 @pytest.mark.xdist_group("dask")
 @pytest.mark.dask_distributed
 def test_concat_data_with_cluster_to_memory(
