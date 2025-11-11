@@ -662,7 +662,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     index_unique: str | None,
     fill_value: Any | None,
     merge: Callable[[Collection[Mapping]], Mapping],
-):
+) -> None:
     """Internal helper to minimize the amount of indented code within the context manager"""
     use_reindexing = False
 
@@ -677,10 +677,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         raise ValueError(msg)
 
     # Write metadata
-    output_group.attrs.update({
-        "encoding-type": "anndata",
-        "encoding-version": "0.1.0",
-    })
+    output_group.attrs.update({"encoding-type": "anndata", "encoding-version": "0.1.0"})
 
     # Read the backed objects of Xs
     Xs = [read_as_backed(g["X"]) for g in groups]
