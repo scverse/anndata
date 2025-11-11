@@ -18,8 +18,17 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Sequence
     from pathlib import Path
+
+    from ._doctest import WarningFilter
+
+
+# Hack, but I didn’t feel like adding rST syntax to define warning filters
+# TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
+_RST_FILTERS: Sequence[WarningFilter] = (
+    ("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning, "", 0),
+)
 
 
 @pytest.fixture(autouse=True)
@@ -48,19 +57,28 @@ def _doctest_env(
 
     from anndata.utils import import_name
 
+    assert isinstance(request.node, pytest.DoctestItem)
     assert isinstance(request.node.parent, pytest.Module)
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
         func = import_name(request.node.name)
-        warning_detail: tuple[type[Warning], str, bool] | None
-        if warning_detail := getattr(func, "__deprecated", None):
-            cat, msg, _ = warning_detail
-            warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
-        if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
-            mod
-        ):
+        if msg := cast("str | None", getattr(func, "__deprecated__", None)):
+            warnings.filterwarnings(
+                "ignore", category=FutureWarning, message=re.escape(msg)
+            )
+        if (
+            mod := cast("str | None", getattr(func, "_doctest_needs", None))
+        ) is not None and not find_spec(mod):
             request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
+        for filter in cast(
+            "Sequence[WarningFilter]", getattr(func, "_doctest_warning_filter", ())
+        ):
+            warnings.filterwarnings(*filter)
+    elif request.node.name.endswith(".rst"):
+        for filter in _RST_FILTERS:
+            warnings.filterwarnings(*filter)
+
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield

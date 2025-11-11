@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -26,15 +26,13 @@ if TYPE_CHECKING:
     from xarray.core.extension_array import PandasExtensionArray
     from xarray.core.indexing import ExplicitIndexer
 
-    from anndata._core.index import Index
     from anndata.compat import ZarrGroup
 
+    from ...compat import Index1DNorm
 
-K = TypeVar("K", H5Array, ZarrArray)
 
-
-class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
-    def __init__(self, array: K):
+class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
+    def __init__(self, array: K) -> None:
         self.chunks = array.chunks
         if isinstance(array, ZarrArray):
             super().__init__(array)
@@ -75,7 +73,7 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
         return self._array[key]
 
 
-class CategoricalArray(XBackendArray, Generic[K]):
+class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy categorical data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -110,9 +108,9 @@ class CategoricalArray(XBackendArray, Generic[K]):
     def categories(self) -> np.ndarray:
         if isinstance(self._categories, ZarrArray):
             return self._categories[...]
-        from ..._io.h5ad import read_dataset
+        from anndata.io import read_elem
 
-        return read_dataset(self._categories)
+        return read_elem(self._categories)
 
     def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
         from xarray.core.extension_array import PandasExtensionArray
@@ -130,7 +128,11 @@ class CategoricalArray(XBackendArray, Generic[K]):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-class MaskedArray(XBackendArray, Generic[K]):
+# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+type K = H5Array | ZarrArray
+
+
+class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -199,7 +201,9 @@ class MaskedArray(XBackendArray, Generic[K]):
 
 
 @_subset.register(XDataArray)
-def _subset_masked(a: XDataArray, subset_idx: Index):
+def _subset_masked(
+    a: XDataArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     return a[subset_idx]
 
 

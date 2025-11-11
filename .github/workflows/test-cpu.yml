@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-        io_mark: ["zarr_io", "not zarr_io"]
+        io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
     env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run tests
         run: |
-          hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          hatch run ${{ matrix.env.name }}:run-cov -v --color=yes ${{ matrix.io_mark != 'dask_distributed' && '-n auto' || '' }} --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
           hatch run ${{ matrix.env.name }}:cov-combine
           hatch run ${{ matrix.env.name }}:coverage xml
 

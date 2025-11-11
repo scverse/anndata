@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
@@ -10,6 +9,7 @@ from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset
+from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -78,12 +78,19 @@ def _gen_dataframe_df(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
+    if isinstance(anno.index, pd.MultiIndex):
+        msg = (
+            "pandas.MultiIndex not supported as index for obs or var on declaration.\n\
+            You can set `obs_names` manually although most operations after will error or convert to str.\n\
+            This behavior will likely be clarified in a future breaking release."
+        )
+        raise ValueError(msg)
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
     if not is_string_dtype(anno.index):
         msg = "Transforming to str index."
-        warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
+        warn(msg, ImplicitModificationWarning)
         anno.index = anno.index.astype(str)
     if not len(anno.columns):
         anno.columns = anno.columns.astype(str)

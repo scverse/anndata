@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import inspect
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+
+from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
@@ -30,9 +31,7 @@ if TYPE_CHECKING:
 
     from ..._core.xarray import Dataset2D
 
-    T = TypeVar("T")
-    W = TypeVar("W", bound=_WriteInternal)
-    LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
+    type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -70,10 +69,10 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
-def write_spec(spec: IOSpec):
+def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs):
+        def wrapper(g: GroupStorageType, k: str, *args, **kwargs) -> None:
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -84,20 +83,19 @@ def write_spec(spec: IOSpec):
     return decorator
 
 
-_R = TypeVar("_R", _ReadInternal, _ReadLazyInternal)
-R = TypeVar("R", Read, ReadLazy)
+class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
+    read: dict[tuple[type, IOSpec, frozenset[str]], RI]
+    read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
+    write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
+    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec]
 
+    def __init__(self) -> None:
+        self.read = {}
+        self.read_partial = {}
+        self.write = {}
+        self.write_specs = {}
 
-class IORegistry(Generic[_R, R]):
-    def __init__(self):
-        self.read: dict[tuple[type, IOSpec, frozenset[str]], _R] = {}
-        self.read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable] = {}
-        self.write: dict[
-            tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal
-        ] = {}
-        self.write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec] = {}
-
-    def register_write(
+    def register_write[T](
         self,
         dest_type: type,
         src_type: type | tuple[type, str],
@@ -119,7 +117,7 @@ class IORegistry(Generic[_R, R]):
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func):
+        def _register(func: _WriteInternal[T]) -> _WriteInternal[T]:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
@@ -155,11 +153,11 @@ class IORegistry(Generic[_R, R]):
         src_type: type,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_R], _R]:
+    ) -> Callable[[RI], RI]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
-        def _register(func):
+        def _register(func: RI) -> RI:
             self.read[(src_type, spec, modifiers)] = func
             return func
 
@@ -303,7 +301,7 @@ class LazyReader(Reader):
         )
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
-            warnings.warn(msg, stacklevel=2)
+            warn(msg, UserWarning)
         read_params = inspect.signature(read_func).parameters
         for kwarg in kwargs:
             if kwarg not in read_params:
@@ -357,7 +355,7 @@ class Writer:
                 raise ValueError(msg)
             else:
                 msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
-                warnings.warn(msg, FutureWarning, stacklevel=2)
+                warn(msg, FutureWarning)
 
         if isinstance(store, h5py.File):
             store = store["/"]

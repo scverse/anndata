@@ -41,6 +41,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any, Literal
 
+    from anndata._types import Join_T
+
 mark_legacy_concatenate = pytest.mark.filterwarnings(
     r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"
 )
@@ -226,12 +228,16 @@ def test_concat_interface_errors(use_xdataset):
         concat([])
 
 
-@mark_legacy_concatenate
 @pytest.mark.parametrize(
     ("concat_func", "backwards_compat"),
     [
-        (partial(concat, merge="unique"), False),
-        (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
+        pytest.param(partial(concat, merge="unique"), False, id="concat"),
+        pytest.param(
+            lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs),
+            True,
+            marks=mark_legacy_concatenate,
+            id="concatenate",
+        ),
     ],
 )
 def test_concatenate_roundtrip(
@@ -1463,7 +1469,7 @@ def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
 
 
 def expected_shape(
-    a: AnnData, b: AnnData, axis: Literal[0, 1], join: Literal["inner", "outer"]
+    a: AnnData, b: AnnData, axis: Literal[0, 1], join: Join_T
 ) -> tuple[int, int]:
     alt_axis = 1 - axis
     labels = partial(axis_labels, axis=alt_axis)

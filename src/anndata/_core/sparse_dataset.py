@@ -12,7 +12,6 @@ See the copyright and license note in this directory source code.
 # - think about supporting the COO format
 from __future__ import annotations
 
-import warnings
 from abc import ABC
 from collections.abc import Iterable
 from functools import cached_property
@@ -28,8 +27,11 @@ import scipy.sparse as ss
 from packaging.version import Version
 from scipy.sparse import _sparsetools
 
+from testing.anndata._doctest import doctest_filterwarnings
+
 from .. import abc
 from .._settings import settings
+from .._warnings import warn
 from ..compat import (
     CSArray,
     CSMatrix,
@@ -48,8 +50,7 @@ if TYPE_CHECKING:
     from scipy.sparse._compressed import _cs_matrix
 
     from .._types import GroupStorageType
-    from ..compat import H5Array
-    from .index import Index, Index1D
+    from ..compat import H5Array, Index, Index1D, Index1DNorm
 else:
     from scipy.sparse import spmatrix as _cs_matrix
 
@@ -508,7 +509,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         msg = (
             "__setitem__ for backed sparse will be removed in the next anndata release."
         )
-        warnings.warn(msg, FutureWarning, stacklevel=2)
+        warn(msg, FutureWarning)
         row, col = self._normalize_index(index)
         mock_matrix = self._to_backed()
         mock_matrix[row, col] = value
@@ -667,6 +668,7 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
     """Internal concrete version of :class:`anndata.abc.CSRDataset`."""
 
 
+@doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 def sparse_dataset(
     group: GroupStorageType,
     *,
@@ -738,5 +740,7 @@ def sparse_dataset(
 
 
 @_subset.register(BaseCompressedSparseDataset)
-def subset_sparsedataset(d, subset_idx):
+def subset_sparsedataset(
+    d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+):
     return d[subset_idx]
