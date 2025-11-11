@@ -266,7 +266,7 @@ def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
-def test_hints():
+def test_hints() -> None:
     settings = ad.settings
     types_loader = importlib.machinery.SourceFileLoader(
         "settings_types",
@@ -274,9 +274,9 @@ def test_hints():
     )
     settings_types_mod = types.ModuleType(types_loader.name)
     types_loader.exec_module(settings_types_mod)
-    for settings_key in dir(settings):
-        if not settings_key.startswith("_"):
-            assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
-    for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
-        if not settings_key.startswith("__"):
-            assert hasattr(settings, settings_key)
+
+    obj_attrs, typing_attrs = (
+        {k for k in dir(o) if not k.startswith("_")}
+        for o in (settings, settings_types_mod._AnnDataSettingsManager)
+    )
+    assert obj_attrs == typing_attrs

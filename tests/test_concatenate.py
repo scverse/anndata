@@ -228,12 +228,16 @@ def test_concat_interface_errors(use_xdataset):
         concat([])
 
 
-@mark_legacy_concatenate
 @pytest.mark.parametrize(
     ("concat_func", "backwards_compat"),
     [
-        (partial(concat, merge="unique"), False),
-        (lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs), True),
+        pytest.param(partial(concat, merge="unique"), False, id="concat"),
+        pytest.param(
+            lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs),
+            True,
+            marks=mark_legacy_concatenate,
+            id="concatenate",
+        ),
     ],
 )
 def test_concatenate_roundtrip(
