@@ -134,35 +134,34 @@ def test_dask_distributed_write(
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
-    g = as_group(pth, mode="w")
+    with as_group(pth, mode="w") as g:
+        with dd.Client(local_cluster_addr):
+            M, N = adata.X.shape
+            adata.obsm["a"] = da.random.random((M, 10))
+            adata.obsm["b"] = da.random.random((M, 10))
+            adata.varm["a"] = da.random.random((N, 10))
+            orig = adata
+            with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
+                ad.io.write_elem(g, "", orig)
+            # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
+            with as_group(pth, mode="r") as g:
+                if auto_shard_zarr_v3:
+                    check_all_sharded(g)
+                curr = ad.io.read_elem(g)
 
-    with dd.Client(local_cluster_addr):
-        M, N = adata.X.shape
-        adata.obsm["a"] = da.random.random((M, 10))
-        adata.obsm["b"] = da.random.random((M, 10))
-        adata.varm["a"] = da.random.random((N, 10))
-        orig = adata
-        with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
-            ad.io.write_elem(g, "", orig)
-        # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
-        g = as_group(pth, mode="r")
-        if auto_shard_zarr_v3:
-            check_all_sharded(g)
-        curr = ad.io.read_elem(g)
+        with pytest.raises(AssertionError):
+            assert_equal(curr.obsm["a"], curr.obsm["b"])
 
-    with pytest.raises(AssertionError):
-        assert_equal(curr.obsm["a"], curr.obsm["b"])
+        assert_equal(curr.varm["a"], orig.varm["a"])
+        assert_equal(curr.obsm["a"], orig.obsm["a"])
+        assert_equal(curr.X, orig.X)
 
-    assert_equal(curr.varm["a"], orig.varm["a"])
-    assert_equal(curr.obsm["a"], orig.obsm["a"])
-    assert_equal(curr.X, orig.X)
-
-    assert isinstance(curr.X, np.ndarray)
-    assert isinstance(curr.obsm["a"], np.ndarray)
-    assert isinstance(curr.varm["a"], np.ndarray)
-    assert isinstance(orig.X, DaskArray)
-    assert isinstance(orig.obsm["a"], DaskArray)
-    assert isinstance(orig.varm["a"], DaskArray)
+        assert isinstance(curr.X, np.ndarray)
+        assert isinstance(curr.obsm["a"], np.ndarray)
+        assert isinstance(curr.varm["a"], np.ndarray)
+        assert isinstance(orig.X, DaskArray)
+        assert isinstance(orig.obsm["a"], DaskArray)
+        assert isinstance(orig.varm["a"], DaskArray)
 
 
 def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
