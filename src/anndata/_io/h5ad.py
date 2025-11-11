@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
     from .._core.file_backing import AnnDataFileManager
     from .._core.raw import Raw
+    from .._types import StorageType
 
 T = TypeVar("T")
 
@@ -261,7 +262,7 @@ def read_h5ad(
 
     with h5py.File(filename, "r") as f:
 
-        def callback(func, elem_name: str, elem, iospec):
+        def callback(read_func, elem_name: str, elem: StorageType, iospec: IOSpec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
                 return AnnData(**{
                     # This is covering up backwards compat in the anndata initializer
@@ -279,7 +280,7 @@ def read_h5ad(
             elif elem_name in {"/obs", "/var"}:
                 # Backwards compat
                 return read_dataframe(elem)
-            return func(elem)
+            return read_func(elem)
 
         adata = read_dispatched(f, callback=callback)
 
