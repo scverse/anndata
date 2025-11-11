@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
@@ -464,7 +464,7 @@ def _write_alt_pairwise(
     write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
 
 
-def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
+def concat_on_disk(  # noqa: PLR0913
     in_files: Collection[PathLike[str] | str | H5Group | ZarrGroup]
     | Mapping[str, PathLike[str] | str | H5Group | ZarrGroup],
     out_file: PathLike[str] | str | H5Group | ZarrGroup,
@@ -639,105 +639,135 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     axis, axis_name = _resolve_axis(axis)
     _, alt_axis_name = _resolve_axis(1 - axis)
 
-    with (
-        as_group(out_file, mode="w") as output_group,
-        ListContextManager([as_group(f, mode="r") for f in in_files]) as groups,
-    ):
-        use_reindexing = False
-
-        alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
-        # All {axis_name}_names must be equal if reindexing not applied
-        if not _indices_equal(alt_idxs):
-            use_reindexing = True
-
-        # All groups must be anndata
-        if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
-            msg = "All groups must be anndata"
-            raise ValueError(msg)
-
-        # Write metadata
-        output_group.attrs.update({
-            "encoding-type": "anndata",
-            "encoding-version": "0.1.0",
-        })
-
-        # Read the backed objects of Xs
-        Xs = [read_as_backed(g["X"]) for g in groups]
-
-        # Label column
-        label_col = pd.Categorical.from_codes(
-            np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
-            categories=keys,
-        )
-
-        # Combining indexes
-        concat_indices = pd.concat(
-            [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
-        )
-        if index_unique is not None:
-            concat_indices = concat_indices.str.cat(
-                label_col.map(str, na_action="ignore"), sep=index_unique
-            )
-
-        # Resulting indices for {axis_name} and {alt_axis_name}
-        concat_indices = pd.Index(concat_indices)
-
-        alt_index = merge_indices(alt_idxs, join=join)
-
-        reindexers = None
-        if use_reindexing:
-            reindexers = [
-                gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
-            ]
-        else:
-            reindexers = [IdentityReindexer()] * len(groups)
-
-        # Write {axis_name}
-        _write_axis_annot(
-            groups, output_group, axis_name, concat_indices, label, label_col, join
-        )
-
-        # Write {alt_axis_name}
-        _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
-
-        # Write {alt_axis_name}m
-        _write_alt_mapping(groups, output_group, alt_axis_name, merge, reindexers)
-
-        # Write {alt_axis_name}p
-        _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
-
-        # Write X
-
-        _write_concat_arrays(
-            arrays=Xs,
+    with ExitStack() as stack, as_group(out_file, mode="w") as output_group:
+        groups = [stack.enter_context(as_group(f, mode="r")) for f in in_files]
+        _concat_on_disk_inner(
+            groups=groups,
             output_group=output_group,
-            output_path="X",
             axis=axis,
-            reindexers=reindexers,
-            fill_value=fill_value,
+            axis_name=axis_name,
+            alt_axis_name=alt_axis_name,
+            keys=keys,
             max_loaded_elems=max_loaded_elems,
+            join=join,
+            label=label,
+            index_unique=index_unique,
+            fill_value=fill_value,
+            merge=merge,
         )
 
-        # Write Layers and {axis_name}m
-        mapping_names = [
-            (
-                f"{axis_name}m",
-                concat_indices,
-                0,
-                None if use_reindexing else [IdentityReindexer()] * len(groups),
-            ),
-            ("layers", None, axis, reindexers),
+
+def _concat_on_disk_inner(  # noqa: PLR0913
+    *,
+    groups: list[H5Group | ZarrGroup],
+    output_group: H5Group | ZarrGroup,
+    axis: Literal[0, 1],
+    axis_name: Literal["obs", "var"],
+    alt_axis_name: Literal["obs", "var"],
+    keys: np.ndarray[tuple[int], np.dtype[Any]] | Collection[str],
+    max_loaded_elems: int,
+    join: Join_T = "inner",
+    label: str | None,
+    index_unique: str | None,
+    fill_value: Any | None,
+    merge: Callable[[Collection[Mapping]], Mapping],
+):
+    """Internal helper to minimize the amount of indented code within the context manager"""
+    use_reindexing = False
+
+    alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
+    # All {axis_name}_names must be equal if reindexing not applied
+    if not _indices_equal(alt_idxs):
+        use_reindexing = True
+
+    # All groups must be anndata
+    if not all(g.attrs.get("encoding-type") == "anndata" for g in groups):
+        msg = "All groups must be anndata"
+        raise ValueError(msg)
+
+    # Write metadata
+    output_group.attrs.update({
+        "encoding-type": "anndata",
+        "encoding-version": "0.1.0",
+    })
+
+    # Read the backed objects of Xs
+    Xs = [read_as_backed(g["X"]) for g in groups]
+
+    # Label column
+    label_col = pd.Categorical.from_codes(
+        np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
+        categories=keys,
+    )
+
+    # Combining indexes
+    concat_indices = pd.concat(
+        [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
+    )
+    if index_unique is not None:
+        concat_indices = concat_indices.str.cat(
+            label_col.map(str, na_action="ignore"), sep=index_unique
+        )
+
+    # Resulting indices for {axis_name} and {alt_axis_name}
+    concat_indices = pd.Index(concat_indices)
+
+    alt_index = merge_indices(alt_idxs, join=join)
+
+    reindexers = None
+    if use_reindexing:
+        reindexers = [
+            gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
         ]
-        for m, m_index, m_axis, m_reindexers in mapping_names:
-            maps = [read_as_backed(g[m]) for g in groups]
-            _write_concat_mappings(
-                maps,
-                output_group,
-                intersect_keys(maps),
-                m,
-                max_loaded_elems=max_loaded_elems,
-                axis=m_axis,
-                index=m_index,
-                reindexers=m_reindexers,
-                fill_value=fill_value,
-            )
+    else:
+        reindexers = [IdentityReindexer()] * len(groups)
+
+    # Write {axis_name}
+    _write_axis_annot(
+        groups, output_group, axis_name, concat_indices, label, label_col, join
+    )
+
+    # Write {alt_axis_name}
+    _write_alt_annot(groups, output_group, alt_axis_name, alt_index, merge)
+
+    # Write {alt_axis_name}m
+    _write_alt_mapping(groups, output_group, alt_axis_name, merge, reindexers)
+
+    # Write {alt_axis_name}p
+    _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
+
+    # Write X
+
+    _write_concat_arrays(
+        arrays=Xs,
+        output_group=output_group,
+        output_path="X",
+        axis=axis,
+        reindexers=reindexers,
+        fill_value=fill_value,
+        max_loaded_elems=max_loaded_elems,
+    )
+
+    # Write Layers and {axis_name}m
+    mapping_names = [
+        (
+            f"{axis_name}m",
+            concat_indices,
+            0,
+            None if use_reindexing else [IdentityReindexer()] * len(groups),
+        ),
+        ("layers", None, axis, reindexers),
+    ]
+    for m, m_index, m_axis, m_reindexers in mapping_names:
+        maps = [read_as_backed(g[m]) for g in groups]
+        _write_concat_mappings(
+            maps,
+            output_group,
+            intersect_keys(maps),
+            m,
+            max_loaded_elems=max_loaded_elems,
+            axis=m_axis,
+            index=m_index,
+            reindexers=m_reindexers,
+            fill_value=fill_value,
+        )
