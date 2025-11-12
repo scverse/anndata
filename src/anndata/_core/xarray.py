@@ -201,7 +201,10 @@ class Dataset2D:
         if isinstance(ret, XDataset):
             # If we get an xarray Dataset, we return a Dataset2D
             as_2d = Dataset2D(ret)
-            if self.true_index_dim not in as_2d.columns:
+            if (
+                self.true_index_dim not in as_2d.columns
+                and self.true_index_dim != as_2d.true_index_dim
+            ):
                 as_2d[self.true_index_dim] = self.true_index
             as_2d.true_index_dim = self.true_index_dim
             as_2d.is_backed = self.is_backed
@@ -264,7 +267,7 @@ class Dataset2D:
         For supported setter values see :meth:`xarray.Dataset.__setitem__`.
         """
         if key == self.index_dim:
-            msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
+            msg = f"Cannot set the index dimension {self.index_dim} as if it were a variable. Use `ds.index = ...` instead."
             raise KeyError(msg)
         if isinstance(value, tuple):
             if isinstance(value[0], tuple):

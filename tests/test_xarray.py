@@ -271,7 +271,7 @@ def test_dataset_2d_set_with_bad_obj(da, pattern, dataset_2d_one_column):
 def test_dataset_2d_set_index(data, dataset_2d_one_column):
     with pytest.raises(
         KeyError,
-        match="Cannot set obs_names as a variable",
+        match="Cannot set the index dimension obs_names",
     ):
         dataset_2d_one_column["obs_names"] = data
 
