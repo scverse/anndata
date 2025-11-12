@@ -201,7 +201,8 @@ class Dataset2D:
         if isinstance(ret, XDataset):
             # If we get an xarray Dataset, we return a Dataset2D
             as_2d = Dataset2D(ret)
-
+            if self.true_index_dim not in as_2d.columns:
+                as_2d[self.true_index_dim] = self.true_index
             as_2d.true_index_dim = self.true_index_dim
             as_2d.is_backed = self.is_backed
             return as_2d

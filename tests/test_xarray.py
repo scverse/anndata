@@ -42,6 +42,8 @@ def test_getitem(df, dataset2d):
     col = df.columns[0]
     assert np.all(dataset2d[col] == df[col])
 
+
+def test_getitem_empty(df, dataset2d):
     empty_dset = dataset2d[[]]
     assert empty_dset.shape == (df.shape[0], 0)
     assert np.all(empty_dset.index == dataset2d.index)
@@ -57,7 +59,20 @@ def test_backed_property(dataset2d):
     assert not dataset2d.is_backed
 
 
-def test_index_dim(dataset2d):
+def test_true_index_dim_column_subset(dataset2d, df):
+    col_iter = iter(dataset2d.keys())
+    col = next(col_iter)
+    dataset2d.true_index_dim = col
+
+    # Ensure we can actually select columns properly that are not the index column
+    cols = [next(col_iter), next(col_iter)]
+    df_expected = dataset2d[cols].to_memory()
+    # account for the fact that we manually set `true_index_dim`
+    df_expected.index = df.index
+    assert np.all(df_expected == df[cols])
+
+
+def test_index_dim(dataset2d, df):
     assert dataset2d.index_dim == "index"
     assert dataset2d.true_index_dim == dataset2d.index_dim
 
