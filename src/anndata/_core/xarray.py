@@ -196,17 +196,16 @@ class Dataset2D:
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
         ret = self.ds.__getitem__(key)
-        if len(key) == 0 and not isinstance(key, tuple):  # empty XDataset
+        if is_empty := (len(key) == 0 and not isinstance(key, tuple)):  # empty Dataset
             ret.coords[self.index_dim] = self.xr_index
         if isinstance(ret, XDataset):
             # If we get an xarray Dataset, we return a Dataset2D
             as_2d = Dataset2D(ret)
-            if (
-                self.true_index_dim not in as_2d.columns
-                and self.true_index_dim != as_2d.true_index_dim
-            ):
+            if not is_empty and self.true_index_dim not in [
+                *as_2d.columns,
+                as_2d.index_dim,
+            ]:
                 as_2d[self.true_index_dim] = self.true_index
-            as_2d.true_index_dim = self.true_index_dim
             as_2d.is_backed = self.is_backed
             return as_2d
         return ret
