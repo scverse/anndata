@@ -69,7 +69,7 @@ def test_true_index_dim_column_subset(dataset2d, df):
     df_expected = dataset2d[cols].to_memory()
     # account for the fact that we manually set `true_index_dim`
     df_expected.index = df.index
-    assert np.all(df_expected == df[cols])
+    pd.testing.assert_frame_equal(df_expected, df[cols])
 
 
 def test_index_dim(dataset2d):
