@@ -25,12 +25,14 @@ if TYPE_CHECKING:
 
     from pandas._libs.missing import NAType
     from pandas.core.dtypes.base import ExtensionDtype
-    from xarray.core.extension_array import PandasExtensionArray
-    from xarray.core.indexing import ExplicitIndexer
 
     from anndata.compat import ZarrGroup
 
     from ...compat import Index1DNorm
+
+    if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
+        from xarray.core.extension_array import PandasExtensionArray
+        from xarray.core.indexing import ExplicitIndexer
 
 
 class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
