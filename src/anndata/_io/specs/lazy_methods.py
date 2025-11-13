@@ -293,6 +293,8 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
+    from ...experimental.backed._lazy_arrays import MaskedArray
+
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -302,11 +304,16 @@ def read_dataframe(
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
-        index = (
-            elem_dict[dim_name].compute()
-            if isinstance(elem_dict[dim_name], DaskArray)
-            else elem_dict[dim_name][...]
-        )
+        if isinstance(elem_dict[dim_name], DaskArray):
+            index = elem_dict[dim_name].compute()
+        elif isinstance(elem_dict[dim_name], MaskedArray):
+            from xarray.core.indexing import BasicIndexer
+
+            index = elem_dict[dim_name][
+                BasicIndexer((slice(None),) * elem_dict[dim_name].ndim)
+            ]
+        else:
+            raise NotImplementedError()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
