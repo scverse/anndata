@@ -50,6 +50,9 @@ def test_read_partial_adata(tmp_path, diskfmt):
             "ignore", r"Moving element.*uns.*to.*obsp", FutureWarning
         )
         adata = sc.datasets.pbmc68k_reduced()
+        # we’re not adding things to read_partial anymore, so it can only read non-nullable strings
+        adata.obs.index = adata.obs.index.astype(object)
+        adata.var.index = adata.var.index.astype(object)
 
     path = Path(tmp_path) / ("test_rp." + diskfmt)
 

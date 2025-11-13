@@ -126,7 +126,9 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
         pytest.param(1.0, "numeric-scalar", id="py_float"),
         pytest.param({"a": 1}, "dict", id="py_dict"),
         pytest.param(
-            gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), "anndata", id="anndata"
+            lambda: gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS),
+            "anndata",
+            id="anndata",
         ),
         pytest.param(
             sparse.random(5, 3, format="csr", density=0.5),
@@ -206,7 +208,10 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
         # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
-def test_io_spec(store, value, encoding_type):
+def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
+    if callable(value):
+        value = value()
+
     with ad.settings.override(allow_write_nullable_strings=True):
         key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
@@ -532,7 +537,9 @@ def test_override_specification():
     "value",
     [
         pytest.param({"a": 1}, id="dict"),
-        pytest.param(gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), id="anndata"),
+        pytest.param(
+            lambda: gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), id="anndata"
+        ),
         pytest.param(sparse.random(5, 3, format="csr", density=0.5), id="csr_matrix"),
         pytest.param(sparse.random(5, 3, format="csc", density=0.5), id="csc_matrix"),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), id="dataframe"),
@@ -562,10 +569,12 @@ def test_override_specification():
         ),
     ],
 )
-def test_write_to_root(store, value):
+def test_write_to_root(store: GroupStorageType, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
+    if callable(value):
+        value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():
