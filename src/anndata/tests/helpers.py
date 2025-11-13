@@ -1183,7 +1183,8 @@ class AccessTrackingStoreBase(LocalStore):
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
 
-    def assert_access_count(self, key: str, count: int):
+    def assert_access_count(self, key: str, count: int) -> None:
+        __tracebackhide__ = True
         keys_accessed = self.get_subkeys_accessed(key)
         access_count = self.get_access_count(key)
         assert self.get_access_count(key) == count, (
