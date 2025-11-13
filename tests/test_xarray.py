@@ -72,7 +72,7 @@ def test_true_index_dim_column_subset(dataset2d, df):
     assert np.all(df_expected == df[cols])
 
 
-def test_index_dim(dataset2d, df):
+def test_index_dim(dataset2d):
     assert dataset2d.index_dim == "index"
     assert dataset2d.true_index_dim == dataset2d.index_dim
 
