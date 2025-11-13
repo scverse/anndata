@@ -35,12 +35,8 @@ _RST_FILTERS: Sequence[WarningFilter] = (
 )
 
 
-@pytest.fixture(autouse=True)
-def _anndata_test_env(request: pytest.FixtureRequest) -> None:
+def setup_env() -> None:
     import anndata
-
-    if isinstance(request.node, pytest.DoctestItem):
-        request.getfixturevalue("_doctest_env")
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
 
@@ -49,6 +45,19 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
         pd.options.future.infer_string = True
         pd.options.mode.copy_on_write = True
         anndata.settings.allow_write_nullable_strings = True
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _anndata_session_env(request: pytest.FixtureRequest) -> None:
+    setup_env()
+
+
+@pytest.fixture(autouse=True)
+def _anndata_test_env(request: pytest.FixtureRequest) -> None:
+    if isinstance(request.node, pytest.DoctestItem):
+        request.getfixturevalue("_doctest_env")
+
+    setup_env()
 
 
 @pytest.fixture

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from anndata._types import GroupStorageType
     from anndata.compat import H5Group
 
 
@@ -492,7 +493,8 @@ def test_write_io_error(store, obj):
     assert re.search(full_pattern, msg)
 
 
-def test_write_nullable_string_error(store):
+def test_write_nullable_string_error(store: GroupStorageType) -> None:
+    ad.settings.allow_write_nullable_strings = False
     with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
         write_elem(store, "/el", pd.array([""], dtype="string"))
 
