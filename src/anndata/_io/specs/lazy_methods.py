@@ -293,6 +293,8 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
+    from xarray.core.indexing import BasicIndexer
+
     from ...experimental.backed._lazy_arrays import MaskedArray
 
     elem_dict = {
@@ -307,11 +309,7 @@ def read_dataframe(
         if isinstance(elem_dict[dim_name], DaskArray):
             index = elem_dict[dim_name].compute()
         elif isinstance(elem_dict[dim_name], MaskedArray):
-            from xarray.core.indexing import BasicIndexer
-
-            index = elem_dict[dim_name][
-                BasicIndexer((slice(None),) * elem_dict[dim_name].ndim)
-            ]
+            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
         else:
             raise NotImplementedError()
     else:
