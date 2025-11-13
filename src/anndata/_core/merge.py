@@ -953,8 +953,13 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
         common_keys = intersect_keys(el.fields for el in els)
+        # TODO: replace dtype=object once this is fixed: https://github.com/scikit-hep/awkward/issues/3730
         reindexers = [
-            Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
+            Reindexer(
+                pd.Index(el.fields, dtype=object),
+                pd.Index(list(common_keys), dtype=object),
+            )
+            for el in els
         ]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
