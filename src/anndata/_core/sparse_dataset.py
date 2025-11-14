@@ -91,7 +91,11 @@ type SparseMatrixType = CupyCSMatrix | CSMatrix | CSArray
 
 
 @dataclass
-class BackedSparseMatrix[DenseT: DenseType, SparseT: SparseMatrixType]:
+class BackedSparseMatrix[
+    DenseT: DenseType,
+    SparseT: SparseMatrixType,
+    GroupT: GroupStorageType,
+]:
     """\
     Mixin class for backed sparse matrices.
 
@@ -99,8 +103,8 @@ class BackedSparseMatrix[DenseT: DenseType, SparseT: SparseMatrixType]:
     since that calls copy on `.data`, `.indices`, and `.indptr`.
     """
 
-    data: GroupStorageType
-    indices: GroupStorageType
+    data: GroupT
+    indices: GroupT
     indptr: DenseT
     format: Literal["csr", "csc"]
     shape: tuple[int, int]
@@ -363,17 +367,21 @@ def is_sparse_indexing_overridden(
     )
 
 
-class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
-    _group: GroupStorageType
+class BaseCompressedSparseDataset[
+    DenseT: DenseType,
+    GroupT: GroupStorageType,
+    SparseT: SparseMatrixType,
+](abc._AbstractCSDataset, ABC):
+    _group: GroupT
     _should_cache_indptr: bool
 
-    def __init__(self, group: GroupStorageType, *, should_cache_indptr: bool = True):
+    def __init__(self, group: GroupT, *, should_cache_indptr: bool = True):
         type(self)._check_group_format(group)
         self._group = group
         self._should_cache_indptr = should_cache_indptr
 
     @property
-    def group(self) -> GroupStorageType:
+    def group(self) -> GroupT:
         """The group underlying the backed matrix."""
         return self._group
 
@@ -421,7 +429,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         name = type(self).__name__.removeprefix("_")
         return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | SparseMatrixType:
+    def __getitem__(self, index: Index | tuple[()]) -> float | SparseT:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
@@ -568,7 +576,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
                 delattr(self, attr)
 
     @cached_property
-    def _indptr(self) -> DenseType:
+    def _indptr(self) -> DenseT:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
@@ -603,7 +611,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
         return mtx
 
-    def to_memory(self) -> SparseMatrixType:
+    def to_memory(self) -> SparseT:
         backed_class = BackedSparseMatrix(
             format=self.format,
             data=self._data,
