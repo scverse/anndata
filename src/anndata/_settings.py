@@ -442,9 +442,10 @@ settings.register(
     description=(
         "Whether or not to allow writing of `pd.arrays.[Arrow]StringArray`. "
         "When set to `None`, it will be inferred from `pd.options.future.infer_string`. "
-        "When set to false explicitly, we will try writing `string` arrays in the old, non-nullable format."
+        "When set to `False` explicitly, we will try writing `string` arrays in the old, non-nullable format."
     ),
     validate=gen_validator((bool, NoneType)),
+    option_type=bool | None,
     get_from_env=check_and_get_bool_or_none,
 )
 
