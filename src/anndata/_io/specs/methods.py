@@ -40,7 +40,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE, is_zarr_v2
+from ...compat import PANDAS_STRING_ARRAY_TYPES, is_zarr_v2
 from ...utils import warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
@@ -1120,6 +1120,9 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 ####################
 # Pandas nullables #
 ####################
+
+
+PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
 
 
 @_REGISTRY.register_write(

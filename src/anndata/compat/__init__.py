@@ -78,7 +78,6 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    from packaging.version import Version
 
     return Version(version("zarr")) < Version("3.0.0")
 
@@ -210,14 +209,19 @@ PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
     pd.arrays.StringArray,
     pd.arrays.ArrowStringArray,
 ]
-if PANDAS_SUPPORTS_NA_VALUE := (Version(version("pandas")) >= Version("2.3")):
+# these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
+try:
     from pandas.core.arrays.string_ import StringArrayNumpySemantics
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [StringArrayNumpySemantics]
+try:
     from pandas.core.arrays.string_arrow import ArrowStringArrayNumpySemantics
-
-    PANDAS_STRING_ARRAY_TYPES += [
-        StringArrayNumpySemantics,
-        ArrowStringArrayNumpySemantics,
-    ]
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
 
 
 @singledispatch
