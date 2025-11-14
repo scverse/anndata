@@ -49,16 +49,12 @@ def test_backwards_compat_files(archive_dir: Path) -> None:
     assert_equal(from_h5ad, from_zarr, exact=True)
 
 
-def test_no_diff(
-    request: pytest.FixtureRequest, tmp_path: Path, archive_dir: Path
-) -> None:
-    if pd.options.future.infer_string:
-        reason = "even old files get read as `string` dtype if this is active"
-        request.applymarker(pytest.mark.xfail(reason=reason))
+def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     if archive_dir.name in {"v0.7.8", "v0.7.0"}:
         pytest.skip("DataFrame encoding changed between 0.7 and now")
     adata, in_path = read_archive(archive_dir, "h5ad")
-    adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
+    with ad.settings.override(allow_write_nullable_strings=False):
+        adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
     diff_proc = run(
         ["h5diff", "-c", in_path, out_path], check=False, capture_output=True, text=True
     )
