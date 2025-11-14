@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._core.merge import Reindexer, StrategiesLiteral
+    from .._types import Join_T
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
