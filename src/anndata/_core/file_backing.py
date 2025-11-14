@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 import weakref
 from collections.abc import Mapping
 from functools import singledispatch
@@ -174,7 +175,11 @@ def _(x: AwkArray, *, copy: bool = False):
 
 @to_memory.register(Dataset2D)
 def _(x: Dataset2D, *, copy: bool = False):
-    return x.to_memory(copy=copy)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(  # TODO: somehow only do this in tests but still localized
+            "default", r"Dtype inference.*pandas.*deprecated", FutureWarning
+        )
+        return x.to_memory(copy=copy)
 
 
 @singledispatch

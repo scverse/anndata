@@ -78,7 +78,6 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-    from packaging.version import Version
 
     return Version(version("zarr")) < Version("3.0.0")
 
@@ -206,11 +205,23 @@ old_positionals = partial(legacy_api, category=FutureWarning)
 #############################
 
 
-NULLABLE_NUMPY_STRING_TYPE = (
-    np.dtype("O")
-    if Version(version("numpy")) < Version("2")
-    else np.dtypes.StringDType(na_object=pd.NA)
-)
+PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
+    pd.arrays.StringArray,
+    pd.arrays.ArrowStringArray,
+]
+# these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
+try:
+    from pandas.core.arrays.string_ import StringArrayNumpySemantics
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [StringArrayNumpySemantics]
+try:
+    from pandas.core.arrays.string_arrow import ArrowStringArrayNumpySemantics
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
 
 
 @singledispatch

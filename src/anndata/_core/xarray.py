@@ -11,15 +11,22 @@ import pandas as pd
 from ..compat import XDataArray, XDataset, XVariable
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable, Iterator, Mapping
+    from collections.abc import (
+        Callable,
+        Collection,
+        Hashable,
+        Iterable,
+        Iterator,
+        Mapping,
+    )
     from typing import Any, Literal
 
     from .._types import Dataset2DIlocIndexer
 
 
-def requires_xarray(func):
+def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             import xarray  # noqa: F401
         except ImportError as e:
@@ -91,7 +98,7 @@ class Dataset2D:
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
-    def is_backed(self, isbacked: bool) -> bool:
+    def is_backed(self, isbacked: bool) -> None:
         if not isbacked and "is_backed" in self.ds.attrs:
             del self.ds.attrs["is_backed"]
         else:
@@ -191,7 +198,7 @@ class Dataset2D:
     @overload
     def __getitem__(self, key: Hashable) -> XDataArray: ...
     @overload
-    def __getitem__(self, key: Iterable[Hashable]) -> Dataset2D: ...
+    def __getitem__(self, key: Collection[Hashable]) -> Dataset2D: ...
     def __getitem__(
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
