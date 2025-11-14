@@ -6,7 +6,7 @@
         "cookiecutter": {
             "project_name": "anndata",
             "package_name": "anndata",
-            "project_description": "Perturbation Analysis in the scverse ecosystem.",
+            "project_description": "Annotated data.",
             "author_full_name": "Philipp Angerer",
             "author_email": "philipp.angerer@helmholtz-munich.de",
             "github_user": "scverse",
