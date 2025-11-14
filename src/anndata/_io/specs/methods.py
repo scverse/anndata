@@ -1144,18 +1144,36 @@ def write_nullable(
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    if (
-        isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
-        and not settings.allow_write_nullable_strings
-    ):
-        msg = (
-            "`anndata.settings.allow_write_nullable_strings` is False, "
-            "because writing of `pd.arrays.[Arrow]StringArray` is new "
-            "and not supported in anndata < 0.11, still use by many people. "
-            "Opt-in to writing these arrays by toggling the setting to True."
-        )
-        raise RuntimeError(msg)
+) -> None:
+    if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        # if explicitly set to `False`, we try writing them as non-nullable string array
+        if settings.allow_write_nullable_strings is False:
+            if v.isna().any():
+                msg = (
+                    "Cannot write `pd.arrays.[Arrow]StringArray` with missing values "
+                    "when `anndata.settings.allow_write_nullable_strings` is set to False. "
+                    "Opt-in to writing these arrays by toggling it to True or remove missing values."
+                )
+                raise ValueError(msg)
+            # This works since there are no missing values. Otherwise, we’d need to be very careful.
+            # TODO: check if the cost of creating a numpy "T" string array here would amortize when writing
+            _writer.write_elem(f, k, np.asarray(v), dataset_kwargs=dataset_kwargs)
+            return
+
+        # if implicitly set to `False`, we error out
+        if (
+            settings.allow_write_nullable_strings is None
+            and not pd.options.future.infer_string
+        ):
+            msg = (
+                "`anndata.settings.allow_write_nullable_strings` is None and "
+                "`pd.options.future.infer_string` is False. "
+                "Opt-in to writing these arrays by toggling either setting to True, "
+                "or make `anndata` attempt to write the non-nullable format supported by "
+                "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
+            )
+            raise RuntimeError(msg)
+
     g = f.require_group(k)
     if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
         if v.dtype.na_value is pd.NA:

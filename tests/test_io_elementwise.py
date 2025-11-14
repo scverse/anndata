@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -212,15 +213,15 @@ def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
     if callable(value):
         value = value()
 
+    key = f"key_for_{encoding_type}"
     with ad.settings.override(allow_write_nullable_strings=True):
-        key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
 
-        assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-        from_disk = read_elem(store[key])
-        assert_equal(value, from_disk)
-        assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+    from_disk = read_elem(store[key])
+    assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 @pytest.mark.parametrize(
@@ -498,10 +499,62 @@ def test_write_io_error(store, obj):
     assert re.search(full_pattern, msg)
 
 
-def test_write_nullable_string_error(store: GroupStorageType) -> None:
-    ad.settings.allow_write_nullable_strings = False
-    with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
-        write_elem(store, "/el", pd.array([""], dtype="string"))
+PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
+
+
+@pytest.mark.parametrize(
+    ("ad_setting", "pd_setting", "expected_missing", "expected_no_missing"),
+    [
+        # when explicitly disabled, we expect an error when trying to write an array with missing values
+        # and expect an array without missing values to be written in the old, non-nullable format
+        *(
+            pytest.param(
+                False,
+                pd_ignored,
+                (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
+                "string-array",
+                id=f"off-explicit-{int(pd_ignored)}",
+            )
+            for pd_ignored in [False, True]
+        ),
+        # when implicitly disabled, we expect a different message in both cases
+        pytest.param(
+            None,
+            False,
+            (RuntimeError, PAT_IMPLICIT),
+            (RuntimeError, PAT_IMPLICIT),
+            id="off-implicit",
+        ),
+        # when enabled, we expect arrays to be written in the nullable format
+        pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
+        pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
+        pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
+    ],
+)
+@pytest.mark.parametrize("missing", [True, False], ids=["missing", "no_missing"])
+def test_write_nullable_string(
+    *,
+    store: GroupStorageType,
+    ad_setting: bool | None,
+    pd_setting: bool,
+    expected_missing: tuple[type[Exception], str] | str,
+    expected_no_missing: tuple[type[Exception], str] | str,
+    missing: bool,
+) -> None:
+    expected = expected_missing if missing else expected_no_missing
+    with (
+        ad.settings.override(allow_write_nullable_strings=ad_setting),
+        pd.option_context("future.infer_string", pd_setting),
+        (
+            nullcontext()
+            if isinstance(expected, str)
+            else pytest.raises(expected[0], match=expected[1])
+        ),
+    ):
+        write_elem(store, "/el", pd.array([pd.NA if missing else "a"], dtype="string"))
+
+    if isinstance(expected, str):
+        assert store["el"].attrs["encoding-type"] == expected
 
 
 def test_categorical_order_type(store):

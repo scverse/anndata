@@ -44,7 +44,6 @@ def setup_env() -> None:
         # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
         pd.options.future.infer_string = True
         pd.options.mode.copy_on_write = True
-        anndata.settings.allow_write_nullable_strings = True
 
 
 @pytest.fixture(scope="session", autouse=True)
