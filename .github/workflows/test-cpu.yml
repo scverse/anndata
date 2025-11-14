@@ -25,7 +25,7 @@ jobs:
         with:
           filter: blob:none
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
       - id: get-envs
@@ -43,9 +43,10 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-        io_mark: ["zarr_io", "not zarr_io"]
-    env:  # environment variable for use in codecov’s env_vars tagging
+        io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
+    env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
+      IO_MARK: ${{ matrix.io_mark }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -56,23 +57,31 @@ jobs:
         run: sudo apt install -y hdf5-tools
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ matrix.env.python }}
 
       - name: Install dependencies
-        run: uvx hatch -v env create ${{ matrix.env.name }}
+        run: |
+          # https://github.com/pallets/click/issues/3066
+          uv tool install --with='click!=8.3.0' hatch
+          hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
+        run: |
+          hatch run ${{ matrix.env.name }}:run-cov -v --color=yes ${{ matrix.io_mark != 'dask_distributed' && '-n auto' || '' }} --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          hatch run ${{ matrix.env.name }}:cov-combine
+          hatch run ${{ matrix.env.name }}:coverage xml
 
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
+          env_vars: ENV_NAME,IO_MARK
           fail_ci_if_error: true
           file: test-data/test-results.xml
 
@@ -80,7 +89,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
+          env_vars: ENV_NAME,IO_MARK
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
@@ -93,7 +102,7 @@ jobs:
           filter: blob:none
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
           cache: pip
@@ -110,11 +119,6 @@ jobs:
         run: |
           python -m build --sdist --wheel .
           twine check dist/*
-
-      - name: Check runtime version
-        run: |
-          pip install dist/*.whl
-          python -c 'import anndata; print(anndata.__version__)'
 
   check:
     if: always()

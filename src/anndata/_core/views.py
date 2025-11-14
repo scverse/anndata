@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
@@ -22,6 +21,7 @@ from ..compat import (
     DaskArray,
     ZappyArray,
 )
+from ..utils import warn
 from .access import ElementRef
 from .xarray import Dataset2D
 
@@ -76,12 +76,11 @@ class _SetItemMixin:
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
-            warnings.warn(
+            msg = (
                 f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
-                "initializing view as actual.",
-                ImplicitModificationWarning,
-                stacklevel=2,
+                "initializing view as actual."
             )
+            warn(msg, ImplicitModificationWarning)
             with view_update(*self._view_args) as container:
                 container[idx] = value
 
@@ -100,7 +99,7 @@ class _ViewMixin(_SetItemMixin):
 
     # TODO: This makes `deepcopy(obj)` return `obj._view_args.parent._adata_ref`, fix it
     def __deepcopy__(self, memo):
-        parent, attrname, keys = self._view_args
+        parent, attrname, _keys = self._view_args
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
@@ -282,12 +281,11 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
     def __setattr__(self, key: str, value: Any):
         if key == "index":
-            warnings.warn(
+            msg = (
                 f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "
-                "initializing view as actual.",
-                ImplicitModificationWarning,
-                stacklevel=2,
+                "initializing view as actual."
             )
+            warn(msg, ImplicitModificationWarning)
             with view_update(*self._view_args) as container:
                 setattr(container, key, value)
         else:

@@ -133,7 +133,9 @@ intersphinx_mapping = dict(
     numpy=("https://numpy.org/doc/stable", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
-    python=("https://docs.python.org/3", None),
+    # TODO: switch to `/3` once docs are built with Python 3.14
+    # https://github.com/readthedocs/readthedocs.org/issues/12523
+    python=("https://docs.python.org/3.13", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
@@ -177,10 +179,6 @@ qualname_overrides = {
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
-    **{
-        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
-        for v in ["In", "Co", "Contra"]
-    },
 )
 
 # -- Social cards ---------------------------------------------------------

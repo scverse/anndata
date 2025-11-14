@@ -46,11 +46,10 @@ jobs:
           environment-name: asv
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
-          # libmambapy upper bound: https://github.com/airspeed-velocity/asv/issues/1438
           create-args: >-
             python=${{ matrix.python }}
             asv
-            libmambapy<2
+            py_rattler
             conda-build
 
       - name: Cache datasets

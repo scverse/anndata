@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 
-@pytest.mark.parametrize("fmt", ["zarr", "h5ad", "loom", "csvs"])
+@pytest.mark.parametrize("fmt", ["zarr", "h5ad", "csvs"])
 @pytest.mark.parametrize("key", ["obs", "var", "obsm", "varm"])
 def test_write_error(
     tmp_path: Path,
-    fmt: Literal["zarr", "h5ad", "loom", "csvs"],
+    fmt: Literal["zarr", "h5ad", "csvs"],
     key: Literal["obs", "var", "obsm", "varm"],
 ):
     path = tmp_path / "adata.h5ad"

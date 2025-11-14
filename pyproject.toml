@@ -5,16 +5,16 @@ requires = [ "hatchling", "hatch-vcs" ]
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "BSD-3-Clause"
 authors = [
     { name = "Philipp Angerer" },
     { name = "Alex Wolf" },
     { name = "Isaac Virshup" },
     { name = "Sergei Rybakov" },
+    { name = "Ilan Gold" },
 ]
 maintainers = [
-    { name = "Isaac Virshup", email = "ivirshup@gmail.com" },
     { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
     { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
 ]
@@ -29,23 +29,23 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.1.0, !=2.1.2",
-    "numpy>=1.26",
-    # https://github.com/scverse/anndata/issues/1434
-    "scipy >=1.12",
-    "h5py>=3.8",
+    "pandas >=2.2.2",
+    "numpy>=2",
+    "scipy >=1.13",
+    "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
-    "array_api_compat>=1.7.1",
+    "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=2.18.7, !=3.0.*",
+    "typing-extensions; python_version<'3.13'",
 ]
 dynamic = [ "version" ]
 
@@ -57,8 +57,6 @@ Home-page = "https://github.com/scverse/anndata"
 
 [project.optional-dependencies]
 dev = [
-    # runtime dev version generation
-    "hatch-vcs",
     "anndata[dev-doc]",
 ]
 doc = [
@@ -70,9 +68,9 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.15.3",
-    "awkward>=2.3",
-    "IPython",                             # For syntax highlighting in notebooks
+    "scanpydoc[theme,typehints] >=0.16",
+    "awkward>=2.6.3",
+    "IPython",                           # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     # for unreleased changes
@@ -80,9 +78,8 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "loompy>=3.0.5",
-    "pytest>=8.2,<8.3.4",
-    "pytest-cov",
+    "pytest>=8.2",
+    "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
     "pytest-mock",
@@ -97,11 +94,11 @@ test-min = [
     # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
     "httpx<1.0",         # For data downloading
     "dask[distributed]",
-    "awkward>=2.3.2",
-    "pyarrow<21",        # https://github.com/scikit-hep/awkward/issues/3579
+    "awkward>=2.6.3",
+    "pyarrow",
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]" ]
+test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -109,7 +106,9 @@ cu11 = [ "cupy-cuda11x" ]
 lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
-dask = [ "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,<2025.2.0" ]
+dask = [
+    "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+]
 
 [tool.hatch.version]
 source = "vcs"
@@ -118,17 +117,15 @@ raw-options.version_scheme = "release-branch-semver"
 packages = [ "src/anndata", "src/testing" ]
 
 [tool.coverage.run]
-data_file = "test-data/coverage"
+data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
 concurrency = [ "multiprocessing" ]
-parallel = "true"
-
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
 source = [ "./src", "**/site-packages" ]
-
 [tool.coverage.report]
 exclude_also = [
     "if TYPE_CHECKING:",
@@ -146,7 +143,12 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",     # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
+    "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
+    "ignore:`__version__` is deprecated:FutureWarning:scanpy",
+    # https://github.com/matplotlib/matplotlib/pull/30589
+    "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -161,6 +163,7 @@ filterwarnings_when_strict = [
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:Automatic shard shape inference is experimental",
 ]
 python_files = "test_*.py"
 testpaths = [
@@ -171,12 +174,17 @@ testpaths = [
 ]
 # For some reason this effects how logging is shown when tests are run
 xfail_strict = true
-markers = [ "gpu: mark test to run on GPU", "zarr_io: mark tests that involve zarr io" ]
+markers = [
+    "gpu: mark test to run on GPU",
+    "zarr_io: mark tests that involve zarr io",
+    "dask_distributed: tests that need a distributed client with multiple processes",
+]
 
 [tool.ruff]
 src = [ "src" ]
 
 [tool.ruff.format]
+preview = true
 docstring-code-format = true
 
 [tool.ruff.lint]
@@ -231,6 +239,7 @@ extend-immutable-calls = [ "slice" ]
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 "legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
+"warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
 strict = true

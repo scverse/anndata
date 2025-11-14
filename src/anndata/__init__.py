@@ -12,7 +12,6 @@ from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
 from ._core.raw import Raw
 from ._settings import settings
-from ._version import __version__
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -20,13 +19,32 @@ from ._warnings import (
     WriteWarning,
 )
 from .io import read_h5ad, read_zarr
-from .utils import module_get_attr_redirect
+from .utils import module_get_attr_redirect, warn
 
 # Submodules need to be imported last
 from . import abc, experimental, typing, io, types  # isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401  # isort: skip
+
+__all__ = [
+    "AnnData",
+    "ExperimentalFeatureWarning",
+    "ImplicitModificationWarning",
+    "OldFormatWarning",
+    "Raw",
+    "WriteWarning",
+    "abc",
+    "concat",
+    "experimental",
+    "io",
+    "read_h5ad",
+    "read_zarr",
+    "register_anndata_namespace",
+    "settings",
+    "types",
+    "typing",
+]
 
 _DEPRECATED_IO = (
     "read_loom",
@@ -41,25 +59,11 @@ _DEPRECATED = {method: f"io.{method}" for method in _DEPRECATED_IO}
 
 
 def __getattr__(attr_name: str) -> Any:
+    if attr_name == "__version__":
+        from importlib.metadata import version
+
+        msg = "`__version__` is deprecated, use `importlib.metadata.version('anndata')` instead."
+        warn(msg, FutureWarning)
+        return version("anndata")
+
     return module_get_attr_redirect(attr_name, deprecated_mapping=_DEPRECATED)
-
-
-__all__ = [
-    "AnnData",
-    "ExperimentalFeatureWarning",
-    "ImplicitModificationWarning",
-    "OldFormatWarning",
-    "Raw",
-    "WriteWarning",
-    "__version__",
-    "abc",
-    "concat",
-    "experimental",
-    "io",
-    "read_h5ad",
-    "read_zarr",
-    "register_anndata_namespace",
-    "settings",
-    "types",
-    "typing",
-]

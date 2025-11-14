@@ -69,8 +69,10 @@ def _alloc_cache():
 # if we put a 2 factor on 2**19
 # the results seems more accurate with the experimental results
 # For example from dask.random we allocate 1mb
+# As of 2025.09.* dask, this needs a bit more than the previous 1.5mb.
+# TODO: Why?
 @pytest.mark.usefixtures("_alloc_cache")
-@pytest.mark.limit_memory("1.5 MB")
+@pytest.mark.limit_memory("2.2 MB")
 def test_size_of_view(mapping_name, give_chunks):
     import dask.array as da
 

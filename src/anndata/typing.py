@@ -32,7 +32,8 @@ __all__ = ["AxisStorable", "Index", "RWAble"]
 Index = _Index
 """1D or 2D index an :class:`~anndata.AnnData` object can be sliced with."""
 
-XDataType: TypeAlias = (
+# Both of the following two types are used with `get_args` hence the need for `TypeAlias`
+XDataType: TypeAlias = (  # noqa: UP040
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
@@ -46,20 +47,20 @@ XDataType: TypeAlias = (
     | CupyArray
     | CupySparseMatrix
 )
-ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray
+ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray  # noqa: UP040
 
 
-InMemoryArrayOrScalarType: TypeAlias = (
+# TODO: use `type` syntax for all the below once https://github.com/sphinx-doc/sphinx/pull/13508 is released
+InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
     pd.DataFrame | np.number | str | ArrayDataStructureTypes
 )
 
-
-AxisStorable: TypeAlias = (
+AxisStorable: TypeAlias = (  # noqa: UP040
     InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]
 )
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-RWAble: TypeAlias = (
+RWAble: TypeAlias = (  # noqa: UP040
     AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
 )
 """A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
-from warnings import warn
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -13,6 +12,7 @@ from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
 from ..experimental import read_dispatched, write_dispatched
+from ..utils import warn
 from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
-
-T = TypeVar("T")
 
 
 @no_write_dataset_2d
@@ -77,13 +75,11 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(
-                **{
-                    k: read_dispatched(v, callback)
-                    for k, v in dict(elem).items()
-                    if not k.startswith("raw.")
-                }
-            )
+            return AnnData(**{
+                k: read_dispatched(v, callback)
+                for k, v in dict(elem).items()
+                if not k.startswith("raw.")
+            })
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:
@@ -131,10 +127,10 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     """Reads old format of dataframes"""
     # NOTE: Likely that categoricals need to be removed from uns
     msg = (
-        f"'{dataset.name}' was written with a very old version of AnnData. "
+        f"{dataset.name!r} was written with a very old version of AnnData. "
         "Consider rewriting it."
     )
-    warn(msg, OldFormatWarning, stacklevel=3)
+    warn(msg, OldFormatWarning)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
     df.set_index(df.columns[0], inplace=True)
     return df
@@ -155,3 +151,14 @@ def open_write_group(
     if not is_zarr_v2() and "zarr_format" not in kwargs:
         kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)
+
+
+def is_group_consolidated(group: zarr.Group) -> bool:
+    if not isinstance(group, zarr.Group):
+        msg = f"Expected zarr.Group, got {type(group)}"
+        raise TypeError(msg)
+    if is_zarr_v2():
+        from zarr.storage import ConsolidatedMetadataStore
+
+        return isinstance(group.store, ConsolidatedMetadataStore)
+    return group.metadata.consolidated_metadata is not None

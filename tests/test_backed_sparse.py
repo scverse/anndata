@@ -83,12 +83,9 @@ def ondisk_equivalent_adata(
             # Read with handling for backwards compat
             def callback(func, elem_name, elem, iospec):
                 if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                    return AnnData(
-                        **{
-                            k: read_dispatched(v, callback)
-                            for k, v in dict(elem).items()
-                        }
-                    )
+                    return AnnData(**{
+                        k: read_dispatched(v, callback) for k, v in dict(elem).items()
+                    })
                 if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
                     return sparse_dataset(elem)
                 return func(elem)
@@ -419,7 +416,7 @@ def test_lazy_array_cache(
         )
 
 
-Kind = Literal["slice", "int", "array", "mask"]
+type Kind = Literal["slice", "int", "array", "mask"]
 
 
 def mk_idx_kind(idx: Sequence[int], *, kind: Kind, l: int) -> Idx | None:
@@ -451,7 +448,9 @@ def width_idx_kinds(
     *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
 ) -> Generator[ParameterSet, None, None]:
     """Convert major (first) index into various identical kinds of indexing."""
-    for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, get_args(Kind)):
+    for (idx_maj_raw, idx_min, exp), maj_kind in product(
+        idxs, get_args(Kind.__value__)
+    ):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
         id_ = "-".join(map(idify, [idx_maj_raw, idx_min, maj_kind]))
@@ -626,6 +625,22 @@ def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"])
     ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(f["/"]))
     assert_equal(adata.X, base)
+
+
+def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+    base = sparse.random(10, 10, format="csr")
+
+    f = (
+        open_write_group(tmp_path / f"parent_store.{diskfmt}", mode="a")
+        if diskfmt == "zarr"
+        else h5py.File(tmp_path / f"parent_store.{diskfmt}", "a")
+    )
+
+    ad.io.write_elem(f, "a_sparse_matrix", base)
+    adata = ad.AnnData(sparse_dataset(f["a_sparse_matrix"]))
+    ad.io.write_elem(f, "adata", adata)
+    adata_roundtripped = ad.io.read_elem(f["adata"])
+    assert_equal(adata_roundtripped.X, base)
 
 
 def test_backed_sizeof(

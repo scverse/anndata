@@ -5,17 +5,23 @@ from typing import TYPE_CHECKING
 
 import h5py
 import pytest
+import scipy.sparse as sp
 import zarr
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
 from anndata.experimental import read_dispatched, write_dispatched
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    visititems_zarr,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.mark.zarr_io
@@ -94,6 +100,24 @@ def test_read_dispatched_null_case(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_write_dispatched_csr_dataset(
+    tmp_path: Path, sparse_format: Literal["csr", "csc"]
+):
+    ad.io.write_elem(
+        open_write_group(tmp_path / "arr.zarr"),
+        "/",
+        sp.random(10, 10, format=sparse_format),
+    )
+    X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
+
+    def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
+        assert iospec.encoding_type == f"{sparse_format}_matrix"
+
+    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
+
+
+@pytest.mark.zarr_io
 def test_write_dispatched_chunks(tmp_path: Path):
     from itertools import chain, repeat
 
@@ -160,18 +184,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
     if is_zarr_v2():
         z.visititems(check_chunking)
     else:
-
-        def visititems(
-            z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
-        ) -> None:
-            for key in z:
-                maybe_group = z[key]
-                if isinstance(maybe_group, ZarrGroup):
-                    visititems(maybe_group, visitor)
-                else:
-                    visitor(key, maybe_group)
-
-        visititems(z, check_chunking)
+        visititems_zarr(z, check_chunking)
 
 
 @pytest.mark.zarr_io

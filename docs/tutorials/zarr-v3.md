@@ -38,7 +38,8 @@ There are two ways of opening remote `zarr` stores from the `zarr-python` packag
 Local data generally poses a different set of challenges.
 First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.
 For the "many small files" problem, `zarr` has introduced {ref}`sharding <zarr:user-guide-sharding>` in the v3 file format.
-Sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use sharding.
+We offer {attr}`anndata.settings.auto_shard_zarr_v3` to hook into zarr's ability to automatically compute shards, which is experimental at the moment.
+Manual sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use custom sharding.
 For example, you cannot shard a 1D array with `shard` sizes `(256, 256)`.
 Here is a short example, although you should tune the sizes to your own use-case and also use the compression that makes the most sense for you:
 
@@ -93,11 +94,6 @@ We therefore recommend this pipeline for writing full datasets and reading conti
 The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `zstd`.
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the {class}`zarr.codecs.BloscCodec` to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
-
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
-Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
-
-The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
 
 ## Dask
 

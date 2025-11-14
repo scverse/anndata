@@ -1,8 +1,8 @@
 name: Enhancement request
 description: Anything you’d like to see in anndata?
 #title: ...
+type: Enhancement
 labels:
-  - enhancement
   - Triage 🩺
 #assignees: []
 body:

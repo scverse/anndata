@@ -46,18 +46,6 @@ def adata() -> ad.AnnData:
     return ad.AnnData(X=rng.poisson(1, size=(10, 10)))
 
 
-def test_find_stacklevel() -> None:
-    """Test that find_stacklevel returns a positive integer.
-
-    This function helps determine the correct stacklevel for warnings, so
-    we just need to verify it returns a sensible value.
-    """
-    level = extensions.find_stacklevel()
-    assert isinstance(level, int)
-    # It should be at least 1, otherwise something is wrong.
-    assert level > 0
-
-
 def test_accessor_namespace() -> None:
     """Test the behavior of the AccessorNameSpace descriptor.
 
@@ -168,7 +156,7 @@ def test_missing_param() -> None:
     """Test that a namespace missing the second parameter is rejected."""
     with pytest.raises(
         TypeError,
-        match="Namespace initializer must accept an AnnData instance as the second parameter.",
+        match=r"Namespace initializer must accept an AnnData instance as the second parameter\.",
     ):
 
         @ad.register_anndata_namespace("missing_param")
@@ -181,7 +169,7 @@ def test_wrong_name() -> None:
     """Test that a namespace with wrong parameter name is rejected."""
     with pytest.raises(
         TypeError,
-        match="Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
+        match=r"Namespace initializer's second parameter must be named 'adata', got 'notadata'\.",
     ):
 
         @ad.register_anndata_namespace("wrong_name")
@@ -194,7 +182,7 @@ def test_wrong_annotation() -> None:
     """Test that a namespace with wrong parameter annotation is rejected."""
     with pytest.raises(
         TypeError,
-        match="Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
+        match=r"Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'\.",
     ):
 
         @ad.register_anndata_namespace("wrong_annotation")

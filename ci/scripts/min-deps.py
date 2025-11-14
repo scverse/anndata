@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # /// script
 # dependencies = [
-#   "tomli; python_version < '3.11'",
 #   "packaging",
 # ]
 # ///

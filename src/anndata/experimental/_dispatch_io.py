@@ -16,10 +16,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
 
-def read_dispatched(
-    elem: StorageType,
-    callback: ReadCallback,
-) -> RWAble:
+def read_dispatched(elem: StorageType, callback: ReadCallback) -> RWAble:
     """
     Read elem, calling the callback at each sub-element.
 

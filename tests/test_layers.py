@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import warnings
-from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
 import pytest
-from numba.core.errors import NumbaDeprecationWarning
 
 from anndata import AnnData, ImplicitModificationWarning, read_h5ad
-from anndata.io import read_loom
 from anndata.tests.helpers import gen_typed_df_t2_size
 
 X_ = np.arange(12).reshape((3, 4))
@@ -78,27 +75,6 @@ def test_readwrite(X: np.ndarray | None, backing_h5ad):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
     adata.write(backing_h5ad)
     adata_read = read_h5ad(backing_h5ad)
-
-    assert adata.layers.keys() == adata_read.layers.keys()
-    assert (adata.layers["L"] == adata_read.layers["L"]).all()
-
-
-@pytest.mark.skipif(find_spec("loompy") is None, reason="loompy not installed")
-def test_readwrite_loom(tmp_path):
-    loom_path = tmp_path / "test.loom"
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        # loompy uses “is” for ints
-        warnings.filterwarnings("ignore", category=SyntaxWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata.write_loom(loom_path)
-    adata_read = read_loom(loom_path, X_name="")
 
     assert adata.layers.keys() == adata_read.layers.keys()
     assert (adata.layers["L"] == adata_read.layers["L"]).all()
