@@ -98,7 +98,17 @@ test-min = [
     "pyarrow",
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
+
+test = [
+    "anndata[test-min,lazy]",
+    "fast-array-utils>=1.2.3",
+]
+
+test-array-api = [
+    "anndata[test-min]",
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
+]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -108,6 +118,10 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11752
 dask = [
     "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+]
+jax = [
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
 ]
 
 [tool.hatch.version]
@@ -178,6 +192,7 @@ markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
+    "array_api: mark tests that test Array API compatibility (JAX, Cubed)",
 ]
 
 [tool.ruff]
