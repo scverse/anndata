@@ -91,7 +91,7 @@ class Dataset2D:
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
-    def is_backed(self, isbacked: bool) -> bool:
+    def is_backed(self, isbacked: bool) -> None:
         if not isbacked and "is_backed" in self.ds.attrs:
             del self.ds.attrs["is_backed"]
         else:
