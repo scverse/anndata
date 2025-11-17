@@ -19,8 +19,8 @@ from anndata.compat import (
     DaskArray,
     H5Array,
     H5Group,
-    XDataArray,
     XDataset,
+    XVariable,
     ZarrArray,
     ZarrGroup,
 )
@@ -244,24 +244,18 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     dim_name: str,
     index: np.NDArray,
-) -> Generator[tuple[str, XDataArray], None, None]:
+) -> Generator[tuple[str, XVariable], None, None]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ...compat import XDataArray
     from ...compat import xarray as xr
 
     for k, v in elem_dict.items():
         if isinstance(v, DaskArray) and k != dim_name:
-            data_array = XDataArray(v, coords=[index], dims=[dim_name], name=k)
+            variable = xr.Variable([dim_name], data=v)
         elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
             variable = xr.Variable(
-                data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
-            )
-            data_array = XDataArray(
-                variable,
-                coords=[index],
-                dims=[dim_name],
-                name=k,
+                [dim_name],
+                data=xr.core.indexing.LazilyIndexedArray(v),
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
@@ -270,13 +264,11 @@ def _gen_xarray_dict_iterator_from_elems(
                 },
             )
         elif k == dim_name:
-            data_array = XDataArray(
-                index, coords=[index], dims=[dim_name], name=dim_name
-            )
+            variable = xr.Variable([dim_name], data=index)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
-        yield k, data_array
+        yield k, variable
 
 
 DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
@@ -309,11 +301,9 @@ def read_dataframe(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
     if use_range_index:
-        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XDataArray(
-            index,
-            coords=[index],
-            dims=[DUMMY_RANGE_INDEX_KEY],
-            name=DUMMY_RANGE_INDEX_KEY,
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XVariable(
+            [DUMMY_RANGE_INDEX_KEY],
+            data=index,
         )
     ds = Dataset2D(XDataset(elem_xarray_dict))
     ds.is_backed = True
