@@ -331,8 +331,8 @@ def gen_adata(  # noqa: PLR0913
         random_state = np.random.default_rng()
 
     M, N = shape
-    obs_names = pd.Index([f"cell{i}" for i in range(shape[0])], dtype=str)
-    var_names = pd.Index([f"gene{i}" for i in range(shape[1])], dtype=str)
+    obs_names = pd.Index([f"cell{i}" for i in range(shape[0])], dtype="str")
+    var_names = pd.Index([f"gene{i}" for i in range(shape[1])], dtype="str")
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147

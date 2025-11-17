@@ -59,7 +59,7 @@ def _gen_dataframe_mapping(
         df = pd.DataFrame(
             anno,
             index=None if length is None else mk_index(length),
-            columns=None if anno else pd.array([], dtype=str),
+            columns=None if anno else pd.array([], dtype="str"),
         )
 
     if length is None:

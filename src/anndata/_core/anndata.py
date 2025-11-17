@@ -789,7 +789,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             )
             raise ValueError(msg)
         else:
-            value = value if isinstance(value, pd.Index) else pd.Index(value, dtype=str)
+            value = (
+                value if isinstance(value, pd.Index) else pd.Index(value, dtype="str")
+            )
             if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
