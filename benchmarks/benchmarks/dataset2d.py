@@ -22,7 +22,7 @@ class Dataset2D:
     )
 
     def setup_cache(self):
-        n_obs = 1_000_000
+        n_obs = 100000
         array_types = {
             "numeric": np.arange(n_obs),
             "string-array": np.array(["a"] * n_obs),
