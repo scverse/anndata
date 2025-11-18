@@ -18,7 +18,7 @@ class Dataset2D:
     params = (
         ("zarr", "h5ad"),
         ((-1,), None),
-        ("cat", "numeric", "string-array", "nullable-string-array"),
+        ("cat", "numeric", "string-array", "nullable-string-array", "all"),
     )
 
     def setup_cache(self):
@@ -45,6 +45,15 @@ class Dataset2D:
                     ad.io.write_elem(store, "df", df)
                 if writing_string_array_on_disk:
                     assert store["df"]["a"].attrs["encoding-type"] == "string-array"
+        for store in [
+            h5py.File("data_all.h5ad", mode="w"),
+            zarr.open("data_all.zarr", mode="w", zarr_version=2),
+        ]:
+            df = pd.DataFrame(array_types, index=[f"cell{i}" for i in range(n_obs)])
+            # write a string array
+            df["string-array"] = df["string-array"].to_numpy()
+            with ad.settings.override(allow_write_nullable_strings=True):
+                ad.io.write_elem(store, "df", df)
 
     def setup(
         self,
