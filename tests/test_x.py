@@ -14,7 +14,7 @@ from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_ad
 from anndata.utils import asarray
 
 # jax option (more later)
-jax = pytest.importorskip("jax")
+# jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
 UNLABELLED_ARRAY_TYPES = [
@@ -204,9 +204,5 @@ def test_fail_on_non_csr_csc_matrix():
 
 
 def test_create_anndata_with_jax():
-    from contextlib import suppress
-
-    with suppress(ImportError):
-        import jax.numpy as jnp
-
+    jnp = pytest.importorskip("jax.numpy")
     ad.AnnData(X=jnp.ones((10, 10)))
