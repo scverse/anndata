@@ -118,10 +118,6 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 dask = [
     "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
-jax = [
-    "jax>=0.6.0",
-    "jaxlib>=0.6.0",
-]
 
 [tool.hatch.version]
 source = "vcs"
