@@ -64,8 +64,14 @@ def test_setter_view(orig_array_type, new_array_type):
         # https://github.com/scverse/anndata/issues/500
         pytest.xfail("Cannot set a dense array with a sparse array")
 
-    if isinstance(orig_X, jnp.ndarray) or isinstance(to_assign, jnp.ndarray):
-        pytest.xfail("JAX arrays are immutable and do not support in-place assignment")
+    # if isinstance(orig_X, jnp.ndarray) or isinstance(to_assign, jnp.ndarray):
+    #     pytest.xfail("JAX arrays are immutable and do not support in-place assignment")
+    if isinstance(orig_X, jnp.ndarray):
+        view = adata[:9, :9]
+        print(f"orig_X: {type(orig_X)}, to_assign: {type(to_assign)}")
+        with pytest.raises(TypeError, match=r"immutable|in-place"):
+            view.X = to_assign
+        return
     view = adata[:9, :9]
     view.X = to_assign
     np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
