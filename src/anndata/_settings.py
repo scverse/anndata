@@ -550,6 +550,14 @@ settings.register(
     get_from_env=check_and_get_int,
 )
 
+settings.register(
+    "repr_html_unique_limit",
+    default_value=1_000_000,
+    description="Maximum number of rows to compute unique counts for in HTML repr. Set to 0 to disable.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
 
 ##################################################################################
 ##################################################################################

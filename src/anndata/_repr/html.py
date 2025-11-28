@@ -23,6 +23,7 @@ from anndata._repr import (
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_ITEMS,
     DEFAULT_PREVIEW_ITEMS,
+    DEFAULT_UNIQUE_LIMIT,
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
@@ -482,11 +483,14 @@ def _render_dataframe_entry(
             parts.append(f'<span class="ad-text-muted">...+{remaining}</span>')
 
     elif hasattr(col, "nunique"):
-        try:
-            n_unique = col.nunique()
-            parts.append(f'<span class="ad-text-muted">({n_unique} unique)</span>')
-        except Exception:
-            pass
+        # Skip nunique() for very large columns to avoid performance issues
+        unique_limit = _get_setting("repr_html_unique_limit", DEFAULT_UNIQUE_LIMIT)
+        if unique_limit > 0 and len(col) <= unique_limit:
+            try:
+                n_unique = col.nunique()
+                parts.append(f'<span class="ad-text-muted">({n_unique} unique)</span>')
+            except Exception:
+                pass
 
     parts.append("</td>")
 
