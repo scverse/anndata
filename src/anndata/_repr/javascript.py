@@ -39,12 +39,18 @@ _JS_CONTENT = """
     // Mark container as JS-enabled (shows interactive elements)
     container.classList.add('js-enabled');
 
-    // Show fold icons and copy buttons (hidden by default for no-JS)
+    // Show fold icons, copy buttons, and search input (hidden by default for no-JS)
     container.querySelectorAll('.ad-fold-icon').forEach(icon => {
         icon.style.display = 'inline';
     });
     container.querySelectorAll('.ad-copy-btn').forEach(btn => {
         btn.style.display = 'inline-flex';
+    });
+    container.querySelectorAll('.ad-search-input').forEach(input => {
+        input.style.display = 'inline-block';
+    });
+    container.querySelectorAll('.ad-filter-indicator').forEach(indicator => {
+        // Will be shown when filtering is active
     });
 
     // Apply initial collapse state from data attributes

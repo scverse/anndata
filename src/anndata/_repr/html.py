@@ -131,17 +131,9 @@ def generate_repr_html(
     # Container
     parts.append(f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}">')
 
-    # Header
+    # Header (with search box integrated on the right)
     if show_header:
-        parts.append(_render_header(adata))
-
-    # Search box (only at top level)
-    if show_search and depth == 0:
-        parts.append(_render_search_box())
-
-    # Metadata bar
-    if depth == 0:
-        parts.append(_render_metadata(adata))
+        parts.append(_render_header(adata, show_search=show_search and depth == 0))
 
     # Index preview (only at top level)
     if depth == 0:
@@ -150,8 +142,8 @@ def generate_repr_html(
     # Sections container
     parts.append('<div class="ad-sections">')
 
-    # X section
-    parts.append(_render_x_section(adata, context))
+    # X as a simple entry (like layers)
+    parts.append(_render_x_entry(adata, context))
 
     # Standard sections
     for section in SECTION_ORDER:
@@ -177,6 +169,11 @@ def generate_repr_html(
             )
 
     parts.append("</div>")  # ad-sections
+
+    # Footer with metadata (only at top level)
+    if depth == 0:
+        parts.append(_render_footer(adata))
+
     parts.append("</div>")  # anndata-repr
 
     # JavaScript (only at top level)
@@ -191,12 +188,12 @@ def generate_repr_html(
 # =============================================================================
 
 
-def _render_header(adata: AnnData) -> str:
-    """Render the header with type, shape, and badges."""
+def _render_header(adata: AnnData, *, show_search: bool = False) -> str:
+    """Render the header with type, shape, badges, and optional search box."""
     # Use inline styles for critical display properties to avoid JupyterLab CSS conflicts
     header_style = (
         "display:flex;flex-wrap:wrap;align-items:center;gap:8px;"
-        "padding:10px 12px;background:#f8f9fa;border-bottom:1px solid #dee2e6;"
+        "padding:8px 12px;background:#f8f9fa;border-bottom:1px solid #dee2e6;"
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
     )
     parts = [f'<div class="ad-header" style="{header_style}">']
@@ -207,7 +204,7 @@ def _render_header(adata: AnnData) -> str:
     parts.append(f'<span class="ad-type" style="{type_style}">{escape_html(type_name)}</span>')
 
     # Shape
-    shape_str = f"n_obs × n_vars = {format_number(adata.n_obs)} × {format_number(adata.n_vars)}"
+    shape_str = f"{format_number(adata.n_obs)} obs × {format_number(adata.n_vars)} vars"
     shape_style = "font-family:ui-monospace,monospace;font-size:12px;color:#6c757d;"
     parts.append(f'<span class="ad-shape" style="{shape_style}">{shape_str}</span>')
 
@@ -229,23 +226,29 @@ def _render_header(adata: AnnData) -> str:
     if type_name != "AnnData":
         parts.append(f'<span class="ad-badge ad-badge-extension">{type_name}</span>')
 
+    # Search box on the right (spacer pushes it right)
+    if show_search:
+        spacer_style = "flex-grow:1;"
+        parts.append(f'<span style="{spacer_style}"></span>')
+        search_style = "display:none;padding:4px 8px;font-size:11px;border:1px solid #dee2e6;border-radius:4px;outline:none;width:150px;"
+        parts.append(
+            f'<input type="text" class="ad-search-input" style="{search_style}" '
+            f'placeholder="Search..." aria-label="Search fields">'
+        )
+        parts.append('<span class="ad-filter-indicator" style="display:none;font-size:10px;color:#0d6efd;margin-left:4px;"></span>')
+
     parts.append("</div>")
     return "\n".join(parts)
 
 
-def _render_search_box() -> str:
-    """Render the search/filter input."""
-    return """
-<div class="ad-search">
-    <input type="text" class="ad-search-input" placeholder="Search fields..." aria-label="Search fields">
-    <span class="ad-filter-indicator"></span>
-</div>
-"""
-
-
-def _render_metadata(adata: AnnData) -> str:
-    """Render the metadata bar with version and memory info."""
-    parts = ['<div class="ad-metadata">']
+def _render_footer(adata: AnnData) -> str:
+    """Render the footer with version and memory info."""
+    footer_style = (
+        "display:flex;justify-content:space-between;padding:4px 12px;"
+        "font-size:10px;color:#adb5bd;border-top:1px solid #e9ecef;"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+    )
+    parts = [f'<div class="ad-footer" style="{footer_style}">']
 
     # Version
     version = get_anndata_version()
@@ -258,10 +261,6 @@ def _render_metadata(adata: AnnData) -> str:
         parts.append(f'<span title="Estimated memory usage">~{mem_str}</span>')
     except Exception:
         pass
-
-    # Creation date if available
-    if hasattr(adata, "uns") and "created_date" in adata.uns:
-        parts.append(f'<span>Created: {escape_html(str(adata.uns["created_date"]))}</span>')
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -302,47 +301,44 @@ def _format_index_preview(index: pd.Index, name: str) -> str:
     return ", ".join(items)
 
 
-def _render_x_section(adata: AnnData, context: FormatterContext) -> str:
-    """Render the X matrix section."""
-    parts = ['<div class="ad-x-section">']
-    parts.append('<dl class="ad-x-info">')
-
+def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
+    """Render X as a single compact entry row."""
     X = adata.X
 
+    # Inline styles
+    row_style = "display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #e9ecef;"
+    name_style = "font-family:ui-monospace,monospace;font-weight:600;min-width:60px;"
+    type_style = "font-family:ui-monospace,monospace;font-size:11px;color:#6c757d;"
+
+    parts = [f'<div class="ad-x-entry" style="{row_style}">']
+    parts.append(f'<span style="{name_style}">X</span>')
+
     if X is None:
-        parts.append("<dt>X</dt><dd><em>None</em></dd>")
+        parts.append(f'<span style="{type_style}"><em>None</em></span>')
     else:
         # Format the X matrix
         output = formatter_registry.format_value(X, context)
 
-        parts.append(f"<dt>Type:</dt><dd><span class=\"{output.css_class}\">{escape_html(output.type_name)}</span></dd>")
+        # Build compact type string
+        type_parts = [output.type_name]
 
-        # Shape
-        if "shape" in output.details:
-            shape = output.details["shape"]
-            shape_str = " × ".join(format_number(s) for s in shape)
-            parts.append(f"<dt>Shape:</dt><dd>{shape_str}</dd>")
-
-        # Dtype
-        if "dtype" in output.details:
-            parts.append(f"<dt>Dtype:</dt><dd>{escape_html(str(output.details['dtype']))}</dd>")
-
-        # Sparsity for sparse matrices
+        # Add sparsity info inline for sparse matrices
         if "sparsity" in output.details and output.details["sparsity"] is not None:
             sparsity = output.details["sparsity"]
             nnz = output.details.get("nnz", "?")
-            parts.append(f"<dt>Sparsity:</dt><dd>{sparsity:.1%} sparse ({format_number(nnz)} stored)</dd>")
+            type_parts.append(f"{sparsity:.1%} sparse ({format_number(nnz)} stored)")
 
         # Chunk info for Dask
         if "chunks" in output.details:
-            chunks = output.details["chunks"]
-            parts.append(f"<dt>Chunks:</dt><dd>{chunks}</dd>")
+            type_parts.append(f"chunks={output.details['chunks']}")
 
         # Backed info
         if is_backed(adata):
-            parts.append("<dt>Storage:</dt><dd>📁 On disk</dd>")
+            type_parts.append("📁 on disk")
 
-    parts.append("</dl>")
+        type_str = " · ".join(type_parts)
+        parts.append(f'<span class="{output.css_class}" style="{type_style}">{escape_html(type_str)}</span>')
+
     parts.append("</div>")
     return "\n".join(parts)
 
@@ -580,9 +576,10 @@ def _render_mapping_entry(
         parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
     parts.append("</td>")
 
-    # Meta - show shape/cols for obsm/varm
-    parts.append('<td class="ad-entry-meta">')
-    if "shape" in output.details and section in ("obsm", "varm", "layers"):
+    # Meta - show shape/cols for obsm/varm only (layers are always n_vars cols)
+    meta_style = "padding:6px 12px;font-size:11px;color:#adb5bd;text-align:right;"
+    parts.append(f'<td class="ad-entry-meta" style="{meta_style}">')
+    if "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
         if len(shape) >= 2:
             parts.append(f"({format_number(shape[1])} cols)")
