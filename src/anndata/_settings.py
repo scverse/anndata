@@ -509,5 +509,39 @@ settings.register(
 )
 
 
+# HTML representation settings
+settings.register(
+    "repr_html_enabled",
+    default_value=True,
+    description="Whether to use rich HTML representation in Jupyter notebooks. Set to False to use plain text repr.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "repr_html_fold_threshold",
+    default_value=5,
+    description="Auto-fold sections in HTML repr when they have more than this many entries.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_depth",
+    default_value=3,
+    description="Maximum recursion depth for nested AnnData objects in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_items",
+    default_value=200,
+    description="Maximum number of items to show per section in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+
 ##################################################################################
 ##################################################################################

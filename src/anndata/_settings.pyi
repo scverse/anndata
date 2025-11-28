@@ -45,5 +45,9 @@ class _AnnDataSettingsManager(SettingsManager):
     min_rows_for_chunked_h5_copy: int = 1000
     disallow_forward_slash_in_h5ad: bool = False
     auto_shard_zarr_v3: bool = False
+    repr_html_enabled: bool = True
+    repr_html_fold_threshold: int = 5
+    repr_html_max_depth: int = 3
+    repr_html_max_items: int = 200
 
 settings: _AnnDataSettingsManager

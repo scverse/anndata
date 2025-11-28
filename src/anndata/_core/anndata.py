@@ -543,6 +543,40 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
 
+    def _repr_html_(self) -> str | None:
+        """Rich HTML representation for Jupyter notebooks.
+
+        Returns an interactive HTML representation with:
+        - Foldable sections for each attribute
+        - Search/filter functionality
+        - Copy-to-clipboard buttons
+        - Color visualization for categorical data
+        - Serialization warnings
+        - Memory usage information
+
+        The representation can be configured via settings:
+        - ``anndata.settings.repr_html_enabled``: Enable/disable HTML repr
+        - ``anndata.settings.repr_html_fold_threshold``: Auto-fold threshold
+        - ``anndata.settings.repr_html_max_depth``: Max recursion depth
+        - ``anndata.settings.repr_html_max_items``: Max items to display
+
+        Returns
+        -------
+        HTML string if enabled, None otherwise (falls back to text repr).
+        """
+        from anndata._settings import settings
+
+        if not settings.repr_html_enabled:
+            return None
+
+        try:
+            from anndata._repr import generate_repr_html
+
+            return generate_repr_html(self)
+        except Exception:
+            # Fall back to text repr if HTML generation fails
+            return None
+
     def __eq__(self, other):
         """Equality testing"""
         msg = (
