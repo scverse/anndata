@@ -874,8 +874,11 @@ def _render_section_header(
     )
     name_style = "font-weight:600;"
     count_style = "font-size:11px;"
-    # Fold icon hidden by default, shown via JS
-    fold_style = "width:16px;font-size:10px;display:none;"
+    # Fold icon hidden by default, shown via JS - centered for proper rotation
+    fold_style = (
+        "display:none;width:16px;height:16px;font-size:10px;"
+        "align-items:center;justify-content:center;transform-origin:center;flex-shrink:0;"
+    )
     link_style = "margin-left:auto;padding:2px 6px;font-size:11px;text-decoration:none;"
 
     parts = [f'<div class="ad-section-header" style="{header_style}">']
@@ -895,7 +898,11 @@ def _render_empty_section(name: str) -> str:
         "display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;"
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
     )
-    fold_style = "width:16px;font-size:10px;display:none;"
+    # Fold icon hidden by default, shown via JS - centered for proper rotation
+    fold_style = (
+        "display:none;width:16px;height:16px;font-size:10px;"
+        "align-items:center;justify-content:center;transform-origin:center;flex-shrink:0;"
+    )
     name_style = "font-weight:600;"
     count_style = "font-size:11px;"
     content_style = "padding:0;overflow:hidden;"

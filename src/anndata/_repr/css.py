@@ -265,10 +265,16 @@ body.dark-mode .anndata-repr {
 }
 
 .anndata-repr .ad-fold-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 16px;
+    height: 16px;
     font-size: 10px;
     color: var(--ad-text-muted);
     transition: transform 0.15s;
+    transform-origin: center;
+    flex-shrink: 0;
 }
 
 .anndata-repr .ad-section.collapsed .ad-fold-icon {

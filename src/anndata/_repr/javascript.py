@@ -41,7 +41,7 @@ _JS_CONTENT = """
 
     // Show interactive elements (hidden by default for no-JS graceful degradation)
     container.querySelectorAll('.ad-fold-icon').forEach(icon => {
-        icon.style.display = 'inline';
+        icon.style.display = 'inline-flex';
     });
     container.querySelectorAll('.ad-copy-btn').forEach(btn => {
         btn.style.display = 'inline-flex';
