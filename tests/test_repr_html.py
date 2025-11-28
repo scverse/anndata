@@ -11,12 +11,20 @@ This module tests:
 - Completeness of representation
 
 Target coverage: >95%
+
+Visual Inspection:
+    Run the visual inspection script to generate an HTML file for manual review:
+
+        python tests/visual_inspect_repr_html.py
+
+    The file will be saved to tests/repr_html_visual_test.html
 """
 
 from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
+from pathlib import Path
 from string import ascii_letters
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +35,7 @@ import scipy.sparse as sp
 
 import anndata as ad
 from anndata import AnnData
+
 
 # Check optional dependencies
 try:
