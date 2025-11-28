@@ -127,7 +127,7 @@ body.dark-mode .anndata-repr {
 .anndata-repr .ad-type {
     font-weight: 600;
     font-size: 14px;
-    color: var(--ad-accent-color);
+    color: var(--ad-text-primary);
 }
 
 .anndata-repr .ad-shape {
