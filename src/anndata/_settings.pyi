@@ -49,7 +49,7 @@ class _AnnDataSettingsManager(SettingsManager):
     repr_html_fold_threshold: int = 5
     repr_html_max_depth: int = 3
     repr_html_max_items: int = 200
-    repr_html_max_categories: int = 5
+    repr_html_max_categories: int = 20
     repr_html_unique_limit: int = 1_000_000
 
 settings: _AnnDataSettingsManager

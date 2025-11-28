@@ -544,7 +544,7 @@ settings.register(
 
 settings.register(
     "repr_html_max_categories",
-    default_value=5,
+    default_value=20,
     description="Maximum number of category values to display inline in HTML repr.",
     validate=validate_int,
     get_from_env=check_and_get_int,
