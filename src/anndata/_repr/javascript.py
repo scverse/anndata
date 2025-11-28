@@ -36,17 +36,44 @@ def get_javascript(container_id: str) -> str:
 
 
 _JS_CONTENT = """
+    // Mark container as JS-enabled (shows interactive elements)
+    container.classList.add('js-enabled');
+
+    // Show fold icons and copy buttons (hidden by default for no-JS)
+    container.querySelectorAll('.ad-fold-icon').forEach(icon => {
+        icon.style.display = 'inline';
+    });
+    container.querySelectorAll('.ad-copy-btn').forEach(btn => {
+        btn.style.display = 'inline-flex';
+    });
+
+    // Apply initial collapse state from data attributes
+    container.querySelectorAll('.ad-section[data-should-collapse="true"]').forEach(section => {
+        section.classList.add('collapsed');
+        const content = section.querySelector('.ad-section-content');
+        if (content) {
+            content.style.maxHeight = '0';
+            content.style.overflow = 'hidden';
+        }
+    });
+
     // Toggle section fold/unfold
     function toggleSection(header) {
         const section = header.closest('.ad-section');
         if (!section) return;
 
-        section.classList.toggle('collapsed');
-
-        // Update ARIA
+        const isCollapsed = section.classList.toggle('collapsed');
         const content = section.querySelector('.ad-section-content');
         if (content) {
-            content.setAttribute('aria-hidden', section.classList.contains('collapsed'));
+            content.style.maxHeight = isCollapsed ? '0' : '';
+            content.style.overflow = isCollapsed ? 'hidden' : '';
+            content.setAttribute('aria-hidden', isCollapsed);
+        }
+
+        // Rotate fold icon
+        const icon = section.querySelector('.ad-fold-icon');
+        if (icon) {
+            icon.style.transform = isCollapsed ? 'rotate(-90deg)' : '';
         }
     }
 

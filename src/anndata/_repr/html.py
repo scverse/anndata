@@ -193,15 +193,23 @@ def generate_repr_html(
 
 def _render_header(adata: AnnData) -> str:
     """Render the header with type, shape, and badges."""
-    parts = ['<div class="ad-header">']
+    # Use inline styles for critical display properties to avoid JupyterLab CSS conflicts
+    header_style = (
+        "display:flex;flex-wrap:wrap;align-items:center;gap:8px;"
+        "padding:10px 12px;background:#f8f9fa;border-bottom:1px solid #dee2e6;"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+    )
+    parts = [f'<div class="ad-header" style="{header_style}">']
 
     # Type name - allow for extension types
     type_name = type(adata).__name__
-    parts.append(f'<span class="ad-type">{escape_html(type_name)}</span>')
+    type_style = "font-weight:600;font-size:14px;color:#0d6efd;"
+    parts.append(f'<span class="ad-type" style="{type_style}">{escape_html(type_name)}</span>')
 
     # Shape
     shape_str = f"n_obs × n_vars = {format_number(adata.n_obs)} × {format_number(adata.n_vars)}"
-    parts.append(f'<span class="ad-shape">{shape_str}</span>')
+    shape_style = "font-family:ui-monospace,monospace;font-size:12px;color:#6c757d;"
+    parts.append(f'<span class="ad-shape" style="{shape_style}">{shape_str}</span>')
 
     # Badges
     if is_view(adata):
@@ -353,19 +361,26 @@ def _render_dataframe_section(
     if n_cols == 0:
         return _render_empty_section(section)
 
-    # Should this section be collapsed?
-    collapsed = n_cols > fold_threshold
+    # Should this section be collapsed? (only via JS, default is expanded)
+    should_collapse = n_cols > fold_threshold
 
-    parts = [f'<div class="ad-section{"" if not collapsed else " collapsed"}" data-section="{section}">']
+    # Section with inline styles for JupyterLab compatibility
+    section_style = "border-bottom:1px solid #e9ecef;"
+    parts = [
+        f'<div class="ad-section" data-section="{section}" '
+        f'data-should-collapse="{str(should_collapse).lower()}" style="{section_style}">'
+    ]
 
     # Header
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
     tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
     parts.append(_render_section_header(section, f"({n_cols} columns)", doc_url, tooltip))
 
-    # Content
-    parts.append('<div class="ad-section-content">')
-    parts.append('<table class="ad-table">')
+    # Content - always visible by default (JS can hide it)
+    content_style = "padding:0;overflow:hidden;"
+    parts.append(f'<div class="ad-section-content" style="{content_style}">')
+    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
+    parts.append(f'<table class="ad-table" style="{table_style}">')
 
     # Render each column
     for i, col_name in enumerate(df.columns):
@@ -408,25 +423,32 @@ def _render_dataframe_entry(
     # Get colors if categorical
     colors = get_matching_column_colors(adata, col_name)
 
-    # Build entry class
-    entry_class = "ad-entry"
+    # Inline styles for JupyterLab compatibility
+    row_style = "border-bottom:1px solid #e9ecef;"
     if warnings:
-        entry_class += " warning"
+        row_style += "background:#fff3cd;"
+    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
+    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;color:#6c757d;"
+    # Copy button hidden by default - JS shows it
+    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     # Build row
-    parts = [f'<tr class="{entry_class}" data-key="{escape_html(col_name)}" data-dtype="{escape_html(output.type_name)}">']
+    parts = [
+        f'<tr class="ad-entry" data-key="{escape_html(col_name)}" '
+        f'data-dtype="{escape_html(output.type_name)}" style="{row_style}">'
+    ]
 
     # Name cell
-    parts.append('<td class="ad-entry-name">')
+    parts.append(f'<td class="ad-entry-name" style="{name_style}">')
     parts.append(escape_html(col_name))
-    parts.append(f'<button class="ad-copy-btn" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>')
+    parts.append(f'<button class="ad-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
     # Type cell
-    parts.append('<td class="ad-entry-type">')
+    parts.append(f'<td class="ad-entry-type" style="{type_style}">')
     if warnings:
         title = escape_html("; ".join(warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
+        parts.append(f'<span class="{output.css_class}" style="color:#d29922;" title="{title}">')
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
@@ -434,9 +456,11 @@ def _render_dataframe_entry(
 
     # Color swatches
     if colors:
-        parts.append('<span class="ad-color-swatches">')
+        swatch_container_style = "display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;"
+        swatch_style = "display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid #dee2e6;"
+        parts.append(f'<span class="ad-color-swatches" style="{swatch_container_style}">')
         for color in colors[:10]:  # Limit to 10 swatches
-            parts.append(f'<span class="ad-color-swatch" style="background:{escape_html(color)}" title="{escape_html(color)}"></span>')
+            parts.append(f'<span class="ad-color-swatch" style="{swatch_style}background:{escape_html(color)};" title="{escape_html(color)}"></span>')
         if len(colors) > 10:
             parts.append(f"<span>+{len(colors) - 10}</span>")
         parts.append("</span>")
@@ -444,7 +468,8 @@ def _render_dataframe_entry(
     parts.append("</td>")
 
     # Meta cell
-    parts.append('<td class="ad-entry-meta">')
+    meta_style = "padding:6px 12px;font-size:11px;color:#adb5bd;text-align:right;"
+    parts.append(f'<td class="ad-entry-meta" style="{meta_style}">')
     if hasattr(col, "cat"):
         parts.append(f"({len(col.cat.categories)} categories)")
     elif hasattr(col, "nunique"):
@@ -476,18 +501,25 @@ def _render_mapping_section(
     if n_items == 0:
         return _render_empty_section(section)
 
-    collapsed = n_items > fold_threshold
+    should_collapse = n_items > fold_threshold
 
-    parts = [f'<div class="ad-section{"" if not collapsed else " collapsed"}" data-section="{section}">']
+    # Section with inline styles
+    section_style = "border-bottom:1px solid #e9ecef;"
+    parts = [
+        f'<div class="ad-section" data-section="{section}" '
+        f'data-should-collapse="{str(should_collapse).lower()}" style="{section_style}">'
+    ]
 
     # Header
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
     tooltip = _get_section_tooltip(section)
     parts.append(_render_section_header(section, f"({n_items} items)", doc_url, tooltip))
 
-    # Content
-    parts.append('<div class="ad-section-content">')
-    parts.append('<table class="ad-table">')
+    # Content - always visible by default
+    content_style = "padding:0;overflow:hidden;"
+    parts.append(f'<div class="ad-section-content" style="{content_style}">')
+    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
+    parts.append(f'<table class="ad-table" style="{table_style}">')
 
     for i, key in enumerate(keys):
         if i >= max_items:
@@ -513,28 +545,35 @@ def _render_mapping_entry(
     """Render a single mapping entry."""
     output = formatter_registry.format_value(value, context)
 
-    entry_class = "ad-entry"
+    # Inline styles
+    row_style = "border-bottom:1px solid #e9ecef;"
     if output.warnings:
-        entry_class += " warning"
+        row_style += "background:#fff3cd;"
     if not output.is_serializable:
-        entry_class += " error"
+        row_style += "background:#f8d7da;"
+    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
+    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;color:#6c757d;"
+    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
-    parts = [f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(output.type_name)}">']
+    parts = [
+        f'<tr class="ad-entry" data-key="{escape_html(key)}" '
+        f'data-dtype="{escape_html(output.type_name)}" style="{row_style}">'
+    ]
 
     # Name
-    parts.append('<td class="ad-entry-name">')
+    parts.append(f'<td class="ad-entry-name" style="{name_style}">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="ad-copy-btn" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(f'<button class="ad-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
     # Type
-    parts.append('<td class="ad-entry-type">')
+    parts.append(f'<td class="ad-entry-type" style="{type_style}">')
     if output.warnings or not output.is_serializable:
         warnings = output.warnings.copy()
         if not output.is_serializable:
             warnings.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
+        parts.append(f'<span class="{output.css_class}" style="color:#d29922;" title="{title}">')
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
@@ -785,13 +824,24 @@ def _render_section_header(
     doc_url: str | None,
     tooltip: str,
 ) -> str:
-    """Render a section header."""
-    parts = ['<div class="ad-section-header">']
-    parts.append('<span class="ad-fold-icon">▼</span>')
-    parts.append(f'<span class="ad-section-name">{escape_html(name)}</span>')
-    parts.append(f'<span class="ad-section-count">{escape_html(count_str)}</span>')
+    """Render a section header with inline styles for JupyterLab compatibility."""
+    header_style = (
+        "display:flex;align-items:center;gap:8px;padding:8px 12px;"
+        "background:#fff;border-bottom:1px solid #e9ecef;cursor:pointer;"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+    )
+    name_style = "font-weight:600;color:#212529;"
+    count_style = "font-size:11px;color:#6c757d;"
+    # Fold icon hidden by default, shown via JS
+    fold_style = "width:16px;font-size:10px;color:#adb5bd;display:none;"
+    link_style = "margin-left:auto;padding:2px 6px;font-size:11px;color:#adb5bd;text-decoration:none;"
+
+    parts = [f'<div class="ad-section-header" style="{header_style}">']
+    parts.append(f'<span class="ad-fold-icon" style="{fold_style}">▼</span>')
+    parts.append(f'<span class="ad-section-name" style="{name_style}">{escape_html(name)}</span>')
+    parts.append(f'<span class="ad-section-count" style="{count_style}">{escape_html(count_str)}</span>')
     if doc_url:
-        parts.append(f'<a class="ad-help-link" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>')
+        parts.append(f'<a class="ad-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>')
     parts.append("</div>")
     return "\n".join(parts)
 
