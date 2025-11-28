@@ -440,7 +440,7 @@ def _render_dataframe_entry(
     parts.append(f'<button class="ad-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
-    # Type cell
+    # Type cell (colors now shown with category names in meta cell)
     parts.append(f'<td class="ad-entry-type" style="{type_style}">')
     if warnings:
         title = escape_html("; ".join(warnings))
@@ -449,30 +449,40 @@ def _render_dataframe_entry(
         parts.append("</span>")
     else:
         parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
-
-    # Color swatches
-    if colors:
-        swatch_container_style = "display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;"
-        swatch_style = "display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid #dee2e6;"
-        parts.append(f'<span class="ad-color-swatches" style="{swatch_container_style}">')
-        for color in colors[:10]:  # Limit to 10 swatches
-            parts.append(f'<span class="ad-color-swatch" style="{swatch_style}background:{escape_html(color)};" title="{escape_html(color)}"></span>')
-        if len(colors) > 10:
-            parts.append(f"<span>+{len(colors) - 10}</span>")
-        parts.append("</span>")
-
     parts.append("</td>")
 
-    # Meta cell
-    meta_style = "padding:6px 12px;font-size:11px;color:#adb5bd;text-align:right;"
+    # Meta cell - show category values with colors
+    meta_style = "padding:6px 12px;font-size:11px;color:#6c757d;text-align:left;"
     parts.append(f'<td class="ad-entry-meta" style="{meta_style}">')
+
     if hasattr(col, "cat"):
-        parts.append(f"({len(col.cat.categories)} categories)")
+        categories = list(col.cat.categories)
+        max_cats = 5  # Max categories to show
+        cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
+        dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
+
+        for i, cat in enumerate(categories[:max_cats]):
+            cat_name = escape_html(str(cat))
+            # Get color for this category if available
+            color = colors[i] if colors and i < len(colors) else None
+
+            parts.append(f'<span style="{cat_style}">')
+            if color:
+                parts.append(f'<span style="{dot_style}background:{escape_html(color)};"></span>')
+            parts.append(f'<span>{cat_name}</span>')
+            parts.append('</span>')
+
+        if len(categories) > max_cats:
+            remaining = len(categories) - max_cats
+            parts.append(f'<span style="color:#adb5bd;">...+{remaining}</span>')
+
     elif hasattr(col, "nunique"):
         try:
-            parts.append(f"({col.nunique()} unique)")
+            n_unique = col.nunique()
+            parts.append(f'<span style="color:#adb5bd;">({n_unique} unique)</span>')
         except Exception:
             pass
+
     parts.append("</td>")
 
     parts.append("</tr>")
