@@ -22,6 +22,7 @@ DEFAULT_MAX_DEPTH = 3  # Maximum recursion depth for nested objects
 DEFAULT_MAX_ITEMS = 200  # Maximum items to show per section
 DEFAULT_MAX_STRING_LENGTH = 100  # Truncate strings longer than this
 DEFAULT_PREVIEW_ITEMS = 5  # Number of items to show in previews (first/last)
+DEFAULT_MAX_CATEGORIES = 5  # Max category values to display inline
 
 # Documentation base URL
 DOCS_BASE_URL = "https://anndata.readthedocs.io/en/latest/"
@@ -46,6 +47,7 @@ __all__ = [
     "DEFAULT_MAX_ITEMS",
     "DEFAULT_MAX_STRING_LENGTH",
     "DEFAULT_PREVIEW_ITEMS",
+    "DEFAULT_MAX_CATEGORIES",
     "DOCS_BASE_URL",
     "SECTION_ORDER",
     # Main function

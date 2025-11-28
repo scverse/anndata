@@ -19,6 +19,7 @@ import pandas as pd
 
 from anndata._repr import (
     DEFAULT_FOLD_THRESHOLD,
+    DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_ITEMS,
     DEFAULT_PREVIEW_ITEMS,
@@ -461,7 +462,7 @@ def _render_dataframe_entry(
 
     if hasattr(col, "cat"):
         categories = list(col.cat.categories)
-        max_cats = 5  # Max categories to show
+        max_cats = _get_setting("repr_html_max_categories", DEFAULT_MAX_CATEGORIES)
         cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
         dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
 
