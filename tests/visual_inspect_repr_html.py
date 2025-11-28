@@ -97,8 +97,15 @@ def create_test_anndata() -> AnnData:
     return adata
 
 
-def create_html_page(sections: list[tuple[str, str]]) -> str:
-    """Create a full HTML page with multiple test cases."""
+def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
+    """Create a full HTML page with multiple test cases.
+
+    Parameters
+    ----------
+    sections
+        List of (title, html_content, description) tuples.
+        Description can be None for no description box.
+    """
     html_parts = [
         """<!DOCTYPE html>
 <html lang="en">
@@ -180,10 +187,19 @@ def create_html_page(sections: list[tuple[str, str]]) -> str:
 """
     ]
 
-    for title, html_content in sections:
+    for item in sections:
+        title = item[0]
+        html_content = item[1]
+        description = item[2] if len(item) > 2 else None
+
+        desc_html = ""
+        if description:
+            desc_html = f'<div class="description">{description}</div>'
+
         html_parts.append(f"""
     <div class="test-case">
         <h3>{title}</h3>
+        {desc_html}
         <div class="repr-output">
             {html_content}
         </div>
@@ -198,6 +214,12 @@ def create_html_page(sections: list[tuple[str, str]]) -> str:
     return "".join(html_parts)
 
 
+def strip_script_tags(html: str) -> str:
+    """Remove <script>...</script> tags from HTML to simulate no-JS environment."""
+    import re
+    return re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
+
+
 def main():
     """Generate visual test HTML file."""
     print("Generating visual test cases...")
@@ -209,7 +231,7 @@ def main():
     adata_full = create_test_anndata()
     sections.append((
         "1. Full AnnData (all features)",
-        adata_full._repr_html_()
+        adata_full._repr_html_(),
     ))
 
     # Test 2: Empty AnnData
@@ -217,7 +239,7 @@ def main():
     adata_empty = AnnData()
     sections.append((
         "2. Empty AnnData",
-        adata_empty._repr_html_()
+        adata_empty._repr_html_(),
     ))
 
     # Test 3: Minimal AnnData
@@ -225,7 +247,7 @@ def main():
     adata_minimal = AnnData(np.zeros((10, 5)))
     sections.append((
         "3. Minimal AnnData (just X matrix)",
-        adata_minimal._repr_html_()
+        adata_minimal._repr_html_(),
     ))
 
     # Test 4: View
@@ -233,7 +255,7 @@ def main():
     view = adata_full[0:20, 0:10]
     sections.append((
         "4. AnnData View (subset)",
-        view._repr_html_()
+        view._repr_html_(),
     ))
 
     # Test 5: Dense matrix
@@ -243,7 +265,7 @@ def main():
     adata_dense.uns["cluster_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00"]
     sections.append((
         "5. Dense Matrix with Categories",
-        adata_dense._repr_html_()
+        adata_dense._repr_html_(),
     ))
 
     # Test 6: Many columns (collapsed sections)
@@ -255,7 +277,7 @@ def main():
         adata_many.obsm[f"X_embedding_{i}"] = np.random.randn(20, 2).astype(np.float32)
     sections.append((
         "6. Many Columns (tests auto-folding)",
-        adata_many._repr_html_()
+        adata_many._repr_html_(),
     ))
 
     # Test 7: Special characters
@@ -267,7 +289,7 @@ def main():
     adata_special.uns["unicode_日本語"] = "japanese"
     sections.append((
         "7. Special Characters (XSS/Unicode test)",
-        adata_special._repr_html_()
+        adata_special._repr_html_(),
     ))
 
     # Test 8: Dask array (if available)
@@ -277,7 +299,7 @@ def main():
         adata_dask = AnnData(X_dask)
         sections.append((
             "8. Dask Array (lazy/chunked)",
-            adata_dask._repr_html_()
+            adata_dask._repr_html_(),
         ))
 
     # Test 9: Nested AnnData at depth
@@ -291,7 +313,47 @@ def main():
     outer.uns["level1"] = inner1
     sections.append((
         "9. Deeply Nested AnnData (tests max depth)",
-        outer._repr_html_()
+        outer._repr_html_(),
+    ))
+
+    # Test 10: Many categories (tests truncation)
+    print("  10. Many categories (tests category truncation)")
+    adata_many_cats = AnnData(np.zeros((100, 10)))
+    # 15 categories - should show only first 5 (default) with "...+10"
+    many_cat_values = [f"type_{i}" for i in range(15)] * (100 // 15) + ["type_0"] * (100 % 15)
+    adata_many_cats.obs["cell_type"] = pd.Categorical(many_cat_values)
+    # Add colors for the categories
+    adata_many_cats.uns["cell_type_colors"] = [
+        "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00",
+        "#ffff33", "#a65628", "#f781bf", "#999999", "#66c2a5",
+        "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f"
+    ]
+    # Also add a column with exactly max categories (5)
+    adata_many_cats.obs["batch"] = pd.Categorical(["A", "B", "C", "D", "E"] * 20)
+    adata_many_cats.uns["batch_colors"] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    sections.append((
+        "10. Many Categories (tests truncation)",
+        adata_many_cats._repr_html_(),
+        "cell_type has 15 categories (should show 5 + '...+10'). batch has exactly 5 (should show all).",
+    ))
+
+    # Test 11: No JavaScript (graceful degradation)
+    print("  11. No JavaScript (graceful degradation)")
+    adata_nojs = AnnData(np.random.randn(30, 15).astype(np.float32))
+    adata_nojs.obs["group"] = pd.Categorical(["X", "Y", "Z"] * 10)
+    adata_nojs.uns["group_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
+    for i in range(8):
+        adata_nojs.obs[f"metric_{i}"] = np.random.randn(30)
+    adata_nojs.obsm["X_pca"] = np.random.randn(30, 10).astype(np.float32)
+    adata_nojs.layers["raw"] = np.random.randn(30, 15).astype(np.float32)
+    # Strip script tags to simulate no-JS environment
+    nojs_html = strip_script_tags(adata_nojs._repr_html_())
+    sections.append((
+        "11. No JavaScript (graceful degradation)",
+        nojs_html,
+        "This example has script tags removed to simulate environments where JS is disabled. "
+        "All content should be visible, sections should be expanded, and interactive buttons "
+        "(fold icons, copy buttons, search, expand) should be hidden.",
     ))
 
     # Generate HTML file
