@@ -572,6 +572,23 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     font-style: italic;
 }
 
+/* Footer */
+.anndata-repr .ad-footer {
+    color: var(--ad-text-muted);
+    border-top: 1px solid var(--ad-border-light);
+}
+
+/* Muted text helper */
+.anndata-repr .ad-text-muted {
+    color: var(--ad-text-muted);
+}
+
+/* X entry row */
+.anndata-repr .ad-x-entry {
+    border-bottom: 1px solid var(--ad-border-light);
+    color: var(--ad-text-secondary);
+}
+
 /* Tooltip */
 .anndata-repr [data-tooltip] {
     position: relative;
