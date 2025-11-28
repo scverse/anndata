@@ -205,14 +205,19 @@ _JS_CONTENT = """
             const entry = btn.closest('.ad-entry');
             if (!entry) return;
 
-            const nestedContent = entry.nextElementSibling;
-            if (!nestedContent || !nestedContent.classList.contains('ad-nested-content')) return;
+            // The nested content is in a sibling <tr class="ad-nested-row">
+            // which contains <td class="ad-nested-content">
+            const nestedRow = entry.nextElementSibling;
+            if (!nestedRow || !nestedRow.classList.contains('ad-nested-row')) return;
 
-            const isExpanded = nestedContent.classList.toggle('expanded');
+            const nestedContent = nestedRow.querySelector('.ad-nested-content');
+            if (!nestedContent) return;
+
+            const isExpanded = nestedRow.classList.toggle('expanded');
 
             btn.textContent = isExpanded ? 'Collapse ▲' : 'Expand ▼';
             btn.setAttribute('aria-expanded', isExpanded);
-            nestedContent.setAttribute('aria-hidden', !isExpanded);
+            nestedRow.setAttribute('aria-hidden', !isExpanded);
         });
     });
 

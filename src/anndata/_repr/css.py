@@ -86,11 +86,12 @@ _CSS_CONTENT = """
     }
 }
 
-/* Jupyter dark theme detection */
+/* Jupyter dark theme detection + manual dark mode class */
 [data-jp-theme-light="false"] .anndata-repr,
 .jp-Theme-Dark .anndata-repr,
 body.vscode-dark .anndata-repr,
-body[data-vscode-theme-kind="vscode-dark"] .anndata-repr {
+body[data-vscode-theme-kind="vscode-dark"] .anndata-repr,
+body.dark-mode .anndata-repr {
     --ad-bg-primary: #1e1e1e;
     --ad-bg-secondary: #252526;
     --ad-bg-tertiary: #2d2d2d;
@@ -431,9 +432,32 @@ body[data-vscode-theme-kind="vscode-dark"] .anndata-repr {
 }
 
 [data-jp-theme-light="false"] .anndata-repr .dtype-category,
-.jp-Theme-Dark .anndata-repr .dtype-category { color: #d2a8ff; }
+.jp-Theme-Dark .anndata-repr .dtype-category,
+body.dark-mode .anndata-repr .dtype-category { color: #d2a8ff; }
 [data-jp-theme-light="false"] .anndata-repr .dtype-int,
-.jp-Theme-Dark .anndata-repr .dtype-int { color: #79c0ff; }
+.jp-Theme-Dark .anndata-repr .dtype-int,
+body.dark-mode .anndata-repr .dtype-int { color: #79c0ff; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-float,
+.jp-Theme-Dark .anndata-repr .dtype-float,
+body.dark-mode .anndata-repr .dtype-float { color: #79c0ff; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-bool,
+.jp-Theme-Dark .anndata-repr .dtype-bool,
+body.dark-mode .anndata-repr .dtype-bool { color: #ff7b72; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-string,
+.jp-Theme-Dark .anndata-repr .dtype-string,
+body.dark-mode .anndata-repr .dtype-string { color: #a5d6ff; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-sparse,
+.jp-Theme-Dark .anndata-repr .dtype-sparse,
+body.dark-mode .anndata-repr .dtype-sparse { color: #7ee787; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-array,
+.jp-Theme-Dark .anndata-repr .dtype-array,
+body.dark-mode .anndata-repr .dtype-array { color: #79c0ff; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-dataframe,
+.jp-Theme-Dark .anndata-repr .dtype-dataframe,
+body.dark-mode .anndata-repr .dtype-dataframe { color: #d2a8ff; }
+[data-jp-theme-light="false"] .anndata-repr .dtype-anndata,
+.jp-Theme-Dark .anndata-repr .dtype-anndata,
+body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 
 /* Color swatches */
 .anndata-repr .ad-color-swatches {
@@ -474,15 +498,19 @@ body[data-vscode-theme-kind="vscode-dark"] .anndata-repr {
     color: white;
 }
 
-.anndata-repr .ad-nested-content {
+/* Nested row (contains nested AnnData) */
+.anndata-repr .ad-nested-row {
     display: none;
+}
+
+.anndata-repr .ad-nested-row.expanded {
+    display: table-row;
+}
+
+.anndata-repr .ad-nested-content {
     padding: 8px 12px 8px 24px;
     background: var(--ad-bg-secondary);
     border-top: 1px solid var(--ad-border-light);
-}
-
-.anndata-repr .ad-nested-content.expanded {
-    display: block;
 }
 
 /* Nested AnnData */
