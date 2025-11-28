@@ -319,22 +319,30 @@ def main():
     # Test 10: Many categories (tests truncation)
     print("  10. Many categories (tests category truncation)")
     adata_many_cats = AnnData(np.zeros((100, 10)))
-    # 15 categories - should show only first 5 (default) with "...+10"
-    many_cat_values = [f"type_{i}" for i in range(15)] * (100 // 15) + ["type_0"] * (100 % 15)
+    # 30 categories - should show only first 20 (default) with "...+10"
+    many_cat_values = [f"type_{i}" for i in range(30)] * (100 // 30) + [f"type_{i}" for i in range(100 % 30)]
     adata_many_cats.obs["cell_type"] = pd.Categorical(many_cat_values)
     # Add colors for the categories
     adata_many_cats.uns["cell_type_colors"] = [
         "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00",
         "#ffff33", "#a65628", "#f781bf", "#999999", "#66c2a5",
-        "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f"
+        "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854", "#ffd92f",
+        "#e5c494", "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3",
+        "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666",
+        "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
     ]
-    # Also add a column with exactly max categories (5)
-    adata_many_cats.obs["batch"] = pd.Categorical(["A", "B", "C", "D", "E"] * 20)
-    adata_many_cats.uns["batch_colors"] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    # Also add a column with exactly max categories (20)
+    adata_many_cats.obs["batch"] = pd.Categorical([f"batch_{i}" for i in range(20)] * 5)
+    adata_many_cats.uns["batch_colors"] = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+        "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
+    ]
     sections.append((
         "10. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
-        "cell_type has 15 categories (should show 5 + '...+10'). batch has exactly 5 (should show all).",
+        "cell_type has 30 categories (should show 20 + '...+10'). batch has exactly 20 (should show all).",
     ))
 
     # Test 11: No JavaScript (graceful degradation)
