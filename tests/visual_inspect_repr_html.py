@@ -112,6 +112,7 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https:; style-src 'self' 'unsafe-inline';">
     <title>AnnData _repr_html_ Visual Test</title>
     <style>
         body {

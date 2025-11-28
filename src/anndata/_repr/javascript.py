@@ -40,24 +40,24 @@ _JS_CONTENT = """
     container.classList.add('js-enabled');
 
     // Show interactive elements (hidden by default for no-JS graceful degradation)
-    container.querySelectorAll('.ad-fold-icon').forEach(icon => {
+    container.querySelectorAll('.adata-fold-icon').forEach(icon => {
         icon.style.display = 'inline-flex';
     });
-    container.querySelectorAll('.ad-copy-btn').forEach(btn => {
+    container.querySelectorAll('.adata-copy-btn').forEach(btn => {
         btn.style.display = 'inline-flex';
     });
-    container.querySelectorAll('.ad-search-input').forEach(input => {
+    container.querySelectorAll('.adata-search-input').forEach(input => {
         input.style.display = 'inline-block';
     });
-    container.querySelectorAll('.ad-expand-btn').forEach(btn => {
+    container.querySelectorAll('.adata-expand-btn').forEach(btn => {
         btn.style.display = 'inline-block';
     });
     // Filter indicator is shown via CSS .active class, no need to set display here
 
     // Apply initial collapse state from data attributes
-    container.querySelectorAll('.ad-section[data-should-collapse="true"]').forEach(section => {
+    container.querySelectorAll('.anndata-sec[data-should-collapse="true"]').forEach(section => {
         section.classList.add('collapsed');
-        const content = section.querySelector('.ad-section-content');
+        const content = section.querySelector('.anndata-seccontent');
         if (content) {
             content.style.maxHeight = '0';
             content.style.overflow = 'hidden';
@@ -66,11 +66,11 @@ _JS_CONTENT = """
 
     // Toggle section fold/unfold
     function toggleSection(header) {
-        const section = header.closest('.ad-section');
+        const section = header.closest('.anndata-sec');
         if (!section) return;
 
         const isCollapsed = section.classList.toggle('collapsed');
-        const content = section.querySelector('.ad-section-content');
+        const content = section.querySelector('.anndata-seccontent');
         if (content) {
             content.style.maxHeight = isCollapsed ? '0' : '';
             content.style.overflow = isCollapsed ? 'hidden' : '';
@@ -78,17 +78,17 @@ _JS_CONTENT = """
         }
 
         // Rotate fold icon
-        const icon = section.querySelector('.ad-fold-icon');
+        const icon = section.querySelector('.adata-fold-icon');
         if (icon) {
             icon.style.transform = isCollapsed ? 'rotate(-90deg)' : '';
         }
     }
 
     // Attach click handlers to section headers
-    container.querySelectorAll('.ad-section-header').forEach(header => {
+    container.querySelectorAll('.anndata-sechdr').forEach(header => {
         header.addEventListener('click', (e) => {
             // Don't toggle if clicking on help link
-            if (e.target.closest('.ad-help-link')) return;
+            if (e.target.closest('.adata-help-link')) return;
             toggleSection(header);
         });
 
@@ -104,8 +104,8 @@ _JS_CONTENT = """
     });
 
     // Search/filter functionality
-    const searchInput = container.querySelector('.ad-search-input');
-    const filterIndicator = container.querySelector('.ad-filter-indicator');
+    const searchInput = container.querySelector('.adata-search-input');
+    const filterIndicator = container.querySelector('.adata-filter-indicator');
 
     if (searchInput) {
         let debounceTimer;
@@ -131,7 +131,7 @@ _JS_CONTENT = """
         let totalEntries = 0;
 
         // Filter all entries
-        container.querySelectorAll('.ad-entry').forEach(entry => {
+        container.querySelectorAll('.adata-entry').forEach(entry => {
             totalEntries++;
 
             if (!query) {
@@ -151,13 +151,13 @@ _JS_CONTENT = """
                 totalMatches++;
 
                 // Expand parent sections to show match
-                const section = entry.closest('.ad-section');
+                const section = entry.closest('.anndata-sec');
                 if (section && section.classList.contains('collapsed')) {
                     section.classList.remove('collapsed');
                 }
 
                 // Expand nested content if match is inside
-                const nestedContent = entry.closest('.ad-nested-content');
+                const nestedContent = entry.closest('.adata-nested-content');
                 if (nestedContent && !nestedContent.classList.contains('expanded')) {
                     nestedContent.classList.add('expanded');
                 }
@@ -177,9 +177,9 @@ _JS_CONTENT = """
         }
 
         // Hide sections with no visible entries
-        container.querySelectorAll('.ad-section').forEach(section => {
-            const visibleEntries = section.querySelectorAll('.ad-entry:not(.hidden)');
-            const sectionHeader = section.querySelector('.ad-section-header');
+        container.querySelectorAll('.anndata-sec').forEach(section => {
+            const visibleEntries = section.querySelectorAll('.adata-entry:not(.hidden)');
+            const sectionHeader = section.querySelector('.anndata-sechdr');
 
             if (query && visibleEntries.length === 0) {
                 section.style.display = 'none';
@@ -190,7 +190,7 @@ _JS_CONTENT = """
     }
 
     // Copy to clipboard
-    container.querySelectorAll('.ad-copy-btn').forEach(btn => {
+    container.querySelectorAll('.adata-copy-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
 
@@ -232,19 +232,19 @@ _JS_CONTENT = """
     });
 
     // Expand/collapse nested content
-    container.querySelectorAll('.ad-expand-btn').forEach(btn => {
+    container.querySelectorAll('.adata-expand-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
 
-            const entry = btn.closest('.ad-entry');
+            const entry = btn.closest('.adata-entry');
             if (!entry) return;
 
-            // The nested content is in a sibling <tr class="ad-nested-row">
-            // which contains <td class="ad-nested-content">
+            // The nested content is in a sibling <tr class="adata-nested-row">
+            // which contains <td class="adata-nested-content">
             const nestedRow = entry.nextElementSibling;
-            if (!nestedRow || !nestedRow.classList.contains('ad-nested-row')) return;
+            if (!nestedRow || !nestedRow.classList.contains('adata-nested-row')) return;
 
-            const nestedContent = nestedRow.querySelector('.ad-nested-content');
+            const nestedContent = nestedRow.querySelector('.adata-nested-content');
             if (!nestedContent) return;
 
             const isExpanded = nestedRow.classList.toggle('expanded');
@@ -256,12 +256,12 @@ _JS_CONTENT = """
     });
 
     // Expand all / Collapse all (if buttons exist)
-    const expandAllBtn = container.querySelector('.ad-expand-all');
-    const collapseAllBtn = container.querySelector('.ad-collapse-all');
+    const expandAllBtn = container.querySelector('.adata-expand-all');
+    const collapseAllBtn = container.querySelector('.adata-collapse-all');
 
     if (expandAllBtn) {
         expandAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.ad-section.collapsed').forEach(section => {
+            container.querySelectorAll('.adata-section.collapsed').forEach(section => {
                 section.classList.remove('collapsed');
             });
         });
@@ -269,7 +269,7 @@ _JS_CONTENT = """
 
     if (collapseAllBtn) {
         collapseAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.ad-section:not(.collapsed)').forEach(section => {
+            container.querySelectorAll('.adata-section:not(.collapsed)').forEach(section => {
                 section.classList.add('collapsed');
             });
         });
