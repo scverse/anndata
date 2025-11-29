@@ -547,22 +547,42 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """Rich HTML representation for Jupyter notebooks.
 
         Returns an interactive HTML representation with:
-        - Foldable sections for each attribute
-        - Search/filter functionality
-        - Copy-to-clipboard buttons
-        - Color visualization for categorical data
-        - Serialization warnings
-        - Memory usage information
 
-        The representation can be configured via settings:
-        - ``anndata.settings.repr_html_enabled``: Enable/disable HTML repr
-        - ``anndata.settings.repr_html_fold_threshold``: Auto-fold threshold
-        - ``anndata.settings.repr_html_max_depth``: Max recursion depth
-        - ``anndata.settings.repr_html_max_items``: Max items to display
+        - Foldable sections for each attribute (auto-collapse for large sections)
+        - Search/filter functionality across all fields
+        - Copy-to-clipboard buttons for field names
+        - Color visualization for categorical data with color palettes
+        - Serialization warnings for non-serializable types
+        - Memory usage and version information
+        - Dark mode support (auto-detects Jupyter/VS Code themes)
+        - Graceful degradation when JavaScript is disabled
+
+        The representation can be configured via :attr:`anndata.settings`:
+
+        - ``repr_html_enabled``: Enable/disable HTML repr (default: True)
+        - ``repr_html_fold_threshold``: Auto-fold sections with more entries (default: 5)
+        - ``repr_html_max_depth``: Max recursion depth for nested AnnData (default: 3)
+        - ``repr_html_max_items``: Max items to show per section (default: 200)
+        - ``repr_html_max_categories``: Max category values to display inline (default: 20)
+        - ``repr_html_unique_limit``: Max rows for unique count computation (default: 1M)
+
+        Examples
+        --------
+        Disable HTML representation globally:
+
+        >>> import anndata
+        >>> anndata.settings.repr_html_enabled = False
+
+        Temporarily change settings using context manager:
+
+        >>> from IPython.display import display
+        >>> with anndata.settings.override(repr_html_fold_threshold=10):
+        ...     display(adata)  # Sections fold only when >10 items
 
         Returns
         -------
-        HTML string if enabled, None otherwise (falls back to text repr).
+        str | None
+            HTML string if enabled, None otherwise (falls back to text repr).
         """
         from anndata._settings import settings
 
