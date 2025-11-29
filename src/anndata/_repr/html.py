@@ -1217,8 +1217,15 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     type_label = output.type_name
 
+    # Build class list for CSS styling
+    entry_class = "adata-entry"
+    if output.warnings:
+        entry_class += " warning"
+    if not output.is_serializable:
+        entry_class += " error"
+
     parts = [
-        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">'
+        f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">'
     ]
 
     # Name
@@ -1231,7 +1238,16 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     # Type
     parts.append(f'<td class="adata-entry-type" style="{type_style}">')
-    parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
+    if output.warnings or not output.is_serializable:
+        entry_warnings = output.warnings.copy()
+        if not output.is_serializable:
+            entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
+        title = escape_html("; ".join(entry_warnings))
+        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
+        parts.append(f"{escape_html(type_label)} ⚠️")
+        parts.append("</span>")
+    else:
+        parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
     parts.append("</td>")
 
     # Meta - custom HTML content
