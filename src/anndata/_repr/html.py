@@ -12,7 +12,6 @@ This module generates the complete HTML representation by:
 from __future__ import annotations
 
 import uuid
-import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -35,8 +34,8 @@ from anndata._repr.registry import (
     FormattedEntry,
     FormattedOutput,
     FormatterContext,
-    formatter_registry,
     extract_uns_type_hint,
+    formatter_registry,
 )
 from anndata._repr.utils import (
     check_color_category_mismatch,
@@ -48,17 +47,14 @@ from anndata._repr.utils import (
     get_matching_column_colors,
     is_backed,
     is_color_list,
-    is_serializable,
     is_view,
-    sanitize_for_id,
     should_warn_string_column,
-    truncate_string,
 )
 
 if TYPE_CHECKING:
     from anndata import AnnData
 
-# Import formatters to register them
+# Import formatters to register them (side-effect import)
 import anndata._repr.formatters  # noqa: F401
 
 
@@ -103,7 +99,9 @@ def generate_repr_html(
     if max_depth is None:
         max_depth = _get_setting("repr_html_max_depth", DEFAULT_MAX_DEPTH)
     if fold_threshold is None:
-        fold_threshold = _get_setting("repr_html_fold_threshold", DEFAULT_FOLD_THRESHOLD)
+        fold_threshold = _get_setting(
+            "repr_html_fold_threshold", DEFAULT_FOLD_THRESHOLD
+        )
     if max_items is None:
         max_items = _get_setting("repr_html_max_items", DEFAULT_MAX_ITEMS)
 
@@ -138,7 +136,11 @@ def generate_repr_html(
 
     # Header (with search box integrated on the right)
     if show_header:
-        parts.append(_render_header(adata, show_search=show_search and depth == 0, container_id=container_id))
+        parts.append(
+            _render_header(
+                adata, show_search=show_search and depth == 0, container_id=container_id
+            )
+        )
 
     # Index preview (only at top level)
     if depth == 0:
@@ -167,7 +169,9 @@ def generate_repr_html(
             )
         elif section == "uns":
             parts.append(
-                _render_uns_section(adata, context, fold_threshold, max_items, max_depth)
+                _render_uns_section(
+                    adata, context, fold_threshold, max_items, max_depth
+                )
             )
         else:
             parts.append(
@@ -238,7 +242,8 @@ def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
         try:
             if not formatter.should_show(adata):
                 continue
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: custom formatters shouldn't break the repr
             continue
 
         # Group by position
@@ -258,13 +263,13 @@ def _render_custom_section(
     """Render a custom section using its registered formatter."""
     try:
         entries = formatter.get_entries(adata, context)
-    except Exception as e:
-        # Log error but don't crash
-        import warnings
-        warnings.warn(
+    except Exception as e:  # noqa: BLE001
+        # Intentional broad catch: custom formatters shouldn't crash the entire repr
+        from anndata._warnings import warn
+
+        warn(
             f"Custom section formatter '{formatter.section_name}' failed: {e}",
             UserWarning,
-            stacklevel=2,
         )
         return ""
 
@@ -308,7 +313,7 @@ def _render_custom_section(
     return "\n".join(parts)
 
 
-def _render_formatted_entry(entry: Any, section: str) -> str:
+def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
     """Render a FormattedEntry from a custom section formatter."""
     output = entry.output
 
@@ -332,7 +337,9 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
     # Name
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(entry.key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
@@ -346,13 +353,19 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
-        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
 
     if has_expandable_content:
-        parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
+        parts.append(
+            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+        )
 
     if output.html_content and not output.is_expandable:
-        parts.append(f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>')
+        parts.append(
+            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
+        )
 
     parts.append("</td>")
 
@@ -377,7 +390,9 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
 # =============================================================================
 
 
-def _render_header(adata: AnnData, *, show_search: bool = False, container_id: str = "") -> str:
+def _render_header(
+    adata: AnnData, *, show_search: bool = False, container_id: str = ""
+) -> str:
     """Render the header with type, shape, badges, and optional search box."""
     # Use inline styles for layout only - colors handled by CSS for dark mode support
     header_style = (
@@ -390,7 +405,9 @@ def _render_header(adata: AnnData, *, show_search: bool = False, container_id: s
     # Type name - allow for extension types
     type_name = type(adata).__name__
     type_style = "font-weight:600;font-size:14px;"
-    parts.append(f'<span class="adata-type" style="{type_style}">{escape_html(type_name)}</span>')
+    parts.append(
+        f'<span class="adata-type" style="{type_style}">{escape_html(type_name)}</span>'
+    )
 
     # Shape
     shape_str = f"{format_number(adata.n_obs)} obs × {format_number(adata.n_vars)} vars"
@@ -408,7 +425,7 @@ def _render_header(adata: AnnData, *, show_search: bool = False, container_id: s
         status = "Open" if backing.get("is_open") else "Closed"
         parts.append(
             f'<span class="adata-badge adata-badge-backed">'
-            f'📁 {format_str} ({status})</span>'
+            f"📁 {format_str} ({status})</span>"
         )
         # Inline file path (full path, no truncation)
         if filename:
@@ -418,13 +435,15 @@ def _render_header(adata: AnnData, *, show_search: bool = False, container_id: s
             )
             parts.append(
                 f'<span class="adata-file-path" style="{path_style}">'
-                f'{escape_html(filename)}'
-                f'</span>'
+                f"{escape_html(filename)}"
+                f"</span>"
             )
 
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":
-        parts.append(f'<span class="adata-badge adata-badge-extension">{type_name}</span>')
+        parts.append(
+            f'<span class="adata-badge adata-badge-extension">{type_name}</span>'
+        )
 
     # Search box on the right (spacer pushes it right)
     if show_search:
@@ -462,7 +481,8 @@ def _render_footer(adata: AnnData) -> str:
         mem_bytes = adata.__sizeof__()
         mem_str = format_memory_size(mem_bytes)
         parts.append(f'<span title="Estimated memory usage">~{mem_str}</span>')
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # Intentional broad catch: __sizeof__ may not be implemented or may fail
         pass
 
     parts.append("</div>")
@@ -499,7 +519,7 @@ def _format_index_preview(index: pd.Index, name: str) -> str:
         # Show first and last
         first = [escape_html(str(x)) for x in index[:preview_n]]
         last = [escape_html(str(x)) for x in index[-preview_n:]]
-        items = first + ["..."] + last
+        items = [*first, "...", *last]
 
     return ", ".join(items)
 
@@ -540,7 +560,9 @@ def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
             type_parts.append("📁 on disk")
 
         type_str = " · ".join(type_parts)
-        parts.append(f'<span class="{output.css_class}" style="{type_style}">{escape_html(type_str)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}" style="{type_style}">{escape_html(type_str)}</span>'
+        )
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -574,7 +596,9 @@ def _render_dataframe_section(
     ]
 
     # Header
-    parts.append(_render_section_header(section, f"({n_cols} columns)", doc_url, tooltip))
+    parts.append(
+        _render_section_header(section, f"({n_cols} columns)", doc_url, tooltip)
+    )
 
     # Content - always visible by default (JS can hide it)
     content_style = "padding:0;overflow:hidden;"
@@ -610,16 +634,16 @@ def _render_dataframe_entry(
     output = formatter_registry.format_value(col, context)
 
     # Check for string->category warning (skip for large columns)
-    warnings = list(output.warnings)
+    entry_warnings = list(output.warnings)
     unique_limit = _get_setting("repr_html_unique_limit", DEFAULT_UNIQUE_LIMIT)
     should_warn, warn_msg = should_warn_string_column(col, unique_limit)
     if should_warn:
-        warnings.append(warn_msg)
+        entry_warnings.append(warn_msg)
 
     # Check for color mismatch
     color_warning = check_color_category_mismatch(adata, col_name)
     if color_warning:
-        warnings.append(color_warning)
+        entry_warnings.append(color_warning)
 
     # Get colors if categorical
     colors = get_matching_column_colors(adata, col_name)
@@ -629,7 +653,7 @@ def _render_dataframe_entry(
 
     # Add warning class if needed (CSS handles color)
     entry_class = "adata-entry"
-    if warnings:
+    if entry_warnings:
         entry_class += " warning"
 
     # Build row
@@ -641,7 +665,9 @@ def _render_dataframe_entry(
     # Name cell
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(col_name))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Check if this is a categorical column (for wrap button)
@@ -652,13 +678,15 @@ def _render_dataframe_entry(
 
     # Type cell
     parts.append('<td class="adata-entry-type">')
-    if warnings:
-        title = escape_html("; ".join(warnings))
+    if entry_warnings:
+        title = escape_html("; ".join(entry_warnings))
         parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
-        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
 
     # Add wrap button for categories in the type column
     if is_categorical and n_cats > 0:
@@ -681,14 +709,16 @@ def _render_dataframe_entry(
             color = colors[i] if colors and i < len(colors) else None
             parts.append(f'<span class="adata-cat-item" style="{cat_style}">')
             if color:
-                parts.append(f'<span style="{dot_style}background:{escape_html(color)};"></span>')
-            parts.append(f'<span>{cat_name}</span>')
-            parts.append('</span>')
+                parts.append(
+                    f'<span style="{dot_style}background:{escape_html(color)};"></span>'
+                )
+            parts.append(f"<span>{cat_name}</span>")
+            parts.append("</span>")
 
         if len(categories) > max_cats:
             remaining = len(categories) - max_cats
             parts.append(f'<span class="adata-text-muted">...+{remaining}</span>')
-        parts.append('</span>')
+        parts.append("</span>")
 
     elif hasattr(col, "nunique"):
         # Skip nunique() for very large columns to avoid performance issues
@@ -696,8 +726,11 @@ def _render_dataframe_entry(
         if unique_limit > 0 and len(col) <= unique_limit:
             try:
                 n_unique = col.nunique()
-                parts.append(f'<span class="adata-text-muted">({n_unique} unique)</span>')
-            except Exception:
+                parts.append(
+                    f'<span class="adata-text-muted">({n_unique} unique)</span>'
+                )
+            except Exception:  # noqa: BLE001
+                # Intentional broad catch: nunique() can fail on unhashable types
                 pass
 
     parts.append("</td>")
@@ -737,7 +770,9 @@ def _render_mapping_section(
     ]
 
     # Header
-    parts.append(_render_section_header(section, f"({n_items} items)", doc_url, tooltip))
+    parts.append(
+        _render_section_header(section, f"({n_items} items)", doc_url, tooltip)
+    )
 
     # Content - always visible by default
     content_style = "padding:0;overflow:hidden;"
@@ -791,7 +826,9 @@ def _render_mapping_entry(
     # Name
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
@@ -805,11 +842,15 @@ def _render_mapping_entry(
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
-        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
 
     # Add expand button for custom HTML content
     if has_expandable_content:
-        parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
+        parts.append(
+            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+        )
 
     # Add wrap button for DataFrame columns list
     has_columns_list = output.details.get("has_columns_list", False)
@@ -820,7 +861,9 @@ def _render_mapping_entry(
 
     # Inline (non-expandable) custom HTML content
     if output.html_content and not output.is_expandable:
-        parts.append(f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>')
+        parts.append(
+            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
+        )
 
     parts.append("</td>")
 
@@ -833,7 +876,9 @@ def _render_mapping_entry(
         parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
     elif "meta_preview" in output.details:
         # Other meta preview (non-DataFrame)
-        parts.append(f'<span title="{escape_html(output.details.get("meta_preview_full", output.details["meta_preview"]))}">{escape_html(output.details["meta_preview"])}</span>')
+        parts.append(
+            f'<span title="{escape_html(output.details.get("meta_preview_full", output.details["meta_preview"]))}">{escape_html(output.details["meta_preview"])}</span>'
+        )
     elif "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
         if len(shape) >= 2:
@@ -895,9 +940,7 @@ def _render_uns_section(
             break
 
         value = uns[key]
-        parts.append(
-            _render_uns_entry(adata, key, value, context, max_depth)
-        )
+        parts.append(_render_uns_entry(adata, key, value, context, max_depth))
 
     parts.append("</table>")
     parts.append("</div>")
@@ -935,7 +978,9 @@ def _render_uns_entry(
         # Type hint present but no formatter registered - show helpful message
         package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
         return _render_uns_entry_with_preview(
-            key, cleaned_value, context,
+            key,
+            cleaned_value,
+            context,
             preview_note=f"[{type_hint}] (import {package_name} to enable)",
         )
 
@@ -987,12 +1032,16 @@ def _render_uns_entry_with_preview(
     if not output.is_serializable:
         entry_class += " error"
 
-    parts = [f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(output.type_name)}">']
+    parts = [
+        f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(output.type_name)}">'
+    ]
 
     # Name
     parts.append(f'<td class="adata-entry-name" style="{name_style}">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
@@ -1006,13 +1055,17 @@ def _render_uns_entry_with_preview(
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
     else:
-        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
     parts.append("</td>")
 
     # Meta - value preview
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
     if preview:
-        parts.append(f'<span class="adata-text-muted" title="{escape_html(str(value)[:500])}">{escape_html(preview)}</span>')
+        parts.append(
+            f'<span class="adata-text-muted" title="{escape_html(str(value)[:500])}">{escape_html(preview)}</span>'
+        )
     parts.append("</td>")
     parts.append("</tr>")
 
@@ -1064,7 +1117,8 @@ def _generate_value_preview(value: Any, max_len: int = 100) -> str:
                 if all(items):
                     bracket = "[]" if isinstance(value, list) else "()"
                     return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
-            except Exception:
+            except Exception:  # noqa: BLE001
+                # Intentional broad catch: preview generation is best-effort
                 pass
         return f"({n_items} items)"
 
@@ -1104,12 +1158,16 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     type_label = output.type_name
 
-    parts = [f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">']
+    parts = [
+        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">'
+    ]
 
     # Name
     parts.append(f'<td class="adata-entry-name" style="{name_style}">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
@@ -1138,12 +1196,16 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
-    parts = [f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="colors">']
+    parts = [
+        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="colors">'
+    ]
 
     # Name
     parts.append(f'<td class="adata-entry-name" style="{name_style}">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
@@ -1155,7 +1217,9 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
     parts.append('<span class="adata-color-swatches">')
     for color in colors[:15]:  # Limit preview
-        parts.append(f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>')
+        parts.append(
+            f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
+        )
     if n_colors > 15:
         parts.append(f'<span class="adata-text-muted">+{n_colors - 15}</span>')
     parts.append("</span>")
@@ -1185,19 +1249,27 @@ def _render_nested_anndata_entry(
     # Expand button hidden by default - JS shows it
     expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
-    parts = [f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="AnnData">']
+    parts = [
+        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="AnnData">'
+    ]
 
     # Name
     parts.append(f'<td class="adata-entry-name" style="{name_style}">')
     parts.append(escape_html(key))
-    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append(
+        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+    )
     parts.append("</td>")
 
     # Type
     parts.append(f'<td class="adata-entry-type" style="{type_style}">')
-    parts.append(f'<span class="dtype-anndata">AnnData ({format_number(n_obs)} × {format_number(n_vars)})</span>')
+    parts.append(
+        f'<span class="dtype-anndata">AnnData ({format_number(n_obs)} × {format_number(n_vars)})</span>'
+    )
     if can_expand:
-        parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
+        parts.append(
+            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+        )
     parts.append("</td>")
 
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
@@ -1241,7 +1313,14 @@ def _render_raw_section(
     # Header
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.raw.html"
     n_vars = getattr(raw, "n_vars", "?")
-    parts.append(_render_section_header("raw", f"(n_vars = {format_number(n_vars)})", doc_url, "Raw data (original unprocessed)"))
+    parts.append(
+        _render_section_header(
+            "raw",
+            f"(n_vars = {format_number(n_vars)})",
+            doc_url,
+            "Raw data (original unprocessed)",
+        )
+    )
 
     # Content with inline styles
     content_style = "padding:0;overflow:hidden;"
@@ -1253,15 +1332,21 @@ def _render_raw_section(
     # raw.X info
     if hasattr(raw, "X") and raw.X is not None:
         output = formatter_registry.format_value(raw.X, context)
-        parts.append(f'<div style="{info_style}"><strong>raw.X:</strong> <span class="{output.css_class}">{escape_html(output.type_name)}</span></div>')
+        parts.append(
+            f'<div style="{info_style}"><strong>raw.X:</strong> <span class="{output.css_class}">{escape_html(output.type_name)}</span></div>'
+        )
 
     # raw.var columns
     if hasattr(raw, "var") and len(raw.var.columns) > 0:
-        parts.append(f'<div style="{info_style}"><strong>raw.var:</strong> {len(raw.var.columns)} columns</div>')
+        parts.append(
+            f'<div style="{info_style}"><strong>raw.var:</strong> {len(raw.var.columns)} columns</div>'
+        )
 
     # raw.varm
     if hasattr(raw, "varm") and len(raw.varm) > 0:
-        parts.append(f'<div style="{info_style}"><strong>raw.varm:</strong> {len(raw.varm)} items</div>')
+        parts.append(
+            f'<div style="{info_style}"><strong>raw.varm:</strong> {len(raw.varm)} items</div>'
+        )
 
     parts.append("</div>")
     parts.append("</div>")
@@ -1297,10 +1382,16 @@ def _render_section_header(
 
     parts = [f'<div class="anndata-sechdr" style="{header_style}">']
     parts.append(f'<span class="adata-fold-icon" style="{fold_style}">▼</span>')
-    parts.append(f'<span class="anndata-sec-name" style="{name_style}">{escape_html(name)}</span>')
-    parts.append(f'<span class="anndata-sec-count" style="{count_style}">{escape_html(count_str)}</span>')
+    parts.append(
+        f'<span class="anndata-sec-name" style="{name_style}">{escape_html(name)}</span>'
+    )
+    parts.append(
+        f'<span class="anndata-sec-count" style="{count_style}">{escape_html(count_str)}</span>'
+    )
     if doc_url:
-        parts.append(f'<a class="adata-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>')
+        parts.append(
+            f'<a class="adata-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+        )
     parts.append("</div>")
     return "\n".join(parts)
 

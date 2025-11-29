@@ -17,14 +17,13 @@ The formatters are registered automatically when this module is imported.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from anndata._repr.registry import (
     FormattedOutput,
-    FormatterContext,
     TypeFormatter,
     formatter_registry,
 )
@@ -34,7 +33,9 @@ from anndata._repr.utils import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from typing import Any
+
+    from anndata._repr.registry import FormatterContext
 
 
 # =============================================================================
@@ -137,12 +138,12 @@ class SparseMatrixFormatter(TypeFormatter):
         # Future-proof against PR #1927 removing scipy sparse inheritance
         # A sparse object should have: nnz (non-zero count), shape, dtype, and sparse conversion methods
         module = type(obj).__module__
-        is_sparse_module = module.startswith('scipy.sparse') or module.startswith('cupyx.scipy.sparse')
+        is_sparse_module = module.startswith(("scipy.sparse", "cupyx.scipy.sparse"))
         has_sparse_attrs = (
-            hasattr(obj, 'nnz') and
-            hasattr(obj, 'shape') and
-            hasattr(obj, 'dtype') and
-            (hasattr(obj, 'tocsr') or hasattr(obj, 'tocsc'))
+            hasattr(obj, "nnz")
+            and hasattr(obj, "shape")
+            and hasattr(obj, "dtype")
+            and (hasattr(obj, "tocsr") or hasattr(obj, "tocsc"))
         )
 
         return is_sparse_module and has_sparse_attrs
@@ -218,8 +219,8 @@ class DataFrameFormatter(TypeFormatter):
     When expanded, uses the rich Jupyter-style output from pandas. Configure
     the display with pandas options::
 
-        pd.set_option('display.max_rows', 10)
-        pd.set_option('display.max_columns', 5)
+        pd.set_option("display.max_rows", 10)
+        pd.set_option("display.max_columns", 5)
     """
 
     priority = 100
@@ -245,12 +246,13 @@ class DataFrameFormatter(TypeFormatter):
                 col_str = ", ".join(str(c) for c in cols[:max_cols_preview]) + ", …"
             # Truncate if still too long
             if len(col_str) > max_total_len:
-                col_str = col_str[:max_total_len - 1] + "…"
+                col_str = col_str[: max_total_len - 1] + "…"
             meta_preview = f"[{col_str}]"
 
         # Check if expandable _repr_html_ is enabled
         try:
             from anndata import settings
+
             expand_dataframes = getattr(settings, "repr_html_dataframe_expand", False)
         except (ImportError, AttributeError):
             expand_dataframes = False
@@ -263,8 +265,10 @@ class DataFrameFormatter(TypeFormatter):
             try:
                 html_content = df._repr_html_()
                 is_expandable = True
-            except Exception:
-                pass  # Fall back to no expansion
+            except Exception:  # noqa: BLE001
+                # Intentional broad catch: _repr_html_() can fail in many ways
+                # (memory, recursion, custom dtypes, etc.) - gracefully degrade
+                pass
 
         return FormattedOutput(
             type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
@@ -289,7 +293,9 @@ class SeriesFormatter(TypeFormatter):
     priority = 100
 
     def can_format(self, obj: Any) -> bool:
-        return isinstance(obj, pd.Series) and not hasattr(obj, "cat")
+        return isinstance(obj, pd.Series) and not isinstance(
+            obj.dtype, pd.CategoricalDtype
+        )
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         series: pd.Series = obj
@@ -313,11 +319,9 @@ class CategoricalFormatter(TypeFormatter):
     priority = 110
 
     def can_format(self, obj: Any) -> bool:
-        if isinstance(obj, pd.Categorical):
-            return True
-        if isinstance(obj, pd.Series) and hasattr(obj, "cat"):
-            return True
-        return False
+        return isinstance(obj, pd.Categorical) or (
+            isinstance(obj, pd.Series) and hasattr(obj, "cat")
+        )
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         if isinstance(obj, pd.Series):
@@ -428,7 +432,9 @@ class AwkwardArrayFormatter(TypeFormatter):
         try:
             length = len(obj)
             type_str = str(obj.type) if hasattr(obj, "type") else "unknown"
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: awkward arrays can fail on len/type access
+            # in edge cases (lazy evaluation, corrupt data) - show placeholder
             length = "?"
             type_str = "unknown"
 
@@ -469,9 +475,7 @@ class ArrayAPIFormatter(TypeFormatter):
         # Duck typing: Check for array-like attributes
         # Must have shape, dtype, and ndim (array-api standard)
         has_array_attrs = (
-            hasattr(obj, 'shape') and
-            hasattr(obj, 'dtype') and
-            hasattr(obj, 'ndim')
+            hasattr(obj, "shape") and hasattr(obj, "dtype") and hasattr(obj, "ndim")
         )
 
         if not has_array_attrs:
@@ -480,22 +484,23 @@ class ArrayAPIFormatter(TypeFormatter):
         # Exclude types that already have specific formatters
         # This prevents conflicts and ensures more specific formatters take precedence
         module = type(obj).__module__
-        already_handled = (
-            isinstance(obj, (np.ndarray, pd.DataFrame, pd.Series)) or
-            module.startswith('numpy') or
-            module.startswith('pandas') or
-            module.startswith('scipy.sparse') or
-            module.startswith('cupy') or  # Has CuPyArrayFormatter
-            module.startswith('cupyx') or
-            module.startswith('awkward') or  # Has AwkwardArrayFormatter
-            module.startswith('dask')  # Has DaskArrayFormatter
-        )
+        already_handled = isinstance(
+            obj, (np.ndarray, pd.DataFrame, pd.Series)
+        ) or module.startswith((
+            "numpy",
+            "pandas",
+            "scipy.sparse",
+            "cupy",  # Has CuPyArrayFormatter
+            "cupyx",
+            "awkward",  # Has AwkwardArrayFormatter
+            "dask",  # Has DaskArrayFormatter
+        ))
 
         return not already_handled
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         # Extract module and type information
-        module_name = type(obj).__module__.split('.')[0]  # e.g., "jax" from "jax.numpy"
+        module_name = type(obj).__module__.split(".")[0]  # e.g., "jax" from "jax.numpy"
         type_name = type(obj).__name__
 
         shape_str = " × ".join(format_number(s) for s in obj.shape)
@@ -504,23 +509,24 @@ class ArrayAPIFormatter(TypeFormatter):
         # Detect common array-api backends
         # Known backends: JAX, PyTorch, TensorFlow, MXNet, etc.
         known_backends = {
-            'jax': 'JAX',
-            'jaxlib': 'JAX',
-            'torch': 'PyTorch',
-            'tensorflow': 'TensorFlow',
-            'tf': 'TensorFlow',
-            'mxnet': 'MXNet',
+            "jax": "JAX",
+            "jaxlib": "JAX",
+            "torch": "PyTorch",
+            "tensorflow": "TensorFlow",
+            "tf": "TensorFlow",
+            "mxnet": "MXNet",
         }
         backend_label = known_backends.get(module_name, module_name)
 
         # Try to get device information (GPU vs CPU)
         device_info = ""
         try:
-            if hasattr(obj, 'device'):
+            if hasattr(obj, "device"):
                 device_info = f" on {obj.device}"
-            elif hasattr(obj, 'device_buffer'):  # JAX
+            elif hasattr(obj, "device_buffer"):  # JAX
                 device_info = f" on {obj.device_buffer.device()}"
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: device access varies by backend and can fail
             pass
 
         return FormattedOutput(

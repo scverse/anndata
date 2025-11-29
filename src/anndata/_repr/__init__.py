@@ -26,6 +26,7 @@ The system is designed to be extensible via two registry patterns:
 
         from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
 
+
         @register_formatter
         class MyArrayFormatter(TypeFormatter):
             sections = ("obsm", "varm")  # Only apply to obsm/varm
@@ -44,6 +45,7 @@ The system is designed to be extensible via two registry patterns:
         from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
         from anndata._repr import extract_uns_type_hint
 
+
         @register_formatter
         class MyConfigFormatter(TypeFormatter):
             priority = 100  # Check before fallback
@@ -57,14 +59,14 @@ The system is designed to be extensible via two registry patterns:
                 hint, data = extract_uns_type_hint(obj)
                 return FormattedOutput(
                     type_name="config",
-                    html_content='<span>Custom config preview</span>',
+                    html_content="<span>Custom config preview</span>",
                 )
 
     Data structure for type hints (works in any section)::
 
         adata.uns["my_config"] = {
             "__anndata_repr__": "mypackage.config",
-            "data": '{"setting": "value"}'
+            "data": '{"setting": "value"}',
         }
 
     When a package registers a formatter and the user imports that package,
@@ -81,6 +83,7 @@ The system is designed to be extensible via two registry patterns:
         from anndata._repr import register_formatter, SectionFormatter
         from anndata._repr import FormattedEntry, FormattedOutput
 
+
         @register_formatter
         class ObstSectionFormatter(SectionFormatter):
             section_name = "obst"
@@ -93,7 +96,7 @@ The system is designed to be extensible via two registry patterns:
                 return [
                     FormattedEntry(
                         key=k,
-                        output=FormattedOutput(type_name=f"Tree ({v.n_nodes} nodes)")
+                        output=FormattedOutput(type_name=f"Tree ({v.n_nodes} nodes)"),
                     )
                     for k, v in obj.obst.items()
                 ]
@@ -114,26 +117,37 @@ DEFAULT_UNIQUE_LIMIT = 1_000_000  # Max rows to compute unique counts (0 to disa
 DOCS_BASE_URL = "https://anndata.readthedocs.io/en/latest/"
 
 # Section order for display
-SECTION_ORDER = ("X", "obs", "var", "uns", "obsm", "varm", "layers", "obsp", "varp", "raw")
-
-# Import main functionality
-from anndata._repr.html import generate_repr_html
-from anndata._repr.registry import (
-    # Type formatter registry
-    FormatterRegistry,
-    formatter_registry,
-    register_formatter,
-    SectionFormatter,
-    TypeFormatter,
-    FormattedOutput,
-    FormattedEntry,
-    FormatterContext,
-    # Type hint extraction (for tagged data in uns)
-    extract_uns_type_hint,
-    UNS_TYPE_HINT_KEY,
+SECTION_ORDER = (
+    "X",
+    "obs",
+    "var",
+    "uns",
+    "obsm",
+    "varm",
+    "layers",
+    "obsp",
+    "varp",
+    "raw",
 )
 
-__all__ = [
+# Import main functionality
+from anndata._repr.html import generate_repr_html  # noqa: E402
+from anndata._repr.registry import (  # noqa: E402
+    UNS_TYPE_HINT_KEY,
+    FormattedEntry,
+    FormattedOutput,
+    FormatterContext,
+    # Type formatter registry
+    FormatterRegistry,
+    SectionFormatter,
+    TypeFormatter,
+    # Type hint extraction (for tagged data in uns)
+    extract_uns_type_hint,
+    formatter_registry,
+    register_formatter,
+)
+
+__all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     # Constants
     "DEFAULT_FOLD_THRESHOLD",
     "DEFAULT_MAX_DEPTH",

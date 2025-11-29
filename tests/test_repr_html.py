@@ -24,9 +24,7 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
-from pathlib import Path
-from string import ascii_letters
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -46,14 +44,14 @@ except ImportError:
     HAS_DASK = False
 
 try:
-    import cupy as cp
+    import cupy as cp  # noqa: F401
 
     HAS_CUPY = True
 except ImportError:
     HAS_CUPY = False
 
 try:
-    import awkward as ak
+    import awkward as ak  # noqa: F401
 
     HAS_AWKWARD = True
 except ImportError:
@@ -478,7 +476,7 @@ class TestWarnings:
         """Test no warning for string columns with all unique values."""
         adata = AnnData(np.zeros((5, 3)))
         adata.obs["id"] = ["cell_0", "cell_1", "cell_2", "cell_3", "cell_4"]
-        html = adata._repr_html_()
+        _html = adata._repr_html_()  # noqa: F841
         # The "id" column should not have warning for unique strings
         # This is harder to test precisely, so we just verify no errors
 
@@ -590,7 +588,7 @@ class TestRawSection:
         """Test no raw section when raw is None."""
         adata = AnnData(np.zeros((10, 5)))
         # raw is None by default
-        html = adata._repr_html_()
+        _html = adata._repr_html_()  # noqa: F841
         # Should not have a non-empty raw section
 
 
@@ -1779,7 +1777,6 @@ class TestUnsRendererRegistry:
         from anndata._repr import (
             register_formatter,
             TypeFormatter,
-            FormattedOutput,
             extract_uns_type_hint,
             formatter_registry,
         )
@@ -1932,7 +1929,7 @@ class TestSectionFormatterCoverage:
 
     def test_section_formatter_default_methods(self):
         """Test SectionFormatter default method implementations."""
-        from anndata._repr.registry import SectionFormatter, FormatterContext, FormattedEntry
+        from anndata._repr.registry import SectionFormatter
 
         class TestSectionFormatter(SectionFormatter):
             @property

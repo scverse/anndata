@@ -46,11 +46,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-import warnings
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from typing import Any
 
 
 @dataclass
@@ -210,7 +206,13 @@ class SectionFormatter(ABC):
 
     Example usage::
 
-        from anndata._repr import register_formatter, SectionFormatter, FormattedEntry, FormattedOutput
+        from anndata._repr import (
+            register_formatter,
+            SectionFormatter,
+            FormattedEntry,
+            FormattedOutput,
+        )
+
 
         @register_formatter
         class ObstSectionFormatter(SectionFormatter):
@@ -314,7 +316,12 @@ class FallbackFormatter(TypeFormatter):
                 pass
 
         # Check if this might be from an extension package
-        is_extension = module and not module.startswith(("anndata", "numpy", "pandas", "scipy"))
+        is_extension = module and not module.startswith((
+            "anndata",
+            "numpy",
+            "pandas",
+            "scipy",
+        ))
 
         return FormattedOutput(
             type_name=type_name,
@@ -375,18 +382,23 @@ class FormatterRegistry:
         current_section = context.section
         for formatter in self._type_formatters:
             # Check if formatter is restricted to specific sections
-            if formatter.sections is not None and current_section not in formatter.sections:
+            if (
+                formatter.sections is not None
+                and current_section not in formatter.sections
+            ):
                 continue
 
             try:
                 if formatter.can_format(obj):
                     return formatter.format(obj, context)
-            except Exception as e:
-                # Log but don't fail - try next formatter
-                warnings.warn(
+            except Exception as e:  # noqa: BLE001
+                # Intentional broad catch: formatters shouldn't crash the entire repr
+                from anndata._warnings import warn
+
+                warn(
                     f"Formatter {type(formatter).__name__} failed for "
                     f"{type(obj).__name__}: {e}",
-                    stacklevel=2,
+                    UserWarning,
                 )
                 continue
 
@@ -448,9 +460,12 @@ def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
     1. In your package (e.g., mypackage/__init__.py), register a TypeFormatter::
 
         from anndata._repr import (
-            register_formatter, TypeFormatter, FormattedOutput,
-            extract_uns_type_hint
+            register_formatter,
+            TypeFormatter,
+            FormattedOutput,
+            extract_uns_type_hint,
         )
+
 
         @register_formatter
         class MyTypeFormatter(TypeFormatter):
@@ -494,7 +509,7 @@ def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
     # Check string prefix format
     if isinstance(value, str) and value.startswith(f"{UNS_TYPE_HINT_KEY}:"):
         # Format: "__anndata_repr__:type.hint::content"
-        rest = value[len(UNS_TYPE_HINT_KEY) + 1:]  # After "__anndata_repr__:"
+        rest = value[len(UNS_TYPE_HINT_KEY) + 1 :]  # After "__anndata_repr__:"
         if "::" in rest:
             hint, content = rest.split("::", 1)
             return hint, content

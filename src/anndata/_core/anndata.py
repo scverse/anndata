@@ -584,8 +584,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         str | None
             HTML string if enabled, None otherwise (falls back to text repr).
         """
-        from anndata._settings import settings
-
         if not settings.repr_html_enabled:
             return None
 
@@ -593,7 +591,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             from anndata._repr import generate_repr_html
 
             return generate_repr_html(self)
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: HTML repr should never crash the notebook
             # Fall back to text repr if HTML generation fails
             return None
 

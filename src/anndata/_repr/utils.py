@@ -86,7 +86,10 @@ def is_serializable(
     if isinstance(obj, np.generic):
         return True, ""
 
-    return False, f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer"
+    return (
+        False,
+        f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer",
+    )
 
 
 def should_warn_string_column(
@@ -123,7 +126,8 @@ def should_warn_string_column(
     try:
         n_unique = series.nunique()
         n_total = len(series)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # Intentional broad catch: nunique() can fail on unhashable types
         return False, ""
 
     if n_unique < n_total:
@@ -162,9 +166,7 @@ def is_color_list(key: str, value: Any) -> bool:
         return True
 
     # Check first element
-    first = value[0] if len(value) > 0 else None
-    if first is None:
-        return False
+    first = value[0]
 
     if isinstance(first, str):
         # Hex color
@@ -281,7 +283,7 @@ def truncate_string(text: str, max_length: int = 100) -> str:
     return text[: max_length - 3] + "..."
 
 
-def format_memory_size(size_bytes: int | float) -> str:
+def format_memory_size(size_bytes: float) -> str:
     """Format memory size in human-readable form."""
     if size_bytes < 0:
         return "Unknown"
@@ -296,7 +298,7 @@ def format_memory_size(size_bytes: int | float) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-def format_number(n: int | float) -> str:
+def format_number(n: float) -> str:
     """Format a number with thousand separators."""
     if isinstance(n, float):
         if n == int(n):
@@ -312,7 +314,8 @@ def get_anndata_version() -> str:
         from importlib.metadata import version
 
         return version("anndata")
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # Intentional broad catch: version lookup can fail in various environments
         return "unknown"
 
 
@@ -355,149 +358,147 @@ def get_backing_info(obj: Any) -> dict[str, Any]:
 
 
 # Basic named colors for color detection
-_NAMED_COLORS = frozenset(
-    {
-        "red",
-        "green",
-        "blue",
-        "yellow",
-        "cyan",
-        "magenta",
-        "black",
-        "white",
-        "gray",
-        "grey",
-        "orange",
-        "pink",
-        "purple",
-        "brown",
-        "navy",
-        "teal",
-        "olive",
-        "maroon",
-        "lime",
-        "aqua",
-        "silver",
-        "fuchsia",
-        # CSS color names (partial list)
-        "aliceblue",
-        "antiquewhite",
-        "aquamarine",
-        "azure",
-        "beige",
-        "bisque",
-        "blanchedalmond",
-        "blueviolet",
-        "burlywood",
-        "cadetblue",
-        "chartreuse",
-        "chocolate",
-        "coral",
-        "cornflowerblue",
-        "cornsilk",
-        "crimson",
-        "darkblue",
-        "darkcyan",
-        "darkgoldenrod",
-        "darkgray",
-        "darkgreen",
-        "darkkhaki",
-        "darkmagenta",
-        "darkolivegreen",
-        "darkorange",
-        "darkorchid",
-        "darkred",
-        "darksalmon",
-        "darkseagreen",
-        "darkslateblue",
-        "darkslategray",
-        "darkturquoise",
-        "darkviolet",
-        "deeppink",
-        "deepskyblue",
-        "dimgray",
-        "dodgerblue",
-        "firebrick",
-        "floralwhite",
-        "forestgreen",
-        "gainsboro",
-        "ghostwhite",
-        "gold",
-        "goldenrod",
-        "greenyellow",
-        "honeydew",
-        "hotpink",
-        "indianred",
-        "indigo",
-        "ivory",
-        "khaki",
-        "lavender",
-        "lavenderblush",
-        "lawngreen",
-        "lemonchiffon",
-        "lightblue",
-        "lightcoral",
-        "lightcyan",
-        "lightgoldenrodyellow",
-        "lightgray",
-        "lightgreen",
-        "lightpink",
-        "lightsalmon",
-        "lightseagreen",
-        "lightskyblue",
-        "lightslategray",
-        "lightsteelblue",
-        "lightyellow",
-        "limegreen",
-        "linen",
-        "mediumaquamarine",
-        "mediumblue",
-        "mediumorchid",
-        "mediumpurple",
-        "mediumseagreen",
-        "mediumslateblue",
-        "mediumspringgreen",
-        "mediumturquoise",
-        "mediumvioletred",
-        "midnightblue",
-        "mintcream",
-        "mistyrose",
-        "moccasin",
-        "navajowhite",
-        "oldlace",
-        "olivedrab",
-        "orangered",
-        "orchid",
-        "palegoldenrod",
-        "palegreen",
-        "paleturquoise",
-        "palevioletred",
-        "papayawhip",
-        "peachpuff",
-        "peru",
-        "plum",
-        "powderblue",
-        "rosybrown",
-        "royalblue",
-        "saddlebrown",
-        "salmon",
-        "sandybrown",
-        "seagreen",
-        "seashell",
-        "sienna",
-        "skyblue",
-        "slateblue",
-        "slategray",
-        "snow",
-        "springgreen",
-        "steelblue",
-        "tan",
-        "thistle",
-        "tomato",
-        "turquoise",
-        "violet",
-        "wheat",
-        "whitesmoke",
-        "yellowgreen",
-    }
-)
+_NAMED_COLORS = frozenset({
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "cyan",
+    "magenta",
+    "black",
+    "white",
+    "gray",
+    "grey",
+    "orange",
+    "pink",
+    "purple",
+    "brown",
+    "navy",
+    "teal",
+    "olive",
+    "maroon",
+    "lime",
+    "aqua",
+    "silver",
+    "fuchsia",
+    # CSS color names (partial list)
+    "aliceblue",
+    "antiquewhite",
+    "aquamarine",
+    "azure",
+    "beige",
+    "bisque",
+    "blanchedalmond",
+    "blueviolet",
+    "burlywood",
+    "cadetblue",
+    "chartreuse",
+    "chocolate",
+    "coral",
+    "cornflowerblue",
+    "cornsilk",
+    "crimson",
+    "darkblue",
+    "darkcyan",
+    "darkgoldenrod",
+    "darkgray",
+    "darkgreen",
+    "darkkhaki",
+    "darkmagenta",
+    "darkolivegreen",
+    "darkorange",
+    "darkorchid",
+    "darkred",
+    "darksalmon",
+    "darkseagreen",
+    "darkslateblue",
+    "darkslategray",
+    "darkturquoise",
+    "darkviolet",
+    "deeppink",
+    "deepskyblue",
+    "dimgray",
+    "dodgerblue",
+    "firebrick",
+    "floralwhite",
+    "forestgreen",
+    "gainsboro",
+    "ghostwhite",
+    "gold",
+    "goldenrod",
+    "greenyellow",
+    "honeydew",
+    "hotpink",
+    "indianred",
+    "indigo",
+    "ivory",
+    "khaki",
+    "lavender",
+    "lavenderblush",
+    "lawngreen",
+    "lemonchiffon",
+    "lightblue",
+    "lightcoral",
+    "lightcyan",
+    "lightgoldenrodyellow",
+    "lightgray",
+    "lightgreen",
+    "lightpink",
+    "lightsalmon",
+    "lightseagreen",
+    "lightskyblue",
+    "lightslategray",
+    "lightsteelblue",
+    "lightyellow",
+    "limegreen",
+    "linen",
+    "mediumaquamarine",
+    "mediumblue",
+    "mediumorchid",
+    "mediumpurple",
+    "mediumseagreen",
+    "mediumslateblue",
+    "mediumspringgreen",
+    "mediumturquoise",
+    "mediumvioletred",
+    "midnightblue",
+    "mintcream",
+    "mistyrose",
+    "moccasin",
+    "navajowhite",
+    "oldlace",
+    "olivedrab",
+    "orangered",
+    "orchid",
+    "palegoldenrod",
+    "palegreen",
+    "paleturquoise",
+    "palevioletred",
+    "papayawhip",
+    "peachpuff",
+    "peru",
+    "plum",
+    "powderblue",
+    "rosybrown",
+    "royalblue",
+    "saddlebrown",
+    "salmon",
+    "sandybrown",
+    "seagreen",
+    "seashell",
+    "sienna",
+    "skyblue",
+    "slateblue",
+    "slategray",
+    "snow",
+    "springgreen",
+    "steelblue",
+    "tan",
+    "thistle",
+    "tomato",
+    "turquoise",
+    "violet",
+    "wheat",
+    "whitesmoke",
+    "yellowgreen",
+})

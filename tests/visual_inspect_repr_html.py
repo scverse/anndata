@@ -638,7 +638,7 @@ def main():
 
         def format(self, obj, context):
             import json
-            hint, value = extract_uns_type_hint(obj)
+            _hint, value = extract_uns_type_hint(obj)
 
             # Parse JSON if string, otherwise use as-is
             if isinstance(value, str):
