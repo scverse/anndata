@@ -590,10 +590,10 @@ def main():
         outer._repr_html_(),
     ))
 
-    # Test 11: Many categories (tests truncation)
+    # Test 11: Many categories (tests truncation and wrap button)
     print("  11. Many categories (tests category truncation)")
     adata_many_cats = AnnData(np.zeros((100, 10)))
-    # 30 categories - should show only first 20 (default) with "...+10"
+    # 30 categories - with max_categories=20 should show first 20 + '...+10'
     many_cat_values = [f"type_{i}" for i in range(30)] * (100 // 30) + [f"type_{i}" for i in range(100 % 30)]
     adata_many_cats.obs["cell_type"] = pd.Categorical(many_cat_values)
     # Add colors for the categories
@@ -605,7 +605,7 @@ def main():
         "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666",
         "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
     ]
-    # Also add a column with exactly max categories (20)
+    # Also add a column with exactly 20 categories
     adata_many_cats.obs["batch"] = pd.Categorical([f"batch_{i}" for i in range(20)] * 5)
     adata_many_cats.uns["batch_colors"] = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
@@ -613,11 +613,15 @@ def main():
         "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
         "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
     ]
+    # Use lower max_categories for this test to demonstrate truncation
+    original_max_cats = ad.settings.repr_html_max_categories
+    ad.settings.repr_html_max_categories = 20
     sections.append((
         "11. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
-        "cell_type has 30 categories (should show 20 + '...+10'). batch has exactly 20 (should show all).",
+        "cell_type has 30 categories (shows 20 + '...+10'). Click ⋯ button to expand to multi-line view.",
     ))
+    ad.settings.repr_html_max_categories = original_max_cats
 
     # Test 12: Uns value previews and custom TypeFormatter
     print("  12. Uns value previews and type hints")

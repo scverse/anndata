@@ -274,4 +274,85 @@ _JS_CONTENT = """
             });
         });
     }
+
+    // Helper to check if element is overflowing
+    function isOverflowing(el) {
+        return el.scrollWidth > el.clientWidth;
+    }
+
+    // Helper to update wrap button visibility based on overflow
+    function updateWrapButtonVisibility(btn, list, metaCell) {
+        if (!list || !metaCell) {
+            btn.style.display = 'none';
+            return;
+        }
+        // Show button only if content is overflowing or currently wrapped
+        const isWrapped = list.classList.contains('wrapped');
+        const overflows = isOverflowing(metaCell);
+        btn.style.display = (overflows || isWrapped) ? 'inline' : 'none';
+    }
+
+    // Toggle category list wrap mode (single line vs multi-line)
+    container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
+        const typeCell = btn.closest('.adata-entry-type');
+        const metaCell = typeCell ? typeCell.nextElementSibling : null;
+        const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
+
+        // Initial visibility check
+        updateWrapButtonVisibility(btn, catsList, metaCell);
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!catsList || !metaCell) return;
+
+            const isWrapped = catsList.classList.toggle('wrapped');
+            metaCell.classList.toggle('expanded', isWrapped);
+            btn.textContent = isWrapped ? '▲' : '⋯';
+            btn.title = isWrapped ? 'Collapse to single line' : 'Toggle multi-line view';
+            // Always show button when wrapped
+            btn.style.display = 'inline';
+        });
+    });
+
+    // Toggle DataFrame columns list wrap mode (single line vs multi-line)
+    container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
+        const typeCell = btn.closest('.adata-entry-type');
+        const metaCell = typeCell ? typeCell.nextElementSibling : null;
+        const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
+
+        // Initial visibility check
+        updateWrapButtonVisibility(btn, colsList, metaCell);
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!colsList || !metaCell) return;
+
+            const isWrapped = colsList.classList.toggle('wrapped');
+            metaCell.classList.toggle('expanded', isWrapped);
+            btn.textContent = isWrapped ? '▲' : '⋯';
+            btn.title = isWrapped ? 'Collapse to single line' : 'Toggle multi-line view';
+            // Always show button when wrapped
+            btn.style.display = 'inline';
+        });
+    });
+
+    // Update button visibility on window resize
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
+                const typeCell = btn.closest('.adata-entry-type');
+                const metaCell = typeCell ? typeCell.nextElementSibling : null;
+                const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
+                updateWrapButtonVisibility(btn, catsList, metaCell);
+            });
+            container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
+                const typeCell = btn.closest('.adata-entry-type');
+                const metaCell = typeCell ? typeCell.nextElementSibling : null;
+                const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
+                updateWrapButtonVisibility(btn, colsList, metaCell);
+            });
+        }, 100);
+    });
 """

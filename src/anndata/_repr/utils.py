@@ -89,7 +89,9 @@ def is_serializable(
     return False, f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer"
 
 
-def should_warn_string_column(series: pd.Series) -> tuple[bool, str]:
+def should_warn_string_column(
+    series: pd.Series, unique_limit: int = 1_000_000
+) -> tuple[bool, str]:
     """
     Check if a string column will be auto-converted to categorical on save.
 
@@ -101,6 +103,8 @@ def should_warn_string_column(series: pd.Series) -> tuple[bool, str]:
     ----------
     series
         Pandas Series to check
+    unique_limit
+        Maximum number of rows to compute unique counts. Skip check for larger columns.
 
     Returns
     -------
@@ -110,6 +114,10 @@ def should_warn_string_column(series: pd.Series) -> tuple[bool, str]:
 
     dtype_str = infer_dtype(series)
     if dtype_str != "string":
+        return False, ""
+
+    # Skip expensive nunique() for very large columns
+    if unique_limit > 0 and len(series) > unique_limit:
         return False, ""
 
     try:

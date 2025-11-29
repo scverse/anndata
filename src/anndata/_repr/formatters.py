@@ -277,6 +277,7 @@ class DataFrameFormatter(TypeFormatter):
                 "columns": cols,
                 "meta_preview": meta_preview,
                 "meta_preview_full": meta_preview_full,
+                "has_columns_list": n_cols > 0,  # Flag for wrap button
             },
             is_serializable=True,
         )

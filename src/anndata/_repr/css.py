@@ -387,6 +387,8 @@ body.dark-mode .anndata-repr {
     color: #212529; /* Fallback */
     color: var(--anndata-text-primary);
     white-space: nowrap;
+    text-align: left;
+    width: 1%;  /* Shrink to fit content */
 }
 
 .anndata-repr .adata-entry-type {
@@ -395,6 +397,9 @@ body.dark-mode .anndata-repr {
     font-size: 11px;
     color: #6c757d; /* Fallback */
     color: var(--anndata-text-secondary);
+    text-align: left;
+    white-space: nowrap;
+    width: 1%;  /* Shrink to fit content */
 }
 
 .anndata-repr .adata-entry-meta {
@@ -402,6 +407,16 @@ body.dark-mode .anndata-repr {
     color: #adb5bd; /* Fallback */
     color: var(--anndata-text-muted);
     text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+}
+
+.anndata-repr .adata-entry-meta.expanded {
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
 }
 
 /* Copy button */
@@ -514,6 +529,66 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     height: 12px;
     border-radius: 2px;
     border: 1px solid var(--anndata-border-color);
+}
+
+/* Category list with wrap toggle */
+/* Default: multi-line for no-JS graceful degradation */
+.anndata-repr .adata-cats-list {
+    display: inline;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* When JS is enabled, start collapsed (single-line) */
+.anndata-repr.js-enabled .adata-cats-list {
+    white-space: nowrap;
+    word-break: normal;
+}
+
+/* Wrapped state (toggled by JS) */
+.anndata-repr.js-enabled .adata-cats-list.wrapped {
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* Wrap buttons - hidden by default for no-JS graceful degradation */
+.anndata-repr .adata-cats-wrap-btn,
+.anndata-repr .adata-cols-wrap-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--anndata-text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 4px;
+    margin-left: 4px;
+    transition: color 0.15s;
+    vertical-align: middle;
+}
+
+.anndata-repr .adata-cats-wrap-btn:hover,
+.anndata-repr .adata-cols-wrap-btn:hover {
+    color: var(--anndata-accent-color);
+}
+
+/* DataFrame columns list with wrap toggle */
+/* Default: multi-line for no-JS graceful degradation */
+.anndata-repr .adata-cols-list {
+    display: inline;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* When JS is enabled, start collapsed (single-line) */
+.anndata-repr.js-enabled .adata-cols-list {
+    white-space: nowrap;
+    word-break: normal;
+}
+
+/* Wrapped state (toggled by JS) */
+.anndata-repr.js-enabled .adata-cols-list.wrapped {
+    white-space: normal;
+    word-break: break-word;
 }
 
 /* Warning indicator */

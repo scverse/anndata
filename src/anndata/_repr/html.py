@@ -312,9 +312,7 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
     """Render a FormattedEntry from a custom section formatter."""
     output = entry.output
 
-    # Inline styles
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
+    # Button styles (hidden by default - JS shows them)
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
     expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
@@ -332,13 +330,13 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(entry.key))
     parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     if output.warnings or not output.is_serializable:
         warnings_list = output.warnings.copy()
         if not output.is_serializable:
@@ -359,8 +357,7 @@ def _render_formatted_entry(entry: Any, section: str) -> str:
     parts.append("</td>")
 
     # Meta (empty for custom sections, or could be customized)
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
+    parts.append('<td class="adata-entry-meta"></td>')
 
     parts.append("</tr>")
 
@@ -612,9 +609,10 @@ def _render_dataframe_entry(
     # Format the column
     output = formatter_registry.format_value(col, context)
 
-    # Check for string->category warning
+    # Check for string->category warning (skip for large columns)
     warnings = list(output.warnings)
-    should_warn, warn_msg = should_warn_string_column(col)
+    unique_limit = _get_setting("repr_html_unique_limit", DEFAULT_UNIQUE_LIMIT)
+    should_warn, warn_msg = should_warn_string_column(col, unique_limit)
     if should_warn:
         warnings.append(warn_msg)
 
@@ -626,10 +624,6 @@ def _render_dataframe_entry(
     # Get colors if categorical
     colors = get_matching_column_colors(adata, col_name)
 
-    # Inline styles for layout only - colors handled by CSS
-    row_style = ""
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
     # Copy button hidden by default - JS shows it
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
@@ -645,13 +639,19 @@ def _render_dataframe_entry(
     ]
 
     # Name cell
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(col_name))
     parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
-    # Type cell (colors now shown with category names in meta cell)
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    # Check if this is a categorical column (for wrap button)
+    is_categorical = hasattr(col, "cat")
+    categories = list(col.cat.categories) if is_categorical else []
+    max_cats = _get_setting("repr_html_max_categories", DEFAULT_MAX_CATEGORIES)
+    n_cats = min(len(categories), max_cats) if is_categorical else 0
+
+    # Type cell
+    parts.append('<td class="adata-entry-type">')
     if warnings:
         title = escape_html("; ".join(warnings))
         parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
@@ -659,24 +659,27 @@ def _render_dataframe_entry(
         parts.append("</span>")
     else:
         parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+
+    # Add wrap button for categories in the type column
+    if is_categorical and n_cats > 0:
+        parts.append(
+            '<button class="adata-cats-wrap-btn" title="Toggle multi-line view">⋯</button>'
+        )
     parts.append("</td>")
 
     # Meta cell - show category values with colors
-    meta_style = "padding:6px 12px;font-size:11px;text-align:left;"
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    parts.append('<td class="adata-entry-meta">')
 
-    if hasattr(col, "cat"):
-        categories = list(col.cat.categories)
-        max_cats = _get_setting("repr_html_max_categories", DEFAULT_MAX_CATEGORIES)
+    if is_categorical:
         cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
         dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
 
+        # Category list container (can be toggled to multi-line with CSS class)
+        parts.append('<span class="adata-cats-list">')
         for i, cat in enumerate(categories[:max_cats]):
             cat_name = escape_html(str(cat))
-            # Get color for this category if available
             color = colors[i] if colors and i < len(colors) else None
-
-            parts.append(f'<span style="{cat_style}">')
+            parts.append(f'<span class="adata-cat-item" style="{cat_style}">')
             if color:
                 parts.append(f'<span style="{dot_style}background:{escape_html(color)};"></span>')
             parts.append(f'<span>{cat_name}</span>')
@@ -685,6 +688,7 @@ def _render_dataframe_entry(
         if len(categories) > max_cats:
             remaining = len(categories) - max_cats
             parts.append(f'<span class="adata-text-muted">...+{remaining}</span>')
+        parts.append('</span>')
 
     elif hasattr(col, "nunique"):
         # Skip nunique() for very large columns to avoid performance issues
@@ -765,9 +769,7 @@ def _render_mapping_entry(
     """Render a single mapping entry."""
     output = formatter_registry.format_value(value, context)
 
-    # Inline styles for layout only - colors handled by CSS
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
+    # Button styles (hidden by default - JS shows them)
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
     expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
@@ -787,13 +789,13 @@ def _render_mapping_entry(
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     if output.warnings or not output.is_serializable:
         warnings = output.warnings.copy()
         if not output.is_serializable:
@@ -809,17 +811,28 @@ def _render_mapping_entry(
     if has_expandable_content:
         parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
 
+    # Add wrap button for DataFrame columns list
+    has_columns_list = output.details.get("has_columns_list", False)
+    if has_columns_list:
+        parts.append(
+            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
+        )
+
     # Inline (non-expandable) custom HTML content
     if output.html_content and not output.is_expandable:
         parts.append(f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>')
 
     parts.append("</td>")
 
-    # Meta - show shape/cols for obsm/varm, or custom meta_preview
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
-    if "meta_preview" in output.details:
-        # Custom meta preview (e.g., DataFrame column names)
+    # Meta - show shape/cols for obsm/varm, or custom meta_preview (DataFrame columns)
+    parts.append('<td class="adata-entry-meta">')
+    if has_columns_list and "columns" in output.details:
+        # Render DataFrame columns as a wrappable list
+        columns = output.details["columns"]
+        col_str = ", ".join(escape_html(str(c)) for c in columns)
+        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
+    elif "meta_preview" in output.details:
+        # Other meta preview (non-DataFrame)
         parts.append(f'<span title="{escape_html(output.details.get("meta_preview_full", output.details["meta_preview"]))}">{escape_html(output.details["meta_preview"])}</span>')
     elif "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
