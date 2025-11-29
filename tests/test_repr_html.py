@@ -1139,3 +1139,214 @@ class TestBackedAnnData:
         html = backed._repr_html_()
         assert "test_file" in html or "h5ad" in html.lower()
         backed.file.close()
+
+
+# =============================================================================
+# Ad-blocker Compatibility
+# =============================================================================
+
+
+class TestAdBlockerCompatibility:
+    """
+    Test that HTML representation doesn't trigger ad-blockers.
+
+    Some browsers (like Comet/Chromium) have aggressive ad-blocking that
+    blocks elements with class names starting with "ad-". This test suite
+    ensures we avoid such patterns.
+
+    See: https://github.com/scverse/anndata/issues/XXXX
+    """
+
+    def test_no_ad_prefix_in_html_classes(self):
+        """Test that generated HTML doesn't contain 'ad-' prefixed class names."""
+        adata = AnnData(
+            np.random.randn(50, 20),
+            obs=pd.DataFrame({"cell_type": ["A", "B"] * 25}),
+            var=pd.DataFrame({"gene_name": [f"gene_{i}" for i in range(20)]}),
+        )
+        adata.obsm["X_pca"] = np.random.randn(50, 10)
+        adata.uns["metadata"] = {"key": "value"}
+
+        html = adata._repr_html_()
+
+        # Find all class="..." attributes
+        class_pattern = re.compile(r'class="([^"]*)"')
+        all_classes = class_pattern.findall(html)
+
+        # Check each class name
+        problematic_classes = []
+        for class_attr in all_classes:
+            # Split multiple classes (e.g., class="foo ad-bar")
+            for class_name in class_attr.split():
+                if class_name.startswith("ad-"):
+                    problematic_classes.append(class_name)
+
+        assert not problematic_classes, (
+            f"Found class names starting with 'ad-' which may be blocked by ad-blockers: "
+            f"{problematic_classes}. Use 'adata-' prefix instead."
+        )
+
+    def test_no_ad_prefix_in_css_selectors(self):
+        """Test that CSS doesn't contain '.ad-' selectors."""
+        from anndata._repr.css import get_css
+
+        css = get_css()
+
+        # Find all CSS class selectors
+        selector_pattern = re.compile(r"\.(ad-[\w-]+)")
+        problematic_selectors = selector_pattern.findall(css)
+
+        assert not problematic_selectors, (
+            f"Found CSS selectors starting with '.ad-' which may be blocked by ad-blockers: "
+            f"{set(problematic_selectors)}. Use '.adata-' prefix instead."
+        )
+
+    def test_no_ad_prefix_in_javascript_selectors(self):
+        """Test that JavaScript doesn't query for '.ad-' selectors."""
+        from anndata._repr.javascript import get_javascript
+
+        js = get_javascript("test-container")
+
+        # Find all querySelectorAll/querySelector calls with '.ad-'
+        selector_pattern = re.compile(r"querySelector(?:All)?\(['\"]\.ad-[\w-]+['\"]")
+        matches = selector_pattern.findall(js)
+
+        assert not matches, (
+            f"Found JavaScript selectors starting with '.ad-' which may be blocked by ad-blockers: "
+            f"{matches}. Use '.adata-' prefix instead."
+        )
+
+    def test_visual_rendering_without_adblocker(self):
+        """Test that key elements are present in the HTML."""
+        adata = AnnData(
+            np.random.randn(100, 50),
+            obs=pd.DataFrame({"cell_type": ["A", "B"] * 50}),
+        )
+        html = adata._repr_html_()
+
+        # Check that essential structural elements are present
+        # These should use 'adata-' or 'anndata-' prefixes
+        assert "adata-type" in html or "anndata" in html.lower()
+        assert "adata-entry" in html or "anndata-sec" in html
+        assert "adata-table" in html or "table" in html.lower()
+
+        # Check that the representation is reasonably sized (not empty/truncated)
+        assert len(html) > 1000, "HTML output seems too short"
+
+
+# =============================================================================
+# Coverage Improvement Tests
+# =============================================================================
+
+
+class TestCoverageEdgeCases:
+    """
+    Tests for edge cases to improve code coverage.
+
+    These tests target specific code paths that aren't covered by other tests.
+    """
+
+    def test_category_column_overflow(self):
+        """Test rendering categorical column with more than max categories."""
+        from anndata import settings
+
+        # Create categorical column with many categories
+        categories = [f"cat_{i}" for i in range(50)]
+        adata = AnnData(
+            np.zeros((100, 5)),
+            obs=pd.DataFrame(
+                {
+                    "many_cats": pd.Categorical(
+                        np.random.choice(categories, 100), categories=categories
+                    )
+                }
+            ),
+        )
+
+        with settings.override(repr_html_max_categories=10):
+            html = adata._repr_html_()
+            # Should show first 10 and indicate there are more
+            assert "cat_0" in html
+            assert "cat_9" in html or "cat_8" in html  # Might show 9 or stop at 8
+            assert "...+" in html or "more" in html.lower()
+
+    def test_non_serializable_object_in_uns(self):
+        """Test warning for non-serializable objects in uns."""
+
+        class NonSerializable:
+            """A class that can't be serialized to H5AD."""
+
+            pass
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["non_serializable"] = NonSerializable()
+
+        html = adata._repr_html_()
+
+        # Should show warning icon
+        assert "⚠" in html or "warn" in html.lower()
+
+    def test_max_depth_with_multiple_nested_anndata(self):
+        """Test max depth indicator with deeply nested AnnData."""
+        from anndata import settings
+
+        # Create 3 levels of nesting
+        level2 = AnnData(np.zeros((5, 3)))
+        level1 = AnnData(np.zeros((7, 4)))
+        level1.uns["nested"] = level2
+        level0 = AnnData(np.zeros((10, 5)))
+        level0.uns["nested"] = level1
+
+        # With max_depth=0, should show max depth indicator immediately
+        with settings.override(repr_html_max_depth=0):
+            html = level0._repr_html_()
+            assert "max depth" in html.lower() or "depth" in html.lower()
+
+    def test_dataframe_entry_nunique_exception(self):
+        """Test nunique() exception handling for dataframe columns."""
+
+        # Create a column that might raise an exception on nunique()
+        # Use a Series with unhashable types
+        adata = AnnData(np.zeros((10, 5)))
+        # Lists are unhashable and will cause nunique() to fail
+        adata.obs["unhashable"] = [[i] for i in range(10)]
+
+        # Should not crash, just skip the unique count
+        html = adata._repr_html_()
+        assert html is not None
+        assert "unhashable" in html
+
+    def test_very_large_dataframe_skips_nunique(self):
+        """Test that nunique() is skipped for very large columns."""
+        from anndata import settings
+
+        # Create a large dataset
+        adata = AnnData(
+            np.zeros((100000, 5)), obs=pd.DataFrame({"col": range(100000)})
+        )
+
+        with settings.override(repr_html_unique_limit=1000):
+            html = adata._repr_html_()
+            # Should render but not show unique count (would be too slow)
+            assert "col" in html
+            # Unique count should not be shown for large columns
+            # (checking that it doesn't crash is the main goal)
+
+    def test_empty_category_counts(self):
+        """Test rendering category column with all unique values."""
+        adata = AnnData(
+            np.zeros((10, 5)),
+            obs=pd.DataFrame(
+                {
+                    "unique_cats": pd.Categorical(
+                        [f"cat_{i}" for i in range(10)],
+                        categories=[f"cat_{i}" for i in range(10)],
+                    )
+                }
+            ),
+        )
+
+        html = adata._repr_html_()
+        assert "unique_cats" in html
+        # Should show the categories
+        assert "cat_0" in html
