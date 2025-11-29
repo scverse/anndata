@@ -450,6 +450,7 @@ body.dark-mode .anndata-repr {
 .anndata-repr .dtype-dask { color: #fb8500; }
 .anndata-repr .dtype-gpu { color: #76b900; }
 .anndata-repr .dtype-awkward { color: #e85d04; }
+.anndata-repr .dtype-array-api { color: #9a6700; } /* Array-API arrays (JAX, PyTorch, etc.) - PR #2063 */
 
 /* Dark mode type colors */
 @media (prefers-color-scheme: dark) {
@@ -462,6 +463,10 @@ body.dark-mode .anndata-repr {
     .anndata-repr .dtype-array { color: #79c0ff; }
     .anndata-repr .dtype-dataframe { color: #d2a8ff; }
     .anndata-repr .dtype-anndata { color: #ff7b72; }
+    .anndata-repr .dtype-dask { color: #ffc168; }
+    .anndata-repr .dtype-gpu { color: #a0db63; }
+    .anndata-repr .dtype-awkward { color: #ff9d76; }
+    .anndata-repr .dtype-array-api { color: #e6c400; } /* Array-API arrays - dark mode */
 }
 
 [data-jp-theme-light="false"] .anndata-repr .dtype-category,

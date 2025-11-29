@@ -112,21 +112,42 @@ class NumpyMaskedArrayFormatter(TypeFormatter):
 
 
 class SparseMatrixFormatter(TypeFormatter):
-    """Formatter for scipy.sparse matrices."""
+    """
+    Formatter for scipy.sparse matrices and arrays.
+
+    Future-proofing notes:
+    - PR #1927 (https://github.com/scverse/anndata/pull/1927) removes scipy sparse inheritance
+    - Uses duck typing as fallback to detect sparse-like objects without relying on isinstance()
+    - Handles both scipy.sparse (CPU) and cupyx.scipy.sparse (GPU) sparse arrays
+    """
 
     priority = 100
 
     def can_format(self, obj: Any) -> bool:
+        # First try scipy.sparse.issparse() if available (backward compatibility)
         try:
             import scipy.sparse as sp
 
-            return sp.issparse(obj)
+            if sp.issparse(obj):
+                return True
         except ImportError:
-            return False
+            pass
+
+        # Fallback: Duck typing for sparse-like objects
+        # Future-proof against PR #1927 removing scipy sparse inheritance
+        # A sparse object should have: nnz (non-zero count), shape, dtype, and sparse conversion methods
+        module = type(obj).__module__
+        is_sparse_module = module.startswith('scipy.sparse') or module.startswith('cupyx.scipy.sparse')
+        has_sparse_attrs = (
+            hasattr(obj, 'nnz') and
+            hasattr(obj, 'shape') and
+            hasattr(obj, 'dtype') and
+            (hasattr(obj, 'tocsr') or hasattr(obj, 'tocsc'))
+        )
+
+        return is_sparse_module and has_sparse_attrs
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
-        import scipy.sparse as sp
-
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
@@ -139,21 +160,32 @@ class SparseMatrixFormatter(TypeFormatter):
             sparsity_str = ""
 
         # Determine format name
-        if sp.isspmatrix_csr(obj):
-            format_name = "csr_matrix"
-        elif sp.isspmatrix_csc(obj):
-            format_name = "csc_matrix"
-        elif sp.isspmatrix_coo(obj):
-            format_name = "coo_matrix"
-        elif sp.isspmatrix_lil(obj):
-            format_name = "lil_matrix"
-        elif sp.isspmatrix_dok(obj):
-            format_name = "dok_matrix"
-        elif sp.isspmatrix_dia(obj):
-            format_name = "dia_matrix"
-        elif sp.isspmatrix_bsr(obj):
-            format_name = "bsr_matrix"
-        else:
+        # Try scipy-specific checks first (backward compatibility)
+        format_name = None
+        try:
+            import scipy.sparse as sp
+
+            if sp.isspmatrix_csr(obj):
+                format_name = "csr_matrix"
+            elif sp.isspmatrix_csc(obj):
+                format_name = "csc_matrix"
+            elif sp.isspmatrix_coo(obj):
+                format_name = "coo_matrix"
+            elif sp.isspmatrix_lil(obj):
+                format_name = "lil_matrix"
+            elif sp.isspmatrix_dok(obj):
+                format_name = "dok_matrix"
+            elif sp.isspmatrix_dia(obj):
+                format_name = "dia_matrix"
+            elif sp.isspmatrix_bsr(obj):
+                format_name = "bsr_matrix"
+        except (ImportError, TypeError):
+            # ImportError: scipy not available
+            # TypeError: isspmatrix_* functions may fail on new sparse array types (PR #1927)
+            pass
+
+        # Fallback: Use type name (works for new sparse array classes like csr_array, csc_array)
+        if format_name is None:
             format_name = type(obj).__name__
 
         return FormattedOutput(
@@ -354,6 +386,100 @@ class AwkwardArrayFormatter(TypeFormatter):
             details={
                 "length": length,
                 "type": type_str,
+            },
+            is_serializable=True,
+        )
+
+
+# =============================================================================
+# Array-API Compatible Array Formatter
+# =============================================================================
+
+
+class ArrayAPIFormatter(TypeFormatter):
+    """
+    Formatter for Array-API compatible arrays (JAX, PyTorch, TensorFlow, etc.).
+
+    Future-proofing notes:
+    - PR #2063 (https://github.com/scverse/anndata/pull/2063) adds Array-API compatibility
+    - Handles JAX arrays, PyTorch tensors, TensorFlow tensors, and other array-like objects
+    - Uses duck typing to detect array-like objects without isinstance checks
+    - Low priority (50) ensures specific formatters (numpy, cupy, etc.) are tried first
+
+    References:
+    - Array API Standard: https://data-apis.org/array-api/latest/
+    """
+
+    priority = 50  # Lower than specific formatters (numpy=110, cupy=120) but higher than builtins
+
+    def can_format(self, obj: Any) -> bool:
+        # Duck typing: Check for array-like attributes
+        # Must have shape, dtype, and ndim (array-api standard)
+        has_array_attrs = (
+            hasattr(obj, 'shape') and
+            hasattr(obj, 'dtype') and
+            hasattr(obj, 'ndim')
+        )
+
+        if not has_array_attrs:
+            return False
+
+        # Exclude types that already have specific formatters
+        # This prevents conflicts and ensures more specific formatters take precedence
+        module = type(obj).__module__
+        already_handled = (
+            isinstance(obj, (np.ndarray, pd.DataFrame, pd.Series)) or
+            module.startswith('numpy') or
+            module.startswith('pandas') or
+            module.startswith('scipy.sparse') or
+            module.startswith('cupy') or  # Has CuPyArrayFormatter
+            module.startswith('cupyx') or
+            module.startswith('awkward') or  # Has AwkwardArrayFormatter
+            module.startswith('dask')  # Has DaskArrayFormatter
+        )
+
+        return not already_handled
+
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        # Extract module and type information
+        module_name = type(obj).__module__.split('.')[0]  # e.g., "jax" from "jax.numpy"
+        type_name = type(obj).__name__
+
+        shape_str = " × ".join(format_number(s) for s in obj.shape)
+        dtype_str = str(obj.dtype)
+
+        # Detect common array-api backends
+        # Known backends: JAX, PyTorch, TensorFlow, MXNet, etc.
+        known_backends = {
+            'jax': 'JAX',
+            'jaxlib': 'JAX',
+            'torch': 'PyTorch',
+            'tensorflow': 'TensorFlow',
+            'tf': 'TensorFlow',
+            'mxnet': 'MXNet',
+        }
+        backend_label = known_backends.get(module_name, module_name)
+
+        # Try to get device information (GPU vs CPU)
+        device_info = ""
+        try:
+            if hasattr(obj, 'device'):
+                device_info = f" on {obj.device}"
+            elif hasattr(obj, 'device_buffer'):  # JAX
+                device_info = f" on {obj.device_buffer.device()}"
+        except Exception:
+            pass
+
+        return FormattedOutput(
+            type_name=f"{type_name} ({shape_str}) {dtype_str}",
+            css_class="dtype-array-api",
+            tooltip=f"{backend_label} array{device_info}",
+            details={
+                "shape": obj.shape,
+                "dtype": dtype_str,
+                "backend": module_name,
+                "type": type_name,
+                "ndim": obj.ndim,
             },
             is_serializable=True,
         )
@@ -608,6 +734,10 @@ def _register_builtin_formatters() -> None:
         SparseMatrixFormatter(),
         DataFrameFormatter(),
         SeriesFormatter(),
+        # Low-medium priority (Array-API compatible arrays)
+        # Must come after specific array formatters (numpy, cupy, etc.) but before builtins
+        # Handles JAX, PyTorch, TensorFlow arrays added in PR #2063
+        ArrayAPIFormatter(),
         # Low priority (builtins)
         NoneFormatter(),
         BoolFormatter(),

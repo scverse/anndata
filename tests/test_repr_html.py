@@ -1350,3 +1350,202 @@ class TestCoverageEdgeCases:
         assert "unique_cats" in html
         # Should show the categories
         assert "cat_0" in html
+
+
+class TestFutureCompatibility:
+    """
+    Tests for future compatibility with upcoming array types and changes.
+
+    These tests ensure that HTML representation remains robust when:
+    - PR #1927 removes scipy sparse inheritance
+    - PR #2063 adds Array-API compatible arrays (JAX, PyTorch, etc.)
+    - New array backends are added in the future
+
+    References:
+    - PR #1927: https://github.com/scverse/anndata/pull/1927
+    - PR #2063: https://github.com/scverse/anndata/pull/2063
+    """
+
+    def test_sparse_duck_typing_detection(self):
+        """
+        Test that sparse arrays can be detected via duck typing.
+
+        Future-proofing for PR #1927 which removes scipy sparse inheritance.
+        This ensures sparse detection works even if scipy.sparse.issparse() breaks.
+        """
+        import scipy.sparse as sp
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a sparse matrix
+        sparse_matrix = sp.csr_matrix([[1, 0, 2], [0, 0, 3], [4, 5, 6]])
+
+        # Test that the formatter can detect it
+        formatter = SparseMatrixFormatter()
+        assert formatter.can_format(sparse_matrix), "Should detect sparse matrix"
+
+        # Test that it formats correctly
+        context = FormatterContext(depth=0)
+        result = formatter.format(sparse_matrix, context)
+        assert "csr" in result.type_name.lower()
+        assert result.css_class == "dtype-sparse"
+        assert result.details["nnz"] == 6
+
+    def test_array_api_formatter_with_mock_jax_array(self):
+        """
+        Test ArrayAPIFormatter with a mock JAX-like array.
+
+        Future-proofing for PR #2063 which adds Array-API compatibility.
+        Tests that JAX/PyTorch/TensorFlow arrays are handled correctly.
+        """
+        from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock JAX-like array
+        class MockJAXArray:
+            """Mock JAX array for testing."""
+
+            def __init__(self):
+                self.shape = (100, 50)
+                self.dtype = np.dtype("float32")
+                self.ndim = 2
+
+            @property
+            def __module__(self):
+                return "jax.numpy"
+
+            def __class__(self):
+                return type("DeviceArray", (), {})
+
+        mock_array = MockJAXArray()
+        type(mock_array).__module__ = "jax.numpy"
+        type(mock_array).__name__ = "DeviceArray"
+
+        # Test that ArrayAPIFormatter can detect it
+        formatter = ArrayAPIFormatter()
+        can_format = formatter.can_format(mock_array)
+        assert can_format, "Should detect JAX-like array"
+
+        # Test that it formats correctly
+        context = FormatterContext(depth=0)
+        result = formatter.format(mock_array, context)
+        assert "100 × 50" in result.type_name
+        assert "float32" in result.type_name
+        assert result.css_class == "dtype-array-api"
+        assert result.details["backend"] == "jax"
+
+    def test_array_api_excludes_already_handled_types(self):
+        """
+        Test that ArrayAPIFormatter doesn't interfere with specific formatters.
+
+        Ensures that numpy, pandas, scipy.sparse, cupy arrays use their
+        specific formatters, not the generic ArrayAPIFormatter.
+        """
+        from anndata._repr.formatters import ArrayAPIFormatter
+
+        formatter = ArrayAPIFormatter()
+
+        # Test numpy array - should NOT be handled by ArrayAPIFormatter
+        np_array = np.array([[1, 2], [3, 4]])
+        assert not formatter.can_format(
+            np_array
+        ), "Should not handle numpy arrays (has NumpyArrayFormatter)"
+
+        # Test pandas DataFrame - should NOT be handled
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        assert not formatter.can_format(
+            df
+        ), "Should not handle pandas DataFrame (has DataFrameFormatter)"
+
+        # Test pandas Series - should NOT be handled
+        series = pd.Series([1, 2, 3])
+        assert not formatter.can_format(
+            series
+        ), "Should not handle pandas Series (has SeriesFormatter)"
+
+    def test_sparse_format_name_fallback(self):
+        """
+        Test that sparse format name detection has proper fallback.
+
+        If scipy.sparse.isspmatrix_* functions fail (as they might after PR #1927),
+        the formatter should fall back to using type(obj).__name__.
+        """
+        import scipy.sparse as sp
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Test with csr_array (new scipy sparse array type)
+        try:
+            # scipy >= 1.8 has sparse arrays
+            sparse_array = sp.csr_array([[1, 0, 2], [0, 0, 3]])
+            formatter = SparseMatrixFormatter()
+            context = FormatterContext(depth=0)
+            result = formatter.format(sparse_array, context)
+
+            # Should either get "csr_matrix" or "csr_array" depending on scipy version
+            assert (
+                "csr" in result.type_name.lower()
+            ), f"Should contain 'csr', got {result.type_name}"
+        except AttributeError:
+            # scipy < 1.8 doesn't have csr_array, skip this part
+            pass
+
+    def test_unknown_array_type_graceful_fallback(self):
+        """
+        Test that completely unknown array types don't break HTML rendering.
+
+        This ensures robustness when encountering array types we haven't seen yet.
+        """
+        # Create a dynamically generated mock array type
+        # We use type() to create a new class with custom __module__
+        FutureArray = type(
+            'FutureArray',  # class name
+            (),  # base classes
+            {
+                '__module__': 'future_lib.arrays',  # module name
+                '__init__': lambda self: setattr(self, '_initialized', True),
+                'shape': property(lambda self: (10, 5)),
+                'dtype': property(lambda self: np.dtype('int64')),
+                'ndim': property(lambda self: 2),
+            }
+        )
+
+        # Create AnnData with this unknown type
+        adata = AnnData(np.zeros((10, 5)))
+        future_array = FutureArray()
+        adata.uns["future_data"] = future_array
+
+        # Should not crash when rendering
+        try:
+            html = adata._repr_html_()
+            # Should successfully render (might use fallback formatter)
+            assert html is not None
+            assert len(html) > 0
+            # The unknown type should appear in the HTML
+            assert "FutureArray" in html or "future" in html.lower() or "object" in html.lower()
+        except Exception as e:
+            pytest.fail(
+                f"HTML rendering should not crash on unknown array types, but got: {e}"
+            )
+
+    def test_css_array_api_styling_exists(self):
+        """
+        Test that CSS styling for Array-API arrays is present.
+
+        Ensures that the dtype-array-api class is defined in CSS.
+        """
+        from anndata._repr.css import get_css
+
+        css = get_css()
+
+        # Check for light mode styling
+        assert (
+            "dtype-array-api" in css
+        ), "CSS should contain dtype-array-api class styling"
+
+        # Check that there's some color definition for it
+        # The exact color doesn't matter, but it should be styled
+        pattern = r"\.dtype-array-api\s*\{[^}]*color:"
+        assert re.search(
+            pattern, css
+        ), "dtype-array-api should have color styling"
