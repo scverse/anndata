@@ -12,6 +12,7 @@ Then open tests/repr_html_visual_test.html in your browser.
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ import pandas as pd
 import scipy.sparse as sp
 
 from anndata import AnnData
+import anndata as ad
 
 # Check optional dependencies
 try:
@@ -303,8 +305,25 @@ def main():
             adata_dask._repr_html_(),
         ))
 
-    # Test 9: Nested AnnData at depth
-    print("  9. Deeply nested AnnData")
+    # Test 9: Backed AnnData (H5AD file)
+    print("  9. Backed AnnData (H5AD file)")
+    with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
+        tmp_path = tmp.name
+    adata_to_save = AnnData(np.random.randn(50, 20).astype(np.float32))
+    adata_to_save.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "B"])
+    adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(20)]
+    adata_to_save.write_h5ad(tmp_path)
+    adata_backed = ad.read_h5ad(tmp_path, backed="r")
+    sections.append((
+        "9. Backed AnnData (H5AD file)",
+        adata_backed._repr_html_(),
+        f"File path: {tmp_path}. Shows 📁 badge with format and status, plus inline file path (hover for full path).",
+    ))
+    # Close the backed file
+    adata_backed.file.close()
+
+    # Test 10: Nested AnnData at depth
+    print("  10. Deeply nested AnnData")
     inner3 = AnnData(np.zeros((3, 2)))
     inner2 = AnnData(np.zeros((5, 3)))
     inner2.uns["level3"] = inner3
@@ -313,12 +332,12 @@ def main():
     outer = AnnData(np.zeros((20, 10)))
     outer.uns["level1"] = inner1
     sections.append((
-        "9. Deeply Nested AnnData (tests max depth)",
+        "10. Deeply Nested AnnData (tests max depth)",
         outer._repr_html_(),
     ))
 
-    # Test 10: Many categories (tests truncation)
-    print("  10. Many categories (tests category truncation)")
+    # Test 11: Many categories (tests truncation)
+    print("  11. Many categories (tests category truncation)")
     adata_many_cats = AnnData(np.zeros((100, 10)))
     # 30 categories - should show only first 20 (default) with "...+10"
     many_cat_values = [f"type_{i}" for i in range(30)] * (100 // 30) + [f"type_{i}" for i in range(100 % 30)]
@@ -341,13 +360,13 @@ def main():
         "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
     ]
     sections.append((
-        "10. Many Categories (tests truncation)",
+        "11. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
         "cell_type has 30 categories (should show 20 + '...+10'). batch has exactly 20 (should show all).",
     ))
 
-    # Test 11: No JavaScript (graceful degradation)
-    print("  11. No JavaScript (graceful degradation)")
+    # Test 12: No JavaScript (graceful degradation)
+    print("  12. No JavaScript (graceful degradation)")
     adata_nojs = AnnData(np.random.randn(30, 15).astype(np.float32))
     adata_nojs.obs["group"] = pd.Categorical(["X", "Y", "Z"] * 10)
     adata_nojs.uns["group_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
@@ -358,7 +377,7 @@ def main():
     # Strip script tags to simulate no-JS environment
     nojs_html = strip_script_tags(adata_nojs._repr_html_())
     sections.append((
-        "11. No JavaScript (graceful degradation)",
+        "12. No JavaScript (graceful degradation)",
         nojs_html,
         "This example has script tags removed to simulate environments where JS is disabled. "
         "All content should be visible, sections should be expanded, and interactive buttons "

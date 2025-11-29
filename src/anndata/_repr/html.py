@@ -216,13 +216,25 @@ def _render_header(adata: AnnData, *, show_search: bool = False, container_id: s
 
     if is_backed(adata):
         backing = get_backing_info(adata)
-        title = escape_html(backing.get("filename", ""))
+        filename = backing.get("filename", "")
         format_str = backing.get("format", "")
         status = "Open" if backing.get("is_open") else "Closed"
         parts.append(
-            f'<span class="adata-badge adata-badge-backed" title="{title}">'
+            f'<span class="adata-badge adata-badge-backed">'
             f'📁 {format_str} ({status})</span>'
         )
+        # Inline file path (truncated with full path on hover)
+        if filename:
+            path_style = (
+                "font-family:ui-monospace,monospace;font-size:11px;"
+                "color:var(--anndata-text-secondary, #6c757d);max-width:300px;"
+                "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+            )
+            parts.append(
+                f'<span class="adata-file-path" style="{path_style}" title="{escape_html(filename)}">'
+                f'{escape_html(filename)}'
+                f'</span>'
+            )
 
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":
