@@ -9,27 +9,44 @@ This module provides a registry system that allows:
 
 Usage for extending to new types:
 
-    from anndata._repr import register_formatter, TypeFormatter
+    from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
 
-    class MyDataFormatter(TypeFormatter):
-        def can_format(self, obj: Any) -> bool:
-            return isinstance(obj, MyDataType)
+    # Format by Python type (e.g., custom array in obsm)
+    @register_formatter
+    class MyArrayFormatter(TypeFormatter):
+        def can_format(self, obj):
+            return isinstance(obj, MyArrayType)
 
-        def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        def format(self, obj, context):
             return FormattedOutput(
-                type_name="MyDataType",
-                css_class="dtype-mydata",
-                details={"custom": "info"},
+                type_name=f"MyArray {obj.shape}",
+                css_class="dtype-myarray",
             )
 
-    register_formatter(MyDataFormatter())
+    # Format by embedded type hint (e.g., tagged data in uns)
+    from anndata._repr import extract_uns_type_hint
+
+    @register_formatter
+    class MyConfigFormatter(TypeFormatter):
+        priority = 100  # Higher priority to check before fallback
+
+        def can_format(self, obj):
+            hint, _ = extract_uns_type_hint(obj)
+            return hint == "mypackage.config"
+
+        def format(self, obj, context):
+            hint, data = extract_uns_type_hint(obj)
+            return FormattedOutput(
+                type_name="config",
+                html_content='<span>Custom config preview</span>',
+            )
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 import warnings
 
 if TYPE_CHECKING:
@@ -132,10 +149,45 @@ class TypeFormatter(ABC):
     Subclass this to add support for new types. The formatter will be
     called when can_format() returns True for an object.
 
-    Priority determines order of checking (higher = checked first).
+    Attributes
+    ----------
+    priority : int
+        Determines order of checking (higher = checked first). Default: 0.
+    sections : tuple[str, ...] | None
+        If set, this formatter only applies to the specified sections.
+        Use standard section names: "obs", "var", "uns", "obsm", "varm",
+        "layers", "obsp", "varp", "raw", "X".
+        If None (default), applies to all sections.
+
+    Examples
+    --------
+    Formatter that only applies to uns section::
+
+        @register_formatter
+        class MyUnsFormatter(TypeFormatter):
+            sections = ("uns",)
+
+            def can_format(self, obj):
+                return isinstance(obj, MySpecialType)
+
+            def format(self, obj, context):
+                return FormattedOutput(type_name="MySpecial")
+
+    Formatter that applies to obsm and varm::
+
+        @register_formatter
+        class MyMatrixFormatter(TypeFormatter):
+            sections = ("obsm", "varm")
+
+            def can_format(self, obj):
+                return isinstance(obj, MyMatrixType)
+
+            def format(self, obj, context):
+                return FormattedOutput(type_name=f"MyMatrix {obj.shape}")
     """
 
     priority: int = 0
+    sections: tuple[str, ...] | None = None
 
     @abstractmethod
     def can_format(self, obj: Any) -> bool:
@@ -153,7 +205,30 @@ class SectionFormatter(ABC):
     Base class for section-specific formatters.
 
     Subclass this to customize how entire sections (obs, var, uns, etc.)
-    are formatted. This allows packages like MuData to add custom sections.
+    are formatted. This allows packages like TreeData, MuData, SpatialData
+    to add custom sections (e.g., obst, vart, mod, spatial).
+
+    Example usage::
+
+        from anndata._repr import register_formatter, SectionFormatter, FormattedEntry, FormattedOutput
+
+        @register_formatter
+        class ObstSectionFormatter(SectionFormatter):
+            section_name = "obst"
+            after_section = "obsm"  # Position after obsm
+
+            def should_show(self, obj):
+                return hasattr(obj, "obst") and len(obj.obst) > 0
+
+            def get_entries(self, obj, context):
+                entries = []
+                for key, value in obj.obst.items():
+                    output = FormattedOutput(
+                        type_name=f"Tree ({value.n_nodes} nodes)",
+                        css_class="dtype-tree",
+                    )
+                    entries.append(FormattedEntry(key=key, output=output))
+                return entries
     """
 
     @property
@@ -166,6 +241,16 @@ class SectionFormatter(ABC):
     def display_name(self) -> str:
         """Display name (defaults to section_name)."""
         return self.section_name
+
+    @property
+    def after_section(self) -> str | None:
+        """
+        Section after which this custom section should appear.
+
+        If None, appears at the end. Valid values are standard sections:
+        "X", "obs", "var", "uns", "obsm", "varm", "layers", "obsp", "varp", "raw"
+        """
+        return None
 
     @property
     def doc_url(self) -> str | None:
@@ -284,9 +369,15 @@ class FormatterRegistry:
         Format a value using the appropriate formatter.
 
         Tries each registered formatter in priority order, falling back
-        to the fallback formatter if none match.
+        to the fallback formatter if none match. Formatters with a `sections`
+        property are only checked if the current section matches.
         """
+        current_section = context.section
         for formatter in self._type_formatters:
+            # Check if formatter is restricted to specific sections
+            if formatter.sections is not None and current_section not in formatter.sections:
+                continue
+
             try:
                 if formatter.can_format(obj):
                     return formatter.format(obj, context)
@@ -316,172 +407,81 @@ formatter_registry = FormatterRegistry()
 
 
 # =============================================================================
-# Uns Value Renderer Registry (for custom serialized data visualization)
+# Type hint extraction for tagged data in uns
 # =============================================================================
 
 # Type hint key used in uns dicts to indicate custom rendering
 UNS_TYPE_HINT_KEY = "__anndata_repr__"
 
 
-@dataclass
-class UnsRendererOutput:
-    """Output from an uns renderer."""
-
-    html: str
-    """HTML content to display (will be sanitized)"""
-
-    collapsed: bool = True
-    """Whether to show collapsed by default"""
-
-    type_label: str = ""
-    """Optional type label to show (e.g., 'analysis config')"""
-
-
-class UnsRendererRegistry:
-    """
-    Registry for custom uns value renderers.
-
-    This registry allows packages to register custom HTML renderers for
-    serialized data stored in uns. The data must contain a type hint
-    (key: '__anndata_repr__') that maps to a registered renderer.
-
-    Security model:
-    - Data in uns NEVER triggers code execution or imports
-    - Packages must be imported by the user and register their renderers
-    - Unrecognized type hints fall back to safe JSON/string preview
-    - All HTML output is sanitized
-
-    Example usage by a package:
-
-        # In mypackage/__init__.py
-        try:
-            from anndata._repr import register_uns_renderer, UnsRendererOutput
-
-            def render_analysis_config(value, context):
-                '''Render analysis configuration stored as JSON string.'''
-                import json
-                data = json.loads(value) if isinstance(value, str) else value
-                # Return safe HTML
-                return UnsRendererOutput(
-                    html='<div class="analysis-config">...</div>',
-                    type_label="analysis config",
-                )
-
-            register_uns_renderer("mypackage.config", render_analysis_config)
-        except ImportError:
-            pass  # anndata not installed or old version
-
-    Example data structure in uns:
-
-        adata.uns["analysis_config"] = {
-            "__anndata_repr__": "mypackage.config",
-            "data": '{"params": {...}, "version": "1.0"}'
-        }
-
-    Or for simple string values with embedded hint:
-
-        adata.uns["config"] = "__anndata_repr__:mypackage.config::{...json...}"
-    """
-
-    def __init__(self) -> None:
-        self._renderers: dict[str, Callable[[Any, FormatterContext], UnsRendererOutput]] = {}
-
-    def register(
-        self,
-        type_hint: str,
-        renderer: Callable[[Any, FormatterContext], UnsRendererOutput],
-    ) -> None:
-        """
-        Register a renderer for a type hint.
-
-        Parameters
-        ----------
-        type_hint
-            The type hint string (e.g., "kompot.history", "scanpy.settings")
-        renderer
-            A callable that takes (value, context) and returns UnsRendererOutput.
-            The value is the uns entry (with type hint removed if it was a dict).
-        """
-        self._renderers[type_hint] = renderer
-
-    def unregister(self, type_hint: str) -> bool:
-        """Unregister a renderer. Returns True if found and removed."""
-        return self._renderers.pop(type_hint, None) is not None
-
-    def get_renderer(
-        self, type_hint: str
-    ) -> Callable[[Any, FormatterContext], UnsRendererOutput] | None:
-        """Get renderer for a type hint, or None if not registered."""
-        return self._renderers.get(type_hint)
-
-    def is_registered(self, type_hint: str) -> bool:
-        """Check if a type hint has a registered renderer."""
-        return type_hint in self._renderers
-
-    def get_registered_hints(self) -> list[str]:
-        """Get list of registered type hints."""
-        return list(self._renderers.keys())
-
-
-# Global uns renderer registry
-uns_renderer_registry = UnsRendererRegistry()
-
-
-def register_uns_renderer(
-    type_hint: str,
-    renderer: Callable[[Any, FormatterContext], UnsRendererOutput],
-) -> None:
-    """
-    Register a custom renderer for uns values with a specific type hint.
-
-    This is the public API for packages to register custom renderers.
-    See UnsRendererRegistry docstring for full documentation and examples.
-
-    Parameters
-    ----------
-    type_hint
-        The type hint string (e.g., "kompot.history")
-    renderer
-        A callable that takes (value, context) and returns UnsRendererOutput
-
-    Examples
-    --------
-    >>> from anndata._repr import register_uns_renderer, UnsRendererOutput
-    >>>
-    >>> def render_my_data(value, context):
-    ...     return UnsRendererOutput(
-    ...         html='<span class="my-data">Custom view</span>',
-    ...         type_label="my custom type",
-    ...     )
-    >>>
-    >>> register_uns_renderer("mypackage.mytype", render_my_data)
-    """
-    uns_renderer_registry.register(type_hint, renderer)
-
-
 def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
     """
-    Extract type hint from an uns value if present.
+    Extract type hint from data if present.
+
+    This is a utility function for TypeFormatter implementations that need
+    to handle tagged data. Data can be tagged with a type hint to indicate
+    which package should render it, without requiring that package to be
+    installed or imported.
 
     Supports two formats:
-    1. Dict with __anndata_repr__ key:
-       {"__anndata_repr__": "pkg.type", "data": ...}
-       Returns ("pkg.type", {"data": ...})
 
-    2. String with prefix:
-       "__anndata_repr__:pkg.type::actual content"
-       Returns ("pkg.type", "actual content")
+    1. Dict with __anndata_repr__ key::
+
+        {"__anndata_repr__": "mypackage.mytype", "data": {"key": "value"}}
+        # Returns ("mypackage.mytype", {"data": {"key": "value"}})
+
+    2. String with prefix::
+
+        "__anndata_repr__:mypackage.mytype::actual content here"
+        # Returns ("mypackage.mytype", "actual content here")
 
     If no type hint found, returns (None, original_value).
+
+    How to make a formatter available
+    ---------------------------------
+    When data contains a type hint but no formatter is registered for it,
+    anndata shows a fallback message: "[mypackage.mytype] (import mypackage)".
+    This tells users they need to import the package to see the custom rendering.
+
+    To register a formatter that handles tagged data:
+
+    1. In your package (e.g., mypackage/__init__.py), register a TypeFormatter::
+
+        from anndata._repr import (
+            register_formatter, TypeFormatter, FormattedOutput,
+            extract_uns_type_hint
+        )
+
+        @register_formatter
+        class MyTypeFormatter(TypeFormatter):
+            priority = 100  # Check before fallback formatters
+            sections = ("uns",)  # Only apply to uns section
+
+            def can_format(self, obj):
+                hint, _ = extract_uns_type_hint(obj)
+                return hint == "mypackage.mytype"
+
+            def format(self, obj, context):
+                hint, data = extract_uns_type_hint(obj)
+                # Render your custom visualization
+                return FormattedOutput(
+                    type_name="mytype",
+                    html_content="<span>Custom rendering</span>",
+                )
+
+    2. When the user imports your package, the formatter is registered
+       and will be used automatically for any data tagged with your hint.
 
     Parameters
     ----------
     value
-        The uns value to check
+        The value to check for a type hint
 
     Returns
     -------
     tuple of (type_hint or None, cleaned_value)
+        If a type hint is found, returns (hint_string, data_without_hint).
+        Otherwise returns (None, original_value).
     """
     # Check dict format
     if isinstance(value, dict) and UNS_TYPE_HINT_KEY in value:

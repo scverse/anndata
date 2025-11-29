@@ -36,8 +36,6 @@ from anndata._repr.registry import (
     FormattedOutput,
     FormatterContext,
     formatter_registry,
-    # Uns renderer registry for custom serialized data
-    uns_renderer_registry,
     extract_uns_type_hint,
 )
 from anndata._repr.utils import (
@@ -152,7 +150,10 @@ def generate_repr_html(
     # X as a simple entry (like layers)
     parts.append(_render_x_entry(adata, context))
 
-    # Standard sections
+    # Get custom sections grouped by their position
+    custom_sections_after = _get_custom_sections_by_position(adata)
+
+    # Standard sections with custom sections inserted at their positions
     for section in SECTION_ORDER:
         if section == "X":
             continue  # Already rendered
@@ -175,6 +176,24 @@ def generate_repr_html(
                 )
             )
 
+        # Render any custom sections that should appear after this section
+        if section in custom_sections_after:
+            for section_formatter in custom_sections_after[section]:
+                parts.append(
+                    _render_custom_section(
+                        adata, section_formatter, context, fold_threshold, max_items
+                    )
+                )
+
+    # Render any custom sections that don't have a specific position (appear at end)
+    if None in custom_sections_after:
+        for section_formatter in custom_sections_after[None]:
+            parts.append(
+                _render_custom_section(
+                    adata, section_formatter, context, fold_threshold, max_items
+                )
+            )
+
     parts.append("</div>")  # adata-sections
 
     # Footer with metadata (only at top level)
@@ -186,6 +205,172 @@ def generate_repr_html(
     # JavaScript (only at top level)
     if depth == 0:
         parts.append(get_javascript(container_id))
+
+    return "\n".join(parts)
+
+
+# =============================================================================
+# Custom Section Support
+# =============================================================================
+
+
+def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
+    """
+    Get registered custom section formatters grouped by their position.
+
+    Returns a dict mapping after_section -> list of formatters.
+    None key contains formatters that should appear at the end.
+    """
+    from collections import defaultdict
+
+    result = defaultdict(list)
+
+    for section_name in formatter_registry.get_registered_sections():
+        formatter = formatter_registry.get_section_formatter(section_name)
+        if formatter is None:
+            continue
+
+        # Skip standard sections (they're handled separately)
+        if section_name in SECTION_ORDER:
+            continue
+
+        # Check if this section should be shown for this object
+        try:
+            if not formatter.should_show(adata):
+                continue
+        except Exception:
+            continue
+
+        # Group by position
+        after = getattr(formatter, "after_section", None)
+        result[after].append(formatter)
+
+    return dict(result)
+
+
+def _render_custom_section(
+    adata: Any,
+    formatter: Any,  # SectionFormatter
+    context: FormatterContext,
+    fold_threshold: int,
+    max_items: int,
+) -> str:
+    """Render a custom section using its registered formatter."""
+    try:
+        entries = formatter.get_entries(adata, context)
+    except Exception as e:
+        # Log error but don't crash
+        import warnings
+        warnings.warn(
+            f"Custom section formatter '{formatter.section_name}' failed: {e}",
+            UserWarning,
+            stacklevel=2,
+        )
+        return ""
+
+    if not entries:
+        return ""
+
+    n_items = len(entries)
+    should_collapse = n_items > fold_threshold
+
+    section_name = formatter.section_name
+    display_name = getattr(formatter, "display_name", section_name)
+    doc_url = getattr(formatter, "doc_url", None)
+    tooltip = getattr(formatter, "tooltip", "")
+
+    parts = [
+        f'<div class="anndata-sec" data-section="{escape_html(section_name)}" '
+        f'data-should-collapse="{str(should_collapse).lower()}">'
+    ]
+
+    # Header
+    parts.append(
+        _render_section_header(display_name, f"({n_items} items)", doc_url, tooltip)
+    )
+
+    # Content
+    content_style = "padding:0;overflow:hidden;"
+    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
+    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
+    parts.append(f'<table class="adata-table" style="{table_style}">')
+
+    for i, entry in enumerate(entries):
+        if i >= max_items:
+            parts.append(_render_truncation_indicator(n_items - max_items))
+            break
+        parts.append(_render_formatted_entry(entry, section_name))
+
+    parts.append("</table>")
+    parts.append("</div>")  # anndata-seccontent
+    parts.append("</div>")  # anndata-sec
+
+    return "\n".join(parts)
+
+
+def _render_formatted_entry(entry: Any, section: str) -> str:
+    """Render a FormattedEntry from a custom section formatter."""
+    output = entry.output
+
+    # Inline styles
+    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
+    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
+    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
+    expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
+
+    entry_class = "adata-entry"
+    if output.warnings:
+        entry_class += " warning"
+    if not output.is_serializable:
+        entry_class += " error"
+
+    has_expandable_content = output.html_content and output.is_expandable
+
+    parts = [
+        f'<tr class="{entry_class}" data-key="{escape_html(entry.key)}" '
+        f'data-dtype="{escape_html(output.type_name)}">'
+    ]
+
+    # Name
+    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append(escape_html(entry.key))
+    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>')
+    parts.append("</td>")
+
+    # Type
+    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    if output.warnings or not output.is_serializable:
+        warnings_list = output.warnings.copy()
+        if not output.is_serializable:
+            warnings_list.insert(0, "Not serializable to H5AD/Zarr")
+        title = escape_html("; ".join(warnings_list))
+        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
+        parts.append(f"{escape_html(output.type_name)} ⚠️")
+        parts.append("</span>")
+    else:
+        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+
+    if has_expandable_content:
+        parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
+
+    if output.html_content and not output.is_expandable:
+        parts.append(f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>')
+
+    parts.append("</td>")
+
+    # Meta (empty for custom sections, or could be customized)
+    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
+    parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
+
+    parts.append("</tr>")
+
+    # Expandable content
+    if has_expandable_content:
+        parts.append('<tr class="adata-nested-row">')
+        parts.append('<td colspan="3" class="adata-nested-content">')
+        parts.append(f'<div class="adata-custom-expanded">{output.html_content}</div>')
+        parts.append("</td>")
+        parts.append("</tr>")
 
     return "\n".join(parts)
 
@@ -228,15 +413,14 @@ def _render_header(adata: AnnData, *, show_search: bool = False, container_id: s
             f'<span class="adata-badge adata-badge-backed">'
             f'📁 {format_str} ({status})</span>'
         )
-        # Inline file path (truncated with full path on hover)
+        # Inline file path (full path, no truncation)
         if filename:
             path_style = (
                 "font-family:ui-monospace,monospace;font-size:11px;"
-                "color:var(--anndata-text-secondary, #6c757d);max-width:300px;"
-                "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                "color:var(--anndata-text-secondary, #6c757d);"
             )
             parts.append(
-                f'<span class="adata-file-path" style="{path_style}" title="{escape_html(filename)}">'
+                f'<span class="adata-file-path" style="{path_style}">'
                 f'{escape_html(filename)}'
                 f'</span>'
             )
@@ -581,6 +765,7 @@ def _render_mapping_entry(
     name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
     type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
+    expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
     # Build class list for CSS styling
     entry_class = "adata-entry"
@@ -588,6 +773,9 @@ def _render_mapping_entry(
         entry_class += " warning"
     if not output.is_serializable:
         entry_class += " error"
+
+    # Check if we have expandable custom HTML content
+    has_expandable_content = output.html_content and output.is_expandable
 
     parts = [
         f'<tr class="{entry_class}" data-key="{escape_html(key)}" '
@@ -612,6 +800,15 @@ def _render_mapping_entry(
         parts.append("</span>")
     else:
         parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+
+    # Add expand button for custom HTML content
+    if has_expandable_content:
+        parts.append(f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>')
+
+    # Inline (non-expandable) custom HTML content
+    if output.html_content and not output.is_expandable:
+        parts.append(f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>')
+
     parts.append("</td>")
 
     # Meta - show shape/cols for obsm/varm only (layers are always n_vars cols)
@@ -624,6 +821,15 @@ def _render_mapping_entry(
     parts.append("</td>")
 
     parts.append("</tr>")
+
+    # Expandable custom HTML content (hidden by default, shown on expand)
+    if has_expandable_content:
+        parts.append('<tr class="adata-nested-row">')
+        parts.append('<td colspan="3" class="adata-nested-content">')
+        parts.append(f'<div class="adata-custom-expanded">{output.html_content}</div>')
+        parts.append("</td>")
+        parts.append("</tr>")
+
     return "\n".join(parts)
 
 
@@ -687,28 +893,23 @@ def _render_uns_entry(
     """Render a single uns entry with special type handling.
 
     Rendering priority:
-    1. Custom renderer via type hint (__anndata_repr__)
+    1. Custom TypeFormatter (checks type hint via can_format)
     2. Color list (keys ending in _colors)
     3. Nested AnnData objects
     4. Generic preview for simple types (str, int, float, bool, small dict/list)
     5. Default type info only
     """
-    # 1. Check for custom renderer via type hint
+    # 1. Check for custom TypeFormatter (may check type hint in can_format)
+    # First try formatting - if a TypeFormatter matches and provides html_content, use it
+    output = formatter_registry.format_value(value, context)
+    if output.html_content:
+        # A TypeFormatter provided custom HTML - render it
+        return _render_uns_entry_with_custom_html(key, output)
+
+    # Check if there's an unhandled type hint (no formatter matched but hint exists)
     type_hint, cleaned_value = extract_uns_type_hint(value)
     if type_hint is not None:
-        renderer = uns_renderer_registry.get_renderer(type_hint)
-        if renderer is not None:
-            try:
-                result = renderer(cleaned_value, context)
-                return _render_custom_uns_entry(key, type_hint, result)
-            except Exception as e:
-                # Fall through to default rendering with warning
-                warnings.warn(
-                    f"Custom renderer for '{type_hint}' failed: {e}",
-                    stacklevel=2,
-                )
-        # Type hint present but no renderer registered - show helpful message
-        # Extract package name from type hint (e.g., "mypackage.config" -> "mypackage")
+        # Type hint present but no formatter registered - show helpful message
         package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
         return _render_uns_entry_with_preview(
             key, cleaned_value, context,
@@ -867,27 +1068,18 @@ def _preview_item(value: Any) -> str:
     return ""  # Empty string means skip
 
 
-def _render_custom_uns_entry(key: str, type_hint: str, result: Any) -> str:
-    """Render an uns entry with custom HTML from a registered renderer.
+def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str:
+    """Render an uns entry with custom HTML from a TypeFormatter.
 
-    The result should be an UnsRendererOutput with sanitized HTML.
+    The output should have html_content set.
     """
-    from anndata._repr.registry import UnsRendererOutput
-
-    if not isinstance(result, UnsRendererOutput):
-        # Fallback if renderer didn't return proper type
-        return _render_uns_entry_with_preview(
-            key, result, FormatterContext(),
-            preview_note=f"[{type_hint}]",
-        )
-
     # Inline styles for layout
     name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
     type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
     meta_style = "padding:6px 12px;font-size:11px;text-align:left;"
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
-    type_label = result.type_label or type_hint
+    type_label = output.type_name
 
     parts = [f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">']
 
@@ -899,13 +1091,13 @@ def _render_custom_uns_entry(key: str, type_hint: str, result: Any) -> str:
 
     # Type
     parts.append(f'<td class="adata-entry-type" style="{type_style}">')
-    parts.append(f'<span class="dtype-extension">{escape_html(type_label)}</span>')
+    parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
     parts.append("</td>")
 
-    # Meta - custom HTML content (already sanitized by renderer)
+    # Meta - custom HTML content
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
-    # Note: HTML is trusted from registered renderer (package must be imported)
-    parts.append(result.html)
+    # Note: HTML is trusted from registered TypeFormatter (package must be imported)
+    parts.append(output.html_content)
     parts.append("</td>")
     parts.append("</tr>")
 

@@ -12,52 +12,91 @@ This module provides an extensible HTML representation system with:
 
 Extensibility
 -------------
-The system is designed to be extensible via registry patterns:
+The system is designed to be extensible via two registry patterns:
 
-**Type Formatters** (for Python object types):
-    New data types (e.g., TreeData, MuData, SpatialData) can register
-    custom formatters without modifying core code.
+**TypeFormatter** (for custom visualization of values):
+    Register a formatter to customize how specific types are displayed.
+    Can match by Python type OR by embedded type hints in data.
 
-**Uns Renderers** (for serialized data in uns):
-    Packages can register custom HTML renderers for data stored in uns
-    that contains a type hint. This is useful for packages that store
-    complex data as JSON strings for H5AD/Zarr compatibility.
+    Attributes:
+        - ``priority``: Higher priority formatters are checked first (default: 0)
+        - ``sections``: Tuple of section names to restrict formatter to (default: None = all)
 
-    Note: Since arbitrary Python objects cannot be serialized to H5AD/Zarr,
-    packages should store their data as serializable types (strings, dicts,
-    lists, arrays) with a type hint that their renderer can interpret.
+    Example - format by Python type::
 
-    Security: Data in uns NEVER triggers code execution. Packages must
-    be explicitly imported by the user, and only then can their registered
-    renderers process data with matching type hints. Unrecognized hints
-    fall back to safe JSON/string preview.
+        from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
 
-    Example for package authors::
+        @register_formatter
+        class MyArrayFormatter(TypeFormatter):
+            sections = ("obsm", "varm")  # Only apply to obsm/varm
 
-        # In mypackage/__init__.py
-        try:
-            from anndata._repr import register_uns_renderer, UnsRendererOutput
+            def can_format(self, obj):
+                return isinstance(obj, MyArrayType)
 
-            def render_my_config(value, context):
-                # Parse and render the stored data
-                return UnsRendererOutput(
-                    html='<span>Custom preview</span>',
-                    type_label="my config",
+            def format(self, obj, context):
+                return FormattedOutput(
+                    type_name=f"MyArray {obj.shape}",
+                    css_class="dtype-myarray",
                 )
 
-            register_uns_renderer("mypackage.config", render_my_config)
-        except ImportError:
-            pass  # anndata not available
+    Example - format by embedded type hint (for tagged data in uns)::
 
-    Example data structure in uns::
+        from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
+        from anndata._repr import extract_uns_type_hint
+
+        @register_formatter
+        class MyConfigFormatter(TypeFormatter):
+            priority = 100  # Check before fallback
+            sections = ("uns",)  # Only apply to uns
+
+            def can_format(self, obj):
+                hint, _ = extract_uns_type_hint(obj)
+                return hint == "mypackage.config"
+
+            def format(self, obj, context):
+                hint, data = extract_uns_type_hint(obj)
+                return FormattedOutput(
+                    type_name="config",
+                    html_content='<span>Custom config preview</span>',
+                )
+
+    Data structure for type hints (works in any section)::
 
         adata.uns["my_config"] = {
             "__anndata_repr__": "mypackage.config",
             "data": '{"setting": "value"}'
         }
 
-    If mypackage is imported, its renderer will be used. Otherwise,
-    a fallback preview shows: "[mypackage.config] (import mypackage to enable)".
+    When a package registers a formatter and the user imports that package,
+    the formatter will automatically handle matching tagged data. Without
+    the import, a fallback shows: "[mypackage.config] (import mypackage)".
+
+    See :func:`extract_uns_type_hint` for full documentation on this pattern.
+
+**SectionFormatter** (for adding new sections):
+    Register a formatter to add entirely new sections (like TreeData's obst/vart).
+
+    Example::
+
+        from anndata._repr import register_formatter, SectionFormatter
+        from anndata._repr import FormattedEntry, FormattedOutput
+
+        @register_formatter
+        class ObstSectionFormatter(SectionFormatter):
+            section_name = "obst"
+            after_section = "obsm"  # Position after obsm
+
+            def should_show(self, obj):
+                return hasattr(obj, "obst") and len(obj.obst) > 0
+
+            def get_entries(self, obj, context):
+                return [
+                    FormattedEntry(
+                        key=k,
+                        output=FormattedOutput(type_name=f"Tree ({v.n_nodes} nodes)")
+                    )
+                    for k, v in obj.obst.items()
+                ]
 """
 
 from __future__ import annotations
@@ -80,16 +119,16 @@ SECTION_ORDER = ("X", "obs", "var", "uns", "obsm", "varm", "layers", "obsp", "va
 # Import main functionality
 from anndata._repr.html import generate_repr_html
 from anndata._repr.registry import (
+    # Type formatter registry
     FormatterRegistry,
     formatter_registry,
     register_formatter,
     SectionFormatter,
     TypeFormatter,
-    # Uns renderer registry (for custom serialized data visualization)
-    UnsRendererOutput,
-    UnsRendererRegistry,
-    uns_renderer_registry,
-    register_uns_renderer,
+    FormattedOutput,
+    FormattedEntry,
+    FormatterContext,
+    # Type hint extraction (for tagged data in uns)
     extract_uns_type_hint,
     UNS_TYPE_HINT_KEY,
 )
@@ -107,17 +146,16 @@ __all__ = [
     "SECTION_ORDER",
     # Main function
     "generate_repr_html",
-    # Registry for extensibility (type formatters)
+    # Registry for extensibility
     "FormatterRegistry",
     "formatter_registry",
     "register_formatter",
     "SectionFormatter",
     "TypeFormatter",
-    # Uns renderer registry (for custom serialized data visualization)
-    "UnsRendererOutput",
-    "UnsRendererRegistry",
-    "uns_renderer_registry",
-    "register_uns_renderer",
+    "FormattedOutput",
+    "FormattedEntry",
+    "FormatterContext",
+    # Type hint extraction (for tagged data in uns)
     "extract_uns_type_hint",
     "UNS_TYPE_HINT_KEY",
 ]

@@ -21,7 +21,12 @@ import scipy.sparse as sp
 
 from anndata import AnnData
 import anndata as ad
-from anndata._repr import register_uns_renderer, UnsRendererOutput
+from anndata._repr import (
+    register_formatter,
+    TypeFormatter,
+    FormattedOutput,
+    extract_uns_type_hint,
+)
 
 # Check optional dependencies
 try:
@@ -29,6 +34,236 @@ try:
     HAS_DASK = True
 except ImportError:
     HAS_DASK = False
+
+try:
+    import networkx as nx
+    from treedata import TreeData
+    from anndata._repr import (
+        register_formatter,
+        SectionFormatter,
+        FormattedEntry,
+        FormattedOutput,
+        FormatterContext,
+    )
+    HAS_TREEDATA = True
+
+    def _render_tree_svg(tree: nx.DiGraph, max_leaves: int = 30, width: int = 300, height: int = 150) -> str:
+        """Render a tree as an SVG visualization.
+
+        Uses a simple top-down layout similar to pycea's approach but generates SVG.
+        """
+        # Find root and leaves
+        roots = [n for n in tree.nodes() if tree.in_degree(n) == 0]
+        if not roots:
+            return "<span style='color:#888;font-size:11px;'>Invalid tree (no root)</span>"
+        root = roots[0]
+
+        leaves = [n for n in tree.nodes() if tree.out_degree(n) == 0]
+        n_leaves = len(leaves)
+
+        # Truncate if too many leaves
+        if n_leaves > max_leaves:
+            return (
+                f"<span style='color:#888;font-size:11px;'>"
+                f"Tree with {n_leaves} leaves (too large to preview)</span>"
+            )
+
+        # Compute depths using BFS
+        depths = {root: 0}
+        queue = [root]
+        while queue:
+            node = queue.pop(0)
+            for child in tree.successors(node):
+                depths[child] = depths[node] + 1
+                queue.append(child)
+
+        max_depth = max(depths.values()) if depths else 0
+        if max_depth == 0:
+            return "<span style='color:#888;font-size:11px;'>Single node tree</span>"
+
+        # Assign y-coordinates (leaves get sequential positions)
+        y_coords = {}
+        leaf_idx = 0
+        def assign_y(node):
+            nonlocal leaf_idx
+            children = list(tree.successors(node))
+            if not children:  # leaf
+                y_coords[node] = leaf_idx
+                leaf_idx += 1
+            else:
+                for child in children:
+                    assign_y(child)
+                # Internal node: average of children
+                y_coords[node] = sum(y_coords[c] for c in children) / len(children)
+
+        assign_y(root)
+
+        # Scale coordinates
+        margin = 15
+        x_scale = (width - 2 * margin) / max_depth if max_depth > 0 else 1
+        y_scale = (height - 2 * margin) / (n_leaves - 1) if n_leaves > 1 else 1
+
+        def get_x(node):
+            return margin + depths[node] * x_scale
+
+        def get_y(node):
+            return margin + y_coords[node] * y_scale
+
+        # Generate SVG
+        svg_parts = [
+            f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
+            f'style="background:#fafafa;border-radius:4px;border:1px solid #e0e0e0;">'
+        ]
+
+        # Draw branches (parent -> child)
+        for parent, child in tree.edges():
+            px, py = get_x(parent), get_y(parent)
+            cx, cy = get_x(child), get_y(child)
+            # Draw elbow connector (horizontal then vertical)
+            svg_parts.append(
+                f'<path d="M{px:.1f},{py:.1f} L{cx:.1f},{py:.1f} L{cx:.1f},{cy:.1f}" '
+                f'fill="none" stroke="#666" stroke-width="1.5"/>'
+            )
+
+        # Draw nodes
+        for node in tree.nodes():
+            x, y = get_x(node), get_y(node)
+            is_leaf = tree.out_degree(node) == 0
+            r = 3 if is_leaf else 4
+            fill = "#4a90d9" if is_leaf else "#333"
+            svg_parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{fill}"/>')
+
+        svg_parts.append('</svg>')
+        return "".join(svg_parts)
+
+    # Register TreeData section formatters
+    @register_formatter
+    class ObstSectionFormatter(SectionFormatter):
+        """Section formatter for obst (observation trees)."""
+
+        @property
+        def section_name(self) -> str:
+            return "obst"
+
+        @property
+        def after_section(self) -> str:
+            return "obsm"
+
+        @property
+        def tooltip(self) -> str:
+            return "Tree annotation of observations"
+
+        def should_show(self, obj) -> bool:
+            return hasattr(obj, "obst") and len(obj.obst) > 0
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            entries = []
+            for key, tree in obj.obst.items():
+                n_nodes = tree.number_of_nodes()
+                n_leaves = sum(1 for n in tree.nodes() if tree.out_degree(n) == 0)
+                # Generate SVG preview
+                svg_html = _render_tree_svg(tree)
+                output = FormattedOutput(
+                    type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
+                    css_class="dtype-tree",
+                    tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
+                    html_content=svg_html,
+                    is_expandable=True,
+                )
+                entries.append(FormattedEntry(key=key, output=output))
+            return entries
+
+    @register_formatter
+    class VartSectionFormatter(SectionFormatter):
+        """Section formatter for vart (variable trees)."""
+
+        @property
+        def section_name(self) -> str:
+            return "vart"
+
+        @property
+        def after_section(self) -> str:
+            return "varm"
+
+        @property
+        def tooltip(self) -> str:
+            return "Tree annotation of variables"
+
+        def should_show(self, obj) -> bool:
+            return hasattr(obj, "vart") and len(obj.vart) > 0
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            entries = []
+            for key, tree in obj.vart.items():
+                n_nodes = tree.number_of_nodes()
+                n_leaves = sum(1 for n in tree.nodes() if tree.out_degree(n) == 0)
+                # Generate SVG preview
+                svg_html = _render_tree_svg(tree)
+                output = FormattedOutput(
+                    type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
+                    css_class="dtype-tree",
+                    tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
+                    html_content=svg_html,
+                    is_expandable=True,
+                )
+                entries.append(FormattedEntry(key=key, output=output))
+            return entries
+
+except ImportError:
+    HAS_TREEDATA = False
+
+
+def create_test_treedata():
+    """Create a TreeData object with observation and variable trees."""
+    if not HAS_TREEDATA:
+        return None
+
+    np.random.seed(42)
+    n_obs, n_vars = 24, 18  # Small enough for SVG preview (< 30 leaves)
+    obs_names = [f"cell_{i}" for i in range(n_obs)]
+    var_names = [f"gene_{i}" for i in range(n_vars)]
+
+    # Create observation tree (phylogenetic-like structure)
+    obs_tree = nx.DiGraph()
+    obs_tree.add_edges_from([
+        ("root", "clade_A"), ("root", "clade_B"),
+        ("clade_A", "subA1"), ("clade_A", "subA2"),
+        ("clade_B", "subB1"), ("clade_B", "subB2"),
+    ])
+    for i, name in enumerate(obs_names):
+        parent = ["subA1", "subA2", "subB1", "subB2"][i % 4]
+        obs_tree.add_edge(parent, name)
+
+    # Create variable tree (gene ontology-like structure)
+    var_tree = nx.DiGraph()
+    var_tree.add_edges_from([
+        ("all_genes", "pathway_X"), ("all_genes", "pathway_Y"),
+        ("pathway_X", "module_1"), ("pathway_X", "module_2"),
+        ("pathway_Y", "module_3"),
+    ])
+    for i, name in enumerate(var_names):
+        parent = ["module_1", "module_2", "module_3"][i % 3]
+        var_tree.add_edge(parent, name)
+
+    # Create TreeData (label=None prevents adding "tree" column to obs/var)
+    tdata = TreeData(
+        X=np.random.randn(n_obs, n_vars).astype(np.float32),
+        obs=pd.DataFrame(
+            {"cell_type": pd.Categorical(["T cell", "B cell"] * (n_obs // 2))},
+            index=obs_names,
+        ),
+        var=pd.DataFrame({"gene_name": var_names}, index=var_names),
+        obst={"phylogeny": obs_tree},
+        vart={"gene_ontology": var_tree},
+        label=None,  # Don't add "tree" column
+    )
+
+    # Add standard annotations
+    tdata.uns["cell_type_colors"] = ["#e41a1c", "#377eb8"]
+    tdata.obsm["X_pca"] = np.random.randn(n_obs, 10).astype(np.float32)
+    tdata.layers["raw"] = np.random.randn(n_obs, n_vars).astype(np.float32)
+
+    return tdata
 
 
 def create_test_anndata() -> AnnData:
@@ -366,43 +601,50 @@ def main():
         "cell_type has 30 categories (should show 20 + '...+10'). batch has exactly 20 (should show all).",
     ))
 
-    # Test 12: Uns value previews and custom renderer
+    # Test 12: Uns value previews and custom TypeFormatter
     print("  12. Uns value previews and type hints")
 
-    # Register a custom renderer for demonstration
-    def render_analysis_history(value, context):
-        """Example renderer for analysis history data."""
-        import json
-        # Parse JSON if string, otherwise use as-is
-        if isinstance(value, str):
-            try:
-                data = json.loads(value)
-            except json.JSONDecodeError:
-                data = {"raw": value}
-        else:
-            data = value if isinstance(value, dict) else {"data": value}
+    # Register a custom TypeFormatter for tagged data in uns
+    @register_formatter
+    class AnalysisHistoryFormatter(TypeFormatter):
+        """Example TypeFormatter for analysis history data with embedded type hint."""
+        priority = 100  # High priority to check before fallback
 
-        # Build a rich HTML preview
-        runs = data.get("runs", [])
-        params = data.get("params", {})
+        def can_format(self, obj):
+            hint, _ = extract_uns_type_hint(obj)
+            return hint == "example.history"
 
-        html_parts = ['<div style="font-size:11px;">']
-        if runs:
-            html_parts.append(f'<strong>{len(runs)} runs</strong>')
-        if params:
-            param_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
-            if len(params) > 3:
-                param_str += "..."
-            html_parts.append(f' · params: {param_str}')
-        html_parts.append('</div>')
+        def format(self, obj, context):
+            import json
+            hint, value = extract_uns_type_hint(obj)
 
-        return UnsRendererOutput(
-            html="".join(html_parts),
-            type_label="analysis history",
-            collapsed=False,
-        )
+            # Parse JSON if string, otherwise use as-is
+            if isinstance(value, str):
+                try:
+                    data = json.loads(value)
+                except json.JSONDecodeError:
+                    data = {"raw": value}
+            else:
+                data = value if isinstance(value, dict) else {"data": value}
 
-    register_uns_renderer("example.history", render_analysis_history)
+            # Build a rich HTML preview
+            runs = data.get("runs", [])
+            params = data.get("params", {})
+
+            html_parts = ['<div style="font-size:11px;">']
+            if runs:
+                html_parts.append(f'<strong>{len(runs)} runs</strong>')
+            if params:
+                param_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
+                if len(params) > 3:
+                    param_str += "..."
+                html_parts.append(f' · params: {param_str}')
+            html_parts.append('</div>')
+
+            return FormattedOutput(
+                type_name="analysis history",
+                html_content="".join(html_parts),
+            )
 
     adata_uns = AnnData(np.zeros((10, 5)))
     # Simple types with previews
@@ -434,7 +676,7 @@ def main():
     sections.append((
         "12. Uns Value Previews and Type Hints",
         adata_uns._repr_html_(),
-        "Shows: (1) preview values for simple types, (2) 'analysis_history' with registered custom renderer "
+        "Shows: (1) preview values for simple types, (2) 'analysis_history' with registered TypeFormatter "
         "(shows '3 runs · params: method=umap...'), (3) unregistered type hints show 'import X to enable' message.",
     ))
 
@@ -456,6 +698,21 @@ def main():
         "All content should be visible, sections should be expanded, and interactive buttons "
         "(fold icons, copy buttons, search, expand) should be hidden.",
     ))
+
+    # Test 14: TreeData with custom sections (if available)
+    if HAS_TREEDATA:
+        print("  14. TreeData with obst/vart sections")
+        tdata = create_test_treedata()
+        sections.append((
+            "14. TreeData with Custom Sections (obst/vart)",
+            tdata._repr_html_(),
+            "This demonstrates <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
+            "integration using SectionFormatter "
+            "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>). "
+            "The 'obst' section appears after 'obsm' and 'vart' after 'varm'. "
+            "Click the expand button (▸) to see an SVG tree visualization. "
+            "Trees with >30 leaves show a text message instead of the full preview.",
+        ))
 
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"

@@ -766,6 +766,90 @@ class TestFormatterRegistry:
         priorities = [f.priority for f in formatter_registry._type_formatters]
         assert priorities == sorted(priorities, reverse=True)
 
+    def test_formatter_sections_filtering(self):
+        """Test formatters are only applied to specified sections."""
+        from anndata._repr.registry import (
+            FormattedOutput,
+            FormatterContext,
+            TypeFormatter,
+            formatter_registry,
+        )
+
+        class SectionSpecificType:
+            """A type for testing section filtering."""
+
+            pass
+
+        class UnsOnlyFormatter(TypeFormatter):
+            priority = 600  # High priority
+            sections = ("uns",)  # Only apply to uns section
+
+            def can_format(self, obj: Any) -> bool:
+                return isinstance(obj, SectionSpecificType)
+
+            def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+                return FormattedOutput(
+                    type_name="UnsSpecificType",
+                    css_class="dtype-uns-specific",
+                )
+
+        formatter = UnsOnlyFormatter()
+        formatter_registry.register_type_formatter(formatter)
+
+        try:
+            obj = SectionSpecificType()
+
+            # Should match in uns section
+            context_uns = FormatterContext(section="uns")
+            result_uns = formatter_registry.format_value(obj, context_uns)
+            assert result_uns.type_name == "UnsSpecificType"
+
+            # Should NOT match in obsm section (falls back to fallback formatter)
+            context_obsm = FormatterContext(section="obsm")
+            result_obsm = formatter_registry.format_value(obj, context_obsm)
+            assert result_obsm.type_name != "UnsSpecificType"
+            assert "SectionSpecificType" in result_obsm.type_name
+        finally:
+            formatter_registry.unregister_type_formatter(formatter)
+
+    def test_formatter_sections_none_applies_everywhere(self):
+        """Test formatters with sections=None apply to all sections."""
+        from anndata._repr.registry import (
+            FormattedOutput,
+            FormatterContext,
+            TypeFormatter,
+            formatter_registry,
+        )
+
+        class UniversalType:
+            """A type for testing universal formatters."""
+
+            pass
+
+        class UniversalFormatter(TypeFormatter):
+            priority = 600
+            sections = None  # Default: apply to all sections
+
+            def can_format(self, obj: Any) -> bool:
+                return isinstance(obj, UniversalType)
+
+            def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+                return FormattedOutput(type_name="UniversalType")
+
+        formatter = UniversalFormatter()
+        formatter_registry.register_type_formatter(formatter)
+
+        try:
+            obj = UniversalType()
+
+            # Should match in any section
+            for section in ["uns", "obsm", "varm", "layers", "obs", "var"]:
+                context = FormatterContext(section=section)
+                result = formatter_registry.format_value(obj, context)
+                assert result.type_name == "UniversalType", f"Failed for section {section}"
+        finally:
+            formatter_registry.unregister_type_formatter(formatter)
+
     def test_extension_type_graceful_handling(self):
         """Test extension types (like TreeData, MuData) are handled gracefully."""
         from anndata._repr.registry import FormatterContext, formatter_registry
@@ -1633,91 +1717,38 @@ class TestUnsRendererRegistry:
         assert hint is None
         assert cleaned == value
 
-    def test_registry_register_and_lookup(self):
-        """Test registering and looking up renderers."""
-        from anndata._repr.registry import UnsRendererRegistry, UnsRendererOutput
-
-        registry = UnsRendererRegistry()
-
-        def my_renderer(value, context):
-            return UnsRendererOutput(html="<span>test</span>")
-
-        # Register
-        registry.register("test.type", my_renderer)
-        assert registry.is_registered("test.type")
-        assert not registry.is_registered("other.type")
-
-        # Lookup
-        renderer = registry.get_renderer("test.type")
-        assert renderer is my_renderer
-
-        # Get registered hints
-        hints = registry.get_registered_hints()
-        assert "test.type" in hints
-
-    def test_registry_unregister(self):
-        """Test unregistering renderers."""
-        from anndata._repr.registry import UnsRendererRegistry, UnsRendererOutput
-
-        registry = UnsRendererRegistry()
-
-        def my_renderer(value, context):
-            return UnsRendererOutput(html="<span>test</span>")
-
-        registry.register("test.type", my_renderer)
-        assert registry.is_registered("test.type")
-
-        # Unregister
-        result = registry.unregister("test.type")
-        assert result is True
-        assert not registry.is_registered("test.type")
-
-        # Unregister non-existent
-        result = registry.unregister("nonexistent.type")
-        assert result is False
-
-    def test_register_uns_renderer_public_api(self):
-        """Test the public register_uns_renderer() function."""
+    def test_type_formatter_for_tagged_uns_data(self):
+        """Test using TypeFormatter to handle tagged data in uns."""
         from anndata._repr import (
-            register_uns_renderer,
-            uns_renderer_registry,
-            UnsRendererOutput,
+            register_formatter,
+            TypeFormatter,
+            FormattedOutput,
+            extract_uns_type_hint,
+            formatter_registry,
         )
 
-        def custom_renderer(value, context):
-            return UnsRendererOutput(
-                html="<div>Custom</div>",
-                type_label="custom type",
-            )
+        class TestConfigFormatter(TypeFormatter):
+            priority = 100  # High priority to check before fallback
 
-        # Register via public API
-        register_uns_renderer("test.public_api", custom_renderer)
+            def can_format(self, obj):
+                hint, _ = extract_uns_type_hint(obj)
+                return hint == "test.config_format"
 
-        try:
-            assert uns_renderer_registry.is_registered("test.public_api")
-            renderer = uns_renderer_registry.get_renderer("test.public_api")
-            assert renderer is custom_renderer
-        finally:
-            # Cleanup
-            uns_renderer_registry.unregister("test.public_api")
+            def format(self, obj, context):
+                hint, data = extract_uns_type_hint(obj)
+                items = data.get("data", {})
+                return FormattedOutput(
+                    type_name="test config",
+                    html_content=f'<span class="test-custom">Items: {len(items)}</span>',
+                )
 
-    def test_registered_renderer_in_html_output(self):
-        """Test that registered renderers produce custom HTML in repr."""
-        from anndata._repr import register_uns_renderer, uns_renderer_registry, UnsRendererOutput
-
-        def test_renderer(value, context):
-            data = value.get("data", {})
-            return UnsRendererOutput(
-                html=f'<span class="test-custom">Items: {len(data)}</span>',
-                type_label="test config",
-            )
-
-        register_uns_renderer("test.html_output", test_renderer)
+        formatter = TestConfigFormatter()
+        register_formatter(formatter)
 
         try:
             adata = AnnData(np.zeros((5, 3)))
             adata.uns["my_config"] = {
-                "__anndata_repr__": "test.html_output",
+                "__anndata_repr__": "test.config_format",
                 "data": {"a": 1, "b": 2, "c": 3},
             }
 
@@ -1727,7 +1758,7 @@ class TestUnsRendererRegistry:
             assert "Items: 3" in html
             assert "test config" in html
         finally:
-            uns_renderer_registry.unregister("test.html_output")
+            formatter_registry.unregister_type_formatter(formatter)
 
     def test_unregistered_type_hint_shows_import_message(self):
         """Test that unregistered type hints show helpful import message."""
@@ -1743,62 +1774,44 @@ class TestUnsRendererRegistry:
         assert "externalpackage.customtype" in html
         assert "import externalpackage" in html
 
-    def test_renderer_error_handled_gracefully(self):
-        """Test that renderer errors don't crash the repr."""
-        from anndata._repr import register_uns_renderer, uns_renderer_registry
+    def test_formatter_error_handled_gracefully(self):
+        """Test that TypeFormatter errors don't crash the repr."""
+        from anndata._repr import (
+            register_formatter,
+            TypeFormatter,
+            FormattedOutput,
+            extract_uns_type_hint,
+            formatter_registry,
+        )
 
-        def failing_renderer(value, context):
-            raise ValueError("Intentional test error")
+        class FailingFormatter(TypeFormatter):
+            priority = 100
 
-        register_uns_renderer("test.failing", failing_renderer)
+            def can_format(self, obj):
+                hint, _ = extract_uns_type_hint(obj)
+                return hint == "test.failing_format"
+
+            def format(self, obj, context):
+                raise ValueError("Intentional test error")
+
+        formatter = FailingFormatter()
+        register_formatter(formatter)
 
         try:
             adata = AnnData(np.zeros((5, 3)))
             adata.uns["will_fail"] = {
-                "__anndata_repr__": "test.failing",
+                "__anndata_repr__": "test.failing_format",
                 "data": "test",
             }
 
             # Should not raise, should fall back to default rendering
-            with pytest.warns(UserWarning, match="Custom renderer.*failed"):
+            with pytest.warns(UserWarning, match="Formatter.*failed"):
                 html = adata._repr_html_()
 
             assert html is not None
             assert "will_fail" in html
         finally:
-            uns_renderer_registry.unregister("test.failing")
-
-    def test_renderer_wrong_return_type_handled(self):
-        """Test that renderers returning wrong type are handled gracefully."""
-        from anndata._repr import register_uns_renderer, uns_renderer_registry
-
-        def bad_renderer(value, context):
-            return "not UnsRendererOutput"  # Wrong return type
-
-        register_uns_renderer("test.bad_return", bad_renderer)
-
-        try:
-            adata = AnnData(np.zeros((5, 3)))
-            adata.uns["bad_return"] = {
-                "__anndata_repr__": "test.bad_return",
-                "data": "test",
-            }
-
-            # Should not crash
-            html = adata._repr_html_()
-            assert html is not None
-            assert "bad_return" in html
-        finally:
-            uns_renderer_registry.unregister("test.bad_return")
-
-    def test_uns_renderer_output_defaults(self):
-        """Test UnsRendererOutput default values."""
-        from anndata._repr.registry import UnsRendererOutput
-
-        output = UnsRendererOutput(html="<span>test</span>")
-        assert output.html == "<span>test</span>"
-        assert output.collapsed is True  # Default
-        assert output.type_label == ""  # Default
+            formatter_registry.unregister_type_formatter(formatter)
 
     def test_string_format_type_hint_in_html(self):
         """Test string format type hints work in HTML output."""
@@ -2565,3 +2578,280 @@ class TestRegistryAbstractMethods:
 
         with pytest.raises(TypeError):
             SectionFormatter()
+
+
+class TestCustomHtmlContent:
+    """Tests for custom HTML content in Type Formatters."""
+
+    def test_inline_html_content(self):
+        """Test inline (non-expandable) custom HTML content."""
+        from anndata._repr.registry import (
+            TypeFormatter,
+            FormattedOutput,
+            formatter_registry,
+        )
+
+        # Custom array class that supports inline HTML preview
+        class CustomArray(np.ndarray):
+            _test_inline_html = True
+
+        class InlineHtmlFormatter(TypeFormatter):
+            priority = 2000  # High priority to be checked first
+
+            def can_format(self, obj):
+                return isinstance(obj, np.ndarray) and getattr(obj, "_test_inline_html", False)
+
+            def format(self, obj, context):
+                return FormattedOutput(
+                    type_name="CustomInline",
+                    css_class="dtype-custom",
+                    html_content='<span class="test-inline">Inline Preview</span>',
+                    is_expandable=False,
+                )
+
+        formatter = InlineHtmlFormatter()
+        formatter_registry.register_type_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            # Create custom array with proper shape
+            custom = np.zeros((5, 2)).view(CustomArray)
+            adata.obsm["custom_data"] = custom
+
+            html = adata._repr_html_()
+
+            assert "CustomInline" in html
+            assert "Inline Preview" in html
+            assert "test-inline" in html
+        finally:
+            formatter_registry.unregister_type_formatter(formatter)
+
+    def test_expandable_html_content(self):
+        """Test expandable custom HTML content (e.g., for TreeData visualization)."""
+        from anndata._repr.registry import (
+            TypeFormatter,
+            FormattedOutput,
+            formatter_registry,
+        )
+
+        # Custom array class that supports expandable HTML (like TreeData)
+        class TreeArray(np.ndarray):
+            _test_expandable_html = True
+
+        class ExpandableHtmlFormatter(TypeFormatter):
+            priority = 2000
+
+            def can_format(self, obj):
+                return isinstance(obj, np.ndarray) and getattr(obj, "_test_expandable_html", False)
+
+            def format(self, obj, context):
+                tree_html = """
+                <div class="test-tree">
+                    <ul>
+                        <li>Root
+                            <ul>
+                                <li>Child 1</li>
+                                <li>Child 2</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+                """
+                return FormattedOutput(
+                    type_name="TreeData (3 nodes)",
+                    css_class="dtype-tree",
+                    html_content=tree_html,
+                    is_expandable=True,
+                )
+
+        formatter = ExpandableHtmlFormatter()
+        formatter_registry.register_type_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            # Create tree array with proper shape
+            tree = np.zeros((5, 4)).view(TreeArray)
+            adata.obsm["tree"] = tree
+
+            html = adata._repr_html_()
+
+            # Should have the type name
+            assert "TreeData (3 nodes)" in html
+            # Should have expand button
+            assert "adata-expand-btn" in html
+            # Should have the tree content in nested row
+            assert "test-tree" in html
+            assert "adata-nested-row" in html
+        finally:
+            formatter_registry.unregister_type_formatter(formatter)
+
+
+class TestCustomSectionFormatters:
+    """Tests for custom section formatters (e.g., TreeData's obst/vart)."""
+
+    def test_custom_section_appears_after_specified_section(self):
+        """Test that custom sections appear after their specified position."""
+        from anndata._repr.registry import (
+            SectionFormatter,
+            FormattedEntry,
+            FormattedOutput,
+            formatter_registry,
+        )
+
+        class ObstSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "obst"
+
+            @property
+            def display_name(self):
+                return "obst"
+
+            @property
+            def after_section(self):
+                return "obsm"  # Should appear after obsm
+
+            @property
+            def tooltip(self):
+                return "Observation-aligned tree data"
+
+            def should_show(self, obj):
+                return hasattr(obj, "_test_obst") and obj._test_obst
+
+            def get_entries(self, obj, context):
+                return [
+                    FormattedEntry(
+                        key="cell_tree",
+                        output=FormattedOutput(
+                            type_name="Tree (100 nodes)",
+                            css_class="dtype-tree",
+                        ),
+                    ),
+                    FormattedEntry(
+                        key="lineage",
+                        output=FormattedOutput(
+                            type_name="Tree (50 nodes)",
+                            css_class="dtype-tree",
+                        ),
+                    ),
+                ]
+
+        formatter = ObstSectionFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            adata._test_obst = True  # Mark for custom section
+            adata.obsm["X_pca"] = np.zeros((5, 2))
+
+            html = adata._repr_html_()
+
+            # Custom section should be present
+            assert 'data-section="obst"' in html
+            assert "cell_tree" in html
+            assert "lineage" in html
+            assert "Tree (100 nodes)" in html
+
+            # Verify order: obsm should come before obst
+            obsm_pos = html.find('data-section="obsm"')
+            obst_pos = html.find('data-section="obst"')
+            assert obsm_pos < obst_pos, "obst should appear after obsm"
+
+            # Verify order: obst should come before varm
+            varm_pos = html.find('data-section="varm"')
+            assert obst_pos < varm_pos, "obst should appear before varm"
+
+        finally:
+            # Cleanup - need to remove from registry
+            formatter_registry._section_formatters.pop("obst", None)
+
+    def test_custom_section_with_expandable_content(self):
+        """Test custom section with expandable HTML content."""
+        from anndata._repr.registry import (
+            SectionFormatter,
+            FormattedEntry,
+            FormattedOutput,
+            formatter_registry,
+        )
+
+        class TreeSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "trees"
+
+            def should_show(self, obj):
+                return hasattr(obj, "_test_trees")
+
+            def get_entries(self, obj, context):
+                tree_html = '<div class="tree-viz"><ul><li>Root<ul><li>A</li><li>B</li></ul></li></ul></div>'
+                return [
+                    FormattedEntry(
+                        key="phylo",
+                        output=FormattedOutput(
+                            type_name="PhyloTree (25 nodes)",
+                            css_class="dtype-tree",
+                            html_content=tree_html,
+                            is_expandable=True,
+                        ),
+                    ),
+                ]
+
+        formatter = TreeSectionFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            adata._test_trees = True
+
+            html = adata._repr_html_()
+
+            # Section should exist
+            assert 'data-section="trees"' in html
+            assert "PhyloTree (25 nodes)" in html
+
+            # Expandable content should be present
+            assert "tree-viz" in html
+            assert "adata-nested-row" in html
+            assert "adata-expand-btn" in html
+
+        finally:
+            formatter_registry._section_formatters.pop("trees", None)
+
+    def test_custom_section_not_shown_when_should_show_false(self):
+        """Test that custom sections are hidden when should_show returns False."""
+        from anndata._repr.registry import (
+            SectionFormatter,
+            FormattedEntry,
+            FormattedOutput,
+            formatter_registry,
+        )
+
+        class HiddenSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "hidden"
+
+            def should_show(self, obj):
+                return False  # Never show
+
+            def get_entries(self, obj, context):
+                return [
+                    FormattedEntry(
+                        key="secret",
+                        output=FormattedOutput(type_name="Secret", css_class="dtype-unknown"),
+                    ),
+                ]
+
+        formatter = HiddenSectionFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            html = adata._repr_html_()
+
+            # Section should NOT be present
+            assert 'data-section="hidden"' not in html
+            assert "secret" not in html
+
+        finally:
+            formatter_registry._section_formatters.pop("hidden", None)
