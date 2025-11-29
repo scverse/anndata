@@ -565,6 +565,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         - ``repr_html_max_items``: Max items to show per section (default: 200)
         - ``repr_html_max_categories``: Max category values to display inline (default: 100)
         - ``repr_html_unique_limit``: Max rows for unique count computation (default: 1M)
+        - ``repr_html_max_field_width``: Max width in pixels for field name column (default: 400)
+        - ``repr_html_type_width``: Width in pixels for type column (default: 220)
 
         Examples
         --------

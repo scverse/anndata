@@ -20,9 +20,11 @@ from anndata._repr import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
+    DEFAULT_MAX_FIELD_WIDTH,
     DEFAULT_MAX_ITEMS,
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_PREVIEW_ITEMS,
+    DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
     DOCS_BASE_URL,
     SECTION_ORDER,
@@ -58,6 +60,63 @@ if TYPE_CHECKING:
 
 # Import formatters to register them (side-effect import)
 import anndata._repr.formatters  # noqa: F401
+
+# Approximate character width in pixels for monospace font at 13px
+CHAR_WIDTH_PX = 8
+
+# =============================================================================
+# Inline styles for graceful degradation
+# =============================================================================
+# CSS classes in css.py provide full styling with dark mode support.
+# These inline styles are minimal fallbacks that ensure basic readability
+# if CSS fails to load (e.g., email clients, restrictive embeds).
+# Colors and theming are intentionally CSS-only to support dark mode.
+
+# Hidden elements - JS reveals these; must be inline to work without CSS
+STYLE_HIDDEN = "display:none;"
+
+# Section content and tables - basic layout fallback
+STYLE_SECTION_CONTENT = "padding:0;overflow:hidden;"
+STYLE_SECTION_TABLE = "width:100%;border-collapse:collapse;"
+STYLE_SECTION_INFO = "padding:6px 12px;"
+
+# Category color dot - needs inline for dynamic background color
+STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
+
+
+def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
+    """
+    Calculate the optimal field name column width based on longest field name.
+
+    Collects field names from obs, var, uns, obsm, varm, layers, obsp, varp
+    and returns a pixel width that fits the longest name (up to max_width).
+    """
+    all_names: list[str] = []
+
+    # obs/var column names
+    if hasattr(adata, "obs") and adata.obs is not None:
+        all_names.extend(adata.obs.columns.tolist())
+    if hasattr(adata, "var") and adata.var is not None:
+        all_names.extend(adata.var.columns.tolist())
+
+    # Mapping sections (uns, obsm, varm, layers, obsp, varp)
+    for attr in ("uns", "obsm", "varm", "layers", "obsp", "varp"):
+        mapping = getattr(adata, attr, None)
+        if mapping is not None:
+            all_names.extend(mapping.keys())
+
+    if not all_names:
+        return 100  # Minimum default
+
+    # Find longest name
+    max_len = max(len(name) for name in all_names)
+
+    # Convert to pixels (with some padding for copy button)
+    # Add ~30px for padding and copy button
+    width_px = (max_len * CHAR_WIDTH_PX) + 30
+
+    # Clamp to reasonable range
+    return max(80, min(width_px, max_width))
 
 
 def generate_repr_html(
@@ -133,8 +192,20 @@ def generate_repr_html(
     if depth == 0:
         parts.append(get_css())
 
-    # Container
-    parts.append(f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}">')
+    # Calculate field name column width based on content
+    max_field_width = _get_setting(
+        "repr_html_max_field_width", default=DEFAULT_MAX_FIELD_WIDTH
+    )
+    field_width = _calculate_field_name_width(adata, max_field_width)
+
+    # Get type column width from settings
+    type_width = _get_setting("repr_html_type_width", default=DEFAULT_TYPE_WIDTH)
+
+    # Container with computed column widths as CSS variables
+    style = f"--anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
+    parts.append(
+        f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}" style="{style}">'
+    )
 
     # Header (with search box integrated on the right)
     if show_header:
@@ -312,10 +383,8 @@ def _render_custom_section(
     )
 
     # Content
-    content_style = "padding:0;overflow:hidden;"
-    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
-    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
-    parts.append(f'<table class="adata-table" style="{table_style}">')
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
 
     for i, entry in enumerate(entries):
         if i >= max_items:
@@ -334,10 +403,6 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
     """Render a FormattedEntry from a custom section formatter."""
     output = entry.output
 
-    # Button styles (hidden by default - JS shows them)
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
-    expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
-
     entry_class = "adata-entry"
     if output.warnings:
         entry_class += " warning"
@@ -355,7 +420,7 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(entry.key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
@@ -376,7 +441,7 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
 
     if has_expandable_content:
         parts.append(
-            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
         )
 
     if output.html_content and not output.is_expandable:
@@ -411,25 +476,15 @@ def _render_header(
     adata: AnnData, *, show_search: bool = False, container_id: str = ""
 ) -> str:
     """Render the header with type, shape, badges, and optional search box."""
-    # Use inline styles for layout only - colors handled by CSS for dark mode support
-    header_style = (
-        "display:flex;flex-wrap:wrap;align-items:center;gap:8px;"
-        "padding:8px 12px;"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-    )
-    parts = [f'<div class="anndata-hdr" style="{header_style}">']
+    parts = ['<div class="anndata-hdr">']
 
     # Type name - allow for extension types
     type_name = type(adata).__name__
-    type_style = "font-weight:600;font-size:14px;"
-    parts.append(
-        f'<span class="adata-type" style="{type_style}">{escape_html(type_name)}</span>'
-    )
+    parts.append(f'<span class="adata-type">{escape_html(type_name)}</span>')
 
     # Shape
     shape_str = f"{format_number(adata.n_obs)} obs × {format_number(adata.n_vars)} vars"
-    shape_style = "font-family:ui-monospace,monospace;font-size:12px;"
-    parts.append(f'<span class="adata-shape" style="{shape_style}">{shape_str}</span>')
+    parts.append(f'<span class="adata-shape">{shape_str}</span>')
 
     # Badges
     if is_view(adata):
@@ -464,13 +519,11 @@ def _render_header(
 
     # Search box on the right (spacer pushes it right)
     if show_search:
-        spacer_style = "flex-grow:1;"
-        parts.append(f'<span style="{spacer_style}"></span>')
+        parts.append('<span style="flex-grow:1;"></span>')
         # Search input hidden by default (JS shows it) - filter indicator uses CSS .active class
-        search_style = "display:none;padding:4px 8px;font-size:11px;border-radius:4px;outline:none;width:150px;"
         search_id = f"{container_id}-search" if container_id else "anndata-search"
         parts.append(
-            f'<input type="text" id="{search_id}" name="{search_id}" class="adata-search-input" style="{search_style}" '
+            f'<input type="text" id="{search_id}" name="{search_id}" class="adata-search-input" style="{STYLE_HIDDEN}" '
             f'placeholder="Search..." aria-label="Search fields">'
         )
         # Filter indicator visibility controlled by CSS (.adata-filter-indicator.active) - no inline style
@@ -482,12 +535,7 @@ def _render_header(
 
 def _render_footer(adata: AnnData) -> str:
     """Render the footer with version and memory info."""
-    footer_style = (
-        "display:flex;justify-content:space-between;padding:4px 12px;"
-        "font-size:10px;"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-    )
-    parts = [f'<div class="anndata-ftr" style="{footer_style}">']
+    parts = ['<div class="anndata-ftr">']
 
     # Version
     version = get_anndata_version()
@@ -545,16 +593,11 @@ def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
     """Render X as a single compact entry row."""
     X = adata.X
 
-    # Inline styles for layout only - colors handled by CSS
-    row_style = "display:flex;align-items:center;gap:12px;padding:6px 12px;"
-    name_style = "font-family:ui-monospace,monospace;font-weight:600;min-width:60px;"
-    type_style = "font-family:ui-monospace,monospace;font-size:11px;"
-
-    parts = [f'<div class="adata-x-entry" style="{row_style}">']
-    parts.append(f'<span style="{name_style}">X</span>')
+    parts = ['<div class="adata-x-entry">']
+    parts.append("<span>X</span>")
 
     if X is None:
-        parts.append(f'<span style="{type_style}"><em>None</em></span>')
+        parts.append("<span><em>None</em></span>")
     else:
         # Format the X matrix
         output = formatter_registry.format_value(X, context)
@@ -577,9 +620,7 @@ def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
             type_parts.append("📁 on disk")
 
         type_str = " · ".join(type_parts)
-        parts.append(
-            f'<span class="{output.css_class}" style="{type_style}">{escape_html(type_str)}</span>'
-        )
+        parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -618,10 +659,8 @@ def _render_dataframe_section(
     )
 
     # Content - always visible by default (JS can hide it)
-    content_style = "padding:0;overflow:hidden;"
-    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
-    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
-    parts.append(f'<table class="adata-table" style="{table_style}">')
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
 
     # Render each column
     for i, col_name in enumerate(df.columns):
@@ -645,17 +684,14 @@ def _render_category_list(
     max_cats: int,
 ) -> str:
     """Render a list of category values with optional color dots."""
-    cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
-    dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
-
     parts = ['<span class="adata-cats-list">']
     for i, cat in enumerate(categories[:max_cats]):
         cat_name = escape_html(str(cat))
         color = colors[i] if colors and i < len(colors) else None
-        parts.append(f'<span class="adata-cat-item" style="{cat_style}">')
+        parts.append('<span class="adata-cat-item">')
         if color:
             parts.append(
-                f'<span style="{dot_style}background:{escape_html(color)};"></span>'
+                f'<span style="{STYLE_CAT_DOT}background:{escape_html(color)};"></span>'
             )
         parts.append(f"<span>{cat_name}</span>")
         parts.append("</span>")
@@ -707,7 +743,6 @@ def _render_dataframe_entry(
     colors = get_matching_column_colors(adata, col_name)
 
     # Copy button hidden by default - JS shows it
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     # Add warning class if needed (CSS handles color)
     entry_class = "adata-entry"
@@ -724,7 +759,7 @@ def _render_dataframe_entry(
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(col_name))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
@@ -801,10 +836,8 @@ def _render_mapping_section(
     )
 
     # Content - always visible by default
-    content_style = "padding:0;overflow:hidden;"
-    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
-    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
-    parts.append(f'<table class="adata-table" style="{table_style}">')
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
 
     for i, key in enumerate(keys):
         if i >= max_items:
@@ -823,7 +856,6 @@ def _render_mapping_section(
 
 def _render_type_cell(
     output: FormattedOutput,
-    expand_btn_style: str,
     *,
     has_expandable_content: bool,
 ) -> list[str]:
@@ -845,7 +877,7 @@ def _render_type_cell(
 
     if has_expandable_content:
         parts.append(
-            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
         )
 
     has_columns_list = output.details.get("has_columns_list", False)
@@ -898,8 +930,6 @@ def _render_mapping_entry(
     output = formatter_registry.format_value(value, context)
 
     # Button styles (hidden by default - JS shows them)
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
-    expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
     # Build class list for CSS styling
     entry_class = "adata-entry"
@@ -919,15 +949,13 @@ def _render_mapping_entry(
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
     # Type cell
     parts.extend(
-        _render_type_cell(
-            output, expand_btn_style, has_expandable_content=has_expandable_content
-        )
+        _render_type_cell(output, has_expandable_content=has_expandable_content)
     )
 
     # Meta cell
@@ -976,11 +1004,9 @@ def _render_uns_section(
     # Header
     parts.append(_render_section_header("uns", f"({n_items} items)", doc_url, tooltip))
 
-    # Content - with inline styles for consistency
-    content_style = "padding:0;overflow:hidden;"
-    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
-    table_style = "width:100%;border-collapse:collapse;font-size:12px;"
-    parts.append(f'<table class="adata-table" style="{table_style}">')
+    # Content
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
 
     for i, key in enumerate(keys):
         if i >= max_items:
@@ -1071,10 +1097,6 @@ def _render_uns_entry_with_preview(
         preview = f"{preview_note} {preview}" if preview else preview_note
 
     # Inline styles for layout - colors via CSS
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
-    meta_style = "padding:6px 12px;font-size:11px;text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     entry_class = "adata-entry"
     if output.warnings:
@@ -1087,15 +1109,15 @@ def _render_uns_entry_with_preview(
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     if output.warnings or not output.is_serializable:
         warn_list = output.warnings.copy()
         if not output.is_serializable:
@@ -1111,7 +1133,7 @@ def _render_uns_entry_with_preview(
     parts.append("</td>")
 
     # Meta - value preview
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    parts.append('<td class="adata-entry-meta">')
     if preview:
         parts.append(
             f'<span class="adata-text-muted" title="{escape_html(str(value)[:500])}">{escape_html(preview)}</span>'
@@ -1210,10 +1232,6 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     The output should have html_content set.
     """
     # Inline styles for layout
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
-    meta_style = "padding:6px 12px;font-size:11px;text-align:left;"
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     type_label = output.type_name
 
@@ -1229,15 +1247,15 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     if output.warnings or not output.is_serializable:
         entry_warnings = output.warnings.copy()
         if not output.is_serializable:
@@ -1247,11 +1265,13 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
         parts.append(f"{escape_html(type_label)} ⚠️")
         parts.append("</span>")
     else:
-        parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(type_label)}</span>'
+        )
     parts.append("</td>")
 
     # Meta - custom HTML content
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    parts.append('<td class="adata-entry-meta">')
     # Note: HTML is trusted from registered TypeFormatter (package must be imported)
     parts.append(output.html_content)
     parts.append("</td>")
@@ -1266,30 +1286,26 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     n_colors = len(colors)
 
     # Inline styles for layout - colors via CSS
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     parts = [
         f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="colors">'
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     parts.append(f'<span class="dtype-object">colors ({n_colors})</span>')
     parts.append("</td>")
 
     # Meta - color swatches
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    parts.append('<td class="adata-entry-meta">')
     parts.append('<span class="adata-color-swatches">')
     parts.extend(
         f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
@@ -1317,37 +1333,32 @@ def _render_nested_anndata_entry(
     can_expand = context.depth < max_depth - 1
 
     # Inline styles for layout - colors via CSS
-    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
-    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
-    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
     # Expand button hidden by default - JS shows it
-    expand_btn_style = "display:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:8px;"
 
     parts = [
         f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="AnnData">'
     ]
 
     # Name
-    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
-        f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
     )
     parts.append("</td>")
 
     # Type
-    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append('<td class="adata-entry-type">')
     parts.append(
         f'<span class="dtype-anndata">AnnData ({format_number(n_obs)} × {format_number(n_vars)})</span>'
     )
     if can_expand:
         parts.append(
-            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
         )
     parts.append("</td>")
 
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
+    parts.append('<td class="adata-entry-meta"></td>')
     parts.append("</tr>")
 
     # Nested content (hidden by default)
@@ -1397,30 +1408,26 @@ def _render_raw_section(
         )
     )
 
-    # Content with inline styles
-    content_style = "padding:0;overflow:hidden;"
-    parts.append(f'<div class="anndata-seccontent" style="{content_style}">')
-
-    # Info items with inline styles
-    info_style = "padding:6px 12px;font-size:12px;"
+    # Content
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
 
     # raw.X info
     if hasattr(raw, "X") and raw.X is not None:
         output = formatter_registry.format_value(raw.X, context)
         parts.append(
-            f'<div style="{info_style}"><strong>raw.X:</strong> <span class="{output.css_class}">{escape_html(output.type_name)}</span></div>'
+            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.X:</strong> <span class="{output.css_class}">{escape_html(output.type_name)}</span></div>'
         )
 
     # raw.var columns
     if hasattr(raw, "var") and len(raw.var.columns) > 0:
         parts.append(
-            f'<div style="{info_style}"><strong>raw.var:</strong> {len(raw.var.columns)} columns</div>'
+            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.var:</strong> {len(raw.var.columns)} columns</div>'
         )
 
     # raw.varm
     if hasattr(raw, "varm") and len(raw.varm) > 0:
         parts.append(
-            f'<div style="{info_style}"><strong>raw.varm:</strong> {len(raw.varm)} items</div>'
+            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.varm:</strong> {len(raw.varm)} items</div>'
         )
 
     parts.append("</div>")
@@ -1441,31 +1448,13 @@ def _render_section_header(
     tooltip: str,
 ) -> str:
     """Render a section header - colors handled by CSS for dark mode support."""
-    # Layout-only inline styles - colors handled by CSS
-    header_style = (
-        "display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-    )
-    name_style = "font-weight:600;"
-    count_style = "font-size:11px;"
-    # Fold icon hidden by default, shown via JS - centered for proper rotation
-    fold_style = (
-        "display:none;width:16px;height:16px;font-size:10px;"
-        "align-items:center;justify-content:center;transform-origin:center;flex-shrink:0;"
-    )
-    link_style = "margin-left:auto;padding:2px 6px;font-size:11px;text-decoration:none;"
-
-    parts = [f'<div class="anndata-sechdr" style="{header_style}">']
-    parts.append(f'<span class="adata-fold-icon" style="{fold_style}">▼</span>')
-    parts.append(
-        f'<span class="anndata-sec-name" style="{name_style}">{escape_html(name)}</span>'
-    )
-    parts.append(
-        f'<span class="anndata-sec-count" style="{count_style}">{escape_html(count_str)}</span>'
-    )
+    parts = ['<div class="anndata-sechdr">']
+    parts.append(f'<span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>')
+    parts.append(f'<span class="anndata-sec-name">{escape_html(name)}</span>')
+    parts.append(f'<span class="anndata-sec-count">{escape_html(count_str)}</span>')
     if doc_url:
         parts.append(
-            f'<a class="adata-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+            f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
         )
     parts.append("</div>")
     return "\n".join(parts)
@@ -1477,37 +1466,21 @@ def _render_empty_section(
     tooltip: str = "",
 ) -> str:
     """Render an empty section indicator."""
-    # Use data-should-collapse for consistency - empty sections always collapsed
-    header_style = (
-        "display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-    )
-    # Fold icon hidden by default, shown via JS - centered for proper rotation
-    fold_style = (
-        "display:none;width:16px;height:16px;font-size:10px;"
-        "align-items:center;justify-content:center;transform-origin:center;flex-shrink:0;"
-    )
-    name_style = "font-weight:600;"
-    count_style = "font-size:11px;"
-    link_style = "margin-left:auto;padding:2px 6px;font-size:11px;text-decoration:none;"
-    content_style = "padding:0;overflow:hidden;"
-    empty_style = "padding:8px 12px;font-size:11px;font-style:italic;"
-
     # Build help link if doc_url provided
     help_link = ""
     if doc_url:
-        help_link = f'<a class="adata-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+        help_link = f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
 
     return f"""
 <div class="anndata-sec" data-section="{escape_html(name)}" data-should-collapse="true">
-    <div class="anndata-sechdr" style="{header_style}">
-        <span class="adata-fold-icon" style="{fold_style}">▼</span>
-        <span class="anndata-sec-name" style="{name_style}">{escape_html(name)}</span>
-        <span class="anndata-sec-count" style="{count_style}">(empty)</span>
+    <div class="anndata-sechdr">
+        <span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>
+        <span class="anndata-sec-name">{escape_html(name)}</span>
+        <span class="anndata-sec-count">(empty)</span>
         {help_link}
     </div>
-    <div class="anndata-seccontent" style="{content_style}">
-        <div class="adata-empty" style="{empty_style}">No entries</div>
+    <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
+        <div class="adata-empty">No entries</div>
     </div>
 </div>
 """

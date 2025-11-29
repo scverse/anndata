@@ -48,6 +48,7 @@ _CSS_CONTENT = """
     --anndata-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --anndata-font-size: 13px;
     --anndata-line-height: 1.4;
+    /* Column widths are set dynamically via inline style on container */
 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: var(--anndata-font-size);
@@ -348,6 +349,11 @@ body.dark-mode .anndata-repr {
     font-size: 12px;
 }
 
+/* When JS is enabled, use fixed layout so meta column fills remaining space */
+.anndata-repr.js-enabled .adata-table {
+    table-layout: fixed;
+}
+
 .anndata-repr .adata-entry {
     border-bottom: 1px solid #e9ecef; /* Fallback */
     border-bottom: 1px solid var(--anndata-border-light);
@@ -388,7 +394,10 @@ body.dark-mode .anndata-repr {
     color: var(--anndata-text-primary);
     white-space: nowrap;
     text-align: left;
-    width: 1%;  /* Shrink to fit content */
+    /* Fixed width for name column */
+    width: var(--anndata-name-col-width, 150px);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .anndata-repr .adata-entry-type {
@@ -399,7 +408,9 @@ body.dark-mode .anndata-repr {
     color: var(--anndata-text-secondary);
     text-align: left;
     white-space: nowrap;
-    width: 1%;  /* Shrink to fit content */
+    /* Fixed width for consistent alignment (dtype names are predictable) */
+    width: var(--anndata-type-col-width, 180px);
+    min-width: var(--anndata-type-col-width, 180px);
 }
 
 .anndata-repr .adata-entry-meta {
@@ -407,16 +418,22 @@ body.dark-mode .anndata-repr {
     color: #adb5bd; /* Fallback */
     color: var(--anndata-text-muted);
     text-align: right;
-    white-space: nowrap;
+    /* Default: allow wrapping for graceful no-JS degradation */
+    white-space: normal;
+    word-break: break-word;
+    /* Takes remaining space */
+}
+
+/* When JS is enabled, meta cell truncates with ellipsis */
+.anndata-repr.js-enabled .adata-entry-meta {
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 300px;
+    white-space: nowrap;
 }
 
 .anndata-repr .adata-entry-meta.expanded {
     white-space: normal;
     overflow: visible;
-    max-width: none;
 }
 
 /* Copy button */
@@ -539,16 +556,21 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     word-break: break-word;
 }
 
-/* When JS is enabled, start collapsed (single-line) */
+/* When JS is enabled, categories inherit truncation from parent cell */
 .anndata-repr.js-enabled .adata-cats-list {
+    display: inline;
     white-space: nowrap;
     word-break: normal;
 }
 
 /* Wrapped state (toggled by JS) */
 .anndata-repr.js-enabled .adata-cats-list.wrapped {
+    display: inline;
+    max-width: none;
     white-space: normal;
     word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 /* Wrap buttons - hidden by default for no-JS graceful degradation */
@@ -566,6 +588,12 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     vertical-align: middle;
 }
 
+/* Show wrap buttons when JS is enabled */
+.anndata-repr.js-enabled .adata-cats-wrap-btn,
+.anndata-repr.js-enabled .adata-cols-wrap-btn {
+    display: inline-block;
+}
+
 .anndata-repr .adata-cats-wrap-btn:hover,
 .anndata-repr .adata-cols-wrap-btn:hover {
     color: var(--anndata-accent-color);
@@ -579,16 +607,21 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     word-break: break-word;
 }
 
-/* When JS is enabled, start collapsed (single-line) */
+/* When JS is enabled, columns inherit truncation from parent cell */
 .anndata-repr.js-enabled .adata-cols-list {
+    display: inline;
     white-space: nowrap;
     word-break: normal;
 }
 
 /* Wrapped state (toggled by JS) */
 .anndata-repr.js-enabled .adata-cols-list.wrapped {
+    display: inline;
+    max-width: none;
     white-space: normal;
     word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 /* Warning indicator */
@@ -757,6 +790,11 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 
 /* Footer */
 .anndata-repr .anndata-ftr {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--anndata-text-muted);
     border-top: 1px solid var(--anndata-border-light);
 }
@@ -768,10 +806,33 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 
 /* X entry row */
 .anndata-repr .adata-x-entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
     border-bottom: 1px solid #e9ecef; /* Fallback */
     border-bottom: 1px solid var(--anndata-border-light);
     color: #6c757d; /* Fallback */
     color: var(--anndata-text-secondary);
+}
+
+.anndata-repr .adata-x-entry > span:first-child {
+    font-family: var(--anndata-font-mono);
+    font-weight: 600;
+    min-width: 60px;
+}
+
+.anndata-repr .adata-x-entry > span:last-child {
+    font-family: var(--anndata-font-mono);
+    font-size: 11px;
+}
+
+/* Category item in list */
+.anndata-repr .adata-cat-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 8px;
 }
 
 /* Tooltip */

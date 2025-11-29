@@ -596,6 +596,7 @@ def main():
     ))
 
     # Test 11: Many categories (tests truncation and wrap button)
+    # Default max_categories is 100, but we set it to 20 here to test truncation
     print("  11. Many categories (tests category truncation)")
     adata_many_cats = AnnData(np.zeros((100, 10)))
     # 30 categories - with max_categories=20 should show first 20 + '...+10'
@@ -618,13 +619,14 @@ def main():
         "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
         "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
     ]
-    # Use lower max_categories for this test to demonstrate truncation
+    # Use lower max_categories (default is 100) to demonstrate truncation
     original_max_cats = ad.settings.repr_html_max_categories
     ad.settings.repr_html_max_categories = 20
     sections.append((
         "11. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
-        "cell_type has 30 categories (shows 20 + '...+10'). Click ⋯ button to expand to multi-line view.",
+        "Default max_categories is 100; set to 20 here to test truncation. "
+        "cell_type has 30 categories (shows 20 + '...+10'). Click ⋯ button to expand.",
     ))
     ad.settings.repr_html_max_categories = original_max_cats
 
@@ -716,14 +718,39 @@ def main():
         adata_nojs.obs[f"metric_{i}"] = np.random.randn(30)
     adata_nojs.obsm["X_pca"] = np.random.randn(30, 10).astype(np.float32)
     adata_nojs.layers["raw"] = np.random.randn(30, 15).astype(np.float32)
+    # Add a DataFrame with many columns to test column list wrapping without JS
+    adata_nojs.obsm["cell_measurements"] = pd.DataFrame({
+        "area": np.random.rand(30) * 500,
+        "perimeter": np.random.rand(30) * 100,
+        "circularity": np.random.rand(30),
+        "eccentricity": np.random.rand(30),
+        "solidity": np.random.rand(30),
+        "extent": np.random.rand(30),
+        "major_axis_length": np.random.rand(30) * 50,
+        "minor_axis_length": np.random.rand(30) * 30,
+        "orientation": np.random.rand(30) * 180,
+        "mean_intensity": np.random.rand(30) * 255,
+        "max_intensity": np.random.rand(30) * 255,
+        "min_intensity": np.random.rand(30) * 50,
+        "std_intensity": np.random.rand(30) * 30,
+        "centroid_x": np.random.randn(30) * 100,
+        "centroid_y": np.random.randn(30) * 100,
+        "bbox_area": np.random.rand(30) * 600,
+        "convex_area": np.random.rand(30) * 550,
+        "euler_number": np.random.randint(-2, 3, 30),
+        "equivalent_diameter": np.random.rand(30) * 25,
+        "filled_area": np.random.rand(30) * 500,
+    }, index=adata_nojs.obs_names)
     # Strip script tags to simulate no-JS environment
     nojs_html = strip_script_tags(adata_nojs._repr_html_())
     sections.append((
         "13. No JavaScript (graceful degradation)",
         nojs_html,
         "This example has script tags removed to simulate environments where JS is disabled. "
-        "All content should be visible, sections should be expanded, and interactive buttons "
-        "(fold icons, copy buttons, search, expand) should be hidden.",
+        "All content should be visible, sections should be expanded, category lists and "
+        "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
+        "(fold icons, copy buttons, search, expand, wrap toggle) should be hidden. "
+        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
@@ -777,6 +804,27 @@ def main():
         ))
     finally:
         ad.settings.repr_html_dataframe_expand = original_expand
+
+    # Test 16: Very long field names
+    print("  16. Very long field names")
+    adata_long = AnnData(np.random.randn(20, 10).astype(np.float32))
+    # Add columns with very long names to test field name column width calculation
+    adata_long.obs["short"] = np.random.randn(20)
+    adata_long.obs["this_is_a_moderately_long_column_name"] = np.random.randn(20)
+    adata_long.obs["this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting"] = np.random.randn(20)
+    adata_long.obs["cell_type_annotation_from_automated_classifier_v2"] = pd.Categorical(["A", "B"] * 10)
+    adata_long.obsm["X_pca_computed_with_highly_variable_genes_batch_corrected"] = np.random.randn(20, 5).astype(np.float32)
+    adata_long.uns["preprocessing_parameters_for_normalization_and_scaling"] = {"method": "log1p", "scale": True}
+    adata_long.layers["raw_counts_before_any_preprocessing_steps"] = np.random.randn(20, 10).astype(np.float32)
+    sections.append((
+        "16. Very Long Field Names",
+        adata_long._repr_html_(),
+        "Tests the dynamic field name column width calculation. The longest field name is "
+        "'this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting' (77 chars). "
+        "The name column width should expand to fit longer names but be capped by "
+        "<code>repr_html_max_field_width</code> (default: 250px). Names exceeding the max width "
+        "should show ellipsis (...) on hover.",
+    ))
 
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"

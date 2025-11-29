@@ -104,14 +104,18 @@ The system is designed to be extensible via two registry patterns:
 
 from __future__ import annotations
 
-# Constants - these can be overridden via settings
-DEFAULT_FOLD_THRESHOLD = 5  # Auto-fold sections with more than N entries
-DEFAULT_MAX_DEPTH = 3  # Maximum recursion depth for nested objects
-DEFAULT_MAX_ITEMS = 200  # Maximum items to show per section
-DEFAULT_MAX_STRING_LENGTH = 100  # Truncate strings longer than this
-DEFAULT_PREVIEW_ITEMS = 5  # Number of items to show in previews (first/last)
-DEFAULT_MAX_CATEGORIES = 100  # Max category values to display inline
-DEFAULT_UNIQUE_LIMIT = 1_000_000  # Max rows to compute unique counts (0 to disable)
+# Import constants from dedicated module (single source of truth)
+from anndata._repr.constants import (
+    DEFAULT_FOLD_THRESHOLD,
+    DEFAULT_MAX_CATEGORIES,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_MAX_FIELD_WIDTH,
+    DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_STRING_LENGTH,
+    DEFAULT_PREVIEW_ITEMS,
+    DEFAULT_TYPE_WIDTH,
+    DEFAULT_UNIQUE_LIMIT,
+)
 
 # Documentation base URL
 DOCS_BASE_URL = "https://anndata.readthedocs.io/en/latest/"
@@ -156,6 +160,8 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "DEFAULT_PREVIEW_ITEMS",
     "DEFAULT_MAX_CATEGORIES",
     "DEFAULT_UNIQUE_LIMIT",
+    "DEFAULT_MAX_FIELD_WIDTH",
+    "DEFAULT_TYPE_WIDTH",
     "DOCS_BASE_URL",
     "SECTION_ORDER",
     # Main function

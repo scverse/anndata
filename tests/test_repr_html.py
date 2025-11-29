@@ -250,8 +250,13 @@ class TestCSSValidation:
         style_match = re.search(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
         if style_match:
             css = style_match.group(1)
-            # Find variable definitions (--name: value)
+            # Find variable definitions in <style> tag (--name: value)
             defined = set(re.findall(r"--([\w-]+)\s*:", css))
+            # Also find variable definitions in inline styles (style="--name: value")
+            # First extract all style attribute values, then find var definitions in them
+            inline_styles = re.findall(r'style="([^"]*)"', html)
+            for style in inline_styles:
+                defined |= set(re.findall(r"--([\w-]+)\s*:", style))
             # Find variable usages (var(--name))
             used = set(re.findall(r"var\s*\(\s*--([\w-]+)", css))
             undefined = used - defined
@@ -3284,3 +3289,116 @@ class TestAnnDataFormatterCoverage:
         # At depth 3, should NOT be expandable (3 >= max_depth 3)
         result_deep = formatter.format(inner, FormatterContext(depth=3, max_depth=3))
         assert not result_deep.is_expandable
+
+
+# =============================================================================
+# Column Width Settings Tests
+# =============================================================================
+
+
+class TestColumnWidthSettings:
+    """Test column width configuration settings."""
+
+    def test_field_width_calculated_from_content(self):
+        """Test field name column width is calculated based on content."""
+        from anndata._repr.html import _calculate_field_name_width
+
+        # Short names - should use minimum width
+        adata_short = AnnData(np.zeros((10, 5)))
+        adata_short.obs["a"] = list(range(10))
+        width_short = _calculate_field_name_width(adata_short, max_width=400)
+        assert width_short >= 80  # Minimum
+
+        # Long names - should expand
+        adata_long = AnnData(np.zeros((10, 5)))
+        adata_long.obs["this_is_a_very_long_column_name_that_tests_width"] = list(
+            range(10)
+        )
+        width_long = _calculate_field_name_width(adata_long, max_width=400)
+        assert width_long > width_short
+
+    def test_field_width_capped_by_max(self):
+        """Test field name column width is capped by max_width setting."""
+        from anndata._repr.html import _calculate_field_name_width
+
+        # Very long name - should be capped
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obs["x" * 100] = list(range(10))  # 100 char name
+
+        width = _calculate_field_name_width(adata, max_width=200)
+        assert width <= 200
+
+    def test_repr_html_max_field_width_setting(self):
+        """Test repr_html_max_field_width setting affects output."""
+        from anndata import settings
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obs["medium_length_name"] = list(range(10))
+
+        # Default max field width
+        html_default = adata._repr_html_()
+        # Extract the CSS variable value
+        match_default = re.search(r"--anndata-name-col-width:\s*(\d+)px", html_default)
+        assert match_default, "Field width CSS variable not found"
+        width_default = int(match_default.group(1))
+
+        # With smaller max field width
+        with settings.override(repr_html_max_field_width=100):
+            html_small = adata._repr_html_()
+            match_small = re.search(r"--anndata-name-col-width:\s*(\d+)px", html_small)
+            assert match_small, "Field width CSS variable not found"
+            width_small = int(match_small.group(1))
+
+        # Smaller max should result in smaller or equal width
+        assert width_small <= 100
+        assert width_small <= width_default
+
+    def test_repr_html_type_width_setting(self):
+        """Test repr_html_type_width setting affects output."""
+        from anndata import settings
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obs["col"] = list(range(10))
+
+        # Default type width
+        html_default = adata._repr_html_()
+        match_default = re.search(r"--anndata-type-col-width:\s*(\d+)px", html_default)
+        assert match_default, "Type width CSS variable not found"
+        width_default = int(match_default.group(1))
+        assert width_default == 220  # Default value
+
+        # With custom type width
+        with settings.override(repr_html_type_width=250):
+            html_custom = adata._repr_html_()
+            match_custom = re.search(r"--anndata-type-col-width:\s*(\d+)px", html_custom)
+            assert match_custom, "Type width CSS variable not found"
+            width_custom = int(match_custom.group(1))
+
+        assert width_custom == 250
+
+    def test_field_width_considers_all_sections(self):
+        """Test field width calculation considers names from all sections."""
+        from anndata._repr.html import _calculate_field_name_width
+
+        # Create AnnData with different length names in different sections
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obs["short"] = list(range(10))  # obs
+        adata.var["medium_name"] = list(range(5))  # var
+        adata.uns["longer_uns_key_name"] = "value"  # uns
+        adata.obsm["X_very_long_obsm_embedding_name"] = np.zeros((10, 2))  # obsm
+        adata.layers["raw"] = np.zeros((10, 5))  # layers
+
+        # Width should accommodate the longest name
+        width = _calculate_field_name_width(adata, max_width=500)
+
+        # X_very_long_obsm_embedding_name is 31 chars, at ~8px/char + 30px padding = ~278px
+        # Should be close to that
+        assert width >= 200  # Should be substantial due to long obsm key
+
+    def test_empty_adata_field_width(self):
+        """Test field width calculation for empty AnnData."""
+        from anndata._repr.html import _calculate_field_name_width
+
+        adata = AnnData()  # Empty
+        width = _calculate_field_name_width(adata, max_width=400)
+        assert width == 100  # Default minimum for empty
