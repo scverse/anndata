@@ -12,6 +12,7 @@ Then open tests/repr_html_visual_test.html in your browser.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -563,18 +564,22 @@ def main():
     print("  9. Backed AnnData (H5AD file)")
     with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
         tmp_path = tmp.name
-    adata_to_save = AnnData(np.random.randn(50, 20).astype(np.float32))
-    adata_to_save.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "B"])
-    adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(20)]
-    adata_to_save.write_h5ad(tmp_path)
-    adata_backed = ad.read_h5ad(tmp_path, backed="r")
-    sections.append((
-        "9. Backed AnnData (H5AD file)",
-        adata_backed._repr_html_(),
-        f"File path: {tmp_path}. Shows badge with format and status, plus file path.",
-    ))
-    # Close the backed file
-    adata_backed.file.close()
+    adata_backed = None
+    try:
+        adata_to_save = AnnData(np.random.randn(50, 20).astype(np.float32))
+        adata_to_save.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "B"])
+        adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(20)]
+        adata_to_save.write_h5ad(tmp_path)
+        adata_backed = ad.read_h5ad(tmp_path, backed="r")
+        sections.append((
+            "9. Backed AnnData (H5AD file)",
+            adata_backed._repr_html_(),
+            f"File path: {tmp_path}. Shows badge with format and status, plus file path.",
+        ))
+    finally:
+        if adata_backed is not None:
+            adata_backed.file.close()
+        os.unlink(tmp_path)
 
     # Test 10: Nested AnnData at depth
     print("  10. Deeply nested AnnData")
