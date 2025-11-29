@@ -315,6 +315,193 @@ class FormatterRegistry:
 formatter_registry = FormatterRegistry()
 
 
+# =============================================================================
+# Uns Value Renderer Registry (for custom serialized data visualization)
+# =============================================================================
+
+# Type hint key used in uns dicts to indicate custom rendering
+UNS_TYPE_HINT_KEY = "__anndata_repr__"
+
+
+@dataclass
+class UnsRendererOutput:
+    """Output from an uns renderer."""
+
+    html: str
+    """HTML content to display (will be sanitized)"""
+
+    collapsed: bool = True
+    """Whether to show collapsed by default"""
+
+    type_label: str = ""
+    """Optional type label to show (e.g., 'analysis config')"""
+
+
+class UnsRendererRegistry:
+    """
+    Registry for custom uns value renderers.
+
+    This registry allows packages to register custom HTML renderers for
+    serialized data stored in uns. The data must contain a type hint
+    (key: '__anndata_repr__') that maps to a registered renderer.
+
+    Security model:
+    - Data in uns NEVER triggers code execution or imports
+    - Packages must be imported by the user and register their renderers
+    - Unrecognized type hints fall back to safe JSON/string preview
+    - All HTML output is sanitized
+
+    Example usage by a package:
+
+        # In mypackage/__init__.py
+        try:
+            from anndata._repr import register_uns_renderer, UnsRendererOutput
+
+            def render_analysis_config(value, context):
+                '''Render analysis configuration stored as JSON string.'''
+                import json
+                data = json.loads(value) if isinstance(value, str) else value
+                # Return safe HTML
+                return UnsRendererOutput(
+                    html='<div class="analysis-config">...</div>',
+                    type_label="analysis config",
+                )
+
+            register_uns_renderer("mypackage.config", render_analysis_config)
+        except ImportError:
+            pass  # anndata not installed or old version
+
+    Example data structure in uns:
+
+        adata.uns["analysis_config"] = {
+            "__anndata_repr__": "mypackage.config",
+            "data": '{"params": {...}, "version": "1.0"}'
+        }
+
+    Or for simple string values with embedded hint:
+
+        adata.uns["config"] = "__anndata_repr__:mypackage.config::{...json...}"
+    """
+
+    def __init__(self) -> None:
+        self._renderers: dict[str, Callable[[Any, FormatterContext], UnsRendererOutput]] = {}
+
+    def register(
+        self,
+        type_hint: str,
+        renderer: Callable[[Any, FormatterContext], UnsRendererOutput],
+    ) -> None:
+        """
+        Register a renderer for a type hint.
+
+        Parameters
+        ----------
+        type_hint
+            The type hint string (e.g., "kompot.history", "scanpy.settings")
+        renderer
+            A callable that takes (value, context) and returns UnsRendererOutput.
+            The value is the uns entry (with type hint removed if it was a dict).
+        """
+        self._renderers[type_hint] = renderer
+
+    def unregister(self, type_hint: str) -> bool:
+        """Unregister a renderer. Returns True if found and removed."""
+        return self._renderers.pop(type_hint, None) is not None
+
+    def get_renderer(
+        self, type_hint: str
+    ) -> Callable[[Any, FormatterContext], UnsRendererOutput] | None:
+        """Get renderer for a type hint, or None if not registered."""
+        return self._renderers.get(type_hint)
+
+    def is_registered(self, type_hint: str) -> bool:
+        """Check if a type hint has a registered renderer."""
+        return type_hint in self._renderers
+
+    def get_registered_hints(self) -> list[str]:
+        """Get list of registered type hints."""
+        return list(self._renderers.keys())
+
+
+# Global uns renderer registry
+uns_renderer_registry = UnsRendererRegistry()
+
+
+def register_uns_renderer(
+    type_hint: str,
+    renderer: Callable[[Any, FormatterContext], UnsRendererOutput],
+) -> None:
+    """
+    Register a custom renderer for uns values with a specific type hint.
+
+    This is the public API for packages to register custom renderers.
+    See UnsRendererRegistry docstring for full documentation and examples.
+
+    Parameters
+    ----------
+    type_hint
+        The type hint string (e.g., "kompot.history")
+    renderer
+        A callable that takes (value, context) and returns UnsRendererOutput
+
+    Examples
+    --------
+    >>> from anndata._repr import register_uns_renderer, UnsRendererOutput
+    >>>
+    >>> def render_my_data(value, context):
+    ...     return UnsRendererOutput(
+    ...         html='<span class="my-data">Custom view</span>',
+    ...         type_label="my custom type",
+    ...     )
+    >>>
+    >>> register_uns_renderer("mypackage.mytype", render_my_data)
+    """
+    uns_renderer_registry.register(type_hint, renderer)
+
+
+def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
+    """
+    Extract type hint from an uns value if present.
+
+    Supports two formats:
+    1. Dict with __anndata_repr__ key:
+       {"__anndata_repr__": "pkg.type", "data": ...}
+       Returns ("pkg.type", {"data": ...})
+
+    2. String with prefix:
+       "__anndata_repr__:pkg.type::actual content"
+       Returns ("pkg.type", "actual content")
+
+    If no type hint found, returns (None, original_value).
+
+    Parameters
+    ----------
+    value
+        The uns value to check
+
+    Returns
+    -------
+    tuple of (type_hint or None, cleaned_value)
+    """
+    # Check dict format
+    if isinstance(value, dict) and UNS_TYPE_HINT_KEY in value:
+        hint = value.get(UNS_TYPE_HINT_KEY)
+        if isinstance(hint, str):
+            # Return value without the type hint key
+            cleaned = {k: v for k, v in value.items() if k != UNS_TYPE_HINT_KEY}
+            return hint, cleaned
+
+    # Check string prefix format
+    if isinstance(value, str) and value.startswith(f"{UNS_TYPE_HINT_KEY}:"):
+        # Format: "__anndata_repr__:type.hint::content"
+        rest = value[len(UNS_TYPE_HINT_KEY) + 1:]  # After "__anndata_repr__:"
+        if "::" in rest:
+            hint, content = rest.split("::", 1)
+            return hint, content
+
+    return None, value
+
+
 def register_formatter(
     formatter: TypeFormatter | SectionFormatter,
 ) -> TypeFormatter | SectionFormatter:

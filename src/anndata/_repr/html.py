@@ -12,6 +12,7 @@ This module generates the complete HTML representation by:
 from __future__ import annotations
 
 import uuid
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -22,6 +23,7 @@ from anndata._repr import (
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_UNIQUE_LIMIT,
     DOCS_BASE_URL,
@@ -34,6 +36,9 @@ from anndata._repr.registry import (
     FormattedOutput,
     FormatterContext,
     formatter_registry,
+    # Uns renderer registry for custom serialized data
+    uns_renderer_registry,
+    extract_uns_type_hint,
 )
 from anndata._repr.utils import (
     check_color_category_mismatch,
@@ -679,22 +684,77 @@ def _render_uns_entry(
     context: FormatterContext,
     max_depth: int,
 ) -> str:
-    """Render a single uns entry with special type handling."""
-    # Check for color list
+    """Render a single uns entry with special type handling.
+
+    Rendering priority:
+    1. Custom renderer via type hint (__anndata_repr__)
+    2. Color list (keys ending in _colors)
+    3. Nested AnnData objects
+    4. Generic preview for simple types (str, int, float, bool, small dict/list)
+    5. Default type info only
+    """
+    # 1. Check for custom renderer via type hint
+    type_hint, cleaned_value = extract_uns_type_hint(value)
+    if type_hint is not None:
+        renderer = uns_renderer_registry.get_renderer(type_hint)
+        if renderer is not None:
+            try:
+                result = renderer(cleaned_value, context)
+                return _render_custom_uns_entry(key, type_hint, result)
+            except Exception as e:
+                # Fall through to default rendering with warning
+                warnings.warn(
+                    f"Custom renderer for '{type_hint}' failed: {e}",
+                    stacklevel=2,
+                )
+        # Type hint present but no renderer registered - show helpful message
+        # Extract package name from type hint (e.g., "mypackage.config" -> "mypackage")
+        package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
+        return _render_uns_entry_with_preview(
+            key, cleaned_value, context,
+            preview_note=f"[{type_hint}] (import {package_name} to enable)",
+        )
+
+    # 2. Check for color list
     if is_color_list(key, value):
         return _render_color_list_entry(key, value)
 
-    # Check for nested AnnData
+    # 3. Check for nested AnnData
     if type(value).__name__ == "AnnData" and hasattr(value, "n_obs"):
         return _render_nested_anndata_entry(key, value, context, max_depth)
 
-    # Regular entry
+    # 4. Generic preview for simple/small types
+    return _render_uns_entry_with_preview(key, value, context)
+
+
+def _render_uns_entry_with_preview(
+    key: str,
+    value: Any,
+    context: FormatterContext,
+    preview_note: str | None = None,
+) -> str:
+    """Render an uns entry with a value preview in the meta column.
+
+    Generates previews for:
+    - Strings: truncated to max length
+    - Numbers (int, float): shown directly
+    - Booleans: shown directly
+    - Small dicts: key count and first few keys
+    - Small lists: length and first few items
+    - Other types: type info only
+    """
     output = formatter_registry.format_value(value, context)
+    max_str_len = _get_setting("repr_html_max_string_length", DEFAULT_MAX_STRING_LENGTH)
+
+    # Generate preview based on type
+    preview = _generate_value_preview(value, max_str_len)
+    if preview_note:
+        preview = f"{preview_note} {preview}" if preview else preview_note
 
     # Inline styles for layout - colors via CSS
     name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
     type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
+    meta_style = "padding:6px 12px;font-size:11px;text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
     btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
 
     entry_class = "adata-entry"
@@ -714,10 +774,10 @@ def _render_uns_entry(
     # Type
     parts.append(f'<td class="adata-entry-type" style="{type_style}">')
     if output.warnings or not output.is_serializable:
-        warnings = output.warnings.copy()
+        warn_list = output.warnings.copy()
         if not output.is_serializable:
-            warnings.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(warnings))
+            warn_list.insert(0, "Not serializable to H5AD/Zarr")
+        title = escape_html("; ".join(warn_list))
         parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
         parts.append(f"{escape_html(output.type_name)} ⚠️")
         parts.append("</span>")
@@ -725,8 +785,128 @@ def _render_uns_entry(
         parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
     parts.append("</td>")
 
-    # Meta
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
+    # Meta - value preview
+    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    if preview:
+        parts.append(f'<span class="adata-text-muted" title="{escape_html(str(value)[:500])}">{escape_html(preview)}</span>')
+    parts.append("</td>")
+    parts.append("</tr>")
+
+    return "\n".join(parts)
+
+
+def _generate_value_preview(value: Any, max_len: int = 100) -> str:
+    """Generate a human-readable preview of a value.
+
+    Returns empty string if no meaningful preview can be generated.
+    """
+    # Strings
+    if isinstance(value, str):
+        if len(value) <= max_len:
+            return f'"{value}"'
+        return f'"{value[:max_len]}..."'
+
+    # Numbers
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, np.integer)):
+        return str(value)
+    if isinstance(value, (float, np.floating)):
+        # Format floats nicely
+        if value == int(value):
+            return str(int(value))
+        return f"{value:.6g}"
+
+    # Small dicts
+    if isinstance(value, dict):
+        n_keys = len(value)
+        if n_keys == 0:
+            return "{}"
+        if n_keys <= 3:
+            keys_preview = ", ".join(str(k) for k in list(value.keys())[:3])
+            return f"{{{keys_preview}}}"
+        keys_preview = ", ".join(str(k) for k in list(value.keys())[:2])
+        return f"{{{keys_preview}, ...}} ({n_keys} keys)"
+
+    # Small lists/tuples
+    if isinstance(value, (list, tuple)):
+        n_items = len(value)
+        if n_items == 0:
+            return "[]" if isinstance(value, list) else "()"
+        if n_items <= 3:
+            # Show items if they're simple
+            try:
+                items = [_preview_item(v) for v in value[:3]]
+                if all(items):
+                    bracket = "[]" if isinstance(value, list) else "()"
+                    return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
+            except Exception:
+                pass
+        return f"({n_items} items)"
+
+    # None
+    if value is None:
+        return "None"
+
+    # No preview for complex types
+    return ""
+
+
+def _preview_item(value: Any) -> str:
+    """Generate a short preview for a single item (for list/tuple previews)."""
+    if isinstance(value, str):
+        if len(value) <= 20:
+            return f'"{value}"'
+        return f'"{value[:17]}..."'
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return str(value)
+    if value is None:
+        return "None"
+    return ""  # Empty string means skip
+
+
+def _render_custom_uns_entry(key: str, type_hint: str, result: Any) -> str:
+    """Render an uns entry with custom HTML from a registered renderer.
+
+    The result should be an UnsRendererOutput with sanitized HTML.
+    """
+    from anndata._repr.registry import UnsRendererOutput
+
+    if not isinstance(result, UnsRendererOutput):
+        # Fallback if renderer didn't return proper type
+        return _render_uns_entry_with_preview(
+            key, result, FormatterContext(),
+            preview_note=f"[{type_hint}]",
+        )
+
+    # Inline styles for layout
+    name_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-weight:500;"
+    type_style = "padding:6px 12px;font-family:ui-monospace,monospace;font-size:11px;"
+    meta_style = "padding:6px 12px;font-size:11px;text-align:left;"
+    btn_style = "display:none;border:none;background:transparent;cursor:pointer;font-size:11px;padding:2px;"
+
+    type_label = result.type_label or type_hint
+
+    parts = [f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">']
+
+    # Name
+    parts.append(f'<td class="adata-entry-name" style="{name_style}">')
+    parts.append(escape_html(key))
+    parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
+    parts.append("</td>")
+
+    # Type
+    parts.append(f'<td class="adata-entry-type" style="{type_style}">')
+    parts.append(f'<span class="dtype-extension">{escape_html(type_label)}</span>')
+    parts.append("</td>")
+
+    # Meta - custom HTML content (already sanitized by renderer)
+    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
+    # Note: HTML is trusted from registered renderer (package must be imported)
+    parts.append(result.html)
+    parts.append("</td>")
     parts.append("</tr>")
 
     return "\n".join(parts)

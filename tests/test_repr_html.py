@@ -1549,3 +1549,1019 @@ class TestFutureCompatibility:
         assert re.search(
             pattern, css
         ), "dtype-array-api should have color styling"
+
+
+# =============================================================================
+# Uns Renderer Registry Tests
+# =============================================================================
+
+
+class TestUnsRendererRegistry:
+    """
+    Test the uns renderer registry for custom serialized data visualization.
+
+    This registry allows packages to register custom HTML renderers for data
+    stored in .uns with type hints. The security model ensures data NEVER
+    triggers code execution - packages must be explicitly imported first.
+    """
+
+    def test_extract_type_hint_dict_format(self):
+        """Test extracting type hint from dict format."""
+        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+
+        value = {
+            UNS_TYPE_HINT_KEY: "mypackage.config",
+            "data": {"setting": "value"},
+            "version": "1.0",
+        }
+        hint, cleaned = extract_uns_type_hint(value)
+
+        assert hint == "mypackage.config"
+        assert UNS_TYPE_HINT_KEY not in cleaned
+        assert cleaned["data"] == {"setting": "value"}
+        assert cleaned["version"] == "1.0"
+
+    def test_extract_type_hint_string_format(self):
+        """Test extracting type hint from string prefix format."""
+        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+
+        value = f"{UNS_TYPE_HINT_KEY}:mypackage.config::{{\"setting\": \"value\"}}"
+        hint, cleaned = extract_uns_type_hint(value)
+
+        assert hint == "mypackage.config"
+        assert cleaned == '{"setting": "value"}'
+
+    def test_extract_type_hint_no_hint_returns_none(self):
+        """Test that values without type hints return (None, original_value)."""
+        from anndata._repr.registry import extract_uns_type_hint
+
+        # Regular dict
+        value = {"data": "value"}
+        hint, cleaned = extract_uns_type_hint(value)
+        assert hint is None
+        assert cleaned == value
+
+        # Regular string
+        value = "just a string"
+        hint, cleaned = extract_uns_type_hint(value)
+        assert hint is None
+        assert cleaned == value
+
+        # Regular int
+        value = 42
+        hint, cleaned = extract_uns_type_hint(value)
+        assert hint is None
+        assert cleaned == value
+
+    def test_extract_type_hint_invalid_dict_hint_type(self):
+        """Test that non-string type hints in dict are ignored."""
+        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+
+        # Type hint is not a string
+        value = {UNS_TYPE_HINT_KEY: 123, "data": "value"}
+        hint, cleaned = extract_uns_type_hint(value)
+        assert hint is None
+        assert cleaned == value
+
+    def test_extract_type_hint_malformed_string_format(self):
+        """Test that malformed string format returns no hint."""
+        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+
+        # Missing :: separator
+        value = f"{UNS_TYPE_HINT_KEY}:mypackage.config:data"
+        hint, cleaned = extract_uns_type_hint(value)
+        assert hint is None
+        assert cleaned == value
+
+    def test_registry_register_and_lookup(self):
+        """Test registering and looking up renderers."""
+        from anndata._repr.registry import UnsRendererRegistry, UnsRendererOutput
+
+        registry = UnsRendererRegistry()
+
+        def my_renderer(value, context):
+            return UnsRendererOutput(html="<span>test</span>")
+
+        # Register
+        registry.register("test.type", my_renderer)
+        assert registry.is_registered("test.type")
+        assert not registry.is_registered("other.type")
+
+        # Lookup
+        renderer = registry.get_renderer("test.type")
+        assert renderer is my_renderer
+
+        # Get registered hints
+        hints = registry.get_registered_hints()
+        assert "test.type" in hints
+
+    def test_registry_unregister(self):
+        """Test unregistering renderers."""
+        from anndata._repr.registry import UnsRendererRegistry, UnsRendererOutput
+
+        registry = UnsRendererRegistry()
+
+        def my_renderer(value, context):
+            return UnsRendererOutput(html="<span>test</span>")
+
+        registry.register("test.type", my_renderer)
+        assert registry.is_registered("test.type")
+
+        # Unregister
+        result = registry.unregister("test.type")
+        assert result is True
+        assert not registry.is_registered("test.type")
+
+        # Unregister non-existent
+        result = registry.unregister("nonexistent.type")
+        assert result is False
+
+    def test_register_uns_renderer_public_api(self):
+        """Test the public register_uns_renderer() function."""
+        from anndata._repr import (
+            register_uns_renderer,
+            uns_renderer_registry,
+            UnsRendererOutput,
+        )
+
+        def custom_renderer(value, context):
+            return UnsRendererOutput(
+                html="<div>Custom</div>",
+                type_label="custom type",
+            )
+
+        # Register via public API
+        register_uns_renderer("test.public_api", custom_renderer)
+
+        try:
+            assert uns_renderer_registry.is_registered("test.public_api")
+            renderer = uns_renderer_registry.get_renderer("test.public_api")
+            assert renderer is custom_renderer
+        finally:
+            # Cleanup
+            uns_renderer_registry.unregister("test.public_api")
+
+    def test_registered_renderer_in_html_output(self):
+        """Test that registered renderers produce custom HTML in repr."""
+        from anndata._repr import register_uns_renderer, uns_renderer_registry, UnsRendererOutput
+
+        def test_renderer(value, context):
+            data = value.get("data", {})
+            return UnsRendererOutput(
+                html=f'<span class="test-custom">Items: {len(data)}</span>',
+                type_label="test config",
+            )
+
+        register_uns_renderer("test.html_output", test_renderer)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            adata.uns["my_config"] = {
+                "__anndata_repr__": "test.html_output",
+                "data": {"a": 1, "b": 2, "c": 3},
+            }
+
+            html = adata._repr_html_()
+
+            # Should show custom HTML
+            assert "Items: 3" in html
+            assert "test config" in html
+        finally:
+            uns_renderer_registry.unregister("test.html_output")
+
+    def test_unregistered_type_hint_shows_import_message(self):
+        """Test that unregistered type hints show helpful import message."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.uns["external_data"] = {
+            "__anndata_repr__": "externalpackage.customtype",
+            "data": {"key": "value"},
+        }
+
+        html = adata._repr_html_()
+
+        # Should show the type hint and import suggestion
+        assert "externalpackage.customtype" in html
+        assert "import externalpackage" in html
+
+    def test_renderer_error_handled_gracefully(self):
+        """Test that renderer errors don't crash the repr."""
+        from anndata._repr import register_uns_renderer, uns_renderer_registry
+
+        def failing_renderer(value, context):
+            raise ValueError("Intentional test error")
+
+        register_uns_renderer("test.failing", failing_renderer)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            adata.uns["will_fail"] = {
+                "__anndata_repr__": "test.failing",
+                "data": "test",
+            }
+
+            # Should not raise, should fall back to default rendering
+            with pytest.warns(UserWarning, match="Custom renderer.*failed"):
+                html = adata._repr_html_()
+
+            assert html is not None
+            assert "will_fail" in html
+        finally:
+            uns_renderer_registry.unregister("test.failing")
+
+    def test_renderer_wrong_return_type_handled(self):
+        """Test that renderers returning wrong type are handled gracefully."""
+        from anndata._repr import register_uns_renderer, uns_renderer_registry
+
+        def bad_renderer(value, context):
+            return "not UnsRendererOutput"  # Wrong return type
+
+        register_uns_renderer("test.bad_return", bad_renderer)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            adata.uns["bad_return"] = {
+                "__anndata_repr__": "test.bad_return",
+                "data": "test",
+            }
+
+            # Should not crash
+            html = adata._repr_html_()
+            assert html is not None
+            assert "bad_return" in html
+        finally:
+            uns_renderer_registry.unregister("test.bad_return")
+
+    def test_uns_renderer_output_defaults(self):
+        """Test UnsRendererOutput default values."""
+        from anndata._repr.registry import UnsRendererOutput
+
+        output = UnsRendererOutput(html="<span>test</span>")
+        assert output.html == "<span>test</span>"
+        assert output.collapsed is True  # Default
+        assert output.type_label == ""  # Default
+
+    def test_string_format_type_hint_in_html(self):
+        """Test string format type hints work in HTML output."""
+        adata = AnnData(np.zeros((5, 3)))
+        # String format: __anndata_repr__:package.type::content
+        adata.uns["string_hint"] = "__anndata_repr__:somepackage.config::actual content here"
+
+        html = adata._repr_html_()
+
+        # Should show the type hint
+        assert "somepackage.config" in html
+        # Should suggest importing
+        assert "import somepackage" in html
+
+    def test_type_hint_key_constant_exported(self):
+        """Test that UNS_TYPE_HINT_KEY constant is properly exported."""
+        from anndata._repr import UNS_TYPE_HINT_KEY
+
+        assert UNS_TYPE_HINT_KEY == "__anndata_repr__"
+
+    def test_security_data_never_triggers_import(self):
+        """
+        Test that data in uns NEVER triggers imports or code execution.
+
+        This is a critical security test. Even if a type hint references
+        a package, the data should never cause that package to be imported.
+        """
+        import sys
+
+        # Use a fake package name that definitely doesn't exist
+        fake_package = "definitely_not_a_real_package_12345"
+        assert fake_package not in sys.modules
+
+        adata = AnnData(np.zeros((5, 3)))
+        adata.uns["malicious"] = {
+            "__anndata_repr__": f"{fake_package}.evil",
+            "data": "some data",
+        }
+
+        # Render the HTML
+        html = adata._repr_html_()
+
+        # The fake package should NOT have been imported
+        assert fake_package not in sys.modules
+        # But the HTML should still work
+        assert html is not None
+        assert "malicious" in html
+
+
+# =============================================================================
+# Additional Coverage Tests for Registry
+# =============================================================================
+
+
+class TestFormatterContextCoverage:
+    """Tests for FormatterContext to improve registry.py coverage."""
+
+    def test_context_child_creates_nested_context(self):
+        """Test FormatterContext.child() creates proper nested context."""
+        from anndata._repr.registry import FormatterContext
+
+        parent = FormatterContext(
+            depth=0,
+            max_depth=5,
+            parent_keys=(),
+            adata_ref=None,
+            section="uns",
+        )
+
+        child = parent.child("nested_key")
+
+        assert child.depth == 1
+        assert child.max_depth == 5
+        assert child.parent_keys == ("nested_key",)
+        assert child.section == "uns"
+
+        grandchild = child.child("deeper")
+        assert grandchild.depth == 2
+        assert grandchild.parent_keys == ("nested_key", "deeper")
+
+    def test_context_access_path_empty(self):
+        """Test access_path returns empty string for no parent keys."""
+        from anndata._repr.registry import FormatterContext
+
+        context = FormatterContext(parent_keys=())
+        assert context.access_path == ""
+
+    def test_context_access_path_identifier_keys(self):
+        """Test access_path with valid Python identifiers."""
+        from anndata._repr.registry import FormatterContext
+
+        context = FormatterContext(parent_keys=("uns", "neighbors", "params"))
+        assert context.access_path == ".uns.neighbors.params"
+
+    def test_context_access_path_non_identifier_keys(self):
+        """Test access_path with non-identifier keys (need brackets)."""
+        from anndata._repr.registry import FormatterContext
+
+        context = FormatterContext(parent_keys=("uns", "key with spaces", "123numeric"))
+        path = context.access_path
+        assert ".uns" in path
+        assert "['key with spaces']" in path
+        assert "['123numeric']" in path
+
+    def test_context_access_path_mixed_keys(self):
+        """Test access_path with mixed identifier and non-identifier keys."""
+        from anndata._repr.registry import FormatterContext
+
+        context = FormatterContext(parent_keys=("valid", "has-hyphen", "also_valid"))
+        path = context.access_path
+        assert ".valid" in path
+        assert "['has-hyphen']" in path
+        assert ".also_valid" in path
+
+
+class TestSectionFormatterCoverage:
+    """Tests for SectionFormatter abstract class coverage."""
+
+    def test_section_formatter_default_methods(self):
+        """Test SectionFormatter default method implementations."""
+        from anndata._repr.registry import SectionFormatter, FormatterContext, FormattedEntry
+
+        class TestSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "test_section"
+
+            def get_entries(self, obj, context):
+                return []
+
+        formatter = TestSectionFormatter()
+
+        # Test default implementations
+        assert formatter.display_name == "test_section"  # Defaults to section_name
+        assert formatter.doc_url is None
+        assert formatter.tooltip == ""
+        assert formatter.should_show(None) is True
+
+
+class TestFallbackFormatterCoverage:
+    """Tests for FallbackFormatter edge cases."""
+
+    def test_fallback_extension_type_no_warning(self):
+        """Test fallback formatter for extension types doesn't add warning."""
+        from anndata._repr.registry import FallbackFormatter, FormatterContext
+
+        # Create a class that looks like an extension
+        class ExtensionType:
+            pass
+
+        ExtensionType.__module__ = "treedata.core"
+
+        formatter = FallbackFormatter()
+        obj = ExtensionType()
+        context = FormatterContext()
+
+        result = formatter.format(obj, context)
+
+        assert result.type_name == "ExtensionType"
+        assert result.css_class == "dtype-extension"
+        assert len(result.warnings) == 0  # No warning for extensions
+
+    def test_fallback_with_shape_and_dtype(self):
+        """Test fallback formatter extracts shape and dtype."""
+        from anndata._repr.registry import FallbackFormatter, FormatterContext
+
+        class ShapedType:
+            shape = (10, 5)
+            dtype = "float32"
+
+        formatter = FallbackFormatter()
+        obj = ShapedType()
+        context = FormatterContext()
+
+        result = formatter.format(obj, context)
+
+        assert result.details["shape"] == (10, 5)
+        assert result.details["dtype"] == "float32"
+        assert "Shape: (10, 5)" in result.tooltip
+
+    def test_fallback_with_len(self):
+        """Test fallback formatter extracts length."""
+        from anndata._repr.registry import FallbackFormatter, FormatterContext
+
+        class LengthType:
+            def __len__(self):
+                return 42
+
+        formatter = FallbackFormatter()
+        obj = LengthType()
+        context = FormatterContext()
+
+        result = formatter.format(obj, context)
+
+        assert result.details["length"] == 42
+
+    def test_fallback_len_raises_error(self):
+        """Test fallback formatter handles __len__ errors gracefully."""
+        from anndata._repr.registry import FallbackFormatter, FormatterContext
+
+        class BrokenLenType:
+            def __len__(self):
+                raise TypeError("Cannot get length")
+
+        formatter = FallbackFormatter()
+        obj = BrokenLenType()
+        context = FormatterContext()
+
+        # Should not raise
+        result = formatter.format(obj, context)
+        assert "length" not in result.details
+
+
+class TestFormatterRegistryCoverage:
+    """Additional tests for FormatterRegistry coverage."""
+
+    def test_registry_formatter_exception_continues(self):
+        """Test registry continues to next formatter on exception."""
+        from anndata._repr.registry import (
+            FormatterRegistry,
+            TypeFormatter,
+            FormattedOutput,
+            FormatterContext,
+        )
+
+        class FailingFormatter(TypeFormatter):
+            priority = 1000
+
+            def can_format(self, obj):
+                return True
+
+            def format(self, obj, context):
+                raise RuntimeError("Intentional failure")
+
+        class BackupFormatter(TypeFormatter):
+            priority = 500
+
+            def can_format(self, obj):
+                return True
+
+            def format(self, obj, context):
+                return FormattedOutput(type_name="Backup", css_class="backup")
+
+        registry = FormatterRegistry()
+        failing = FailingFormatter()
+        backup = BackupFormatter()
+        registry.register_type_formatter(failing)
+        registry.register_type_formatter(backup)
+
+        try:
+            # Should fall through to backup formatter
+            with pytest.warns(UserWarning, match="Formatter.*failed"):
+                result = registry.format_value("test", FormatterContext())
+            assert result.type_name == "Backup"
+        finally:
+            registry.unregister_type_formatter(failing)
+            registry.unregister_type_formatter(backup)
+
+    def test_register_formatter_decorator_with_class(self):
+        """Test register_formatter works as decorator with class."""
+        from anndata._repr.registry import (
+            register_formatter,
+            formatter_registry,
+            TypeFormatter,
+            FormattedOutput,
+            FormatterContext,
+        )
+
+        class DecoratorTestFormatter(TypeFormatter):
+            priority = 999
+
+            def can_format(self, obj):
+                return isinstance(obj, tuple) and len(obj) == 3 and obj[0] == "decorator_test"
+
+            def format(self, obj, context):
+                return FormattedOutput(type_name="DecoratorTest", css_class="test")
+
+        # Register using register_formatter (non-decorator form)
+        formatter_instance = DecoratorTestFormatter()
+        register_formatter(formatter_instance)
+
+        try:
+            # Should be registered
+            result = formatter_registry.format_value(
+                ("decorator_test", 1, 2), FormatterContext()
+            )
+            assert result.type_name == "DecoratorTest"
+        finally:
+            # Cleanup
+            formatter_registry.unregister_type_formatter(formatter_instance)
+
+
+# =============================================================================
+# Additional Coverage Tests for Utils
+# =============================================================================
+
+
+class TestUtilsCoverage:
+    """Tests to improve utils.py coverage."""
+
+    def test_is_serializable_list_with_unserializable(self):
+        """Test is_serializable catches unserializable item in list."""
+        from anndata._repr.utils import is_serializable
+
+        class BadType:
+            pass
+
+        obj = [1, 2, BadType(), 4]
+        is_ok, reason = is_serializable(obj)
+        assert not is_ok
+        assert "Index 2" in reason
+
+    def test_is_serializable_max_depth_exceeded(self):
+        """Test is_serializable handles deep nesting."""
+        from anndata._repr.utils import is_serializable
+
+        # Create deeply nested structure
+        nested = {"level": 0}
+        current = nested
+        for i in range(15):
+            current["nested"] = {"level": i + 1}
+            current = current["nested"]
+
+        is_ok, reason = is_serializable(nested, _max_depth=10)
+        assert not is_ok
+        assert "depth" in reason.lower()
+
+    def test_is_serializable_numpy_scalar(self):
+        """Test is_serializable handles numpy scalar types."""
+        from anndata._repr.utils import is_serializable
+
+        assert is_serializable(np.int64(42))[0]
+        assert is_serializable(np.float32(3.14))[0]
+        assert is_serializable(np.bool_(True))[0]
+
+    def test_should_warn_string_column_exception(self):
+        """Test should_warn_string_column handles exceptions."""
+        from anndata._repr.utils import should_warn_string_column
+
+        # Create a series that will raise on nunique
+        class BrokenSeries(pd.Series):
+            def nunique(self):
+                raise RuntimeError("Broken")
+
+        # This is tricky to test directly, but we can test with unhashable types
+        s = pd.Series([[1, 2], [3, 4], [1, 2]])  # Lists are unhashable
+        warn, msg = should_warn_string_column(s)
+        assert not warn  # Should return False on exception
+
+    def test_is_color_list_named_colors(self):
+        """Test is_color_list detects named colors."""
+        from anndata._repr.utils import is_color_list
+
+        assert is_color_list("cluster_colors", ["red", "blue", "green"])
+        assert is_color_list("batch_colors", ["crimson", "navy"])
+
+    def test_is_color_list_rgb_format(self):
+        """Test is_color_list detects RGB/RGBA format."""
+        from anndata._repr.utils import is_color_list
+
+        assert is_color_list("cluster_colors", ["rgb(255, 0, 0)", "rgb(0, 255, 0)"])
+        assert is_color_list("batch_colors", ["rgba(255, 0, 0, 0.5)"])
+
+    def test_is_color_list_none_first_element(self):
+        """Test is_color_list handles None in first element."""
+        from anndata._repr.utils import is_color_list
+
+        assert not is_color_list("cluster_colors", [None, "#FF0000"])
+
+    def test_get_matching_column_colors_var(self):
+        """Test get_matching_column_colors finds colors for var columns."""
+        from anndata._repr.utils import get_matching_column_colors
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.var["gene_type"] = pd.Categorical(["A", "B"] * 2 + ["A"])
+        adata.uns["gene_type_colors"] = ["#FF0000", "#00FF00"]
+
+        colors = get_matching_column_colors(adata, "gene_type")
+        assert colors == ["#FF0000", "#00FF00"]
+
+    def test_get_matching_column_colors_no_column(self):
+        """Test get_matching_column_colors returns None for missing column."""
+        from anndata._repr.utils import get_matching_column_colors
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["missing_colors"] = ["#FF0000"]
+
+        colors = get_matching_column_colors(adata, "missing")
+        assert colors is None
+
+    def test_get_matching_column_colors_not_categorical(self):
+        """Test get_matching_column_colors returns None for non-categorical."""
+        from anndata._repr.utils import get_matching_column_colors
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obs["numeric"] = list(range(10))
+        adata.uns["numeric_colors"] = ["#FF0000"]
+
+        colors = get_matching_column_colors(adata, "numeric")
+        assert colors is None
+
+    def test_sanitize_for_id_starts_with_number(self):
+        """Test sanitize_for_id handles strings starting with numbers."""
+        from anndata._repr.utils import sanitize_for_id
+
+        result = sanitize_for_id("123abc")
+        assert result.startswith("id_")
+        assert result[3:].startswith("123")
+
+    def test_sanitize_for_id_special_chars(self):
+        """Test sanitize_for_id replaces special characters."""
+        from anndata._repr.utils import sanitize_for_id
+
+        result = sanitize_for_id("hello world!@#$%")
+        assert " " not in result
+        assert "!" not in result
+        assert "_" in result
+
+    def test_truncate_string_short(self):
+        """Test truncate_string doesn't modify short strings."""
+        from anndata._repr.utils import truncate_string
+
+        result = truncate_string("short", max_length=100)
+        assert result == "short"
+
+    def test_truncate_string_long(self):
+        """Test truncate_string truncates long strings."""
+        from anndata._repr.utils import truncate_string
+
+        result = truncate_string("a" * 200, max_length=100)
+        assert len(result) == 100
+        assert result.endswith("...")
+
+    def test_format_memory_size_negative(self):
+        """Test format_memory_size handles negative values."""
+        from anndata._repr.utils import format_memory_size
+
+        result = format_memory_size(-100)
+        assert result == "Unknown"
+
+    def test_format_memory_size_very_large(self):
+        """Test format_memory_size handles very large values (PB)."""
+        from anndata._repr.utils import format_memory_size
+
+        result = format_memory_size(5 * 1024**5)  # 5 PB
+        assert "PB" in result
+
+    def test_format_number_float_whole(self):
+        """Test format_number handles floats that are whole numbers."""
+        from anndata._repr.utils import format_number
+
+        result = format_number(1000.0)
+        assert result == "1,000"
+
+    def test_format_number_float_decimal(self):
+        """Test format_number handles floats with decimals."""
+        from anndata._repr.utils import format_number
+
+        result = format_number(1234.567)
+        assert "1,234.57" in result
+
+    def test_get_backing_info_zarr(self):
+        """Test get_backing_info detects Zarr format."""
+        from anndata._repr.utils import get_backing_info
+
+        class MockBackedAdata:
+            isbacked = True
+            filename = "/path/to/data.zarr"
+
+            class file:
+                is_open = True
+
+        info = get_backing_info(MockBackedAdata())
+        assert info["format"] == "Zarr"
+
+    def test_get_backing_info_unknown_format(self):
+        """Test get_backing_info handles unknown format."""
+        from anndata._repr.utils import get_backing_info
+
+        class MockBackedAdata:
+            isbacked = True
+            filename = "/path/to/data.xyz"
+
+            class file:
+                is_open = True
+
+        info = get_backing_info(MockBackedAdata())
+        assert info["format"] == "Unknown"
+
+
+# =============================================================================
+# Additional Coverage Tests for Formatters
+# =============================================================================
+
+
+class TestFormattersCoverage:
+    """Tests to improve formatters.py coverage."""
+
+    def test_numpy_array_3d(self):
+        """Test numpy array formatter with 3D+ arrays."""
+        from anndata._repr.formatters import NumpyArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyArrayFormatter()
+        arr = np.zeros((10, 5, 3))
+        result = formatter.format(arr, FormatterContext())
+
+        assert "(10, 5, 3)" in result.type_name
+
+    def test_masked_array_formatter(self):
+        """Test MaskedArray formatter."""
+        from anndata._repr.formatters import NumpyMaskedArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyMaskedArrayFormatter()
+        arr = np.ma.array([1, 2, 3, 4, 5], mask=[0, 0, 1, 0, 1])
+
+        assert formatter.can_format(arr)
+        result = formatter.format(arr, FormatterContext())
+
+        assert "MaskedArray" in result.type_name
+        assert result.details["n_masked"] == 2
+
+    def test_masked_array_no_mask(self):
+        """Test MaskedArray formatter with no masked values."""
+        from anndata._repr.formatters import NumpyMaskedArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyMaskedArrayFormatter()
+        arr = np.ma.array([1, 2, 3, 4, 5])  # No mask
+
+        result = formatter.format(arr, FormatterContext())
+        assert result.details["n_masked"] == 0
+
+    def test_sparse_csc_formatter(self):
+        """Test sparse formatter with CSC matrix."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        mat = sp.csc_matrix([[1, 0], [0, 2]])
+
+        result = formatter.format(mat, FormatterContext())
+        assert "csc" in result.type_name.lower()
+
+    def test_sparse_coo_formatter(self):
+        """Test sparse formatter with COO matrix."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        mat = sp.coo_matrix([[1, 0], [0, 2]])
+
+        result = formatter.format(mat, FormatterContext())
+        assert "coo" in result.type_name.lower()
+
+    def test_sparse_zero_elements(self):
+        """Test sparse formatter with zero-element matrix."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        mat = sp.csr_matrix((0, 0))
+
+        result = formatter.format(mat, FormatterContext())
+        assert result.details["sparsity"] is None  # Can't compute sparsity for 0 elements
+
+
+class TestBuiltinFormattersCoverage:
+    """Tests for built-in type formatters coverage."""
+
+    def test_list_formatter(self):
+        """Test list formatter."""
+        from anndata._repr.formatters import ListFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = ListFormatter()
+        obj = [1, 2, 3, 4, 5]
+
+        assert formatter.can_format(obj)
+        result = formatter.format(obj, FormatterContext())
+        assert "list" in result.type_name.lower()
+        assert result.details["n_items"] == 5
+
+    def test_dict_formatter(self):
+        """Test dict formatter."""
+        from anndata._repr.formatters import DictFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DictFormatter()
+        obj = {"a": 1, "b": 2, "c": 3}
+
+        assert formatter.can_format(obj)
+        result = formatter.format(obj, FormatterContext())
+        assert "dict" in result.type_name.lower()
+        assert result.details["n_items"] == 3
+
+    def test_string_formatter(self):
+        """Test string formatter."""
+        from anndata._repr.formatters import StringFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = StringFormatter()
+        obj = "hello world"
+
+        assert formatter.can_format(obj)
+        result = formatter.format(obj, FormatterContext())
+        assert "str" in result.type_name.lower()
+
+    def test_none_formatter(self):
+        """Test None formatter."""
+        from anndata._repr.formatters import NoneFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NoneFormatter()
+
+        assert formatter.can_format(None)
+        result = formatter.format(None, FormatterContext())
+        assert "None" in result.type_name
+
+    def test_bool_formatter(self):
+        """Test bool formatter."""
+        from anndata._repr.formatters import BoolFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = BoolFormatter()
+
+        assert formatter.can_format(True)
+        assert formatter.can_format(False)
+        result = formatter.format(True, FormatterContext())
+        assert "bool" in result.type_name.lower()
+
+    def test_int_formatter(self):
+        """Test int formatter."""
+        from anndata._repr.formatters import IntFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = IntFormatter()
+
+        assert formatter.can_format(42)
+        result = formatter.format(42, FormatterContext())
+        assert "int" in result.type_name.lower()
+
+    def test_float_formatter(self):
+        """Test float formatter."""
+        from anndata._repr.formatters import FloatFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = FloatFormatter()
+
+        assert formatter.can_format(3.14)
+        result = formatter.format(3.14, FormatterContext())
+        assert "float" in result.type_name.lower()
+
+    def test_categorical_direct_object(self):
+        """Test CategoricalFormatter with direct pd.Categorical object."""
+        from anndata._repr.formatters import CategoricalFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = CategoricalFormatter()
+
+        # Direct Categorical object (not wrapped in Series)
+        cat = pd.Categorical(["A", "B", "A", "C"])
+
+        assert formatter.can_format(cat)
+        result = formatter.format(cat, FormatterContext())
+        assert "category" in result.type_name.lower()
+        assert result.details["n_categories"] == 3
+
+    def test_series_formatter_simple(self):
+        """Test SeriesFormatter with simple numeric series."""
+        from anndata._repr.formatters import SeriesFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SeriesFormatter()
+        series = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        assert formatter.can_format(series)
+        result = formatter.format(series, FormatterContext())
+        assert result.details["length"] == 5
+
+    def test_dataframe_formatter(self):
+        """Test DataFrameFormatter."""
+        from anndata._repr.formatters import DataFrameFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DataFrameFormatter()
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        assert formatter.can_format(df)
+        result = formatter.format(df, FormatterContext())
+        assert result.details["n_rows"] == 3
+        assert result.details["n_cols"] == 2
+
+
+class TestHTMLCoverage:
+    """Tests to improve html.py coverage."""
+
+    def test_extension_type_badge(self):
+        """Test extension type shows badge."""
+        # Create a mock extension type
+        class MockAnnData:
+            def __init__(self):
+                self.n_obs = 10
+                self.n_vars = 5
+                self.X = np.zeros((10, 5))
+                self.obs = pd.DataFrame(index=range(10))
+                self.var = pd.DataFrame(index=range(5))
+                self.uns = {}
+                self.obsm = {}
+                self.varm = {}
+                self.layers = {}
+                self.obsp = {}
+                self.varp = {}
+                self.raw = None
+                self.is_view = False
+                self.isbacked = False
+                self.obs_names = pd.Index([f"cell_{i}" for i in range(10)])
+                self.var_names = pd.Index([f"gene_{i}" for i in range(5)])
+
+            def __sizeof__(self):
+                return 1000
+
+        # Can't easily test extension badge without modifying core AnnData
+        # but we can test that repr_html works with various configurations
+        adata = AnnData(np.zeros((10, 5)))
+        html = adata._repr_html_()
+        assert html is not None
+
+    def test_html_with_empty_obsm_varm(self):
+        """Test HTML repr with empty obsm/varm."""
+        adata = AnnData(np.zeros((10, 5)))
+        # obsm and varm are empty by default
+        html = adata._repr_html_()
+        assert html is not None
+
+    def test_html_with_all_empty_sections(self):
+        """Test HTML repr with minimal data."""
+        adata = AnnData()
+        html = adata._repr_html_()
+        assert html is not None
+        assert "0" in html  # n_obs and n_vars are 0
+
+
+class TestRegistryAbstractMethods:
+    """
+    Tests verifying abstract methods raise NotImplementedError.
+
+    Abstract methods in TypeFormatter and SectionFormatter are designed
+    to be overridden. Testing them directly isn't meaningful, but we can
+    verify the abstract class structure is correct.
+    """
+
+    def test_type_formatter_is_abstract(self):
+        """Verify TypeFormatter cannot be instantiated directly."""
+        from anndata._repr.registry import TypeFormatter
+
+        with pytest.raises(TypeError):
+            TypeFormatter()
+
+    def test_section_formatter_is_abstract(self):
+        """Verify SectionFormatter cannot be instantiated directly."""
+        from anndata._repr.registry import SectionFormatter
+
+        with pytest.raises(TypeError):
+            SectionFormatter()

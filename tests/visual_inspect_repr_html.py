@@ -21,6 +21,7 @@ import scipy.sparse as sp
 
 from anndata import AnnData
 import anndata as ad
+from anndata._repr import register_uns_renderer, UnsRendererOutput
 
 # Check optional dependencies
 try:
@@ -365,8 +366,80 @@ def main():
         "cell_type has 30 categories (should show 20 + '...+10'). batch has exactly 20 (should show all).",
     ))
 
-    # Test 12: No JavaScript (graceful degradation)
-    print("  12. No JavaScript (graceful degradation)")
+    # Test 12: Uns value previews and custom renderer
+    print("  12. Uns value previews and type hints")
+
+    # Register a custom renderer for demonstration
+    def render_analysis_history(value, context):
+        """Example renderer for analysis history data."""
+        import json
+        # Parse JSON if string, otherwise use as-is
+        if isinstance(value, str):
+            try:
+                data = json.loads(value)
+            except json.JSONDecodeError:
+                data = {"raw": value}
+        else:
+            data = value if isinstance(value, dict) else {"data": value}
+
+        # Build a rich HTML preview
+        runs = data.get("runs", [])
+        params = data.get("params", {})
+
+        html_parts = ['<div style="font-size:11px;">']
+        if runs:
+            html_parts.append(f'<strong>{len(runs)} runs</strong>')
+        if params:
+            param_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
+            if len(params) > 3:
+                param_str += "..."
+            html_parts.append(f' · params: {param_str}')
+        html_parts.append('</div>')
+
+        return UnsRendererOutput(
+            html="".join(html_parts),
+            type_label="analysis history",
+            collapsed=False,
+        )
+
+    register_uns_renderer("example.history", render_analysis_history)
+
+    adata_uns = AnnData(np.zeros((10, 5)))
+    # Simple types with previews
+    adata_uns.uns["string_param"] = "A short string value"
+    adata_uns.uns["long_string"] = "This is a very long string that should be truncated in the preview because it exceeds the maximum length allowed for display in the meta column"
+    adata_uns.uns["int_param"] = 42
+    adata_uns.uns["float_param"] = 3.14159265359
+    adata_uns.uns["bool_param"] = True
+    adata_uns.uns["none_param"] = None
+    adata_uns.uns["small_list"] = [1, 2, 3]
+    adata_uns.uns["small_dict"] = {"a": 1, "b": 2}
+    adata_uns.uns["larger_dict"] = {"key1": "val1", "key2": "val2", "key3": "val3", "key4": "val4", "key5": "val5"}
+
+    # Type hint WITH registered renderer (shows custom HTML)
+    adata_uns.uns["analysis_history"] = {
+        "__anndata_repr__": "example.history",
+        "runs": [{"id": 1}, {"id": 2}, {"id": 3}],
+        "params": {"method": "umap", "n_neighbors": 15, "metric": "euclidean"},
+    }
+
+    # Type hint WITHOUT registered renderer (shows fallback with import hint)
+    adata_uns.uns["unregistered_data"] = {
+        "__anndata_repr__": "otherpackage.custom_type",
+        "data": {"some": "data", "values": [1, 2, 3]},
+    }
+    # String format type hint (also unregistered)
+    adata_uns.uns["string_hint"] = "__anndata_repr__:otherpackage.config::{'setting': 'value'}"
+
+    sections.append((
+        "12. Uns Value Previews and Type Hints",
+        adata_uns._repr_html_(),
+        "Shows: (1) preview values for simple types, (2) 'analysis_history' with registered custom renderer "
+        "(shows '3 runs · params: method=umap...'), (3) unregistered type hints show 'import X to enable' message.",
+    ))
+
+    # Test 13: No JavaScript (graceful degradation)
+    print("  13. No JavaScript (graceful degradation)")
     adata_nojs = AnnData(np.random.randn(30, 15).astype(np.float32))
     adata_nojs.obs["group"] = pd.Categorical(["X", "Y", "Z"] * 10)
     adata_nojs.uns["group_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
@@ -377,7 +450,7 @@ def main():
     # Strip script tags to simulate no-JS environment
     nojs_html = strip_script_tags(adata_nojs._repr_html_())
     sections.append((
-        "12. No JavaScript (graceful degradation)",
+        "13. No JavaScript (graceful degradation)",
         nojs_html,
         "This example has script tags removed to simulate environments where JS is disabled. "
         "All content should be visible, sections should be expanded, and interactive buttons "

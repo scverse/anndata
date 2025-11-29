@@ -531,7 +531,7 @@ class NoneFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
-            type_name="None",
+            type_name="NoneType",
             css_class="dtype-object",
             is_serializable=True,
         )
@@ -547,7 +547,7 @@ class BoolFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
-            type_name=str(obj),
+            type_name="bool",
             css_class="dtype-bool",
             is_serializable=True,
         )
@@ -563,7 +563,7 @@ class IntFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
-            type_name=f"int ({format_number(obj)})",
+            type_name="int",
             css_class="dtype-int",
             is_serializable=True,
         )
@@ -579,7 +579,7 @@ class FloatFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
-            type_name=f"float ({obj:.6g})",
+            type_name="float",
             css_class="dtype-float",
             is_serializable=True,
         )
@@ -594,14 +594,9 @@ class StringFormatter(TypeFormatter):
         return isinstance(obj, str)
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
-        from anndata._repr import DEFAULT_MAX_STRING_LENGTH
-        from anndata._repr.utils import truncate_string
-
-        display = truncate_string(obj, DEFAULT_MAX_STRING_LENGTH)
         return FormattedOutput(
-            type_name=f'str "{display}"',
+            type_name="str",
             css_class="dtype-string",
-            tooltip=obj if len(obj) > DEFAULT_MAX_STRING_LENGTH else "",
             is_serializable=True,
         )
 
@@ -622,7 +617,7 @@ class DictFormatter(TypeFormatter):
         warnings = [] if is_serial else [reason]
 
         return FormattedOutput(
-            type_name=f"dict ({n_items} items)",
+            type_name="dict",
             css_class="dtype-object",
             details={"n_items": n_items, "keys": list(obj.keys())[:10]},
             is_expandable=n_items > 0 and context.depth < context.max_depth,
@@ -648,7 +643,7 @@ class ListFormatter(TypeFormatter):
         warnings = [] if is_serial else [reason]
 
         return FormattedOutput(
-            type_name=f"{type_name} ({n_items} items)",
+            type_name=type_name,
             css_class="dtype-object",
             details={"n_items": n_items},
             is_serializable=is_serial,

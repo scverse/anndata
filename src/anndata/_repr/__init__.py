@@ -5,13 +5,59 @@ This module provides an extensible HTML representation system with:
 - Foldable sections with auto-collapse
 - Search/filter functionality
 - Color visualization for categorical data
+- Value previews for simple types in uns (strings, numbers, dicts, lists)
 - Serialization warnings
 - Support for nested AnnData objects
 - Graceful handling of unknown types
 
-The system is designed to be extensible via a registry pattern,
-allowing new data types (e.g., TreeData, MuData, SpatialData) to
-register custom formatters without modifying core code.
+Extensibility
+-------------
+The system is designed to be extensible via registry patterns:
+
+**Type Formatters** (for Python object types):
+    New data types (e.g., TreeData, MuData, SpatialData) can register
+    custom formatters without modifying core code.
+
+**Uns Renderers** (for serialized data in uns):
+    Packages can register custom HTML renderers for data stored in uns
+    that contains a type hint. This is useful for packages that store
+    complex data as JSON strings for H5AD/Zarr compatibility.
+
+    Note: Since arbitrary Python objects cannot be serialized to H5AD/Zarr,
+    packages should store their data as serializable types (strings, dicts,
+    lists, arrays) with a type hint that their renderer can interpret.
+
+    Security: Data in uns NEVER triggers code execution. Packages must
+    be explicitly imported by the user, and only then can their registered
+    renderers process data with matching type hints. Unrecognized hints
+    fall back to safe JSON/string preview.
+
+    Example for package authors::
+
+        # In mypackage/__init__.py
+        try:
+            from anndata._repr import register_uns_renderer, UnsRendererOutput
+
+            def render_my_config(value, context):
+                # Parse and render the stored data
+                return UnsRendererOutput(
+                    html='<span>Custom preview</span>',
+                    type_label="my config",
+                )
+
+            register_uns_renderer("mypackage.config", render_my_config)
+        except ImportError:
+            pass  # anndata not available
+
+    Example data structure in uns::
+
+        adata.uns["my_config"] = {
+            "__anndata_repr__": "mypackage.config",
+            "data": '{"setting": "value"}'
+        }
+
+    If mypackage is imported, its renderer will be used. Otherwise,
+    a fallback preview shows: "[mypackage.config] (import mypackage to enable)".
 """
 
 from __future__ import annotations
@@ -39,6 +85,13 @@ from anndata._repr.registry import (
     register_formatter,
     SectionFormatter,
     TypeFormatter,
+    # Uns renderer registry (for custom serialized data visualization)
+    UnsRendererOutput,
+    UnsRendererRegistry,
+    uns_renderer_registry,
+    register_uns_renderer,
+    extract_uns_type_hint,
+    UNS_TYPE_HINT_KEY,
 )
 
 __all__ = [
@@ -54,10 +107,17 @@ __all__ = [
     "SECTION_ORDER",
     # Main function
     "generate_repr_html",
-    # Registry for extensibility
+    # Registry for extensibility (type formatters)
     "FormatterRegistry",
     "formatter_registry",
     "register_formatter",
     "SectionFormatter",
     "TypeFormatter",
+    # Uns renderer registry (for custom serialized data visualization)
+    "UnsRendererOutput",
+    "UnsRendererRegistry",
+    "uns_renderer_registry",
+    "register_uns_renderer",
+    "extract_uns_type_hint",
+    "UNS_TYPE_HINT_KEY",
 ]
