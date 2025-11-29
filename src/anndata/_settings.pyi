@@ -51,5 +51,6 @@ class _AnnDataSettingsManager(SettingsManager):
     repr_html_max_items: int = 200
     repr_html_max_categories: int = 20
     repr_html_unique_limit: int = 1_000_000
+    repr_html_dataframe_expand: bool = False
 
 settings: _AnnDataSettingsManager

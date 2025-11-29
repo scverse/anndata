@@ -2897,3 +2897,393 @@ class TestCustomSectionFormatters:
 
         finally:
             formatter_registry._section_formatters.pop("hidden", None)
+
+
+# =============================================================================
+# Additional Formatter Coverage Tests
+# =============================================================================
+
+
+class TestRareSparseMatrixFormats:
+    """Tests for rare sparse matrix formats (lil, dok, dia, bsr)."""
+
+    def test_sparse_lil_formatter(self):
+        """Test sparse formatter with LIL matrix (line 174-175)."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        mat = sp.lil_matrix((10, 10))
+        mat[0, 0] = 1
+        mat[5, 5] = 2
+
+        assert formatter.can_format(mat)
+        result = formatter.format(mat, FormatterContext())
+        assert "lil" in result.type_name.lower()
+        assert result.details["format"] == "lil_matrix"
+
+    def test_sparse_dok_formatter(self):
+        """Test sparse formatter with DOK matrix (line 176-177)."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        mat = sp.dok_matrix((10, 10))
+        mat[0, 0] = 1
+        mat[5, 5] = 2
+
+        assert formatter.can_format(mat)
+        result = formatter.format(mat, FormatterContext())
+        assert "dok" in result.type_name.lower()
+        assert result.details["format"] == "dok_matrix"
+
+    def test_sparse_dia_formatter(self):
+        """Test sparse formatter with DIA matrix (line 178-179)."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        # Create a diagonal matrix
+        data = np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+        offsets = np.array([0, 1])
+        mat = sp.dia_matrix((data, offsets), shape=(4, 4))
+
+        assert formatter.can_format(mat)
+        result = formatter.format(mat, FormatterContext())
+        assert "dia" in result.type_name.lower()
+        assert result.details["format"] == "dia_matrix"
+
+    def test_sparse_bsr_formatter(self):
+        """Test sparse formatter with BSR matrix (line 180-181)."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = SparseMatrixFormatter()
+        # Create a block sparse row matrix
+        mat = sp.bsr_matrix(np.array([[1, 0, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [4, 0, 0, 0]]))
+
+        assert formatter.can_format(mat)
+        result = formatter.format(mat, FormatterContext())
+        assert "bsr" in result.type_name.lower()
+        assert result.details["format"] == "bsr_matrix"
+
+
+class TestDataFrameFormatterEdgeCases:
+    """Tests for DataFrame formatter edge cases."""
+
+    def test_dataframe_long_column_names_truncation(self):
+        """Test DataFrame with long column names gets truncated (line 247-248)."""
+        from anndata._repr.formatters import DataFrameFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DataFrameFormatter()
+        # Create DataFrame with very long column names
+        long_names = {f"very_long_column_name_{i}_with_extra_text": [1] for i in range(3)}
+        df = pd.DataFrame(long_names)
+
+        result = formatter.format(df, FormatterContext())
+        # Preview should be truncated
+        assert "…" in result.details["meta_preview"]
+        # Full preview should have all columns
+        assert "meta_preview_full" in result.details
+
+
+class TestMockCuPyArrayFormatter:
+    """Tests for CuPy array formatter using mock objects."""
+
+    def test_cupy_array_formatter_with_mock(self):
+        """Test CuPy array formatter with a mock CuPy array (lines 394-410)."""
+        from anndata._repr.formatters import CuPyArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock CuPy array
+        class MockDevice:
+            id = 0
+
+        class MockCuPyArray:
+            def __init__(self):
+                self.shape = (100, 50)
+                self.dtype = np.float32
+                self.device = MockDevice()
+
+        # Set module to look like cupy
+        MockCuPyArray.__module__ = "cupy._core.core"
+
+        formatter = CuPyArrayFormatter()
+        mock_arr = MockCuPyArray()
+
+        assert formatter.can_format(mock_arr)
+        result = formatter.format(mock_arr, FormatterContext())
+
+        assert "cupy" in result.type_name.lower()
+        assert "100" in result.type_name
+        assert "50" in result.type_name
+        assert result.css_class == "dtype-gpu"
+        assert "GPU:0" in result.tooltip
+
+
+class TestMockAwkwardArrayFormatter:
+    """Tests for Awkward array formatter using mock objects."""
+
+    def test_awkward_array_formatter_with_mock(self):
+        """Test Awkward array formatter with a mock object (lines 428-444)."""
+        from anndata._repr.formatters import AwkwardArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock Awkward array
+        class MockAwkwardArray:
+            def __init__(self):
+                self.type = "var * int64"
+
+            def __len__(self):
+                return 100
+
+        MockAwkwardArray.__module__ = "awkward.highlevel"
+
+        formatter = AwkwardArrayFormatter()
+        mock_arr = MockAwkwardArray()
+
+        assert formatter.can_format(mock_arr)
+        result = formatter.format(mock_arr, FormatterContext())
+
+        assert "awkward" in result.type_name.lower()
+        assert "100" in result.type_name
+        assert result.css_class == "dtype-awkward"
+        assert "var * int64" in result.tooltip
+
+    def test_awkward_array_formatter_exception_handling(self):
+        """Test Awkward array formatter handles exceptions (lines 431-433)."""
+        from anndata._repr.formatters import AwkwardArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock that raises exceptions
+        class BrokenAwkwardArray:
+            @property
+            def type(self):
+                raise RuntimeError("Cannot get type")
+
+            def __len__(self):
+                raise RuntimeError("Cannot get length")
+
+        BrokenAwkwardArray.__module__ = "awkward.highlevel"
+
+        formatter = AwkwardArrayFormatter()
+        mock_arr = BrokenAwkwardArray()
+
+        assert formatter.can_format(mock_arr)
+        result = formatter.format(mock_arr, FormatterContext())
+
+        # Should handle gracefully
+        assert "awkward" in result.type_name.lower()
+        assert "?" in result.type_name  # Length should be "?"
+        assert "unknown" in result.tooltip.lower()
+
+
+class TestArrayAPIFormatter:
+    """Tests for Array-API compatible array formatter."""
+
+    def test_array_api_formatter_jax_like(self):
+        """Test Array-API formatter with JAX-like array (lines 496-538)."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock JAX array
+        class MockJAXArray:
+            def __init__(self):
+                self.shape = (100, 50)
+                self.dtype = np.float32
+                self.ndim = 2
+                self.device = "gpu:0"
+
+        MockJAXArray.__module__ = "jax.numpy"
+
+        formatter = ArrayAPIFormatter()
+        mock_arr = MockJAXArray()
+
+        assert formatter.can_format(mock_arr)
+        result = formatter.format(mock_arr, FormatterContext())
+
+        assert "MockJAXArray" in result.type_name
+        assert "100" in result.type_name
+        assert "50" in result.type_name
+        assert result.css_class == "dtype-array-api"
+        assert "JAX" in result.tooltip
+        assert "gpu:0" in result.tooltip
+
+    def test_array_api_formatter_pytorch_like(self):
+        """Test Array-API formatter with PyTorch-like tensor."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
+
+        class MockTorchTensor:
+            def __init__(self):
+                self.shape = (64, 32)
+                self.dtype = "torch.float32"
+                self.ndim = 2
+                self.device = "cuda:0"
+
+        MockTorchTensor.__module__ = "torch"
+
+        formatter = ArrayAPIFormatter()
+        mock_tensor = MockTorchTensor()
+
+        assert formatter.can_format(mock_tensor)
+        result = formatter.format(mock_tensor, FormatterContext())
+
+        assert "MockTorchTensor" in result.type_name
+        assert "PyTorch" in result.tooltip
+
+    def test_array_api_formatter_device_buffer(self):
+        """Test Array-API formatter with device_buffer attribute (lines 521-522)."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
+
+        class MockDeviceBuffer:
+            def device(self):
+                return "tpu:0"
+
+        class MockJAXArrayWithBuffer:
+            def __init__(self):
+                self.shape = (10, 5)
+                self.dtype = np.float32
+                self.ndim = 2
+                self.device_buffer = MockDeviceBuffer()
+
+        MockJAXArrayWithBuffer.__module__ = "jaxlib.xla_extension"
+
+        formatter = ArrayAPIFormatter()
+        mock_arr = MockJAXArrayWithBuffer()
+
+        assert formatter.can_format(mock_arr)
+        result = formatter.format(mock_arr, FormatterContext())
+
+        assert "JAX" in result.tooltip
+        assert "tpu:0" in result.tooltip
+
+    def test_array_api_formatter_excludes_numpy(self):
+        """Test Array-API formatter excludes numpy arrays."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+
+        formatter = ArrayAPIFormatter()
+        arr = np.zeros((10, 5))
+
+        # Should NOT format numpy arrays (handled by NumpyArrayFormatter)
+        assert not formatter.can_format(arr)
+
+    def test_array_api_formatter_excludes_pandas(self):
+        """Test Array-API formatter excludes pandas objects."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+
+        formatter = ArrayAPIFormatter()
+
+        # Should NOT format pandas objects
+        assert not formatter.can_format(pd.DataFrame({"a": [1, 2, 3]}))
+        assert not formatter.can_format(pd.Series([1, 2, 3]))
+
+
+class TestDtypeCSSClassHelpers:
+    """Tests for dtype CSS class helper functions."""
+
+    def test_get_dtype_css_class_complex(self):
+        """Test CSS class for complex dtype (line 742-743)."""
+        from anndata._repr.formatters import _get_dtype_css_class
+
+        complex_dtype = np.dtype(np.complex128)
+        css_class = _get_dtype_css_class(complex_dtype)
+        assert css_class == "dtype-float"  # Complex maps to float
+
+    def test_get_dtype_css_class_unknown(self):
+        """Test CSS class for unknown dtype (line 744-745)."""
+        from anndata._repr.formatters import _get_dtype_css_class
+
+        # Datetime dtype has kind 'M'
+        datetime_dtype = np.dtype("datetime64[ns]")
+        css_class = _get_dtype_css_class(datetime_dtype)
+        assert css_class == "dtype-object"  # Unknown maps to object
+
+    def test_get_pandas_dtype_css_class_category(self):
+        """Test CSS class for pandas category dtype (line 757-758)."""
+        from anndata._repr.formatters import _get_pandas_dtype_css_class
+
+        cat_dtype = pd.CategoricalDtype(categories=["a", "b", "c"])
+        css_class = _get_pandas_dtype_css_class(cat_dtype)
+        assert css_class == "dtype-category"
+
+    def test_get_pandas_dtype_css_class_unknown(self):
+        """Test CSS class for unknown pandas dtype (line 761-762)."""
+        from anndata._repr.formatters import _get_pandas_dtype_css_class
+
+        # Timedelta dtype
+        timedelta_dtype = pd.to_timedelta([1, 2, 3], unit="s").dtype
+        css_class = _get_pandas_dtype_css_class(timedelta_dtype)
+        assert css_class == "dtype-object"  # Unknown maps to object
+
+
+class TestColorListFormatterCoverage:
+    """Tests for ColorListFormatter coverage."""
+
+    def test_color_list_formatter_raises_not_implemented(self):
+        """Test ColorListFormatter.format raises NotImplementedError (lines 719-723)."""
+        from anndata._repr.formatters import ColorListFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = ColorListFormatter()
+
+        # can_format always returns False (context-dependent)
+        assert not formatter.can_format(["#FF0000", "#00FF00"])
+
+        # format should raise NotImplementedError
+        with pytest.raises(NotImplementedError):
+            formatter.format(["#FF0000"], FormatterContext())
+
+
+class TestSparseFormatterDuckTyping:
+    """Tests for sparse formatter duck typing fallback."""
+
+    def test_sparse_formatter_duck_typing_fallback(self):
+        """Test sparse formatter uses duck typing when scipy checks fail (lines 182-189)."""
+        from anndata._repr.formatters import SparseMatrixFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Create a mock sparse-like object that passes duck typing
+        class MockSparseArray:
+            def __init__(self):
+                self.nnz = 10
+                self.shape = (5, 5)
+                self.dtype = np.float64
+
+            def tocsr(self):
+                pass
+
+        # Set module to look like scipy.sparse
+        MockSparseArray.__module__ = "scipy.sparse._csr"
+
+        formatter = SparseMatrixFormatter()
+        mock_sparse = MockSparseArray()
+
+        assert formatter.can_format(mock_sparse)
+        result = formatter.format(mock_sparse, FormatterContext())
+
+        # Should use type name as fallback
+        assert "MockSparseArray" in result.type_name
+        assert result.details["format"] == "MockSparseArray"
+
+
+class TestAnnDataFormatterCoverage:
+    """Tests for AnnData formatter coverage."""
+
+    def test_anndata_formatter_nested_depth_limit(self):
+        """Test AnnData formatter respects max_depth for nested objects."""
+        from anndata._repr.formatters import AnnDataFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = AnnDataFormatter()
+        inner = AnnData(np.zeros((5, 3)))
+
+        # At depth 0, should be expandable (0 < max_depth default 3)
+        result_shallow = formatter.format(inner, FormatterContext(depth=0, max_depth=3))
+        assert result_shallow.is_expandable
+
+        # At depth 3, should NOT be expandable (3 >= max_depth 3)
+        result_deep = formatter.format(inner, FormatterContext(depth=3, max_depth=3))
+        assert not result_deep.is_expandable
