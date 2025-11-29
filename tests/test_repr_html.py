@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,8 @@ import scipy.sparse as sp
 import anndata as ad
 from anndata import AnnData
 
+if TYPE_CHECKING:
+    from typing import Any
 
 # Check optional dependencies
 try:
@@ -51,7 +53,7 @@ except ImportError:
     HAS_CUPY = False
 
 try:
-    import awkward as ak  # noqa: F401
+    import awkward as ak
 
     HAS_AWKWARD = True
 except ImportError:
@@ -84,21 +86,17 @@ def adata_full():
     n_obs, n_vars = 100, 50
     adata = AnnData(
         sp.random(n_obs, n_vars, density=0.1, format="csr", dtype=np.float32),
-        obs=pd.DataFrame(
-            {
-                "batch": pd.Categorical(["A", "B"] * (n_obs // 2)),
-                "n_counts": np.random.randint(1000, 10000, n_obs),
-                "cell_type": pd.Categorical(
-                    ["T", "B", "NK"] * (n_obs // 3) + ["T"] * (n_obs % 3)
-                ),
-            }
-        ),
-        var=pd.DataFrame(
-            {
-                "gene_name": [f"gene_{i}" for i in range(n_vars)],
-                "highly_variable": np.random.choice([True, False], n_vars),
-            }
-        ),
+        obs=pd.DataFrame({
+            "batch": pd.Categorical(["A", "B"] * (n_obs // 2)),
+            "n_counts": np.random.randint(1000, 10000, n_obs),
+            "cell_type": pd.Categorical(
+                ["T", "B", "NK"] * (n_obs // 3) + ["T"] * (n_obs % 3)
+            ),
+        }),
+        var=pd.DataFrame({
+            "gene_name": [f"gene_{i}" for i in range(n_vars)],
+            "highly_variable": np.random.choice([True, False], n_vars),
+        }),
     )
     adata.uns["neighbors"] = {"params": {"n_neighbors": 15}}
     adata.uns["batch_colors"] = ["#FF0000", "#00FF00"]
@@ -135,7 +133,7 @@ def adata_with_special_chars():
     adata = AnnData(np.zeros((10, 5)))
     adata.obs["col<script>"] = list(range(10))  # XSS attempt
     adata.uns["key&value"] = "test"
-    adata.uns['quotes"test\''] = "value"
+    adata.uns["quotes\"test'"] = "value"
     return adata
 
 
@@ -144,24 +142,22 @@ def adata_with_special_chars():
 # =============================================================================
 
 
-VOID_ELEMENTS = frozenset(
-    {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-)
+VOID_ELEMENTS = frozenset({
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+})
 
 
 class StrictHTMLParser(HTMLParser):
@@ -298,7 +294,8 @@ class TestBasicHTMLGeneration:
         adata = AnnData(np.random.randn(100, 50).astype(np.float32))
         html = adata._repr_html_()
         assert "float32" in html
-        assert "100" in html and "50" in html
+        assert "100" in html
+        assert "50" in html
 
     def test_sparse_csr_matrix(self):
         """Test repr with sparse CSR X."""
@@ -408,7 +405,7 @@ class TestNestedAnnData:
 
         # Create deeply nested structure
         adata = AnnData(np.zeros((5, 3)))
-        for i in range(5):
+        for _i in range(5):
             wrapper = AnnData(np.zeros((5, 3)))
             wrapper.uns["inner"] = adata
             adata = wrapper
@@ -481,7 +478,7 @@ class TestWarnings:
         """Test no warning for string columns with all unique values."""
         adata = AnnData(np.zeros((5, 3)))
         adata.obs["id"] = ["cell_0", "cell_1", "cell_2", "cell_3", "cell_4"]
-        _html = adata._repr_html_()  # noqa: F841
+        _html = adata._repr_html_()
         # The "id" column should not have warning for unique strings
         # This is harder to test precisely, so we just verify no errors
 
@@ -593,7 +590,7 @@ class TestRawSection:
         """Test no raw section when raw is None."""
         adata = AnnData(np.zeros((10, 5)))
         # raw is None by default
-        _html = adata._repr_html_()  # noqa: F841
+        _html = adata._repr_html_()
         # Should not have a non-empty raw section
 
 
@@ -709,8 +706,6 @@ class TestFormatterRegistry:
         class CustomType:
             """A custom type for testing."""
 
-            pass
-
         class CustomTypeFormatter(TypeFormatter):
             priority = 500  # High priority
 
@@ -749,8 +744,6 @@ class TestFormatterRegistry:
         class UnknownType:
             """An unknown type not in the registry."""
 
-            pass
-
         obj = UnknownType()
         context = FormatterContext()
         result = formatter_registry.format_value(obj, context)
@@ -780,8 +773,6 @@ class TestFormatterRegistry:
 
         class SectionSpecificType:
             """A type for testing section filtering."""
-
-            pass
 
         class UnsOnlyFormatter(TypeFormatter):
             priority = 600  # High priority
@@ -827,8 +818,6 @@ class TestFormatterRegistry:
         class UniversalType:
             """A type for testing universal formatters."""
 
-            pass
-
         class UniversalFormatter(TypeFormatter):
             priority = 600
             sections = None  # Default: apply to all sections
@@ -849,7 +838,9 @@ class TestFormatterRegistry:
             for section in ["uns", "obsm", "varm", "layers", "obs", "var"]:
                 context = FormatterContext(section=section)
                 result = formatter_registry.format_value(obj, context)
-                assert result.type_name == "UniversalType", f"Failed for section {section}"
+                assert result.type_name == "UniversalType", (
+                    f"Failed for section {section}"
+                )
         finally:
             formatter_registry.unregister_type_formatter(formatter)
 
@@ -909,7 +900,7 @@ class TestUtilityFunctions:
 
         # These should be serializable
         assert is_serializable(None)[0]
-        assert is_serializable(True)[0]
+        assert is_serializable(True)[0]  # noqa: FBT003
         assert is_serializable(42)[0]
         assert is_serializable(3.14)[0]
         assert is_serializable("string")[0]
@@ -1264,9 +1255,9 @@ class TestAdBlockerCompatibility:
         problematic_classes = []
         for class_attr in all_classes:
             # Split multiple classes (e.g., class="foo ad-bar")
-            for class_name in class_attr.split():
-                if class_name.startswith("ad-"):
-                    problematic_classes.append(class_name)
+            problematic_classes.extend(
+                cn for cn in class_attr.split() if cn.startswith("ad-")
+            )
 
         assert not problematic_classes, (
             f"Found class names starting with 'ad-' which may be blocked by ad-blockers: "
@@ -1341,13 +1332,11 @@ class TestCoverageEdgeCases:
         categories = [f"cat_{i}" for i in range(50)]
         adata = AnnData(
             np.zeros((100, 5)),
-            obs=pd.DataFrame(
-                {
-                    "many_cats": pd.Categorical(
-                        np.random.choice(categories, 100), categories=categories
-                    )
-                }
-            ),
+            obs=pd.DataFrame({
+                "many_cats": pd.Categorical(
+                    np.random.choice(categories, 100), categories=categories
+                )
+            }),
         )
 
         with settings.override(repr_html_max_categories=10):
@@ -1362,8 +1351,6 @@ class TestCoverageEdgeCases:
 
         class NonSerializable:
             """A class that can't be serialized to H5AD."""
-
-            pass
 
         adata = AnnData(np.zeros((10, 5)))
         adata.uns["non_serializable"] = NonSerializable()
@@ -1408,9 +1395,7 @@ class TestCoverageEdgeCases:
         from anndata import settings
 
         # Create a large dataset
-        adata = AnnData(
-            np.zeros((100000, 5)), obs=pd.DataFrame({"col": range(100000)})
-        )
+        adata = AnnData(np.zeros((100000, 5)), obs=pd.DataFrame({"col": range(100000)}))
 
         with settings.override(repr_html_unique_limit=1000):
             html = adata._repr_html_()
@@ -1423,14 +1408,12 @@ class TestCoverageEdgeCases:
         """Test rendering category column with all unique values."""
         adata = AnnData(
             np.zeros((10, 5)),
-            obs=pd.DataFrame(
-                {
-                    "unique_cats": pd.Categorical(
-                        [f"cat_{i}" for i in range(10)],
-                        categories=[f"cat_{i}" for i in range(10)],
-                    )
-                }
-            ),
+            obs=pd.DataFrame({
+                "unique_cats": pd.Categorical(
+                    [f"cat_{i}" for i in range(10)],
+                    categories=[f"cat_{i}" for i in range(10)],
+                )
+            }),
         )
 
         html = adata._repr_html_()
@@ -1461,6 +1444,7 @@ class TestFutureCompatibility:
         This ensures sparse detection works even if scipy.sparse.issparse() breaks.
         """
         import scipy.sparse as sp
+
         from anndata._repr.formatters import SparseMatrixFormatter
         from anndata._repr.registry import FormatterContext
 
@@ -1534,21 +1518,21 @@ class TestFutureCompatibility:
 
         # Test numpy array - should NOT be handled by ArrayAPIFormatter
         np_array = np.array([[1, 2], [3, 4]])
-        assert not formatter.can_format(
-            np_array
-        ), "Should not handle numpy arrays (has NumpyArrayFormatter)"
+        assert not formatter.can_format(np_array), (
+            "Should not handle numpy arrays (has NumpyArrayFormatter)"
+        )
 
         # Test pandas DataFrame - should NOT be handled
         df = pd.DataFrame({"a": [1, 2, 3]})
-        assert not formatter.can_format(
-            df
-        ), "Should not handle pandas DataFrame (has DataFrameFormatter)"
+        assert not formatter.can_format(df), (
+            "Should not handle pandas DataFrame (has DataFrameFormatter)"
+        )
 
         # Test pandas Series - should NOT be handled
         series = pd.Series([1, 2, 3])
-        assert not formatter.can_format(
-            series
-        ), "Should not handle pandas Series (has SeriesFormatter)"
+        assert not formatter.can_format(series), (
+            "Should not handle pandas Series (has SeriesFormatter)"
+        )
 
     def test_sparse_format_name_fallback(self):
         """
@@ -1558,6 +1542,7 @@ class TestFutureCompatibility:
         the formatter should fall back to using type(obj).__name__.
         """
         import scipy.sparse as sp
+
         from anndata._repr.formatters import SparseMatrixFormatter
         from anndata._repr.registry import FormatterContext
 
@@ -1570,9 +1555,9 @@ class TestFutureCompatibility:
             result = formatter.format(sparse_array, context)
 
             # Should either get "csr_matrix" or "csr_array" depending on scipy version
-            assert (
-                "csr" in result.type_name.lower()
-            ), f"Should contain 'csr', got {result.type_name}"
+            assert "csr" in result.type_name.lower(), (
+                f"Should contain 'csr', got {result.type_name}"
+            )
         except AttributeError:
             # scipy < 1.8 doesn't have csr_array, skip this part
             pass
@@ -1586,15 +1571,15 @@ class TestFutureCompatibility:
         # Create a dynamically generated mock array type
         # We use type() to create a new class with custom __module__
         FutureArray = type(
-            'FutureArray',  # class name
+            "FutureArray",  # class name
             (),  # base classes
             {
-                '__module__': 'future_lib.arrays',  # module name
-                '__init__': lambda self: setattr(self, '_initialized', True),
-                'shape': property(lambda self: (10, 5)),
-                'dtype': property(lambda self: np.dtype('int64')),
-                'ndim': property(lambda self: 2),
-            }
+                "__module__": "future_lib.arrays",  # module name
+                "__init__": lambda self: setattr(self, "_initialized", True),
+                "shape": property(lambda self: (10, 5)),
+                "dtype": property(lambda self: np.dtype("int64")),
+                "ndim": property(lambda self: 2),
+            },
         )
 
         # Create AnnData with this unknown type
@@ -1602,18 +1587,17 @@ class TestFutureCompatibility:
         future_array = FutureArray()
         adata.uns["future_data"] = future_array
 
-        # Should not crash when rendering
-        try:
-            html = adata._repr_html_()
-            # Should successfully render (might use fallback formatter)
-            assert html is not None
-            assert len(html) > 0
-            # The unknown type should appear in the HTML
-            assert "FutureArray" in html or "future" in html.lower() or "object" in html.lower()
-        except Exception as e:
-            pytest.fail(
-                f"HTML rendering should not crash on unknown array types, but got: {e}"
-            )
+        # Should not crash when rendering - test will fail with clear error if it does
+        html = adata._repr_html_()
+        # Should successfully render (might use fallback formatter)
+        assert html is not None
+        assert len(html) > 0
+        # The unknown type should appear in the HTML
+        assert (
+            "FutureArray" in html
+            or "future" in html.lower()
+            or "object" in html.lower()
+        )
 
     def test_css_array_api_styling_exists(self):
         """
@@ -1626,16 +1610,14 @@ class TestFutureCompatibility:
         css = get_css()
 
         # Check for light mode styling
-        assert (
-            "dtype-array-api" in css
-        ), "CSS should contain dtype-array-api class styling"
+        assert "dtype-array-api" in css, (
+            "CSS should contain dtype-array-api class styling"
+        )
 
         # Check that there's some color definition for it
         # The exact color doesn't matter, but it should be styled
         pattern = r"\.dtype-array-api\s*\{[^}]*color:"
-        assert re.search(
-            pattern, css
-        ), "dtype-array-api should have color styling"
+        assert re.search(pattern, css), "dtype-array-api should have color styling"
 
 
 # =============================================================================
@@ -1654,7 +1636,7 @@ class TestUnsRendererRegistry:
 
     def test_extract_type_hint_dict_format(self):
         """Test extracting type hint from dict format."""
-        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+        from anndata._repr.registry import UNS_TYPE_HINT_KEY, extract_uns_type_hint
 
         value = {
             UNS_TYPE_HINT_KEY: "mypackage.config",
@@ -1670,9 +1652,9 @@ class TestUnsRendererRegistry:
 
     def test_extract_type_hint_string_format(self):
         """Test extracting type hint from string prefix format."""
-        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+        from anndata._repr.registry import UNS_TYPE_HINT_KEY, extract_uns_type_hint
 
-        value = f"{UNS_TYPE_HINT_KEY}:mypackage.config::{{\"setting\": \"value\"}}"
+        value = f'{UNS_TYPE_HINT_KEY}:mypackage.config::{{"setting": "value"}}'
         hint, cleaned = extract_uns_type_hint(value)
 
         assert hint == "mypackage.config"
@@ -1702,7 +1684,7 @@ class TestUnsRendererRegistry:
 
     def test_extract_type_hint_invalid_dict_hint_type(self):
         """Test that non-string type hints in dict are ignored."""
-        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+        from anndata._repr.registry import UNS_TYPE_HINT_KEY, extract_uns_type_hint
 
         # Type hint is not a string
         value = {UNS_TYPE_HINT_KEY: 123, "data": "value"}
@@ -1712,7 +1694,7 @@ class TestUnsRendererRegistry:
 
     def test_extract_type_hint_malformed_string_format(self):
         """Test that malformed string format returns no hint."""
-        from anndata._repr.registry import extract_uns_type_hint, UNS_TYPE_HINT_KEY
+        from anndata._repr.registry import UNS_TYPE_HINT_KEY, extract_uns_type_hint
 
         # Missing :: separator
         value = f"{UNS_TYPE_HINT_KEY}:mypackage.config:data"
@@ -1723,11 +1705,11 @@ class TestUnsRendererRegistry:
     def test_type_formatter_for_tagged_uns_data(self):
         """Test using TypeFormatter to handle tagged data in uns."""
         from anndata._repr import (
-            register_formatter,
-            TypeFormatter,
             FormattedOutput,
+            TypeFormatter,
             extract_uns_type_hint,
             formatter_registry,
+            register_formatter,
         )
 
         class TestConfigFormatter(TypeFormatter):
@@ -1738,7 +1720,7 @@ class TestUnsRendererRegistry:
                 return hint == "test.config_format"
 
             def format(self, obj, context):
-                hint, data = extract_uns_type_hint(obj)
+                _hint, data = extract_uns_type_hint(obj)
                 items = data.get("data", {})
                 return FormattedOutput(
                     type_name="test config",
@@ -1780,10 +1762,10 @@ class TestUnsRendererRegistry:
     def test_formatter_error_handled_gracefully(self):
         """Test that TypeFormatter errors don't crash the repr."""
         from anndata._repr import (
-            register_formatter,
             TypeFormatter,
             extract_uns_type_hint,
             formatter_registry,
+            register_formatter,
         )
 
         class FailingFormatter(TypeFormatter):
@@ -1794,7 +1776,8 @@ class TestUnsRendererRegistry:
                 return hint == "test.failing_format"
 
             def format(self, obj, context):
-                raise ValueError("Intentional test error")
+                msg = "Intentional test error"
+                raise ValueError(msg)
 
         formatter = FailingFormatter()
         register_formatter(formatter)
@@ -1819,7 +1802,9 @@ class TestUnsRendererRegistry:
         """Test string format type hints work in HTML output."""
         adata = AnnData(np.zeros((5, 3)))
         # String format: __anndata_repr__:package.type::content
-        adata.uns["string_hint"] = "__anndata_repr__:somepackage.config::actual content here"
+        adata.uns["string_hint"] = (
+            "__anndata_repr__:somepackage.config::actual content here"
+        )
 
         html = adata._repr_html_()
 
@@ -2016,7 +2001,8 @@ class TestFallbackFormatterCoverage:
 
         class BrokenLenType:
             def __len__(self):
-                raise TypeError("Cannot get length")
+                msg = "Cannot get length"
+                raise TypeError(msg)
 
         formatter = FallbackFormatter()
         obj = BrokenLenType()
@@ -2033,10 +2019,10 @@ class TestFormatterRegistryCoverage:
     def test_registry_formatter_exception_continues(self):
         """Test registry continues to next formatter on exception."""
         from anndata._repr.registry import (
-            FormatterRegistry,
-            TypeFormatter,
             FormattedOutput,
             FormatterContext,
+            FormatterRegistry,
+            TypeFormatter,
         )
 
         class FailingFormatter(TypeFormatter):
@@ -2046,7 +2032,8 @@ class TestFormatterRegistryCoverage:
                 return True
 
             def format(self, obj, context):
-                raise RuntimeError("Intentional failure")
+                msg = "Intentional failure"
+                raise RuntimeError(msg)
 
         class BackupFormatter(TypeFormatter):
             priority = 500
@@ -2075,18 +2062,22 @@ class TestFormatterRegistryCoverage:
     def test_register_formatter_decorator_with_class(self):
         """Test register_formatter works as decorator with class."""
         from anndata._repr.registry import (
-            register_formatter,
-            formatter_registry,
-            TypeFormatter,
             FormattedOutput,
             FormatterContext,
+            TypeFormatter,
+            formatter_registry,
+            register_formatter,
         )
 
         class DecoratorTestFormatter(TypeFormatter):
             priority = 999
 
             def can_format(self, obj):
-                return isinstance(obj, tuple) and len(obj) == 3 and obj[0] == "decorator_test"
+                return (
+                    isinstance(obj, tuple)
+                    and len(obj) == 3
+                    and obj[0] == "decorator_test"
+                )
 
             def format(self, obj, context):
                 return FormattedOutput(type_name="DecoratorTest", css_class="test")
@@ -2147,7 +2138,7 @@ class TestUtilsCoverage:
 
         assert is_serializable(np.int64(42))[0]
         assert is_serializable(np.float32(3.14))[0]
-        assert is_serializable(np.bool_(True))[0]
+        assert is_serializable(np.bool_(True))[0]  # noqa: FBT003
 
     def test_should_warn_string_column_exception(self):
         """Test should_warn_string_column handles exceptions."""
@@ -2156,11 +2147,12 @@ class TestUtilsCoverage:
         # Create a series that will raise on nunique
         class BrokenSeries(pd.Series):
             def nunique(self):
-                raise RuntimeError("Broken")
+                msg = "Broken"
+                raise RuntimeError(msg)
 
         # This is tricky to test directly, but we can test with unhashable types
         s = pd.Series([[1, 2], [3, 4], [1, 2]])  # Lists are unhashable
-        warn, msg = should_warn_string_column(s)
+        warn, _msg = should_warn_string_column(s)
         assert not warn  # Should return False on exception
 
     def test_is_color_list_named_colors(self):
@@ -2379,7 +2371,9 @@ class TestFormattersCoverage:
         mat = sp.csr_matrix((0, 0))
 
         result = formatter.format(mat, FormatterContext())
-        assert result.details["sparsity"] is None  # Can't compute sparsity for 0 elements
+        assert (
+            result.details["sparsity"] is None
+        )  # Can't compute sparsity for 0 elements
 
 
 class TestBuiltinFormattersCoverage:
@@ -2441,9 +2435,9 @@ class TestBuiltinFormattersCoverage:
 
         formatter = BoolFormatter()
 
-        assert formatter.can_format(True)
-        assert formatter.can_format(False)
-        result = formatter.format(True, FormatterContext())
+        assert formatter.can_format(True)  # noqa: FBT003
+        assert formatter.can_format(False)  # noqa: FBT003
+        result = formatter.format(True, FormatterContext())  # noqa: FBT003
         assert "bool" in result.type_name.lower()
 
     def test_int_formatter(self):
@@ -2556,6 +2550,7 @@ class TestHTMLCoverage:
 
     def test_extension_type_badge(self):
         """Test extension type shows badge."""
+
         # Create a mock extension type
         class MockAnnData:
             def __init__(self):
@@ -2630,8 +2625,8 @@ class TestCustomHtmlContent:
     def test_inline_html_content(self):
         """Test inline (non-expandable) custom HTML content."""
         from anndata._repr.registry import (
-            TypeFormatter,
             FormattedOutput,
+            TypeFormatter,
             formatter_registry,
         )
 
@@ -2643,7 +2638,9 @@ class TestCustomHtmlContent:
             priority = 2000  # High priority to be checked first
 
             def can_format(self, obj):
-                return isinstance(obj, np.ndarray) and getattr(obj, "_test_inline_html", False)
+                return isinstance(obj, np.ndarray) and getattr(
+                    obj, "_test_inline_html", False
+                )
 
             def format(self, obj, context):
                 return FormattedOutput(
@@ -2673,8 +2670,8 @@ class TestCustomHtmlContent:
     def test_expandable_html_content(self):
         """Test expandable custom HTML content (e.g., for TreeData visualization)."""
         from anndata._repr.registry import (
-            TypeFormatter,
             FormattedOutput,
+            TypeFormatter,
             formatter_registry,
         )
 
@@ -2686,7 +2683,9 @@ class TestCustomHtmlContent:
             priority = 2000
 
             def can_format(self, obj):
-                return isinstance(obj, np.ndarray) and getattr(obj, "_test_expandable_html", False)
+                return isinstance(obj, np.ndarray) and getattr(
+                    obj, "_test_expandable_html", False
+                )
 
             def format(self, obj, context):
                 tree_html = """
@@ -2736,9 +2735,9 @@ class TestCustomSectionFormatters:
     def test_custom_section_appears_after_specified_section(self):
         """Test that custom sections appear after their specified position."""
         from anndata._repr.registry import (
-            SectionFormatter,
             FormattedEntry,
             FormattedOutput,
+            SectionFormatter,
             formatter_registry,
         )
 
@@ -2812,9 +2811,9 @@ class TestCustomSectionFormatters:
     def test_custom_section_with_expandable_content(self):
         """Test custom section with expandable HTML content."""
         from anndata._repr.registry import (
-            SectionFormatter,
             FormattedEntry,
             FormattedOutput,
+            SectionFormatter,
             formatter_registry,
         )
 
@@ -2864,9 +2863,9 @@ class TestCustomSectionFormatters:
     def test_custom_section_not_shown_when_should_show_false(self):
         """Test that custom sections are hidden when should_show returns False."""
         from anndata._repr.registry import (
-            SectionFormatter,
             FormattedEntry,
             FormattedOutput,
+            SectionFormatter,
             formatter_registry,
         )
 
@@ -2882,7 +2881,9 @@ class TestCustomSectionFormatters:
                 return [
                     FormattedEntry(
                         key="secret",
-                        output=FormattedOutput(type_name="Secret", css_class="dtype-unknown"),
+                        output=FormattedOutput(
+                            type_name="Secret", css_class="dtype-unknown"
+                        ),
                     ),
                 ]
 
@@ -2962,7 +2963,9 @@ class TestRareSparseMatrixFormats:
 
         formatter = SparseMatrixFormatter()
         # Create a block sparse row matrix
-        mat = sp.bsr_matrix(np.array([[1, 0, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [4, 0, 0, 0]]))
+        mat = sp.bsr_matrix(
+            np.array([[1, 0, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [4, 0, 0, 0]])
+        )
 
         assert formatter.can_format(mat)
         result = formatter.format(mat, FormatterContext())
@@ -2980,7 +2983,9 @@ class TestDataFrameFormatterEdgeCases:
 
         formatter = DataFrameFormatter()
         # Create DataFrame with very long column names
-        long_names = {f"very_long_column_name_{i}_with_extra_text": [1] for i in range(3)}
+        long_names = {
+            f"very_long_column_name_{i}_with_extra_text": [1] for i in range(3)
+        }
         df = pd.DataFrame(long_names)
 
         result = formatter.format(df, FormatterContext())
@@ -3062,10 +3067,12 @@ class TestMockAwkwardArrayFormatter:
         class BrokenAwkwardArray:
             @property
             def type(self):
-                raise RuntimeError("Cannot get type")
+                msg = "Cannot get type"
+                raise RuntimeError(msg)
 
             def __len__(self):
-                raise RuntimeError("Cannot get length")
+                msg = "Cannot get length"
+                raise RuntimeError(msg)
 
         BrokenAwkwardArray.__module__ = "awkward.highlevel"
 
@@ -3370,7 +3377,9 @@ class TestColumnWidthSettings:
         # With custom type width
         with settings.override(repr_html_type_width=250):
             html_custom = adata._repr_html_()
-            match_custom = re.search(r"--anndata-type-col-width:\s*(\d+)px", html_custom)
+            match_custom = re.search(
+                r"--anndata-type-col-width:\s*(\d+)px", html_custom
+            )
             assert match_custom, "Type width CSS variable not found"
             width_custom = int(match_custom.group(1))
 
