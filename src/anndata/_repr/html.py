@@ -547,7 +547,7 @@ def _render_footer(adata: AnnData) -> str:
         mem_str = format_memory_size(mem_bytes)
         parts.append(f'<span title="Estimated memory usage">~{mem_str}</span>')
     except Exception:  # noqa: BLE001
-        # Intentional broad catch: __sizeof__ may not be implemented or may fail
+        # Broad catch: __sizeof__ recursively calls into user data which could raise anything
         pass
 
     parts.append("</div>")
@@ -710,8 +710,8 @@ def _render_unique_count(col: pd.Series) -> str:
         try:
             n_unique = col.nunique()
             return f'<span class="adata-text-muted">({n_unique} unique)</span>'
-        except Exception:  # noqa: BLE001
-            # Intentional broad catch: nunique() can fail on unhashable types
+        except TypeError:
+            # nunique() fails on unhashable types (e.g., object columns with lists/dicts)
             pass
     return ""
 

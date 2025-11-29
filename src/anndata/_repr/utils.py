@@ -134,8 +134,8 @@ def should_warn_string_column(
     try:
         n_unique = series.nunique()
         n_total = len(series)
-    except Exception:  # noqa: BLE001
-        # Intentional broad catch: nunique() can fail on unhashable types
+    except TypeError:
+        # nunique() fails on unhashable types (shouldn't happen after infer_dtype check)
         return False, ""
 
     if n_unique < n_total:
@@ -314,11 +314,10 @@ def format_number(n: float) -> str:
 def get_anndata_version() -> str:
     """Get the anndata version string."""
     try:
-        from importlib.metadata import version
+        from importlib.metadata import PackageNotFoundError, version
 
         return version("anndata")
-    except Exception:  # noqa: BLE001
-        # Intentional broad catch: version lookup can fail in various environments
+    except PackageNotFoundError:
         return "unknown"
 
 
