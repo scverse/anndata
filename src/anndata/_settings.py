@@ -558,6 +558,19 @@ settings.register(
     get_from_env=check_and_get_int,
 )
 
+settings.register(
+    "repr_html_dataframe_expand",
+    default_value=False,
+    description=(
+        "Whether to show expandable pandas DataFrame previews in HTML repr. "
+        "When enabled, DataFrames in obsm/varm can be expanded to show their content "
+        "using pandas _repr_html_() (rich Jupyter-style output). Configure pandas "
+        "display options to control output: pd.set_option('display.max_rows', 10)"
+    ),
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 
 ##################################################################################
 ##################################################################################

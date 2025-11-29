@@ -136,6 +136,9 @@ try:
         svg_parts.append('</svg>')
         return "".join(svg_parts)
 
+    # TreeData documentation URL
+    TREEDATA_DOCS = "https://treedata.readthedocs.io/en/latest/"
+
     # Register TreeData section formatters
     @register_formatter
     class ObstSectionFormatter(SectionFormatter):
@@ -150,8 +153,12 @@ try:
             return "obsm"
 
         @property
+        def doc_url(self) -> str:
+            return TREEDATA_DOCS
+
+        @property
         def tooltip(self) -> str:
-            return "Tree annotation of observations"
+            return "Tree annotation of observations (TreeData)"
 
         def should_show(self, obj) -> bool:
             return hasattr(obj, "obst") and len(obj.obst) > 0
@@ -186,8 +193,12 @@ try:
             return "varm"
 
         @property
+        def doc_url(self) -> str:
+            return TREEDATA_DOCS
+
+        @property
         def tooltip(self) -> str:
-            return "Tree annotation of variables"
+            return "Tree annotation of variables (TreeData)"
 
         def should_show(self, obj) -> bool:
             return hasattr(obj, "vart") and len(obj.vart) > 0
@@ -219,7 +230,8 @@ def create_test_treedata():
         return None
 
     np.random.seed(42)
-    n_obs, n_vars = 24, 18  # Small enough for SVG preview (< 30 leaves)
+    n_obs = 24  # Small enough for SVG preview (< 30 leaves)
+    n_vars = 45  # Large enough to trigger "too large to preview" (> 30 leaves)
     obs_names = [f"cell_{i}" for i in range(n_obs)]
     var_names = [f"gene_{i}" for i in range(n_vars)]
 
@@ -234,15 +246,16 @@ def create_test_treedata():
         parent = ["subA1", "subA2", "subB1", "subB2"][i % 4]
         obs_tree.add_edge(parent, name)
 
-    # Create variable tree (gene ontology-like structure)
+    # Create variable tree (gene ontology-like structure, >30 leaves)
     var_tree = nx.DiGraph()
     var_tree.add_edges_from([
-        ("all_genes", "pathway_X"), ("all_genes", "pathway_Y"),
+        ("all_genes", "pathway_X"), ("all_genes", "pathway_Y"), ("all_genes", "pathway_Z"),
         ("pathway_X", "module_1"), ("pathway_X", "module_2"),
-        ("pathway_Y", "module_3"),
+        ("pathway_Y", "module_3"), ("pathway_Y", "module_4"),
+        ("pathway_Z", "module_5"),
     ])
     for i, name in enumerate(var_names):
-        parent = ["module_1", "module_2", "module_3"][i % 3]
+        parent = ["module_1", "module_2", "module_3", "module_4", "module_5"][i % 5]
         var_tree.add_edge(parent, name)
 
     # Create TreeData (label=None prevents adding "tree" column to obs/var)
@@ -321,6 +334,11 @@ def create_test_anndata() -> AnnData:
     adata.obsm["X_pca"] = np.random.randn(n_obs, 50).astype(np.float32)
     adata.obsm["X_umap"] = np.random.randn(n_obs, 2).astype(np.float32)
     adata.obsm["X_tsne"] = np.random.randn(n_obs, 2).astype(np.float32)
+    adata.obsm["cell_metadata"] = pd.DataFrame({
+        "spatial_x": np.random.randn(n_obs),
+        "spatial_y": np.random.randn(n_obs),
+        "area": np.random.rand(n_obs) * 100,
+    }, index=adata.obs_names)
     adata.varm["PCs"] = np.random.randn(n_vars, 50).astype(np.float32)
 
     # Add layers
@@ -553,7 +571,7 @@ def main():
     sections.append((
         "9. Backed AnnData (H5AD file)",
         adata_backed._repr_html_(),
-        f"File path: {tmp_path}. Shows 📁 badge with format and status, plus inline file path (hover for full path).",
+        f"File path: {tmp_path}. Shows badge with format and status, plus file path.",
     ))
     # Close the backed file
     adata_backed.file.close()
@@ -699,20 +717,57 @@ def main():
         "(fold icons, copy buttons, search, expand) should be hidden.",
     ))
 
-    # Test 14: TreeData with custom sections (if available)
+    # Test 14: Custom sections example using TreeData (if available)
     if HAS_TREEDATA:
-        print("  14. TreeData with obst/vart sections")
+        print("  14. Custom Sections (TreeData example)")
         tdata = create_test_treedata()
         sections.append((
-            "14. TreeData with Custom Sections (obst/vart)",
+            "14. Custom Sections (TreeData example)",
             tdata._repr_html_(),
-            "This demonstrates <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
-            "integration using SectionFormatter "
+            "Demonstrates how to add custom sections using SectionFormatter. "
+            "This example uses <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
+            "to show 'obst' and 'vart' sections "
             "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>). "
             "The 'obst' section appears after 'obsm' and 'vart' after 'varm'. "
             "Click the expand button (▸) to see an SVG tree visualization. "
             "Trees with >30 leaves show a text message instead of the full preview.",
         ))
+
+    # Test 15: Expandable DataFrame in obsm
+    print("  15. Expandable DataFrame in obsm")
+    # Enable DataFrame expansion for this test
+    original_expand = ad.settings.repr_html_dataframe_expand
+    ad.settings.repr_html_dataframe_expand = True
+    try:
+        adata_df = AnnData(np.random.randn(30, 10).astype(np.float32))
+        adata_df.obs["group"] = pd.Categorical(["A", "B", "C"] * 10)
+        # Add a wide DataFrame to obsm with many columns
+        adata_df.obsm["spatial_metrics"] = pd.DataFrame({
+            "x_centroid": np.random.randn(30) * 100,
+            "y_centroid": np.random.randn(30) * 100,
+            "area": np.random.rand(30) * 500,
+            "perimeter": np.random.rand(30) * 100,
+            "circularity": np.random.rand(30),
+            "eccentricity": np.random.rand(30),
+            "solidity": np.random.rand(30),
+            "extent": np.random.rand(30),
+            "major_axis": np.random.rand(30) * 50,
+            "minor_axis": np.random.rand(30) * 30,
+            "orientation": np.random.rand(30) * 180,
+            "intensity_mean": np.random.rand(30) * 255,
+        }, index=adata_df.obs_names)
+        adata_df.obsm["X_pca"] = np.random.randn(30, 5).astype(np.float32)
+        sections.append((
+            "15. Expandable DataFrame in obsm",
+            adata_df._repr_html_(),
+            "When <code>anndata.settings.repr_html_dataframe_expand = True</code>, "
+            "DataFrames in obsm/varm show an 'Expand' button. Click to see pandas <code>_repr_html_()</code> output "
+            "(styled table with zebra striping and hover). Configure pandas display options: "
+            "<code>pd.set_option('display.max_rows', 10)</code>. "
+            "Column names are shown in the rightmost column (meta column).",
+        ))
+    finally:
+        ad.settings.repr_html_dataframe_expand = original_expand
 
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"

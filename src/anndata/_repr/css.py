@@ -27,6 +27,7 @@ _CSS_CONTENT = """
     --anndata-bg-primary: #ffffff;
     --anndata-bg-secondary: #f8f9fa;
     --anndata-bg-tertiary: #e9ecef;
+    --anndata-highlight: #e7f1ff;
     --anndata-text-primary: #212529;
     --anndata-text-secondary: #6c757d;
     --anndata-text-muted: #adb5bd;
@@ -67,6 +68,7 @@ _CSS_CONTENT = """
         --anndata-bg-primary: #1e1e1e;
         --anndata-bg-secondary: #252526;
         --anndata-bg-tertiary: #2d2d2d;
+        --anndata-highlight: #264f78;
         --anndata-text-primary: #e0e0e0;
         --anndata-text-secondary: #a0a0a0;
         --anndata-text-muted: #707070;
@@ -95,6 +97,7 @@ body.dark-mode .anndata-repr {
     --anndata-bg-primary: #1e1e1e;
     --anndata-bg-secondary: #252526;
     --anndata-bg-tertiary: #2d2d2d;
+    --anndata-highlight: #264f78;
     --anndata-text-primary: #e0e0e0;
     --anndata-text-secondary: #a0a0a0;
     --anndata-text-muted: #707070;
@@ -549,6 +552,73 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     padding: 8px 12px 8px 24px;
     background: var(--anndata-bg-secondary);
     border-top: 1px solid var(--anndata-border-light);
+    /* Constrain width to prevent wide tables from expanding the layout */
+    max-width: 1px;
+    overflow: hidden;
+}
+
+/* Container for embedded content (e.g., pandas DataFrame HTML output) */
+.anndata-repr .adata-custom-expanded {
+    display: block;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* Use width:0 + min-width:100% trick to prevent table from expanding container */
+    width: 0;
+    min-width: 100%;
+    padding: 8px 12px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Jupyter-like table styling for embedded DataFrames */
+.anndata-repr .adata-custom-expanded > div {
+    display: inline-block;
+}
+
+.anndata-repr .adata-custom-expanded table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: none;
+    font-size: 12px;
+    font-family: var(--anndata-font-mono);
+    table-layout: auto;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.anndata-repr .adata-custom-expanded thead {
+    border-bottom: 1px solid var(--anndata-border-color);
+    vertical-align: bottom;
+}
+
+.anndata-repr .adata-custom-expanded th,
+.anndata-repr .adata-custom-expanded td {
+    vertical-align: middle;
+    padding: 6px 10px;
+    line-height: normal;
+    border: none;
+    text-align: right;
+}
+
+.anndata-repr .adata-custom-expanded th {
+    font-weight: 600;
+    color: var(--anndata-text-primary);
+    background: var(--anndata-bg-secondary);
+}
+
+.anndata-repr .adata-custom-expanded td {
+    color: var(--anndata-text-primary);
+}
+
+.anndata-repr .adata-custom-expanded tbody tr:nth-child(odd) {
+    background: var(--anndata-bg-primary);
+}
+
+.anndata-repr .adata-custom-expanded tbody tr:nth-child(even) {
+    background: var(--anndata-bg-secondary);
+}
+
+.anndata-repr .adata-custom-expanded tbody tr:hover {
+    background: var(--anndata-highlight);
 }
 
 /* Nested AnnData */

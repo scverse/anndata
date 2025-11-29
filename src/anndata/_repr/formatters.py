@@ -209,7 +209,18 @@ class SparseMatrixFormatter(TypeFormatter):
 
 
 class DataFrameFormatter(TypeFormatter):
-    """Formatter for pandas.DataFrame."""
+    """Formatter for pandas.DataFrame.
+
+    Shows column names in the meta column. Can optionally show full DataFrame
+    as expandable content via pandas ``_repr_html_()`` - controlled by setting
+    ``anndata.settings.repr_html_dataframe_expand`` (default: False).
+
+    When expanded, uses the rich Jupyter-style output from pandas. Configure
+    the display with pandas options::
+
+        pd.set_option('display.max_rows', 10)
+        pd.set_option('display.max_columns', 5)
+    """
 
     priority = 100
 
@@ -218,13 +229,54 @@ class DataFrameFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         df: pd.DataFrame = obj
+        n_rows, n_cols = len(df), len(df.columns)
+        cols = list(df.columns)
+
+        # Build compact column preview for meta column
+        meta_preview = ""
+        meta_preview_full = ""
+        if n_cols > 0:
+            max_cols_preview = 5
+            max_total_len = 40
+            meta_preview_full = f"columns: [{', '.join(str(c) for c in cols)}]"
+            if n_cols <= max_cols_preview:
+                col_str = ", ".join(str(c) for c in cols)
+            else:
+                col_str = ", ".join(str(c) for c in cols[:max_cols_preview]) + ", …"
+            # Truncate if still too long
+            if len(col_str) > max_total_len:
+                col_str = col_str[:max_total_len - 1] + "…"
+            meta_preview = f"[{col_str}]"
+
+        # Check if expandable _repr_html_ is enabled
+        try:
+            from anndata import settings
+            expand_dataframes = getattr(settings, "repr_html_dataframe_expand", False)
+        except (ImportError, AttributeError):
+            expand_dataframes = False
+
+        html_content = None
+        is_expandable = False
+        if expand_dataframes and n_rows > 0 and n_cols > 0:
+            # Use pandas _repr_html_() for native Jupyter-style output
+            # Respects pd.options.display settings (max_rows, max_columns, etc.)
+            try:
+                html_content = df._repr_html_()
+                is_expandable = True
+            except Exception:
+                pass  # Fall back to no expansion
+
         return FormattedOutput(
-            type_name=f"DataFrame ({format_number(len(df))} × {format_number(len(df.columns))})",
+            type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
             css_class="dtype-dataframe",
+            html_content=html_content,
+            is_expandable=is_expandable,
             details={
-                "n_rows": len(df),
-                "n_cols": len(df.columns),
-                "columns": list(df.columns),
+                "n_rows": n_rows,
+                "n_cols": n_cols,
+                "columns": cols,
+                "meta_preview": meta_preview,
+                "meta_preview_full": meta_preview_full,
             },
             is_serializable=True,
         )

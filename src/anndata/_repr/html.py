@@ -560,8 +560,12 @@ def _render_dataframe_section(
     df: pd.DataFrame = getattr(adata, section)
     n_cols = len(df.columns)
 
+    # Doc URL and tooltip for this section
+    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
+    tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
+
     if n_cols == 0:
-        return _render_empty_section(section)
+        return _render_empty_section(section, doc_url, tooltip)
 
     # Should this section be collapsed? (only via JS, default is expanded)
     should_collapse = n_cols > fold_threshold
@@ -573,8 +577,6 @@ def _render_dataframe_section(
     ]
 
     # Header
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
-    tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
     parts.append(_render_section_header(section, f"({n_cols} columns)", doc_url, tooltip))
 
     # Content - always visible by default (JS can hide it)
@@ -715,8 +717,12 @@ def _render_mapping_section(
     keys = list(mapping.keys())
     n_items = len(keys)
 
+    # Doc URL and tooltip for this section
+    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
+    tooltip = _get_section_tooltip(section)
+
     if n_items == 0:
-        return _render_empty_section(section)
+        return _render_empty_section(section, doc_url, tooltip)
 
     should_collapse = n_items > fold_threshold
 
@@ -727,8 +733,6 @@ def _render_mapping_section(
     ]
 
     # Header
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
-    tooltip = _get_section_tooltip(section)
     parts.append(_render_section_header(section, f"({n_items} items)", doc_url, tooltip))
 
     # Content - always visible by default
@@ -811,10 +815,13 @@ def _render_mapping_entry(
 
     parts.append("</td>")
 
-    # Meta - show shape/cols for obsm/varm only (layers are always n_vars cols)
-    meta_style = "padding:6px 12px;font-size:11px;text-align:right;"
+    # Meta - show shape/cols for obsm/varm, or custom meta_preview
+    meta_style = "padding:6px 12px;font-size:11px;text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
-    if "shape" in output.details and section in ("obsm", "varm"):
+    if "meta_preview" in output.details:
+        # Custom meta preview (e.g., DataFrame column names)
+        parts.append(f'<span title="{escape_html(output.details.get("meta_preview_full", output.details["meta_preview"]))}">{escape_html(output.details["meta_preview"])}</span>')
+    elif "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
         if len(shape) >= 2:
             parts.append(f"({format_number(shape[1])} cols)")
@@ -845,8 +852,12 @@ def _render_uns_section(
     keys = list(uns.keys())
     n_items = len(keys)
 
+    # Doc URL and tooltip
+    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.uns.html"
+    tooltip = "Unstructured annotation"
+
     if n_items == 0:
-        return _render_empty_section("uns")
+        return _render_empty_section("uns", doc_url, tooltip)
 
     should_collapse = n_items > fold_threshold
 
@@ -857,8 +868,7 @@ def _render_uns_section(
     ]
 
     # Header
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.uns.html"
-    parts.append(_render_section_header("uns", f"({n_items} items)", doc_url, "Unstructured annotation"))
+    parts.append(_render_section_header("uns", f"({n_items} items)", doc_url, tooltip))
 
     # Content - with inline styles for consistency
     content_style = "padding:0;overflow:hidden;"
@@ -1123,9 +1133,13 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     parts.append(f'<button class="adata-copy-btn" style="{btn_style}" data-copy="{escape_html(key)}" title="Copy name">📋</button>')
     parts.append("</td>")
 
-    # Type with color swatches
+    # Type
     parts.append(f'<td class="adata-entry-type" style="{type_style}">')
     parts.append(f'<span class="dtype-object">colors ({n_colors})</span>')
+    parts.append("</td>")
+
+    # Meta - color swatches
+    parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
     parts.append('<span class="adata-color-swatches">')
     for color in colors[:15]:  # Limit preview
         parts.append(f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>')
@@ -1133,8 +1147,6 @@ def _render_color_list_entry(key: str, value: Any) -> str:
         parts.append(f'<span class="adata-text-muted">+{n_colors - 15}</span>')
     parts.append("</span>")
     parts.append("</td>")
-
-    parts.append(f'<td class="adata-entry-meta" style="{meta_style}"></td>')
     parts.append("</tr>")
 
     return "\n".join(parts)
@@ -1280,7 +1292,11 @@ def _render_section_header(
     return "\n".join(parts)
 
 
-def _render_empty_section(name: str) -> str:
+def _render_empty_section(
+    name: str,
+    doc_url: str | None = None,
+    tooltip: str = "",
+) -> str:
     """Render an empty section indicator."""
     # Use data-should-collapse for consistency - empty sections always collapsed
     header_style = (
@@ -1294,8 +1310,14 @@ def _render_empty_section(name: str) -> str:
     )
     name_style = "font-weight:600;"
     count_style = "font-size:11px;"
+    link_style = "margin-left:auto;padding:2px 6px;font-size:11px;text-decoration:none;"
     content_style = "padding:0;overflow:hidden;"
     empty_style = "padding:8px 12px;font-size:11px;font-style:italic;"
+
+    # Build help link if doc_url provided
+    help_link = ""
+    if doc_url:
+        help_link = f'<a class="adata-help-link" style="{link_style}" href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
 
     return f"""
 <div class="anndata-sec" data-section="{escape_html(name)}" data-should-collapse="true">
@@ -1303,6 +1325,7 @@ def _render_empty_section(name: str) -> str:
         <span class="adata-fold-icon" style="{fold_style}">▼</span>
         <span class="anndata-sec-name" style="{name_style}">{escape_html(name)}</span>
         <span class="anndata-sec-count" style="{count_style}">(empty)</span>
+        {help_link}
     </div>
     <div class="anndata-seccontent" style="{content_style}">
         <div class="adata-empty" style="{empty_style}">No entries</div>

@@ -2499,12 +2499,54 @@ class TestBuiltinFormattersCoverage:
         from anndata._repr.registry import FormatterContext
 
         formatter = DataFrameFormatter()
-        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        ctx = FormatterContext()
 
+        # Basic DataFrame
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
         assert formatter.can_format(df)
-        result = formatter.format(df, FormatterContext())
+        result = formatter.format(df, ctx)
         assert result.details["n_rows"] == 3
         assert result.details["n_cols"] == 2
+        assert "3 × 2" in result.type_name
+        # Column names in meta_preview
+        assert "[a, b]" in result.details["meta_preview"]
+
+        # DataFrame with many columns (truncated preview)
+        df_many = pd.DataFrame({f"col_{i}": [1] for i in range(10)})
+        result_many = formatter.format(df_many, ctx)
+        assert "…" in result_many.details["meta_preview"]  # Should be truncated
+
+        # Empty DataFrame
+        df_empty = pd.DataFrame()
+        result_empty = formatter.format(df_empty, ctx)
+        assert "0 × 0" in result_empty.type_name
+        assert result_empty.details["meta_preview"] == ""  # No column preview for empty
+
+    def test_dataframe_formatter_expandable(self):
+        """Test DataFrameFormatter with expandable to_html enabled."""
+        import anndata
+        from anndata._repr.formatters import DataFrameFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DataFrameFormatter()
+        ctx = FormatterContext()
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        # Default: not expandable
+        result = formatter.format(df, ctx)
+        assert not result.is_expandable
+        assert result.html_content is None
+
+        # Enable expansion
+        original = anndata.settings.repr_html_dataframe_expand
+        try:
+            anndata.settings.repr_html_dataframe_expand = True
+            result_expanded = formatter.format(df, ctx)
+            assert result_expanded.is_expandable
+            assert result_expanded.html_content is not None
+            assert "<table" in result_expanded.html_content  # pandas to_html output
+        finally:
+            anndata.settings.repr_html_dataframe_expand = original
 
 
 class TestHTMLCoverage:
