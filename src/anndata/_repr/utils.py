@@ -13,13 +13,45 @@ from __future__ import annotations
 
 import html
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 
 if TYPE_CHECKING:
+    from typing import Any
+
+    import pandas as pd
+
     from anndata import AnnData
+
+
+def _check_serializable_single(obj: Any) -> tuple[bool, str]:
+    """Check if a single (non-container) object is serializable."""
+    # Handle None
+    if obj is None:
+        return True, ""
+
+    # Use the actual IO registry
+    try:
+        from anndata._io.specs.registry import _REGISTRY
+
+        _REGISTRY.get_spec(obj)
+        return True, ""
+    except (KeyError, TypeError):
+        pass
+
+    # Check for basic Python types that are serializable
+    if isinstance(obj, (bool, int, float, str, bytes)):
+        return True, ""
+
+    # Check numpy scalar types
+    if isinstance(obj, np.generic):
+        return True, ""
+
+    return (
+        False,
+        f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer",
+    )
 
 
 def is_serializable(
@@ -50,10 +82,6 @@ def is_serializable(
     if _depth > _max_depth:
         return False, "Maximum nesting depth exceeded"
 
-    # Handle None
-    if obj is None:
-        return True, ""
-
     # Check containers recursively
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -69,27 +97,7 @@ def is_serializable(
                 return False, f"Index {i}: {reason}"
         return True, ""
 
-    # Use the actual IO registry
-    try:
-        from anndata._io.specs.registry import _REGISTRY
-
-        _REGISTRY.get_spec(obj)
-        return True, ""
-    except (KeyError, TypeError):
-        pass
-
-    # Check for basic Python types that are serializable
-    if isinstance(obj, (bool, int, float, str, bytes)):
-        return True, ""
-
-    # Check numpy scalar types
-    if isinstance(obj, np.generic):
-        return True, ""
-
-    return (
-        False,
-        f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer",
-    )
+    return _check_serializable_single(obj)
 
 
 def should_warn_string_column(
@@ -140,6 +148,16 @@ def should_warn_string_column(
     return False, ""
 
 
+def _is_color_string(s: str) -> bool:
+    """Check if a string looks like a color value."""
+    if s.startswith("#"):
+        return True
+    s_lower = s.lower()
+    if s_lower in _NAMED_COLORS:
+        return True
+    return s_lower.startswith(("rgb(", "rgba("))
+
+
 def is_color_list(key: str, value: Any) -> bool:
     """
     Check if a value is a color list following the *_colors convention.
@@ -157,29 +175,14 @@ def is_color_list(key: str, value: Any) -> bool:
     """
     if not key.endswith("_colors"):
         return False
-
     if not isinstance(value, (list, np.ndarray, tuple)):
         return False
-
     # Empty list is valid
     if len(value) == 0:
         return True
-
     # Check first element
     first = value[0]
-
-    if isinstance(first, str):
-        # Hex color
-        if first.startswith("#"):
-            return True
-        # Named color (basic check)
-        if first.lower() in _NAMED_COLORS:
-            return True
-        # RGB/RGBA string like "rgb(255, 0, 0)"
-        if first.lower().startswith(("rgb(", "rgba(")):
-            return True
-
-    return False
+    return isinstance(first, str) and _is_color_string(first)
 
 
 def get_matching_column_colors(

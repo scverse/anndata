@@ -12,10 +12,9 @@ This module generates the complete HTML representation by:
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 
 from anndata._repr import (
     DEFAULT_FOLD_THRESHOLD,
@@ -31,8 +30,6 @@ from anndata._repr import (
 from anndata._repr.css import get_css
 from anndata._repr.javascript import get_javascript
 from anndata._repr.registry import (
-    FormattedEntry,
-    FormattedOutput,
     FormatterContext,
     extract_uns_type_hint,
     formatter_registry,
@@ -52,7 +49,12 @@ from anndata._repr.utils import (
 )
 
 if TYPE_CHECKING:
+    from typing import Any
+
+    import pandas as pd
+
     from anndata import AnnData
+    from anndata._repr.registry import FormattedEntry, FormattedOutput
 
 # Import formatters to register them (side-effect import)
 import anndata._repr.formatters  # noqa: F401
@@ -97,16 +99,16 @@ def generate_repr_html(
     """
     # Get settings with defaults
     if max_depth is None:
-        max_depth = _get_setting("repr_html_max_depth", DEFAULT_MAX_DEPTH)
+        max_depth = _get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
     if fold_threshold is None:
         fold_threshold = _get_setting(
-            "repr_html_fold_threshold", DEFAULT_FOLD_THRESHOLD
+            "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
         )
     if max_items is None:
-        max_items = _get_setting("repr_html_max_items", DEFAULT_MAX_ITEMS)
+        max_items = _get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
 
     # Check if HTML repr is enabled
-    if not _get_setting("repr_html_enabled", True):
+    if not _get_setting("repr_html_enabled", default=True):
         # Fallback to text repr
         return f"<pre>{escape_html(repr(adata))}</pre>"
 
@@ -148,56 +150,10 @@ def generate_repr_html(
 
     # Sections container
     parts.append('<div class="adata-sections">')
-
-    # X as a simple entry (like layers)
     parts.append(_render_x_entry(adata, context))
-
-    # Get custom sections grouped by their position
-    custom_sections_after = _get_custom_sections_by_position(adata)
-
-    # Standard sections with custom sections inserted at their positions
-    for section in SECTION_ORDER:
-        if section == "X":
-            continue  # Already rendered
-        if section == "raw":
-            parts.append(_render_raw_section(adata, context, fold_threshold, max_items))
-        elif section in ("obs", "var"):
-            parts.append(
-                _render_dataframe_section(
-                    adata, section, context, fold_threshold, max_items
-                )
-            )
-        elif section == "uns":
-            parts.append(
-                _render_uns_section(
-                    adata, context, fold_threshold, max_items, max_depth
-                )
-            )
-        else:
-            parts.append(
-                _render_mapping_section(
-                    adata, section, context, fold_threshold, max_items
-                )
-            )
-
-        # Render any custom sections that should appear after this section
-        if section in custom_sections_after:
-            for section_formatter in custom_sections_after[section]:
-                parts.append(
-                    _render_custom_section(
-                        adata, section_formatter, context, fold_threshold, max_items
-                    )
-                )
-
-    # Render any custom sections that don't have a specific position (appear at end)
-    if None in custom_sections_after:
-        for section_formatter in custom_sections_after[None]:
-            parts.append(
-                _render_custom_section(
-                    adata, section_formatter, context, fold_threshold, max_items
-                )
-            )
-
+    parts.extend(
+        _render_all_sections(adata, context, fold_threshold, max_items, max_depth)
+    )
     parts.append("</div>")  # adata-sections
 
     # Footer with metadata (only at top level)
@@ -216,6 +172,67 @@ def generate_repr_html(
 # =============================================================================
 # Custom Section Support
 # =============================================================================
+
+
+def _render_all_sections(
+    adata: AnnData,
+    context: FormatterContext,
+    fold_threshold: int,
+    max_items: int,
+    max_depth: int,
+) -> list[str]:
+    """Render all standard and custom sections."""
+    parts = []
+    custom_sections_after = _get_custom_sections_by_position(adata)
+
+    for section in SECTION_ORDER:
+        if section == "X":
+            continue  # Already rendered
+        parts.append(
+            _render_section(
+                adata, section, context, fold_threshold, max_items, max_depth
+            )
+        )
+
+        # Render custom sections after this section
+        if section in custom_sections_after:
+            parts.extend(
+                _render_custom_section(
+                    adata, section_formatter, context, fold_threshold, max_items
+                )
+                for section_formatter in custom_sections_after[section]
+            )
+
+    # Custom sections at end (no specific position)
+    if None in custom_sections_after:
+        parts.extend(
+            _render_custom_section(
+                adata, section_formatter, context, fold_threshold, max_items
+            )
+            for section_formatter in custom_sections_after[None]
+        )
+
+    return parts
+
+
+def _render_section(
+    adata: AnnData,
+    section: str,
+    context: FormatterContext,
+    fold_threshold: int,
+    max_items: int,
+    max_depth: int,
+) -> str:
+    """Render a single standard section."""
+    if section == "raw":
+        return _render_raw_section(adata, context, fold_threshold, max_items)
+    if section in ("obs", "var"):
+        return _render_dataframe_section(
+            adata, section, context, fold_threshold, max_items
+        )
+    if section == "uns":
+        return _render_uns_section(adata, context, fold_threshold, max_items, max_depth)
+    return _render_mapping_section(adata, section, context, fold_threshold, max_items)
 
 
 def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
@@ -622,6 +639,47 @@ def _render_dataframe_section(
     return "\n".join(parts)
 
 
+def _render_category_list(
+    categories: list,
+    colors: list[str] | None,
+    max_cats: int,
+) -> str:
+    """Render a list of category values with optional color dots."""
+    cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
+    dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
+
+    parts = ['<span class="adata-cats-list">']
+    for i, cat in enumerate(categories[:max_cats]):
+        cat_name = escape_html(str(cat))
+        color = colors[i] if colors and i < len(colors) else None
+        parts.append(f'<span class="adata-cat-item" style="{cat_style}">')
+        if color:
+            parts.append(
+                f'<span style="{dot_style}background:{escape_html(color)};"></span>'
+            )
+        parts.append(f"<span>{cat_name}</span>")
+        parts.append("</span>")
+
+    if len(categories) > max_cats:
+        remaining = len(categories) - max_cats
+        parts.append(f'<span class="adata-text-muted">...+{remaining}</span>')
+    parts.append("</span>")
+    return "".join(parts)
+
+
+def _render_unique_count(col: pd.Series) -> str:
+    """Render unique count for a non-categorical column."""
+    unique_limit = _get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
+    if unique_limit > 0 and len(col) <= unique_limit:
+        try:
+            n_unique = col.nunique()
+            return f'<span class="adata-text-muted">({n_unique} unique)</span>'
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: nunique() can fail on unhashable types
+            pass
+    return ""
+
+
 def _render_dataframe_entry(
     adata: AnnData,
     section: str,
@@ -635,7 +693,7 @@ def _render_dataframe_entry(
 
     # Check for string->category warning (skip for large columns)
     entry_warnings = list(output.warnings)
-    unique_limit = _get_setting("repr_html_unique_limit", DEFAULT_UNIQUE_LIMIT)
+    unique_limit = _get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
     should_warn, warn_msg = should_warn_string_column(col, unique_limit)
     if should_warn:
         entry_warnings.append(warn_msg)
@@ -673,7 +731,7 @@ def _render_dataframe_entry(
     # Check if this is a categorical column (for wrap button)
     is_categorical = hasattr(col, "cat")
     categories = list(col.cat.categories) if is_categorical else []
-    max_cats = _get_setting("repr_html_max_categories", DEFAULT_MAX_CATEGORIES)
+    max_cats = _get_setting("repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES)
     n_cats = min(len(categories), max_cats) if is_categorical else 0
 
     # Type cell
@@ -695,44 +753,12 @@ def _render_dataframe_entry(
         )
     parts.append("</td>")
 
-    # Meta cell - show category values with colors
+    # Meta cell - show category values with colors or unique count
     parts.append('<td class="adata-entry-meta">')
-
     if is_categorical:
-        cat_style = "display:inline-flex;align-items:center;gap:3px;margin-right:8px;"
-        dot_style = "width:8px;height:8px;border-radius:50%;display:inline-block;"
-
-        # Category list container (can be toggled to multi-line with CSS class)
-        parts.append('<span class="adata-cats-list">')
-        for i, cat in enumerate(categories[:max_cats]):
-            cat_name = escape_html(str(cat))
-            color = colors[i] if colors and i < len(colors) else None
-            parts.append(f'<span class="adata-cat-item" style="{cat_style}">')
-            if color:
-                parts.append(
-                    f'<span style="{dot_style}background:{escape_html(color)};"></span>'
-                )
-            parts.append(f"<span>{cat_name}</span>")
-            parts.append("</span>")
-
-        if len(categories) > max_cats:
-            remaining = len(categories) - max_cats
-            parts.append(f'<span class="adata-text-muted">...+{remaining}</span>')
-        parts.append("</span>")
-
+        parts.append(_render_category_list(categories, colors, max_cats))
     elif hasattr(col, "nunique"):
-        # Skip nunique() for very large columns to avoid performance issues
-        unique_limit = _get_setting("repr_html_unique_limit", DEFAULT_UNIQUE_LIMIT)
-        if unique_limit > 0 and len(col) <= unique_limit:
-            try:
-                n_unique = col.nunique()
-                parts.append(
-                    f'<span class="adata-text-muted">({n_unique} unique)</span>'
-                )
-            except Exception:  # noqa: BLE001
-                # Intentional broad catch: nunique() can fail on unhashable types
-                pass
-
+        parts.append(_render_unique_count(col))
     parts.append("</td>")
 
     parts.append("</tr>")
@@ -795,6 +821,73 @@ def _render_mapping_section(
     return "\n".join(parts)
 
 
+def _render_type_cell(
+    output: FormattedOutput,
+    expand_btn_style: str,
+    *,
+    has_expandable_content: bool,
+) -> list[str]:
+    """Render the type cell for a mapping entry."""
+    parts = ['<td class="adata-entry-type">']
+
+    if output.warnings or not output.is_serializable:
+        entry_warnings = output.warnings.copy()
+        if not output.is_serializable:
+            entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
+        title = escape_html("; ".join(entry_warnings))
+        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
+        parts.append(f"{escape_html(output.type_name)} ⚠️")
+        parts.append("</span>")
+    else:
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
+
+    if has_expandable_content:
+        parts.append(
+            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
+        )
+
+    has_columns_list = output.details.get("has_columns_list", False)
+    if has_columns_list:
+        parts.append(
+            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
+        )
+
+    if output.html_content and not output.is_expandable:
+        parts.append(
+            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
+        )
+
+    parts.append("</td>")
+    return parts
+
+
+def _render_mapping_meta_cell(output: FormattedOutput, section: str) -> list[str]:
+    """Render the meta cell for a mapping entry."""
+    parts = ['<td class="adata-entry-meta">']
+
+    has_columns_list = output.details.get("has_columns_list", False)
+    if has_columns_list and "columns" in output.details:
+        columns = output.details["columns"]
+        col_str = ", ".join(escape_html(str(c)) for c in columns)
+        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
+    elif "meta_preview" in output.details:
+        full_preview = output.details.get(
+            "meta_preview_full", output.details["meta_preview"]
+        )
+        parts.append(
+            f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
+        )
+    elif "shape" in output.details and section in ("obsm", "varm"):
+        shape = output.details["shape"]
+        if len(shape) >= 2:
+            parts.append(f"({format_number(shape[1])} cols)")
+
+    parts.append("</td>")
+    return parts
+
+
 def _render_mapping_entry(
     key: str,
     value: Any,
@@ -815,7 +908,6 @@ def _render_mapping_entry(
     if not output.is_serializable:
         entry_class += " error"
 
-    # Check if we have expandable custom HTML content
     has_expandable_content = output.html_content and output.is_expandable
 
     parts = [
@@ -823,7 +915,7 @@ def _render_mapping_entry(
         f'data-dtype="{escape_html(output.type_name)}">'
     ]
 
-    # Name
+    # Name cell
     parts.append('<td class="adata-entry-name">')
     parts.append(escape_html(key))
     parts.append(
@@ -831,63 +923,19 @@ def _render_mapping_entry(
     )
     parts.append("</td>")
 
-    # Type
-    parts.append('<td class="adata-entry-type">')
-    if output.warnings or not output.is_serializable:
-        warnings = output.warnings.copy()
-        if not output.is_serializable:
-            warnings.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(output.type_name)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+    # Type cell
+    parts.extend(
+        _render_type_cell(
+            output, expand_btn_style, has_expandable_content=has_expandable_content
         )
+    )
 
-    # Add expand button for custom HTML content
-    if has_expandable_content:
-        parts.append(
-            f'<button class="adata-expand-btn" style="{expand_btn_style}" aria-expanded="false">Expand ▼</button>'
-        )
-
-    # Add wrap button for DataFrame columns list
-    has_columns_list = output.details.get("has_columns_list", False)
-    if has_columns_list:
-        parts.append(
-            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
-        )
-
-    # Inline (non-expandable) custom HTML content
-    if output.html_content and not output.is_expandable:
-        parts.append(
-            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
-        )
-
-    parts.append("</td>")
-
-    # Meta - show shape/cols for obsm/varm, or custom meta_preview (DataFrame columns)
-    parts.append('<td class="adata-entry-meta">')
-    if has_columns_list and "columns" in output.details:
-        # Render DataFrame columns as a wrappable list
-        columns = output.details["columns"]
-        col_str = ", ".join(escape_html(str(c)) for c in columns)
-        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
-    elif "meta_preview" in output.details:
-        # Other meta preview (non-DataFrame)
-        parts.append(
-            f'<span title="{escape_html(output.details.get("meta_preview_full", output.details["meta_preview"]))}">{escape_html(output.details["meta_preview"])}</span>'
-        )
-    elif "shape" in output.details and section in ("obsm", "varm"):
-        shape = output.details["shape"]
-        if len(shape) >= 2:
-            parts.append(f"({format_number(shape[1])} cols)")
-    parts.append("</td>")
+    # Meta cell
+    parts.extend(_render_mapping_meta_cell(output, section))
 
     parts.append("</tr>")
 
-    # Expandable custom HTML content (hidden by default, shown on expand)
+    # Expandable content row
     if has_expandable_content:
         parts.append('<tr class="adata-nested-row">')
         parts.append('<td colspan="3" class="adata-nested-content">')
@@ -1013,7 +1061,9 @@ def _render_uns_entry_with_preview(
     - Other types: type info only
     """
     output = formatter_registry.format_value(value, context)
-    max_str_len = _get_setting("repr_html_max_string_length", DEFAULT_MAX_STRING_LENGTH)
+    max_str_len = _get_setting(
+        "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
+    )
 
     # Generate preview based on type
     preview = _generate_value_preview(value, max_str_len)
@@ -1072,60 +1122,69 @@ def _render_uns_entry_with_preview(
     return "\n".join(parts)
 
 
+def _preview_string(value: str, max_len: int) -> str:
+    """Preview a string value."""
+    if len(value) <= max_len:
+        return f'"{value}"'
+    return f'"{value[:max_len]}..."'
+
+
+def _preview_number(value: float | np.integer | np.floating) -> str:
+    """Preview a numeric value."""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, np.integer)):
+        return str(value)
+    # Float - format nicely
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.6g}"
+
+
+def _preview_dict(value: dict) -> str:
+    """Preview a dict value."""
+    n_keys = len(value)
+    if n_keys == 0:
+        return "{}"
+    if n_keys <= 3:
+        keys_preview = ", ".join(str(k) for k in list(value.keys())[:3])
+        return f"{{{keys_preview}}}"
+    keys_preview = ", ".join(str(k) for k in list(value.keys())[:2])
+    return f"{{{keys_preview}, ...}} ({n_keys} keys)"
+
+
+def _preview_sequence(value: list | tuple) -> str:
+    """Preview a list or tuple value."""
+    n_items = len(value)
+    bracket = "[]" if isinstance(value, list) else "()"
+    if n_items == 0:
+        return bracket
+    if n_items <= 3:
+        try:
+            items = [_preview_item(v) for v in value[:3]]
+            if all(items):
+                return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: preview generation is best-effort
+            pass
+    return f"({n_items} items)"
+
+
 def _generate_value_preview(value: Any, max_len: int = 100) -> str:
     """Generate a human-readable preview of a value.
 
     Returns empty string if no meaningful preview can be generated.
     """
-    # Strings
-    if isinstance(value, str):
-        if len(value) <= max_len:
-            return f'"{value}"'
-        return f'"{value[:max_len]}..."'
-
-    # Numbers
-    if isinstance(value, bool):
-        return str(value)
-    if isinstance(value, (int, np.integer)):
-        return str(value)
-    if isinstance(value, (float, np.floating)):
-        # Format floats nicely
-        if value == int(value):
-            return str(int(value))
-        return f"{value:.6g}"
-
-    # Small dicts
-    if isinstance(value, dict):
-        n_keys = len(value)
-        if n_keys == 0:
-            return "{}"
-        if n_keys <= 3:
-            keys_preview = ", ".join(str(k) for k in list(value.keys())[:3])
-            return f"{{{keys_preview}}}"
-        keys_preview = ", ".join(str(k) for k in list(value.keys())[:2])
-        return f"{{{keys_preview}, ...}} ({n_keys} keys)"
-
-    # Small lists/tuples
-    if isinstance(value, (list, tuple)):
-        n_items = len(value)
-        if n_items == 0:
-            return "[]" if isinstance(value, list) else "()"
-        if n_items <= 3:
-            # Show items if they're simple
-            try:
-                items = [_preview_item(v) for v in value[:3]]
-                if all(items):
-                    bracket = "[]" if isinstance(value, list) else "()"
-                    return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
-            except Exception:  # noqa: BLE001
-                # Intentional broad catch: preview generation is best-effort
-                pass
-        return f"({n_items} items)"
-
-    # None
     if value is None:
         return "None"
-
+    if isinstance(value, str):
+        return _preview_string(value, max_len)
+    if isinstance(value, (bool, int, float, np.integer, np.floating)):
+        return _preview_number(value)
+    if isinstance(value, dict):
+        return _preview_dict(value)
+    if isinstance(value, (list, tuple)):
+        return _preview_sequence(value)
     # No preview for complex types
     return ""
 
@@ -1216,10 +1275,10 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     # Meta - color swatches
     parts.append(f'<td class="adata-entry-meta" style="{meta_style}">')
     parts.append('<span class="adata-color-swatches">')
-    for color in colors[:15]:  # Limit preview
-        parts.append(
-            f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
-        )
+    parts.extend(
+        f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
+        for color in colors[:15]  # Limit preview
+    )
     if n_colors > 15:
         parts.append(f'<span class="adata-text-muted">+{n_colors - 15}</span>')
     parts.append("</span>")
@@ -1466,7 +1525,7 @@ def _get_section_tooltip(section: str) -> str:
     return tooltips.get(section, "")
 
 
-def _get_setting(name: str, default: Any) -> Any:
+def _get_setting(name: str, *, default: Any) -> Any:
     """Get a setting value, falling back to default."""
     try:
         from anndata import settings
