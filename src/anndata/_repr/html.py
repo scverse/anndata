@@ -261,7 +261,12 @@ def _render_all_sections(
             continue  # Already rendered
         parts.append(
             _render_section(
-                adata, section, context, fold_threshold, max_items, max_depth
+                adata,
+                section,
+                context,
+                fold_threshold=fold_threshold,
+                max_items=max_items,
+                max_depth=max_depth,
             )
         )
 
@@ -290,6 +295,7 @@ def _render_section(
     adata: AnnData,
     section: str,
     context: FormatterContext,
+    *,
     fold_threshold: int,
     max_items: int,
     max_depth: int,
