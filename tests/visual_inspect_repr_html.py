@@ -938,36 +938,53 @@ def main():  # noqa: PLR0915
         "#ff7f00",
     ]
     adata_readme.obsm["X_pca"] = np.random.randn(50, 10).astype(np.float32)
-    adata_readme.uns["README"] = """# PBMC 3k Dataset
+    adata_readme.uns["README"] = """# Human Lung Adenocarcinoma - Patient LU-A047
 
-## Description
-This dataset contains **3,000 peripheral blood mononuclear cells** (PBMCs) from a healthy donor.
-It is commonly used as a tutorial dataset for single-cell RNA sequencing analysis.
+Single-cell RNA sequencing of a primary lung adenocarcinoma tumor sample. This dataset was generated as part of a study investigating tumor heterogeneity and immune cell infiltration patterns in early-stage lung cancer.
 
-## Processing
-The data has been processed with the following steps:
-1. Quality control filtering
-2. Normalization using `scanpy.pp.normalize_total`
-3. Log transformation
-4. Highly variable gene selection
-5. PCA dimensionality reduction
+## Sample Information
+- **Tissue**: Primary lung tumor, right upper lobe
+- **Diagnosis**: Adenocarcinoma, stage IIA (T2aN0M0)
+- **Collection date**: 2024-03-15
+- **Patient ID**: LU-A047 (IRB #2023-0892)
 
-## Annotations
-- **cluster**: Leiden clustering results (5 clusters: A-E)
-- **X_pca**: First 10 principal components
+## Wet Lab Protocol
+1. Fresh tissue dissociation using Miltenyi Tumor Dissociation Kit
+2. Dead cell removal via MACS Dead Cell Removal Kit
+3. Red blood cell lysis (ACK buffer, 2 min)
+4. Filtered through 40 µm cell strainer
+5. Viability assessment: **92%** (Trypan Blue)
 
-## Code Example
+## 10x Genomics Processing
+- **Chemistry**: Chromium Next GEM 3' v3.1
+- **Target cells**: 10,000
+- **Cells recovered**: 8,247
+- **Sequencing**: NovaSeq 6000, 28×90 bp
+
+## Quality Metrics
+| Metric | Value |
+|--------|-------|
+| Median genes/cell | 2,847 |
+| Median UMIs/cell | 8,392 |
+| Sequencing saturation | 78.2% |
+
+## Usage Example
 ```python
 import scanpy as sc
-adata = sc.read_h5ad("pbmc3k.h5ad")
-sc.pl.umap(adata, color="cluster")
+
+adata = sc.read_h5ad("LU-A047.h5ad")
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pl.umap(adata, color=["cell_type", "cluster"])
 ```
 
 ## References
-- [10x Genomics PBMC dataset](https://support.10xgenomics.com/single-cell-gene-expression/datasets)
-- [Scanpy tutorial](https://scanpy-tutorials.readthedocs.io/)
+- [10x Genomics Cell Ranger](https://support.10xgenomics.com/single-cell-gene-expression)
+- [Scanpy documentation](https://scanpy.readthedocs.io/)
 
-> **Note**: This is example data for demonstration purposes.
+## Contact
+For questions about this dataset: `genome-lab@example-hospital.org`
+
+> **Note**: All patient identifiers have been de-identified per HIPAA guidelines.
 """
     sections.append((
         "17. README Icon",
@@ -975,7 +992,7 @@ sc.pl.umap(adata, color="cluster")
         "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
         "Click the icon to open a modal with the README content rendered as markdown. "
         "The modal supports: headers (h1-h4), bold/italic, code blocks, inline code, "
-        "ordered lists (numbered), unordered lists (bulleted), links, and blockquotes. "
+        "ordered lists (numbered), unordered lists (bulleted), links, tables, and blockquotes. "
         "Press Escape or click outside to close.",
     ))
 
