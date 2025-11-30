@@ -541,6 +541,25 @@ def _render_header(
             f'<span class="adata-badge adata-badge-extension">{type_name}</span>'
         )
 
+    # README icon if uns["README"] exists with a string
+    readme_content = adata.uns.get("README") if hasattr(adata, "uns") else None
+    if isinstance(readme_content, str) and readme_content.strip():
+        escaped_readme = escape_html(readme_content)
+        # Truncate for no-JS tooltip (first 500 chars)
+        tooltip_text = readme_content[:500]
+        if len(readme_content) > 500:
+            tooltip_text += "..."
+        escaped_tooltip = escape_html(tooltip_text)
+
+        parts.append(
+            f'<span class="adata-readme-icon" '
+            f'data-readme="{escaped_readme}" '
+            f'title="{escaped_tooltip}" '
+            f'role="button" tabindex="0" aria-label="View README">'
+            f"ⓘ"
+            f"</span>"
+        )
+
     # Search box on the right (spacer pushes it right)
     if show_search:
         parts.append('<span style="flex-grow:1;"></span>')

@@ -4144,3 +4144,104 @@ class TestSectionTooltips:
         from anndata._repr.html import _get_section_tooltip
 
         assert _get_section_tooltip("unknown_section") == ""
+
+
+# =============================================================================
+# README Button Feature Tests
+# =============================================================================
+
+
+class TestReadmeIcon:
+    """Tests for the README icon feature in header."""
+
+    def test_readme_icon_appears_with_string(self):
+        """Test README icon appears when uns['README'] is a string."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = "# My Dataset\n\nThis is a test dataset."
+
+        html = adata._repr_html_()
+        # Check for README icon element
+        assert 'class="adata-readme-icon"' in html
+        # Icon should have info symbol
+        assert "ⓘ" in html
+
+    def test_readme_icon_not_shown_without_readme(self):
+        """Test README icon is not shown when no README exists."""
+        adata = AnnData(np.zeros((10, 5)))
+
+        html = adata._repr_html_()
+        # Check for absence of README icon element
+        assert 'class="adata-readme-icon"' not in html
+
+    def test_readme_icon_not_shown_for_empty_string(self):
+        """Test README icon is not shown for empty string."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = ""
+
+        html = adata._repr_html_()
+        assert 'class="adata-readme-icon"' not in html
+
+    def test_readme_icon_not_shown_for_whitespace_only(self):
+        """Test README icon is not shown for whitespace-only string."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = "   \n\t  "
+
+        html = adata._repr_html_()
+        assert 'class="adata-readme-icon"' not in html
+
+    def test_readme_icon_not_shown_for_non_string(self):
+        """Test README icon is not shown for non-string values."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = {"title": "My Dataset"}  # dict, not string
+
+        html = adata._repr_html_()
+        assert 'class="adata-readme-icon"' not in html
+
+    def test_readme_content_escaped(self):
+        """Test README content is properly HTML-escaped."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = '<script>alert("xss")</script>'
+
+        html = adata._repr_html_()
+        # Script tag in README should be escaped in the data-readme attribute
+        # Note: the HTML does contain <script> tags for the JS functionality
+        assert "&lt;script&gt;alert" in html
+        assert "alert(&quot;xss&quot;)" in html
+
+    def test_readme_tooltip_truncated(self):
+        """Test README tooltip is truncated for long content."""
+        adata = AnnData(np.zeros((10, 5)))
+        long_readme = "A" * 1000  # Very long README
+        adata.uns["README"] = long_readme
+
+        html = adata._repr_html_()
+        # README icon should be present
+        assert 'class="adata-readme-icon"' in html
+        # The full 1000 chars should be in data-readme, but tooltip should be shorter
+        assert 'title="' in html
+
+    def test_readme_data_attribute_contains_content(self):
+        """Test README content is in data-readme attribute."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = """# Dataset Title
+
+## Description
+This dataset contains important data.
+"""
+
+        html = adata._repr_html_()
+        assert 'class="adata-readme-icon"' in html
+        # Content should be in data-readme attribute (escaped)
+        assert "data-readme=" in html
+        # Title should be somewhere in the escaped content
+        assert "Dataset Title" in html
+
+    def test_readme_icon_accessibility(self):
+        """Test README icon has proper accessibility attributes."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["README"] = "# Test\n\nContent"
+
+        html = adata._repr_html_()
+        assert 'role="button"' in html
+        assert 'tabindex="0"' in html
+        assert 'aria-label="View README"' in html

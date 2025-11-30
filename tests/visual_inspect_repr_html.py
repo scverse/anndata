@@ -926,6 +926,82 @@ def main():  # noqa: PLR0915
         "full name in a tooltip.",
     ))
 
+    # Test 17: README icon
+    print("  17. README icon")
+    adata_readme = AnnData(np.random.randn(50, 20).astype(np.float32))
+    adata_readme.obs["cluster"] = pd.Categorical(["A", "B", "C", "D", "E"] * 10)
+    adata_readme.uns["cluster_colors"] = [
+        "#e41a1c",
+        "#377eb8",
+        "#4daf4a",
+        "#984ea3",
+        "#ff7f00",
+    ]
+    adata_readme.obsm["X_pca"] = np.random.randn(50, 10).astype(np.float32)
+    adata_readme.uns["README"] = """# PBMC 3k Dataset
+
+## Description
+This dataset contains **3,000 peripheral blood mononuclear cells** (PBMCs) from a healthy donor.
+It is commonly used as a tutorial dataset for single-cell RNA sequencing analysis.
+
+## Processing
+The data has been processed with the following steps:
+1. Quality control filtering
+2. Normalization using `scanpy.pp.normalize_total`
+3. Log transformation
+4. Highly variable gene selection
+5. PCA dimensionality reduction
+
+## Annotations
+- **cluster**: Leiden clustering results (5 clusters: A-E)
+- **X_pca**: First 10 principal components
+
+## Code Example
+```python
+import scanpy as sc
+adata = sc.read_h5ad("pbmc3k.h5ad")
+sc.pl.umap(adata, color="cluster")
+```
+
+## References
+- [10x Genomics PBMC dataset](https://support.10xgenomics.com/single-cell-gene-expression/datasets)
+- [Scanpy tutorial](https://scanpy-tutorials.readthedocs.io/)
+
+> **Note**: This is example data for demonstration purposes.
+"""
+    sections.append((
+        "17. README Icon",
+        adata_readme._repr_html_(),
+        "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
+        "Click the icon to open a modal with the README content rendered as markdown. "
+        "The modal supports: headers (h1-h4), bold/italic, code blocks, inline code, "
+        "ordered lists (numbered), unordered lists (bulleted), links, and blockquotes. "
+        "Press Escape or click outside to close.",
+    ))
+
+    # Test 18: README icon in No-JS mode
+    print("  18. README icon in No-JS mode")
+    adata_readme_nojs = AnnData(np.random.randn(20, 10).astype(np.float32))
+    adata_readme_nojs.obs["batch"] = pd.Categorical(["batch1", "batch2"] * 10)
+    adata_readme_nojs.uns["README"] = """# Dataset Information
+
+This dataset contains processed single-cell data.
+
+## Key Features
+- 20 cells, 10 genes
+- 2 batches
+
+For more details, see the full documentation.
+"""
+    nojs_readme_html = strip_script_tags(adata_readme_nojs._repr_html_())
+    sections.append((
+        "18. README Icon in No-JS Mode",
+        nojs_readme_html,
+        "In no-JS mode, the README icon still appears but clicking it won't open a modal. "
+        "Instead, **hover over the icon** to see the README content as a tooltip (browser's "
+        "native title attribute). The tooltip shows the first 500 characters of the README.",
+    ))
+
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"
     html_content = create_html_page(sections)

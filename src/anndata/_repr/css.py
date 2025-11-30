@@ -171,6 +171,159 @@ body.dark-mode .anndata-repr {
     color: white;
 }
 
+/* README icon in header */
+.anndata-repr .adata-readme-icon {
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    margin-left: 4px;
+}
+
+.anndata-repr .adata-readme-icon:hover {
+    opacity: 1;
+}
+
+/* README modal overlay */
+.anndata-repr .adata-readme-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+}
+
+/* README modal */
+.anndata-repr .adata-readme-modal {
+    background: var(--anndata-bg-primary);
+    border: 1px solid var(--anndata-border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    max-width: 700px;
+    max-height: 80vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.anndata-repr .adata-readme-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--anndata-border-color);
+    background: var(--anndata-bg-secondary);
+}
+
+.anndata-repr .adata-readme-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--anndata-text-primary);
+}
+
+.anndata-repr .adata-readme-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--anndata-text-secondary);
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.anndata-repr .adata-readme-close:hover {
+    color: var(--anndata-text-primary);
+}
+
+.anndata-repr .adata-readme-content {
+    padding: 16px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--anndata-text-primary);
+}
+
+/* Markdown rendering in README */
+.anndata-repr .adata-readme-content h1,
+.anndata-repr .adata-readme-content h2,
+.anndata-repr .adata-readme-content h3,
+.anndata-repr .adata-readme-content h4 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--anndata-text-primary);
+}
+
+.anndata-repr .adata-readme-content h1 {
+    font-size: 1.5em;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--anndata-border-color);
+}
+.anndata-repr .adata-readme-content h2 { font-size: 1.3em; }
+.anndata-repr .adata-readme-content h3 { font-size: 1.1em; }
+
+.anndata-repr .adata-readme-content p {
+    margin: 0 0 12px 0;
+}
+
+.anndata-repr .adata-readme-content code {
+    background: var(--anndata-code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--anndata-font-mono);
+    font-size: 0.9em;
+}
+
+.anndata-repr .adata-readme-content pre {
+    background: var(--anndata-code-bg);
+    padding: 12px;
+    border-radius: var(--anndata-radius);
+    overflow-x: auto;
+    margin: 12px 0;
+}
+
+.anndata-repr .adata-readme-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.anndata-repr .adata-readme-content ul,
+.anndata-repr .adata-readme-content ol {
+    margin: 0 0 12px 24px;
+    padding-left: 0;
+    list-style-position: outside;
+}
+
+.anndata-repr .adata-readme-content li {
+    margin: 4px 0;
+    padding-left: 4px;
+}
+
+.anndata-repr .adata-readme-content a {
+    color: var(--anndata-link-color);
+    text-decoration: none;
+}
+
+.anndata-repr .adata-readme-content a:hover {
+    text-decoration: underline;
+}
+
+.anndata-repr .adata-readme-content blockquote {
+    margin: 12px 0;
+    padding: 8px 16px;
+    border-left: 3px solid var(--anndata-accent-color);
+    background: var(--anndata-bg-secondary);
+    color: var(--anndata-text-secondary);
+}
+
 /* Search box */
 .anndata-repr .adata-search {
     padding: 8px 12px;
