@@ -78,7 +78,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "pytest>=8.2",
+    "pytest>=9.0",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
