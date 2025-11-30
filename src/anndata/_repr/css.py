@@ -288,6 +288,9 @@ body.dark-mode .anndata-repr {
     border-radius: var(--anndata-radius);
     overflow-x: auto;
     margin: 12px 0;
+    font-family: var(--anndata-font-mono);
+    font-size: 0.9em;
+    line-height: 1.5;
 }
 
 .anndata-repr .adata-readme-content pre code {

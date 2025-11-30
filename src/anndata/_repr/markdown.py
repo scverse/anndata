@@ -106,11 +106,21 @@ _MARKDOWN_PARSER_JS = """
             return html;
         });
 
-        // Code blocks (``` ... ```)
-        text = text.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
+        // Extract code blocks and inline code first to protect from formatting
+        const codeBlocks = [];
+        const inlineCodes = [];
 
-        // Inline code (`...`)
-        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Code blocks (``` ... ```) - extract and replace with placeholder
+        text = text.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, (match, lang, code) => {
+            codeBlocks.push('<pre><code>' + code + '</code></pre>');
+            return '%%CODEBLOCK' + (codeBlocks.length - 1) + '%%';
+        });
+
+        // Inline code (`...`) - extract and replace with placeholder
+        text = text.replace(/`([^`]+)`/g, (match, code) => {
+            inlineCodes.push('<code>' + code + '</code>');
+            return '%%INLINECODE' + (inlineCodes.length - 1) + '%%';
+        });
 
         // Headers
         text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -167,6 +177,14 @@ _MARKDOWN_PARSER_JS = """
 
         // Single newlines to <br> within paragraphs
         text = text.replace(/([^>])\\n([^<])/g, '$1<br>$2');
+
+        // Restore code blocks and inline code
+        codeBlocks.forEach((block, i) => {
+            text = text.replace('%%CODEBLOCK' + i + '%%', block);
+        });
+        inlineCodes.forEach((code, i) => {
+            text = text.replace('%%INLINECODE' + i + '%%', code);
+        });
 
         return text;
     }
