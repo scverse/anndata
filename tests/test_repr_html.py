@@ -3411,3 +3411,736 @@ class TestColumnWidthSettings:
         adata = AnnData()  # Empty
         width = _calculate_field_name_width(adata, max_width=400)
         assert width == 100  # Default minimum for empty
+
+
+# =============================================================================
+# Coverage Tests for html.py Functions
+# =============================================================================
+
+
+class TestGenerateReprHtmlDirectly:
+    """Tests calling generate_repr_html directly to cover internal code paths."""
+
+    def test_html_disabled_returns_pre(self):
+        """Test disabled HTML returns <pre> wrapped text when called directly."""
+        from anndata import settings
+        from anndata._repr.html import generate_repr_html
+
+        adata = AnnData(np.zeros((10, 5)))
+
+        with settings.override(repr_html_enabled=False):
+            html = generate_repr_html(adata)
+            # Should return pre-wrapped text
+            assert html is not None
+            assert html.startswith("<pre>")
+            assert "</pre>" in html
+
+    def test_max_depth_reached_at_depth_zero(self):
+        """Test max depth indicator when depth >= max_depth."""
+        from anndata._repr.html import generate_repr_html
+
+        adata = AnnData(np.zeros((10, 5)))
+
+        # Call with depth >= max_depth
+        html = generate_repr_html(adata, depth=3, max_depth=2)
+        assert "max depth" in html.lower()
+        assert "10" in html  # n_obs
+        assert "5" in html  # n_vars
+
+    def test_nested_anndata_not_expandable_at_max_depth(self):
+        """Test nested AnnData doesn't expand when at max depth."""
+        inner = AnnData(np.zeros((5, 3)))
+        outer = AnnData(np.zeros((10, 5)))
+        outer.uns["nested"] = inner
+
+        # With max_depth=1, the inner AnnData shouldn't be expandable
+        from anndata import settings
+
+        with settings.override(repr_html_max_depth=1):
+            html = outer._repr_html_()
+            assert "nested" in html
+            # Should show max depth reached for nested
+            assert "max depth" in html.lower()
+
+
+class TestValuePreviewFunctions:
+    """Tests for value preview helper functions in html.py."""
+
+    def test_preview_string_short(self):
+        """Test string preview for short strings."""
+        from anndata._repr.html import _preview_string
+
+        result = _preview_string("hello", max_len=100)
+        assert result == '"hello"'
+
+    def test_preview_string_long(self):
+        """Test string preview for long strings."""
+        from anndata._repr.html import _preview_string
+
+        long_str = "a" * 100
+        result = _preview_string(long_str, max_len=20)
+        assert len(result) < 30  # Much shorter than original
+        assert result.endswith('..."')
+
+    def test_preview_number_bool(self):
+        """Test number preview for booleans."""
+        from anndata._repr.html import _preview_number
+
+        assert _preview_number(True) == "True"  # noqa: FBT003
+        assert _preview_number(False) == "False"  # noqa: FBT003
+
+    def test_preview_number_int(self):
+        """Test number preview for integers."""
+        from anndata._repr.html import _preview_number
+
+        assert _preview_number(42) == "42"
+        assert _preview_number(np.int64(42)) == "42"
+
+    def test_preview_number_float_whole(self):
+        """Test number preview for whole number floats."""
+        from anndata._repr.html import _preview_number
+
+        assert _preview_number(42.0) == "42"
+        assert _preview_number(np.float32(100.0)) == "100"
+
+    def test_preview_number_float_decimal(self):
+        """Test number preview for decimal floats."""
+        from anndata._repr.html import _preview_number
+
+        result = _preview_number(3.14159265359)
+        # Should be formatted concisely with :.6g
+        assert "3.14159" in result
+
+    def test_preview_dict_empty(self):
+        """Test dict preview for empty dict."""
+        from anndata._repr.html import _preview_dict
+
+        assert _preview_dict({}) == "{}"
+
+    def test_preview_dict_small(self):
+        """Test dict preview for small dict (<=3 keys)."""
+        from anndata._repr.html import _preview_dict
+
+        result = _preview_dict({"a": 1, "b": 2})
+        assert "a" in result
+        assert "b" in result
+        assert "{" in result
+
+    def test_preview_dict_large(self):
+        """Test dict preview for large dict (>3 keys)."""
+        from anndata._repr.html import _preview_dict
+
+        d = {f"key_{i}": i for i in range(10)}
+        result = _preview_dict(d)
+        assert "keys" in result.lower()
+        assert "10" in result
+
+    def test_preview_sequence_empty_list(self):
+        """Test sequence preview for empty list."""
+        from anndata._repr.html import _preview_sequence
+
+        assert _preview_sequence([]) == "[]"
+
+    def test_preview_sequence_empty_tuple(self):
+        """Test sequence preview for empty tuple."""
+        from anndata._repr.html import _preview_sequence
+
+        assert _preview_sequence(()) == "()"
+
+    def test_preview_sequence_small_list(self):
+        """Test sequence preview for small list."""
+        from anndata._repr.html import _preview_sequence
+
+        result = _preview_sequence([1, 2, 3])
+        assert "[" in result
+        assert "]" in result
+        assert "1" in result
+
+    def test_preview_sequence_small_tuple(self):
+        """Test sequence preview for small tuple."""
+        from anndata._repr.html import _preview_sequence
+
+        result = _preview_sequence((1, 2, 3))
+        assert "(" in result
+        assert ")" in result
+
+    def test_preview_sequence_large(self):
+        """Test sequence preview for large sequence."""
+        from anndata._repr.html import _preview_sequence
+
+        result = _preview_sequence(list(range(100)))
+        assert "items" in result.lower()
+        assert "100" in result
+
+    def test_preview_sequence_with_complex_items(self):
+        """Test sequence preview with complex items (returns item count)."""
+        from anndata._repr.html import _preview_sequence
+
+        # Lists with nested structures should fall back to item count
+        result = _preview_sequence([{"a": 1}, {"b": 2}])
+        assert "2" in result  # 2 items
+
+    def test_preview_item_string(self):
+        """Test item preview for strings."""
+        from anndata._repr.html import _preview_item
+
+        assert _preview_item("hello") == '"hello"'
+        assert _preview_item("a" * 100).endswith('..."')
+
+    def test_preview_item_numbers(self):
+        """Test item preview for numbers."""
+        from anndata._repr.html import _preview_item
+
+        assert _preview_item(42) == "42"
+        assert _preview_item(3.14) == "3.14"
+        assert _preview_item(True) == "True"  # noqa: FBT003
+
+    def test_preview_item_none(self):
+        """Test item preview for None."""
+        from anndata._repr.html import _preview_item
+
+        assert _preview_item(None) == "None"
+
+    def test_preview_item_complex(self):
+        """Test item preview for complex types returns empty."""
+        from anndata._repr.html import _preview_item
+
+        assert _preview_item([1, 2, 3]) == ""
+        assert _preview_item({"a": 1}) == ""
+
+    def test_generate_value_preview_none(self):
+        """Test value preview for None."""
+        from anndata._repr.html import _generate_value_preview
+
+        assert _generate_value_preview(None) == "None"
+
+    def test_generate_value_preview_string(self):
+        """Test value preview for string."""
+        from anndata._repr.html import _generate_value_preview
+
+        result = _generate_value_preview("hello world")
+        assert '"hello world"' in result
+
+    def test_generate_value_preview_number(self):
+        """Test value preview for number."""
+        from anndata._repr.html import _generate_value_preview
+
+        assert "42" in _generate_value_preview(42)
+        assert "3.14" in _generate_value_preview(3.14)
+
+    def test_generate_value_preview_dict(self):
+        """Test value preview for dict."""
+        from anndata._repr.html import _generate_value_preview
+
+        result = _generate_value_preview({"key": "value"})
+        assert "key" in result
+
+    def test_generate_value_preview_list(self):
+        """Test value preview for list."""
+        from anndata._repr.html import _generate_value_preview
+
+        result = _generate_value_preview([1, 2, 3])
+        assert "[" in result or "items" in result
+
+    def test_generate_value_preview_complex(self):
+        """Test value preview for complex types returns empty."""
+        from anndata._repr.html import _generate_value_preview
+
+        class CustomClass:
+            pass
+
+        assert _generate_value_preview(CustomClass()) == ""
+
+
+class TestRawSectionRendering:
+    """Tests for raw section rendering."""
+
+    def test_raw_section_with_var(self):
+        """Test raw section shows var column count."""
+        adata = AnnData(np.zeros((10, 20)))
+        adata.raw = adata.copy()
+        # Now subset var
+        adata = adata[:, :5]
+
+        html = adata._repr_html_()
+        assert "raw" in html.lower()
+        # Should show raw.var info
+        assert "var" in html.lower()
+
+    def test_raw_section_with_varm(self):
+        """Test raw section shows varm when present."""
+        adata = AnnData(np.zeros((10, 20)))
+        adata.varm["PCs"] = np.zeros((20, 50))
+        adata.raw = adata.copy()
+        adata = adata[:, :5]
+
+        html = adata._repr_html_()
+        assert "raw" in html.lower()
+
+
+class TestColorListRendering:
+    """Tests for color list entry rendering."""
+
+    def test_color_list_many_colors(self):
+        """Test color list with more than 15 colors shows +N."""
+        adata = AnnData(np.zeros((10, 5)))
+        # Create a color list with more than 15 colors
+        colors = [f"#{i:02x}{i:02x}{i:02x}" for i in range(0, 250, 10)]
+        adata.uns["many_colors"] = colors
+
+        html = adata._repr_html_()
+        # Should show some colors and indicate more
+        assert "many_colors" in html
+        # Check for color format
+        assert "#" in html
+
+    def test_color_list_exact_limit(self):
+        """Test color list with exactly 15 colors."""
+        adata = AnnData(np.zeros((15, 5)))
+        colors = [f"#{i:02x}0000" for i in range(15)]
+        adata.obs["cluster"] = pd.Categorical([i % 15 for i in range(15)])
+        adata.uns["cluster_colors"] = colors
+
+        html = adata._repr_html_()
+        assert "cluster_colors" in html
+
+
+class TestMappingSectionEdgeCases:
+    """Tests for mapping section edge cases."""
+
+    def test_obsm_shape_meta_display(self):
+        """Test obsm shows column count in meta."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obsm["X_pca"] = np.zeros((10, 50))
+        adata.obsm["X_umap"] = np.zeros((10, 2))
+
+        html = adata._repr_html_()
+        assert "X_pca" in html
+        assert "X_umap" in html
+        # Should show column info
+        assert "50" in html or "cols" in html.lower()
+
+    def test_layers_truncation(self):
+        """Test layers section truncates when exceeding max_items."""
+        from anndata import settings
+
+        adata = AnnData(np.zeros((10, 5)))
+        # Add many layers
+        for i in range(100):
+            adata.layers[f"layer_{i}"] = np.zeros((10, 5))
+
+        with settings.override(repr_html_max_items=10):
+            html = adata._repr_html_()
+            # Should show truncation
+            assert "more" in html.lower() or "..." in html
+
+
+class TestTypeCellRendering:
+    """Tests for type cell rendering with warnings and expand buttons."""
+
+    def test_type_cell_with_warning(self):
+        """Test type cell shows warning icon."""
+
+        class CustomObject:
+            pass
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["custom"] = CustomObject()
+
+        html = adata._repr_html_()
+        # Should show warning icon
+        assert "⚠" in html or "warning" in html.lower()
+
+    def test_type_cell_not_serializable(self):
+        """Test type cell shows not serializable warning."""
+
+        class NotSerializable:
+            pass
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.obsm["bad"] = np.zeros((10, 5))
+        # Can't directly add unserializable to obsm, but we can test uns
+        adata.uns["unserializable"] = NotSerializable()
+
+        html = adata._repr_html_()
+        assert "serializable" in html.lower() or "⚠" in html
+
+    def test_expand_button_for_expandable_content(self):
+        """Test expand button appears for expandable content."""
+        from anndata import settings
+
+        adata = AnnData(np.zeros((10, 5)))
+        # DataFrames with expand setting enabled show expand button
+        adata.uns["df"] = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        with settings.override(repr_html_dataframe_expand=True):
+            html = adata._repr_html_()
+            # Should have expand functionality
+            assert "expand" in html.lower() or "Expand" in html
+
+
+class TestCustomSectionFormatterCodePaths:
+    """Tests for custom section formatter code paths to improve coverage."""
+
+    def test_custom_section_with_entries(self):
+        """Test custom section formatter with entries."""
+        from anndata._repr.registry import (
+            FormattedEntry,
+            FormattedOutput,
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class TestSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "test_custom_section"
+
+            @property
+            def display_name(self) -> str:
+                return "Test Custom"
+
+            @property
+            def doc_url(self) -> str:
+                return "https://example.com/docs"
+
+            @property
+            def tooltip(self) -> str:
+                return "A test section"
+
+            def should_show(self, obj) -> bool:
+                return hasattr(obj, "_test_marker")
+
+            def get_entries(self, obj, context: FormatterContext):
+                return [
+                    FormattedEntry(
+                        key="entry1",
+                        output=FormattedOutput(type_name="TestType", css_class="test"),
+                    ),
+                    FormattedEntry(
+                        key="entry2",
+                        output=FormattedOutput(
+                            type_name="TestType2",
+                            css_class="test",
+                            warnings=["Test warning"],
+                        ),
+                    ),
+                ]
+
+        formatter = TestSectionFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            adata._test_marker = True
+
+            html = adata._repr_html_()
+            assert "Test Custom" in html or "test_custom_section" in html
+            assert "entry1" in html
+            assert "entry2" in html
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("test_custom_section", None)
+
+    def test_custom_section_exception_handling(self):
+        """Test custom section formatter handles exceptions gracefully."""
+        from anndata._repr.registry import (
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class FailingSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "failing_section"
+
+            def should_show(self, obj) -> bool:
+                return True
+
+            def get_entries(self, obj, context: FormatterContext):
+                msg = "Intentional failure"
+                raise ValueError(msg)
+
+        formatter = FailingSectionFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            # Should not crash, just skip the failing section
+            with pytest.warns(UserWarning, match="Custom section.*failed"):
+                html = adata._repr_html_()
+            assert html is not None
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("failing_section", None)
+
+    def test_custom_section_should_show_exception(self):
+        """Test custom section handles should_show exception."""
+        from anndata._repr.registry import (
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class ShouldShowFailingFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "should_show_failing"
+
+            def should_show(self, obj) -> bool:
+                msg = "Intentional failure in should_show"
+                raise RuntimeError(msg)
+
+            def get_entries(self, obj, context: FormatterContext):
+                return []
+
+        formatter = ShouldShowFailingFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            # Should not crash
+            html = adata._repr_html_()
+            assert html is not None
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("should_show_failing", None)
+
+
+class TestFormattedEntryRendering:
+    """Tests for FormattedEntry rendering in custom sections."""
+
+    def test_formatted_entry_with_expandable_html(self):
+        """Test formatted entry with expandable HTML content."""
+        from anndata._repr.registry import (
+            FormattedEntry,
+            FormattedOutput,
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class ExpandableEntryFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "expandable_section"
+
+            def should_show(self, obj) -> bool:
+                return hasattr(obj, "_expandable_marker")
+
+            def get_entries(self, obj, context: FormatterContext):
+                return [
+                    FormattedEntry(
+                        key="expandable_entry",
+                        output=FormattedOutput(
+                            type_name="Expandable",
+                            css_class="test",
+                            html_content="<div>Expanded content here</div>",
+                            is_expandable=True,
+                        ),
+                    ),
+                ]
+
+        formatter = ExpandableEntryFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            adata._expandable_marker = True
+
+            html = adata._repr_html_()
+            assert "expandable_entry" in html
+            assert "Expand" in html or "expand" in html.lower()
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("expandable_section", None)
+
+    def test_formatted_entry_with_inline_html(self):
+        """Test formatted entry with inline (non-expandable) HTML."""
+        from anndata._repr.registry import (
+            FormattedEntry,
+            FormattedOutput,
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class InlineHtmlFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "inline_section"
+
+            def should_show(self, obj) -> bool:
+                return hasattr(obj, "_inline_marker")
+
+            def get_entries(self, obj, context: FormatterContext):
+                return [
+                    FormattedEntry(
+                        key="inline_entry",
+                        output=FormattedOutput(
+                            type_name="Inline",
+                            css_class="test",
+                            html_content="<span>Inline preview</span>",
+                            is_expandable=False,
+                        ),
+                    ),
+                ]
+
+        formatter = InlineHtmlFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            adata._inline_marker = True
+
+            html = adata._repr_html_()
+            assert "inline_entry" in html
+            assert "Inline preview" in html
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("inline_section", None)
+
+    def test_formatted_entry_not_serializable(self):
+        """Test formatted entry with is_serializable=False."""
+        from anndata._repr.registry import (
+            FormattedEntry,
+            FormattedOutput,
+            FormatterContext,  # noqa: TC001
+            SectionFormatter,
+            formatter_registry,
+        )
+
+        class NotSerializableFormatter(SectionFormatter):
+            @property
+            def section_name(self) -> str:
+                return "not_serializable_section"
+
+            def should_show(self, obj) -> bool:
+                return hasattr(obj, "_not_serializable_marker")
+
+            def get_entries(self, obj, context: FormatterContext):
+                return [
+                    FormattedEntry(
+                        key="bad_entry",
+                        output=FormattedOutput(
+                            type_name="BadType",
+                            css_class="test",
+                            is_serializable=False,
+                        ),
+                    ),
+                ]
+
+        formatter = NotSerializableFormatter()
+        formatter_registry.register_section_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((10, 5)))
+            adata._not_serializable_marker = True
+
+            html = adata._repr_html_()
+            assert "bad_entry" in html
+            assert "serializable" in html.lower() or "⚠" in html
+        finally:
+            # Cleanup: remove from internal dict
+            formatter_registry._section_formatters.pop("not_serializable_section", None)
+
+
+class TestUnsEntryRendering:
+    """Tests for uns entry rendering with various types."""
+
+    def test_uns_entry_with_type_hint_preview_note(self):
+        """Test uns entry with unregistered type hint shows import suggestion."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["typed_data"] = {
+            "__anndata_repr__": "hypothetical.package.Type",
+            "data": {"key": "value"},
+        }
+
+        html = adata._repr_html_()
+        assert "typed_data" in html
+        assert "hypothetical.package" in html
+        assert "import hypothetical" in html
+
+    def test_uns_entry_with_tuple(self):
+        """Test uns entry preview for tuple."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["my_tuple"] = (1, 2, 3)
+
+        html = adata._repr_html_()
+        assert "my_tuple" in html
+
+    def test_uns_entry_with_empty_list(self):
+        """Test uns entry preview for empty list."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["empty_list"] = []
+
+        html = adata._repr_html_()
+        assert "empty_list" in html
+
+    def test_uns_entry_with_none(self):
+        """Test uns entry preview for None."""
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["none_value"] = None
+
+        html = adata._repr_html_()
+        assert "none_value" in html
+        assert "None" in html
+
+
+class TestIndexPreviewRendering:
+    """Tests for index preview rendering."""
+
+    def test_index_preview_empty(self):
+        """Test index preview for empty AnnData."""
+        adata = AnnData()
+        html = adata._repr_html_()
+        assert "empty" in html.lower()
+
+    def test_index_preview_few_items(self):
+        """Test index preview shows all items when small."""
+        adata = AnnData(np.zeros((4, 3)))
+        html = adata._repr_html_()
+        # Should show all obs/var names
+        assert "obs_names" in html or "cell" in html.lower()
+
+    def test_index_preview_many_items(self):
+        """Test index preview shows first/last when many items."""
+        adata = AnnData(
+            np.zeros((100, 50)),
+            obs=pd.DataFrame(index=[f"cell_{i}" for i in range(100)]),
+            var=pd.DataFrame(index=[f"gene_{i}" for i in range(50)]),
+        )
+        html = adata._repr_html_()
+        # Should show ellipsis for truncation
+        assert "..." in html
+
+
+class TestSectionTooltips:
+    """Tests for section tooltip function."""
+
+    def test_get_section_tooltip_all_sections(self):
+        """Test tooltip text for all standard sections."""
+        from anndata._repr.html import _get_section_tooltip
+
+        sections = [
+            "obs",
+            "var",
+            "uns",
+            "obsm",
+            "varm",
+            "layers",
+            "obsp",
+            "varp",
+            "raw",
+        ]
+        for section in sections:
+            tooltip = _get_section_tooltip(section)
+            assert tooltip, f"Missing tooltip for section: {section}"
+
+    def test_get_section_tooltip_unknown(self):
+        """Test tooltip for unknown section returns empty string."""
+        from anndata._repr.html import _get_section_tooltip
+
+        assert _get_section_tooltip("unknown_section") == ""
