@@ -336,25 +336,38 @@ _JS_CONTENT = """
         });
     });
 
-    // Update button visibility on window resize
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-            container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
-                const typeCell = btn.closest('.adata-entry-type');
-                const metaCell = typeCell ? typeCell.nextElementSibling : null;
-                const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
-                updateWrapButtonVisibility(btn, catsList, metaCell);
-            });
-            container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
-                const typeCell = btn.closest('.adata-entry-type');
-                const metaCell = typeCell ? typeCell.nextElementSibling : null;
-                const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
-                updateWrapButtonVisibility(btn, colsList, metaCell);
-            });
-        }, 100);
-    });
+    // Update button visibility on container resize (works for JupyterLab panes too)
+    function updateAllWrapButtons() {
+        container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
+            const typeCell = btn.closest('.adata-entry-type');
+            const metaCell = typeCell ? typeCell.nextElementSibling : null;
+            const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
+            updateWrapButtonVisibility(btn, catsList, metaCell);
+        });
+        container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
+            const typeCell = btn.closest('.adata-entry-type');
+            const metaCell = typeCell ? typeCell.nextElementSibling : null;
+            const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
+            updateWrapButtonVisibility(btn, colsList, metaCell);
+        });
+    }
+
+    // Use ResizeObserver for robust resize detection (pane resizes, not just window)
+    if (typeof ResizeObserver !== 'undefined') {
+        let resizeTimer;
+        const resizeObserver = new ResizeObserver(() => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateAllWrapButtons, 100);
+        });
+        resizeObserver.observe(container);
+    } else {
+        // Fallback for older browsers
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(updateAllWrapButtons, 100);
+        });
+    }
 
     // README modal functionality
     const readmeIcon = container.querySelector('.adata-readme-icon');
