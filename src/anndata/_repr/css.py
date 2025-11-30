@@ -396,8 +396,22 @@ body.dark-mode .anndata-repr {
     text-align: left;
     /* Fixed width for name column */
     width: var(--anndata-name-col-width, 150px);
+}
+
+/* Name cell inner container: text truncates, copy button stays visible */
+.anndata-repr .adata-entry-name-inner {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;  /* Allow flex child to shrink below content size */
+}
+
+.anndata-repr .adata-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;  /* Allow text to shrink and show ellipsis */
 }
 
 .anndata-repr .adata-entry-type {
@@ -443,7 +457,6 @@ body.dark-mode .anndata-repr {
     justify-content: center;
     width: 20px;
     height: 20px;
-    margin-left: 4px;
     padding: 0;
     font-size: 11px;
     color: var(--anndata-text-muted);
@@ -453,6 +466,7 @@ body.dark-mode .anndata-repr {
     cursor: pointer;
     opacity: 0;
     transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+    flex-shrink: 0;  /* Don't shrink the button */
 }
 
 .anndata-repr .adata-entry:hover .adata-copy-btn {

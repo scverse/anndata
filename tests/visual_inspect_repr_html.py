@@ -835,7 +835,8 @@ def main():  # noqa: PLR0915
         "All content should be visible, sections should be expanded, category lists and "
         "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
         "(fold icons, copy buttons, search, expand, wrap toggle) should be hidden. "
-        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping.",
+        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
+        "A very long field name is included to test text truncation with tooltip.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
@@ -921,8 +922,9 @@ def main():  # noqa: PLR0915
         "Tests the dynamic field name column width calculation. The longest field name is "
         "'this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting' (77 chars). "
         "The name column width should expand to fit longer names but be capped by "
-        "<code>repr_html_max_field_width</code> (default: 250px). Names exceeding the max width "
-        "should show ellipsis (...) on hover.",
+        "<code>repr_html_max_field_width</code> (default: 400px). Names exceeding the max width "
+        "show an ellipsis (...) via CSS text-overflow; hover over truncated names to see the "
+        "full name in a tooltip.",
     ))
 
     # Generate HTML file

@@ -423,12 +423,7 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
     ]
 
     # Name
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(entry.key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(entry.key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(entry.key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -471,6 +466,29 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
         parts.append("</tr>")
 
     return "\n".join(parts)
+
+
+# =============================================================================
+# Name Cell Renderer
+# =============================================================================
+
+
+def _render_name_cell(name: str) -> str:
+    """Render a name cell with copy button and tooltip for truncated names.
+
+    The structure uses flexbox so the copy button stays visible even when
+    the name text overflows and shows ellipsis.
+    """
+    escaped_name = escape_html(name)
+    return (
+        f'<td class="adata-entry-name">'
+        f'<div class="adata-entry-name-inner">'
+        f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
+        f'data-copy="{escaped_name}" title="Copy name">📋</button>'
+        f'</div>'
+        f'</td>'
+    )
 
 
 # =============================================================================
@@ -762,12 +780,7 @@ def _render_dataframe_entry(
     ]
 
     # Name cell
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(col_name))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(col_name)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(col_name))
 
     # Check if this is a categorical column (for wrap button)
     is_categorical = hasattr(col, "cat")
@@ -952,12 +965,7 @@ def _render_mapping_entry(
     ]
 
     # Name cell
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(key))
 
     # Type cell
     parts.extend(
@@ -1115,12 +1123,7 @@ def _render_uns_entry_with_preview(
     ]
 
     # Name
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -1253,12 +1256,7 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     ]
 
     # Name
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -1298,12 +1296,7 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     ]
 
     # Name
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -1346,12 +1339,7 @@ def _render_nested_anndata_entry(
     ]
 
     # Name
-    parts.append('<td class="adata-entry-name">')
-    parts.append(escape_html(key))
-    parts.append(
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" data-copy="{escape_html(key)}" title="Copy name">📋</button>'
-    )
-    parts.append("</td>")
+    parts.append(_render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
