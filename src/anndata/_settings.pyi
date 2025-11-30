@@ -52,5 +52,7 @@ class _AnnDataSettingsManager(SettingsManager):
     repr_html_max_categories: int = 20
     repr_html_unique_limit: int = 1_000_000
     repr_html_dataframe_expand: bool = False
+    repr_html_max_field_width: int = 400
+    repr_html_type_width: int = 220
 
 settings: _AnnDataSettingsManager
