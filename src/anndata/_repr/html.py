@@ -486,8 +486,8 @@ def _render_name_cell(name: str) -> str:
         f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
         f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
         f'data-copy="{escaped_name}" title="Copy name">📋</button>'
-        f'</div>'
-        f'</td>'
+        f"</div>"
+        f"</td>"
     )
 
 

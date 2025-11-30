@@ -835,8 +835,7 @@ def main():  # noqa: PLR0915
         "All content should be visible, sections should be expanded, category lists and "
         "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
         "(fold icons, copy buttons, search, expand, wrap toggle) should be hidden. "
-        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
-        "A very long field name is included to test text truncation with tooltip.",
+        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
