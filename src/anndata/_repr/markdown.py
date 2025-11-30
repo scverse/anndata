@@ -19,11 +19,12 @@ The current implementation supports:
 - Ordered and unordered lists
 - Links (with target="_blank" for security)
 - Blockquotes
+- Tables (basic, no alignment)
 - Paragraphs
 
 Limitations:
 - No nested lists
-- No tables
+- No table column alignment
 - No images
 - No horizontal rules
 - Limited edge case handling
@@ -71,6 +72,39 @@ _MARKDOWN_PARSER_JS = """
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+
+        // Tables: |col1|col2| format with |---|---| separator
+        text = text.replace(/(^\\|.+\\|\\n?)+/gm, function(tableBlock) {
+            const rows = tableBlock.trim().split('\\n').filter(r => r.trim());
+            if (rows.length < 2) return tableBlock;
+
+            // Find separator row index (contains only |, -, :, and spaces)
+            const sepIndex = rows.findIndex(r => /^\\|[\\s:\\-|]+\\|$/.test(r));
+            if (sepIndex < 1) return tableBlock; // No valid separator found
+
+            let html = '<table>';
+
+            // Header rows (before separator)
+            html += '<thead>';
+            for (let i = 0; i < sepIndex; i++) {
+                const cells = rows[i].split('|').slice(1, -1);
+                html += '<tr>' + cells.map(c => '<th>' + c.trim() + '</th>').join('') + '</tr>';
+            }
+            html += '</thead>';
+
+            // Body rows (after separator)
+            if (sepIndex < rows.length - 1) {
+                html += '<tbody>';
+                for (let i = sepIndex + 1; i < rows.length; i++) {
+                    const cells = rows[i].split('|').slice(1, -1);
+                    html += '<tr>' + cells.map(c => '<td>' + c.trim() + '</td>').join('') + '</tr>';
+                }
+                html += '</tbody>';
+            }
+
+            html += '</table>';
+            return html;
+        });
 
         // Code blocks (``` ... ```)
         text = text.replace(/```(\\w*)\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
@@ -128,6 +162,8 @@ _MARKDOWN_PARSER_JS = """
         text = text.replace(/(<\\/pre>)<\\/p>/g, '$1');
         text = text.replace(/<p>(<blockquote>)/g, '$1');
         text = text.replace(/(<\\/blockquote>)<\\/p>/g, '$1');
+        text = text.replace(/<p>(<table>)/g, '$1');
+        text = text.replace(/(<\\/table>)<\\/p>/g, '$1');
 
         // Single newlines to <br> within paragraphs
         text = text.replace(/([^>])\\n([^<])/g, '$1<br>$2');

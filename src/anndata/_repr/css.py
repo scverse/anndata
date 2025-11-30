@@ -324,6 +324,29 @@ body.dark-mode .anndata-repr {
     color: var(--anndata-text-secondary);
 }
 
+.anndata-repr .adata-readme-content table {
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.9em;
+    width: auto;
+}
+
+.anndata-repr .adata-readme-content th,
+.anndata-repr .adata-readme-content td {
+    border: 1px solid var(--anndata-border-color);
+    padding: 6px 12px;
+    text-align: left;
+}
+
+.anndata-repr .adata-readme-content th {
+    background: var(--anndata-bg-secondary);
+    font-weight: 600;
+}
+
+.anndata-repr .adata-readme-content tbody tr:hover {
+    background: var(--anndata-bg-secondary);
+}
+
 /* Search box */
 .anndata-repr .adata-search {
     padding: 8px 12px;
