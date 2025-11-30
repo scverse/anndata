@@ -575,11 +575,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         >>> import anndata
         >>> anndata.settings.repr_html_enabled = False
 
-        Temporarily change settings using context manager:
+        Temporarily change settings using context manager::
 
-        >>> from IPython.display import display
-        >>> with anndata.settings.override(repr_html_fold_threshold=10):
-        ...     display(adata)  # Sections fold only when >10 items
+            with anndata.settings.override(repr_html_fold_threshold=10):
+                display(adata)  # Sections fold only when >10 items
 
         Returns
         -------
