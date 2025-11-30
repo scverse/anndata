@@ -940,7 +940,7 @@ def main():  # noqa: PLR0915
     adata_readme.obsm["X_pca"] = np.random.randn(50, 10).astype(np.float32)
     adata_readme.uns["README"] = """# Human Lung Adenocarcinoma - Patient LU-A047
 
-Single-cell RNA sequencing of a primary lung adenocarcinoma tumor sample. This dataset was generated as part of a study investigating tumor heterogeneity and immune cell infiltration patterns in early-stage lung cancer.
+Single-cell RNA sequencing of a *primary* lung adenocarcinoma tumor sample. This dataset was generated as part of a study investigating **tumor heterogeneity** and ***immune cell infiltration*** patterns in early-stage lung cancer.
 
 ## Sample Information
 - **Tissue**: Primary lung tumor, right upper lobe
@@ -949,11 +949,18 @@ Single-cell RNA sequencing of a primary lung adenocarcinoma tumor sample. This d
 - **Patient ID**: LU-A047 (IRB #2023-0892)
 
 ## Wet Lab Protocol
+
+### Tissue Dissociation
 1. Fresh tissue dissociation using Miltenyi Tumor Dissociation Kit
 2. Dead cell removal via MACS Dead Cell Removal Kit
 3. Red blood cell lysis (ACK buffer, 2 min)
+
+### Quality Control
 4. Filtered through 40 µm cell strainer
 5. Viability assessment: **92%** (Trypan Blue)
+
+#### Technical Notes
+Cell viability was *above threshold* for sequencing. Data stored in `adata.obs['viability']`.
 
 ## 10x Genomics Processing
 - **Chemistry**: Chromium Next GEM 3' v3.1

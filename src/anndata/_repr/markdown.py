@@ -188,8 +188,9 @@ _MARKDOWN_PARSER_JS = """
         text = text.replace(/<p>(<table>)/g, '$1');
         text = text.replace(/(<\\/table>)<\\/p>/g, '$1');
 
-        // Single newlines to <br> within paragraphs
-        text = text.replace(/([^>])\\n([^<])/g, '$1<br>$2');
+        // Single newlines become spaces (standard markdown behavior)
+        // Text flows together unless there's a double newline (paragraph break)
+        text = text.replace(/([^>])\\n([^<])/g, '$1 $2');
 
         // Restore links (apply formatting to link text, but URL is protected)
         links.forEach((link, i) => {
