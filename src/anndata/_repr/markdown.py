@@ -18,6 +18,7 @@ The current implementation supports:
 - Inline code and code blocks
 - Ordered and unordered lists
 - Links (with target="_blank" for security)
+- Auto-linking raw URLs (https://...)
 - Blockquotes
 - Tables (basic, no alignment)
 - Paragraphs
@@ -122,6 +123,21 @@ _MARKDOWN_PARSER_JS = """
             return '%%INLINECODE' + (inlineCodes.length - 1) + '%%';
         });
 
+        // Links [text](url) - extract to protect URLs from formatting
+        const links = [];
+        text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, (match, linkText, url) => {
+            links.push({text: linkText, url: url});
+            return '%%LINK' + (links.length - 1) + '%%';
+        });
+
+        // Auto-link raw URLs (https://... or http://...)
+        text = text.replace(/(https?:\\/\\/[^\\s<>)"']+)/g, (match, url) => {
+            // Don't match if already inside a placeholder
+            if (url.includes('%%')) return match;
+            links.push({text: url, url: url});
+            return '%%LINK' + (links.length - 1) + '%%';
+        });
+
         // Headers
         text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
         text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
@@ -133,9 +149,6 @@ _MARKDOWN_PARSER_JS = """
         text = text.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
         text = text.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
         text = text.replace(/_(.+?)_/g, '<em>$1</em>');
-
-        // Links [text](url)
-        text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
         // Blockquotes
         text = text.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
@@ -177,6 +190,16 @@ _MARKDOWN_PARSER_JS = """
 
         // Single newlines to <br> within paragraphs
         text = text.replace(/([^>])\\n([^<])/g, '$1<br>$2');
+
+        // Restore links (apply formatting to link text, but URL is protected)
+        links.forEach((link, i) => {
+            // Apply formatting to link text only
+            let formattedText = link.text;
+            formattedText = formattedText.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+            formattedText = formattedText.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
+            const linkHtml = '<a href="' + link.url + '" target="_blank" rel="noopener">' + formattedText + '</a>';
+            text = text.replace('%%LINK' + i + '%%', linkHtml);
+        });
 
         // Restore code blocks and inline code
         codeBlocks.forEach((block, i) => {

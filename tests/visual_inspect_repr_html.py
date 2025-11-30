@@ -980,6 +980,7 @@ sc.pl.umap(adata, color=["cell_type", "cluster"])
 ## References
 - [10x Genomics Cell Ranger](https://support.10xgenomics.com/single-cell-gene-expression)
 - [Scanpy documentation](https://scanpy.readthedocs.io/)
+- GEO accession: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE_example_data
 
 ## Contact
 For questions about this dataset: `genome-lab@example-hospital.org`
