@@ -185,7 +185,6 @@ _JS_CONTENT = """
         // Hide sections with no visible entries
         container.querySelectorAll('.anndata-sec').forEach(section => {
             const visibleEntries = section.querySelectorAll('.adata-entry:not(.hidden)');
-            const sectionHeader = section.querySelector('.anndata-sechdr');
 
             if (query && visibleEntries.length === 0) {
                 section.style.display = 'none';
@@ -261,7 +260,7 @@ _JS_CONTENT = """
 
     if (expandAllBtn) {
         expandAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.adata-section.collapsed').forEach(section => {
+            container.querySelectorAll('.anndata-sec.collapsed').forEach(section => {
                 section.classList.remove('collapsed');
             });
         });
@@ -269,7 +268,7 @@ _JS_CONTENT = """
 
     if (collapseAllBtn) {
         collapseAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.adata-section:not(.collapsed)').forEach(section => {
+            container.querySelectorAll('.anndata-sec:not(.collapsed)').forEach(section => {
                 section.classList.add('collapsed');
             });
         });
@@ -372,6 +371,11 @@ _JS_CONTENT = """
     // README modal functionality
     const readmeIcon = container.querySelector('.adata-readme-icon');
     if (readmeIcon) {
+        // Ensure accessibility attributes
+        readmeIcon.setAttribute('role', 'button');
+        readmeIcon.setAttribute('tabindex', '0');
+        readmeIcon.setAttribute('aria-label', 'View README');
+
         readmeIcon.addEventListener('click', (e) => {
             e.stopPropagation();
             const readmeContent = readmeIcon.dataset.readme;
@@ -381,14 +385,17 @@ _JS_CONTENT = """
             const overlay = document.createElement('div');
             overlay.className = 'adata-readme-overlay';
 
-            // Create modal
+            // Create modal with accessibility attributes
             const modal = document.createElement('div');
             modal.className = 'adata-readme-modal';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.setAttribute('aria-labelledby', 'readme-modal-title');
 
             // Header
             const header = document.createElement('div');
             header.className = 'adata-readme-header';
-            header.innerHTML = '<h3>README</h3>';
+            header.innerHTML = '<h3 id="readme-modal-title">README</h3>';
 
             const closeBtn = document.createElement('button');
             closeBtn.className = 'adata-readme-close';
