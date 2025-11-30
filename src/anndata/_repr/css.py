@@ -542,6 +542,8 @@ body.dark-mode .anndata-repr {
 .anndata-repr .adata-entry-name {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; /* Fallback */
     font-family: var(--anndata-font-mono);
+    font-size: 13px; /* Fallback */
+    font-size: var(--anndata-font-size);
     font-weight: 500;
     color: #212529; /* Fallback */
     color: var(--anndata-text-primary);
@@ -565,6 +567,7 @@ body.dark-mode .anndata-repr {
     white-space: nowrap;
     flex: 1;
     min-width: 0;  /* Allow text to shrink and show ellipsis */
+    font-size: inherit;  /* Prevent mobile browsers from auto-sizing truncated text */
 }
 
 .anndata-repr .adata-entry-type {
@@ -603,36 +606,74 @@ body.dark-mode .anndata-repr {
     overflow: visible;
 }
 
-/* Copy button */
+/* Copy button - uses CSS to draw two overlapping squares icon */
 .anndata-repr .adata-copy-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     padding: 0;
-    font-size: 11px;
-    color: var(--anndata-text-muted);
     background: transparent;
     border: none;
-    border-radius: 3px;
+    border-radius: 2px;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+    transition: opacity 0.15s, background-color 0.15s;
     flex-shrink: 0;  /* Don't shrink the button */
+    position: relative;
+}
+
+/* Two overlapping squares icon using pseudo-elements */
+.anndata-repr .adata-copy-btn::before,
+.anndata-repr .adata-copy-btn::after {
+    content: '';
+    position: absolute;
+    width: 7px;
+    height: 8px;
+    border: 1.5px solid var(--anndata-text-muted);
+    border-radius: 1px;
+    background: var(--anndata-bg-primary);
+}
+
+.anndata-repr .adata-copy-btn::before {
+    top: 2px;
+    left: 2px;
+}
+
+.anndata-repr .adata-copy-btn::after {
+    top: 5px;
+    left: 5px;
 }
 
 .anndata-repr .adata-entry:hover .adata-copy-btn {
     opacity: 1;
 }
 
-.anndata-repr .adata-copy-btn:hover {
-    color: var(--anndata-accent-color);
-    background: var(--anndata-bg-tertiary);
+.anndata-repr .adata-copy-btn:hover::before,
+.anndata-repr .adata-copy-btn:hover::after {
+    border-color: var(--anndata-accent-color);
 }
 
-.anndata-repr .adata-copy-btn.copied {
+/* When copied, hide squares and show checkmark */
+.anndata-repr .adata-copy-btn.copied::before,
+.anndata-repr .adata-copy-btn.copied::after {
+    display: none;
+}
+
+.anndata-repr .adata-copy-btn.copied::before {
+    display: block;
+    content: '✓';
+    width: auto;
+    height: auto;
+    border: none;
+    background: none;
     color: var(--anndata-success-color);
+    font-size: 12px;
+    font-weight: bold;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 /* Type-specific styling */
@@ -648,7 +689,10 @@ body.dark-mode .anndata-repr {
 .anndata-repr .dtype-anndata { color: #cf222e; font-weight: 600; }
 .anndata-repr .dtype-unknown { color: #6e7781; font-style: italic; }
 .anndata-repr .dtype-extension { color: #8250df; }
-.anndata-repr .dtype-warning { color: var(--anndata-warning-color); }
+/* Warning class kept for backwards compatibility but no longer used for coloring */
+.anndata-repr .dtype-warning {
+    /* Type name keeps its original color; only the icon is styled */
+}
 .anndata-repr .dtype-dask { color: #fb8500; }
 .anndata-repr .dtype-gpu { color: #76b900; }
 .anndata-repr .dtype-awkward { color: #e85d04; }
@@ -793,8 +837,11 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 
 /* Warning indicator */
 .anndata-repr .adata-warning-icon {
+    font-size: 10px;
+    font-weight: 600;
     color: var(--anndata-warning-color);
-    margin-left: 4px;
+    cursor: help;
+    margin-left: 2px;
 }
 
 /* Expandable nested content */
@@ -899,8 +946,6 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 /* Nested AnnData */
 .anndata-repr .adata-nested-anndata {
     margin: 8px 0;
-    border: 1px solid var(--anndata-border-color);
-    border-radius: var(--anndata-radius);
 }
 
 /* X section (special) */

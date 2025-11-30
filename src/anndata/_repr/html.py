@@ -427,18 +427,15 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
 
     # Type
     parts.append('<td class="adata-entry-type">')
+    parts.append(
+        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+    )
     if output.warnings or not output.is_serializable:
         warnings_list = output.warnings.copy()
         if not output.is_serializable:
             warnings_list.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(warnings_list))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(output.type_name)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
+        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
 
     if has_expandable_content:
         parts.append(
@@ -485,7 +482,7 @@ def _render_name_cell(name: str) -> str:
         f'<div class="adata-entry-name-inner">'
         f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
         f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
-        f'data-copy="{escaped_name}" title="Copy name">📋</button>'
+        f'data-copy="{escaped_name}" title="Copy name" aria-label="Copy name"></button>'
         f"</div>"
         f"</td>"
     )
@@ -521,7 +518,7 @@ def _render_header(
         status = "Open" if backing.get("is_open") else "Closed"
         parts.append(
             f'<span class="adata-badge adata-badge-backed">'
-            f"📁 {format_str} ({status})</span>"
+            f"{format_str} ({status})</span>"
         )
         # Inline file path (full path, no truncation)
         if filename:
@@ -660,7 +657,7 @@ def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
 
         # Backed info
         if is_backed(adata):
-            type_parts.append("📁 on disk")
+            type_parts.append("on disk")
 
         type_str = " · ".join(type_parts)
         parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
@@ -809,15 +806,12 @@ def _render_dataframe_entry(
 
     # Type cell
     parts.append('<td class="adata-entry-type">')
+    parts.append(
+        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+    )
     if entry_warnings:
         title = escape_html("; ".join(entry_warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(output.type_name)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
+        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
 
     # Add wrap button for categories in the type column
     if is_categorical and n_cats > 0:
@@ -900,18 +894,15 @@ def _render_type_cell(
     """Render the type cell for a mapping entry."""
     parts = ['<td class="adata-entry-type">']
 
+    parts.append(
+        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+    )
     if output.warnings or not output.is_serializable:
         entry_warnings = output.warnings.copy()
         if not output.is_serializable:
             entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(entry_warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(output.type_name)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
+        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
 
     if has_expandable_content:
         parts.append(
@@ -1146,18 +1137,15 @@ def _render_uns_entry_with_preview(
 
     # Type
     parts.append('<td class="adata-entry-type">')
+    parts.append(
+        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+    )
     if output.warnings or not output.is_serializable:
         warn_list = output.warnings.copy()
         if not output.is_serializable:
             warn_list.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(warn_list))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(output.type_name)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
+        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
     parts.append("</td>")
 
     # Meta - value preview
@@ -1279,18 +1267,13 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     # Type
     parts.append('<td class="adata-entry-type">')
+    parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
     if output.warnings or not output.is_serializable:
         entry_warnings = output.warnings.copy()
         if not output.is_serializable:
             entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(entry_warnings))
-        parts.append(f'<span class="{output.css_class} dtype-warning" title="{title}">')
-        parts.append(f"{escape_html(type_label)} ⚠️")
-        parts.append("</span>")
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(type_label)}</span>'
-        )
+        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
     parts.append("</td>")
 
     # Meta - custom HTML content

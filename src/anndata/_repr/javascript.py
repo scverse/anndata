@@ -206,15 +206,9 @@ _JS_CONTENT = """
             try {
                 await navigator.clipboard.writeText(text);
 
-                // Visual feedback
+                // Visual feedback (icon turns green via CSS)
                 btn.classList.add('copied');
-                const originalText = btn.textContent;
-                btn.textContent = '✓';
-
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    btn.textContent = originalText;
-                }, 1500);
+                setTimeout(() => btn.classList.remove('copied'), 1500);
             } catch (err) {
                 // Fallback for older browsers
                 const textarea = document.createElement('textarea');
