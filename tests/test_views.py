@@ -371,9 +371,6 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     adata = ad.AnnData(matrix_type_no_gpu(asarray(sparse.random(20, 20))))
-    if jnp is not None and isinstance(adata.X, jnp.ndarray):
-        msg = "JAX does not support in-place mutation, so this test is irrelevant."
-        pytest.skip(msg)
     init_hash = tokenize(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -387,6 +384,13 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     internal_idx = _normalize_index(
         subset_func(np.arange(subset.X.shape[1])), subset.var_names
     )
+    # JAX‐specific immutability check
+    if jnp is not None and isinstance(subset.X, jnp.ndarray):
+        with pytest.raises(TypeError, match=r"immutable"):
+            subset.X[:, internal_idx] = 1
+        return
+
+    # non-JAX case
     assert subset.is_view
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
@@ -399,14 +403,16 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_set_scalar_subset_X(matrix_type, subset_func):
-    if "jax" in matrix_type.__module__:
-        msg = "JAX arrays don't support item assignment via boolean indexing (e.g. adata.X[bool_idx] = val)."
-        pytest.xfail(msg)
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
+
+    if isinstance(adata.X, jnp.ndarray):
+        with pytest.raises(TypeError, match=r"immutable"):
+            adata_subset.X = 1
+        return
 
     adata_subset.X = 1
 

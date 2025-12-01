@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from array_api_compat import get_namespace
-from dask.base import is_dask_collection
 
 # Enable DLPack interop for JAX, CuPy, etc., only if installed
 with suppress(ImportError):
@@ -27,6 +26,7 @@ from scipy import sparse
 
 from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
+from anndata.compat import DaskArray
 
 from ..compat import (
     AwkArray,
@@ -134,7 +134,8 @@ def _same_backend(x, y, *, copy: bool = True):
         raise TypeError(msg) from err
 
     # Special-case: Dask cannot be converted via DLPack
-    if is_dask_collection(x) or is_dask_collection(y):
+    # if is_dask_collection(x) or is_dask_collection(y):
+    if isinstance(x, DaskArray) or isinstance(y, DaskArray):
         return x, y
 
     # if two arrays use different backends, convert y to x's backend using DLPack
