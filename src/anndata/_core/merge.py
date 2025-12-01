@@ -26,7 +26,6 @@ from scipy import sparse
 
 from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
-from anndata.compat import DaskArray
 
 from ..compat import (
     AwkArray,
