@@ -198,7 +198,12 @@ _MARKDOWN_PARSER_JS = """
             let formattedText = link.text;
             formattedText = formattedText.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
             formattedText = formattedText.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
-            const linkHtml = '<a href="' + link.url + '" target="_blank" rel="noopener">' + formattedText + '</a>';
+            // Sanitize URL: only allow safe protocols (http, https, mailto, relative)
+            let safeUrl = link.url;
+            if (!/^(https?:|mailto:|\\/|#)/i.test(safeUrl)) {
+                safeUrl = '#';  // Block unsafe protocols
+            }
+            const linkHtml = '<a href="' + safeUrl + '" target="_blank" rel="noopener">' + formattedText + '</a>';
             text = text.replace('%%LINK' + i + '%%', linkHtml);
         });
 
