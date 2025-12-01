@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import warnings
-from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
@@ -10,17 +9,17 @@ import pytest
 import anndata as ad
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
+HERE = Path(__file__).parent
+DATA_DIR = HERE / "data"
 
-@pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
+
 def test_old_format_warning_thrown() -> None:
-    import scanpy as sc
-
     def msg_re(entry: str) -> str:
         return re.escape(
             f"Moving element from .uns['neighbors'][{entry!r}] to .obsp[{entry!r}]."
         )
 
-    pth = Path(sc.datasets.__file__).parent / "10x_pbmc68k_reduced.h5ad"
+    pth = DATA_DIR / "archives/v0.5.0/adata.h5ad"
     warnings.simplefilter("default", FutureWarning)
     with (
         pytest.warns(FutureWarning, match=msg_re("distances")),
