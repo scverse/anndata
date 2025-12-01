@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping
+from contextlib import ExitStack, contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
@@ -30,7 +31,7 @@ from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
     from typing import Any, Literal
 
     from .._core.merge import Reindexer, StrategiesLiteral
@@ -101,35 +102,42 @@ def _gen_slice_to_append(
 
 
 @singledispatch
-def as_group(store, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def as_group(store, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
 
 @as_group.register(PathLike)
 @as_group.register(str)
-def _(store: PathLike[str] | str, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def _(store: PathLike[str] | str, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
 
-        return h5py.File(store, mode=mode)
+        f = h5py.File(store, mode=mode)
+        try:
+            yield f
+        finally:
+            f.close()
 
-    if mode == "r":  # others all write: r+, a, w, w-
+    elif mode == "r":  # others all write: r+, a, w, w-
         import zarr
 
-        return zarr.open_group(store, mode=mode)
+        yield zarr.open_group(store, mode=mode)
+    else:
+        from anndata._io.zarr import open_write_group
 
-    from anndata._io.zarr import open_write_group
-
-    return open_write_group(store, mode=mode)
+        yield open_write_group(store, mode=mode)
 
 
 @as_group.register(ZarrGroup)
 @as_group.register(H5Group)
-def _(store, *, mode: str) -> ZarrGroup | H5Group:
+@contextmanager
+def _(store: ZarrGroup | H5Group, *, mode: str) -> Generator[ZarrGroup | H5Group]:
     del mode
-    return store
+    yield store
 
 
 ###################
@@ -447,9 +455,10 @@ def _write_alt_pairwise(
     write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
 
 
-def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
-    in_files: Collection[PathLike[str] | str] | Mapping[str, PathLike[str] | str],
-    out_file: PathLike[str] | str,
+def concat_on_disk(  # noqa: PLR0913
+    in_files: Collection[PathLike[str] | str | H5Group | ZarrGroup]
+    | Mapping[str, PathLike[str] | str | H5Group | ZarrGroup],
+    out_file: PathLike[str] | str | H5Group | ZarrGroup,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -590,10 +599,11 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    out_file = Path(out_file)
-    if not out_file.parent.exists():
-        msg = f"Parent directory of {out_file} does not exist."
-        raise FileNotFoundError(msg)
+    if is_out_path_like := isinstance(out_file, str | PathLike):
+        out_file = Path(out_file)
+        if not out_file.parent.exists():
+            msg = f"Parent directory of {out_file} does not exist."
+            raise FileNotFoundError(msg)
 
     if isinstance(in_files, Mapping):
         if keys is not None:
@@ -606,7 +616,11 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     else:
         in_files = list(in_files)
 
-    if len(in_files) == 1:
+    if (
+        len(in_files) == 1
+        and isinstance(in_files[0], str | PathLike)
+        and is_out_path_like
+    ):
         shutil.copy2(in_files[0], out_file)
         return
 
@@ -616,9 +630,40 @@ def concat_on_disk(  # noqa: PLR0912, PLR0913, PLR0915
     axis, axis_name = _resolve_axis(axis)
     _, alt_axis_name = _resolve_axis(1 - axis)
 
-    output_group = as_group(out_file, mode="w")
-    groups = [as_group(f, mode="r") for f in in_files]
+    with ExitStack() as stack, as_group(out_file, mode="w") as output_group:
+        groups = [stack.enter_context(as_group(f, mode="r")) for f in in_files]
+        _concat_on_disk_inner(
+            groups=groups,
+            output_group=output_group,
+            axis=axis,
+            axis_name=axis_name,
+            alt_axis_name=alt_axis_name,
+            keys=keys,
+            max_loaded_elems=max_loaded_elems,
+            join=join,
+            label=label,
+            index_unique=index_unique,
+            fill_value=fill_value,
+            merge=merge,
+        )
 
+
+def _concat_on_disk_inner(  # noqa: PLR0913
+    *,
+    groups: list[H5Group | ZarrGroup],
+    output_group: H5Group | ZarrGroup,
+    axis: Literal[0, 1],
+    axis_name: Literal["obs", "var"],
+    alt_axis_name: Literal["obs", "var"],
+    keys: np.ndarray[tuple[int], np.dtype[Any]] | Collection[str],
+    max_loaded_elems: int,
+    join: Join_T = "inner",
+    label: str | None,
+    index_unique: str | None,
+    fill_value: Any | None,
+    merge: Callable[[Collection[Mapping]], Mapping],
+) -> None:
+    """Internal helper to minimize the amount of indented code within the context manager"""
     use_reindexing = False
 
     alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]

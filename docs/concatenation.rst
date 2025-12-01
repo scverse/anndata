@@ -22,14 +22,14 @@ Let's start off with an example:
     >>> from scipy import sparse
     >>> from anndata import AnnData
     >>> pbmc = sc.datasets.pbmc68k_reduced()
-    >>> pbmc
+    >>> pbmc  # doctest: +ELLIPSIS
     AnnData object with n_obs × n_vars = 700 × 765
         obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain'
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         uns: 'bulk_labels_colors', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
-        obsp: 'distances', 'connectivities'
+        obsp: ...
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 

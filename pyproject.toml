@@ -42,9 +42,10 @@ dependencies = [
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
-    "array_api_compat>=1.7.1",
+    "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=2.18.7, !=3.0.*",
+    "typing-extensions; python_version<'3.13'",
 ]
 dynamic = [ "version" ]
 
@@ -67,9 +68,9 @@ doc = [
     "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.15.3",
+    "scanpydoc[theme,typehints] >=0.16",
     "awkward>=2.6.3",
-    "IPython",                             # For syntax highlighting in notebooks
+    "IPython",                           # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
     # for unreleased changes
@@ -77,7 +78,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "pytest>=8.2,<10.0",
+    "pytest>=8.2",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",

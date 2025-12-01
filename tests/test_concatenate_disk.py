@@ -4,11 +4,14 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import TYPE_CHECKING, Literal
 
+import awkward as ak
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData, concat, settings
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
@@ -88,13 +91,15 @@ def _adatas_to_paths(adatas, tmp_path, file_format):
         paths = {}
         for k, v in adatas.items():
             p = tmp_path / (f"{k}." + file_format)
-            write_elem(as_group(p, mode="a"), "", v)
+            with as_group(p, mode="a") as f:
+                write_elem(f, "", v)
             paths[k] = p
     else:
         paths = []
         for i, a in enumerate(adatas):
             p = tmp_path / (f"{i}." + file_format)
-            write_elem(as_group(p, mode="a"), "", a)
+            with as_group(p, mode="a") as f:
+                write_elem(f, "", a)
             paths += [p]
     return paths
 
@@ -116,7 +121,8 @@ def assert_eq_concat_on_disk(
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
     concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
-    res2 = read_elem(as_group(out_name, mode="r"))
+    with as_group(out_name, mode="r") as rg:
+        res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
 
 
@@ -300,8 +306,55 @@ def test_output_dir_exists(tmp_path):
 
     AnnData(X=np.ones((5, 1))).write_h5ad(in_pth)
 
-    with pytest.raises(FileNotFoundError, match=f"{out_pth}"):
+    with pytest.raises(FileNotFoundError, match=str(out_pth)):
         concat_on_disk([in_pth], out_pth)
+
+
+def test_no_open_h5_file_handles_after_error(tmp_path):
+    in_pth = tmp_path / "in.h5ad"
+    in_pth2 = tmp_path / "in2.h5ad"
+    out_pth = tmp_path / "out.h5ad"
+
+    adata = AnnData(
+        X=np.ones((2, 1)),
+        obsm={
+            "awk": ak.Array([
+                [{"a": 1, "b": "foo"}],
+                [{"a": 2, "b": "bar"}],
+            ])
+        },
+    )
+    adata.write_h5ad(in_pth)
+    adata.write_h5ad(in_pth2)
+
+    # Intentionally write an unsupported array type, which could leave dangling file handles:
+    # https://github.com/scverse/anndata/issues/2198
+    try:
+        concat_on_disk([in_pth, in_pth2], out_pth)
+    except NotImplementedError:
+        for path in [in_pth, in_pth2, out_pth]:
+            # should not error out because there are no file handles open
+            f = h5py.File(path, mode="w")
+            f.close()
+
+
+def test_write_using_groups(tmp_path, file_format):
+    in_pth = tmp_path / f"in.{file_format}"
+    in_pth2 = tmp_path / f"in2.{file_format}"
+    out_pth = tmp_path / f"out.{file_format}"
+
+    adata = AnnData(X=np.ones((2, 1)))
+    getattr(adata, f"write_{file_format}")(in_pth)
+    getattr(adata, f"write_{file_format}")(in_pth2)
+
+    with (
+        as_group(in_pth, mode="r") as f1,
+        as_group(in_pth2, mode="r") as f2,
+        as_group(out_pth, mode="w") as fout,
+    ):
+        concat_on_disk([f1, f2], fout)
+    adata_out = getattr(ad, f"read_{file_format}")(out_pth)
+    assert_equal(adata_out, concat([adata, adata]))
 
 
 def test_failure_w_no_args(tmp_path):
