@@ -384,7 +384,7 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     internal_idx = _normalize_index(
         subset_func(np.arange(subset.X.shape[1])), subset.var_names
     )
-    # JAX‐specific immutability check
+    # JAX-specific immutability check
     if jnp is not None and isinstance(subset.X, jnp.ndarray):
         with pytest.raises(TypeError, match=r"immutable"):
             subset.X[:, internal_idx] = 1
