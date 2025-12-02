@@ -244,6 +244,7 @@ try:
         SectionFormatter,
         register_formatter,
     )
+    from anndata._repr.html import generate_repr_html
     from anndata._repr.utils import format_number
 
     HAS_MUDATA = True
@@ -281,6 +282,17 @@ try:
                 shape_str = (
                     f"{format_number(adata.n_obs)} × {format_number(adata.n_vars)}"
                 )
+                # Generate nested HTML for expandable content
+                can_expand = context.depth < context.max_depth
+                nested_html = None
+                if can_expand:
+                    nested_html = generate_repr_html(
+                        adata,
+                        depth=context.depth + 1,
+                        max_depth=context.max_depth,
+                        show_header=True,
+                        show_search=False,
+                    )
                 output = FormattedOutput(
                     type_name=f"AnnData ({shape_str})",
                     css_class="dtype-anndata",
@@ -289,7 +301,8 @@ try:
                         "n_obs": adata.n_obs,
                         "n_vars": adata.n_vars,
                     },
-                    is_expandable=context.depth < context.max_depth,
+                    html_content=nested_html,
+                    is_expandable=can_expand,
                     is_serializable=True,
                 )
                 entries.append(FormattedEntry(key=mod_name, output=output))
