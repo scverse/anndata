@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
-from types import GenericAlias
+from types import GenericAlias, NoneType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 from ._warnings import warn
@@ -100,7 +100,7 @@ def check_and_get_environ_var[T](
     )
 
 
-def check_and_get_bool(option, default_value):
+def check_and_get_bool(option: str, default_value: bool) -> bool:  # noqa: FBT001
     return check_and_get_environ_var(
         f"ANNDATA_{option.upper()}",
         str(int(default_value)),
@@ -109,7 +109,16 @@ def check_and_get_bool(option, default_value):
     )
 
 
-def check_and_get_int(option, default_value):
+def check_and_get_bool_or_none(option: str, default_value: bool | None) -> bool | None:  # noqa: FBT001
+    return check_and_get_environ_var(
+        f"ANNDATA_{option.upper()}",
+        "" if default_value is None else str(int(default_value)),
+        ["0", "1", ""],
+        lambda x: None if x == "" else bool(int(x)),
+    )
+
+
+def check_and_get_int(option: str, default_value: int) -> int:
     return check_and_get_environ_var(
         f"ANNDATA_{option.upper()}",
         str(int(default_value)),
@@ -394,7 +403,9 @@ settings = SettingsManager()
 ##################################################################################
 
 
-def gen_validator[V](_type: type[V]) -> Callable[[V, SettingsManager], None]:
+def gen_validator[V](
+    _type: type[V] | tuple[type[V], ...], /
+) -> Callable[[V, SettingsManager], None]:
     def validate_type(val: V, settings: SettingsManager) -> None:
         if not isinstance(val, _type):
             msg = f"{val} not valid {_type}"
@@ -427,10 +438,15 @@ settings.register(
 
 settings.register(
     "allow_write_nullable_strings",
-    default_value=False,
-    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
-    validate=validate_bool,
-    get_from_env=check_and_get_bool,
+    default_value=None,
+    description=(
+        "Whether or not to allow writing of `pd.arrays.[Arrow]StringArray`. "
+        "When set to `None`, it will be inferred from `pd.options.future.infer_string`. "
+        "When set to `False` explicitly, we will try writing `string` arrays in the old, non-nullable format."
+    ),
+    validate=gen_validator((bool, NoneType)),
+    option_type=bool | None,
+    get_from_env=check_and_get_bool_or_none,
 )
 
 
