@@ -347,9 +347,7 @@ def is_lazy_series(series: Any) -> bool:
     if hasattr(series, "data") and hasattr(series.data, "dims"):
         return True
     # Check for xarray Variable backing
-    if hasattr(series, "_variable"):
-        return True
-    return False
+    return hasattr(series, "_variable")
 
 
 def get_backing_info(obj: Any) -> dict[str, Any]:
