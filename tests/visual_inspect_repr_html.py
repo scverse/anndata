@@ -43,7 +43,7 @@ try:
     from anndata._repr import (
         FormattedEntry,
         FormattedOutput,
-        FormatterContext,  # noqa: TC001
+        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -232,6 +232,143 @@ try:
 
 except ImportError:
     HAS_TREEDATA = False
+
+# Check for MuData
+try:
+    from mudata import MuData
+
+    from anndata._repr import (
+        FormattedEntry,
+        FormattedOutput,
+        FormatterContext,  # noqa: TC001
+        SectionFormatter,
+        register_formatter,
+    )
+    from anndata._repr.utils import format_number
+
+    HAS_MUDATA = True
+
+    # Register a SectionFormatter for MuData's .mod section
+    # This allows generate_repr_html() to work directly on MuData objects
+    @register_formatter
+    class ModSectionFormatter(SectionFormatter):
+        """
+        SectionFormatter for MuData's .mod attribute.
+
+        This demonstrates how external packages (like mudata) can extend
+        anndata's HTML repr to add new sections. The .mod section contains
+        AnnData objects for each modality, similar to how .uns can contain
+        nested AnnData objects.
+        """
+
+        section_name = "mod"
+        priority = 200  # High priority to show before other sections
+
+        @property
+        def after_section(self) -> str:
+            return "X"  # Show right after X (before obs)
+
+        @property
+        def tooltip(self) -> str:
+            return "Modalities (MuData)"
+
+        def should_show(self, obj) -> bool:
+            return hasattr(obj, "mod") and len(obj.mod) > 0
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            entries = []
+            for mod_name, adata in obj.mod.items():
+                shape_str = (
+                    f"{format_number(adata.n_obs)} × {format_number(adata.n_vars)}"
+                )
+                output = FormattedOutput(
+                    type_name=f"AnnData ({shape_str})",
+                    css_class="dtype-anndata",
+                    tooltip=f"Modality: {mod_name}",
+                    details={
+                        "n_obs": adata.n_obs,
+                        "n_vars": adata.n_vars,
+                    },
+                    is_expandable=context.depth < context.max_depth,
+                    is_serializable=True,
+                )
+                entries.append(FormattedEntry(key=mod_name, output=output))
+            return entries
+
+except ImportError:
+    HAS_MUDATA = False
+    MuData = None  # type: ignore[assignment,misc]
+
+
+def create_test_mudata():
+    """Create a comprehensive test MuData with multiple modalities."""
+    if not HAS_MUDATA:
+        return None
+
+    np.random.seed(42)
+
+    # RNA modality
+    n_cells = 100
+    n_genes = 50
+    rna = AnnData(
+        np.random.randn(n_cells, n_genes).astype(np.float32),
+        obs=pd.DataFrame({
+            "cell_type": pd.Categorical(
+                ["T cell", "B cell", "NK cell"] * 33 + ["T cell"]
+            ),
+            "n_counts": np.random.randint(1000, 10000, n_cells),
+        }),
+        var=pd.DataFrame({
+            "gene_name": [f"gene_{i}" for i in range(n_genes)],
+            "highly_variable": np.random.choice([True, False], n_genes),
+        }),
+    )
+    rna.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
+    rna.obsm["X_pca"] = np.random.randn(n_cells, 10).astype(np.float32)
+    rna.obsm["X_umap"] = np.random.randn(n_cells, 2).astype(np.float32)
+    rna.layers["raw"] = np.random.randn(n_cells, n_genes).astype(np.float32)
+
+    # ATAC modality (same cells, different features)
+    n_peaks = 30
+    atac = AnnData(
+        np.random.randn(n_cells, n_peaks).astype(np.float32),
+        obs=pd.DataFrame({
+            "peak_count": np.random.randint(500, 5000, n_cells),
+            "tss_enrichment": np.random.uniform(2, 10, n_cells),
+        }),
+        var=pd.DataFrame({
+            "peak_name": [f"peak_{i}" for i in range(n_peaks)],
+            "chr": [f"chr{i % 22 + 1}" for i in range(n_peaks)],
+        }),
+    )
+    atac.obsm["X_lsi"] = np.random.randn(n_cells, 15).astype(np.float32)
+
+    # Protein modality (subset of cells)
+    n_prot_cells = 80
+    n_proteins = 20
+    prot = AnnData(
+        np.random.randn(n_prot_cells, n_proteins).astype(np.float32),
+        obs=pd.DataFrame({
+            "protein_count": np.random.randint(100, 1000, n_prot_cells),
+        }),
+        var=pd.DataFrame({
+            "protein_name": [f"CD{i}" for i in range(n_proteins)],
+            "isotype_control": [i < 3 for i in range(n_proteins)],
+        }),
+    )
+
+    # Create MuData
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mdata = MuData({"rna": rna, "atac": atac, "prot": prot})
+
+    # Add shared annotations
+    mdata.uns["experiment"] = "multiome_sample_001"
+    mdata.uns["processing_date"] = "2024-03-15"
+
+    return mdata
 
 
 def create_test_treedata():
@@ -1026,6 +1163,29 @@ For more details, see the full documentation.
         "Instead, **hover over the icon** to see the README content as a tooltip (browser's "
         "native title attribute). The tooltip shows the first 500 characters of the README.",
     ))
+
+    # Test 19: MuData (multimodal data)
+    # This demonstrates how MuData can reuse anndata's repr by:
+    # 1. Registering a SectionFormatter for the .mod attribute (done at import time above)
+    # 2. Calling generate_repr_html() directly on the MuData object
+    if HAS_MUDATA:
+        print("  19. MuData (multimodal data)")
+        from anndata._repr.html import generate_repr_html
+
+        mdata = create_test_mudata()
+        if mdata is not None:
+            sections.append((
+                "19. MuData (Multimodal Data)",
+                generate_repr_html(mdata),
+                "Demonstrates how MuData can reuse anndata's HTML repr machinery by simply "
+                "registering a <code>SectionFormatter</code> for the <code>.mod</code> attribute. "
+                "The <code>mod</code> section shows each modality as an expandable nested AnnData "
+                "(click the arrow to expand). All standard sections (obs, var, obsm, varm, uns, etc.) "
+                "work automatically. This example has 3 modalities: RNA (100×50), ATAC (100×30), "
+                "and Protein (80×20).",
+            ))
+    else:
+        print("  19. MuData (skipped - mudata not installed)")
 
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"
