@@ -130,7 +130,7 @@ class Write(Protocol[RWAble_contra]):
         v
             The element to write out.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
         """
         ...
 
@@ -194,7 +194,7 @@ class WriteCallback(Protocol[RWAble]):
         iospec
             Internal AnnData encoding specification for the element.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
         """
         ...
 
