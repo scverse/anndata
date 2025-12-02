@@ -259,7 +259,15 @@ def _render_all_sections(
 
     for section in SECTION_ORDER:
         if section == "X":
-            continue  # Already rendered
+            # X is already rendered, but check for custom sections after X
+            if "X" in custom_sections_after:
+                parts.extend(
+                    _render_custom_section(
+                        adata, section_formatter, context, fold_threshold, max_items
+                    )
+                    for section_formatter in custom_sections_after["X"]
+                )
+            continue
         parts.append(
             _render_section(
                 adata,
