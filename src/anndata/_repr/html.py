@@ -46,6 +46,7 @@ from anndata._repr.utils import (
     get_matching_column_colors,
     is_backed,
     is_color_list,
+    is_lazy_series,
     is_view,
     should_warn_string_column,
 )
@@ -745,6 +746,10 @@ def _render_category_list(
 
 def _render_unique_count(col: pd.Series) -> str:
     """Render unique count for a non-categorical column."""
+    # Show "(lazy)" for lazy series to avoid triggering data loading
+    if is_lazy_series(col):
+        return '<span class="adata-text-muted">(lazy)</span>'
+
     unique_limit = _get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
     if unique_limit > 0 and len(col) <= unique_limit:
         try:

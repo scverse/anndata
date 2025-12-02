@@ -121,6 +121,10 @@ def should_warn_string_column(
     -------
     tuple of (should_warn, warning_message)
     """
+    # Skip for lazy series to avoid triggering data loading
+    if is_lazy_series(series):
+        return False, ""
+
     from pandas.api.types import infer_dtype
 
     dtype_str = infer_dtype(series)
@@ -329,6 +333,23 @@ def is_view(obj: Any) -> bool:
 def is_backed(obj: Any) -> bool:
     """Check if an object is backed (for AnnData-like objects)."""
     return getattr(obj, "isbacked", False)
+
+
+def is_lazy_series(series: Any) -> bool:
+    """
+    Check if a Series-like object is lazy (backed by remote/lazy storage).
+
+    This detects Series from Dataset2D (xarray-backed DataFrames used in
+    lazy AnnData) to prevent operations that would trigger data loading.
+    """
+    # Check if it's from a Dataset2D (lazy DataFrame)
+    # Dataset2D columns have a .data attribute that's an xarray DataArray
+    if hasattr(series, "data") and hasattr(series.data, "dims"):
+        return True
+    # Check for xarray Variable backing
+    if hasattr(series, "_variable"):
+        return True
+    return False
 
 
 def get_backing_info(obj: Any) -> dict[str, Any]:
