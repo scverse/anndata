@@ -270,6 +270,10 @@ try:
             return "X"  # Show right after X (before obs)
 
         @property
+        def doc_url(self) -> str:
+            return "https://mudata.readthedocs.io/en/latest/api/generated/mudata.MuData.html"
+
+        @property
         def tooltip(self) -> str:
             return "Modalities (MuData)"
 
