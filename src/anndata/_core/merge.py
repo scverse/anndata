@@ -1199,7 +1199,6 @@ def make_dask_col_from_extension_dtype(
         get_chunksize,
         maybe_open_h5,
     )
-    from anndata.compat import XDataArray
     from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
@@ -1209,7 +1208,6 @@ def make_dask_col_from_extension_dtype(
         base_path_or_zarr_group is not None and elem_name is not None
     ):  # lazy, backed by store
         dims = col.dims
-        coords = col.coords.copy()
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
             maybe_chunk_size = get_chunksize(read_elem_lazy(f))
             chunk_size = (
@@ -1226,16 +1224,11 @@ def make_dask_col_from_extension_dtype(
                 variable = xr.Variable(
                     data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
                 )
-                data_array = XDataArray(
-                    variable,
-                    coords=coords,
-                    dims=dims,
-                )
                 idx = tuple(
                     slice(start, stop)
                     for start, stop in block_info[None]["array-location"]
                 )
-                chunk = np.array(data_array.data[idx])
+                chunk = np.array(variable.data[idx])
             return chunk
 
         if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
