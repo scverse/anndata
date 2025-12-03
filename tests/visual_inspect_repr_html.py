@@ -240,7 +240,7 @@ try:
     from anndata._repr import (
         FormattedEntry,
         FormattedOutput,
-        FormatterContext,  # noqa: TC001
+        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -330,6 +330,9 @@ try:
         STYLE_HIDDEN,
         FormattedEntry,
         FormattedOutput,
+        FormatterContext,
+        FormatterRegistry,
+        TypeFormatter,
         escape_html,
         format_memory_size,
         format_number,
@@ -344,6 +347,42 @@ try:
 
     # SpatialData documentation base URL
     SPATIALDATA_DOCS = "https://spatialdata.scverse.org/en/latest/api/SpatialData.html"
+
+    # =========================================================================
+    # OPTIONAL: Extensibility via FormatterRegistry
+    # =========================================================================
+    # SpatialData can create its own registry to allow third-party packages
+    # to register custom formatters for SpatialData's element types.
+    # This is the same pattern anndata uses for TypeFormatter/SectionFormatter.
+
+    # Create SpatialData's own formatter registry
+    spatialdata_formatter_registry = FormatterRegistry()
+
+    # Example: A third-party package could register a custom formatter
+    # for xarray DataTree objects used in SpatialData's images section
+    class DataTreeFormatter(TypeFormatter):
+        """Example formatter for xarray DataTree (multiscale images)."""
+
+        priority = 100  # Higher priority than fallback
+
+        def can_format(self, obj) -> bool:
+            # In real code: return isinstance(obj, xarray.DataTree)
+            # Here we check for our mock dict structure
+            return isinstance(obj, dict) and "shape" in obj and "dtype" in obj
+
+        def format(self, obj, context: FormatterContext) -> FormattedOutput:
+            shape_str = " × ".join(str(s) for s in obj["shape"])
+            dims_str = ", ".join(obj.get("dims", ["y", "x"]))
+            return FormattedOutput(
+                type_name=f"DataArray[{dims_str}] ({shape_str}) {obj['dtype']}",
+                css_class="dtype-ndarray",
+                tooltip=f"Image data with shape {shape_str}",
+            )
+
+    # Register the formatter (third-party packages would do this on import)
+    spatialdata_formatter_registry.register_type_formatter(DataTreeFormatter())
+
+    # =========================================================================
 
     class MockSpatialData:
         """
@@ -485,19 +524,19 @@ try:
             )
 
         def _render_images_section(self) -> str:
-            """Render the images section using FormattedEntry."""
+            """Render the images section using the formatter registry.
+
+            This demonstrates using FormatterRegistry for extensibility.
+            Third-party packages can register custom formatters for image types.
+            """
+            # Create context for this section (used by formatters)
+            context = FormatterContext(section="images")
+
             rows = []
             for name, info in self.images.items():
-                shape_str = " × ".join(str(s) for s in info["shape"])
-                dims_str = ", ".join(info["dims"])
-                entry = FormattedEntry(
-                    key=name,
-                    output=FormattedOutput(
-                        type_name=f"DataArray[{dims_str}] ({shape_str}) {info['dtype']}",
-                        css_class="dtype-ndarray",
-                        tooltip=f"Image: {name}",
-                    ),
-                )
+                # Use the registry to format the value - allows third-party customization
+                output = spatialdata_formatter_registry.format_value(info, context)
+                entry = FormattedEntry(key=name, output=output)
                 rows.append(render_formatted_entry(entry))
 
             return render_section(
@@ -616,7 +655,7 @@ try:
             try:
                 mem_str = format_memory_size(self.__sizeof__())
                 parts.append(f'<span title="Estimated memory usage">~{mem_str}</span>')
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 pass
             parts.append("</div>")
             return "\n".join(parts)
@@ -633,9 +672,7 @@ try:
         cell_table = AnnData(
             np.random.randn(n_cells, n_genes).astype(np.float32),
             obs=pd.DataFrame({
-                "cell_type": pd.Categorical(
-                    ["Tumor", "Immune", "Stromal"] * 50
-                ),
+                "cell_type": pd.Categorical(["Tumor", "Immune", "Stromal"] * 50),
                 "area": np.random.uniform(100, 1000, n_cells),
                 "region": pd.Categorical(["region_A", "region_B"] * 75),
             }),
@@ -645,14 +682,18 @@ try:
             }),
         )
         cell_table.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
-        cell_table.obsm["spatial"] = np.random.randn(n_cells, 2).astype(np.float32) * 1000
+        cell_table.obsm["spatial"] = (
+            np.random.randn(n_cells, 2).astype(np.float32) * 1000
+        )
 
         # Transcript counts table
         n_transcripts = 80
         transcript_table = AnnData(
             np.random.randn(n_transcripts, 10).astype(np.float32),
             obs=pd.DataFrame({
-                "gene": pd.Categorical(np.random.choice([f"gene_{i}" for i in range(10)], n_transcripts)),
+                "gene": pd.Categorical(
+                    np.random.choice([f"gene_{i}" for i in range(10)], n_transcripts)
+                ),
                 "quality_score": np.random.uniform(0, 1, n_transcripts),
             }),
         )
@@ -710,7 +751,7 @@ try:
             path="/data/experiment_001.zarr",
         )
 
-except Exception:
+except ImportError:
     HAS_SPATIALDATA_EXAMPLE = False
 
 
@@ -1051,7 +1092,7 @@ def strip_script_tags(html: str) -> str:
     return re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
 
 
-def main():  # noqa: PLR0915
+def main():  # noqa: PLR0915, PLR0912
     """Generate visual test HTML file."""
     print("Generating visual test cases...")
 
