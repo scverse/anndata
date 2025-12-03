@@ -136,8 +136,11 @@ _JS_CONTENT = """
         let totalMatches = 0;
         let totalEntries = 0;
 
-        // Filter all entries
-        container.querySelectorAll('.adata-entry').forEach(entry => {
+        // First pass: mark all entries as hidden or not based on direct match
+        const entries = container.querySelectorAll('.adata-entry');
+        const directMatches = new Set();
+
+        entries.forEach(entry => {
             totalEntries++;
 
             if (!query) {
@@ -153,6 +156,7 @@ _JS_CONTENT = """
             const matches = key.includes(query) || dtype.includes(query) || text.includes(query);
 
             if (matches) {
+                directMatches.add(entry);
                 entry.classList.remove('hidden');
                 totalMatches++;
 
@@ -171,6 +175,31 @@ _JS_CONTENT = """
                 entry.classList.add('hidden');
             }
         });
+
+        // Second pass: if a nested entry matches, show its parent entry row
+        // This ensures that when searching for something inside a nested AnnData,
+        // the row containing that AnnData remains visible so the user can expand it
+        if (query) {
+            directMatches.forEach(matchedEntry => {
+                // Find if this entry is inside a nested AnnData (.adata-nested-content)
+                const nestedContainer = matchedEntry.closest('.adata-nested-content');
+                if (nestedContainer) {
+                    // Find the parent row that contains this nested content
+                    // Structure: tr.adata-entry > tr.adata-nested-row > td.adata-nested-content
+                    const nestedRow = nestedContainer.closest('.adata-nested-row');
+                    if (nestedRow) {
+                        // The parent entry is the previous sibling row
+                        const parentEntry = nestedRow.previousElementSibling;
+                        if (parentEntry && parentEntry.classList.contains('adata-entry')) {
+                            if (parentEntry.classList.contains('hidden')) {
+                                parentEntry.classList.remove('hidden');
+                                totalMatches++;
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         // Update filter indicator
         if (filterIndicator) {
