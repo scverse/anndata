@@ -182,31 +182,32 @@ _JS_CONTENT = """
         if (query) {
             directMatches.forEach(matchedEntry => {
                 // Walk up the DOM tree to find and show all parent entry rows
+                // Safety limit prevents infinite loops (max nesting depth is typically 3)
                 let element = matchedEntry;
-                while (element && element !== container) {
+                let iterations = 0;
+                const maxIterations = 20;
+
+                while (element && element !== container && iterations < maxIterations) {
+                    iterations++;
                     // Check if we're inside a nested content container
                     const nestedContainer = element.closest('.adata-nested-content');
-                    if (nestedContainer) {
-                        // Find the parent row that contains this nested content
-                        // Structure: tr.adata-entry > tr.adata-nested-row > td.adata-nested-content
-                        const nestedRow = nestedContainer.closest('.adata-nested-row');
-                        if (nestedRow) {
-                            // The parent entry is the previous sibling row
-                            const parentEntry = nestedRow.previousElementSibling;
-                            if (parentEntry && parentEntry.classList.contains('adata-entry')) {
-                                if (parentEntry.classList.contains('hidden')) {
-                                    parentEntry.classList.remove('hidden');
-                                    totalMatches++;
-                                }
-                            }
-                            // Continue searching from the parent's container
-                            element = nestedRow.parentElement;
-                        } else {
-                            break;
+                    if (!nestedContainer) break;
+
+                    // Find the parent row that contains this nested content
+                    // Structure: tr.adata-entry > tr.adata-nested-row > td.adata-nested-content
+                    const nestedRow = nestedContainer.closest('.adata-nested-row');
+                    if (!nestedRow) break;
+
+                    // The parent entry is the previous sibling row
+                    const parentEntry = nestedRow.previousElementSibling;
+                    if (parentEntry && parentEntry.classList.contains('adata-entry')) {
+                        if (parentEntry.classList.contains('hidden')) {
+                            parentEntry.classList.remove('hidden');
+                            totalMatches++;
                         }
-                    } else {
-                        break;
                     }
+                    // Continue searching from the parent's container
+                    element = nestedRow.parentElement;
                 }
             });
         }
