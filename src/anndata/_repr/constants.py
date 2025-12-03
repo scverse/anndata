@@ -20,3 +20,8 @@ DEFAULT_UNIQUE_LIMIT = 1_000_000  # Max rows to compute unique counts (0 to disa
 # Column widths (pixels)
 DEFAULT_MAX_FIELD_WIDTH = 400  # Max width for field name column
 DEFAULT_TYPE_WIDTH = 220  # Width for type column
+
+# Inline styles for graceful degradation (hidden until JS enables)
+STYLE_HIDDEN = "display:none;"
+STYLE_SECTION_CONTENT = "padding:0;overflow:hidden;"
+STYLE_SECTION_TABLE = "width:100%;border-collapse:collapse;"

@@ -29,6 +29,11 @@ from anndata._repr import (
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
+from anndata._repr.constants import (
+    STYLE_HIDDEN,
+    STYLE_SECTION_CONTENT,
+    STYLE_SECTION_TABLE,
+)
 from anndata._repr.css import get_css
 from anndata._repr.javascript import get_javascript
 from anndata._repr.registry import (
@@ -72,13 +77,9 @@ CHAR_WIDTH_PX = 8
 # These inline styles are minimal fallbacks that ensure basic readability
 # if CSS fails to load (e.g., email clients, restrictive embeds).
 # Colors and theming are intentionally CSS-only to support dark mode.
+# STYLE_HIDDEN, STYLE_SECTION_CONTENT, STYLE_SECTION_TABLE are imported
+# from constants.py (single source of truth).
 
-# Hidden elements - JS reveals these; must be inline to work without CSS
-STYLE_HIDDEN = "display:none;"
-
-# Section content and tables - basic layout fallback
-STYLE_SECTION_CONTENT = "padding:0;overflow:hidden;"
-STYLE_SECTION_TABLE = "width:100%;border-collapse:collapse;"
 STYLE_SECTION_INFO = "padding:6px 12px;"
 
 # Category color dot - needs inline for dynamic background color
@@ -380,42 +381,82 @@ def _render_custom_section(
         return ""
 
     n_items = len(entries)
-    should_collapse = n_items > fold_threshold
-
     section_name = formatter.section_name
-    display_name = getattr(formatter, "display_name", section_name)
-    doc_url = getattr(formatter, "doc_url", None)
-    tooltip = getattr(formatter, "tooltip", "")
 
-    parts = [
-        f'<div class="anndata-sec" data-section="{escape_html(section_name)}" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
-    ]
-
-    # Header
-    parts.append(
-        _render_section_header(display_name, f"({n_items} items)", doc_url, tooltip)
-    )
-
-    # Content
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
-
+    # Render entries (with truncation)
+    rows = []
     for i, entry in enumerate(entries):
         if i >= max_items:
-            parts.append(_render_truncation_indicator(n_items - max_items))
+            rows.append(_render_truncation_indicator(n_items - max_items))
             break
-        parts.append(_render_formatted_entry(entry, section_name))
+        rows.append(render_formatted_entry(entry, section_name))
 
-    parts.append("</table>")
-    parts.append("</div>")  # anndata-seccontent
-    parts.append("</div>")  # anndata-sec
+    # Use render_section for consistent structure
+    return render_section(
+        getattr(formatter, "display_name", section_name),
+        "\n".join(rows),
+        n_items=n_items,
+        doc_url=getattr(formatter, "doc_url", None),
+        tooltip=getattr(formatter, "tooltip", ""),
+        should_collapse=n_items > fold_threshold,
+        section_id=section_name,
+    )
 
-    return "\n".join(parts)
 
+def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
+    """
+    Render a FormattedEntry as a table row.
 
-def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
-    """Render a FormattedEntry from a custom section formatter."""
+    This is a public API for packages building their own _repr_html_.
+    It provides the same flexibility as internal code by accepting
+    FormattedEntry/FormattedOutput objects.
+
+    Parameters
+    ----------
+    entry
+        A FormattedEntry containing the key and FormattedOutput
+    section
+        Optional section name (for future use)
+
+    Returns
+    -------
+    HTML string for the table row(s)
+
+    Examples
+    --------
+    ::
+
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            render_formatted_entry,
+        )
+
+        entry = FormattedEntry(
+            key="my_array",
+            output=FormattedOutput(
+                type_name="ndarray (100, 50) float32",
+                css_class="dtype-ndarray",
+                tooltip="My custom array",
+                warnings=["Some warning"],
+            ),
+        )
+        html = render_formatted_entry(entry)
+
+    With expandable nested content::
+
+        nested_html = generate_repr_html(adata, depth=1)
+        entry = FormattedEntry(
+            key="cell_table",
+            output=FormattedOutput(
+                type_name="AnnData (150 × 30)",
+                css_class="dtype-anndata",
+                html_content=nested_html,
+                is_expandable=True,
+            ),
+        )
+        html = render_formatted_entry(entry)
+    """
     output = entry.output
 
     entry_class = "adata-entry"
@@ -440,7 +481,7 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
     if output.warnings or not output.is_serializable:
-        warnings_list = output.warnings.copy()
+        warnings_list = list(output.warnings)
         if not output.is_serializable:
             warnings_list.insert(0, "Not serializable to H5AD/Zarr")
         title = escape_html("; ".join(warnings_list))
@@ -458,7 +499,7 @@ def _render_formatted_entry(entry: FormattedEntry, section: str) -> str:
 
     parts.append("</td>")
 
-    # Meta (empty for custom sections, or could be customized)
+    # Meta (empty for custom sections)
     parts.append('<td class="adata-entry-meta"></td>')
 
     parts.append("</tr>")
@@ -693,38 +734,24 @@ def _render_dataframe_section(
     if n_cols == 0:
         return _render_empty_section(section, doc_url, tooltip)
 
-    # Should this section be collapsed? (only via JS, default is expanded)
-    should_collapse = n_cols > fold_threshold
-
-    # Section - no inline colors to allow dark mode CSS to work
-    parts = [
-        f'<div class="anndata-sec" data-section="{section}" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
-    ]
-
-    # Header
-    parts.append(
-        _render_section_header(section, f"({n_cols} columns)", doc_url, tooltip)
-    )
-
-    # Content - always visible by default (JS can hide it)
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
-
-    # Render each column
+    # Render entries (with truncation)
+    rows = []
     for i, col_name in enumerate(df.columns):
         if i >= max_items:
-            parts.append(_render_truncation_indicator(n_cols - max_items))
+            rows.append(_render_truncation_indicator(n_cols - max_items))
             break
-
         col = df[col_name]
-        parts.append(_render_dataframe_entry(adata, section, col_name, col, context))
+        rows.append(_render_dataframe_entry(adata, section, col_name, col, context))
 
-    parts.append("</table>")
-    parts.append("</div>")  # anndata-seccontent
-    parts.append("</div>")  # anndata-sec
-
-    return "\n".join(parts)
+    return render_section(
+        section,
+        "\n".join(rows),
+        n_items=n_cols,
+        doc_url=doc_url,
+        tooltip=tooltip,
+        should_collapse=n_cols > fold_threshold,
+        count_str=f"({n_cols} columns)",
+    )
 
 
 def _render_category_list(
@@ -867,36 +894,23 @@ def _render_mapping_section(
     if n_items == 0:
         return _render_empty_section(section, doc_url, tooltip)
 
-    should_collapse = n_items > fold_threshold
-
-    # Section - no inline colors to allow dark mode CSS to work
-    parts = [
-        f'<div class="anndata-sec" data-section="{section}" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
-    ]
-
-    # Header
-    parts.append(
-        _render_section_header(section, f"({n_items} items)", doc_url, tooltip)
-    )
-
-    # Content - always visible by default
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
-
+    # Render entries (with truncation)
+    rows = []
     for i, key in enumerate(keys):
         if i >= max_items:
-            parts.append(_render_truncation_indicator(n_items - max_items))
+            rows.append(_render_truncation_indicator(n_items - max_items))
             break
-
         value = mapping[key]
-        parts.append(_render_mapping_entry(key, value, context, section))
+        rows.append(_render_mapping_entry(key, value, context, section))
 
-    parts.append("</table>")
-    parts.append("</div>")
-    parts.append("</div>")
-
-    return "\n".join(parts)
+    return render_section(
+        section,
+        "\n".join(rows),
+        n_items=n_items,
+        doc_url=doc_url,
+        tooltip=tooltip,
+        should_collapse=n_items > fold_threshold,
+    )
 
 
 def _render_type_cell(
@@ -1030,34 +1044,23 @@ def _render_uns_section(
     if n_items == 0:
         return _render_empty_section("uns", doc_url, tooltip)
 
-    should_collapse = n_items > fold_threshold
-
-    # Section - use data-should-collapse for JS to handle (consistent with other sections)
-    parts = [
-        f'<div class="anndata-sec" data-section="uns" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
-    ]
-
-    # Header
-    parts.append(_render_section_header("uns", f"({n_items} items)", doc_url, tooltip))
-
-    # Content
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
-
+    # Render entries (with truncation)
+    rows = []
     for i, key in enumerate(keys):
         if i >= max_items:
-            parts.append(_render_truncation_indicator(n_items - max_items))
+            rows.append(_render_truncation_indicator(n_items - max_items))
             break
-
         value = uns[key]
-        parts.append(_render_uns_entry(adata, key, value, context, max_depth))
+        rows.append(_render_uns_entry(adata, key, value, context, max_depth))
 
-    parts.append("</table>")
-    parts.append("</div>")
-    parts.append("</div>")
-
-    return "\n".join(parts)
+    return render_section(
+        "uns",
+        "\n".join(rows),
+        n_items=n_items,
+        doc_url=doc_url,
+        tooltip=tooltip,
+        should_collapse=n_items > fold_threshold,
+    )
 
 
 def _render_uns_entry(
@@ -1531,3 +1534,102 @@ def _get_setting(name: str, *, default: Any) -> Any:
         return getattr(settings, name, default)
     except (ImportError, AttributeError):
         return default
+
+
+# =============================================================================
+# Public API for building custom _repr_html_
+# =============================================================================
+
+
+def render_section(  # noqa: PLR0913
+    name: str,
+    entries_html: str,
+    *,
+    n_items: int,
+    doc_url: str | None = None,
+    tooltip: str = "",
+    should_collapse: bool = False,
+    section_id: str | None = None,
+    count_str: str | None = None,
+) -> str:
+    """
+    Render a complete section with header and content.
+
+    This is a public API for packages building their own _repr_html_.
+    It is also used internally for consistency.
+
+    Parameters
+    ----------
+    name
+        Display name for the section header (e.g., 'images', 'tables')
+    entries_html
+        HTML content for the section body (table rows)
+    n_items
+        Number of items (used for empty check and default count string)
+    doc_url
+        URL for the help link (? icon)
+    tooltip
+        Tooltip text for the help link
+    should_collapse
+        Whether this section should start collapsed
+    section_id
+        ID for the section in data-section attribute (defaults to name)
+    count_str
+        Custom count string for header (defaults to "(N items)")
+
+    Returns
+    -------
+    HTML string for the complete section
+
+    Examples
+    --------
+    ::
+
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            render_formatted_entry,
+        )
+
+        rows = []
+        for key, info in items.items():
+            entry = FormattedEntry(
+                key=key,
+                output=FormattedOutput(
+                    type_name=info["type"], css_class="dtype-ndarray"
+                ),
+            )
+            rows.append(render_formatted_entry(entry))
+
+        html = render_section(
+            "images",
+            "\\n".join(rows),
+            n_items=len(items),
+            doc_url="https://docs.example.com/images",
+            tooltip="Image data",
+        )
+    """
+    if section_id is None:
+        section_id = name
+
+    if n_items == 0:
+        return _render_empty_section(name, doc_url, tooltip)
+
+    if count_str is None:
+        count_str = f"({n_items} items)"
+
+    parts = [
+        f'<div class="anndata-sec" data-section="{escape_html(section_id)}" '
+        f'data-should-collapse="{str(should_collapse).lower()}">'
+    ]
+
+    # Header
+    parts.append(_render_section_header(name, count_str, doc_url, tooltip))
+
+    # Content
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
+    parts.append(entries_html)
+    parts.append("</table></div></div>")
+
+    return "\n".join(parts)

@@ -151,6 +151,25 @@ from anndata._repr.registry import (  # noqa: E402
     register_formatter,
 )
 
+# Building blocks for packages that want to create their own _repr_html_
+# These allow reusing anndata's styling while building custom representations
+from anndata._repr.css import get_css  # noqa: E402
+from anndata._repr.javascript import get_javascript  # noqa: E402
+from anndata._repr.utils import (  # noqa: E402
+    escape_html,
+    format_memory_size,
+    format_number,
+)
+
+# HTML rendering helpers for building custom sections
+from anndata._repr.html import (  # noqa: E402
+    render_formatted_entry,
+    render_section,
+)
+
+# Inline styles for graceful degradation (from single source of truth)
+from anndata._repr.constants import STYLE_HIDDEN  # noqa: E402
+
 __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     # Constants
     "DEFAULT_FOLD_THRESHOLD",
@@ -178,4 +197,13 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     # Type hint extraction (for tagged data in uns)
     "extract_uns_type_hint",
     "UNS_TYPE_HINT_KEY",
+    # Building blocks for custom _repr_html_ implementations
+    "get_css",
+    "get_javascript",
+    "escape_html",
+    "format_number",
+    "format_memory_size",
+    "render_section",
+    "render_formatted_entry",
+    "STYLE_HIDDEN",
 ]
