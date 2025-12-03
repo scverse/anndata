@@ -332,6 +332,7 @@ try:
         FormattedOutput,
         FormatterContext,
         FormatterRegistry,
+        SectionFormatter,
         TypeFormatter,
         escape_html,
         format_memory_size,
@@ -352,14 +353,18 @@ try:
     # OPTIONAL: Extensibility via FormatterRegistry
     # =========================================================================
     # SpatialData can create its own registry to allow third-party packages
-    # to register custom formatters for SpatialData's element types.
-    # This is the same pattern anndata uses for TypeFormatter/SectionFormatter.
+    # to register custom formatters for SpatialData's element types AND
+    # add entirely new sections. This is the same pattern anndata uses.
 
     # Create SpatialData's own formatter registry
     spatialdata_formatter_registry = FormatterRegistry()
 
-    # Example: A third-party package could register a custom formatter
-    # for xarray DataTree objects used in SpatialData's images section
+    # -------------------------------------------------------------------------
+    # Example 1: TypeFormatter for custom value rendering
+    # -------------------------------------------------------------------------
+    # A third-party package could register a custom formatter for xarray
+    # DataTree objects used in SpatialData's images section
+
     class DataTreeFormatter(TypeFormatter):
         """Example formatter for xarray DataTree (multiscale images)."""
 
@@ -379,8 +384,61 @@ try:
                 tooltip=f"Image data with shape {shape_str}",
             )
 
-    # Register the formatter (third-party packages would do this on import)
     spatialdata_formatter_registry.register_type_formatter(DataTreeFormatter())
+
+    # -------------------------------------------------------------------------
+    # Example 2: SectionFormatter for adding new sections
+    # -------------------------------------------------------------------------
+    # A third-party package (e.g., a spatial analysis toolkit) could add
+    # entirely new sections to SpatialData's repr
+
+    class SpatialDataSectionFormatter(SectionFormatter):
+        """Base class for SpatialData section formatters."""
+
+        @property
+        def section_name(self) -> str:
+            raise NotImplementedError
+
+    class TransformsSectionFormatter(SpatialDataSectionFormatter):
+        """Example: Add a 'transforms' section showing coordinate transforms."""
+
+        section_name = "transforms"
+
+        @property
+        def doc_url(self) -> str:
+            return f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.coordinate_systems"
+
+        @property
+        def tooltip(self) -> str:
+            return "Coordinate transformations between spaces"
+
+        def should_show(self, obj) -> bool:
+            # Show if object has coordinate systems (transforms between them)
+            return (
+                hasattr(obj, "coordinate_systems") and len(obj.coordinate_systems) > 1
+            )
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            # Mock: show transforms between coordinate systems
+            entries = []
+            coord_systems = list(obj.coordinate_systems)
+            for i, cs in enumerate(coord_systems[:-1]):
+                next_cs = coord_systems[i + 1]
+                entries.append(
+                    FormattedEntry(
+                        key=f"{cs} → {next_cs}",
+                        output=FormattedOutput(
+                            type_name="Affine (3×3)",
+                            css_class="dtype-ndarray",
+                            tooltip=f"Transform from {cs} to {next_cs}",
+                        ),
+                    )
+                )
+            return entries
+
+    spatialdata_formatter_registry.register_section_formatter(
+        TransformsSectionFormatter()
+    )
 
     # =========================================================================
 
@@ -437,8 +495,9 @@ try:
             1. Reuse anndata's CSS and JavaScript
             2. Build custom header (no shape, custom badges)
             3. Build custom index preview (coordinate systems instead of obs/var names)
-            4. Use render_section() and render_entry_row() helpers
+            4. Use render_section() and render_formatted_entry() helpers
             5. Embed nested AnnData with full interactivity
+            6. Support custom sections via FormatterRegistry (optional extensibility)
             """
             container_id = f"spatialdata-repr-{uuid.uuid4().hex[:8]}"
 
@@ -466,6 +525,8 @@ try:
             parts.append(self._render_points_section())
             parts.append(self._render_shapes_section())
             parts.append(self._render_tables_section())
+            # 5b. Render custom sections from registry (extensibility)
+            parts.append(self._render_custom_sections())
             parts.append("</div>")
 
             # 6. Custom footer
@@ -647,6 +708,49 @@ try:
                 doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.tables",
                 tooltip="Annotation tables (AnnData)",
             )
+
+        def _render_custom_sections(self) -> str:
+            """Render custom sections registered via FormatterRegistry.
+
+            This demonstrates how third-party packages can add new sections
+            to SpatialData's repr by registering SectionFormatters.
+            """
+            parts = []
+            context = FormatterContext()
+
+            # Get all registered section formatters
+            for (
+                section_name
+            ) in spatialdata_formatter_registry.get_registered_sections():
+                formatter = spatialdata_formatter_registry.get_section_formatter(
+                    section_name
+                )
+                if formatter is None:
+                    continue
+
+                # Check if this section should be shown
+                if not formatter.should_show(self):
+                    continue
+
+                # Get entries from the formatter
+                entries = formatter.get_entries(self, context)
+                if not entries:
+                    continue
+
+                # Render each entry
+                rows = [render_formatted_entry(entry) for entry in entries]
+
+                # Use render_section for consistent structure
+                section_html = render_section(
+                    formatter.section_name,
+                    "\n".join(rows),
+                    n_items=len(entries),
+                    doc_url=getattr(formatter, "doc_url", None),
+                    tooltip=getattr(formatter, "tooltip", ""),
+                )
+                parts.append(section_html)
+
+            return "\n".join(parts)
 
         def _render_footer(self) -> str:
             """Render custom footer with spatialdata version."""
