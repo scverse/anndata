@@ -230,7 +230,8 @@ try:
                 entries.append(FormattedEntry(key=key, output=output))
             return entries
 
-except ImportError:
+except (ImportError, AttributeError):
+    # AttributeError can occur on Python 3.14+ with incompatible networkx versions
     HAS_TREEDATA = False
 
 # Check for MuData
