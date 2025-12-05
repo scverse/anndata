@@ -49,7 +49,7 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal
+    from typing import Any, ClassVar, Literal, NoReturn
 
     from zarr.storage import StoreLike
 
@@ -1806,25 +1806,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         return out
 
-    def var_names_make_unique(self, join: str = "-"):
+    def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.var_names = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join: str = "-"):
+    def obs_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.obs_names = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def _check_uniqueness(self):
-        if not self.obs.index.is_unique:
+    def _check_uniqueness(self) -> None:
+        if self.obs.index[~self.obs.index.isna()].has_duplicates:
             utils.warn_names_duplicates("obs")
-        if not self.var.index.is_unique:
+        if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: Any):
+    def __contains__(self, key: Any) -> NoReturn:
         msg = "AnnData has no attribute __contains__, don’t check `in adata`."
         raise AttributeError(msg)
 

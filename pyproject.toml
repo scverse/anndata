@@ -78,7 +78,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "pytest>=8.2",
+    "pytest>=9.0.1",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
@@ -130,10 +130,10 @@ exclude_also = [
     "if TYPE_CHECKING:",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
+strict = true
 addopts = [
     "--import-mode=importlib",
-    "--strict-markers",
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
@@ -147,7 +147,6 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
     "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
-
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -164,7 +163,7 @@ filterwarnings_when_strict = [
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
 ]
-python_files = "test_*.py"
+python_files = [ "test_*.py" ]
 testpaths = [
     "anndata",                  # docstrings (module name due to --pyargs)
     "./tests",                  # unit tests
@@ -172,7 +171,6 @@ testpaths = [
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
-xfail_strict = true
 markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",

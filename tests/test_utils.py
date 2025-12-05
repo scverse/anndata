@@ -12,17 +12,19 @@ from anndata.utils import make_index_unique
 
 
 def test_make_index_unique() -> None:
-    index = pd.Index(["val", "val", "val-1", "val-1"])
+    index = pd.Index(["val", "val", pd.NA, "val-1", "val-1", pd.NA], dtype="string")
     with pytest.warns(
         UserWarning, match=r"Suffix used.*index values difficult to interpret"
     ):
         result = make_index_unique(index)
-    expected = pd.Index(["val", "val-2", "val-1", "val-1-1"])
-    assert list(expected) == list(result)
-    assert result.is_unique
+    expected = pd.Index(
+        ["val", "val-2", pd.NA, "val-1", "val-1-1", pd.NA], dtype="string"
+    )
+    pd.testing.assert_index_equal(result, expected)
+    assert result[~result.isna()].is_unique
 
 
-def test_adata_unique_indices():
+def test_adata_unique_indices() -> None:
     m, n = (10, 20)
     obs_index = pd.Index(repeat("a", m), name="obs")
     var_index = pd.Index(repeat("b", n), name="var")
