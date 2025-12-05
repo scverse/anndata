@@ -78,7 +78,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "pytest",
+    "pytest < 9.0",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
@@ -98,7 +98,17 @@ test-min = [
     "pyarrow",
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
+
+test = [
+    "anndata[test-min,lazy]",
+    "fast-array-utils>=1.2.3",
+]
+
+test-array-api = [
+    "anndata[test-min]",
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
+]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]

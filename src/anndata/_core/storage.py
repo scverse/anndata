@@ -9,7 +9,7 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, has_xp
 from ..utils import (
     ensure_df_homogeneous,
     join_english,
@@ -30,6 +30,8 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
+    from anndata._core.merge import _is_array_api_compatible
+
     from ..typing import ArrayDataStructureTypes
 
     # If value is a scalar and we allow that, return it
@@ -44,6 +46,8 @@ def coerce_array(
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)
             value = value.A
+        return value
+    if _is_array_api_compatible(value):
         return value
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))
@@ -67,6 +71,8 @@ def coerce_array(
             return np.array(value)
         except (ValueError, TypeError) as _e:
             e = _e
+    if has_xp(value):
+        return value
     # if value isn’t the right type or convertible, raise an error
     msg = f"{name} needs to be of one of {join_english(map(str, array_data_structure_types))}, not {type(value)}."
     if e is not None:

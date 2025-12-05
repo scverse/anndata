@@ -4,6 +4,7 @@ Main class and helper functions.
 
 from __future__ import annotations
 
+import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
@@ -660,8 +661,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
                     warn(msg, UserWarning)
                     value = value.toarray()
-                msg = "Modifying `X` on a view results in data being overridden"
-                warn(msg, ImplicitModificationWarning)
+                warnings.warn(  # noqa: TID251
+                    "Modifying `X` on a view results in data being overridden",
+                    ImplicitModificationWarning,
+                    stacklevel=2,
+                )
+                dest = self._adata_ref._X
+                # Handles read-only NumPy views from backend arrays like JAX by
+                # making a writable copy so in-place assignment on views can succeed.
+                if isinstance(dest, np.ndarray) and not dest.flags.writeable:
+                    dest = np.array(dest, copy=True)  # make a fresh, writable buffer
+                    self._adata_ref._X = dest
                 self._adata_ref._X[oidx, vidx] = value
             else:
                 self._X = value

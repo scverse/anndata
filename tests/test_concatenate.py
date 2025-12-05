@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
+from contextlib import suppress
 from copy import deepcopy
 from functools import partial, singledispatch
 from importlib.metadata import version
@@ -36,6 +37,14 @@ from anndata.tests.helpers import (
     gen_vstr_recarray,
 )
 from anndata.utils import asarray
+
+JaxArray = None
+jax = None
+jnp = None
+
+with suppress(ImportError):
+    import jax.numpy as jnp
+    from jaxlib._jax import ArrayImpl as JaxArray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,6 +91,13 @@ def _filled_sparse_array(a, fill_value=None):
 def _filled_df(a, fill_value=np.nan):
     # dtype from pd.concat can be unintuitive, this returns something close enough
     return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
+
+
+if JaxArray is not None:
+
+    @filled_like.register(JaxArray)
+    def _(a, fill_value=None):
+        return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
@@ -361,6 +377,8 @@ def test_concatenate_dense():
 
 @mark_legacy_concatenate
 def test_concatenate_layers(array_type, join_type):
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
@@ -527,6 +545,8 @@ def test_concat_annot_join(obsm_adatas, join_type):
 
 @mark_legacy_concatenate
 def test_concatenate_layers_misaligned(array_type, join_type):
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
@@ -542,6 +562,10 @@ def test_concatenate_layers_misaligned(array_type, join_type):
 @mark_legacy_concatenate
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
+
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices via `asarray()`")
+
     a = AnnData(
         X=np.ones((10, 20)),
         layers={"a": array_type(sparse.random(10, 20, format="csr"))},
@@ -901,6 +925,8 @@ def test_awkward_does_not_mix(join_type, other):
 
 
 def test_pairwise_concat(axis_name, array_type):
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices to arrays")
     axis, axis_name = merge._resolve_axis(axis_name)
     _, alt_axis_name = merge._resolve_axis(1 - axis)
     axis_sizes = [[100, 200, 50], [50, 50, 50]]
@@ -959,6 +985,9 @@ def test_pairwise_concat(axis_name, array_type):
 
 
 def test_nan_merge(axis_name, join_type, array_type):
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices")
+
     axis, _ = merge._resolve_axis(axis_name)
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
@@ -1486,11 +1515,23 @@ def expected_shape(
     return tuple(shape)
 
 
+array_namespaces_contact_size_0_axis = ["numpy"]
+if jax is not None:
+    array_namespaces_contact_size_0_axis.append("jax")
+
+
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
+@pytest.mark.parametrize("array_namespace", array_namespaces_contact_size_0_axis)
 def test_concat_size_0_axis(
-    axis_name, join_type, merge_strategy, shape, use_xdataset, force_lazy
+    axis_name,
+    join_type,
+    merge_strategy,
+    shape,
+    use_xdataset,
+    force_lazy,
+    array_namespace,
 ):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
@@ -1502,6 +1543,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        array_namespace=array_namespace,
     )
     b = gen_adata(
         shape,
@@ -1509,6 +1551,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        array_namespace=array_namespace,
     )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
@@ -1573,6 +1616,7 @@ def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
     )
+
     del getattr(b, f"{axis}m")[elem]
 
     concated = concat(
@@ -1663,6 +1707,9 @@ def test_concat_different_types_dask(merge_strategy, array_type):
     from scipy import sparse
 
     import anndata as ad
+
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
 
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
@@ -1797,6 +1844,9 @@ def test_error_on_mixed_device():
 
 def test_concat_on_var_outer_join(array_type):
     # https://github.com/scverse/anndata/issues/1286
+    if jnp is not None and array_type is jnp.asarray:
+        pytest.xfail("concat across different array backends is not supported")
+
     a = AnnData(
         obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
         var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10)]),
@@ -1837,3 +1887,18 @@ def test_1d_concat():
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)
+
+
+# def test_concatenate_dtype():
+#     X1 = np.array([[1, 2, 3], [4, 5, 6]], dtype=int)
+#     X2 = np.array([[3, 2, 1], [6, 5, 4]], dtype=int)
+#     X3 = np.array([[3, 2], [6, 5]], dtype=int)
+#     adata1 = AnnData(X1, dict(obs_names=["s1", "s2"]), dict(var_names=["a", "b", "c"]))
+#     adata2 = AnnData(X2, dict(obs_names=["s3", "s4"]), dict(var_names=["a", "b", "c"]))
+#     adata3 = AnnData(X3, dict(obs_names=["s5", "s6"]), dict(var_names=["b", "c"]))
+#     adata_inner = concat([adata1, adata2, adata3], join="inner")
+#     assert adata_inner.X.dtype == np.int64, (
+#         "dtype should be int unexpectedly in inner join"
+#     )
+#     adata_outer = adata1.concatenate(adata2, adata3, join="outer")
+#     assert adata_outer.X.dtype == np.float64, "dtype should be float after outer join"
