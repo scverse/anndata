@@ -499,8 +499,11 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
 
     parts.append("</td>")
 
-    # Meta (empty for custom sections)
-    parts.append('<td class="adata-entry-meta"></td>')
+    # Meta column (for data previews, dimensions, etc.)
+    parts.append('<td class="adata-entry-meta">')
+    if output.meta_content:
+        parts.append(output.meta_content)
+    parts.append("</td>")
 
     parts.append("</tr>")
 

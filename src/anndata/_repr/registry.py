@@ -75,7 +75,10 @@ class FormattedOutput:
     """Child entries for expandable types"""
 
     html_content: str | None = None
-    """Custom HTML content (for special visualizations like colors)"""
+    """Custom HTML content (for expandable nested content or type column)"""
+
+    meta_content: str | None = None
+    """HTML content for the meta column (data previews, dimensions, etc.)"""
 
     is_expandable: bool = False
     """Whether this entry can be expanded"""
