@@ -322,6 +322,15 @@ except ImportError:
 # =============================================================================
 # This demonstrates how packages like SpatialData can create their own _repr_html_
 # while reusing anndata's CSS, JavaScript, and rendering helpers.
+#
+# KEY BUILDING BLOCKS USED:
+#   - get_css()                  : Reuse anndata's CSS (dark mode, styling)
+#   - get_javascript(id)         : Reuse anndata's JS (fold, search, copy)
+#   - render_section()           : Render a collapsible section
+#   - render_formatted_entry()   : Render a table row
+#   - FormattedEntry/Output      : Data classes for entry configuration
+#   - generate_repr_html()       : Embed nested AnnData objects
+#   - FormatterRegistry          : (Optional) Allow third-party extensions
 
 try:
     import uuid
@@ -346,108 +355,16 @@ try:
 
     HAS_SPATIALDATA_EXAMPLE = True
 
-    # SpatialData documentation base URL
-    SPATIALDATA_DOCS = "https://spatialdata.scverse.org/en/latest/api/SpatialData.html"
-
     # =========================================================================
-    # OPTIONAL: Extensibility via FormatterRegistry
-    # =========================================================================
-    # SpatialData can create its own registry to allow third-party packages
-    # to register custom formatters for SpatialData's element types AND
-    # add entirely new sections. This is the same pattern anndata uses.
-
-    # Create SpatialData's own formatter registry
-    spatialdata_formatter_registry = FormatterRegistry()
-
-    # -------------------------------------------------------------------------
-    # Example 1: TypeFormatter for custom value rendering
-    # -------------------------------------------------------------------------
-    # A third-party package could register a custom formatter for xarray
-    # DataTree objects used in SpatialData's images section
-
-    class DataTreeFormatter(TypeFormatter):
-        """Example formatter for xarray DataTree (multiscale images)."""
-
-        priority = 100  # Higher priority than fallback
-
-        def can_format(self, obj) -> bool:
-            # In real code: return isinstance(obj, xarray.DataTree)
-            # Here we check for our mock dict structure
-            return isinstance(obj, dict) and "shape" in obj and "dtype" in obj
-
-        def format(self, obj, context: FormatterContext) -> FormattedOutput:
-            shape_str = " × ".join(str(s) for s in obj["shape"])
-            dims_str = ", ".join(obj.get("dims", ["y", "x"]))
-            return FormattedOutput(
-                type_name=f"DataArray[{dims_str}] ({shape_str}) {obj['dtype']}",
-                css_class="dtype-ndarray",
-                tooltip=f"Image data with shape {shape_str}",
-            )
-
-    spatialdata_formatter_registry.register_type_formatter(DataTreeFormatter())
-
-    # -------------------------------------------------------------------------
-    # Example 2: SectionFormatter for adding new sections
-    # -------------------------------------------------------------------------
-    # A third-party package (e.g., a spatial analysis toolkit) could add
-    # entirely new sections to SpatialData's repr
-
-    class SpatialDataSectionFormatter(SectionFormatter):
-        """Base class for SpatialData section formatters."""
-
-        @property
-        def section_name(self) -> str:
-            raise NotImplementedError
-
-    class TransformsSectionFormatter(SpatialDataSectionFormatter):
-        """Example: Add a 'transforms' section showing coordinate transforms."""
-
-        section_name = "transforms"
-
-        @property
-        def doc_url(self) -> str:
-            return f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.coordinate_systems"
-
-        @property
-        def tooltip(self) -> str:
-            return "Coordinate transformations between spaces"
-
-        def should_show(self, obj) -> bool:
-            # Show if object has coordinate systems (transforms between them)
-            return (
-                hasattr(obj, "coordinate_systems") and len(obj.coordinate_systems) > 1
-            )
-
-        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
-            # Mock: show transforms between coordinate systems
-            entries = []
-            coord_systems = list(obj.coordinate_systems)
-            for i, cs in enumerate(coord_systems[:-1]):
-                next_cs = coord_systems[i + 1]
-                entries.append(
-                    FormattedEntry(
-                        key=f"{cs} → {next_cs}",
-                        output=FormattedOutput(
-                            type_name="Affine (3×3)",
-                            css_class="dtype-ndarray",
-                            tooltip=f"Transform from {cs} to {next_cs}",
-                        ),
-                    )
-                )
-            return entries
-
-    spatialdata_formatter_registry.register_section_formatter(
-        TransformsSectionFormatter()
-    )
-
+    # MockSpatialData: Minimal example of custom _repr_html_
     # =========================================================================
 
     class MockSpatialData:
         """
-        Mock SpatialData class demonstrating how to build _repr_html_ using anndata's tools.
+        Mock SpatialData demonstrating custom _repr_html_ with anndata's building blocks.
 
-        This shows how packages like SpatialData (which have completely different
-        structures from AnnData) can still reuse anndata's styling infrastructure.
+        This is a simplified example showing the essential pattern. A real
+        implementation would have more complex data structures.
         """
 
         def __init__(
@@ -457,7 +374,7 @@ try:
             labels: dict | None = None,
             points: dict | None = None,
             shapes: dict | None = None,
-            tables: dict | None = None,
+            tables: dict | None = None,  # Contains AnnData objects
             coordinate_systems: list | None = None,
             path: str | None = None,
         ):
@@ -465,161 +382,126 @@ try:
             self.labels = labels or {}
             self.points = points or {}
             self.shapes = shapes or {}
-            self.tables = tables or {}  # Contains AnnData objects
-            self._coordinate_systems = coordinate_systems or []
-            self._path = path
-
-        @property
-        def coordinate_systems(self):
-            return self._coordinate_systems
-
-        def is_backed(self):
-            return self._path is not None
-
-        @property
-        def path(self):
-            return self._path
-
-        def __sizeof__(self):
-            # Rough estimate for demo
-            total = 0
-            for table in self.tables.values():
-                total += table.__sizeof__()
-            return total
+            self.tables = tables or {}
+            self.coordinate_systems = coordinate_systems or []
+            self.path = path
 
         def _repr_html_(self) -> str:
             """
-            Generate HTML representation using anndata's building blocks.
+            Build HTML using anndata's building blocks.
 
-            This demonstrates how to:
-            1. Reuse anndata's CSS and JavaScript
-            2. Build custom header (no shape, custom badges)
-            3. Build custom index preview (coordinate systems instead of obs/var names)
-            4. Use render_section() and render_formatted_entry() helpers
-            5. Embed nested AnnData with full interactivity
-            6. Support custom sections via FormatterRegistry (optional extensibility)
+            Pattern:
+                1. get_css() - include styling
+                2. Container div with unique ID
+                3. Custom header (optional)
+                4. Sections using render_section() + render_formatted_entry()
+                5. Custom sections via FormatterRegistry (optional)
+                6. get_javascript(id) - include interactivity
             """
-            container_id = f"spatialdata-repr-{uuid.uuid4().hex[:8]}"
-
+            container_id = f"spatialdata-{uuid.uuid4().hex[:8]}"
             parts = []
 
-            # 1. Include anndata's CSS
+            # --- STEP 1: Include anndata's CSS ---
             parts.append(get_css())
 
-            # 2. Container with CSS variables
+            # --- STEP 2: Container with anndata-repr class ---
             parts.append(
                 f'<div class="anndata-repr" id="{container_id}" data-depth="0" '
-                f'style="--anndata-name-col-width: 150px; --anndata-type-col-width: 350px;">'
+                f'style="--anndata-name-col-width: 150px; --anndata-type-col-width: 300px;">'
             )
 
-            # 3. Custom header (SpatialData has no central shape)
-            parts.append(self._render_header(container_id))
+            # --- STEP 3: Custom header (SpatialData has no shape) ---
+            parts.append(self._build_header(container_id))
 
-            # 4. Custom index preview (coordinate systems instead of obs/var)
-            parts.append(self._render_coordinate_systems_preview())
-
-            # 5. Sections container - using render_section() helper
+            # --- STEP 4: Sections using render_section() ---
             parts.append('<div class="adata-sections">')
-            parts.append(self._render_images_section())
-            parts.append(self._render_labels_section())
-            parts.append(self._render_points_section())
-            parts.append(self._render_shapes_section())
-            parts.append(self._render_tables_section())
-            # 5b. Render custom sections from registry (extensibility)
-            parts.append(self._render_custom_sections())
+            parts.append(self._build_images_section())
+            parts.append(self._build_labels_section())
+            parts.append(self._build_points_section())
+            parts.append(self._build_shapes_section())
+            parts.append(self._build_tables_section())  # Nested AnnData
+            # --- STEP 5: Custom sections from FormatterRegistry ---
+            parts.append(self._build_custom_sections())
             parts.append("</div>")
-
-            # 6. Custom footer
-            parts.append(self._render_footer())
 
             parts.append("</div>")
 
-            # 7. Include anndata's JavaScript
+            # --- STEP 6: Include anndata's JavaScript ---
             parts.append(get_javascript(container_id))
 
             return "\n".join(parts)
 
-        def _render_header(self, container_id: str) -> str:
-            """Render custom header for SpatialData (no shape since there's no central X)."""
+        def _build_header(self, container_id: str) -> str:
+            """Custom header - shows 'SpatialData' with Zarr badge and file path."""
             parts = ['<div class="anndata-hdr">']
             parts.append('<span class="adata-type">SpatialData</span>')
 
-            if self.is_backed():
+            # Zarr badge (like AnnData's backed badge)
+            if self.path:
                 parts.append(
                     '<span class="adata-badge adata-badge-backed" '
                     'title="Backed by Zarr storage">Zarr</span>'
                 )
-
-            if self._path:
                 parts.append(
                     f'<span class="adata-file-path" style="font-family:ui-monospace,monospace;'
                     f'font-size:11px;color:var(--anndata-text-secondary, #6c757d);">'
-                    f"{escape_html(self._path)}</span>"
+                    f'{escape_html(self.path)}</span>'
                 )
 
-            # Search box (hidden until JS enables it)
             parts.append('<span style="flex-grow:1;"></span>')
-            search_id = f"{container_id}-search"
             parts.append(
-                f'<input type="text" id="{search_id}" name="{search_id}" '
-                f'class="adata-search-input" style="{STYLE_HIDDEN}" '
-                f'placeholder="Search..." aria-label="Search fields">'
+                f'<input type="text" class="adata-search-input" style="{STYLE_HIDDEN}" '
+                f'placeholder="Search..." aria-label="Search">'
             )
             parts.append('<span class="adata-filter-indicator"></span>')
             parts.append("</div>")
             return "\n".join(parts)
 
-        def _render_coordinate_systems_preview(self) -> str:
-            """Render coordinate systems instead of obs/var names."""
-            if not self._coordinate_systems:
-                return ""
-
-            cs_preview = ", ".join(self._coordinate_systems[:5])
-            if len(self._coordinate_systems) > 5:
-                cs_preview += f", ... ({len(self._coordinate_systems)} total)"
-
-            return (
-                f'<div class="adata-index-preview">'
-                f"<div><strong>coordinate_systems:</strong> {escape_html(cs_preview)}</div>"
-                f"</div>"
-            )
-
-        def _render_images_section(self) -> str:
-            """Render the images section using the formatter registry.
-
-            This demonstrates using FormatterRegistry for extensibility.
-            Third-party packages can register custom formatters for image types.
+        def _build_images_section(self) -> str:
             """
-            # Create context for this section (used by formatters)
-            context = FormatterContext(section="images")
+            Build images section using render_section() + render_formatted_entry().
 
+            This is the core pattern: create FormattedEntry objects and render them.
+            """
             rows = []
             for name, info in self.images.items():
-                # Use the registry to format the value - allows third-party customization
-                output = spatialdata_formatter_registry.format_value(info, context)
-                entry = FormattedEntry(key=name, output=output)
+                # Build meta content (dimensions info) for the META column
+                dims_str = ", ".join(info.get("dims", ["y", "x"]))
+                meta = f'<span class="adata-meta-info">[{dims_str}]</span>'
+
+                # Create a FormattedEntry with FormattedOutput
+                entry = FormattedEntry(
+                    key=name,
+                    output=FormattedOutput(
+                        type_name=f"DataArray {info['shape']} {info['dtype']}",
+                        css_class="dtype-ndarray",
+                        meta_content=meta,  # Content in meta column (rightmost)
+                    ),
+                )
+                # render_formatted_entry() creates the table row HTML
                 rows.append(render_formatted_entry(entry))
 
+            # render_section() wraps rows in a collapsible section
             return render_section(
                 "images",
                 "\n".join(rows),
                 n_items=len(self.images),
-                doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.images",
-                tooltip="2D/3D image data (xarray.DataArray)",
+                tooltip="Image data (xarray.DataArray)",
             )
 
-        def _render_labels_section(self) -> str:
-            """Render the labels section."""
+        def _build_labels_section(self) -> str:
+            """Build labels section - same pattern as images."""
             rows = []
             for name, info in self.labels.items():
-                shape_str = " × ".join(str(s) for s in info["shape"])
-                dims_str = ", ".join(info["dims"])
+                dims_str = ", ".join(info.get("dims", ["y", "x"]))
+                meta = f'<span class="adata-meta-info">[{dims_str}]</span>'
+
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
-                        type_name=f"DataArray[{dims_str}] ({shape_str}) {info['dtype']}",
+                        type_name=f"Labels {info['shape']} {info['dtype']}",
                         css_class="dtype-ndarray",
-                        tooltip=f"Label mask: {name}",
+                        meta_content=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -628,20 +510,21 @@ try:
                 "labels",
                 "\n".join(rows),
                 n_items=len(self.labels),
-                doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.labels",
                 tooltip="Segmentation masks (xarray.DataArray)",
             )
 
-        def _render_points_section(self) -> str:
-            """Render the points section."""
+        def _build_points_section(self) -> str:
+            """Build points section."""
             rows = []
             for name, info in self.points.items():
+                meta = f'<span class="adata-meta-info">{info["n_dims"]}D coordinates</span>'
+
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"dask.DataFrame ({format_number(info['n_points'])} × {info['n_dims']})",
                         css_class="dtype-dataframe",
-                        tooltip=f"Points: {name} ({info['n_dims']}D)",
+                        meta_content=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -650,20 +533,21 @@ try:
                 "points",
                 "\n".join(rows),
                 n_items=len(self.points),
-                doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.points",
                 tooltip="Point annotations (dask.DataFrame)",
             )
 
-        def _render_shapes_section(self) -> str:
-            """Render the shapes section."""
+        def _build_shapes_section(self) -> str:
+            """Build shapes section."""
             rows = []
             for name, info in self.shapes.items():
+                meta = f'<span class="adata-meta-info">{info["geometry_type"]}</span>'
+
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"GeoDataFrame ({format_number(info['n_shapes'])} shapes)",
                         css_class="dtype-dataframe",
-                        tooltip=f"Shapes: {name} ({info['geometry_type']})",
+                        meta_content=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -672,31 +556,35 @@ try:
                 "shapes",
                 "\n".join(rows),
                 n_items=len(self.shapes),
-                doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.shapes",
                 tooltip="Vector shapes (geopandas.GeoDataFrame)",
             )
 
-        def _render_tables_section(self) -> str:
-            """Render the tables section with expandable nested AnnData.
+        def _build_tables_section(self) -> str:
+            """
+            Build tables section with NESTED AnnData objects.
 
-            This demonstrates using FormattedEntry/FormattedOutput for full flexibility.
+            Uses generate_repr_html() to embed full AnnData representations
+            that are expandable with all standard features.
             """
             rows = []
             for name, adata in self.tables.items():
-                # Generate nested HTML using anndata's generate_repr_html
+                # generate_repr_html() creates nested AnnData HTML
                 nested_html = generate_repr_html(
-                    adata, depth=1, max_depth=3, show_header=True, show_search=False
+                    adata,
+                    depth=1,  # Nested level
+                    max_depth=3,
+                    show_header=True,
+                    show_search=False,
                 )
 
-                # Use FormattedEntry/FormattedOutput for full customization
+                # FormattedOutput with is_expandable=True makes it collapsible
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
-                        type_name=f"AnnData ({format_number(adata.n_obs)} × {format_number(adata.n_vars)})",
+                        type_name=f"AnnData ({adata.n_obs} × {adata.n_vars})",
                         css_class="dtype-anndata",
-                        tooltip=f"Table: {name}",
                         html_content=nested_html,
-                        is_expandable=True,
+                        is_expandable=True,  # Makes the nested content collapsible
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -705,147 +593,126 @@ try:
                 "tables",
                 "\n".join(rows),
                 n_items=len(self.tables),
-                doc_url=f"{SPATIALDATA_DOCS}#spatialdata.SpatialData.tables",
                 tooltip="Annotation tables (AnnData)",
             )
 
-        def _render_custom_sections(self) -> str:
-            """Render custom sections registered via FormatterRegistry.
+        def _build_custom_sections(self) -> str:
+            """
+            Render custom sections from FormatterRegistry.
 
             This demonstrates how third-party packages can add new sections
-            to SpatialData's repr by registering SectionFormatters.
+            by registering SectionFormatters with spatialdata_formatter_registry.
             """
             parts = []
             context = FormatterContext()
 
-            # Get all registered section formatters
-            for (
-                section_name
-            ) in spatialdata_formatter_registry.get_registered_sections():
-                formatter = spatialdata_formatter_registry.get_section_formatter(
-                    section_name
-                )
-                if formatter is None:
+            for section_name in spatialdata_formatter_registry.get_registered_sections():
+                formatter = spatialdata_formatter_registry.get_section_formatter(section_name)
+                if formatter is None or not formatter.should_show(self):
                     continue
 
-                # Check if this section should be shown
-                if not formatter.should_show(self):
-                    continue
-
-                # Get entries from the formatter
                 entries = formatter.get_entries(self, context)
                 if not entries:
                     continue
 
-                # Render each entry
                 rows = [render_formatted_entry(entry) for entry in entries]
-
-                # Use render_section for consistent structure
                 section_html = render_section(
                     formatter.section_name,
                     "\n".join(rows),
                     n_items=len(entries),
-                    doc_url=getattr(formatter, "doc_url", None),
                     tooltip=getattr(formatter, "tooltip", ""),
                 )
                 parts.append(section_html)
 
             return "\n".join(parts)
 
-        def _render_footer(self) -> str:
-            """Render custom footer with spatialdata version."""
-            parts = ['<div class="anndata-ftr">']
-            parts.append("<span>spatialdata v0.2.0 (mock)</span>")
-            try:
-                mem_str = format_memory_size(self.__sizeof__())
-                parts.append(f'<span title="Estimated memory usage">~{mem_str}</span>')
-            except (TypeError, ValueError, AttributeError):
-                pass
-            parts.append("</div>")
-            return "\n".join(parts)
+    # =========================================================================
+    # OPTIONAL: FormatterRegistry for third-party extensibility
+    # =========================================================================
+    # SpatialData can create its own registry to allow plugins to add
+    # custom type formatters or new sections. This mirrors anndata's pattern.
+
+    # Create SpatialData's own formatter registry
+    spatialdata_formatter_registry = FormatterRegistry()
+
+    # Example: TypeFormatter for custom value rendering
+    class DataTreeFormatter(TypeFormatter):
+        """Example: format xarray DataTree objects."""
+
+        priority = 100
+
+        def can_format(self, obj) -> bool:
+            return isinstance(obj, dict) and "shape" in obj and "dtype" in obj
+
+        def format(self, obj, context: FormatterContext) -> FormattedOutput:
+            return FormattedOutput(
+                type_name=f"DataTree {obj['shape']} {obj['dtype']}",
+                css_class="dtype-ndarray",
+            )
+
+    spatialdata_formatter_registry.register_type_formatter(DataTreeFormatter())
+
+    # Example: SectionFormatter to add new sections
+    class TransformsSectionFormatter(SectionFormatter):
+        """Example: add a 'transforms' section."""
+
+        section_name = "transforms"
+
+        def should_show(self, obj) -> bool:
+            return hasattr(obj, "coordinate_systems") and len(obj.coordinate_systems) > 1
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            entries = []
+            cs = list(obj.coordinate_systems)
+            for i in range(len(cs) - 1):
+                entries.append(
+                    FormattedEntry(
+                        key=f"{cs[i]} → {cs[i+1]}",
+                        output=FormattedOutput(type_name="Affine (3×3)"),
+                    )
+                )
+            return entries
+
+    spatialdata_formatter_registry.register_section_formatter(TransformsSectionFormatter())
+
+    # =========================================================================
+    # Test data factory
+    # =========================================================================
 
     def create_test_spatialdata():
         """Create a mock SpatialData object for testing."""
-        np.random.seed(42)
-
-        # Create some AnnData tables
-        n_cells = 150
-        n_genes = 30
-
-        # Cell annotations table
+        # Create nested AnnData tables
         cell_table = AnnData(
-            np.random.randn(n_cells, n_genes).astype(np.float32),
+            np.random.randn(150, 30).astype(np.float32),
             obs=pd.DataFrame({
                 "cell_type": pd.Categorical(["Tumor", "Immune", "Stromal"] * 50),
-                "area": np.random.uniform(100, 1000, n_cells),
-                "region": pd.Categorical(["region_A", "region_B"] * 75),
-            }),
-            var=pd.DataFrame({
-                "gene_name": [f"gene_{i}" for i in range(n_genes)],
-                "highly_variable": np.random.choice([True, False], n_genes),
+                "area": np.random.uniform(100, 1000, 150),
             }),
         )
-        cell_table.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
-        cell_table.obsm["spatial"] = (
-            np.random.randn(n_cells, 2).astype(np.float32) * 1000
-        )
+        cell_table.obsm["spatial"] = np.random.randn(150, 2).astype(np.float32)
 
-        # Transcript counts table
-        n_transcripts = 80
         transcript_table = AnnData(
-            np.random.randn(n_transcripts, 10).astype(np.float32),
+            np.random.randn(80, 10).astype(np.float32),
             obs=pd.DataFrame({
-                "gene": pd.Categorical(
-                    np.random.choice([f"gene_{i}" for i in range(10)], n_transcripts)
-                ),
-                "quality_score": np.random.uniform(0, 1, n_transcripts),
+                "gene": pd.Categorical(np.random.choice([f"gene_{i}" for i in range(10)], 80)),
             }),
         )
 
         return MockSpatialData(
             images={
-                "raw_image": {
-                    "shape": (3, 2048, 2048),
-                    "dims": ("c", "y", "x"),
-                    "dtype": "uint16",
-                },
-                "processed_image": {
-                    "shape": (3, 1024, 1024),
-                    "dims": ("c", "y", "x"),
-                    "dtype": "float32",
-                },
+                "raw_image": {"shape": (3, 2048, 2048), "dims": ("c", "y", "x"), "dtype": "uint16"},
+                "processed": {"shape": (3, 1024, 1024), "dims": ("c", "y", "x"), "dtype": "float32"},
             },
             labels={
-                "cell_segmentation": {
-                    "shape": (2048, 2048),
-                    "dims": ("y", "x"),
-                    "dtype": "int32",
-                },
-                "nucleus_segmentation": {
-                    "shape": (2048, 2048),
-                    "dims": ("y", "x"),
-                    "dtype": "int32",
-                },
+                "cell_segmentation": {"shape": (2048, 2048), "dims": ("y", "x"), "dtype": "int32"},
+                "nucleus_segmentation": {"shape": (2048, 2048), "dims": ("y", "x"), "dtype": "int32"},
             },
             points={
-                "transcripts": {
-                    "n_points": 50000,
-                    "n_dims": 3,
-                },
+                "transcripts": {"n_points": 50000, "n_dims": 3},
             },
             shapes={
-                "cell_boundaries": {
-                    "n_shapes": 150,
-                    "geometry_type": "Polygon",
-                },
-                "nucleus_boundaries": {
-                    "n_shapes": 148,
-                    "geometry_type": "Polygon",
-                },
-                "roi_annotations": {
-                    "n_shapes": 5,
-                    "geometry_type": "Polygon",
-                },
+                "cell_boundaries": {"n_shapes": 150, "geometry_type": "Polygon"},
+                "roi_annotations": {"n_shapes": 5, "geometry_type": "Polygon"},
             },
             tables={
                 "cell_annotations": cell_table,
@@ -855,7 +722,7 @@ try:
             path="/data/experiment_001.zarr",
         )
 
-except ImportError:
+except (ImportError, AttributeError):
     HAS_SPATIALDATA_EXAMPLE = False
 
 
@@ -1755,18 +1622,16 @@ For more details, see the full documentation.
         sections.append((
             "20. SpatialData (Custom _repr_html_)",
             sdata._repr_html_(),
-            "Demonstrates how packages like <a href='https://spatialdata.scverse.org' target='_blank'>SpatialData</a> "
-            "can build their own <code>_repr_html_</code> while reusing anndata's CSS, JavaScript, and utilities. "
-            "Unlike MuData (which mirrors AnnData's structure), SpatialData has: "
+            "Demonstrates how packages can build custom <code>_repr_html_</code> using anndata's building blocks: "
             "<ul>"
-            "<li><strong>No central X matrix</strong> - data is distributed across elements</li>"
-            "<li><strong>Different sections</strong>: images, labels, points, shapes, tables</li>"
-            "<li><strong>No obs_names/var_names</strong> - shows coordinate_systems instead</li>"
-            "<li><strong>Custom footer</strong> - shows spatialdata version</li>"
+            "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
+            "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
+            "<li><code>render_formatted_entry()</code> with <code>meta_content</code> - table rows with meta column</li>"
+            "<li><code>generate_repr_html()</code> - embed nested AnnData (see 'tables' section)</li>"
+            "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
             "</ul>"
-            "The <code>tables</code> section contains nested AnnData objects that are fully expandable "
-            "with all standard features (fold/expand, search, copy buttons). "
-            "This approach requires more code than using SectionFormatter, but gives complete control.",
+            "Note the meta column shows dimension info like <code>[c, y, x]</code>. "
+            "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand).",
         ))
     else:
         print("  20. SpatialData (skipped - example failed to load)")
