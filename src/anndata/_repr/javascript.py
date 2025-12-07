@@ -193,56 +193,21 @@ _JS_CONTENT = """
         let totalMatches = 0;
         let totalEntries = 0;
 
-        // Get all entries
-        const allEntries = container.querySelectorAll('.adata-entry');
+        // First pass: mark all entries as hidden or not based on direct match
+        const entries = container.querySelectorAll('.adata-entry');
+        const directMatches = new Set();
 
-        // First pass: determine which entries match directly
-        const matchingEntries = new Set();
-        allEntries.forEach(entry => {
-            if (!query) {
-                matchingEntries.add(entry);
-                return;
-            }
+        entries.forEach(entry => {
+            totalEntries++;
 
             const key = entry.dataset.key || '';
             const dtype = entry.dataset.dtype || '';
             const text = entry.textContent;
 
-            if (matchesQuery(key, query) || matchesQuery(dtype, query) || matchesQuery(text, query)) {
-                matchingEntries.add(entry);
-            }
-        });
+            const matches = !query || matchesQuery(key, query) || matchesQuery(dtype, query) || matchesQuery(text, query);
 
-        // Second pass: for matching entries inside nested content, also show their parent entries
-        // This ensures hierarchical search works (e.g., searching for a field in nested AnnData
-        // keeps the parent entry visible)
-        const entriesToAdd = [];
-        matchingEntries.forEach(entry => {
-            // Walk up the DOM to find if this entry is inside nested content
-            let element = entry.parentElement;
-            let iterations = 0;
-            const maxIterations = 100; // Guard against infinite loops
-            while (element && element !== container && iterations < maxIterations) {
-                iterations++;
-                if (element.classList.contains('adata-nested-content')) {
-                    // Found nested content - find the parent entry (previous sibling of nested-row)
-                    const nestedRow = element.closest('.adata-nested-row');
-                    if (nestedRow && nestedRow.previousElementSibling &&
-                        nestedRow.previousElementSibling.classList.contains('adata-entry')) {
-                        entriesToAdd.push(nestedRow.previousElementSibling);
-                    }
-                    break; // Found the nesting level, stop here
-                }
-                element = element.parentElement;
-            }
-        });
-        entriesToAdd.forEach(e => matchingEntries.add(e));
-
-        // Apply visibility to entries
-        allEntries.forEach(entry => {
-            totalEntries++;
-
-            if (matchingEntries.has(entry)) {
+            if (matches) {
+                directMatches.add(entry);
                 entry.classList.remove('hidden');
                 totalMatches++;
 
@@ -264,6 +229,42 @@ _JS_CONTENT = """
                 entry.classList.add('hidden');
             }
         });
+
+        // Second pass: if a nested entry matches, show all ancestor entry rows
+        // This ensures that when searching for something inside a nested AnnData,
+        // all parent rows remain visible so the user can expand them to see the match
+        if (query) {
+            directMatches.forEach(matchedEntry => {
+                // Walk up the DOM tree to find and show all parent entry rows
+                // Safety limit prevents infinite loops (max nesting depth is typically 3)
+                let element = matchedEntry;
+                let iterations = 0;
+                const maxIterations = 20;
+
+                while (element && element !== container && iterations < maxIterations) {
+                    iterations++;
+                    // Check if we're inside a nested content container
+                    const nestedContainer = element.closest('.adata-nested-content');
+                    if (!nestedContainer) break;
+
+                    // Find the parent row that contains this nested content
+                    // Structure: tr.adata-entry > tr.adata-nested-row > td.adata-nested-content
+                    const nestedRow = nestedContainer.closest('.adata-nested-row');
+                    if (!nestedRow) break;
+
+                    // The parent entry is the previous sibling row
+                    const parentEntry = nestedRow.previousElementSibling;
+                    if (parentEntry && parentEntry.classList.contains('adata-entry')) {
+                        if (parentEntry.classList.contains('hidden')) {
+                            parentEntry.classList.remove('hidden');
+                            totalMatches++;
+                        }
+                    }
+                    // Continue searching from the parent's container
+                    element = nestedRow.parentElement;
+                }
+            });
+        }
 
         // Also filter X entries in nested AnnData (they use adata-x-entry class, not adata-entry)
         // This prevents orphaned X rows from showing when their sibling entries are hidden
