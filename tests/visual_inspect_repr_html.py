@@ -348,7 +348,9 @@ try:
         format_number,
         get_css,
         get_javascript,
+        render_badge,
         render_formatted_entry,
+        render_search_box,
         render_section,
     )
     from anndata._repr.html import generate_repr_html
@@ -436,24 +438,18 @@ try:
             parts = ['<div class="anndata-hdr">']
             parts.append('<span class="adata-type">SpatialData</span>')
 
-            # Zarr badge (like AnnData's backed badge)
+            # Zarr badge using render_badge() helper
             if self.path:
-                parts.append(
-                    '<span class="adata-badge adata-badge-backed" '
-                    'title="Backed by Zarr storage">Zarr</span>'
-                )
+                parts.append(render_badge("Zarr", "adata-badge-backed", "Backed by Zarr storage"))
                 parts.append(
                     f'<span class="adata-file-path" style="font-family:ui-monospace,monospace;'
                     f'font-size:11px;color:var(--anndata-text-secondary, #6c757d);">'
                     f'{escape_html(self.path)}</span>'
                 )
 
+            # Search box using render_search_box() helper
             parts.append('<span style="flex-grow:1;"></span>')
-            parts.append(
-                f'<input type="text" class="adata-search-input" style="{STYLE_HIDDEN}" '
-                f'placeholder="Search..." aria-label="Search">'
-            )
-            parts.append('<span class="adata-filter-indicator"></span>')
+            parts.append(render_search_box(container_id))
             parts.append("</div>")
             return "\n".join(parts)
 

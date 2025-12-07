@@ -167,6 +167,15 @@ from anndata._repr.html import (  # noqa: E402
     render_section,
 )
 
+# UI component helpers (search box, fold icon, badges, etc.)
+from anndata._repr.html import (  # noqa: E402
+    render_badge,
+    render_copy_button,
+    render_fold_icon,
+    render_header_badges,
+    render_search_box,
+)
+
 # Inline styles for graceful degradation (from single source of truth)
 from anndata._repr.constants import STYLE_HIDDEN  # noqa: E402
 
@@ -206,4 +215,10 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "render_section",
     "render_formatted_entry",
     "STYLE_HIDDEN",
+    # UI component helpers
+    "render_search_box",
+    "render_fold_icon",
+    "render_copy_button",
+    "render_badge",
+    "render_header_badges",
 ]

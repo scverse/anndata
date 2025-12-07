@@ -519,6 +519,180 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
 
 
 # =============================================================================
+# UI Component Helpers (for external packages)
+# =============================================================================
+# These functions generate HTML for common interactive UI elements.
+# External packages (SpatialData, MuData, etc.) can use these instead of
+# hardcoding CSS classes and inline styles.
+
+
+def render_search_box(container_id: str = "") -> str:
+    """
+    Render a search box with filter indicator.
+
+    The search box is hidden by default and shown when JavaScript is enabled.
+    It filters entries across all sections by key, type, or content.
+
+    Parameters
+    ----------
+    container_id
+        Unique ID for the container (used for label association)
+
+    Returns
+    -------
+    HTML string for the search box
+
+    Example
+    -------
+    >>> parts = ['<div class="anndata-hdr">']
+    >>> parts.append('<span class="adata-type">SpatialData</span>')
+    >>> parts.append('<span style="flex-grow:1;"></span>')  # Spacer
+    >>> parts.append(render_search_box(container_id))
+    >>> parts.append('</div>')
+    """
+    search_id = f"{container_id}-search" if container_id else "anndata-search"
+    return (
+        f'<input type="text" id="{search_id}" name="{search_id}" '
+        f'class="adata-search-input" style="{STYLE_HIDDEN}" '
+        f'placeholder="Search..." aria-label="Search fields">'
+        f'<span class="adata-filter-indicator"></span>'
+    )
+
+
+def render_fold_icon() -> str:
+    """
+    Render a fold/expand icon for section headers.
+
+    The icon is hidden by default and shown when JavaScript is enabled.
+    It rotates when the section is collapsed.
+
+    Returns
+    -------
+    HTML string for the fold icon
+
+    Example
+    -------
+    >>> parts = ['<div class="anndata-sechdr">']
+    >>> parts.append(render_fold_icon())
+    >>> parts.append('<span class="anndata-sec-name">images</span>')
+    >>> parts.append('</div>')
+    """
+    return f'<span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>'
+
+
+def render_copy_button(text: str, tooltip: str = "Copy") -> str:
+    """
+    Render a copy-to-clipboard button.
+
+    The button is hidden by default and shown when JavaScript is enabled.
+    When clicked, it copies the specified text to the clipboard.
+
+    Parameters
+    ----------
+    text
+        The text to copy when clicked
+    tooltip
+        Tooltip text (default: "Copy")
+
+    Returns
+    -------
+    HTML string for the copy button
+
+    Example
+    -------
+    >>> html = f'<span>{name}</span>{render_copy_button(name, "Copy name")}'
+    """
+    escaped_text = escape_html(text)
+    escaped_tooltip = escape_html(tooltip)
+    return (
+        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
+        f'data-copy="{escaped_text}" title="{escaped_tooltip}" '
+        f'aria-label="{escaped_tooltip}"></button>'
+    )
+
+
+def render_badge(
+    text: str,
+    variant: str = "",
+    tooltip: str = "",
+) -> str:
+    """
+    Render a badge (pill-shaped label).
+
+    Parameters
+    ----------
+    text
+        Badge text
+    variant
+        Variant class for styling. Built-in variants:
+        - "" (default gray)
+        - "adata-badge-view" (blue, for views)
+        - "adata-badge-backed" (orange, for backed mode)
+        - "adata-badge-sparse" (green, for sparse matrices)
+        - "adata-badge-dask" (purple, for Dask arrays)
+        - "adata-badge-extension" (for extension types)
+    tooltip
+        Tooltip text on hover
+
+    Returns
+    -------
+    HTML string for the badge
+
+    Example
+    -------
+    >>> render_badge("Zarr", "adata-badge-backed", "Backed by Zarr store")
+    """
+    escaped_text = escape_html(text)
+    title_attr = f' title="{escape_html(tooltip)}"' if tooltip else ""
+    # Always include base class, optionally add variant
+    css_class = f"adata-badge {variant}".strip() if variant else "adata-badge"
+    return f'<span class="{css_class}"{title_attr}>{escaped_text}</span>'
+
+
+def render_header_badges(
+    *,
+    is_view: bool = False,
+    is_backed: bool = False,
+    backing_path: str | None = None,
+    backing_format: str | None = None,
+) -> str:
+    """
+    Render standard header badges for view/backed status.
+
+    Parameters
+    ----------
+    is_view
+        Whether this is a view
+    is_backed
+        Whether this is backed by a file
+    backing_path
+        Path to the backing file (for tooltip)
+    backing_format
+        Format of the backing file ("H5AD", "Zarr", etc.)
+
+    Returns
+    -------
+    HTML string with badges
+
+    Example
+    -------
+    >>> badges = render_header_badges(
+    ...     is_backed=True,
+    ...     backing_path="/data/sample.zarr",
+    ...     backing_format="Zarr",
+    ... )
+    """
+    parts = []
+    if is_view:
+        parts.append(render_badge("View", "adata-badge-view", "This is a view of another object"))
+    if is_backed:
+        tooltip = f"Backed by {backing_path}" if backing_path else "Backed mode"
+        label = backing_format or "Backed"
+        parts.append(render_badge(label, "adata-badge-backed", tooltip))
+    return "".join(parts)
+
+
+# =============================================================================
 # Name Cell Renderer
 # =============================================================================
 
@@ -534,8 +708,7 @@ def _render_name_cell(name: str) -> str:
         f'<td class="adata-entry-name">'
         f'<div class="adata-entry-name-inner">'
         f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
-        f'data-copy="{escaped_name}" title="Copy name" aria-label="Copy name"></button>'
+        f"{render_copy_button(name, 'Copy name')}"
         f"</div>"
         f"</td>"
     )
@@ -560,19 +733,16 @@ def _render_header(
     shape_str = f"{format_number(adata.n_obs)} obs × {format_number(adata.n_vars)} vars"
     parts.append(f'<span class="adata-shape">{shape_str}</span>')
 
-    # Badges
+    # Badges - use render_badge() helper
     if is_view(adata):
-        parts.append('<span class="adata-badge adata-badge-view">View</span>')
+        parts.append(render_badge("View", "adata-badge-view"))
 
     if is_backed(adata):
         backing = get_backing_info(adata)
         filename = backing.get("filename", "")
         format_str = backing.get("format", "")
         status = "Open" if backing.get("is_open") else "Closed"
-        parts.append(
-            f'<span class="adata-badge adata-badge-backed">'
-            f"{format_str} ({status})</span>"
-        )
+        parts.append(render_badge(f"{format_str} ({status})", "adata-badge-backed"))
         # Inline file path (full path, no truncation)
         if filename:
             path_style = (
@@ -587,9 +757,7 @@ def _render_header(
 
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":
-        parts.append(
-            f'<span class="adata-badge adata-badge-extension">{type_name}</span>'
-        )
+        parts.append(render_badge(type_name, "adata-badge-extension"))
 
     # README icon if uns["README"] exists with a string
     readme_content = adata.uns.get("README") if hasattr(adata, "uns") else None
@@ -610,17 +778,10 @@ def _render_header(
             f"</span>"
         )
 
-    # Search box on the right (spacer pushes it right)
+    # Search box on the right (spacer pushes it right) - use render_search_box() helper
     if show_search:
         parts.append('<span style="flex-grow:1;"></span>')
-        # Search input hidden by default (JS shows it) - filter indicator uses CSS .active class
-        search_id = f"{container_id}-search" if container_id else "anndata-search"
-        parts.append(
-            f'<input type="text" id="{search_id}" name="{search_id}" class="adata-search-input" style="{STYLE_HIDDEN}" '
-            f'placeholder="Search..." aria-label="Search fields">'
-        )
-        # Filter indicator visibility controlled by CSS (.adata-filter-indicator.active) - no inline style
-        parts.append('<span class="adata-filter-indicator"></span>')
+        parts.append(render_search_box(container_id))
 
     parts.append("</div>")
     return "\n".join(parts)
@@ -1464,7 +1625,7 @@ def _render_section_header(
 ) -> str:
     """Render a section header - colors handled by CSS for dark mode support."""
     parts = ['<div class="anndata-sechdr">']
-    parts.append(f'<span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>')
+    parts.append(render_fold_icon())  # Use helper for fold icon
     parts.append(f'<span class="anndata-sec-name">{escape_html(name)}</span>')
     parts.append(f'<span class="anndata-sec-count">{escape_html(count_str)}</span>')
     if doc_url:
@@ -1486,10 +1647,13 @@ def _render_empty_section(
     if doc_url:
         help_link = f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
 
+    # Use render_fold_icon() helper for consistency
+    fold_icon = render_fold_icon()
+
     return f"""
 <div class="anndata-sec" data-section="{escape_html(name)}" data-should-collapse="true">
     <div class="anndata-sechdr">
-        <span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>
+        {fold_icon}
         <span class="anndata-sec-name">{escape_html(name)}</span>
         <span class="anndata-sec-count">(empty)</span>
         {help_link}
