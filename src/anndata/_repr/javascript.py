@@ -136,13 +136,14 @@ _JS_CONTENT = """
         let totalMatches = 0;
         let totalEntries = 0;
 
-        // Filter all entries
-        container.querySelectorAll('.adata-entry').forEach(entry => {
-            totalEntries++;
+        // Get all entries
+        const allEntries = container.querySelectorAll('.adata-entry');
 
+        // First pass: determine which entries match directly
+        const matchingEntries = new Set();
+        allEntries.forEach(entry => {
             if (!query) {
-                entry.classList.remove('hidden');
-                totalMatches++;
+                matchingEntries.add(entry);
                 return;
             }
 
@@ -150,9 +151,41 @@ _JS_CONTENT = """
             const dtype = (entry.dataset.dtype || '').toLowerCase();
             const text = entry.textContent.toLowerCase();
 
-            const matches = key.includes(query) || dtype.includes(query) || text.includes(query);
+            if (key.includes(query) || dtype.includes(query) || text.includes(query)) {
+                matchingEntries.add(entry);
+            }
+        });
 
-            if (matches) {
+        // Second pass: for matching entries inside nested content, also show their parent entries
+        // This ensures hierarchical search works (e.g., searching for a field in nested AnnData
+        // keeps the parent entry visible)
+        const entriesToAdd = [];
+        matchingEntries.forEach(entry => {
+            // Walk up the DOM to find if this entry is inside nested content
+            let element = entry.parentElement;
+            let iterations = 0;
+            const maxIterations = 100; // Guard against infinite loops
+            while (element && element !== container && iterations < maxIterations) {
+                iterations++;
+                if (element.classList.contains('adata-nested-content')) {
+                    // Found nested content - find the parent entry (previous sibling of nested-row)
+                    const nestedRow = element.closest('.adata-nested-row');
+                    if (nestedRow && nestedRow.previousElementSibling &&
+                        nestedRow.previousElementSibling.classList.contains('adata-entry')) {
+                        entriesToAdd.push(nestedRow.previousElementSibling);
+                    }
+                    break; // Found the nesting level, stop here
+                }
+                element = element.parentElement;
+            }
+        });
+        entriesToAdd.forEach(e => matchingEntries.add(e));
+
+        // Apply visibility to entries
+        allEntries.forEach(entry => {
+            totalEntries++;
+
+            if (matchingEntries.has(entry)) {
                 entry.classList.remove('hidden');
                 totalMatches++;
 
@@ -162,15 +195,36 @@ _JS_CONTENT = """
                     section.classList.remove('collapsed');
                 }
 
-                // Expand nested content if match is inside
+                // Expand nested content if match is inside nested area
                 const nestedContent = entry.closest('.adata-nested-content');
-                if (nestedContent && !nestedContent.classList.contains('expanded')) {
-                    nestedContent.classList.add('expanded');
+                if (nestedContent) {
+                    const nestedRow = nestedContent.closest('.adata-nested-row');
+                    if (nestedRow && !nestedRow.classList.contains('expanded')) {
+                        nestedRow.classList.add('expanded');
+                    }
                 }
             } else {
                 entry.classList.add('hidden');
             }
         });
+
+        // Also filter X entries in nested AnnData (they use adata-x-entry class, not adata-entry)
+        // This prevents orphaned X rows from showing when their sibling entries are hidden
+        if (query) {
+            container.querySelectorAll('.adata-nested-content .adata-x-entry').forEach(xEntry => {
+                // Check if the nested AnnData has any visible entries
+                const nestedRepr = xEntry.closest('.anndata-repr');
+                if (nestedRepr) {
+                    const hasVisibleEntries = nestedRepr.querySelector('.adata-entry:not(.hidden)');
+                    xEntry.style.display = hasVisibleEntries ? '' : 'none';
+                }
+            });
+        } else {
+            // Reset X entries when no query
+            container.querySelectorAll('.adata-nested-content .adata-x-entry').forEach(xEntry => {
+                xEntry.style.display = '';
+            });
+        }
 
         // Update filter indicator
         if (filterIndicator) {
