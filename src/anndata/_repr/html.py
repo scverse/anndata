@@ -528,10 +528,11 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
 
 def render_search_box(container_id: str = "") -> str:
     """
-    Render a search box with filter indicator.
+    Render a search box with filter indicator and search mode toggles.
 
     The search box is hidden by default and shown when JavaScript is enabled.
     It filters entries across all sections by key, type, or content.
+    Includes toggle buttons for case-sensitive search and regex mode.
 
     Parameters
     ----------
@@ -552,9 +553,17 @@ def render_search_box(container_id: str = "") -> str:
     """
     search_id = f"{container_id}-search" if container_id else "anndata-search"
     return (
+        f'<span class="adata-search-box" style="{STYLE_HIDDEN}">'
         f'<input type="text" id="{search_id}" name="{search_id}" '
-        f'class="adata-search-input" style="{STYLE_HIDDEN}" '
+        f'class="adata-search-input" '
         f'placeholder="Search..." aria-label="Search fields">'
+        f'<span class="adata-search-toggles">'
+        f'<button type="button" class="adata-search-toggle adata-toggle-case" '
+        f'title="Match case" aria-label="Match case" aria-pressed="false">Aa</button>'
+        f'<button type="button" class="adata-search-toggle adata-toggle-regex" '
+        f'title="Use regular expression" aria-label="Use regular expression" aria-pressed="false">.*</button>'
+        f'</span>'
+        f'</span>'
         f'<span class="adata-filter-indicator"></span>'
     )
 

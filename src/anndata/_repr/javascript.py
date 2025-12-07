@@ -52,11 +52,14 @@ _JS_CONTENT = """
     container.querySelectorAll('.adata-copy-btn').forEach(btn => {
         btn.style.display = 'inline-flex';
     });
-    container.querySelectorAll('.adata-search-input').forEach(input => {
-        input.style.display = 'inline-block';
+    container.querySelectorAll('.adata-search-box').forEach(box => {
+        box.style.display = 'inline-flex';
     });
     container.querySelectorAll('.adata-expand-btn').forEach(btn => {
         btn.style.display = 'inline-block';
+    });
+    container.querySelectorAll('.adata-search-toggle').forEach(btn => {
+        btn.style.display = 'inline-flex';
     });
     // Filter indicator is shown via CSS .active class, no need to set display here
 
@@ -110,18 +113,27 @@ _JS_CONTENT = """
     });
 
     // Search/filter functionality
+    const searchBox = container.querySelector('.adata-search-box');
     const searchInput = container.querySelector('.adata-search-input');
     const filterIndicator = container.querySelector('.adata-filter-indicator');
+    const caseToggle = container.querySelector('.adata-toggle-case');
+    const regexToggle = container.querySelector('.adata-toggle-regex');
+
+    // Search state
+    let caseSensitive = false;
+    let useRegex = false;
 
     if (searchInput) {
         let debounceTimer;
 
-        searchInput.addEventListener('input', (e) => {
+        const triggerFilter = () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                filterEntries(e.target.value.toLowerCase().trim());
+                filterEntries(searchInput.value.trim());
             }, 150);
-        });
+        };
+
+        searchInput.addEventListener('input', triggerFilter);
 
         // Clear on Escape
         searchInput.addEventListener('keydown', (e) => {
@@ -130,6 +142,51 @@ _JS_CONTENT = """
                 filterEntries('');
             }
         });
+
+        // Toggle button handlers
+        if (caseToggle) {
+            caseToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                caseSensitive = !caseSensitive;
+                caseToggle.classList.toggle('active', caseSensitive);
+                caseToggle.setAttribute('aria-pressed', caseSensitive);
+                triggerFilter();
+            });
+        }
+
+        if (regexToggle) {
+            regexToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                useRegex = !useRegex;
+                regexToggle.classList.toggle('active', useRegex);
+                regexToggle.setAttribute('aria-pressed', useRegex);
+                triggerFilter();
+            });
+        }
+    }
+
+    // Helper: test if text matches query (respects case sensitivity and regex mode)
+    function matchesQuery(text, query) {
+        if (!query) return true;
+        if (useRegex) {
+            try {
+                const flags = caseSensitive ? '' : 'i';
+                const regex = new RegExp(query, flags);
+                if (searchBox) searchBox.classList.remove('regex-error');
+                return regex.test(text);
+            } catch (e) {
+                // Invalid regex - show error state but don't crash
+                if (searchBox) searchBox.classList.add('regex-error');
+                return false;
+            }
+        } else {
+            if (searchBox) searchBox.classList.remove('regex-error');
+            if (caseSensitive) {
+                return text.includes(query);
+            } else {
+                return text.toLowerCase().includes(query.toLowerCase());
+            }
+        }
     }
 
     function filterEntries(query) {
@@ -147,11 +204,11 @@ _JS_CONTENT = """
                 return;
             }
 
-            const key = (entry.dataset.key || '').toLowerCase();
-            const dtype = (entry.dataset.dtype || '').toLowerCase();
-            const text = entry.textContent.toLowerCase();
+            const key = entry.dataset.key || '';
+            const dtype = entry.dataset.dtype || '';
+            const text = entry.textContent;
 
-            if (key.includes(query) || dtype.includes(query) || text.includes(query)) {
+            if (matchesQuery(key, query) || matchesQuery(dtype, query) || matchesQuery(text, query)) {
                 matchingEntries.add(entry);
             }
         });
