@@ -302,6 +302,13 @@ def read_dataframe(
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
         index = elem_dict[dim_name].compute()
+        # python 3.14 fix
+        # index = elem_dict[dim_name]
+        # if hasattr(index, "compute"):
+        #     index = index.compute()
+        # if hasattr(index, "filled"):
+        #     index = index.filled()
+
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")

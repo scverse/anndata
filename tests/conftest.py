@@ -5,11 +5,17 @@ from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import joblib
+
+# Avoid ArrowStringArray in tests (AnnData cannot write these yet)
+# import pandas as pd
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
 from anndata.compat import is_zarr_v2
+
+# if hasattr(pd.options.mode, "string_storage"):
+#     pd.options.mode.string_storage = "python"
 
 if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
@@ -21,6 +27,8 @@ from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
+
+ad.settings.allow_write_nullable_strings = True
 
 if TYPE_CHECKING:
     from collections.abc import Generator

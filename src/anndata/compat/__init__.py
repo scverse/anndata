@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
+from array_api_compat import get_namespace as array_api_get_namespace
 from legacy_api_wrap import legacy_api  # noqa: TID251
 from numpy.typing import NDArray
 from packaging.version import Version
@@ -417,3 +418,11 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def has_xp(mod):
+    try:
+        array_api_get_namespace(mod)
+        return True
+    except TypeError:
+        return False

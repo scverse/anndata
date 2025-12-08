@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from string import ascii_letters
 
 import numpy as np
@@ -29,30 +30,11 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import axis_len
 
-# Testing to see if all error types can have the key name appended.
-# Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
-#
-# @singledispatch
-# def iswarning(x):
-#     return iswarning(type(x))
-
-# @iswarning.register(type)
-# def _notwarning(x):
-#     return False
-
-# @iswarning.register(Warning)
-# def _iswarning(x):
-#     return True
-
-# @pytest.mark.parametrize("exception", list(filter(lambda t: not iswarning(t), Exception.__subclasses__())))
-# def test_report_name_types(exception):
-#     def throw(e):
-#         raise e()
-#     tag = "".join(np.random.permutation(list(ascii_letters)))
-
-#     with pytest.raises(exception) as err:
-#         report_name(throw)(exception, _elem_name=tag)
-#     assert tag in str(err.value)
+jax = None
+jnp = None
+with suppress(ImportError):
+    import jax
+    import jax.numpy as jnp
 
 
 @pytest.fixture
@@ -114,6 +96,13 @@ def test_report_name():
         report_name(raise_error)(_elem_name=tag)
     assert str(e2.value).startswith(str(e1.value))
     assert tag in str(e2.value)
+
+
+@pytest.fixture
+def enable_jax_float64() -> None:
+    if jax is None:
+        pytest.skip("JAX not installed")
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
 def test_assert_equal():
@@ -323,3 +312,37 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
+
+
+@pytest.mark.skipif(jax is None, reason="JAX not installed")
+def test_gen_adata_jax_backend():
+    adata = gen_adata(
+        (5, 5),
+        array_namespace="jax",
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    assert isinstance(adata.X, jnp.ndarray | type(jnp.ones(1)))  # jax.Array
+    assert adata.X.shape == (5, 5)
+    assert adata.X.dtype == jnp.float32
+
+
+@pytest.mark.skipif(jax is None, reason="JAX not installed")
+def test_gen_adata_jax_subfields():
+    adata = gen_adata(
+        (5, 5),
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    adata.obsm["pca"] = jnp.asarray(adata.X[:, :2], dtype=jnp.float32)
+    adata.varm["gene_scores"] = jnp.asarray(adata.X.T[:3].T, dtype=jnp.float32)
+    adata.layers["counts"] = jnp.asarray(adata.X, dtype=jnp.float32)
+
+    assert isinstance(adata.obsm["pca"], jnp.ndarray)
+    assert adata.obsm["pca"].shape == (5, 2)
+
+    assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
+    assert adata.varm["gene_scores"].shape == (5, 3)
+
+    assert isinstance(adata.layers["counts"], jnp.ndarray)
+    assert adata.layers["counts"].shape == adata.X.shape
