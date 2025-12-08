@@ -36,7 +36,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.2.2",
+    "pandas >=2.2.2, <3.0.0",
     "numpy>=2",
     "scipy >=1.13",
     "h5py>=3.11",
