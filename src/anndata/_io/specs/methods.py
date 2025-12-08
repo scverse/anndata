@@ -1180,9 +1180,9 @@ def write_nullable(
     g = f.require_group(k)
     if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
         if v.dtype.na_value is pd.NA:
-            g.attrs["na_value"] = "pandas.NA"
+            g.attrs["na_value"] = "NA"
         elif np.isnan(v.dtype.na_value):
-            g.attrs["na_value"] = "numpy.nan"
+            g.attrs["na_value"] = "NaN"
         else:
             msg = f"Cannot write {v.dtype.na_value} as na_value for pandas StringArray"
             raise ValueError(msg)
@@ -1238,14 +1238,15 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
-    if PANDAS_SUPPORTS_NA_VALUE:
-        dtype = pd.StringDtype(
+    dtype = (
+        pd.StringDtype(
             na_value=pd.NA
-            if _read_attr(elem.attrs, "na_value", default="pandas.NA") == "pandas.NA"
+            if _read_attr(elem.attrs, "na_value", default="NA") == "NA"
             else np.nan
         )
-    else:
-        dtype = pd.StringDtype()
+        if PANDAS_SUPPORTS_NA_VALUE
+        else pd.StringDtype()
+    )
 
     arr = pd.array(
         values.astype(np.dtypes.StringDType(na_object=dtype.na_value)),  # TODO: why?
