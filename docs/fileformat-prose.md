@@ -7,7 +7,7 @@ but will still be read by newer versions of the library.
 ```
 
 AnnData objects are saved on disk to hierarchical array stores like [HDF5]
-(via {doc}`H5py <h5py:index>`) and {doc}`zarr:index`.
+(via {doc}`H5py <h5py:index>`) and {mod}`zarr`.
 This allows us to have very similar structures in disk and on memory.
 
 As an example we’ll look into a typical `.h5ad`/ `.zarr` object that’s been through an analysis.
@@ -91,7 +91,7 @@ Using this information, we're able to dispatch onto readers for the different el
 ## Dense arrays
 
 Dense numeric arrays have the most simple representation on disk,
-as they have native equivalents in H5py {doc}`h5py:high/dataset` and Zarr {doc}`Arrays <zarr:user-guide/arrays>`.
+as they have native equivalents in H5py {doc}`h5py:high/dataset` and {class}`zarr.Array`\ s.
 We can see an example of this with dimensionality reductions stored in the `obsm` group:
 
 `````{tab-set}

@@ -1,10 +1,9 @@
 .. sidebar:: Key Contributors
 
-   * `Isaac Virshup`_: anndata >= 0.7, diverse contributions
+   * Isaac Virshup: anndata >= 0.7, diverse contributions
    * Sergei Rybakov: diverse contributions
-   * `Alex Wolf`_: initial conception/development
+   * Alex Wolf: initial conception/development
    * Philipp Angerer: initial conception/development, software quality
+   * Ilan Gold: improved cloud support, software quality
 
 .. _contributions graph: https://github.com/scverse/anndata/graphs/contributors
-.. _Isaac Virshup: https://twitter.com/ivirshup
-.. _Alex Wolf: https://twitter.com/falexwolf

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 from subprocess import run
 from typing import TYPE_CHECKING
@@ -49,6 +51,10 @@ def test_backwards_compat_files(archive_dir: Path) -> None:
     assert_equal(from_h5ad, from_zarr, exact=True)
 
 
+@pytest.mark.skipif(
+    not os.environ.get("CI") and shutil.which("h5diff") is None,
+    reason="not in CI and h5diff not installed",
+)
 def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     if archive_dir.name in {"v0.7.8", "v0.7.0"}:
         pytest.skip("DataFrame encoding changed between 0.7 and now")

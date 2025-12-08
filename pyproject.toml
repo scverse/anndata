@@ -60,7 +60,7 @@ dev = [
     "anndata[dev-doc]",
 ]
 doc = [
-    "sphinx>=8.2.1",
+    "sphinx>=8.2.1,<9",                  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/586
     "sphinx-book-theme>=1.1.0",
     "sphinx-autodoc-typehints>=2.2.0",
     "sphinx-issues>=5.0.1",
@@ -78,7 +78,7 @@ doc = [
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test-min = [
-    "pytest>=9.0.1",
+    "pytest",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
