@@ -99,9 +99,9 @@ def test_report_name():
 
 
 @pytest.fixture
-@pytest.mark.skipif(jax is None, reason="JAX not installed")
 def enable_jax_float64() -> None:
-    # Explicit conversion to JAX float64
+    if jax is None:
+        pytest.skip("JAX not installed")
     jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
