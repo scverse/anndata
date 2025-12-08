@@ -409,11 +409,10 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     adata_subset = adata[subset_idx, :]
 
-    if jnp is not None:
-        if isinstance(adata.X, jnp.ndarray):
-            with pytest.raises(TypeError, match=r"immutable"):
-                adata_subset.X = 1
-            return
+    if jnp is not None and isinstance(adata.X, jnp.ndarray):
+        with pytest.raises(TypeError, match=r"immutable"):
+            adata_subset.X = 1
+        return
 
     adata_subset.X = 1
 
