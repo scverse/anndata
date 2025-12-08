@@ -43,7 +43,6 @@ def setup_env() -> None:
     if IS_PRE:
         # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
         pd.options.future.infer_string = True
-        pd.options.mode.copy_on_write = True
 
 
 @pytest.fixture(scope="session", autouse=True)
