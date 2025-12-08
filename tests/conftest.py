@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING
 import joblib
 
 # Avoid ArrowStringArray in tests (AnnData cannot write these yet)
-import pandas as pd
+# import pandas as pd
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
 from anndata.compat import is_zarr_v2
 
-if hasattr(pd.options.mode, "string_storage"):
-    pd.options.mode.string_storage = "python"
+# if hasattr(pd.options.mode, "string_storage"):
+#     pd.options.mode.string_storage = "python"
 
 if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
