@@ -28,6 +28,8 @@ from scipy import sparse
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
 
+ad.settings.allow_write_nullable_strings = True
+
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
