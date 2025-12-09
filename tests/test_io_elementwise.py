@@ -707,7 +707,7 @@ def test_dataframe_column_uniqueness(store):
 @pytest.mark.filterwarnings(  # this warning triggers even when setting to True
     r"ignore:Copy-on-Write can no longer be disabled:pandas.errors.Pandas4Warning"
 )
-def test_io_pd_cow(store, copy_on_write) -> None:
+def test_io_pd_cow(*, store: GroupStorageType, copy_on_write: bool) -> None:
     # https://github.com/zarr-developers/numcodecs/issues/514
     with pd.option_context("mode.copy_on_write", copy_on_write):
         orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)

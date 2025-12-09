@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping, Sequence
+from enum import Enum, auto
 from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -20,10 +21,6 @@ from zarr import Group as ZarrGroup
 
 from .._warnings import warn
 
-if TYPE_CHECKING:
-    from typing import Any
-
-
 #############################
 # scipy sparse array comapt #
 #############################
@@ -33,8 +30,8 @@ CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
 CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
 
 
-class Empty:
-    pass
+class Empty(Enum):
+    TOKEN = auto()
 
 
 Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
@@ -224,18 +221,30 @@ else:
     PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
 
 
+@overload
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
+) -> V: ...
+
+
+@overload
+def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
+
+
 @singledispatch
-def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
-    if default is Empty:
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
+) -> V | T:
+    if default is Empty.TOKEN:
         return attrs[name]
     else:
         return attrs.get(name, default=default)
 
 
 @_read_attr.register(h5py.AttributeManager)
-def _read_attr_hdf5(
-    attrs: h5py.AttributeManager, name: str, default: Any | None = Empty
-):
+def _read_attr_hdf5[T](
+    attrs: h5py.AttributeManager, name: str, default: T | Empty = Empty.TOKEN
+) -> str | T:
     """
     Read an HDF5 attribute and perform all necessary conversions.
 
@@ -244,7 +253,7 @@ def _read_attr_hdf5(
     For example Julia's HDF5.jl writes string attributes as fixed-size strings, which
     are read as bytes by h5py.
     """
-    if name not in attrs and default is not Empty:
+    if name not in attrs and default is not Empty.TOKEN:
         return default
     attr = attrs[name]
     attr_id = attrs.get_id(name)

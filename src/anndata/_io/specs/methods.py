@@ -1180,9 +1180,9 @@ def write_nullable(
     g = f.require_group(k)
     if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
         if v.dtype.na_value is pd.NA:
-            g.attrs["na_value"] = "NA"
+            g.attrs["na-value"] = "NA"
         elif np.isnan(v.dtype.na_value):
-            g.attrs["na_value"] = "NaN"
+            g.attrs["na-value"] = "NaN"
         else:
             msg = f"Cannot write {v.dtype.na_value} as na_value for pandas StringArray"
             raise ValueError(msg)
@@ -1240,9 +1240,9 @@ def _read_nullable_string(
     mask = _reader.read_elem(elem["mask"])
     dtype = (
         pd.StringDtype(
-            na_value=pd.NA
-            if _read_attr(elem.attrs, "na_value", default="NA") == "NA"
-            else np.nan
+            na_value=np.nan
+            if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
+            else pd.NA
         )
         if PANDAS_SUPPORTS_NA_VALUE
         else pd.StringDtype()
