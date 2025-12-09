@@ -22,7 +22,7 @@ class Dataset2D:
     )
 
     def setup_cache(self):
-        n_obs = 100000
+        n_obs = 100_000
         array_types = {
             "numeric": np.arange(n_obs),
             "string-array": np.array(["a"] * n_obs),
@@ -50,8 +50,9 @@ class Dataset2D:
             zarr.open("data_all.zarr", mode="w", zarr_version=2),
         ]:
             df = pd.DataFrame(array_types, index=[f"cell{i}" for i in range(n_obs)])
-            # write a string array
-            df["string-array"] = df["string-array"].to_numpy()
+            # write a string array by triggering:
+            # https://github.com/scverse/anndata/blob/71966500949adcac4e49d2233f06e9f11f438e19/src/anndata/_io/specs/methods.py#L557-L559
+            df["string-array"] = df["string-array"].to_numpy().astype(object)
             with ad.settings.override(allow_write_nullable_strings=True):
                 ad.io.write_elem(store, "df", df)
 
@@ -59,7 +60,9 @@ class Dataset2D:
         self,
         store_type: Literal["zarr", "h5ad"],
         chunks: None | tuple[int],
-        array_type: Literal["cat", "numeric", "string-array", "nullable-string-array"],
+        array_type: Literal[
+            "cat", "numeric", "string-array", "nullable-string-array", "all"
+        ],
     ):
         self.store = (
             h5py.File(f"data_{array_type}.h5ad", mode="r")
