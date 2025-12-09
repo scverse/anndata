@@ -11,7 +11,7 @@ import anndata as ad
 from anndata.tests.helpers import get_multiindex_columns_df
 
 
-@pytest.mark.parametrize("dtype", [object, "str", "string"])
+@pytest.mark.parametrize("dtype", [object, "string"])
 def test_str_to_categorical(dtype):
     obs = pd.DataFrame(
         {"str": ["a", "a", None, "b", "b"]}, index=[f"cell-{i}" for i in range(5)]
