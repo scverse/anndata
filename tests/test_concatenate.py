@@ -1474,7 +1474,7 @@ def test_concat_names(
     if with_missing:
         for s in [lhs, rhs]:
             new_index = pd.Index([*get_annot(s).index[:5], *([pd.NA] * 5)])
-            setattr(s, axis_name, get_annot(s).set_index(new_index))
+            setattr(s, f"{axis_name}_names", new_index)
 
     cat = concat(
         [lhs, rhs], axis=axis_name, index_unique=index_unique, force_lazy=force_lazy

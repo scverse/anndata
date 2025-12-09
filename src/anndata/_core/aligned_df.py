@@ -88,12 +88,12 @@ def _gen_dataframe_df(
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
-    if not is_string_dtype(anno.index):
+    if not is_string_dtype(anno.index[~anno.index.isna()]):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)
-        anno.index = anno.index.astype(str)
+        anno.index = anno.index.astype("str")
     if not len(anno.columns):
-        anno.columns = anno.columns.astype(str)
+        anno.columns = anno.columns.astype("str")
     return anno
 
 
