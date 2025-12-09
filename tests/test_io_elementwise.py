@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 from contextlib import nullcontext
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -14,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -41,6 +43,9 @@ if TYPE_CHECKING:
 
     from anndata._types import GroupStorageType
     from anndata.compat import H5Group
+
+
+PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
 
 
 @pytest.fixture
@@ -686,7 +691,22 @@ def test_dataframe_column_uniqueness(store):
     assert_equal(result, index_shared_okay)
 
 
-@pytest.mark.parametrize("copy_on_write", [True, False])
+@pytest.mark.parametrize(
+    "copy_on_write",
+    [
+        pytest.param(True, id="cow"),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                PANDAS_3, reason="Can’t disable copy-on-write in pandas 3+."
+            ),
+            id="nocow",
+        ),
+    ],
+)
+@pytest.mark.filterwarnings(  # this warning triggers even when setting to True
+    r"ignore:Copy-on-Write can no longer be disabled:pandas.errors.Pandas4Warning"
+)
 def test_io_pd_cow(store, copy_on_write) -> None:
     # https://github.com/zarr-developers/numcodecs/issues/514
     with pd.option_context("mode.copy_on_write", copy_on_write):
