@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from .._types import DataFrameLike
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
 from ..utils import (
@@ -36,8 +37,8 @@ if TYPE_CHECKING:
 
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
-# TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
+# DataFrameLike encompasses pd.DataFrame and Dataset2D
+Value = DataFrameLike | CSMatrix | CSArray | np.ndarray
 
 
 class AlignedMappingBase[I: OneDIdx](MutableMapping[str, Value], ABC):

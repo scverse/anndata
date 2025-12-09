@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from pandas.api.types import is_string_dtype
 
+from .._types import DataFrameLike
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset
 from ..utils import warn
@@ -25,7 +26,13 @@ def _gen_dataframe(
     source: Literal["X", "shape"],
     attr: Literal["obs", "var"],
     length: int | None = None,
-) -> pd.DataFrame:  # pragma: no cover
+) -> DataFrameLike:  # pragma: no cover
+    # Check if anno satisfies the DataFrameLike protocol
+    # This allows any DataFrameLike-compliant object to be used as obs/var
+    if isinstance(anno, DataFrameLike):
+        if length is not None and anno.shape[0] != length:
+            raise _mk_df_error(source, attr, length, anno.shape[0])
+        return anno
     msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
     raise ValueError(msg)
 
