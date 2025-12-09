@@ -5,7 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -46,6 +46,12 @@ if TYPE_CHECKING:
 
 
 PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
+
+
+@pytest.fixture
+def exit_stack() -> Generator[ExitStack, None, None]:
+    with ExitStack() as stack:
+        yield stack
 
 
 @pytest.fixture
@@ -704,16 +710,16 @@ def test_dataframe_column_uniqueness(store):
         ),
     ],
 )
-@pytest.mark.filterwarnings(  # this warning triggers even when setting to True
-    r"ignore:Copy-on-Write can no longer be disabled:pandas.errors.Pandas4Warning"
-)
-def test_io_pd_cow(*, store: GroupStorageType, copy_on_write: bool) -> None:
-    # https://github.com/zarr-developers/numcodecs/issues/514
-    with pd.option_context("mode.copy_on_write", copy_on_write):
-        orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
-        write_elem(store, "adata", orig)
-        from_store = read_elem(store["adata"])
-        assert_equal(orig, from_store)
+def test_io_pd_cow(
+    *, exit_stack: ExitStack, store: GroupStorageType, copy_on_write: bool
+) -> None:
+    """See <https://github.com/zarr-developers/numcodecs/issues/514>."""
+    if not PANDAS_3:  # Setting copy_on_write always warns in pandas 3, and does nothing
+        exit_stack.enter_context(pd.option_context("mode.copy_on_write", copy_on_write))
+    orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
+    write_elem(store, "adata", orig)
+    from_store = read_elem(store["adata"])
+    assert_equal(orig, from_store)
 
 
 def test_read_sparse_array(
