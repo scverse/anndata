@@ -7,7 +7,7 @@ from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -219,6 +219,14 @@ except ImportError:
     pass
 else:
     PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
+
+
+def pandas_str_dtype() -> pd.StringDtype | np.dtypes.ObjectDType:
+    """Get dtype that pandas infers for strings.
+
+    This is `"str"` when `pd.options.future.infer_string` is `True` (e.g. in Pandas 3+), and `"object"` otherwise.
+    """
+    return cast("pd.StringDtype | np.dtypes.ObjectDType", pd.Index([""]).dtype)
 
 
 @overload

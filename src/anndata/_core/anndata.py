@@ -25,7 +25,14 @@ from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
-from ..compat import CSArray, DaskArray, ZarrArray, _move_adj_mtx, old_positionals
+from ..compat import (
+    CSArray,
+    DaskArray,
+    ZarrArray,
+    _move_adj_mtx,
+    old_positionals,
+    pandas_str_dtype,
+)
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -385,11 +392,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index.astype(str)))
+                    x_indices.append((
+                        "obs",
+                        "index",
+                        X.index.astype(pandas_str_dtype()),
+                    ))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns.astype(str)))
+                    x_indices.append((
+                        "var",
+                        "columns",
+                        X.columns.astype(pandas_str_dtype()),
+                    ))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -790,7 +805,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             raise ValueError(msg)
         else:
             value = (
-                value if isinstance(value, pd.Index) else pd.Index(value, dtype="str")
+                value
+                if isinstance(value, pd.Index)
+                else pd.Index(value, dtype=pandas_str_dtype())
             )
             if not isinstance(value.name, str | type(None)):
                 value.name = None

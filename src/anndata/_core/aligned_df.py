@@ -8,7 +8,7 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, pandas_str_dtype
 from ..utils import warn
 from .xarray import Dataset2D
 
@@ -91,9 +91,9 @@ def _gen_dataframe_df(
     if not is_string_dtype(anno.index[~anno.index.isna()]):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)
-        anno.index = anno.index.astype("str")
+        anno.index = anno.index.astype(pandas_str_dtype())
     if not len(anno.columns):
-        anno.columns = anno.columns.astype("str")
+        anno.columns = anno.columns.astype(pandas_str_dtype())
     return anno
 
 

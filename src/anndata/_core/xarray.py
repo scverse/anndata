@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, overload
 import numpy as np
 import pandas as pd
 
-from ..compat import XDataArray, XDataset, XVariable
+from ..compat import XDataArray, XDataset, XVariable, pandas_str_dtype
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -242,8 +242,9 @@ class Dataset2D:
         }
         df = self.ds.to_dataframe()
         for col in all_columns - non_nullable_string_cols:
-            # "str" becomes `O` unless `pd.options.future.infer_string` is True
-            df[col] = df[col].astype(dtype="str" if col == index_key else "string")
+            df[col] = df[col].astype(
+                dtype=pandas_str_dtype() if col == index_key else "string"
+            )
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
         df.index.name = None  # matches old AnnData object
