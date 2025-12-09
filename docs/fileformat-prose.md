@@ -464,9 +464,10 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 * In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec
 * In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding
 
-## Nullable integers and booleans
+(nullable-arrays)=
+## Nullable integers, booleans, and strings
 
-We support IO with Pandas nullable integer and boolean arrays.
+We support IO with Pandas nullable integer, boolean, and string arrays.
 We represent these on disk similar to `numpy` masked arrays, `julia` nullable arrays, or `arrow` validity bitmaps (see {issue}`504` for more discussion).
 That is, we store an indicator array (or mask) of null values alongside the array of all values.
 
@@ -526,17 +527,50 @@ nullable_integer/values <zarr.core.Array '/nullable_integer/values' (4,) int64>
 ### Nullable integer specifications (v0.1.0)
 
 * Nullable integers MUST be stored as a group
-* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
 * The group MUST contain an integer valued array under the key `"values"`
 * The group MUST contain an boolean valued array under the key `"mask"`
 
 ### Nullable boolean specifications (v0.1.0)
 
 * Nullable booleans MUST be stored as a group
-* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
 * The group MUST contain an boolean valued array under the key `"values"`
 * The group MUST contain an boolean valued array under the key `"mask"`
 * The `"values"` and `"mask"` arrays MUST be the same shape
+
+### Nullable string specifications (v0.1.0)
+
+* Nullable strings MUST be stored as a group
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MAY contain `"na-value"` as an indicator for missing value semantics with the possible value `"NA"` or `"NaN"` described in [](#missing-value-semantics), and the default being `"NA"`
+* The group MUST contain a string valued array under the key `"values"`
+* The group MUST contain a boolean valued array under the key `"mask"`
+* The `"values"` and `"mask"` arrays MUST be the same shape
+
+(missing-value-semantics)=
+### Missing value semantics
+
+If available in the runtime data model, the following values representing missing value semantics are defined.
+See the individual specification versions for elements that support them.
+
+`"NA"` means that a comparison between a missing value and a defined value produces a missing value (e.g. `"x"==NA` → `NA`).
+`"NaN"` means that a comparison between a missing value and a defined value produces a binary result (e.g. `"x"==NaN` → `false`).
+
+After reading an element supporting missing value semantics, it SHOULD behave according to the specified semantics if the runtime data model allows for it.
+If no semantics are specified in the representation, the default semantics from the element specification SHOULD be used.
+When the encoded semantics value is unknown to the implementation, reading the element SHOULD NOT produce an error, and the implementation may freely choose the semantics.
+
+For element specifications supporting missing value semantics, the semantics value most closely matching the source data model SHOULD be written.
+If the source data model instead behaves very differently from all currently defined ones, please reach out to get a new value for the behavior defined here.
+
+#### Examples
+
+Pandas’ string arrays support both `"NA"` and `"NaN"` semantics, while `R`’s `character` array only supports `"NA"` semantics.
+
+Therefore an R implementation SHOULD write a `character` array with `"na-value": "NA"`,
+and when reading a `"nullable-string-array"`, it MAY choose to read it into a `character` array,
+ignoring the `"na-value"` attribute (since `character` arrays can not be made to behave with `"NaN"` semantics).
 
 ## AwkwardArrays
 
