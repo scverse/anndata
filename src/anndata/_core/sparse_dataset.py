@@ -394,7 +394,16 @@ def is_sparse_indexing_overridden(
 def validate_indices(
     mtx: BackedSparseMatrix, indices: tuple[Index1D, Index1D]
 ) -> tuple[Index1D, Index1D]:
-    res = mtx._validate_indices(indices)
+    if hasattr(mtx, "_validate_indices"):
+        res = mtx._validate_indices(indices)
+    # https://github.com/scipy/scipy/pull/23267
+    elif Version(version("scipy")) >= Version("1.17.0rc0"):
+        from scipy.sparse._index import _validate_indices  # type: ignore
+
+        res = _validate_indices(indices, mtx.shape, mtx.format)
+    else:
+        msg = "Cannot validate indices"
+        raise RuntimeError(msg)
     return res[0] if SCIPY_1_15 else res
 
 
