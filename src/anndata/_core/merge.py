@@ -315,12 +315,14 @@ def try_unifying_dtype(  # noqa: PLR0911
         if len(categories_intersection) < len(categories):
             return object
 
-        if all(
+        dtypes_with_categories = [
+            dtype for dtype in dtypes if len(dtype.categories) > 0
+        ]
+        if dtypes_with_categories and all(
             dtype.ordered and np.all(categories == dtype.categories)
-            for dtype in dtypes
-            if len(dtype.categories) > 0
+            for dtype in dtypes_with_categories
         ):
-            return next(iter(dtypes))
+            return dtypes_with_categories[0]
         return object
 
     # Boolean
@@ -939,8 +941,13 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
         common_keys = intersect_keys(el.fields for el in els)
+        # TODO: replace dtype=object once this is fixed: https://github.com/scikit-hep/awkward/issues/3730
         reindexers = [
-            Reindexer(pd.Index(el.fields), pd.Index(list(common_keys))) for el in els
+            Reindexer(
+                pd.Index(el.fields, dtype=object),
+                pd.Index(list(common_keys), dtype=object),
+            )
+            for el in els
         ]
     else:
         min_ind = min(el.shape[alt_axis] for el in els)
@@ -1179,6 +1186,8 @@ def make_dask_col_from_extension_dtype(
     A :class:`dask.Array`: representation of the column.
     """
     import dask.array as da
+    import xarray as xr
+    from xarray.core.indexing import LazilyIndexedArray
 
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
@@ -1186,7 +1195,6 @@ def make_dask_col_from_extension_dtype(
         maybe_open_h5,
     )
     from anndata.compat import XDataArray
-    from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
@@ -1209,9 +1217,7 @@ def make_dask_col_from_extension_dtype(
             # reopening is important to get around h5py's unserializable lock in processes
             with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
                 v = read_elem_lazy(f)
-                variable = xr.Variable(
-                    data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
-                )
+                variable = xr.Variable(data=LazilyIndexedArray(v), dims=dims)
                 data_array = XDataArray(
                     variable,
                     coords=coords,
@@ -1304,9 +1310,10 @@ def concat_dataset2d_on_annot_axis(
     -------
     Concatenated :class:`~anndata.experimental.backed.Dataset2D`
     """
+    import xarray as xr
+
     from anndata._core.xarray import Dataset2D
     from anndata._io.specs.lazy_methods import DUMMY_RANGE_INDEX_KEY
-    from anndata.compat import xarray as xr
 
     annotations_re_indexed = []
     have_backed = any(a.is_backed for a in annotations)
@@ -1506,15 +1513,18 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> inner
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
-    >>> (inner.obs_names, inner.var_names)  # doctest: +NORMALIZE_WHITESPACE
-    (Index(['s1', 's2', 's3', 's4'], dtype='object'),
-    Index(['var1', 'var2'], dtype='object'))
+    >>> (
+    ...     inner.obs_names.astype("string"),
+    ...     inner.var_names.astype("string"),
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    (Index(['s1', 's2', 's3', 's4'], dtype='string'),
+    Index(['var1', 'var2'], dtype='string'))
     >>> outer = ad.concat([a, b], join="outer")  # Joining on union of variables
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
-    >>> outer.var_names
-    Index(['var1', 'var2', 'var3'], dtype='object')
+    >>> outer.var_names.astype("string")
+    Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
         var1  var2  var3
     s1     0     1     0
@@ -1619,7 +1629,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
 
     # Combining indexes
     concat_indices = pd.concat(
-        [pd.Series(axis_indices(a, axis=axis)) for a in adatas], ignore_index=True
+        [axis_indices(a, axis=axis).to_series() for a in adatas], ignore_index=True
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(

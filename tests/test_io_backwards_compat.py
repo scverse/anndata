@@ -59,9 +59,12 @@ def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     if archive_dir.name in {"v0.7.8", "v0.7.0"}:
         pytest.skip("DataFrame encoding changed between 0.7 and now")
     adata, in_path = read_archive(archive_dir, "h5ad")
-    adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
-    diff_proc = run(["h5diff", in_path, out_path], check=False)
-    assert diff_proc.returncode == 0
+    with ad.settings.override(allow_write_nullable_strings=False):
+        adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
+    diff_proc = run(
+        ["h5diff", "-c", in_path, out_path], check=False, capture_output=True, text=True
+    )
+    assert diff_proc.returncode == 0, diff_proc.stdout
 
 
 def test_clean_uns_backwards_compat(tmp_path, diskfmt):
