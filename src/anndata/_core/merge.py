@@ -10,8 +10,8 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, TypeVar
-from warnings import cast, warn
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
+from warnings import warn
 
 import numpy as np
 import pandas as pd
