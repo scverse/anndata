@@ -337,7 +337,6 @@ try:
     import uuid
 
     from anndata._repr import (
-        STYLE_HIDDEN,
         FormattedEntry,
         FormattedOutput,
         FormatterContext,
@@ -345,7 +344,6 @@ try:
         SectionFormatter,
         TypeFormatter,
         escape_html,
-        format_memory_size,
         format_number,
         get_css,
         get_javascript,
@@ -397,9 +395,10 @@ try:
                 1. get_css() - include styling
                 2. Container div with unique ID
                 3. Custom header (optional)
-                4. Sections using render_section() + render_formatted_entry()
-                5. Custom sections via FormatterRegistry (optional)
-                6. get_javascript(id) - include interactivity
+                4. Coordinate systems preview (like obs_names/var_names in AnnData)
+                5. Sections using render_section() + render_formatted_entry()
+                6. Custom sections via FormatterRegistry (optional)
+                7. get_javascript(id) - include interactivity
             """
             container_id = f"spatialdata-{uuid.uuid4().hex[:8]}"
             parts = []
@@ -416,20 +415,23 @@ try:
             # --- STEP 3: Custom header (SpatialData has no shape) ---
             parts.append(self._build_header(container_id))
 
-            # --- STEP 4: Sections using render_section() ---
+            # --- STEP 4: Coordinate systems preview (alternative to obs_names/var_names) ---
+            parts.append(self._build_coordinate_systems_preview())
+
+            # --- STEP 5: Sections using render_section() ---
             parts.append('<div class="adata-sections">')
             parts.append(self._build_images_section())
             parts.append(self._build_labels_section())
             parts.append(self._build_points_section())
             parts.append(self._build_shapes_section())
             parts.append(self._build_tables_section())  # Nested AnnData
-            # --- STEP 5: Custom sections from FormatterRegistry ---
+            # --- STEP 6: Custom sections from FormatterRegistry ---
             parts.append(self._build_custom_sections())
             parts.append("</div>")
 
             parts.append("</div>")
 
-            # --- STEP 6: Include anndata's JavaScript ---
+            # --- STEP 7: Include anndata's JavaScript ---
             parts.append(get_javascript(container_id))
 
             return "\n".join(parts)
@@ -441,11 +443,13 @@ try:
 
             # Zarr badge using render_badge() helper
             if self.path:
-                parts.append(render_badge("Zarr", "adata-badge-backed", "Backed by Zarr storage"))
+                parts.append(
+                    render_badge("Zarr", "adata-badge-backed", "Backed by Zarr storage")
+                )
                 parts.append(
                     f'<span class="adata-file-path" style="font-family:ui-monospace,monospace;'
                     f'font-size:11px;color:var(--anndata-text-secondary, #6c757d);">'
-                    f'{escape_html(self.path)}</span>'
+                    f"{escape_html(self.path)}</span>"
                 )
 
             # Search box using render_search_box() helper
@@ -453,6 +457,50 @@ try:
             parts.append(render_search_box(container_id))
             parts.append("</div>")
             return "\n".join(parts)
+
+        def _build_coordinate_systems_preview(self) -> str:
+            """
+            Build coordinate systems preview - SpatialData's equivalent to obs_names/var_names.
+
+            Simple list of coordinate system names with element details in tooltips.
+            """
+            if not self.coordinate_systems:
+                return ""
+
+            # Collect element names for tooltips
+            all_elements = []
+            if self.images:
+                all_elements.extend([f"{k} (Images)" for k in self.images])
+            if self.labels:
+                all_elements.extend([f"{k} (Labels)" for k in self.labels])
+            if self.points:
+                all_elements.extend([f"{k} (Points)" for k in self.points])
+            if self.shapes:
+                all_elements.extend([f"{k} (Shapes)" for k in self.shapes])
+
+            elements_str = ", ".join(all_elements) if all_elements else "no elements"
+
+            # Build simple inline list
+            parts = ['<div class="adata-index-preview" style="padding:2px 8px;">']
+            parts.append(
+                '<span style="color:var(--anndata-text-secondary, #6c757d);'
+                'font-size:12px;">coordinate_systems: </span>'
+            )
+
+            # Render coordinate systems as simple badges with tooltips
+            cs_parts = []
+            for cs_name in self.coordinate_systems:
+                tooltip = f"Elements: {elements_str}"
+                cs_parts.append(
+                    f'<span title="{escape_html(tooltip)}" style="'
+                    f"font-family:ui-monospace,monospace;font-size:11px;"
+                    f'color:var(--anndata-accent, #0d6efd);cursor:help;">'
+                    f"'{escape_html(cs_name)}'</span>"
+                )
+
+            parts.append(", ".join(cs_parts))
+            parts.append("</div>")
+            return "".join(parts)
 
         def _build_images_section(self) -> str:
             """
@@ -603,8 +651,12 @@ try:
             parts = []
             context = FormatterContext()
 
-            for section_name in spatialdata_formatter_registry.get_registered_sections():
-                formatter = spatialdata_formatter_registry.get_section_formatter(section_name)
+            for (
+                section_name
+            ) in spatialdata_formatter_registry.get_registered_sections():
+                formatter = spatialdata_formatter_registry.get_section_formatter(
+                    section_name
+                )
                 if formatter is None or not formatter.should_show(self):
                     continue
 
@@ -656,21 +708,23 @@ try:
         section_name = "transforms"
 
         def should_show(self, obj) -> bool:
-            return hasattr(obj, "coordinate_systems") and len(obj.coordinate_systems) > 1
+            return (
+                hasattr(obj, "coordinate_systems") and len(obj.coordinate_systems) > 1
+            )
 
         def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
-            entries = []
             cs = list(obj.coordinate_systems)
-            for i in range(len(cs) - 1):
-                entries.append(
-                    FormattedEntry(
-                        key=f"{cs[i]} → {cs[i+1]}",
-                        output=FormattedOutput(type_name="Affine (3×3)"),
-                    )
+            return [
+                FormattedEntry(
+                    key=f"{cs[i]} → {cs[i + 1]}",
+                    output=FormattedOutput(type_name="Affine (3×3)"),
                 )
-            return entries
+                for i in range(len(cs) - 1)
+            ]
 
-    spatialdata_formatter_registry.register_section_formatter(TransformsSectionFormatter())
+    spatialdata_formatter_registry.register_section_formatter(
+        TransformsSectionFormatter()
+    )
 
     # =========================================================================
     # Test data factory
@@ -691,18 +745,36 @@ try:
         transcript_table = AnnData(
             np.random.randn(80, 10).astype(np.float32),
             obs=pd.DataFrame({
-                "gene": pd.Categorical(np.random.choice([f"gene_{i}" for i in range(10)], 80)),
+                "gene": pd.Categorical(
+                    np.random.choice([f"gene_{i}" for i in range(10)], 80)
+                ),
             }),
         )
 
         return MockSpatialData(
             images={
-                "raw_image": {"shape": (3, 2048, 2048), "dims": ("c", "y", "x"), "dtype": "uint16"},
-                "processed": {"shape": (3, 1024, 1024), "dims": ("c", "y", "x"), "dtype": "float32"},
+                "raw_image": {
+                    "shape": (3, 2048, 2048),
+                    "dims": ("c", "y", "x"),
+                    "dtype": "uint16",
+                },
+                "processed": {
+                    "shape": (3, 1024, 1024),
+                    "dims": ("c", "y", "x"),
+                    "dtype": "float32",
+                },
             },
             labels={
-                "cell_segmentation": {"shape": (2048, 2048), "dims": ("y", "x"), "dtype": "int32"},
-                "nucleus_segmentation": {"shape": (2048, 2048), "dims": ("y", "x"), "dtype": "int32"},
+                "cell_segmentation": {
+                    "shape": (2048, 2048),
+                    "dims": ("y", "x"),
+                    "dtype": "int32",
+                },
+                "nucleus_segmentation": {
+                    "shape": (2048, 2048),
+                    "dims": ("y", "x"),
+                    "dtype": "int32",
+                },
             },
             points={
                 "transcripts": {"n_points": 50000, "n_dims": 3},
@@ -1619,7 +1691,9 @@ For more details, see the full documentation.
         sections.append((
             "20. SpatialData (Custom _repr_html_)",
             sdata._repr_html_(),
-            "Demonstrates how packages can build custom <code>_repr_html_</code> using anndata's building blocks: "
+            "Demonstrates how packages like <a href='https://spatialdata.scverse.org/' "
+            "target='_blank'>SpatialData</a> can build custom <code>_repr_html_</code> "
+            "using anndata's building blocks: "
             "<ul>"
             "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
             "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
@@ -1628,7 +1702,8 @@ For more details, see the full documentation.
             "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
             "</ul>"
             "Note the meta column shows dimension info like <code>[c, y, x]</code>. "
-            "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand).",
+            "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand). "
+            "Hover over coordinate system names to see associated elements.",
         ))
     else:
         print("  20. SpatialData (skipped - example failed to load)")
