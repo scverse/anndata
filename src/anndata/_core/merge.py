@@ -280,7 +280,7 @@ def unify_dtypes(
     return dfs
 
 
-def try_unifying_dtype(  # noqa: PLR0911
+def try_unifying_dtype(
     dtypes: Sequence[np.dtype | ExtensionDtype], *, has_missing: bool
 ) -> ExtensionDtype | type[object] | None:
     """Determine unified dtype if possible.
@@ -301,28 +301,21 @@ def try_unifying_dtype(  # noqa: PLR0911
         if TYPE_CHECKING:
             dtypes = cast("Sequence[pd.CategoricalDtype]", dtypes)
 
-        categories = reduce(
+        all_categories = reduce(
             lambda x, y: x.union(y), (dtype.categories for dtype in dtypes)
         )
         if not any(dtype.ordered for dtype in dtypes):
-            return pd.CategoricalDtype(natsorted(categories), ordered=False)
-
-        # for xarray Datasets, see https://github.com/pydata/xarray/issues/10247
-        categories_intersection = reduce(
-            lambda x, y: x.intersection(y),
-            (dtype.categories for dtype in dtypes if len(dtype.categories) > 0),
-        )
-        if len(categories_intersection) < len(categories):
-            return object
+            return pd.CategoricalDtype(natsorted(all_categories), ordered=False)
 
         dtypes_with_categories = [
             dtype for dtype in dtypes if len(dtype.categories) > 0
         ]
         if dtypes_with_categories and all(
-            dtype.ordered and np.all(categories == dtype.categories)
+            dtype.ordered and np.all(all_categories == dtype.categories)
             for dtype in dtypes_with_categories
         ):
             return dtypes_with_categories[0]
+
         return object
 
     # Boolean
