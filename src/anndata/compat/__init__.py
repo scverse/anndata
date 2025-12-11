@@ -226,6 +226,13 @@ def pandas_str_dtype() -> pd.StringDtype | np.dtypes.ObjectDType:
 
     This is `"str"` when `pd.options.future.infer_string` is `True` (e.g. in Pandas 3+), and `"object"` otherwise.
     """
+    return _pandas_str_dtype(infer_string=pd.options.future.infer_string)
+
+
+@cache
+def _pandas_str_dtype(*, infer_string: bool) -> pd.StringDtype | np.dtypes.ObjectDType:
+    # the return value of the following expression depends on `pd.options.future.infer_string``
+    del infer_string
     return cast("pd.StringDtype | np.dtypes.ObjectDType", pd.Index([""]).dtype)
 
 
