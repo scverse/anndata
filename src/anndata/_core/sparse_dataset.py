@@ -402,7 +402,7 @@ def validate_indices(
         from scipy.sparse._index import _validate_indices  # type: ignore
 
         return _validate_indices(indices, mtx.shape, mtx.format)[0]
-    else:
+    else:  # pragma: no cover
         msg = "Cannot validate indices"
         raise RuntimeError(msg)
 
