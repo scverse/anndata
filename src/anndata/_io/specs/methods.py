@@ -23,7 +23,6 @@ from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_datase
 from anndata._io.utils import check_key, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     AwkArray,
     CupyArray,
     CupyCSCMatrix,
@@ -41,7 +40,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import is_zarr_v2
+from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE, is_zarr_v2
 from ...utils import warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
@@ -1135,39 +1134,68 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 @_REGISTRY.register_write(
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
-@_REGISTRY.register_write(
-    H5Group, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
-)
-@_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.StringArray, IOSpec("nullable-string-array", "0.1.0")
-)
 def write_nullable(
     f: GroupStorageType,
     k: str,
-    v: pd.arrays.IntegerArray | pd.arrays.BooleanArray | pd.arrays.StringArray,
+    v: pd.arrays.IntegerArray
+    | pd.arrays.BooleanArray
+    | pd.arrays.StringArray
+    | pd.arrays.ArrowStringArray,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    if (
-        isinstance(v, pd.arrays.StringArray)
-        and not settings.allow_write_nullable_strings
-    ):
-        msg = (
-            "`anndata.settings.allow_write_nullable_strings` is False, "
-            "because writing of `pd.arrays.StringArray` is new "
-            "and not supported in anndata < 0.11, still use by many people. "
-            "Opt-in to writing these arrays by toggling the setting to True."
-        )
-        raise RuntimeError(msg)
+) -> None:
+    if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        # if explicitly set to `False`, we try writing them as non-nullable string array
+        if settings.allow_write_nullable_strings is False:
+            if v.isna().any():
+                msg = (
+                    "Cannot write `pd.arrays.[Arrow]StringArray` with missing values "
+                    "when `anndata.settings.allow_write_nullable_strings` is set to False. "
+                    "Opt-in to writing these arrays by toggling it to True or remove missing values."
+                )
+                raise ValueError(msg)
+            # This works since there are no missing values. Otherwise, we’d need to be very careful.
+            # TODO: check if the cost of creating a numpy "T" string array here would amortize when writing
+            _writer.write_elem(f, k, np.asarray(v), dataset_kwargs=dataset_kwargs)
+            return
+
+        # if implicitly set to `False`, we error out
+        if (
+            settings.allow_write_nullable_strings is None
+            and not pd.options.future.infer_string
+        ):
+            msg = (
+                "`anndata.settings.allow_write_nullable_strings` is None and "
+                "`pd.options.future.infer_string` is False. "
+                "Opt-in to writing these arrays by toggling either setting to True, "
+                "or make `anndata` attempt to write the non-nullable format supported by "
+                "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
+            )
+            raise RuntimeError(msg)
+
     g = f.require_group(k)
+    if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        if v.dtype.na_value is pd.NA:
+            g.attrs["na-value"] = "NA"
+        elif np.isnan(v.dtype.na_value):
+            g.attrs["na-value"] = "NaN"
+        else:
+            msg = f"Cannot write {v.dtype.na_value} as na_value for pandas StringArray"
+            raise ValueError(msg)
     values = (
         v.to_numpy(na_value="")
-        if isinstance(v, pd.arrays.StringArray)
+        if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
         else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
+
+
+for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_TYPES):
+    _REGISTRY.register_write(
+        store_type, array_type, IOSpec("nullable-string-array", "0.1.0")
+    )(write_nullable)
 
 
 def _read_nullable(
@@ -1185,18 +1213,6 @@ def _read_nullable(
     )
 
 
-def _string_array(
-    values: np.ndarray, mask: np.ndarray
-) -> pd.api.extensions.ExtensionArray:
-    """Construct a string array from values and mask."""
-    arr = pd.array(
-        values.astype(NULLABLE_NUMPY_STRING_TYPE),
-        dtype=pd.StringDtype(),
-    )
-    arr[mask] = pd.NA
-    return arr
-
-
 _REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
     read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
 )
@@ -1211,12 +1227,30 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean
 )
 
-_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))(
-    read_nullable_string := partial(_read_nullable, array_type=_string_array)
-)
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))(
-    read_nullable_string
-)
+
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
+def _read_nullable_string(
+    elem: GroupStorageType, *, _reader: Reader
+) -> pd.api.extensions.ExtensionArray:
+    values = _reader.read_elem(elem["values"])
+    mask = _reader.read_elem(elem["mask"])
+    dtype = (
+        pd.StringDtype(
+            na_value=np.nan
+            if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
+            else pd.NA
+        )
+        if PANDAS_SUPPORTS_NA_VALUE
+        else pd.StringDtype()
+    )
+
+    arr = pd.array(
+        values.astype(np.dtypes.StringDType(na_object=dtype.na_value)),  # TODO: why?
+        dtype=dtype,
+    )
+    arr[mask] = pd.NA
+    return arr
 
 
 ###########

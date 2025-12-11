@@ -1450,18 +1450,38 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-def test_concat_names(axis_name, use_xdataset, force_lazy):
-    get_annot = attrgetter(axis_name)
+@pytest.mark.parametrize(
+    ("index_unique", "expect_unique"),
+    [
+        pytest.param(None, False, id="default"),
+        pytest.param("-", True, id="force_unique"),
+    ],
+)
+@pytest.mark.parametrize("with_missing", [True, False], ids=["missing", "no_missing"])
+def test_concat_names(
+    *,
+    axis_name: Literal["obs", "var"],
+    use_xdataset: bool,
+    force_lazy: bool,
+    index_unique: str | None,
+    expect_unique: bool,
+    with_missing: bool,
+) -> None:
+    get_annot: attrgetter[pd.DataFrame] = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
     rhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
+    if with_missing:
+        for s in [lhs, rhs]:
+            new_index = pd.Index([*get_annot(s).index[:5], *([pd.NA] * 5)])
+            setattr(s, f"{axis_name}_names", new_index)
 
-    assert not get_annot(
-        concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy)
-    ).index.is_unique
-    assert get_annot(
-        concat([lhs, rhs], axis=axis_name, index_unique="-", force_lazy=force_lazy)
-    ).index.is_unique
+    cat = concat(
+        [lhs, rhs], axis=axis_name, index_unique=index_unique, force_lazy=force_lazy
+    )
+    assert get_annot(cat).index[~get_annot(cat).index.isna()].is_unique is expect_unique
+    if with_missing:
+        assert get_annot(cat).index.isna().sum() == 10
 
 
 def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
