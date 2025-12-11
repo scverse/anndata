@@ -401,7 +401,7 @@ def validate_indices(
     elif Version(version("scipy")) >= Version("1.17.0rc0"):
         from scipy.sparse._index import _validate_indices  # type: ignore
 
-        return _validate_indices(indices, mtx.shape, mtx.format)
+        return _validate_indices(indices, mtx.shape, mtx.format)[0]
     else:
         msg = "Cannot validate indices"
         raise RuntimeError(msg)
