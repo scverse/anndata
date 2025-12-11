@@ -311,7 +311,9 @@ def try_unifying_dtype(
             dtype for dtype in dtypes if len(dtype.categories) > 0
         ]
         if dtypes_with_categories and all(
-            dtype.ordered and np.all(all_categories == dtype.categories)
+            len(dtype.categories) == len(all_categories)
+            and dtype.ordered
+            and np.all(all_categories == dtype.categories)
             for dtype in dtypes_with_categories
         ):
             return dtypes_with_categories[0]
