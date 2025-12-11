@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, overload
 import numpy as np
 import pandas as pd
 
-from ..compat import XDataArray, XDataset, XVariable, pandas_str_dtype
+from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -242,8 +242,8 @@ class Dataset2D:
         }
         df = self.ds.to_dataframe()
         for col in all_columns - non_nullable_string_cols:
-            df[col] = df[col].astype(
-                dtype=pandas_str_dtype() if col == index_key else "string"
+            df[col] = (
+                pandas_as_str(df[col]) if col == index_key else df[col].astype("string")
             )
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)

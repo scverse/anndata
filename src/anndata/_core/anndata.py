@@ -31,7 +31,7 @@ from ..compat import (
     ZarrArray,
     _move_adj_mtx,
     old_positionals,
-    pandas_str_dtype,
+    pandas_as_str,
 )
 from ..logging import anndata_logger as logger
 from ..utils import (
@@ -392,19 +392,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append((
-                        "obs",
-                        "index",
-                        X.index.astype(pandas_str_dtype()),
-                    ))
+                    x_indices.append(("obs", "index", pandas_as_str(X.index)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append((
-                        "var",
-                        "columns",
-                        X.columns.astype(pandas_str_dtype()),
-                    ))
+                    x_indices.append(("var", "columns", pandas_as_str(X.columns)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -805,9 +797,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             raise ValueError(msg)
         else:
             value = (
-                value
-                if isinstance(value, pd.Index)
-                else pd.Index(value, dtype=pandas_str_dtype())
+                value if isinstance(value, pd.Index) else pandas_as_str(pd.Index(value))
             )
             if not isinstance(value.name, str | type(None)):
                 value.name = None

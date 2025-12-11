@@ -7,7 +7,7 @@ from functools import cache, partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -20,6 +20,10 @@ from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
 from .._warnings import warn
+
+if TYPE_CHECKING:
+    from typing import Any
+
 
 #############################
 # scipy sparse array comapt #
@@ -75,7 +79,6 @@ H5File = h5py.File
 #############################
 @cache
 def is_zarr_v2() -> bool:
-
     return Version(version("zarr")) < Version("3.0.0")
 
 
@@ -202,6 +205,9 @@ old_positionals = partial(legacy_api, category=FutureWarning)
 #############################
 
 
+PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
+
+
 PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
     pd.arrays.StringArray,
     pd.arrays.ArrowStringArray,
@@ -221,19 +227,36 @@ else:
     PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
 
 
-def pandas_str_dtype() -> pd.StringDtype | np.dtypes.ObjectDType:
-    """Get dtype that pandas infers for strings.
+@overload
+def pandas_as_str(a: pd.Index[Any]) -> pd.Index[str]: ...
+@overload
+def pandas_as_str(a: pd.Series[Any]) -> pd.Series[str]: ...
+
+
+def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
+    """Convert to fitting dtype, maintaining NA semantics if possible.
 
     This is `"str"` when `pd.options.future.infer_string` is `True` (e.g. in Pandas 3+), and `"object"` otherwise.
     """
-    return _pandas_str_dtype(infer_string=pd.options.future.infer_string)
+    if a.array.dtype == "string":  # any `pd.StringDtype`
+        return a
 
-
-@cache
-def _pandas_str_dtype(*, infer_string: bool) -> pd.StringDtype | np.dtypes.ObjectDType:
-    # the return value of the following expression depends on `pd.options.future.infer_string``
-    del infer_string
-    return cast("pd.StringDtype | np.dtypes.ObjectDType", pd.Index([""]).dtype)
+    if PANDAS_SUPPORTS_NA_VALUE:
+        dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
+    elif a.array.dtype.na_value is pd.NA:
+        dtype = pd.StringDtype()  # NA semantics
+    elif a.array.dtype.na_value is np.nan and find_spec("pyarrow"):  # noqa: PLW0177
+        # on pandas 2.2, this is the only way to get `np.nan` semantics
+        dtype = pd.StringDtype("pyarrow_numpy")
+    else:
+        msg = (
+            f"Converting an array with `dtype.na_value={a.array.dtype.na_value}` to a string array requires pyarrow or pandas>=2.3. "
+            "Converting to `pd.NA` semantics instead."
+        )
+        warn(msg, UserWarning)
+        dtype = pd.StringDtype()  # NA semantics
+    a = a.astype(dtype)
+    return a if pd.options.future.infer_string else a.astype(object)
 
 
 @overload
