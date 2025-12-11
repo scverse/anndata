@@ -1180,7 +1180,6 @@ def make_dask_col_from_extension_dtype(
     """
     import dask.array as da
     import xarray as xr
-    from xarray.core.indexing import LazilyIndexedArray
 
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
