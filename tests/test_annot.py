@@ -20,7 +20,7 @@ def test_str_to_categorical(dtype):
     a = ad.AnnData(obs=obs.copy())
 
     a.strings_to_categoricals()
-    expected = obs["str"].astype("category")
+    expected = obs["str"].astype(pd.CategoricalDtype(pd.Index(["a", "b"], dtype=dtype)))
     pd.testing.assert_series_equal(expected, a.obs["str"])
 
 
