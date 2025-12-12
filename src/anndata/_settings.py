@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
-from types import GenericAlias, NoneType
+from types import GenericAlias
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar, cast
 
 from .compat import is_zarr_v2, old_positionals
@@ -108,15 +108,6 @@ def check_and_get_bool(option: str, default_value: bool) -> bool:  # noqa: FBT00
         str(int(default_value)),
         ["0", "1"],
         lambda x: bool(int(x)),
-    )
-
-
-def check_and_get_bool_or_none(option: str, default_value: bool | None) -> bool | None:  # noqa: FBT001
-    return check_and_get_environ_var(
-        f"ANNDATA_{option.upper()}",
-        "" if default_value is None else str(int(default_value)),
-        ["0", "1", ""],
-        lambda x: None if x == "" else bool(int(x)),
     )
 
 
@@ -439,15 +430,10 @@ settings.register(
 
 settings.register(
     "allow_write_nullable_strings",
-    default_value=None,
-    description=(
-        "Whether or not to allow writing of `pd.arrays.[Arrow]StringArray`. "
-        "When set to `None`, it will be inferred from `pd.options.future.infer_string`. "
-        "When set to `False` explicitly, we will try writing `string` arrays in the old, non-nullable format."
-    ),
-    validate=gen_validator((bool, NoneType)),
-    option_type=bool | None,
-    get_from_env=check_and_get_bool_or_none,
+    default_value=False,
+    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
 )
 
 
