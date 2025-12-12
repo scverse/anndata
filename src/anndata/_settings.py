@@ -431,7 +431,7 @@ settings.register(
 settings.register(
     "allow_write_nullable_strings",
     default_value=False,
-    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    description="Whether or not to allow writing of `pd.arrays.{StringArray,ArrowStringArray}`.",
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )

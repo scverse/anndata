@@ -507,9 +507,6 @@ def test_write_io_error(store, obj):
     assert re.search(full_pattern, msg)
 
 
-PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
-
-
 @pytest.mark.parametrize(
     ("ad_setting", "pd_setting", "expected_missing", "expected_no_missing"),
     [
@@ -519,22 +516,20 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
             pytest.param(
                 False,
                 pd_ignored,
-                (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
-                "string-array",
+                *(
+                    [
+                        (
+                            RuntimeError,
+                            r"`anndata.settings.allow_write_nullable_strings` is False",
+                        )
+                    ]
+                    * 2
+                ),
                 id=f"off-explicit-{int(pd_ignored)}",
             )
             for pd_ignored in [False, True]
         ),
-        # when implicitly disabled, we expect a different message in both cases
-        pytest.param(
-            None,
-            False,
-            (RuntimeError, PAT_IMPLICIT),
-            (RuntimeError, PAT_IMPLICIT),
-            id="off-implicit",
-        ),
         # when enabled, we expect arrays to be written in the nullable format
-        pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
         pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
         pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
     ],
@@ -543,7 +538,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
 def test_write_nullable_string(
     *,
     store: GroupStorageType,
-    ad_setting: bool | None,
+    ad_setting: bool,
     pd_setting: bool,
     expected_missing: tuple[type[Exception], str] | str,
     expected_no_missing: tuple[type[Exception], str] | str,

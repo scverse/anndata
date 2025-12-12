@@ -210,6 +210,12 @@ else:
 #############################
 
 
+NULLABLE_NUMPY_STRING_TYPE = (
+    np.dtype("O")
+    if Version(version("numpy")) < Version("2")
+    else np.dtypes.StringDType(na_object=pd.NA)
+)
+
 PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
 
 
@@ -243,9 +249,10 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
 
     This is `"str"` when `pd.options.future.infer_string` is `True` (e.g. in Pandas 3+), and `"object"` otherwise.
     """
+    if not pd.options.future.infer_string:
+        return a.astype(str)
     if a.array.dtype == "string":  # any `pd.StringDtype`
         return a
-
     if PANDAS_SUPPORTS_NA_VALUE:
         dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
     elif a.array.dtype.na_value is pd.NA:
@@ -260,8 +267,7 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
         )
         warn(msg, UserWarning, stacklevel=2)
         dtype = pd.StringDtype()  # NA semantics
-    a = a.astype(dtype)
-    return a if pd.options.future.infer_string else a.astype(object)
+    return a.astype(dtype)
 
 
 V = TypeVar("V")

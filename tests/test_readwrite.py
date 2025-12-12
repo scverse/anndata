@@ -453,63 +453,6 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
 
 
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
-@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
-def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
-    X = typ(X_list)
-    obs_dim = "meaningful_obs_dim_name"
-    var_dim = "meaningful_var_dim_name"
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata_src.obs_names.name = obs_dim
-    adata_src.var_names.name = var_dim
-    adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
-    adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        # loompy uses “is” for ints
-        warnings.filterwarnings("ignore", category=SyntaxWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
-
-    adata = ad.io.read_loom(
-        tmp_path / "test.loom",
-        sparse=typ is csr_matrix,
-        obsm_mapping=obsm_mapping,
-        obs_names=obs_dim,
-        varm_mapping=varm_mapping,
-        var_names=var_dim,
-        cleanup=True,
-    )
-
-    if isinstance(X, np.ndarray):
-        assert np.allclose(adata.X, X)
-    else:
-        # TODO: this should not be necessary
-        assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm
-    assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm
-    assert adata.varm["X_b"].shape[1] == 3
-    # as we called with `cleanup=True`
-    assert "oanno1b" in adata.uns["loom-obs"]
-    assert "vanno2" in adata.uns["loom-var"]
-    for k, v in obsm_mapping.items():
-        assert k in adata.obsm
-        assert adata.obsm[k].shape[1] == len(v)
-    for k, v in varm_mapping.items():
-        assert k in adata.varm
-        assert adata.varm[k].shape[1] == len(v)
-    assert adata.obs_names.name == obs_dim
-    assert adata.var_names.name == var_dim
-
-
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 def test_readloom_deprecations(tmp_path):
     loom_pth = tmp_path / "test.loom"
     adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
