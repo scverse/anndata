@@ -42,7 +42,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES, is_zarr_v2
+from ...compat import NULLABLE_NUMPY_STRING_TYPE, PANDAS_STRING_ARRAY_TYPES, is_zarr_v2
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1217,7 +1217,7 @@ def _read_nullable_string(
     dtype = pd.StringDtype()
 
     arr = pd.array(
-        values.astype(np.dtypes.StringDType(na_object=dtype.na_value)),  # TODO: why?
+        values.astype(NULLABLE_NUMPY_STRING_TYPE),  # TODO: why?
         dtype=dtype,
     )
     arr[mask] = pd.NA
