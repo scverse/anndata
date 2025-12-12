@@ -12,7 +12,7 @@ from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
 from anndata.experimental.backed._io import ANNDATA_ELEMS
-from anndata.io import write_elem
+from anndata.io import read_zarr, write_elem
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     AccessTrackingStore,
@@ -90,26 +90,39 @@ def test_access_count_subset_column_compute(
 
 def test_access_count_index(
     remote_store_tall_skinny: AccessTrackingStore,
-):
+    adata_remote_with_store_tall_skinny_path: Path,
+) -> None:
+    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
+
     remote_store_tall_skinny.initialize_key_trackers(["obs/_index"])
     read_lazy(remote_store_tall_skinny, load_annotation_index=False)
     remote_store_tall_skinny.assert_access_count("obs/_index", 0)
+
     read_lazy(remote_store_tall_skinny)
-    # 4 is number of chunks
-    remote_store_tall_skinny.assert_access_count("obs/_index", 4)
+    n_chunks = 4
+    count_expected = (  # *2 when mask exists
+        n_chunks * 2 if adata_orig.obs.index.dtype == "string" else n_chunks
+    )
+    remote_store_tall_skinny.assert_access_count("obs/_index", count_expected)
 
 
 def test_access_count_dtype(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
-):
+    adata_remote_with_store_tall_skinny_path: Path,
+) -> None:
+    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
+
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
-    # This should only cause categories to be read in once
+
+    count_expected = 2 if adata_orig.obs["cat"].cat.categories.dtype == "string" else 1
+    # This should only cause categories to be read in once (and their mask if applicable)
+    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
 
 
 def test_uns_uses_dask(adata_remote: AnnData):
