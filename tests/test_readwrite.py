@@ -38,7 +38,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -653,22 +653,22 @@ def test_read_umi_tools():
 def test_write_categorical(
     *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
 ) -> None:
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    obs = dict(
+        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+    )
+    orig = ad.AnnData(obs=pd.DataFrame(obs))
     with ad.settings.override(allow_write_nullable_strings=True):
-        adata_pth = tmp_path / f"adata.{diskfmt}"
-        obs = dict(
-            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
-            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
-        )
-        orig = ad.AnnData(obs=pd.DataFrame(obs))
         getattr(orig, f"write_{diskfmt}")(
             adata_pth, convert_strings_to_categoricals=s2c
         )
-        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
-        assert np.all(orig.obs.notna() == curr.obs.notna())
-        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
-        assert curr.obs["str"].dtype == ("category" if s2c else "string")
-        assert curr.obs["cat"].dtype == "category"
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    assert np.all(orig.obs.notna() == curr.obs.notna())
+    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+    assert curr.obs["str"].dtype == ("category" if s2c else "string")
+    assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -804,7 +804,9 @@ def _do_roundtrip(
 
 
 @pytest.fixture
-def roundtrip(diskfmt):
+def roundtrip(
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Callable[[ad.AnnData, Path], ad.AnnData]:
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
@@ -847,20 +849,24 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
     assert_equal(pbmc, from_disk2)
 
 
+@pytest.mark.filterwarnings(r"ignore:Observation names are not unique:UserWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
+def test_scanpy_krumsiek11(
+    tmp_path: Path,
+    diskfmt: Literal["h5ad", "zarr"],
+    roundtrip: Callable[[ad.AnnData, Path], ad.AnnData],
+) -> None:
     import scanpy as sc
 
-    # TODO: this should be fixed in scanpy instead
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
+    with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", r".*first_column_names.*no longer positional", FutureWarning
         )
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
-    # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
-    orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+    # Depending on pd.options.future.infer_string, this becomes either `object` or `'string'`
+    orig.var.columns = orig.var.columns.astype(str)
+    with ad.settings.override(allow_write_nullable_strings=True):
         curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
 
     assert_equal(orig, curr, exact=True)
@@ -916,11 +922,16 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     [
         pytest.param(dict(base=None), id="dict_val"),
         pytest.param(
-            pd.DataFrame(dict(col_0=["string", None])).convert_dtypes(), id="df"
+            lambda: pd.DataFrame(
+                dict(col_0=pd.array(["string", None], dtype="string"))
+            ),
+            id="df",
         ),
     ],
 )
 def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
+    if callable(uns_val):
+        uns_val = uns_val()
     pth = tmp_path / f"adata_dtype.{diskfmt}"
 
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))

@@ -5,6 +5,8 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from contextlib import ExitStack, nullcontext
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -34,12 +37,23 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
     from typing import Literal, TypeVar
 
+    from anndata._types import GroupStorageType
     from anndata.compat import H5Group
 
     G = TypeVar("G", H5Group, ZarrGroup)
+
+
+PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
+
+
+@pytest.fixture
+def exit_stack() -> Generator[ExitStack, None, None]:
+    with ExitStack() as stack:
+        yield stack
 
 
 @pytest.fixture
@@ -126,7 +140,9 @@ def create_sparse_store(
         pytest.param(1.0, "numeric-scalar", id="py_float"),
         pytest.param({"a": 1}, "dict", id="py_dict"),
         pytest.param(
-            gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), "anndata", id="anndata"
+            lambda: gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS),
+            "anndata",
+            id="anndata",
         ),
         pytest.param(
             sparse.random(5, 3, format="csr", density=0.5),
@@ -206,16 +222,19 @@ def create_sparse_store(
         # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
-def test_io_spec(store, value, encoding_type):
+def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
+    if callable(value):
+        value = value()
+
+    key = f"key_for_{encoding_type}"
     with ad.settings.override(allow_write_nullable_strings=True):
-        key = f"key_for_{encoding_type}"
         write_elem(store, key, value, dataset_kwargs={})
 
-        assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
+    assert encoding_type == _read_attr(store[key].attrs, "encoding-type")
 
-        from_disk = read_elem(store[key])
-        assert_equal(value, from_disk)
-        assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+    from_disk = read_elem(store[key])
+    assert_equal(value, from_disk)
+    assert get_spec(store[key]) == _REGISTRY.get_spec(value)
 
 
 @pytest.mark.parametrize(
@@ -488,9 +507,62 @@ def test_write_io_error(store, obj):
     assert re.search(full_pattern, msg)
 
 
-def test_write_nullable_string_error(store):
-    with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings.*is False"):
-        write_elem(store, "/el", pd.array([""], dtype="string"))
+PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
+
+
+@pytest.mark.parametrize(
+    ("ad_setting", "pd_setting", "expected_missing", "expected_no_missing"),
+    [
+        # when explicitly disabled, we expect an error when trying to write an array with missing values
+        # and expect an array without missing values to be written in the old, non-nullable format
+        *(
+            pytest.param(
+                False,
+                pd_ignored,
+                (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
+                "string-array",
+                id=f"off-explicit-{int(pd_ignored)}",
+            )
+            for pd_ignored in [False, True]
+        ),
+        # when implicitly disabled, we expect a different message in both cases
+        pytest.param(
+            None,
+            False,
+            (RuntimeError, PAT_IMPLICIT),
+            (RuntimeError, PAT_IMPLICIT),
+            id="off-implicit",
+        ),
+        # when enabled, we expect arrays to be written in the nullable format
+        pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
+        pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
+        pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
+    ],
+)
+@pytest.mark.parametrize("missing", [True, False], ids=["missing", "no_missing"])
+def test_write_nullable_string(
+    *,
+    store: GroupStorageType,
+    ad_setting: bool | None,
+    pd_setting: bool,
+    expected_missing: tuple[type[Exception], str] | str,
+    expected_no_missing: tuple[type[Exception], str] | str,
+    missing: bool,
+) -> None:
+    expected = expected_missing if missing else expected_no_missing
+    with (
+        ad.settings.override(allow_write_nullable_strings=ad_setting),
+        pd.option_context("future.infer_string", pd_setting),
+        (
+            nullcontext()
+            if isinstance(expected, str)
+            else pytest.raises(expected[0], match=expected[1])
+        ),
+    ):
+        write_elem(store, "/el", pd.array([pd.NA if missing else "a"], dtype="string"))
+
+    if isinstance(expected, str):
+        assert store["el"].attrs["encoding-type"] == expected
 
 
 def test_categorical_order_type(store):
@@ -526,7 +598,9 @@ def test_override_specification():
     "value",
     [
         pytest.param({"a": 1}, id="dict"),
-        pytest.param(gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), id="anndata"),
+        pytest.param(
+            lambda: gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS), id="anndata"
+        ),
         pytest.param(sparse.random(5, 3, format="csr", density=0.5), id="csr_matrix"),
         pytest.param(sparse.random(5, 3, format="csc", density=0.5), id="csc_matrix"),
         pytest.param(pd.DataFrame({"a": [1, 2, 3]}), id="dataframe"),
@@ -556,10 +630,12 @@ def test_override_specification():
         ),
     ],
 )
-def test_write_to_root(store, value):
+def test_write_to_root(store: GroupStorageType, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
+    if callable(value):
+        value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(store, ZarrGroup) and not is_zarr_v2():
@@ -618,14 +694,29 @@ def test_dataframe_column_uniqueness(store):
     assert_equal(result, index_shared_okay)
 
 
-@pytest.mark.parametrize("copy_on_write", [True, False])
-def test_io_pd_cow(store, copy_on_write) -> None:
-    # https://github.com/zarr-developers/numcodecs/issues/514
-    with pd.option_context("mode.copy_on_write", copy_on_write):
-        orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
-        write_elem(store, "adata", orig)
-        from_store = read_elem(store["adata"])
-        assert_equal(orig, from_store)
+@pytest.mark.parametrize(
+    "copy_on_write",
+    [
+        pytest.param(True, id="cow"),
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                PANDAS_3, reason="Can’t disable copy-on-write in pandas 3+."
+            ),
+            id="nocow",
+        ),
+    ],
+)
+def test_io_pd_cow(
+    *, exit_stack: ExitStack, store: GroupStorageType, copy_on_write: bool
+) -> None:
+    """See <https://github.com/zarr-developers/numcodecs/issues/514>."""
+    if not PANDAS_3:  # Setting copy_on_write always warns in pandas 3, and does nothing
+        exit_stack.enter_context(pd.option_context("mode.copy_on_write", copy_on_write))
+    orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
+    write_elem(store, "adata", orig)
+    from_store = read_elem(store["adata"])
+    assert_equal(orig, from_store)
 
 
 def test_read_sparse_array(
