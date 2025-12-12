@@ -269,8 +269,10 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
+                    "is_nullable_string": (
+                        isinstance(v, MaskedArray)
+                        and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
+                    ),
                 },
             )
         elif k == dim_name:
@@ -296,6 +298,10 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
+    from xarray.core.indexing import BasicIndexer
+
+    from ...experimental.backed._lazy_arrays import MaskedArray
+
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -305,7 +311,12 @@ def read_dataframe(
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
-        index = elem_dict[dim_name].compute()
+        if isinstance(elem_dict[dim_name], DaskArray):
+            index = elem_dict[dim_name].compute()
+        elif isinstance(elem_dict[dim_name], MaskedArray):
+            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
+        else:
+            raise NotImplementedError()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")

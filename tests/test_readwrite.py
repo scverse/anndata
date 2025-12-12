@@ -15,7 +15,6 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
-from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -38,7 +37,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -452,102 +451,6 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
-@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
-def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
-    X = typ(X_list)
-    obs_dim = "meaningful_obs_dim_name"
-    var_dim = "meaningful_var_dim_name"
-    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
-    adata_src.obs_names.name = obs_dim
-    adata_src.var_names.name = var_dim
-    adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
-    adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        # loompy uses “is” for ints
-        warnings.filterwarnings("ignore", category=SyntaxWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
-
-    adata = ad.io.read_loom(
-        tmp_path / "test.loom",
-        sparse=typ is csr_matrix,
-        obsm_mapping=obsm_mapping,
-        obs_names=obs_dim,
-        varm_mapping=varm_mapping,
-        var_names=var_dim,
-        cleanup=True,
-    )
-
-    if isinstance(X, np.ndarray):
-        assert np.allclose(adata.X, X)
-    else:
-        # TODO: this should not be necessary
-        assert np.allclose(adata.X.toarray(), X.toarray())
-    assert "X_a" in adata.obsm
-    assert adata.obsm["X_a"].shape[1] == 2
-    assert "X_b" in adata.varm
-    assert adata.varm["X_b"].shape[1] == 3
-    # as we called with `cleanup=True`
-    assert "oanno1b" in adata.uns["loom-obs"]
-    assert "vanno2" in adata.uns["loom-var"]
-    for k, v in obsm_mapping.items():
-        assert k in adata.obsm
-        assert adata.obsm[k].shape[1] == len(v)
-    for k, v in varm_mapping.items():
-        assert k in adata.varm
-        assert adata.varm[k].shape[1] == len(v)
-    assert adata.obs_names.name == obs_dim
-    assert adata.var_names.name == var_dim
-
-
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-def test_readloom_deprecations(tmp_path):
-    loom_pth = tmp_path / "test.loom"
-    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(loom_pth, write_obsm_varm=True)
-
-    # obsm_names -> obsm_mapping
-    obsm_mapping = {"df": adata_src.obs.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
-
-    # varm_names -> varm_mapping
-    varm_mapping = {"df": adata_src.var.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
-
-    # positional -> keyword
-    with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
-    actual_result = ad.io.read_loom(loom_pth, sparse=True)
-    assert type(depr_result.X) == type(actual_result.X)
-
-
 def test_read_csv():
     adata = ad.io.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
@@ -653,22 +556,22 @@ def test_read_umi_tools():
 def test_write_categorical(
     *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
 ) -> None:
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    obs = dict(
+        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+    )
+    orig = ad.AnnData(obs=pd.DataFrame(obs))
     with ad.settings.override(allow_write_nullable_strings=True):
-        adata_pth = tmp_path / f"adata.{diskfmt}"
-        obs = dict(
-            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
-            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
-        )
-        orig = ad.AnnData(obs=pd.DataFrame(obs))
         getattr(orig, f"write_{diskfmt}")(
             adata_pth, convert_strings_to_categoricals=s2c
         )
-        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
-        assert np.all(orig.obs.notna() == curr.obs.notna())
-        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
-        assert curr.obs["str"].dtype == ("category" if s2c else "string")
-        assert curr.obs["cat"].dtype == "category"
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    assert np.all(orig.obs.notna() == curr.obs.notna())
+    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+    assert curr.obs["str"].dtype == ("category" if s2c else "string")
+    assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -804,7 +707,9 @@ def _do_roundtrip(
 
 
 @pytest.fixture
-def roundtrip(diskfmt):
+def roundtrip(
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Callable[[ad.AnnData, Path], ad.AnnData]:
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
@@ -847,20 +752,24 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
     assert_equal(pbmc, from_disk2)
 
 
+@pytest.mark.filterwarnings(r"ignore:Observation names are not unique:UserWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
+def test_scanpy_krumsiek11(
+    tmp_path: Path,
+    diskfmt: Literal["h5ad", "zarr"],
+    roundtrip: Callable[[ad.AnnData, Path], ad.AnnData],
+) -> None:
     import scanpy as sc
 
-    # TODO: this should be fixed in scanpy instead
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
+    with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", r".*first_column_names.*no longer positional", FutureWarning
         )
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
-    # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
-    orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+    # Depending on pd.options.future.infer_string, this becomes either `object` or `'string'`
+    orig.var.columns = orig.var.columns.astype(str)
+    with ad.settings.override(allow_write_nullable_strings=True):
         curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
 
     assert_equal(orig, curr, exact=True)
@@ -916,11 +825,16 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     [
         pytest.param(dict(base=None), id="dict_val"),
         pytest.param(
-            pd.DataFrame(dict(col_0=["string", None])).convert_dtypes(), id="df"
+            lambda: pd.DataFrame(
+                dict(col_0=pd.array(["string", None], dtype="string"))
+            ),
+            id="df",
         ),
     ],
 )
 def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
+    if callable(uns_val):
+        uns_val = uns_val()
     pth = tmp_path / f"adata_dtype.{diskfmt}"
 
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))

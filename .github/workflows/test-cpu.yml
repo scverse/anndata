@@ -64,13 +64,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # https://github.com/pallets/click/issues/3066
-          uv tool install --with='click!=8.3.0' hatch
+          uv tool install hatch
           hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        env:
-          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
           hatch run ${{ matrix.env.name }}:run-cov -v --color=yes ${{ matrix.io_mark != 'dask_distributed' && '-n auto' || '' }} --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
           hatch run ${{ matrix.env.name }}:cov-combine

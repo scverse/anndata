@@ -255,6 +255,3 @@ def get_key_trackers_for_columns_on_axis(
     """
     for col in getattr(adata, axis).columns:
         yield f"{axis}/{col}" if "cat" not in col else f"{axis}/{col}/codes"
-
-
-ANNDATA_ELEMS = typing.get_args(AnnDataElem)

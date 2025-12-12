@@ -102,7 +102,7 @@ def check_and_get_environ_var(
     )
 
 
-def check_and_get_bool(option, default_value):
+def check_and_get_bool(option: str, default_value: bool) -> bool:  # noqa: FBT001
     return check_and_get_environ_var(
         f"ANNDATA_{option.upper()}",
         str(int(default_value)),
@@ -111,7 +111,7 @@ def check_and_get_bool(option, default_value):
     )
 
 
-def check_and_get_int(option, default_value):
+def check_and_get_int(option: str, default_value: int) -> int:
     return check_and_get_environ_var(
         f"ANNDATA_{option.upper()}",
         str(int(default_value)),
@@ -431,7 +431,7 @@ settings.register(
 settings.register(
     "allow_write_nullable_strings",
     default_value=False,
-    description="Whether or not to allow writing of `pd.arrays.StringArray`.",
+    description="Whether or not to allow writing of `pd.arrays.{StringArray,ArrowStringArray}`.",
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )

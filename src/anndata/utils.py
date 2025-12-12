@@ -216,7 +216,7 @@ except ImportError:
     pass
 
 
-def make_index_unique(index: pd.Index, join: str = "-"):
+def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:
     """
     Makes the index unique by appending a number string to each duplicate index element:
     '1', '2', etc.
@@ -235,18 +235,18 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     --------
     >>> from anndata import AnnData
     >>> adata = AnnData(np.ones((2, 3)), var=pd.DataFrame(index=["a", "a", "b"]))
-    >>> adata.var_names
-    Index(['a', 'a', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a', 'b'], dtype='string')
     >>> adata.var_names_make_unique()
-    >>> adata.var_names
-    Index(['a', 'a-1', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a-1', 'b'], dtype='string')
     """
     if index.is_unique:
         return index
     from collections import Counter
 
-    values = index.values.copy()
-    indices_dup = index.duplicated(keep="first")
+    values = index.array.copy()
+    indices_dup = index.duplicated(keep="first") & ~index.isna()
     values_dup = values[indices_dup]
     values_set = set(values)
     counter = Counter()

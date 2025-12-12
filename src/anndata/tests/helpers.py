@@ -322,8 +322,8 @@ def gen_adata(  # noqa: PLR0913
         random_state = np.random.default_rng()
 
     M, N = shape
-    obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
-    var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
+    obs_names = pd.Index([f"cell{i}" for i in range(shape[0])], dtype="str")
+    var_names = pd.Index([f"gene{i}" for i in range(shape[1])], dtype="str")
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
@@ -1166,7 +1166,8 @@ class AccessTrackingStoreBase(LocalStore):
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
 
-    def assert_access_count(self, key: str, count: int):
+    def assert_access_count(self, key: str, count: int) -> None:
+        __tracebackhide__ = True
         keys_accessed = self.get_subkeys_accessed(key)
         access_count = self.get_access_count(key)
         assert self.get_access_count(key) == count, (

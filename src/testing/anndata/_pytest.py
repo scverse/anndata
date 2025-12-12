@@ -21,16 +21,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@pytest.fixture(autouse=True)
-def _anndata_test_env(request: pytest.FixtureRequest) -> None:
-    import anndata
-
-    if isinstance(request.node, pytest.DoctestItem):
-        request.getfixturevalue("_doctest_env")
-
-    anndata.settings.reset(anndata.settings._registered_options.keys())
-
-
 @pytest.fixture
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path

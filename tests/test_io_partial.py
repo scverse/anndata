@@ -9,7 +9,7 @@ import pytest
 import zarr
 from scipy.sparse import csr_matrix
 
-from anndata import AnnData
+from anndata import AnnData, settings
 from anndata._io.specs.registry import read_elem_partial
 from anndata.io import read_elem, write_h5ad, write_zarr
 
@@ -48,7 +48,10 @@ def test_read_partial_adata(tmp_path, diskfmt):
 
     path = Path(tmp_path) / ("test_rp." + diskfmt)
 
-    WRITER[diskfmt](path, adata)
+    # we’re not adding things to read_partial anymore, so it can only read non-nullable strings.
+    # therefore force writing old format here
+    with settings.override(allow_write_nullable_strings=False):
+        WRITER[diskfmt](path, adata)
 
     storage = READER[diskfmt](path, mode="r")
 
