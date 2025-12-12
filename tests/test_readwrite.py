@@ -15,7 +15,6 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
-from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -450,45 +449,6 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(orig, modified, exact=True)
     with pytest.raises(AssertionError):
         assert_equal(read, modified, exact=True)
-
-
-@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
-def test_readloom_deprecations(tmp_path):
-    loom_pth = tmp_path / "test.loom"
-    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message=r"datetime.datetime.utcnow\(\) is deprecated",
-            category=DeprecationWarning,
-        )
-        adata_src.write_loom(loom_pth, write_obsm_varm=True)
-
-    # obsm_names -> obsm_mapping
-    obsm_mapping = {"df": adata_src.obs.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
-
-    # varm_names -> varm_mapping
-    varm_mapping = {"df": adata_src.var.columns}
-    with pytest.warns(FutureWarning):
-        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
-    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
-    assert_equal(actual_result, depr_result)
-    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
-        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
-
-    # positional -> keyword
-    with pytest.warns(FutureWarning, match=r"sparse"):
-        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
-    actual_result = ad.io.read_loom(loom_pth, sparse=True)
-    assert type(depr_result.X) == type(actual_result.X)
 
 
 def test_read_csv():
