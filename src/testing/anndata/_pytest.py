@@ -11,16 +11,32 @@ from __future__ import annotations
 
 import re
 import warnings
+from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, cast
 
+import pandas as pd
 import pytest
+from packaging.version import Version
 
 import anndata
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from pathlib import Path
+
+# Use a marker present in the environment so VS Code’s tests behave identical
+IS_PRE = Version(version("zarr")).is_prerelease
+
+
+def setup_env() -> None:
+    import anndata
+
+    anndata.settings.reset(anndata.settings._registered_options.keys())
+
+    if IS_PRE:
+        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
+        pd.options.future.infer_string = True
 
 
 @pytest.fixture(autouse=True)
