@@ -13,6 +13,7 @@ This allows us to have very similar structures in disk and on memory.
 As an example we’ll look into a typical `.h5ad`/ `.zarr` object that’s been through an analysis.
 The structures are largely equivalent, though there are a few minor differences when it comes to type encoding.
 
+(elements)=
 ## Elements
 
  <!-- I’ve started using h5py since I couldn’t figure out a nice way to print attributes from bash. -->
@@ -69,12 +70,14 @@ For example, we can see that this file represents an `AnnData` object from its m
 
 Using this information, we're able to dispatch onto readers for the different element types that you'd find in an anndata.
 
+(element)=
 ### Element Specification
 
 * An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
 * An element MUST have a string-valued field `"encoding-type"` in its metadata
 * An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
 
+(anndata)=
 ### AnnData specification (v0.1.0)
 
 * An `AnnData` object MUST be a group.
@@ -88,6 +91,7 @@ Using this information, we're able to dispatch onto readers for the different el
 * The group MAY contain a mapping `varp`. Entries in `varp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_var`
 * The group MAY contain a mapping `uns`. Entries in `uns` MUST be an anndata encoded type.
 
+(dense-arrays)=
 ## Dense arrays
 
 Dense numeric arrays have the most simple representation on disk,
@@ -129,11 +133,13 @@ X_pca                    Dataset {38410, 50}
 X_umap                   Dataset {38410, 2}
 ``` -->
 
+(array)=
 ### Dense arrays specification (v0.2.0)
 
 * Dense arrays MUST be stored in an Array object
 * Dense arrays MUST have the entries `'encoding-type': 'array'` and `'encoding-version': '0.2.0'` in their metadata
 
+(sparse-arrays)=
 ## Sparse arrays
 
 Sparse arrays don’t have a native representations in HDF5 or Zarr,
@@ -188,6 +194,8 @@ indptr <zarr.core.Array '/X/indptr' (164115,) int32 read-only>
 
 `````
 
+(csr_matrix)=
+(csc_matrix)=
 ### Sparse array specification (v0.1.0)
 
 * Each sparse array MUST be its own group
@@ -197,6 +205,7 @@ indptr <zarr.core.Array '/X/indptr' (164115,) int32 read-only>
     * `"encoding-version"`, which is set to `"0.1.0"`
     * `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
 
+(dataframes)=
 ## DataFrames
 
 DataFrames are saved as a columnar format in a group, so each column of a DataFrame is saved as a separate array.
@@ -263,6 +272,7 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 {'encoding-type': 'array', 'encoding-version': '0.2.0'}
 ```
 
+(dataframe)=
 ### Dataframe Specification (v0.2.0)
 
 * A dataframe MUST be stored as a group
@@ -274,6 +284,7 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
 * Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
+(mappings)=
 ## Mappings
 
 Mappings are simply stored as `Group`s on disk.
@@ -314,13 +325,14 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 
 `````
 
-
-
+(dict)=
+(mapping)=
 ### Mapping specifications (v0.1.0)
 
 * Each mapping MUST be its own group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
+(scalars)=
 ## Scalars
 
 Zero dimensional arrays are used for scalar values (i.e. single values like strings, numbers or booleans).
@@ -363,6 +375,8 @@ random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read
 {'encoding-type': 'string', 'encoding-version': '0.2.0'}
 ```
 
+(numeric-scalar)=
+(string)=
 ### Scalar specification (v0.2.0)
 
 * Scalars MUST be written as a 0 dimensional array
@@ -374,6 +388,7 @@ random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read
     * In zarr, scalar strings MUST be stored as a fixed length unicode dtype
     * In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
 
+(categorical-arrays)=
 ## Categorical arrays
 
 ```python
@@ -414,6 +429,7 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 
 `````
 
+(categorical)=
 ### Categorical array specification (v0.2.0)
 
 * Categorical arrays MUST be stored as a group
@@ -423,6 +439,7 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
     * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value
 * The group MUST contain an array called `"categories"`
 
+(string-arrays)=
 ## String arrays
 
 Arrays of strings are handled differently than numeric arrays since numpy doesn't really have a good way of representing arrays of unicode strings.
@@ -457,6 +474,7 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 {'encoding-type': 'string-array', 'encoding-version': '0.2.0'}
 ```
 
+(string-array)=
 ### String array specifications (v0.2.0)
 
 * String arrays MUST be stored in arrays
@@ -464,9 +482,10 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 * In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec
 * In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding
 
-## Nullable integers and booleans
+(nullable-arrays)=
+## Nullable integers, booleans, and strings
 
-We support IO with Pandas nullable integer and boolean arrays.
+We support IO with Pandas nullable integer, boolean, and string arrays.
 We represent these on disk similar to `numpy` masked arrays, `julia` nullable arrays, or `arrow` validity bitmaps (see {issue}`504` for more discussion).
 That is, we store an indicator array (or mask) of null values alongside the array of all values.
 
@@ -523,21 +542,58 @@ nullable_integer/values <zarr.core.Array '/nullable_integer/values' (4,) int64>
 {'encoding-type': 'nullable-integer', 'encoding-version': '0.1.0'}
 ```
 
+(nullable-integer)=
 ### Nullable integer specifications (v0.1.0)
 
 * Nullable integers MUST be stored as a group
-* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
 * The group MUST contain an integer valued array under the key `"values"`
 * The group MUST contain an boolean valued array under the key `"mask"`
 
+(nullable-boolean)=
 ### Nullable boolean specifications (v0.1.0)
 
 * Nullable booleans MUST be stored as a group
-* The group's attributes MUST have contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
 * The group MUST contain an boolean valued array under the key `"values"`
 * The group MUST contain an boolean valued array under the key `"mask"`
 * The `"values"` and `"mask"` arrays MUST be the same shape
 
+(nullable-string-array)=
+### Nullable string specifications (v0.1.0)
+
+* Nullable strings MUST be stored as a group
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MAY contain `"na-value"` as an indicator for missing value semantics with the possible value `"NA"` or `"NaN"` described in [](#missing-value-semantics), and the default being `"NA"`
+* The group MUST contain a string valued array under the key `"values"`
+* The group MUST contain a boolean valued array under the key `"mask"`
+* The `"values"` and `"mask"` arrays MUST be the same shape
+
+(missing-value-semantics)=
+### Missing value semantics
+
+If available in the runtime data model, the following values representing missing value semantics are defined.
+See the individual specification versions for elements that support them.
+
+`"NA"` means that a comparison between a missing value and a defined value produces a missing value (e.g. `"x"==NA` → `NA`).
+`"NaN"` means that a comparison between a missing value and a defined value produces a binary result (e.g. `"x"==NaN` → `false`).
+
+After reading an element supporting missing value semantics, it SHOULD behave according to the specified semantics if the runtime data model allows for it.
+If no semantics are specified in the representation, the default semantics from the element specification SHOULD be used.
+When the encoded semantics value is unknown to the implementation, reading the element SHOULD NOT produce an error, and the implementation may freely choose the semantics.
+
+For element specifications supporting missing value semantics, the semantics value most closely matching the source data model SHOULD be written.
+If the source data model instead behaves very differently from all currently defined ones, please reach out to get a new value for the behavior defined here.
+
+#### Examples
+
+Pandas’ string arrays support both `"NA"` and `"NaN"` semantics, while `R`’s `character` array only supports `"NA"` semantics.
+
+Therefore an R implementation SHOULD write a `character` array with `"na-value": "NA"`,
+and when reading a `"nullable-string-array"`, it MAY choose to read it into a `character` array,
+ignoring the `"na-value"` attribute (since `character` arrays can not be made to behave with `"NaN"` semantics).
+
+(awkward-array)=
 ## AwkwardArrays
 
 ```{warning}
