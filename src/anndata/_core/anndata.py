@@ -604,7 +604,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             # Fall back to text repr if HTML generation fails, but log the error
             warn(
                 f"HTML repr failed, falling back to text repr: {e}",
-                stacklevel=2,
+                UserWarning,
             )
             return None
 

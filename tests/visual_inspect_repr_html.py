@@ -1743,13 +1743,190 @@ For more details, see the full documentation.
     # Add varm to raw
     adata_raw.raw.varm["PCs"] = np.random.randn(n_vars_raw, 50).astype(np.float32)
     sections.append((
-        "21. Raw Section (Unprocessed Data)",
+        "21a. Raw Section - Dense Matrix with var and varm",
         adata_raw._repr_html_(),
-        "Shows the <code>.raw</code> attribute which stores unprocessed data before filtering. "
-        "The raw section now displays: (1) full shape in header (100 × 2,000 vs filtered 100 × 500), "
-        "(2) <code>raw.X</code> matrix info, (3) each <code>raw.var</code> column with type info, "
-        "(4) <code>raw.varm</code> items. Click the section header to expand. "
-        "This addresses <a href='https://github.com/scverse/anndata/pull/349' target='_blank'>PR #349</a>.",
+        "Shows the <code>.raw</code> attribute with dense matrix, var columns, and varm. "
+        "Click the raw row to expand and see the full Raw repr with X, var, and varm sections.",
+    ))
+
+    # Test 21b: Raw with sparse matrix
+    print("  21b. Raw section (sparse matrix)")
+    from scipy import sparse as sp
+
+    adata_sparse_raw = AnnData(
+        sp.random(n_obs, n_vars_filtered, density=0.1, format="csr", dtype=np.float32),
+        var=pd.DataFrame(index=[f"gene_{i}" for i in range(n_vars_filtered)]),
+    )
+    sparse_raw_X = sp.random(
+        n_obs, n_vars_raw, density=0.05, format="csr", dtype=np.float32
+    )
+    adata_sparse_raw.raw = AnnData(sparse_raw_X, var=raw_var)
+    sections.append((
+        "21b. Raw Section - Sparse Matrix",
+        adata_sparse_raw._repr_html_(),
+        "Raw with sparse CSR matrix. The X section should show sparsity info.",
+    ))
+
+    # Test 21c: Raw with no varm (minimal raw)
+    print("  21c. Raw section (minimal - no varm)")
+    adata_minimal_raw = AnnData(
+        np.random.randn(50, 100).astype(np.float32),
+        var=pd.DataFrame(index=[f"gene_{i}" for i in range(100)]),
+    )
+    minimal_raw_var = pd.DataFrame(
+        {"gene_symbol": [f"GENE{i}" for i in range(200)]},
+        index=[f"gene_{i}" for i in range(200)],
+    )
+    adata_minimal_raw.raw = AnnData(
+        np.random.randn(50, 200).astype(np.float32),
+        var=minimal_raw_var,
+    )
+    sections.append((
+        "21c. Raw Section - Minimal (no varm)",
+        adata_minimal_raw._repr_html_(),
+        "Raw with only X and var (no varm). Shows graceful handling of optional attributes.",
+    ))
+
+    # Test 21d: Raw with empty var columns
+    print("  21d. Raw section (empty var columns)")
+    adata_empty_var_raw = AnnData(
+        np.random.randn(30, 50).astype(np.float32),
+        var=pd.DataFrame(index=[f"gene_{i}" for i in range(50)]),
+    )
+    empty_raw_var = pd.DataFrame(index=[f"gene_{i}" for i in range(80)])  # No columns
+    adata_empty_var_raw.raw = AnnData(
+        np.random.randn(30, 80).astype(np.float32),
+        var=empty_raw_var,
+    )
+    sections.append((
+        "21d. Raw Section - Empty var columns",
+        adata_empty_var_raw._repr_html_(),
+        "Raw where var has no columns (only index). The meta info should not show 'var: 0 cols'.",
+    ))
+
+    # Test 22: Unknown sections and error handling
+    print("  22. Unknown sections and error handling")
+
+    class ExtendedAnnData(AnnData):
+        """AnnData subclass with custom mapping attributes."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._custom_mappings = {}
+
+        @property
+        def custom_data(self):
+            """Custom mapping-like attribute."""
+            return self._custom_mappings
+
+        @property
+        def failing_data(self):
+            """Property that raises an error when accessed."""
+            msg = "This property intentionally fails for testing"
+            raise RuntimeError(msg)
+
+    adata_extended = ExtendedAnnData(
+        np.random.randn(50, 100).astype(np.float32),
+        obs=pd.DataFrame({"cluster": pd.Categorical(["A", "B"] * 25)}),
+    )
+    # Add some custom data
+    adata_extended._custom_mappings = {
+        "embedding": np.random.randn(50, 2),
+        "config": {"param1": 1, "param2": "value"},
+    }
+    sections.append((
+        "22a. Unknown Sections",
+        adata_extended._repr_html_(),
+        "Demonstrates two important features for scientific accuracy:<br>"
+        "<ol>"
+        "<li><strong>Unknown sections:</strong> The <code>custom_data</code> mapping attribute "
+        "appears in an 'other' section at the bottom, ensuring no data is silently hidden.</li>"
+        "<li><strong>Error handling:</strong> The <code>failing_data</code> property raises an "
+        "error when accessed. Instead of silently hiding it, the repr shows it as 'inaccessible' "
+        "in the 'other' section.</li>"
+        "</ol>"
+        "This ensures researchers always know what data exists, even if it can't be rendered.",
+    ))
+
+    # Test 22b: Failing section rendering (using real rendering mechanism)
+    # Use unittest.mock to safely patch properties
+    print("  22b. Failing section rendering (real errors)")
+    from unittest.mock import PropertyMock, patch
+
+    # Create a mapping-like object that raises an error when accessed
+    class FailingMapping:
+        """A mapping that raises an error when iterated."""
+
+        def __init__(self, error_msg: str):
+            self._error_msg = error_msg
+
+        def keys(self):
+            raise RuntimeError(self._error_msg)
+
+        def __len__(self):
+            return 1  # Report as non-empty so it tries to render
+
+        def __iter__(self):
+            raise RuntimeError(self._error_msg)
+
+    # Create a real AnnData with data
+    rng = np.random.default_rng(42)
+    adata_failing = ad.AnnData(
+        X=rng.random((100, 50)),
+        obs=pd.DataFrame(
+            {"cell_type": ["A", "B", "C"] * 33 + ["A"]},
+            index=[f"cell_{i}" for i in range(100)],
+        ),
+        var=pd.DataFrame(
+            {"gene_name": [f"gene_{i}" for i in range(50)]},
+            index=[f"gene_{i}" for i in range(50)],
+        ),
+        obsm={"X_pca": rng.random((100, 10)), "X_umap": rng.random((100, 2))},
+        varm={"loadings": rng.random((50, 10))},
+        layers={"counts": rng.integers(0, 100, (100, 50))},
+        obsp={"distances": sp.csr_matrix(rng.random((100, 100)))},
+        uns={"method": "test", "params": {"k": 10}},
+    )
+
+    # Create failing mappings
+    failing_varm = FailingMapping(
+        "Failed to decompress data block (corrupted zarr chunk)"
+    )
+    failing_layers = FailingMapping(
+        "IOError: [Errno 5] Input/output error reading '/data/counts.h5'"
+    )
+
+    # Use unittest.mock.patch to safely patch properties (auto-restores on exit)
+    with (
+        patch.object(
+            type(adata_failing),
+            "varm",
+            new_callable=PropertyMock,
+            return_value=failing_varm,
+        ),
+        patch.object(
+            type(adata_failing),
+            "layers",
+            new_callable=PropertyMock,
+            return_value=failing_layers,
+        ),
+    ):
+        # Use the real repr mechanism - this will trigger errors on varm and layers
+        failing_html = adata_failing._repr_html_()
+
+    sections.append((
+        "22b. Failing Section Rendering (Real Errors)",
+        failing_html,
+        "Demonstrates the <strong>actual error handling mechanism</strong> in the repr. "
+        "This test uses <code>unittest.mock.patch</code> to make <code>varm</code> and "
+        "<code>layers</code> properties raise real exceptions when accessed.<br>"
+        "<ul>"
+        "<li><strong>Normal sections:</strong> X, obs, var, uns, obsm, obsp, varp render correctly</li>"
+        "<li><strong>varm (error):</strong> Real RuntimeError from corrupted data simulation</li>"
+        "<li><strong>layers (error):</strong> Real IOError from I/O failure simulation</li>"
+        "</ul>"
+        "This tests the actual <code>_render_section</code> try/except error handling "
+        "using the real <code>generate_repr_html</code> pipeline.",
     ))
 
     # Generate HTML file

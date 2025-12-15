@@ -103,9 +103,13 @@ def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
 
     # Mapping sections (uns, obsm, varm, layers, obsp, varp)
     for attr in ("uns", "obsm", "varm", "layers", "obsp", "varp"):
-        mapping = getattr(adata, attr, None)
-        if mapping is not None:
-            all_names.extend(mapping.keys())
+        try:
+            mapping = getattr(adata, attr, None)
+            if mapping is not None:
+                all_names.extend(mapping.keys())
+        except Exception:  # noqa: BLE001
+            # Skip sections that fail to access (will show error during rendering)
+            pass
 
     if not all_names:
         return 100  # Minimum default
@@ -298,6 +302,11 @@ def _render_all_sections(
             for section_formatter in custom_sections_after[None]
         )
 
+    # Detect and show unknown sections (mapping-like attributes not in SECTION_ORDER)
+    unknown_sections = _detect_unknown_sections(adata)
+    if unknown_sections:
+        parts.append(_render_unknown_sections(unknown_sections))
+
     return parts
 
 
@@ -311,15 +320,25 @@ def _render_section(
     max_depth: int,
 ) -> str:
     """Render a single standard section."""
-    if section == "raw":
-        return _render_raw_section(adata, context, fold_threshold, max_items)
-    if section in ("obs", "var"):
-        return _render_dataframe_section(
+    try:
+        if section == "X":
+            return _render_x_entry(adata, context)
+        if section == "raw":
+            return _render_raw_section(adata, context, fold_threshold, max_items)
+        if section in ("obs", "var"):
+            return _render_dataframe_section(
+                adata, section, context, fold_threshold, max_items
+            )
+        if section == "uns":
+            return _render_uns_section(
+                adata, context, fold_threshold, max_items, max_depth
+            )
+        return _render_mapping_section(
             adata, section, context, fold_threshold, max_items
         )
-    if section == "uns":
-        return _render_uns_section(adata, context, fold_threshold, max_items, max_depth)
-    return _render_mapping_section(adata, section, context, fold_threshold, max_items)
+    except Exception as e:  # noqa: BLE001
+        # Show error instead of hiding the section
+        return _render_error_entry(section, str(e))
 
 
 def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
@@ -854,49 +873,12 @@ def _format_index_preview(index: pd.Index, name: str) -> str:
     return ", ".join(items)
 
 
-def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
-    """Render X as a single compact entry row."""
-    X = adata.X
+def _render_x_entry(obj: Any, context: FormatterContext) -> str:
+    """Render X as a single compact entry row.
 
-    parts = ['<div class="adata-x-entry">']
-    parts.append("<span>X</span>")
-
-    if X is None:
-        parts.append("<span><em>None</em></span>")
-    else:
-        # Format the X matrix
-        output = formatter_registry.format_value(X, context)
-
-        # Build compact type string
-        type_parts = [output.type_name]
-
-        # Add sparsity info inline for sparse matrices
-        if "sparsity" in output.details and output.details["sparsity"] is not None:
-            sparsity = output.details["sparsity"]
-            nnz = output.details.get("nnz", "?")
-            type_parts.append(f"{sparsity:.1%} sparse ({format_number(nnz)} stored)")
-
-        # Chunk info for Dask
-        if "chunks" in output.details:
-            type_parts.append(f"chunks={output.details['chunks']}")
-
-        # Backed info
-        if is_backed(adata):
-            type_parts.append("on disk")
-
-        type_str = " · ".join(type_parts)
-        parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
-
-    parts.append("</div>")
-    return "\n".join(parts)
-
-
-def _render_x_entry_for_raw(raw, context: FormatterContext) -> str:
-    """Render X as a single compact entry row for Raw objects.
-
-    Similar to _render_x_entry but works with Raw objects instead of AnnData.
+    Works with both AnnData and Raw objects.
     """
-    X = raw.X
+    X = obj.X
 
     parts = ['<div class="adata-x-entry">']
     parts.append("<span>X</span>")
@@ -919,6 +901,10 @@ def _render_x_entry_for_raw(raw, context: FormatterContext) -> str:
         # Chunk info for Dask
         if "chunks" in output.details:
             type_parts.append(f"chunks={output.details['chunks']}")
+
+        # Backed info (only for AnnData, not Raw)
+        if is_backed(obj):
+            type_parts.append("on disk")
 
         type_str = " · ".join(type_parts)
         parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
@@ -1605,6 +1591,142 @@ def _render_nested_anndata_entry(
     return "\n".join(parts)
 
 
+def _detect_unknown_sections(adata) -> list[tuple[str, str]]:
+    """Detect mapping-like attributes that aren't in SECTION_ORDER.
+
+    Returns list of (attr_name, type_description) tuples for unknown sections.
+    """
+    from collections.abc import Mapping
+
+    # Known sections and internal attributes to skip
+    known = set(SECTION_ORDER) | {
+        # Internal/meta attributes
+        "shape",
+        "n_obs",
+        "n_vars",
+        "obs_names",
+        "var_names",
+        "filename",
+        "file",
+        "is_view",
+        "isbacked",
+        "isview",
+        "T",
+        # Methods (not data)
+        "obs_keys",
+        "var_keys",
+        "uns_keys",
+        "obsm_keys",
+        "varm_keys",
+    }
+
+    unknown = []
+    for attr in dir(adata):
+        # Skip private, known, and callable attributes
+        if attr.startswith("_") or attr in known:
+            continue
+
+        try:
+            val = getattr(adata, attr)
+            # Check if it's a data container (mapping-like or has keys())
+            if isinstance(val, Mapping) or (
+                hasattr(val, "keys")
+                and hasattr(val, "__getitem__")
+                and not callable(val)
+            ):
+                # Get type description
+                type_name = type(val).__name__
+                try:
+                    n_items = len(val)
+                    type_desc = f"{type_name} ({n_items} items)"
+                except Exception:  # noqa: BLE001
+                    type_desc = type_name
+                unknown.append((attr, type_desc))
+        except Exception:  # noqa: BLE001
+            # If we can't even access the attribute, note it as inaccessible
+            unknown.append((attr, "inaccessible"))
+
+    return unknown
+
+
+def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
+    """Render a section showing unknown/unrecognized attributes."""
+    parts = [
+        '<div class="anndata-sec anndata-sec-unknown" data-section="unknown" '
+        'data-should-collapse="true">'
+    ]
+    parts.append('<div class="anndata-sechdr">')
+    parts.append(render_fold_icon())
+    parts.append('<span class="anndata-sec-name">other</span>')
+    parts.append(f'<span class="anndata-sec-count">({len(unknown_sections)})</span>')
+    parts.append("</div>")
+
+    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
+
+    for attr_name, type_desc in unknown_sections:
+        parts.append(f'<tr class="adata-entry" data-key="{escape_html(attr_name)}">')
+        parts.append(_render_name_cell(attr_name))
+        parts.append('<td class="adata-entry-type">')
+        parts.append(
+            f'<span class="dtype-unknown" title="Unrecognized attribute">'
+            f"{escape_html(type_desc)}</span>"
+        )
+        parts.append("</td>")
+        parts.append('<td class="adata-entry-meta"></td>')
+        parts.append("</tr>")
+
+    parts.append("</table>")
+    parts.append("</div>")
+    parts.append("</div>")
+
+    return "\n".join(parts)
+
+
+def _render_error_entry(section: str, error: str) -> str:
+    """Render an error indicator for a section that failed to render."""
+    error_escaped = escape_html(str(error)[:200])  # Truncate long errors
+    return f"""
+<div class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}">
+    <div class="anndata-sechdr">
+        {render_fold_icon()}
+        <span class="anndata-sec-name">{escape_html(section)}</span>
+        <span class="anndata-sec-count adata-error-badge" style="color: var(--anndata-warning, #dc3545);">(error)</span>
+    </div>
+    <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
+        <div class="adata-error" style="color: var(--anndata-warning, #dc3545); padding: 4px 8px; font-size: 12px;">
+            Failed to render: {error_escaped}
+        </div>
+    </div>
+</div>
+"""
+
+
+def _safe_get_attr(obj, attr: str, default="?"):
+    """Safely get an attribute with fallback."""
+    try:
+        val = getattr(obj, attr, None)
+        return val if val is not None else default
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def _get_raw_meta_parts(raw) -> list[str]:
+    """Build meta info parts for raw section."""
+    meta_parts = []
+    try:
+        if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
+            meta_parts.append(f"var: {len(raw.var.columns)} cols")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
+            meta_parts.append(f"varm: {len(raw.varm)}")
+    except Exception:  # noqa: BLE001
+        pass
+    return meta_parts
+
+
 def _render_raw_section(
     adata: AnnData,
     context: FormatterContext,
@@ -1628,19 +1750,16 @@ def _render_raw_section(
     if raw is None:
         return ""
 
-    n_obs = getattr(raw, "n_obs", "?")
-    n_vars = getattr(raw, "n_vars", "?")
+    # Safely get dimensions with fallbacks
+    n_obs = _safe_get_attr(raw, "n_obs", "?")
+    n_vars = _safe_get_attr(raw, "n_vars", "?")
     max_depth = context.max_depth
 
     # Check if we can expand (same logic as nested AnnData)
     can_expand = context.depth < max_depth - 1
 
-    # Build meta info string
-    meta_parts = []
-    if hasattr(raw, "var") and len(raw.var.columns) > 0:
-        meta_parts.append(f"var: {len(raw.var.columns)} cols")
-    if hasattr(raw, "varm") and len(raw.varm) > 0:
-        meta_parts.append(f"varm: {len(raw.varm)}")
+    # Build meta info string safely
+    meta_parts = _get_raw_meta_parts(raw)
     meta_text = ", ".join(meta_parts) if meta_parts else ""
 
     # Single row container (like a minimal section with just one entry)
@@ -1723,8 +1842,9 @@ def _generate_raw_repr_html(
         max_items = _get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
     from anndata._repr.registry import FormatterContext
 
-    n_obs = getattr(raw, "n_obs", "?")
-    n_vars = getattr(raw, "n_vars", "?")
+    # Safely get dimensions
+    n_obs = _safe_get_attr(raw, "n_obs", "?")
+    n_vars = _safe_get_attr(raw, "n_vars", "?")
 
     context = FormatterContext(
         depth=depth,
@@ -1745,46 +1865,55 @@ def _generate_raw_repr_html(
     parts.append(f'<span class="adata-shape">{shape_str}</span>')
     parts.append("</div>")
 
-    # X section - show matrix info
-    if hasattr(raw, "X") and raw.X is not None:
-        parts.append(_render_x_entry_for_raw(raw, context))
+    # X section - show matrix info (with error handling)
+    try:
+        if hasattr(raw, "X") and raw.X is not None:
+            parts.append(_render_x_entry(raw, context))
+    except Exception as e:  # noqa: BLE001
+        parts.append(_render_error_entry("X", str(e)))
 
     # var section (like AnnData's var)
     # _render_dataframe_section expects an object with a .var attribute
-    if hasattr(raw, "var") and len(raw.var.columns) > 0:
-        var_context = FormatterContext(
-            depth=depth,
-            max_depth=max_depth,
-            adata_ref=None,
-            section="var",
-        )
-        parts.append(
-            _render_dataframe_section(
-                raw,  # Pass raw object, not raw.var
-                "var",
-                var_context,
-                fold_threshold=fold_threshold,
-                max_items=max_items,
+    try:
+        if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
+            var_context = FormatterContext(
+                depth=depth,
+                max_depth=max_depth,
+                adata_ref=None,
+                section="var",
             )
-        )
+            parts.append(
+                _render_dataframe_section(
+                    raw,  # Pass raw object, not raw.var
+                    "var",
+                    var_context,
+                    fold_threshold=fold_threshold,
+                    max_items=max_items,
+                )
+            )
+    except Exception as e:  # noqa: BLE001
+        parts.append(_render_error_entry("var", str(e)))
 
     # varm section (like AnnData's varm)
-    if hasattr(raw, "varm") and len(raw.varm) > 0:
-        varm_context = FormatterContext(
-            depth=depth,
-            max_depth=max_depth,
-            adata_ref=None,
-            section="varm",
-        )
-        parts.append(
-            _render_mapping_section(
-                raw,  # Pass raw object, not raw.varm
-                "varm",
-                varm_context,
-                fold_threshold=fold_threshold,
-                max_items=max_items,
+    try:
+        if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
+            varm_context = FormatterContext(
+                depth=depth,
+                max_depth=max_depth,
+                adata_ref=None,
+                section="varm",
             )
-        )
+            parts.append(
+                _render_mapping_section(
+                    raw,  # Pass raw object, not raw.varm
+                    "varm",
+                    varm_context,
+                    fold_threshold=fold_threshold,
+                    max_items=max_items,
+                )
+            )
+    except Exception as e:  # noqa: BLE001
+        parts.append(_render_error_entry("varm", str(e)))
 
     parts.append("</div>")
 
