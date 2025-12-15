@@ -124,8 +124,8 @@ class CategoricalArray(XBackendArray, Generic[K]):
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes,
-            # astype str maintains our old behavior, this will be relaxed in 0.13
-            categories=self.categories.astype(str),
+            # casting to numpy (string) maintains our old behavior, this will be relaxed in 0.13
+            categories=np.array(self.categories),
             ordered=self._ordered,
         )
         if settings.remove_unused_categories:
