@@ -1217,7 +1217,7 @@ def _read_nullable_string(
     dtype = pd.StringDtype()
 
     arr = pd.array(
-        values.astype(NULLABLE_NUMPY_STRING_TYPE),  # TODO: why?
+        values.astype(NULLABLE_NUMPY_STRING_TYPE),
         dtype=dtype,
     )
     arr[mask] = pd.NA
