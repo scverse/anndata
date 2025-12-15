@@ -109,7 +109,7 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [
-    "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2023.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
 
 [tool.hatch.version]
@@ -122,7 +122,8 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
-patch = [ "subprocess" ]
+concurrency = [ "multiprocessing" ]
+parallel = true
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
