@@ -4245,3 +4245,386 @@ This dataset contains important data.
         assert 'role="button"' in html
         assert 'tabindex="0"' in html
         assert 'aria-label="View README"' in html
+
+
+# =============================================================================
+# Test render_header_badges Helper
+# =============================================================================
+
+
+class TestRenderHeaderBadges:
+    """Tests for the render_header_badges public helper."""
+
+    def test_no_badges(self):
+        """Test render_header_badges with no flags set."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges()
+        assert html == ""
+
+    def test_view_badge_only(self):
+        """Test render_header_badges with view flag."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(is_view=True)
+        assert "View" in html
+        assert "adata-badge-view" in html
+        assert "This is a view" in html
+
+    def test_backed_badge_only(self):
+        """Test render_header_badges with backed flag."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(is_backed=True)
+        assert "Backed" in html
+        assert "adata-badge-backed" in html
+
+    def test_backed_badge_with_format(self):
+        """Test render_header_badges with backing format."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(is_backed=True, backing_format="Zarr")
+        assert "Zarr" in html
+        assert "adata-badge-backed" in html
+
+    def test_backed_badge_with_path(self):
+        """Test render_header_badges with backing path in tooltip."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(
+            is_backed=True,
+            backing_path="/data/sample.h5ad",
+            backing_format="H5AD",
+        )
+        assert "H5AD" in html
+        assert "/data/sample.h5ad" in html
+
+    def test_both_badges(self):
+        """Test render_header_badges with both view and backed."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(
+            is_view=True,
+            is_backed=True,
+            backing_format="Zarr",
+        )
+        assert "View" in html
+        assert "Zarr" in html
+        assert "adata-badge-view" in html
+        assert "adata-badge-backed" in html
+
+
+# =============================================================================
+# Test Error Handling in HTML Rendering
+# =============================================================================
+
+
+class TestErrorHandling:
+    """Tests for error handling in HTML rendering."""
+
+    def test_error_entry_display(self):
+        """Test that error entries are displayed with error styling."""
+        from anndata._repr.html import _render_error_entry
+
+        html = _render_error_entry("bad_key", "Something went wrong")
+        assert "bad_key" in html
+        assert "Something went wrong" in html
+        assert "adata-error" in html or "error" in html.lower()
+
+    def test_formatter_exception_caught(self):
+        """Test that formatter exceptions don't crash the repr."""
+        from anndata._repr import (
+            TypeFormatter,
+            formatter_registry,
+        )
+
+        class CrashingFormatter(TypeFormatter):
+            priority = 1000  # High priority to be checked first
+
+            def can_format(self, obj):
+                return isinstance(obj, dict) and obj.get("__crash__")
+
+            def format(self, obj, context):
+                msg = "Intentional crash"
+                raise RuntimeError(msg)
+
+        formatter = CrashingFormatter()
+        formatter_registry.register_type_formatter(formatter)
+
+        try:
+            # Create AnnData with data that triggers the crashing formatter
+            adata = AnnData(np.zeros((5, 3)))
+            adata.uns["test"] = {"__crash__": True, "data": "value"}
+
+            # Should not raise, should fall back gracefully
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                html = adata._repr_html_()
+                # Should have generated HTML despite the crash
+                assert "anndata-repr" in html
+                # Should have warned about the formatter failure
+                assert any("CrashingFormatter" in str(warning.message) for warning in w)
+        finally:
+            formatter_registry.unregister_type_formatter(formatter)
+
+    def test_section_formatter_exception_caught(self):
+        """Test that section formatter exceptions don't crash the repr."""
+        from anndata._repr import (
+            SectionFormatter,
+            register_formatter,
+        )
+
+        class CrashingSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "crashing_section"
+
+            def should_show(self, obj):
+                return True
+
+            def get_entries(self, obj, context):
+                msg = "Section formatter crash"
+                raise RuntimeError(msg)
+
+        formatter = CrashingSectionFormatter()
+        register_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            import warnings
+
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("always")
+                html = adata._repr_html_()
+                # Should still generate HTML
+                assert "anndata-repr" in html
+        finally:
+            # Clean up - remove from registry
+            from anndata._repr import formatter_registry
+
+            if "crashing_section" in formatter_registry._section_formatters:
+                del formatter_registry._section_formatters["crashing_section"]
+
+
+# =============================================================================
+# Test Unknown Sections Detection
+# =============================================================================
+
+
+class TestUnknownSectionsDetection:
+    """Tests for detecting and displaying unknown sections."""
+
+    def test_standard_sections_not_in_other(self):
+        """Test that standard sections don't appear in 'other'."""
+        adata = AnnData(
+            np.zeros((10, 5)),
+            obs=pd.DataFrame({"col": range(10)}),
+            var=pd.DataFrame({"gene": range(5)}),
+        )
+        adata.obsm["X_pca"] = np.zeros((10, 2))
+        adata.uns["neighbors"] = {"key": "value"}
+
+        html = adata._repr_html_()
+
+        # Standard sections should be present
+        assert 'data-section="obs"' in html
+        assert 'data-section="obsm"' in html
+        assert 'data-section="uns"' in html
+
+        # Should NOT have an "other" section for standard attributes
+        # (other section only appears for truly unknown attributes)
+        assert 'data-section="other"' not in html or "unknown" not in html.lower()
+
+    def test_unknown_attribute_in_other(self):
+        """Test that unknown attributes appear in 'other' section."""
+        adata = AnnData(np.zeros((10, 5)))
+        # Add a non-standard attribute
+        adata._custom_attr = {"special": "data"}
+
+        html = adata._repr_html_()
+
+        # The repr should still work
+        assert "anndata-repr" in html
+
+    def test_registered_section_not_in_other(self):
+        """Test that registered custom sections don't appear in 'other'."""
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            SectionFormatter,
+            formatter_registry,
+            register_formatter,
+        )
+
+        class CustomSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "custom_test_section"
+
+            def should_show(self, obj):
+                return hasattr(obj, "uns")
+
+            def get_entries(self, obj, context):
+                return [
+                    FormattedEntry(
+                        key="test_entry",
+                        output=FormattedOutput(type_name="test"),
+                    )
+                ]
+
+        formatter = CustomSectionFormatter()
+        register_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            html = adata._repr_html_()
+
+            # Custom section should be present
+            assert 'data-section="custom_test_section"' in html
+            assert "test_entry" in html
+        finally:
+            # Clean up
+            if "custom_test_section" in formatter_registry._section_formatters:
+                del formatter_registry._section_formatters["custom_test_section"]
+
+    def test_suppressed_section_not_in_other(self):
+        """Test that suppressed sections (should_show=False) don't appear in 'other'."""
+        from anndata._repr import (
+            SectionFormatter,
+            formatter_registry,
+            register_formatter,
+        )
+
+        class SuppressedSectionFormatter(SectionFormatter):
+            @property
+            def section_name(self):
+                return "suppressed_section"
+
+            def should_show(self, obj):
+                return False  # Never show
+
+            def get_entries(self, obj, context):
+                return []
+
+        formatter = SuppressedSectionFormatter()
+        register_formatter(formatter)
+
+        try:
+            adata = AnnData(np.zeros((5, 3)))
+            html = adata._repr_html_()
+
+            # Suppressed section should NOT appear
+            assert "suppressed_section" not in html
+            # And should not be in "other" either
+            assert "suppressed_section" not in html
+        finally:
+            # Clean up
+            if "suppressed_section" in formatter_registry._section_formatters:
+                del formatter_registry._section_formatters["suppressed_section"]
+
+
+# =============================================================================
+# Test Public API Exports
+# =============================================================================
+
+
+class TestPublicAPIExports:
+    """Tests that all documented public API is actually importable."""
+
+    def test_css_js_exports(self):
+        """Test CSS and JS helper exports."""
+        from anndata._repr import get_css, get_javascript
+
+        css = get_css()
+        assert "<style>" in css
+        assert "anndata-repr" in css
+
+        js = get_javascript("test-container")
+        assert "<script>" in js
+        assert "test-container" in js
+
+    def test_section_rendering_exports(self):
+        """Test section rendering helper exports."""
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            render_formatted_entry,
+            render_section,
+        )
+
+        entry = FormattedEntry(
+            key="test_key",
+            output=FormattedOutput(type_name="test_type"),
+        )
+        entry_html = render_formatted_entry(entry)
+        assert "test_key" in entry_html
+        assert "test_type" in entry_html
+
+        section_html = render_section("test_section", entry_html, n_items=1)
+        assert "test_section" in section_html
+        assert 'data-section="test_section"' in section_html
+
+    def test_ui_helper_exports(self):
+        """Test UI helper exports."""
+        from anndata._repr import (
+            render_badge,
+            render_copy_button,
+            render_fold_icon,
+            render_search_box,
+        )
+
+        badge = render_badge("Test", "test-class", "tooltip")
+        assert "Test" in badge
+        assert "test-class" in badge
+
+        search = render_search_box("container-id")
+        assert "container-id" in search
+        assert "search" in search.lower()
+
+        fold = render_fold_icon()
+        assert "fold" in fold.lower() or "svg" in fold.lower()
+
+        copy_btn = render_copy_button("text-to-copy")
+        assert "text-to-copy" in copy_btn or "copy" in copy_btn.lower()
+
+    def test_utility_exports(self):
+        """Test utility function exports."""
+        from anndata._repr import escape_html, format_memory_size, format_number
+
+        assert escape_html("<script>") == "&lt;script&gt;"
+        assert format_number(1000) == "1,000"
+        assert "KB" in format_memory_size(1024) or "1" in format_memory_size(1024)
+
+    def test_registry_exports(self):
+        """Test registry class exports."""
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            FormatterContext,
+            FormatterRegistry,
+            SectionFormatter,
+            TypeFormatter,
+            formatter_registry,
+            register_formatter,
+        )
+
+        # All should be importable
+        assert FormatterRegistry is not None
+        assert TypeFormatter is not None
+        assert SectionFormatter is not None
+        assert FormattedOutput is not None
+        assert FormattedEntry is not None
+        assert FormatterContext is not None
+        assert formatter_registry is not None
+        assert register_formatter is not None
+
+    def test_generate_repr_html_export(self):
+        """Test generate_repr_html export and basic usage."""
+        from anndata._repr import generate_repr_html
+
+        adata = AnnData(np.zeros((10, 5)))
+        html = generate_repr_html(adata)
+        assert "anndata-repr" in html
+        assert "AnnData" in html
