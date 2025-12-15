@@ -1708,6 +1708,50 @@ For more details, see the full documentation.
     else:
         print("  20. SpatialData (skipped - example failed to load)")
 
+    # Test 21: Raw section with detailed info
+    print("  21. Raw section (unprocessed data)")
+    # Create an AnnData that simulates a typical workflow:
+    # 1. Start with more genes (raw)
+    # 2. Filter to fewer genes (current)
+    n_obs, n_vars_raw = 100, 2000
+    n_vars_filtered = 500
+    adata_raw = AnnData(
+        # Current filtered data
+        np.random.randn(n_obs, n_vars_filtered).astype(np.float32),
+        obs=pd.DataFrame({
+            "cell_type": pd.Categorical(
+                ["T cell", "B cell", "NK cell"] * 33 + ["T cell"]
+            ),
+            "n_counts": np.random.randint(1000, 10000, n_obs),
+        }),
+        var=pd.DataFrame({
+            "gene_name": [f"HVG_{i}" for i in range(n_vars_filtered)],
+            "highly_variable": [True] * n_vars_filtered,
+            "mean_expression": np.random.randn(n_vars_filtered).astype(np.float32),
+        }),
+    )
+    # Set raw to have more genes (simulating pre-filtering state)
+    raw_X = np.random.randn(n_obs, n_vars_raw).astype(np.float32)
+    raw_var = pd.DataFrame(
+        {
+            "gene_name": [f"gene_{i}" for i in range(n_vars_raw)],
+            "highly_variable": [i < n_vars_filtered for i in range(n_vars_raw)],
+        },
+        index=[f"gene_{i}" for i in range(n_vars_raw)],
+    )
+    adata_raw.raw = AnnData(raw_X, var=raw_var)
+    # Add varm to raw
+    adata_raw.raw.varm["PCs"] = np.random.randn(n_vars_raw, 50).astype(np.float32)
+    sections.append((
+        "21. Raw Section (Unprocessed Data)",
+        adata_raw._repr_html_(),
+        "Shows the <code>.raw</code> attribute which stores unprocessed data before filtering. "
+        "The raw section now displays: (1) full shape in header (100 × 2,000 vs filtered 100 × 500), "
+        "(2) <code>raw.X</code> matrix info, (3) each <code>raw.var</code> column with type info, "
+        "(4) <code>raw.varm</code> items. Click the section header to expand. "
+        "This addresses <a href='https://github.com/scverse/anndata/pull/349' target='_blank'>PR #349</a>.",
+    ))
+
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"
     html_content = create_html_page(sections)

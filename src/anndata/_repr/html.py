@@ -549,7 +549,7 @@ def render_search_box(container_id: str = "") -> str:
     >>> parts.append('<span class="adata-type">SpatialData</span>')
     >>> parts.append('<span style="flex-grow:1;"></span>')  # Spacer
     >>> parts.append(render_search_box(container_id))
-    >>> parts.append('</div>')
+    >>> parts.append("</div>")
     """
     search_id = f"{container_id}-search" if container_id else "anndata-search"
     return (
@@ -562,8 +562,8 @@ def render_search_box(container_id: str = "") -> str:
         f'title="Match case" aria-label="Match case" aria-pressed="false">Aa</button>'
         f'<button type="button" class="adata-search-toggle adata-toggle-regex" '
         f'title="Use regular expression" aria-label="Use regular expression" aria-pressed="false">.*</button>'
-        f'</span>'
-        f'</span>'
+        f"</span>"
+        f"</span>"
         f'<span class="adata-filter-indicator"></span>'
     )
 
@@ -584,7 +584,7 @@ def render_fold_icon() -> str:
     >>> parts = ['<div class="anndata-sechdr">']
     >>> parts.append(render_fold_icon())
     >>> parts.append('<span class="anndata-sec-name">images</span>')
-    >>> parts.append('</div>')
+    >>> parts.append("</div>")
     """
     return f'<span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>'
 
@@ -609,7 +609,7 @@ def render_copy_button(text: str, tooltip: str = "Copy") -> str:
 
     Example
     -------
-    >>> html = f'<span>{name}</span>{render_copy_button(name, "Copy name")}'
+    >>> html = f"<span>{name}</span>{render_copy_button(name, 'Copy name')}"
     """
     escaped_text = escape_html(text)
     escaped_tooltip = escape_html(tooltip)
@@ -693,7 +693,9 @@ def render_header_badges(
     """
     parts = []
     if is_view:
-        parts.append(render_badge("View", "adata-badge-view", "This is a view of another object"))
+        parts.append(
+            render_badge("View", "adata-badge-view", "This is a view of another object")
+        )
     if is_backed:
         tooltip = f"Backed by {backing_path}" if backing_path else "Backed mode"
         label = backing_format or "Backed"
@@ -881,6 +883,42 @@ def _render_x_entry(adata: AnnData, context: FormatterContext) -> str:
         # Backed info
         if is_backed(adata):
             type_parts.append("on disk")
+
+        type_str = " · ".join(type_parts)
+        parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
+
+    parts.append("</div>")
+    return "\n".join(parts)
+
+
+def _render_x_entry_for_raw(raw, context: FormatterContext) -> str:
+    """Render X as a single compact entry row for Raw objects.
+
+    Similar to _render_x_entry but works with Raw objects instead of AnnData.
+    """
+    X = raw.X
+
+    parts = ['<div class="adata-x-entry">']
+    parts.append("<span>X</span>")
+
+    if X is None:
+        parts.append("<span><em>None</em></span>")
+    else:
+        # Format the X matrix
+        output = formatter_registry.format_value(X, context)
+
+        # Build compact type string
+        type_parts = [output.type_name]
+
+        # Add sparsity info inline for sparse matrices
+        if "sparsity" in output.details and output.details["sparsity"] is not None:
+            sparsity = output.details["sparsity"]
+            nnz = output.details.get("nnz", "?")
+            type_parts.append(f"{sparsity:.1%} sparse ({format_number(nnz)} stored)")
+
+        # Chunk info for Dask
+        if "chunks" in output.details:
+            type_parts.append(f"chunks={output.details['chunks']}")
 
         type_str = " · ".join(type_parts)
         parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
@@ -1573,49 +1611,181 @@ def _render_raw_section(
     fold_threshold: int,
     max_items: int,
 ) -> str:
-    """Render the raw section."""
+    """Render the raw section as a single expandable row.
+
+    The raw section shows unprocessed data that was saved before filtering/normalization.
+    It contains raw.X (the matrix), raw.var (variable annotations), and raw.varm
+    (multi-dimensional variable annotations).
+
+    Unlike the main AnnData, raw shares obs with the parent but has its own var
+    (which may have more variables than the filtered main data).
+
+    Rendered as a single row with an expand button (no section header).
+    When expanded, shows a full AnnData-like repr for Raw contents (X, var, varm).
+    The depth parameter prevents infinite recursion.
+    """
     raw = getattr(adata, "raw", None)
     if raw is None:
         return ""
 
-    # Raw section always starts collapsed (use data-should-collapse for consistency)
-    parts = ['<div class="anndata-sec" data-section="raw" data-should-collapse="true">']
-
-    # Header
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.raw.html"
+    n_obs = getattr(raw, "n_obs", "?")
     n_vars = getattr(raw, "n_vars", "?")
-    parts.append(
-        _render_section_header(
-            "raw",
-            f"(n_vars = {format_number(n_vars)})",
-            doc_url,
-            "Raw data (original unprocessed)",
+    max_depth = context.max_depth
+
+    # Check if we can expand (same logic as nested AnnData)
+    can_expand = context.depth < max_depth - 1
+
+    # Build meta info string
+    meta_parts = []
+    if hasattr(raw, "var") and len(raw.var.columns) > 0:
+        meta_parts.append(f"var: {len(raw.var.columns)} cols")
+    if hasattr(raw, "varm") and len(raw.varm) > 0:
+        meta_parts.append(f"varm: {len(raw.varm)}")
+    meta_text = ", ".join(meta_parts) if meta_parts else ""
+
+    # Single row container (like a minimal section with just one entry)
+    parts = ['<div class="anndata-sec anndata-sec-raw" data-section="raw">']
+    parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
+
+    # Single row with raw info and expand button
+    parts.append('<tr class="adata-entry" data-key="raw" data-dtype="Raw">')
+    parts.append(_render_name_cell("raw"))
+    parts.append('<td class="adata-entry-type">')
+    # Show just dimensions - "raw" is already in the name cell
+    type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
+    parts.append(f'<span class="dtype-anndata">{escape_html(type_str)}</span>')
+    if can_expand:
+        parts.append(
+            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
         )
+    parts.append("</td>")
+    parts.append(f'<td class="adata-entry-meta">{escape_html(meta_text)}</td>')
+    parts.append("</tr>")
+
+    # Nested content (hidden by default, shown on expand)
+    if can_expand:
+        parts.append('<tr class="adata-nested-row">')
+        parts.append('<td colspan="3" class="adata-nested-content">')
+        parts.append('<div class="adata-nested-anndata">')
+
+        nested_html = _generate_raw_repr_html(
+            raw,
+            depth=context.depth + 1,
+            max_depth=max_depth,
+            fold_threshold=fold_threshold,
+            max_items=max_items,
+        )
+        parts.append(nested_html)
+
+        parts.append("</div>")
+        parts.append("</td>")
+        parts.append("</tr>")
+
+    parts.append("</table>")
+    parts.append("</div>")
+
+    return "\n".join(parts)
+
+
+def _generate_raw_repr_html(
+    raw,
+    depth: int = 0,
+    max_depth: int | None = None,
+    fold_threshold: int | None = None,
+    max_items: int | None = None,
+) -> str:
+    """Generate HTML repr for a Raw object.
+
+    This renders X, var, and varm sections similar to AnnData,
+    but without obs, obsm, layers, obsp, varp, uns, or raw sections.
+
+    Parameters
+    ----------
+    raw
+        Raw object to render
+    depth
+        Current nesting depth
+    max_depth
+        Maximum nesting depth (defaults to settings or DEFAULT_MAX_DEPTH)
+    fold_threshold
+        Number of items before a section auto-folds (defaults to settings or DEFAULT_FOLD_THRESHOLD)
+    max_items
+        Maximum items to display per section (defaults to settings or DEFAULT_MAX_ITEMS)
+    """
+    # Use configured settings with fallback to defaults
+    if max_depth is None:
+        max_depth = _get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
+    if fold_threshold is None:
+        fold_threshold = _get_setting(
+            "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
+        )
+    if max_items is None:
+        max_items = _get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
+    from anndata._repr.registry import FormatterContext
+
+    n_obs = getattr(raw, "n_obs", "?")
+    n_vars = getattr(raw, "n_vars", "?")
+
+    context = FormatterContext(
+        depth=depth,
+        max_depth=max_depth,
+        adata_ref=None,
     )
 
-    # Content
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts = []
 
-    # raw.X info
-    if hasattr(raw, "X") and raw.X is not None:
-        output = formatter_registry.format_value(raw.X, context)
-        parts.append(
-            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.X:</strong> <span class="{output.css_class}">{escape_html(output.type_name)}</span></div>'
-        )
+    # Container with header showing Raw shape
+    container_id = f"raw-repr-{id(raw)}"
+    parts.append(f'<div class="anndata-repr" id="{container_id}">')
 
-    # raw.var columns
-    if hasattr(raw, "var") and len(raw.var.columns) > 0:
-        parts.append(
-            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.var:</strong> {len(raw.var.columns)} columns</div>'
-        )
-
-    # raw.varm
-    if hasattr(raw, "varm") and len(raw.varm) > 0:
-        parts.append(
-            f'<div style="{STYLE_SECTION_INFO}"><strong>raw.varm:</strong> {len(raw.varm)} items</div>'
-        )
-
+    # Header for Raw - same structure as AnnData header
+    parts.append('<div class="anndata-hdr">')
+    parts.append('<span class="adata-type">Raw</span>')
+    shape_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
+    parts.append(f'<span class="adata-shape">{shape_str}</span>')
     parts.append("</div>")
+
+    # X section - show matrix info
+    if hasattr(raw, "X") and raw.X is not None:
+        parts.append(_render_x_entry_for_raw(raw, context))
+
+    # var section (like AnnData's var)
+    # _render_dataframe_section expects an object with a .var attribute
+    if hasattr(raw, "var") and len(raw.var.columns) > 0:
+        var_context = FormatterContext(
+            depth=depth,
+            max_depth=max_depth,
+            adata_ref=None,
+            section="var",
+        )
+        parts.append(
+            _render_dataframe_section(
+                raw,  # Pass raw object, not raw.var
+                "var",
+                var_context,
+                fold_threshold=fold_threshold,
+                max_items=max_items,
+            )
+        )
+
+    # varm section (like AnnData's varm)
+    if hasattr(raw, "varm") and len(raw.varm) > 0:
+        varm_context = FormatterContext(
+            depth=depth,
+            max_depth=max_depth,
+            adata_ref=None,
+            section="varm",
+        )
+        parts.append(
+            _render_mapping_section(
+                raw,  # Pass raw object, not raw.varm
+                "varm",
+                varm_context,
+                fold_threshold=fold_threshold,
+                max_items=max_items,
+            )
+        )
+
     parts.append("</div>")
 
     return "\n".join(parts)

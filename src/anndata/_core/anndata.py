@@ -599,9 +599,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             from anndata._repr import generate_repr_html
 
             return generate_repr_html(self)
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             # Intentional broad catch: HTML repr should never crash the notebook
-            # Fall back to text repr if HTML generation fails
+            # Fall back to text repr if HTML generation fails, but log the error
+            warn(
+                f"HTML repr failed, falling back to text repr: {e}",
+                stacklevel=2,
+            )
             return None
 
     def __eq__(self, other):

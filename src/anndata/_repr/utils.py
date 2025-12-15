@@ -207,6 +207,10 @@ def get_matching_column_colors(
     -------
     List of color strings if colors exist and match, None otherwise
     """
+    # Handle objects without .uns (e.g., Raw)
+    if not hasattr(adata, "uns"):
+        return None
+
     color_key = f"{column_name}_colors"
     if color_key not in adata.uns:
         return None
@@ -215,9 +219,9 @@ def get_matching_column_colors(
 
     # Find the column in obs or var
     col = None
-    if column_name in adata.obs.columns:
+    if hasattr(adata, "obs") and column_name in adata.obs.columns:
         col = adata.obs[column_name]
-    elif column_name in adata.var.columns:
+    elif hasattr(adata, "var") and column_name in adata.var.columns:
         col = adata.var[column_name]
 
     if col is None:
@@ -244,7 +248,7 @@ def check_color_category_mismatch(
     Parameters
     ----------
     adata
-        AnnData object
+        AnnData object (or object with .uns attribute)
     column_name
         Name of the column to check
 
@@ -252,6 +256,10 @@ def check_color_category_mismatch(
     -------
     Warning message if mismatch, None otherwise
     """
+    # Handle objects without .uns (e.g., Raw)
+    if not hasattr(adata, "uns"):
+        return None
+
     color_key = f"{column_name}_colors"
     if color_key not in adata.uns:
         return None
