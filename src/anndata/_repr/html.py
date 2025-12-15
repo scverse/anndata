@@ -1620,6 +1620,10 @@ def _detect_unknown_sections(adata) -> list[tuple[str, str]]:
         "varm_keys",
     }
 
+    # Also exclude sections that have registered custom formatters
+    # (including those with should_show=False that suppress display)
+    known |= set(formatter_registry.get_registered_sections())
+
     unknown = []
     for attr in dir(adata):
         # Skip private, known, and callable attributes

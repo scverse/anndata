@@ -135,7 +135,26 @@ SECTION_ORDER = (
 )
 
 # Import main functionality
-from anndata._repr.html import generate_repr_html  # noqa: E402
+# Inline styles for graceful degradation (from single source of truth)
+from anndata._repr.constants import STYLE_HIDDEN  # noqa: E402
+
+# Building blocks for packages that want to create their own _repr_html_
+# These allow reusing anndata's styling while building custom representations
+from anndata._repr.css import get_css  # noqa: E402
+
+# HTML rendering helpers for building custom sections
+# UI component helpers (search box, fold icon, badges, etc.)
+from anndata._repr.html import (  # noqa: E402  # noqa: E402
+    generate_repr_html,
+    render_badge,
+    render_copy_button,
+    render_fold_icon,
+    render_formatted_entry,
+    render_header_badges,
+    render_search_box,
+    render_section,
+)
+from anndata._repr.javascript import get_javascript  # noqa: E402
 from anndata._repr.registry import (  # noqa: E402
     UNS_TYPE_HINT_KEY,
     FormattedEntry,
@@ -150,34 +169,11 @@ from anndata._repr.registry import (  # noqa: E402
     formatter_registry,
     register_formatter,
 )
-
-# Building blocks for packages that want to create their own _repr_html_
-# These allow reusing anndata's styling while building custom representations
-from anndata._repr.css import get_css  # noqa: E402
-from anndata._repr.javascript import get_javascript  # noqa: E402
 from anndata._repr.utils import (  # noqa: E402
     escape_html,
     format_memory_size,
     format_number,
 )
-
-# HTML rendering helpers for building custom sections
-from anndata._repr.html import (  # noqa: E402
-    render_formatted_entry,
-    render_section,
-)
-
-# UI component helpers (search box, fold icon, badges, etc.)
-from anndata._repr.html import (  # noqa: E402
-    render_badge,
-    render_copy_button,
-    render_fold_icon,
-    render_header_badges,
-    render_search_box,
-)
-
-# Inline styles for graceful degradation (from single source of truth)
-from anndata._repr.constants import STYLE_HIDDEN  # noqa: E402
 
 __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     # Constants

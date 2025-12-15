@@ -13,6 +13,7 @@ Then open tests/repr_html_visual_test.html in your browser.
 from __future__ import annotations
 
 import tempfile
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,15 @@ import pandas as pd
 import scipy.sparse as sp
 
 import anndata as ad
+
+# Suppress anndata warning about string index transformation (not relevant for visual tests)
+from anndata._warnings import ImplicitModificationWarning
+
+warnings.filterwarnings(
+    "ignore",
+    message="Transforming to str index",
+    category=ImplicitModificationWarning,
+)
 from anndata import AnnData
 from anndata._repr import (
     FormattedOutput,
@@ -249,6 +259,24 @@ try:
     from anndata._repr.utils import format_number
 
     HAS_MUDATA = True
+
+    # Suppress MuData's internal mapping attributes using a SectionFormatter
+    # that handles multiple sections and returns empty (suppresses them)
+    @register_formatter
+    class MuDataInternalSectionsFormatter(SectionFormatter):
+        """Suppress MuData's internal mapping attributes."""
+
+        section_names = ("obsmap", "varmap", "axis")
+
+        @property
+        def section_name(self) -> str:
+            return self.section_names[0]  # Primary name for compatibility
+
+        def should_show(self, obj) -> bool:
+            return False  # Never show these sections
+
+        def get_entries(self, obj, context):
+            return []  # No entries
 
     # Register a SectionFormatter for MuData's .mod section
     # This allows generate_repr_html() to work directly on MuData objects

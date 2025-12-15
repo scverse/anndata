@@ -210,6 +210,10 @@ class SectionFormatter(ABC):
     are formatted. This allows packages like TreeData, MuData, SpatialData
     to add custom sections (e.g., obst, vart, mod, spatial).
 
+    A single SectionFormatter can handle multiple sections by setting
+    ``section_names`` (tuple). Use ``should_show()`` returning False to
+    suppress sections entirely (they won't appear in "other" either).
+
     Example usage::
 
         from anndata._repr import (
@@ -237,13 +241,39 @@ class SectionFormatter(ABC):
                     )
                     entries.append(FormattedEntry(key=key, output=output))
                 return entries
+
+    Example - suppress multiple sections::
+
+        @register_formatter
+        class SuppressInternalSections(SectionFormatter):
+            section_names = ("obsmap", "varmap", "axis")
+
+            @property
+            def section_name(self) -> str:
+                return self.section_names[0]
+
+            def should_show(self, obj) -> bool:
+                return False  # Never show
+
+            def get_entries(self, obj, context):
+                return []
     """
 
     @property
     @abstractmethod
     def section_name(self) -> str:
-        """Name of the section this formatter handles."""
+        """Primary name of the section this formatter handles."""
         ...
+
+    @property
+    def section_names(self) -> tuple[str, ...]:
+        """
+        All section names this formatter handles.
+
+        Override this to handle multiple sections with one formatter.
+        Defaults to a tuple containing just section_name.
+        """
+        return (self.section_name,)
 
     @property
     def display_name(self) -> str:
@@ -366,8 +396,9 @@ class FormatterRegistry:
         self._type_formatters.sort(key=lambda f: -f.priority)
 
     def register_section_formatter(self, formatter: SectionFormatter) -> None:
-        """Register a section formatter."""
-        self._section_formatters[formatter.section_name] = formatter
+        """Register a section formatter for all its section_names."""
+        for name in formatter.section_names:
+            self._section_formatters[name] = formatter
 
     def unregister_type_formatter(self, formatter: TypeFormatter) -> bool:
         """Unregister a type formatter. Returns True if found and removed."""
