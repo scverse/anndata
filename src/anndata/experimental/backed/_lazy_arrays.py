@@ -114,8 +114,6 @@ class CategoricalArray(XBackendArray, Generic[K]):
 
     @cached_property
     def categories(self) -> np.ndarray:
-        if isinstance(self._categories, ZarrArray):
-            return self._categories[...]
         from anndata.io import read_elem
 
         return read_elem(self._categories)
@@ -125,7 +123,10 @@ class CategoricalArray(XBackendArray, Generic[K]):
 
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
-            codes=codes, categories=self.categories, ordered=self._ordered
+            codes=codes,
+            # astype str maintains our old behavior, this will be relaxed in 0.13
+            categories=self.categories.astype(str),
+            ordered=self._ordered,
         )
         if settings.remove_unused_categories:
             categorical_array = categorical_array.remove_unused_categories()

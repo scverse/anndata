@@ -764,7 +764,6 @@ def test_create_adata_from_single_axis_elem(
         a=np.zeros((10, 10)),
     )
     in_memory = AnnData(**{f"{axis}{elem_type}": d})
-    print(in_memory.obs.index.array)
     assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")

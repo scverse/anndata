@@ -33,10 +33,15 @@ def setup_env() -> None:
     import anndata
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
-
     if IS_PRE:
         # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
         pd.options.future.infer_string = True
+        anndata.settings.allow_write_nullable_strings = True
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _anndata_session_env(request: pytest.FixtureRequest) -> None:
+    setup_env()
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +51,7 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
         request.getfixturevalue("_doctest_env")
 
     anndata.settings.reset(anndata.settings._registered_options.keys())
+    setup_env()
 
 
 @pytest.fixture
