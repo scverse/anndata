@@ -269,10 +269,8 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": (
-                        isinstance(v, MaskedArray)
-                        and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
-                    ),
+                    "is_nullable_string": isinstance(v, MaskedArray)
+                    and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
                 },
             )
         elif k == dim_name:
