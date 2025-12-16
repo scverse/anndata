@@ -570,12 +570,21 @@ def test_write_nullable_string(
         assert store["el"].attrs["encoding-type"] == expected
 
 
+@pytest.mark.parametrize("infer_string", [True, False], ids=["infer_string", "default"])
 @pytest.mark.parametrize(
-    "infer_string", [True, False], ids=["nullable", "non-nullable"]
+    "index",
+    [
+        pd.array([1, 2, pd.NA]),
+        pd.array([1, 2, np.nan]),
+        pd.RangeIndex(3),
+    ],
+    ids=["NA", "nan", "range"],
 )
-def test_nullable_string_from_range(*, infer_string: bool) -> None:
+def test_nullable_string_from_non_string_index(
+    *, infer_string: bool, index: pd.api.extensions.ExtensionArray
+) -> None:
     with pd.option_context("future.infer_string", infer_string):
-        adata = ad.AnnData(obs=pd.DataFrame({"foo": [1, 2, 3]}))
+        adata = ad.AnnData(obs=pd.DataFrame({"foo": [1, 2, 3]}, index=index))
         assert ("string" if infer_string else object) == adata.obs_names.dtype
 
 
