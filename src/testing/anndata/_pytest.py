@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+import anndata
+
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from pathlib import Path
@@ -23,7 +25,6 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _anndata_test_env(request: pytest.FixtureRequest) -> None:
-    import anndata
 
     if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
