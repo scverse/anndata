@@ -576,7 +576,7 @@ def test_write_nullable_string(
 def test_nullable_string_from_range(*, infer_string: bool) -> None:
     with pd.option_context("future.infer_string", infer_string):
         adata = ad.AnnData(obs=pd.DataFrame({"foo": [1, 2, 3]}))
-        assert ("str" if infer_string else object) == adata.obs_names.dtype
+        assert ("string" if infer_string else object) == adata.obs_names.dtype
 
 
 def test_categorical_order_type(store):
