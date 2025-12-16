@@ -348,9 +348,9 @@ class Dataset2D:
         return len(self.ds)
 
     @property
-    def dtypes(self) -> pd.Series:
+    def dtypes(self) -> Mapping[Hashable, np.dtype]:
         """
-        Return a Series with the dtypes of the variables in the Dataset2D.
+        Return a Mapping with the dtypes of the variables in the Dataset2D.
         """
         return self.ds.dtypes
 
