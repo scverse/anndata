@@ -26,7 +26,14 @@ from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
-from ..compat import CSArray, DaskArray, ZarrArray, _move_adj_mtx, old_positionals
+from ..compat import (
+    CSArray,
+    DaskArray,
+    ZarrArray,
+    _move_adj_mtx,
+    old_positionals,
+    pandas_as_str,
+)
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -48,7 +55,7 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal
+    from typing import Any, ClassVar, Literal, NoReturn
 
     from zarr.storage import StoreLike
 
@@ -383,11 +390,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index.astype(str)))
+                    x_indices.append(("obs", "index", pandas_as_str(X.index)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns.astype(str)))
+                    x_indices.append(("var", "columns", pandas_as_str(X.columns)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -790,7 +797,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             )
             raise ValueError(msg)
         else:
-            value = pd.Index(value)
+            value = (
+                value if isinstance(value, pd.Index) else pandas_as_str(pd.Index(value))
+            )
             if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
@@ -1058,6 +1067,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
+            # TODO: this mode is going away
             with pd.option_context("mode.chained_assignment", None):
                 df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
@@ -1627,8 +1637,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         annoA-1  NaN  2.0  1.0  0.0
         annoA-2  NaN  3.0  2.0  0.0
         annoB-2  NaN  2.0  1.0  0.0
-        >>> outer.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> outer.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> outer.X
         array([[ 1.,  2.,  3., nan],
                [ 4.,  5.,  6., nan],
@@ -1710,8 +1720,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata = adata1.concatenate(adata2, adata3, join='outer')
-        >>> adata.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> adata.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> adata.X.toarray()
         array([[0., 2., 3., 0.],
                [0., 5., 6., 0.],
@@ -1779,25 +1789,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         return out
 
-    def var_names_make_unique(self, join: str = "-"):
+    def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.var_names = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join: str = "-"):
+    def obs_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.obs_names = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def _check_uniqueness(self):
-        if not self.obs.index.is_unique:
+    def _check_uniqueness(self) -> None:
+        if self.obs.index[~self.obs.index.isna()].has_duplicates:
             utils.warn_names_duplicates("obs")
-        if not self.var.index.is_unique:
+        if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: Any):
+    def __contains__(self, key: Any) -> NoReturn:
         msg = "AnnData has no attribute __contains__, don’t check `in adata`."
         raise AttributeError(msg)
 
