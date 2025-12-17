@@ -117,7 +117,7 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [
-    "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
 
 [tool.hatch.version]
@@ -130,8 +130,7 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
-concurrency = [ "multiprocessing" ]
-parallel = true
+patch = [ "subprocess" ]
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
@@ -141,10 +140,10 @@ exclude_also = [
     "if TYPE_CHECKING:",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
+strict = true
 addopts = [
     "--import-mode=importlib",
-    "--strict-markers",
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
@@ -158,7 +157,6 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
     "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
-
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -175,7 +173,7 @@ filterwarnings_when_strict = [
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
 ]
-python_files = "test_*.py"
+python_files = [ "test_*.py" ]
 testpaths = [
     "anndata",                  # docstrings (module name due to --pyargs)
     "./tests",                  # unit tests
@@ -183,7 +181,6 @@ testpaths = [
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
-xfail_strict = true
 markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",

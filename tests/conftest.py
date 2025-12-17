@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from functools import partial
 from importlib.metadata import version
 from typing import TYPE_CHECKING
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from types import EllipsisType
+    from typing import Literal
 
 
 @pytest.fixture
@@ -54,7 +56,9 @@ def backing_h5ad(tmp_path: Path) -> Path:
     ],
     ids=["h5ad", "zarr2", "zarr3"],
 )
-def diskfmt(request):
+def diskfmt(
+    request: pytest.FixtureRequest,
+) -> Generator[Literal["h5ad", "zarr"], None, None]:
     if (fmt := request.param[0]) == "h5ad":
         yield fmt
     else:
@@ -63,7 +67,9 @@ def diskfmt(request):
 
 
 @pytest.fixture
-def diskfmt2(diskfmt):
+def diskfmt2(
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Generator[Literal["zarr", "h5ad"], None, None]:
     if diskfmt == "h5ad":
         with ad.settings.override(zarr_write_format=2):
             yield "zarr"

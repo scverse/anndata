@@ -189,7 +189,7 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     with pytest.warns(ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"):
         m[0, 0] = 100
     assert not subset.is_view
-    # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626.
+    # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626 becomes minimum version i.e., scipy 1.17.
 
     is_dask_with_broken_view_setting = (
         "sparse_dask" in request.node.callspec.id
@@ -201,7 +201,8 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     )
     with (
         pytest.raises(ValueError, match=r"shape mismatch")
-        if is_sparse_array_in_lower_dask_version or is_dask_with_broken_view_setting
+        if Version(version("scipy")) < Version("1.17.0rc0")
+        and (is_sparse_array_in_lower_dask_version or is_dask_with_broken_view_setting)
         else nullcontext()
     ):
         assert getattr(subset, mapping_name)["m"][0, 0] == 100

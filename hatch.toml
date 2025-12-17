@@ -28,6 +28,7 @@ overrides.matrix.deps.pre-install-commands = [
         "min",
     ], value = "uv run ci/scripts/min-deps.py pyproject.toml --all-extras -o ci/min-deps.txt" },
     # To prevent situations like https://github.com/pydata/xarray/issues/10419 going forward, and test against zarr as well
+    # IMPORTANT: `zarr` being a pre-release is used in the testing code
     { if = [
         "pre",
     ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git\nzarr @ git+https://github.com/zarr-developers/zarr-python.git' > ci/pre-deps.txt" },

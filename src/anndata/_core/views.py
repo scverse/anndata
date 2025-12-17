@@ -419,6 +419,7 @@ def as_view_df(df, view_args):
     if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
+                # TODO: this mode is going away
                 with pd.option_context("mode.chained_assignment", None):
                     df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
