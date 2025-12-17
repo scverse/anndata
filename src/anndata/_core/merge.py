@@ -1181,15 +1181,13 @@ def make_dask_col_from_extension_dtype(
     A :class:`dask.Array`: representation of the column.
     """
     import dask.array as da
-    import xarray as xr
-    from xarray.core.indexing import LazilyIndexedArray
 
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
         get_chunksize,
         maybe_open_h5,
     )
-    from anndata.compat import XDataArray
+    from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
     base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
@@ -1198,7 +1196,6 @@ def make_dask_col_from_extension_dtype(
         base_path_or_zarr_group is not None and elem_name is not None
     ):  # lazy, backed by store
         dims = col.dims
-        coords = col.coords.copy()
         with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
             maybe_chunk_size = get_chunksize(read_elem_lazy(f))
             chunk_size = (
@@ -1212,17 +1209,14 @@ def make_dask_col_from_extension_dtype(
             # reopening is important to get around h5py's unserializable lock in processes
             with maybe_open_h5(base_path_or_zarr_group, elem_name) as f:
                 v = read_elem_lazy(f)
-                variable = xr.Variable(data=LazilyIndexedArray(v), dims=dims)
-                data_array = XDataArray(
-                    variable,
-                    coords=coords,
-                    dims=dims,
+                variable = xr.Variable(
+                    data=xr.core.indexing.LazilyIndexedArray(v), dims=dims
                 )
                 idx = tuple(
                     slice(start, stop)
                     for start, stop in block_info[None]["array-location"]
                 )
-                chunk = np.array(data_array.data[idx])
+                chunk = np.array(variable.data[idx])
             return chunk
 
         if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
