@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -38,19 +38,25 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 
-jax = None
-jnp = None
-
-with suppress(ImportError):
-    import jax
+try:
     import jax.numpy as jnp
+except ImportError:
+    jnp = None
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
-
+MAYBE_JAX_TYPE = [pytest.param(jnp.array, id="jax.array")] if jnp is not None else []
+ARRAY_TYPES = [
+    pytest.param(np.array, id="np.array"),
+    pytest.param(as_dense_dask_array, id="dask_dense"),
+    pytest.param(csr_matrix, id="csr_matrix"),
+    pytest.param(csr_array, id="csr_array"),
+    *MAYBE_JAX_TYPE,
+]
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -128,12 +134,7 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-TYPES = [np.array, csr_matrix, csr_array, as_dense_dask_array]
-if jax is not None:
-    TYPES.append(as_dense_jax_array)
-
-
-@pytest.mark.parametrize("typ", TYPES)
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     if typ is as_dense_jax_array:
         if diskfmt == "h5ad":
@@ -181,7 +182,7 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", TYPES)
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     if typ is as_dense_jax_array:
         if storage == "zarr":
@@ -232,7 +233,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", TYPES)
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     if typ is as_dense_jax_array:
         pytest.xfail(
@@ -280,7 +281,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", TYPES)
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_backed(typ, backing_h5ad):
     if typ.__name__ == "as_dense_jax_array":
         pytest.xfail("JAX arrays are not supported in backed HDF5 mode.")
@@ -298,15 +299,18 @@ def test_readwrite_backed(typ, backing_h5ad):
     assert_equal(adata, adata_src)
 
 
-TYPES_h5ad_zarr = [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
-if jnp is not None:
-    TYPES_h5ad_zarr.append(jnp.array)
-
-
-@pytest.mark.parametrize("typ", TYPES_h5ad_zarr)
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(np.array, id="np.array"),
+        pytest.param(csr_matrix, id="csr_matrix"),
+        pytest.param(csc_matrix, id="csc_matrix"),
+        pytest.param(csr_array, id="csr_array"),
+        pytest.param(csc_array, id="csc_array"),
+        *MAYBE_JAX_TYPE,
+    ],
+)
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
-    if typ.__module__.startswith("jax"):
-        pytest.xfail("JAX arrays cannot be written to .h5ad via h5py")
 
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
@@ -492,20 +496,12 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
-TYPES_loom = [np.array, csr_matrix]
-if jnp is not None:
-    TYPES_loom.append(jnp.array)
-
-
-@pytest.mark.parametrize("typ", TYPES_loom)
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, *MAYBE_JAX_TYPE])
 @pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
 @pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
 @pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
 def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
     X = typ(X_list)
-
-    if isinstance(X, jnp.ndarray):
-        pytest.xfail("JAX arrays cannot be written to .loom")
 
     obs_dim = "meaningful_obs_dim_name"
     var_dim = "meaningful_var_dim_name"
@@ -624,7 +620,7 @@ if jnp is not None:
     TYPES_CSV.append(jnp.array)
 
 
-@pytest.mark.parametrize("typ", TYPES_CSV)
+@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -663,11 +659,6 @@ def test_write_csv_view(typ, tmp_path):
     assert hash_dir_contents(view_pth) == hash_dir_contents(copy_pth)
 
 
-XP = [np]
-if jnp is not None:
-    XP.append(jnp)
-
-
 @pytest.mark.parametrize(
     ("read", "write", "name"),
     [
@@ -675,7 +666,7 @@ if jnp is not None:
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-@pytest.mark.parametrize("xp", XP)
+@pytest.mark.parametrize("xp", [np, jnp] if jnp is not None else [np])
 def test_readwrite_empty(read, write, name, tmp_path, xp):
     # JAX arrays are not not directly serializable by h5py
     raw_array = xp.array([], dtype=float)
@@ -771,14 +762,11 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
         getattr(to_write, f"write_{diskfmt}")(adata_pth)
 
 
-@pytest.mark.parametrize("xp", [np, jnp])  # xp = array namespace
-def test_write_large_categorical(tmp_path, diskfmt, xp):
-    if xp is jnp:
-        pytest.xfail("JAX does not support string/categorical arrays.")
+def test_write_large_categorical(tmp_path, diskfmt):
 
     M = 30_000
     N = 1000
-    ls = xp.array(list(ascii_letters))
+    ls = np.array(list(ascii_letters))
 
     def random_cats(n):
         cats = {
@@ -789,14 +777,14 @@ def test_write_large_categorical(tmp_path, diskfmt, xp):
             cats |= random_cats(n - len(cats))
         return cats
 
-    cats = xp.array(sorted(random_cats(10_000)))
+    cats = np.array(sorted(random_cats(10_000)))
     adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
         csr_matrix(([1], ([0], [0])), shape=(M, N)),
         obs=dict(
             cat1=cats[np.random.choice(n_cats, M)],
-            cat2=pd.Categorical.from_codes(xp.random.choice(n_cats, M), cats),
+            cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
         ),
     )
     getattr(orig, f"write_{diskfmt}")(adata_pth)
