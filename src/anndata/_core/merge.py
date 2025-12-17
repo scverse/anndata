@@ -1181,6 +1181,7 @@ def make_dask_col_from_extension_dtype(
     A :class:`dask.Array`: representation of the column.
     """
     import dask.array as da
+
     from anndata._io.specs.lazy_methods import (
         compute_chunk_layout_for_axis_size,
         get_chunksize,
