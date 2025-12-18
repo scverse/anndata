@@ -8,15 +8,12 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
-from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
-from anndata import AnnData
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import DaskArray, ZarrGroup, _read_attr, has_xp, is_zarr_v2
 
 from ...utils import warn
 
@@ -48,49 +45,9 @@ def is_sparse_like(x):
 
 
 def to_writeable(x):
-    if isinstance(
-        x,
-        np.ndarray
-        | np.generic
-        | pd.DataFrame
-        | pd.Series
-        | pd.Index
-        | ExtensionArray
-        | DaskArray
-        | sp.spmatrix
-        | AnnData,
-    ):
-        return x
-
-    # Try array-API detection only for unknown leaves
-    try:
-        # importing the array API compatibility layer
-        import array_api_compat as aac
-
-        # getting the array namespace
-        xp = aac.array_namespace(x)
-        # If the array has a `.device` attribute, check if it's on GPU
-        if hasattr(x, "device"):
-            device = x.device
-            # if the device has a `.type` field, use it
-            if hasattr(device, "type"):
-                if device.type != "cpu":
-                    # move the array to CPU if it's on GPU
-                    x = xp.to_device(
-                        x, "cpu"
-                    )  # not sure about this, would we want to move the entire array to CPU?
-            # otherwise, if the device is not a string, check if it's not "cpu"
-            elif str(device) != "cpu":
-                x = xp.to_device(x, "cpu")
-
-        # Convert to NumPy using DLPack (safe now)
-        if hasattr(x, "__to_dlpack__"):
-            return np.from_dlpack(x)
-
-    except (ImportError, AttributeError, TypeError, RuntimeError):
-        # Could not detect or convert – return unchanged
-        return x
-
+    # Convert non-numpy arrays to dlpack
+    if has_xp(x) and not (isinstance(x, np.ndarray) or np.isscalar(x)):
+        return np.from_dlpack(x)
     return x
 
 

@@ -33,7 +33,6 @@ from anndata.compat import (
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
-    as_dense_jax_array,
     assert_equal,
     gen_adata,
 )
@@ -136,13 +135,6 @@ def dtype(request):
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
-    if typ is as_dense_jax_array:
-        if diskfmt == "h5ad":
-            pytest.xfail("JAX arrays cannot be written to .h5ad via h5py")
-        if diskfmt == "zarr":
-            pytest.xfail(
-                "zarr3 doesn't natively provide direct support for JAX arrays."
-            )
 
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -156,6 +148,8 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     adata2 = read1()
     write2(adata2)
     adata3 = read2()
+    if jnp is not None and isinstance(adata1.X, jnp.ndarray):
+        adata1.X = np.from_dlpack(adata1.X)
 
     assert_equal(adata2, adata1)
     assert_equal(adata3, adata1)
@@ -184,11 +178,6 @@ def test_readwrite_roundtrip_async(tmp_path):
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
-    if typ is as_dense_jax_array:
-        if storage == "zarr":
-            pytest.xfail("Zarr I/O does not support .raw containing JAX arrays")
-        elif storage == "h5ad":
-            pytest.xfail("h5ad I/O does not support .raw containing JAX arrays")
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -213,6 +202,9 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
+        adata_src.raw = adata_src.copy()
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
@@ -235,15 +227,13 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
-    if typ is as_dense_jax_array:
-        pytest.xfail(
-            "h5py cannot preserve dtype of JAX arrays because they cannot be written"
-        )
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -283,9 +273,6 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_backed(typ, backing_h5ad):
-    if typ.__name__ == "as_dense_jax_array":
-        pytest.xfail("JAX arrays are not supported in backed HDF5 mode.")
-
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -615,11 +602,6 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-TYPES_CSV = [np.array, csr_matrix]
-if jnp is not None:
-    TYPES_CSV.append(jnp.array)
-
-
 @pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
@@ -627,7 +609,7 @@ def test_write_csv(typ, tmp_path):
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", TYPES_CSV)
+@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
