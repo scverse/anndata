@@ -7,20 +7,14 @@ from __future__ import annotations
 import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
-from contextlib import suppress
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
-from array_api_compat import get_namespace
-
-# Enable DLPack interop for JAX, CuPy, etc., only if installed
-with suppress(ImportError):
-    pass
 import pandas as pd
-import pandas.api.types as pdf
+from array_api_compat import get_namespace
 from natsort import natsorted
 from scipy import sparse
 
@@ -35,6 +29,7 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
+    has_xp,
 )
 from ..utils import asarray, axis_len, warn, warn_once
 from .anndata import AnnData
@@ -115,40 +110,6 @@ def is_missing(v) -> bool:
 
 def not_missing(v) -> bool:
     return v is not MissingVal
-
-
-def _same_backend(x, y, *, copy: bool = True):
-    # TODO: convert it so that I could also use it to convert one array to another
-    # for merge implementation
-    # Makes sure two arrays are from the same array backend.
-    # If not, uses from_dlpack() to convert `y` to `x`'s backend.
-    try:
-        # Get the array API "namespace" (i.e., backend) of `x` and `y`.
-        # This tells us whether we are dealing with NumPy, JAX, Cubed, etc.
-        xp_x = get_namespace(x)
-        xp_y = get_namespace(y)
-    except AttributeError as err:
-        # if either x or y does not support __array_namespace__, we cannot do backend detection
-        msg = "Both arrays must support __array_namespace__ for backend detection."
-        raise TypeError(msg) from err
-
-    # Special-case: Dask cannot be converted via DLPack
-    # if is_dask_collection(x) or is_dask_collection(y):
-    if isinstance(x, DaskArray) or isinstance(y, DaskArray):
-        return x, y
-
-    # if two arrays use different backends, convert y to x's backend using DLPack
-    if xp_x is not xp_y:
-        try:
-            y = xp_x.from_dlpack(y, copy=copy, device=getattr(x, "device", None))
-        except AttributeError as err:
-            msg = "Cannot convert: from_dlpack not supported by source array."
-            raise RuntimeError(msg) from err
-        except ValueError as e:
-            msg = f"Backend conversion failed: {e}"
-            raise RuntimeError(msg) from e
-
-    return x, y
 
 
 # We need to be able to check for equality of arrays to know which are the same.
@@ -566,50 +527,6 @@ def resolve_merge_strategy(
     return strategy
 
 
-# def safe_to_numpy(x):
-#     """Convert to numpy array, handling JAX/Cupy arrays."""
-#     if isinstance(x, pd.Series | pd.Index) or (
-#         hasattr(x, "dtype") and is_extension_array_dtype(x.dtype)
-#     ):
-#         return x
-#     return np.asarray(x)
-
-
-def _is_pandas(x):
-    return isinstance(x, pd.Series | pd.Index) or (
-        hasattr(x, "dtype") and pdf.is_extension_array_dtype(x.dtype)
-    )
-
-
-def _is_array_api_compatible(x):
-    # not sure if it is needed but kept it for the future
-    try:
-        get_namespace(x)
-        return True
-    except TypeError:
-        return False
-
-
-def _dlpack_to_numpy(x):
-    try:
-        return np.from_dlpack(x)
-    except TypeError:
-        return np.asarray(x)
-
-
-def _dlpack_from_numpy(x_np, original_xp):
-    # TODO: cubed and other array later elif
-    if hasattr(original_xp, "from_dlpack"):
-        try:
-            return original_xp.from_dlpack(x_np)
-        except Exception as e:
-            msg = f"Failed to call from_dlpack on backend {original_xp.__name__}: {e}"
-            raise TypeError(msg) from e
-
-    msg = f"DLPack back-conversion not implemented for backend {original_xp.__name__}"
-    raise TypeError(msg)
-
-
 #####################
 # Concatenation
 #####################
@@ -669,7 +586,7 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        elif _is_array_api_compatible(el):
+        elif has_xp(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
         else:
             msg = "Cannot reindex element of unsupported type."
@@ -1009,17 +926,15 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
 
-    elif all(hasattr(a, "__array_namespace__") for a in arrays):
+    elif all(has_xp(a) for a in arrays):
         # All arrays are array-api compatible
 
         # use first as a reference to check if all of the arrays are the same type
-        try:
-            xp = get_namespace(arrays[0])
-        except TypeError as err:
+        if len(array_apis := {a.__array_namespace__() for a in arrays}) > 1:
             msg = "Cannot concatenate array-api arrays from different backends."
-            raise ValueError(msg) from err
+            raise ValueError(msg)
 
-        return xp.concatenate(
+        return next(iter(array_apis)).concatenate(
             [
                 f(x, fill_value=fill_value, axis=1 - axis)
                 for f, x in zip(reindexers, arrays, strict=True)
@@ -1835,17 +1750,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
-    # Due to the initial way, which used as a quick shape check to skip filling easily miss real missing values
-    # Had to introduce this hacky check to convert initially placed -1 to np.nan
-
-    # Convert -1 to np.nan if .X is integer type and contains -1
-    if (
-        isinstance(X, np.ndarray)
-        and np.issubdtype(X.dtype, np.integer)
-        and (X == -1).any()
-    ):
-        X = X.astype(float)
-        X[X == -1] = np.nan
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
