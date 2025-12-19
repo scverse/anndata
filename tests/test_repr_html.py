@@ -3127,6 +3127,60 @@ class TestSeriesFormatterNonSerializable:
         with pytest.raises(TypeError):
             adata.write_h5ad(tmp_path / "test.h5ad")
 
+    def test_datetime64_column_detected_and_not_serializable(self, tmp_path):
+        """Repr detects datetime64 columns as non-serializable (issue #455).
+
+        MAINTAINER NOTE: If this test fails because datetime64 serialization
+        was added to anndata, update SeriesFormatter in formatters.py to
+        remove the datetime64 warning check.
+        """
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["date"] = pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"])
+
+        # Verify datetime64 still fails to serialize
+        # If this starts passing, datetime64 support was added - update repr accordingly
+        try:
+            path = tmp_path / "test_datetime.h5ad"
+            adata.write_h5ad(path)
+            # If we get here, datetime64 is now serializable - repr should stop warning
+            pytest.fail(
+                "datetime64 serialization now works! "
+                "Update SeriesFormatter in formatters.py to remove the datetime64 warning."
+            )
+        except Exception:
+            pass  # Expected - datetime64 not serializable
+
+        # Repr should detect and warn about it
+        html = adata._repr_html_()
+        assert "datetime64" in html, "Repr should show datetime64 dtype"
+        assert "(!)" in html, "Repr should show warning icon for datetime64"
+
+    def test_timedelta64_column_detected_and_not_serializable(self, tmp_path):
+        """Repr detects timedelta64 columns as non-serializable.
+
+        MAINTAINER NOTE: If this test fails because timedelta64 serialization
+        was added to anndata, update SeriesFormatter in formatters.py to
+        remove the timedelta64 warning check.
+        """
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["duration"] = pd.to_timedelta(["1 days", "2 days", "3 days"])
+
+        # Verify timedelta64 still fails to serialize
+        try:
+            path = tmp_path / "test_timedelta.h5ad"
+            adata.write_h5ad(path)
+            pytest.fail(
+                "timedelta64 serialization now works! "
+                "Update SeriesFormatter in formatters.py to remove the timedelta64 warning."
+            )
+        except Exception:
+            pass  # Expected - timedelta64 not serializable
+
+        # Repr should detect and warn about it
+        html = adata._repr_html_()
+        assert "timedelta64" in html, "Repr should show timedelta64 dtype"
+        assert "(!)" in html, "Repr should show warning icon for timedelta64"
+
 
 class TestColumnNameValidation:
     """Tests for column name validation (issue #321)."""

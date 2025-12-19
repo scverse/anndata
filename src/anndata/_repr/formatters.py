@@ -365,10 +365,20 @@ class SeriesFormatter(TypeFormatter):
         dtype_str = str(series.dtype)
         css_class = _get_pandas_dtype_css_class(series.dtype)
 
-        # Check serializability for object dtype columns
+        # Check serializability
         is_serial = True
         warnings = []
-        if series.dtype == np.dtype("object") and len(series) > 0:
+
+        # datetime64/timedelta64 columns are not serializable (issue #455)
+        if pd.api.types.is_datetime64_any_dtype(series.dtype):
+            is_serial = False
+            warnings.append("datetime64 not serializable")
+        elif pd.api.types.is_timedelta64_dtype(series.dtype):
+            is_serial = False
+            warnings.append("timedelta64 not serializable")
+
+        # Object dtype columns may contain non-serializable values
+        elif series.dtype == np.dtype("object") and len(series) > 0:
             is_serial, reason = _check_series_serializability(series)
             if not is_serial:
                 warnings.append(reason)

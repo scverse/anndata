@@ -1970,6 +1970,12 @@ For more details, see the full documentation.
     adata_serial.obs["list_values"] = [["a", "b"], ["c"], ["d"], ["e"], ["f"]]
     adata_serial.obs["dict_values"] = [{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}, {"k": 5}]
     adata_serial.obs["custom_obj"] = [CustomObject() for _ in range(5)]
+    adata_serial.obs["datetime_col"] = pd.to_datetime(
+        ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"]
+    )
+    adata_serial.obs["timedelta_col"] = pd.to_timedelta(
+        ["1 days", "2 days", "3 days", "4 days", "5 days"]
+    )
     adata_serial.obs["path/slash"] = ["a", "b", "c", "d", "e"]  # Slash in name
     adata_serial.obs[("tuple", "name")] = [1, 2, 3, 4, 5]  # Non-string name
 
@@ -1990,6 +1996,8 @@ For more details, see the full documentation.
         "<li><code>obs.list_values</code> - Contains list</li>"
         "<li><code>obs.dict_values</code> - Contains dict</li>"
         "<li><code>obs.custom_obj</code> - Contains CustomObject</li>"
+        "<li><code>obs.datetime_col</code> - datetime64 not serializable</li>"
+        "<li><code>obs.timedelta_col</code> - timedelta64 not serializable</li>"
         "<li><code>obs.('tuple', 'name')</code> - Non-string column name</li>"
         "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
         "</ul>"
