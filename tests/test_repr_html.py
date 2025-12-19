@@ -2995,6 +2995,93 @@ class TestDataFrameFormatterEdgeCases:
         assert "meta_preview_full" in result.details
 
 
+class TestSeriesFormatterNonSerializable:
+    """Tests for Series formatter detecting non-serializable object dtype columns."""
+
+    def test_custom_object_in_obs_column_not_serializable(self):
+        """Test that custom objects in obs columns are flagged as non-serializable.
+
+        Uses a custom class (not a list) to ensure this test remains valid
+        even if list serialization is added in the future (issue #1923).
+        """
+        from anndata._repr.formatters import SeriesFormatter
+        from anndata._repr.registry import FormatterContext
+
+        class CustomObject:
+            """A custom class that will never be serializable."""
+
+        # Create a Series with custom objects
+        series = pd.Series([CustomObject(), CustomObject(), CustomObject()])
+        assert series.dtype == np.dtype("object")
+
+        formatter = SeriesFormatter()
+        result = formatter.format(series, FormatterContext())
+
+        assert not result.is_serializable
+        assert len(result.warnings) > 0
+        assert "CustomObject" in result.warnings[0]
+
+    def test_list_in_obs_column_not_serializable(self):
+        """Test that lists in obs columns are flagged as non-serializable.
+
+        NOTE: This test may need updating if #1923 adds list serialization.
+        See: https://github.com/scverse/anndata/issues/1923
+        """
+        from anndata._repr.formatters import SeriesFormatter
+        from anndata._repr.registry import FormatterContext
+
+        series = pd.Series([["a", "b"], ["c"], ["d", "e", "f"]])
+        assert series.dtype == np.dtype("object")
+
+        formatter = SeriesFormatter()
+        result = formatter.format(series, FormatterContext())
+
+        assert not result.is_serializable
+        assert len(result.warnings) > 0
+        assert "list" in result.warnings[0]
+
+    def test_string_obs_column_is_serializable(self):
+        """Test that string object columns are serializable."""
+        from anndata._repr.formatters import SeriesFormatter
+        from anndata._repr.registry import FormatterContext
+
+        series = pd.Series(["a", "b", "c"], dtype=object)
+
+        formatter = SeriesFormatter()
+        result = formatter.format(series, FormatterContext())
+
+        assert result.is_serializable
+        assert len(result.warnings) == 0
+
+    def test_empty_series_is_serializable(self):
+        """Test that empty object dtype series is considered serializable."""
+        from anndata._repr.formatters import SeriesFormatter
+        from anndata._repr.registry import FormatterContext
+
+        series = pd.Series([], dtype=object)
+
+        formatter = SeriesFormatter()
+        result = formatter.format(series, FormatterContext())
+
+        assert result.is_serializable
+
+    def test_html_repr_shows_warning_for_custom_object_column(self):
+        """Test that the full HTML repr shows a warning for non-serializable columns."""
+
+        class CustomObject:
+            """A custom class that will never be serializable."""
+
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["custom_col"] = [CustomObject(), CustomObject(), CustomObject()]
+
+        html = adata._repr_html_()
+
+        # Check warning appears in HTML
+        assert "CustomObject" in html
+        # Check the warning indicator is present
+        assert "(!)" in html or "warning" in html.lower()
+
+
 class TestMockCuPyArrayFormatter:
     """Tests for CuPy array formatter using mock objects."""
 

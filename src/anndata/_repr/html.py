@@ -1021,10 +1021,12 @@ def _render_dataframe_entry(
 
     # Copy button hidden by default - JS shows it
 
-    # Add warning class if needed (CSS handles color)
+    # Add warning/error class (CSS handles color - error is red like in uns)
     entry_class = "adata-entry"
     if entry_warnings:
         entry_class += " warning"
+    if not output.is_serializable:
+        entry_class += " error"
 
     # Build row
     parts = [
@@ -1046,8 +1048,12 @@ def _render_dataframe_entry(
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    if entry_warnings:
-        title = escape_html("; ".join(entry_warnings))
+    if entry_warnings or not output.is_serializable:
+        # Build tooltip: "Not serializable" first (if applicable), then other warnings
+        tooltip_warnings = list(entry_warnings)
+        if not output.is_serializable:
+            tooltip_warnings.insert(0, "Not serializable to H5AD/Zarr")
+        title = escape_html("; ".join(tooltip_warnings))
         parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
 
     # Add wrap button for categories in the type column

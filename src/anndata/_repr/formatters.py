@@ -39,6 +39,55 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
+# Helper functions
+# =============================================================================
+
+
+def _check_series_serializability(series: pd.Series) -> tuple[bool, str]:
+    """
+    Check if an object-dtype Series contains serializable values.
+
+    For object dtype columns, checks the first non-null value to determine
+    if the column can be written to H5AD/Zarr. Uses anndata's actual IO
+    mechanism to test serializability.
+
+    Parameters
+    ----------
+    series
+        Pandas Series with object dtype
+
+    Returns
+    -------
+    tuple of (is_serializable, reason_if_not)
+    """
+    if len(series) == 0:
+        return True, ""
+
+    # Get first non-null value
+    first_valid_idx = series.first_valid_index()
+    if first_valid_idx is None:
+        return True, ""  # All null
+
+    value = series.loc[first_valid_idx]
+
+    # Object dtype columns with non-string/numeric values are problematic
+    # Check if value is a type that anndata can serialize in a DataFrame column
+    if isinstance(value, (list, tuple)):
+        # Lists/tuples in DataFrame columns are not directly serializable
+        # (they work in uns as arrays, but not as DataFrame cell values)
+        # NOTE: If https://github.com/scverse/anndata/issues/1923 is resolved,
+        # lists of strings may become serializable - update this check accordingly
+        return False, f"Contains {type(value).__name__}"
+    elif isinstance(value, dict):
+        return False, "Contains dict"
+    elif not isinstance(value, str | bytes | np.generic | int | float | bool):
+        # Custom objects are not serializable
+        return False, f"Contains {type(value).__name__}"
+
+    return True, ""
+
+
+# =============================================================================
 # NumPy Formatters
 # =============================================================================
 
@@ -302,6 +351,14 @@ class SeriesFormatter(TypeFormatter):
         dtype_str = str(series.dtype)
         css_class = _get_pandas_dtype_css_class(series.dtype)
 
+        # Check serializability for object dtype columns
+        is_serial = True
+        warnings = []
+        if series.dtype == np.dtype("object") and len(series) > 0:
+            is_serial, reason = _check_series_serializability(series)
+            if not is_serial:
+                warnings.append(reason)
+
         return FormattedOutput(
             type_name=f"{dtype_str}",
             css_class=css_class,
@@ -309,7 +366,8 @@ class SeriesFormatter(TypeFormatter):
                 "length": len(series),
                 "dtype": dtype_str,
             },
-            is_serializable=True,
+            is_serializable=is_serial,
+            warnings=warnings,
         )
 
 

@@ -1002,12 +1002,21 @@ def create_test_anndata() -> AnnData:
     adata.uns["float_value"] = 3.14159
     adata.uns["list_value"] = [1, 2, 3, "mixed", {"nested": True}]
 
-    # Add unserializable type (should warn)
+    # Add unserializable type in uns (should warn)
     class CustomClass:
         def __repr__(self):
             return "CustomClass()"
 
     adata.uns["unserializable"] = CustomClass()
+
+    # Add non-serializable columns in var (should warn with red like uns)
+    # Using var instead of obs since obs already has 5 columns (avoids folding)
+    # Lists in DataFrame columns are not directly serializable (issue #1923)
+    adata.var["list_col"] = [["tag1", "tag2"]] * (n_vars // 2) + [["tag3"]] * (
+        n_vars - n_vars // 2
+    )
+    # Custom objects are definitely never serializable
+    adata.var["custom_obj"] = [CustomClass() for _ in range(n_vars)]
 
     # Add obsm/varm
     adata.obsm["X_pca"] = np.random.randn(n_obs, 50).astype(np.float32)
