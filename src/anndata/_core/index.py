@@ -37,7 +37,7 @@ def _normalize_indices(
     return ax0, ax1
 
 
-def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
+def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: Index1D, index: pd.Index
 ) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
@@ -66,34 +66,36 @@ def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
-    elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
+    elif (use_xp := has_xp(indexer)) or isinstance(
+        indexer, Sequence | pd.Index | CSMatrix | np.matrix | CSArray
     ):
         # convert to the 1D if it's accidentally 2D column/row vector
         # convert sparse into dense arrays if needed
+        xp = indexer.__array_namespace__() if use_xp else np
         if hasattr(indexer, "shape") and (
             (indexer.shape == (index.shape[0], 1))
             or (indexer.shape == (1, index.shape[0]))
         ):
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
-            indexer = np.ravel(indexer)
+            indexer = xp.ravel(indexer)
         # if it is something else, convert it to numpy
-        if not isinstance(indexer, np.ndarray | pd.Index):
+        if not isinstance(indexer, pd.Index) and not use_xp:
             indexer = np.array(indexer)
+            use_xp = True
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
         # if it is a float array or something along those lines, convert it to integers
-        if isinstance(indexer, np.ndarray) and np.issubdtype(
-            indexer.dtype, np.floating
-        ):
-            indexer_int = indexer.astype(int)
-            if np.all((indexer - indexer_int) != 0):
+        if xp.isdtype(indexer.dtype, "real floating"):
+            indexer_int = xp.astype(indexer, xp.int64)
+            if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if issubclass(indexer.dtype.type, np.integer | np.floating):
+        if xp.isdtype(
+            indexer.dtype, ("signed integer", "unsigned integer", "real floating")
+        ):
             return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+        elif xp.isdtype(indexer.dtype, "bool"):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -104,7 +106,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
             return indexer
         else:
             positions = index.get_indexer(indexer)
-            if np.any(positions < 0):
+            if xp.any(positions < 0):
                 not_found = indexer[positions < 0]
                 msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
@@ -116,61 +118,6 @@ def _normalize_index(  # noqa: PLR0911, PLR0912, PLR0915
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data
-
-    elif has_xp(indexer):
-        # getting array's namespace
-        xp = indexer.__array_namespace__()
-
-        # Flatten to 1D
-        if hasattr(indexer, "shape") and (
-            indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0])
-        ):
-            indexer = xp.ravel(
-                indexer
-            )  # flattening to 1D, jax.numpy has it, not sure about cubed
-
-        # Get dtype in array-api-style
-        dtype = getattr(indexer, "dtype", None)
-
-        # if we have like a jax boolean mask array
-        if xp.issubdtype(dtype, xp.bool_):
-            if indexer.shape != index.shape:
-                msg = (
-                    f"Boolean index does not match AnnData’s shape along this dimension. "
-                    f"Boolean index has shape {indexer.shape}, expected {index.shape}"
-                )
-                raise IndexError(msg)
-            return indexer
-
-        elif xp.issubdtype(dtype, xp.integer):
-            return indexer
-        # float number case
-        elif xp.issubdtype(dtype, xp.floating):
-            indexer_int = xp.astype(indexer, xp.int32)  # jax default to it
-            # If all floats were “safe” (like 0.0, 1.0, 2.0), return them cast to integers.
-            is_fractional = xp.not_equal(indexer, xp.astype(indexer_int, xp.floating))
-            if xp.any(is_fractional):
-                msg = f"Indexer {indexer!r} has non-integer floating point values."
-                raise IndexError(msg)
-            return indexer_int
-
-        else:
-            try:
-                values = indexer.tolist()  # converting to the list
-            except Exception as err:
-                msg = f"Could not convert {indexer!r} to list for string lookup."
-                raise IndexError(msg) from err
-            positions = index.get_indexer(values)
-            if np.any(positions < 0):
-                not_found = [
-                    v for v, p in zip(values, positions, strict=False) if p < 0
-                ]
-                msg = (
-                    f"Values {not_found}, from {values}, "
-                    "are not valid obs/ var names or indices."
-                )
-                raise KeyError(msg)
-            return positions
 
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
