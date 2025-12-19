@@ -57,6 +57,53 @@ def check_column_name(name: str) -> tuple[bool, str, bool]:
     return True, "", False
 
 
+def _check_array_has_writer(array: Any) -> bool:
+    """Check if an array type has a registered IO writer.
+
+    This uses the actual IO registry, making it future-proof: if a writer
+    is registered for a new type (e.g., datetime64), this will detect it.
+    """
+    try:
+        from anndata._io.specs.registry import _REGISTRY
+
+        _REGISTRY.get_spec(array)
+        return True
+    except (KeyError, TypeError):
+        return False
+
+
+def _check_series_backing_array(series: pd.Series) -> tuple[bool, str]:
+    """Check if a Series' backing array type can be serialized.
+
+    Uses the IO registry to check the underlying array. This is future-proof:
+    if anndata adds support for datetime64/timedelta64/etc, this will detect it.
+
+    Returns (is_serializable, reason_if_not).
+    """
+    # Standard numpy dtypes are always serializable (no registry check needed)
+    # This covers: float16/32/64, int8/16/32/64, uint*, bool, complex*, bytes, str
+    if series.dtype.kind in ("f", "i", "u", "b", "c", "S", "U"):
+        return True, ""
+
+    # Get the backing array for extension dtypes
+    backing_array = series.array
+
+    # NumpyExtensionArray wraps numpy arrays - check the underlying numpy array
+    if type(backing_array).__name__ == "NumpyExtensionArray":
+        # The underlying numpy array is serializable
+        return True, ""
+
+    # For other extension arrays (DatetimeArray, ArrowStringArray, etc.),
+    # check the IO registry. This is future-proof: if anndata adds support
+    # for datetime64, the registry will have a writer and this returns True.
+    if _check_array_has_writer(backing_array):
+        return True, ""
+
+    # No writer registered - provide a helpful message
+    dtype_name = str(series.dtype)
+    return False, f"{dtype_name} not serializable"
+
+
 def _check_series_serializability(series: pd.Series) -> tuple[bool, str]:
     """
     Check if an object-dtype Series contains serializable values.
@@ -365,20 +412,19 @@ class SeriesFormatter(TypeFormatter):
         dtype_str = str(series.dtype)
         css_class = _get_pandas_dtype_css_class(series.dtype)
 
-        # Check serializability
+        # Check serializability using the IO registry (future-proof)
         is_serial = True
         warnings = []
 
-        # datetime64/timedelta64 columns are not serializable (issue #455)
-        if pd.api.types.is_datetime64_any_dtype(series.dtype):
-            is_serial = False
-            warnings.append("datetime64 not serializable")
-        elif pd.api.types.is_timedelta64_dtype(series.dtype):
-            is_serial = False
-            warnings.append("timedelta64 not serializable")
+        # For non-object dtypes, check if the backing array has a registered writer
+        # This is future-proof: if anndata adds datetime64 support, this will detect it
+        if series.dtype != np.dtype("object"):
+            is_serial, reason = _check_series_backing_array(series)
+            if not is_serial:
+                warnings.append(reason)
 
-        # Object dtype columns may contain non-serializable values
-        elif series.dtype == np.dtype("object") and len(series) > 0:
+        # Object dtype columns need value-level checking
+        elif len(series) > 0:
             is_serial, reason = _check_series_serializability(series)
             if not is_serial:
                 warnings.append(reason)
