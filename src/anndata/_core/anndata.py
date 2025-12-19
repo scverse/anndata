@@ -4,7 +4,6 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
@@ -668,11 +667,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
                     warn(msg, UserWarning)
                     value = value.toarray()
-                warnings.warn(  # noqa: TID251
-                    "Modifying `X` on a view results in data being overridden",
-                    ImplicitModificationWarning,
-                    stacklevel=2,
-                )
+                msg = "Modifying `X` on a view results in data being overridden"
+                warn(msg, ImplicitModificationWarning)
                 self._adata_ref._X[oidx, vidx] = value
             else:
                 self._X = value
