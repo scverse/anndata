@@ -3065,21 +3065,125 @@ class TestSeriesFormatterNonSerializable:
 
         assert result.is_serializable
 
-    def test_html_repr_shows_warning_for_custom_object_column(self):
-        """Test that the full HTML repr shows a warning for non-serializable columns."""
+    def test_list_column_detected_and_not_serializable(self, tmp_path):
+        """Repr detects list columns as non-serializable, and they actually fail."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["list_col"] = [["a", "b"], ["c"], ["d"]]
+
+        # Repr detects it
+        html = adata._repr_html_()
+        assert "list" in html
+        assert "(!)" in html
+
+        # Actually fails to serialize
+        with pytest.raises(TypeError):
+            adata.write_h5ad(tmp_path / "test.h5ad")
+
+    def test_custom_object_detected_and_not_serializable(self, tmp_path):
+        """Repr detects custom objects as non-serializable, and they actually fail."""
 
         class CustomObject:
-            """A custom class that will never be serializable."""
+            pass
 
         adata = ad.AnnData(X=np.eye(3))
-        adata.obs["custom_col"] = [CustomObject(), CustomObject(), CustomObject()]
+        adata.obs["custom"] = [CustomObject(), CustomObject(), CustomObject()]
+
+        # Repr detects it
+        html = adata._repr_html_()
+        assert "CustomObject" in html
+        assert "(!)" in html
+
+        # Actually fails to serialize
+        with pytest.raises(TypeError):
+            adata.write_h5ad(tmp_path / "test.h5ad")
+
+    def test_non_ascii_column_no_warning_and_serializes(self, tmp_path):
+        """Repr does not warn for non-ASCII (it's valid), and it serializes."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["gène_名前"] = ["a", "b", "c"]
+
+        # Repr does not warn
+        html = adata._repr_html_()
+        assert "gène_名前" in html
+        assert "Not serializable" not in html
+
+        # Actually serializes
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+        adata2 = ad.read_h5ad(path)
+        assert "gène_名前" in adata2.obs.columns
+
+    def test_tuple_column_name_detected_and_not_serializable(self, tmp_path):
+        """Repr detects non-string column names, and they actually fail."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs[("a", "b")] = [1, 2, 3]
+
+        # Repr detects it
+        html = adata._repr_html_()
+        assert "Non-string" in html
+        assert "(!)" in html
+
+        # Actually fails to serialize
+        with pytest.raises(TypeError):
+            adata.write_h5ad(tmp_path / "test.h5ad")
+
+
+class TestColumnNameValidation:
+    """Tests for column name validation (issue #321)."""
+
+    def test_check_column_name_valid(self):
+        """Test that valid column names pass."""
+        from anndata._repr.formatters import check_column_name
+
+        valid, _, _ = check_column_name("gene_name")
+        assert valid
+        valid, _, _ = check_column_name("gène_名前")  # Non-ASCII is fine
+        assert valid
+
+    def test_check_column_name_slash(self):
+        """Test slashes are flagged as warning (not hard error - still works for now)."""
+        from anndata._repr.formatters import check_column_name
+
+        valid, reason, is_hard_error = check_column_name("path/to/gene")
+        assert not valid
+        assert "/" in reason
+        assert not is_hard_error  # Deprecation warning, not hard error
+
+    def test_check_column_name_non_string(self):
+        """Test non-string names are flagged as hard error."""
+        from anndata._repr.formatters import check_column_name
+
+        valid, reason, is_hard_error = check_column_name(("a", "b"))
+        assert not valid
+        assert "Non-string" in reason
+        assert is_hard_error  # Fails NOW
+
+    def test_html_repr_shows_warning_for_slash_column_name(self):
+        """Test that the HTML repr shows warnings for slash in column names."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["path/gene"] = ["a", "b", "c"]
 
         html = adata._repr_html_()
+        assert "deprecated" in html or "/" in html
 
-        # Check warning appears in HTML
-        assert "CustomObject" in html
-        # Check the warning indicator is present
-        assert "(!)" in html or "warning" in html.lower()
+    def test_mapping_sections_warn_for_invalid_keys(self):
+        """Test that layers/obsm/etc warn for invalid key names."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.layers[("tuple", "key")] = np.eye(3)  # Non-string - error
+        adata.obsm["path/embed"] = np.random.randn(3, 2)  # Slash - warning
+
+        html = adata._repr_html_()
+        assert "Non-string" in html
+        assert "deprecated" in html
+
+    def test_uns_warns_for_invalid_keys(self):
+        """Test that uns warns for invalid key names."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.uns[("tuple", "key")] = "value"  # Non-string - error
+
+        html = adata._repr_html_()
+        assert "Non-string" in html
+        assert "Not serializable" in html
 
 
 class TestMockCuPyArrayFormatter:

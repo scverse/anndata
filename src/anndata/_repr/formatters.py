@@ -43,6 +43,20 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
+def check_column_name(name: str) -> tuple[bool, str, bool]:
+    """Check if a column name is valid for HDF5/Zarr serialization.
+
+    Returns (is_valid, reason, is_hard_error).
+    is_hard_error=True means it fails NOW, False means it's a deprecation warning.
+    """
+    if not isinstance(name, str):
+        return False, f"Non-string name ({type(name).__name__})", True
+    # Slashes will be disallowed in h5 stores (FutureWarning)
+    if "/" in name:
+        return False, "Contains '/' (deprecated)", False
+    return True, "", False
+
+
 def _check_series_serializability(series: pd.Series) -> tuple[bool, str]:
     """
     Check if an object-dtype Series contains serializable values.

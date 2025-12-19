@@ -231,6 +231,7 @@ from anndata._repr.constants import (
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
+    NOT_SERIALIZABLE_MSG,
 )
 
 # Documentation base URL
@@ -260,6 +261,7 @@ from anndata._repr.css import get_css  # noqa: E402
 
 # HTML rendering helpers for building custom sections
 # UI component helpers (search box, fold icon, badges, etc.)
+from anndata._repr.formatters import check_column_name  # noqa: E402
 from anndata._repr.html import (  # noqa: E402  # noqa: E402
     generate_repr_html,
     render_badge,
@@ -269,6 +271,7 @@ from anndata._repr.html import (  # noqa: E402  # noqa: E402
     render_header_badges,
     render_search_box,
     render_section,
+    render_warning_icon,
 )
 from anndata._repr.javascript import get_javascript  # noqa: E402
 from anndata._repr.registry import (  # noqa: E402
@@ -304,6 +307,7 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "DEFAULT_TYPE_WIDTH",
     "DOCS_BASE_URL",
     "SECTION_ORDER",
+    "NOT_SERIALIZABLE_MSG",
     # Main function
     "generate_repr_html",
     # Registry for extensibility
@@ -333,4 +337,7 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "render_copy_button",
     "render_badge",
     "render_header_badges",
+    "render_warning_icon",
+    # Validation helpers
+    "check_column_name",
 ]

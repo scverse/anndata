@@ -1009,15 +1009,6 @@ def create_test_anndata() -> AnnData:
 
     adata.uns["unserializable"] = CustomClass()
 
-    # Add non-serializable columns in var (should warn with red like uns)
-    # Using var instead of obs since obs already has 5 columns (avoids folding)
-    # Lists in DataFrame columns are not directly serializable (issue #1923)
-    adata.var["list_col"] = [["tag1", "tag2"]] * (n_vars // 2) + [["tag3"]] * (
-        n_vars - n_vars // 2
-    )
-    # Custom objects are definitely never serializable
-    adata.var["custom_obj"] = [CustomClass() for _ in range(n_vars)]
-
     # Add obsm/varm
     adata.obsm["X_pca"] = np.random.randn(n_obs, 50).astype(np.float32)
     adata.obsm["X_umap"] = np.random.randn(n_obs, 2).astype(np.float32)
@@ -1964,6 +1955,55 @@ For more details, see the full documentation.
         "</ul>"
         "This tests the actual <code>_render_section</code> try/except error handling "
         "using the real <code>generate_repr_html</code> pipeline.",
+    ))
+
+    # Test 23: Serialization warnings and edge cases
+    print("  23. Serialization warnings and edge cases")
+
+    class CustomObject:
+        def __repr__(self):
+            return "CustomObject()"
+
+    adata_serial = ad.AnnData(X=np.eye(5))
+
+    # Cases that SHOULD warn (and fail to serialize)
+    adata_serial.obs["list_values"] = [["a", "b"], ["c"], ["d"], ["e"], ["f"]]
+    adata_serial.obs["dict_values"] = [{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}, {"k": 5}]
+    adata_serial.obs["custom_obj"] = [CustomObject() for _ in range(5)]
+    adata_serial.obs["path/slash"] = ["a", "b", "c", "d", "e"]  # Slash in name
+    adata_serial.obs[("tuple", "name")] = [1, 2, 3, 4, 5]  # Non-string name
+
+    # Cases that should NOT warn (and serialize fine)
+    adata_serial.var["gène_名前"] = ["a", "b", "c", "d", "e"]  # Non-ASCII is OK
+    adata_serial.var["normal_col"] = [1.0, 2.0, 3.0, 4.0, 5.0]  # Normal floats
+    adata_serial.var["string_col"] = ["a", "b", "c", "d", "e"]  # Strings OK
+
+    # Mapping sections (layers, obsm, etc.) - same rules apply
+    adata_serial.layers[("tuple", "key")] = np.eye(5)  # Non-string - fails NOW
+    adata_serial.obsm["path/embed"] = np.random.randn(5, 2)  # Slash - deprecated
+
+    sections.append((
+        "23. Serialization Warnings",
+        adata_serial._repr_html_(),
+        "<strong>Fails NOW (red):</strong>"
+        "<ul>"
+        "<li><code>obs.list_values</code> - Contains list</li>"
+        "<li><code>obs.dict_values</code> - Contains dict</li>"
+        "<li><code>obs.custom_obj</code> - Contains CustomObject</li>"
+        "<li><code>obs.('tuple', 'name')</code> - Non-string column name</li>"
+        "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
+        "</ul>"
+        "<strong>Will fail in future (yellow):</strong>"
+        "<ul>"
+        "<li><code>obs.path/slash</code> - Slash in name</li>"
+        "<li><code>obsm.path/embed</code> - Slash in key</li>"
+        "</ul>"
+        "<strong>Serializes fine (no warning):</strong>"
+        "<ul>"
+        "<li><code>var.gène_名前</code> - Non-ASCII is valid UTF-8</li>"
+        "<li><code>var.normal_col</code> - Normal float values</li>"
+        "<li><code>var.string_col</code> - String values</li>"
+        "</ul>",
     ))
 
     # Generate HTML file

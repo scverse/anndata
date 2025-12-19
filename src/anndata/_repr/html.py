@@ -30,6 +30,7 @@ from anndata._repr import (
     SECTION_ORDER,
 )
 from anndata._repr.constants import (
+    NOT_SERIALIZABLE_MSG,
     STYLE_HIDDEN,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
@@ -66,6 +67,7 @@ if TYPE_CHECKING:
 
 # Import formatters to register them (side-effect import)
 import anndata._repr.formatters  # noqa: F401
+from anndata._repr.formatters import check_column_name
 
 # Approximate character width in pixels for monospace font at 13px
 CHAR_WIDTH_PX = 8
@@ -84,6 +86,29 @@ STYLE_SECTION_INFO = "padding:6px 12px;"
 
 # Category color dot - needs inline for dynamic background color
 STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
+
+
+def render_warning_icon(warnings: list[str], is_error: bool = False) -> str:
+    """Render warning icon with tooltip if there are warnings or errors.
+
+    Parameters
+    ----------
+    warnings
+        List of warning messages to show in tooltip.
+    is_error
+        If True, prepends "Not serializable to H5AD/Zarr" to warnings.
+
+    Returns
+    -------
+    HTML string for warning icon, or empty string if no warnings/error.
+    """
+    if not warnings and not is_error:
+        return ""
+    all_warnings = list(warnings)
+    if is_error:
+        all_warnings.insert(0, NOT_SERIALIZABLE_MSG)
+    title = escape_html("; ".join(all_warnings))
+    return f'<span class="adata-warning-icon" title="{title}">(!)</span>'
 
 
 def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
@@ -499,12 +524,7 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    if output.warnings or not output.is_serializable:
-        warnings_list = list(output.warnings)
-        if not output.is_serializable:
-            warnings_list.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(warnings_list))
-        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
+    parts.append(render_warning_icon(list(output.warnings), not output.is_serializable))
 
     if has_expandable_content:
         parts.append(
@@ -1011,6 +1031,13 @@ def _render_dataframe_entry(
     if should_warn:
         entry_warnings.append(warn_msg)
 
+    # Check column name validity (issue #321)
+    name_valid, name_reason, name_hard_error = check_column_name(col_name)
+    name_error = False
+    if not name_valid:
+        entry_warnings.append(name_reason)
+        name_error = name_hard_error
+
     # Check for color mismatch
     color_warning = check_color_category_mismatch(adata, col_name)
     if color_warning:
@@ -1025,7 +1052,7 @@ def _render_dataframe_entry(
     entry_class = "adata-entry"
     if entry_warnings:
         entry_class += " warning"
-    if not output.is_serializable:
+    if not output.is_serializable or name_error:
         entry_class += " error"
 
     # Build row
@@ -1048,13 +1075,8 @@ def _render_dataframe_entry(
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    if entry_warnings or not output.is_serializable:
-        # Build tooltip: "Not serializable" first (if applicable), then other warnings
-        tooltip_warnings = list(entry_warnings)
-        if not output.is_serializable:
-            tooltip_warnings.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(tooltip_warnings))
-        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
+    is_error = not output.is_serializable or name_error
+    parts.append(render_warning_icon(entry_warnings, is_error))
 
     # Add wrap button for categories in the type column
     if is_categorical and n_cats > 0:
@@ -1120,6 +1142,8 @@ def _render_type_cell(
     output: FormattedOutput,
     *,
     has_expandable_content: bool,
+    extra_warnings: list[str] | None = None,
+    key_hard_error: bool = False,
 ) -> list[str]:
     """Render the type cell for a mapping entry."""
     parts = ['<td class="adata-entry-type">']
@@ -1127,12 +1151,9 @@ def _render_type_cell(
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    if output.warnings or not output.is_serializable:
-        entry_warnings = output.warnings.copy()
-        if not output.is_serializable:
-            entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(entry_warnings))
-        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
+    all_warnings = (extra_warnings or []) + list(output.warnings)
+    has_error = not output.is_serializable or key_hard_error
+    parts.append(render_warning_icon(all_warnings, has_error))
 
     if has_expandable_content:
         parts.append(
@@ -1188,13 +1209,17 @@ def _render_mapping_entry(
     """Render a single mapping entry."""
     output = formatter_registry.format_value(value, context)
 
-    # Button styles (hidden by default - JS shows them)
+    # Check key name validity (issue #321)
+    key_valid, key_reason, key_hard_error = check_column_name(key)
+    key_warnings = []
+    if not key_valid:
+        key_warnings.append(key_reason)
 
     # Build class list for CSS styling
     entry_class = "adata-entry"
-    if output.warnings:
+    if output.warnings or key_warnings:
         entry_class += " warning"
-    if not output.is_serializable:
+    if not output.is_serializable or key_hard_error:
         entry_class += " error"
 
     has_expandable_content = output.html_content and output.is_expandable
@@ -1209,7 +1234,12 @@ def _render_mapping_entry(
 
     # Type cell
     parts.extend(
-        _render_type_cell(output, has_expandable_content=has_expandable_content)
+        _render_type_cell(
+            output,
+            has_expandable_content=has_expandable_content,
+            extra_warnings=key_warnings,
+            key_hard_error=key_hard_error,
+        )
     )
 
     # Meta cell
@@ -1339,12 +1369,16 @@ def _render_uns_entry_with_preview(
     if preview_note:
         preview = f"{preview_note} {preview}" if preview else preview_note
 
-    # Inline styles for layout - colors via CSS
+    # Check key name validity
+    key_valid, key_reason, key_hard_error = check_column_name(key)
+    all_warnings = list(output.warnings)
+    if not key_valid:
+        all_warnings.append(key_reason)
 
     entry_class = "adata-entry"
-    if output.warnings:
+    if all_warnings:
         entry_class += " warning"
-    if not output.is_serializable:
+    if not output.is_serializable or key_hard_error:
         entry_class += " error"
 
     parts = [
@@ -1359,12 +1393,8 @@ def _render_uns_entry_with_preview(
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    if output.warnings or not output.is_serializable:
-        warn_list = output.warnings.copy()
-        if not output.is_serializable:
-            warn_list.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(warn_list))
-        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
+    is_error = not output.is_serializable or key_hard_error
+    parts.append(render_warning_icon(all_warnings, is_error))
     parts.append("</td>")
 
     # Meta - value preview
@@ -1466,15 +1496,19 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     The output should have html_content set.
     """
-    # Inline styles for layout
-
     type_label = output.type_name
+
+    # Check key name validity
+    key_valid, key_reason, key_hard_error = check_column_name(key)
+    all_warnings = list(output.warnings)
+    if not key_valid:
+        all_warnings.append(key_reason)
 
     # Build class list for CSS styling
     entry_class = "adata-entry"
-    if output.warnings:
+    if all_warnings:
         entry_class += " warning"
-    if not output.is_serializable:
+    if not output.is_serializable or key_hard_error:
         entry_class += " error"
 
     parts = [
@@ -1487,12 +1521,8 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     # Type
     parts.append('<td class="adata-entry-type">')
     parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
-    if output.warnings or not output.is_serializable:
-        entry_warnings = output.warnings.copy()
-        if not output.is_serializable:
-            entry_warnings.insert(0, "Not serializable to H5AD/Zarr")
-        title = escape_html("; ".join(entry_warnings))
-        parts.append(f'<span class="adata-warning-icon" title="{title}">(!)</span>')
+    is_error = not output.is_serializable or key_hard_error
+    parts.append(render_warning_icon(all_warnings, is_error))
     parts.append("</td>")
 
     # Meta - custom HTML content

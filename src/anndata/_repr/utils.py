@@ -177,7 +177,7 @@ def is_color_list(key: str, value: Any) -> bool:
     -------
     True if this appears to be a color list
     """
-    if not key.endswith("_colors"):
+    if not isinstance(key, str) or not key.endswith("_colors"):
         return False
     if not isinstance(value, (list, np.ndarray, tuple)):
         return False

@@ -25,3 +25,6 @@ DEFAULT_TYPE_WIDTH = 220  # Width for type column
 STYLE_HIDDEN = "display:none;"
 STYLE_SECTION_CONTENT = "padding:0;overflow:hidden;"
 STYLE_SECTION_TABLE = "width:100%;border-collapse:collapse;"
+
+# Warning messages
+NOT_SERIALIZABLE_MSG = "Not serializable to H5AD/Zarr"
