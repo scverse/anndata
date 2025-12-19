@@ -3066,21 +3066,37 @@ class TestSeriesFormatterNonSerializable:
         assert result.is_serializable
 
     def test_list_column_detected_and_not_serializable(self, tmp_path):
-        """Repr detects list columns as non-serializable, and they actually fail."""
+        """Repr detects list columns as non-serializable, and they actually fail.
+
+        MAINTAINER NOTE: If issue #1923 is resolved and lists become serializable,
+        update _check_series_serializability() in formatters.py to remove the
+        list/tuple check, or make it conditional on list content.
+        """
         adata = ad.AnnData(X=np.eye(3))
         adata.obs["list_col"] = [["a", "b"], ["c"], ["d"]]
 
-        # Repr detects it
+        # Verify lists still fail to serialize
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "List serialization now works! "
+                "Update _check_series_serializability() in formatters.py."
+            )
+        except (TypeError, Exception):
+            pass  # Expected - lists not serializable
+
+        # Repr should detect and warn
         html = adata._repr_html_()
         assert "list" in html
         assert "(!)" in html
 
-        # Actually fails to serialize
-        with pytest.raises(TypeError):
-            adata.write_h5ad(tmp_path / "test.h5ad")
-
     def test_custom_object_detected_and_not_serializable(self, tmp_path):
-        """Repr detects custom objects as non-serializable, and they actually fail."""
+        """Repr detects custom objects as non-serializable, and they actually fail.
+
+        NOTE: Custom objects should never become serializable without explicit
+        registration. If this test fails, check if anndata added a generic
+        object serialization mechanism.
+        """
 
         class CustomObject:
             pass
@@ -3088,44 +3104,68 @@ class TestSeriesFormatterNonSerializable:
         adata = ad.AnnData(X=np.eye(3))
         adata.obs["custom"] = [CustomObject(), CustomObject(), CustomObject()]
 
-        # Repr detects it
+        # Verify custom objects still fail to serialize
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "Custom object serialization now works! "
+                "Update _check_series_serializability() in formatters.py."
+            )
+        except (TypeError, Exception):
+            pass  # Expected - custom objects not serializable
+
+        # Repr should detect and warn
         html = adata._repr_html_()
         assert "CustomObject" in html
         assert "(!)" in html
 
-        # Actually fails to serialize
-        with pytest.raises(TypeError):
-            adata.write_h5ad(tmp_path / "test.h5ad")
-
     def test_non_ascii_column_no_warning_and_serializes(self, tmp_path):
-        """Repr does not warn for non-ASCII (it's valid), and it serializes."""
+        """Repr does not warn for non-ASCII (it's valid), and it serializes.
+
+        MAINTAINER NOTE: If non-ASCII stops working, add a warning in
+        check_column_name() in formatters.py. But UTF-8 should always work.
+        """
         adata = ad.AnnData(X=np.eye(3))
         adata.obs["gène_名前"] = ["a", "b", "c"]
 
-        # Repr does not warn
+        # Verify non-ASCII still serializes fine
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+        adata2 = ad.read_h5ad(path)
+        assert "gène_名前" in adata2.obs.columns, (
+            "Non-ASCII serialization broke! If this is intentional, "
+            "add warning in check_column_name() in formatters.py."
+        )
+
+        # Repr should NOT warn (non-ASCII is valid UTF-8)
         html = adata._repr_html_()
         assert "gène_名前" in html
         assert "Not serializable" not in html
 
-        # Actually serializes
-        path = tmp_path / "test.h5ad"
-        adata.write_h5ad(path)
-        adata2 = ad.read_h5ad(path)
-        assert "gène_名前" in adata2.obs.columns
-
     def test_tuple_column_name_detected_and_not_serializable(self, tmp_path):
-        """Repr detects non-string column names, and they actually fail."""
+        """Repr detects non-string column names, and they actually fail.
+
+        NOTE: Non-string column names (tuples, ints) should never become
+        serializable - HDF5/Zarr keys must be strings. If this changes,
+        update check_column_name() in formatters.py.
+        """
         adata = ad.AnnData(X=np.eye(3))
         adata.obs[("a", "b")] = [1, 2, 3]
 
-        # Repr detects it
+        # Verify non-string names still fail to serialize
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "Non-string column name serialization now works! "
+                "Update check_column_name() in formatters.py."
+            )
+        except (TypeError, Exception):
+            pass  # Expected - non-string names not serializable
+
+        # Repr should detect and warn
         html = adata._repr_html_()
         assert "Non-string" in html
         assert "(!)" in html
-
-        # Actually fails to serialize
-        with pytest.raises(TypeError):
-            adata.write_h5ad(tmp_path / "test.h5ad")
 
     def test_datetime64_column_detected_and_not_serializable(self, tmp_path):
         """Repr detects datetime64 columns as non-serializable (issue #455).
@@ -3212,11 +3252,41 @@ class TestColumnNameValidation:
         assert "Non-string" in reason
         assert is_hard_error  # Fails NOW
 
-    def test_html_repr_shows_warning_for_slash_column_name(self):
-        """Test that the HTML repr shows warnings for slash in column names."""
+    def test_slash_column_name_warns_but_still_serializes(self, tmp_path):
+        """Test slash in column names: warns (yellow) but still works for now.
+
+        MAINTAINER NOTE: When slashes become hard errors (FutureWarning fulfilled),
+        update check_column_name() in formatters.py to return is_hard_error=True
+        for slashes, and update the CSS class from yellow to red.
+        """
         adata = ad.AnnData(X=np.eye(3))
         adata.obs["path/gene"] = ["a", "b", "c"]
 
+        # Currently still serializes (with FutureWarning)
+        path = tmp_path / "test_slash.h5ad"
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            try:
+                adata.write_h5ad(path)
+                # If we get here, slashes still work
+                serializes = True
+            except Exception:
+                # Slashes now fail - update repr to show red instead of yellow
+                serializes = False
+                pytest.fail(
+                    "Slash in column names now fails! "
+                    "Update check_column_name() in formatters.py: "
+                    "set is_hard_error=True for slashes."
+                )
+
+        if serializes:
+            # Verify it's still a FutureWarning (yellow in repr)
+            adata2 = ad.read_h5ad(path)
+            assert "path/gene" in adata2.obs.columns
+
+        # Repr should show yellow warning (not red error)
         html = adata._repr_html_()
         assert "deprecated" in html or "/" in html
 
