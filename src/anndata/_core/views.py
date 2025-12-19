@@ -37,50 +37,6 @@ if TYPE_CHECKING:
     from ..compat import Index1DNorm
 
 
-# def _to_numpy_if_immutable(x):
-#     print("Initial x:", type(x))
-#     if isinstance(x, np.ndarray | pd.DataFrame | pd.Series | DaskArray):
-#         print("x is already a supported mutable type:", type(x))
-#         return x
-#     try:
-#         # checking for mutability
-#         print("Trying np.asarray(x)...")
-#         x_array = np.asarray(x)
-#         print("np.asarray(x) succeeded:", type(x_array))
-#         if x_array.size > 0:
-#             try:
-#                 orig = x_array[0]
-#                 print("Checking mutability: trying in-place write")
-#                 x_array[0] = orig  # test no-op write
-#                 print("In-place mutation succeeded, x is mutable:", type(x))
-#                 return x  # mutation worked, so keep original
-#             except (ValueError, TypeError) as e:
-#                 print("In-place mutation failed:", type(x), "|", repr(e))
-#                 # pass
-
-#     except ValueError:
-#         print("Trying np.from_dlpack(x)...")
-#         result = np.from_dlpack(x)
-#         print("np.from_dlpack(x) succeeded:", type(result))
-#         # pass
-#     # if it is not mutable, we convert to numpy
-#     try:
-#         # trying convert via from_dlpack first
-#         return np.from_dlpack(x)
-#     except TypeError:
-#         try:
-#             # fallback to asarray if from_dlpack not possible
-#             print("Trying fallback np.asarray(x)...")
-#             result = np.asarray(x)
-#             print("Fallback np.asarray(x) succeeded:", type(result))
-#             return result
-#         except ValueError:
-#             # Not an array-API object (or lib not available) = return unchanged
-#             print("Final fallback np.asarray(x) failed:", type(x), "|", repr(e))
-#             print("Returning x as-is:", type(x))
-#             return x
-
-
 @contextmanager
 def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     """Context manager for updating a view of an AnnData object.
@@ -113,34 +69,6 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     adata_view._init_as_actual(new)
 
 
-def _replace_field(container, idx, value):
-    import awkward as ak
-
-    # JAX-style immutable array
-    if hasattr(container, "at"):
-        return container.at[idx].set(value)
-
-    # Awkward Array: replace a field or index
-    if isinstance(container, ak.Array):
-        # Awkward field key (e.g. container["c"] = value)
-        if isinstance(idx, str):
-            return ak.with_field(container, value, idx)
-        # Positional index (e.g. container[0] = value)
-        else:
-            container_np = np.asarray(container)
-            container_np[idx] = value
-            return ak.Array(container_np)
-
-    # NumPy or anything else: try normal in-place replacement
-    try:
-        container_copy = container.copy()
-        container_copy[idx] = value
-        return container_copy
-    except TypeError as err:
-        msg = f"Unsupported container type: {type(container)}"
-        raise TypeError(msg) from err
-
-
 class _SetItemMixin:
     """\
     Class which (when values are being set) lets their parent AnnData view know,
@@ -150,24 +78,6 @@ class _SetItemMixin:
 
     _view_args: ElementRef | None
 
-    # def __setitem__(self, idx: Any, value: Any):
-    #     # from anndata._core.merge import _to_numpy_if_immutable
-
-    #     if self._view_args is None:
-    #         super().__setitem__(idx, value)
-    #     else:
-    #         warnings.warn(
-    #             f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
-    #             "initializing view as actual.",
-    #             ImplicitModificationWarning,
-    #             stacklevel=2,
-    #         )
-    #         with view_update(*self._view_args) as container:
-    #             arr = _to_numpy_if_immutable(container)
-    #             arr[idx] = value
-    #             # manually assign back into the parent dict
-    #             parent = reduce(lambda d, k: d[k], self._view_args[:-1])
-    #             parent[self._view_args[-1]] = arr
     def __setitem__(self, idx: Any, value: Any):
         if self._view_args is None:
             super().__setitem__(idx, value)
@@ -179,13 +89,6 @@ class _SetItemMixin:
             warn(msg, ImplicitModificationWarning)
             with view_update(*self._view_args) as container:
                 container[idx] = value
-            # potential conversion to numpy
-            # with view_update(*self._view_args) as (parent, key, container):
-            #     try:
-            #         container[idx] = value  # works for NumPy / mutable arrays
-            #     except (TypeError, ValueError):
-            #         new_container = _replace_field(container, idx, value)
-            #         parent[key] = new_container
 
 
 class _ViewMixin(_SetItemMixin):
@@ -398,7 +301,9 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 @singledispatch
 def as_view(obj, view_args):
     if has_xp(obj):
-        # TODO: Determine if we need some sort of specific view object for array-api
+        # TODO: Determine if we need some sort of specific view object for array-api, or some sort of wrapper that just warns loudly?
+        # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
+        # You should NOT update views.
         return obj
     msg = f"No view type has been registered for {type(obj)}"
     raise NotImplementedError(msg)
@@ -553,7 +458,6 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
-    import array_api_compat as aac
 
     from ..compat import has_xp
 
@@ -561,19 +465,24 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
     if not has_xp(old):
         msg = f"Expected array-API–compatible array, got {type(old)}"
         raise TypeError(msg)
-
-    xp = aac.array_namespace(old)
-
-    # handle boolean mask; check dtype string representation for bool-like types
-    # not sure what is causing it but i get the error stating that array_api_compat does not have isdtype (can't seem to resolve the issue)
-    # I have 2023 version of array_api_compat installed
-    if hasattr(old, "dtype") and str(old.dtype) in ("bool", "bool_", "boolean"):
-        old = xp.nonzero(old)[0]
+    xp = old.__array_namespace__()
 
     # handle slice indexing by converting to array indices
     if isinstance(new, slice):
         new = xp.arange(*new.indices(old.shape[0]))
+    if not has_xp(new):
+        msg = "New indexer must have array api compatibility"
+        raise RuntimeError(msg)
 
+    if (new_xp := new.__array_namespace__()) is not xp:
+        msg = f"Cannot resolve indices when the old indexer and new indexer are not the same array-api compatible type. old: {xp}, new: {new_xp}"
+        raise RuntimeError(msg)
+    if xp.isdtype(old.dtype, "bool"):
+        if xp.isdtype(new.dtype, "bool"):
+            mask = xp.zeros_like(old)
+            mask[xp.nonzero(xp.reshape(old, (-1,)))[new]] = True
+            return mask
+        old = xp.where(old)[0]
     return old[new]
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import nullcontext, suppress
+from contextlib import nullcontext
 from copy import deepcopy
 from importlib.metadata import version
 from operator import mul
@@ -38,10 +38,10 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
-jnp = None
-jax = None
-with suppress(ImportError):
+try:
     import jax.numpy as jnp
+except ImportError:
+    jnp = None
 
 if TYPE_CHECKING:
     from types import EllipsisType
@@ -948,7 +948,7 @@ def test_normalize_index_jax_flatten_2d():
 
 
 @pytest.mark.skipif(jnp is None, reason="JAX not installed")
-def test_double_index_jax(subset_func, subset_func2):
+def test_index_jax_both_axes():
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), array_namespace="jax")
     obs_subset = jnp.array([0, 2, 4, 6])
@@ -956,8 +956,15 @@ def test_double_index_jax(subset_func, subset_func2):
     v1 = adata[obs_subset, var_subset]
     v2 = adata[obs_subset, :][:, var_subset]
 
-    assert np.all(asarray(v1.X) == asarray(v2.X))
-    assert np.all(v1.obs == v2.obs)
-    assert np.all(v1.var == v2.var)
-    assert isinstance(v1.X, jnp.ndarray)
-    assert isinstance(v2.X, jnp.ndarray)
+    assert_equal(v1, v2)
+
+
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+def test_double_index_jax():
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), array_namespace="jax")
+    subset = [0, 1, 3, 4]
+    v1 = adata[subset, :]
+    v2 = adata[jnp.array([0, 1, 2, 3, 4, 5]), :][jnp.array(subset), :]
+
+    assert_equal(v1, v2)
