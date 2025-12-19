@@ -38,6 +38,7 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
+    has_xp,
     is_zarr_v2,
 )
 from anndata.utils import asarray
@@ -699,17 +700,15 @@ def report_name(func):
 @report_name
 def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    from array_api_compat import get_namespace
-
-    try:
-        xp = get_namespace(a)
+    if has_xp(a):
+        xp = a.__array_namespace()
 
         if exact:
             assert xp.all(a == b)
         else:
             # for padding with NaN
             assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
-    except TypeError:
+    else:
         assert a == b
 
 

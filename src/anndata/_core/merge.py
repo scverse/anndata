@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
-from array_api_compat import get_namespace
 from natsort import natsorted
 from scipy import sparse
 
@@ -648,7 +647,7 @@ class Reindexer:
     def _apply_to_array_api(self, el, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = default_fill_value([el])
-        xp = get_namespace(el)
+        xp = el.__array_namespace__()
         indexer = xp.asarray(self.idx)
 
         # Handling edge case to mimic pandas behavior
