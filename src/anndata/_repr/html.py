@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from anndata._repr import (
+from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
@@ -29,20 +29,20 @@ from anndata._repr import (
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
-from anndata._repr.constants import (
+from .constants import (
     NOT_SERIALIZABLE_MSG,
     STYLE_HIDDEN,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
 )
-from anndata._repr.css import get_css
-from anndata._repr.javascript import get_javascript
-from anndata._repr.registry import (
+from .css import get_css
+from .javascript import get_javascript
+from .registry import (
     FormatterContext,
     extract_uns_type_hint,
     formatter_registry,
 )
-from anndata._repr.utils import (
+from .utils import (
     check_color_category_mismatch,
     escape_html,
     format_memory_size,
@@ -63,18 +63,16 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from anndata import AnnData
-    from anndata._repr.registry import FormattedEntry, FormattedOutput
+
+    from .registry import FormattedEntry, FormattedOutput
 
 # Import formatters to register them (side-effect import)
-import anndata._repr.formatters  # noqa: F401
-from anndata._repr.formatters import check_column_name
+from . import formatters as _formatters  # noqa: F401
+from .formatters import check_column_name
 
 # Approximate character width in pixels for monospace font at 13px
 CHAR_WIDTH_PX = 8
 
-# =============================================================================
-# Inline styles for graceful degradation
-# =============================================================================
 # CSS classes in css.py provide full styling with dark mode support.
 # These inline styles are minimal fallbacks that ensure basic readability
 # if CSS fails to load (e.g., email clients, restrictive embeds).
@@ -88,7 +86,7 @@ STYLE_SECTION_INFO = "padding:6px 12px;"
 STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
 
 
-def render_warning_icon(warnings: list[str], is_error: bool = False) -> str:
+def render_warning_icon(warnings: list[str], *, is_error: bool = False) -> str:
     """Render warning icon with tooltip if there are warnings or errors.
 
     Parameters
@@ -271,11 +269,6 @@ def generate_repr_html(
     return "\n".join(parts)
 
 
-# =============================================================================
-# Custom Section Support
-# =============================================================================
-
-
 def _render_all_sections(
     adata: AnnData,
     context: FormatterContext,
@@ -413,7 +406,7 @@ def _render_custom_section(
         entries = formatter.get_entries(adata, context)
     except Exception as e:  # noqa: BLE001
         # Intentional broad catch: custom formatters shouldn't crash the entire repr
-        from anndata._warnings import warn
+        from .._warnings import warn
 
         warn(
             f"Custom section formatter '{formatter.section_name}' failed: {e}",
@@ -470,7 +463,7 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
     --------
     ::
 
-        from anndata._repr import (
+        from . import (
             FormattedEntry,
             FormattedOutput,
             render_formatted_entry,
@@ -555,14 +548,6 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
         parts.append("</tr>")
 
     return "\n".join(parts)
-
-
-# =============================================================================
-# UI Component Helpers (for external packages)
-# =============================================================================
-# These functions generate HTML for common interactive UI elements.
-# External packages (SpatialData, MuData, etc.) can use these instead of
-# hardcoding CSS classes and inline styles.
 
 
 def render_search_box(container_id: str = "") -> str:
@@ -742,11 +727,6 @@ def render_header_badges(
     return "".join(parts)
 
 
-# =============================================================================
-# Name Cell Renderer
-# =============================================================================
-
-
 def _render_name_cell(name: str) -> str:
     """Render a name cell with copy button and tooltip for truncated names.
 
@@ -762,11 +742,6 @@ def _render_name_cell(name: str) -> str:
         f"</div>"
         f"</td>"
     )
-
-
-# =============================================================================
-# Section Renderers
-# =============================================================================
 
 
 def _render_header(
@@ -1880,7 +1855,7 @@ def _generate_raw_repr_html(
         )
     if max_items is None:
         max_items = _get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
-    from anndata._repr.registry import FormatterContext
+    from .registry import FormatterContext
 
     # Safely get dimensions
     n_obs = _safe_get_attr(raw, "n_obs", "?")
@@ -1958,11 +1933,6 @@ def _generate_raw_repr_html(
     parts.append("</div>")
 
     return "\n".join(parts)
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
 
 
 def _render_section_header(
@@ -2051,11 +2021,6 @@ def _get_setting(name: str, *, default: Any) -> Any:
         return default
 
 
-# =============================================================================
-# Public API for building custom _repr_html_
-# =============================================================================
-
-
 def render_section(  # noqa: PLR0913
     name: str,
     entries_html: str,
@@ -2100,7 +2065,7 @@ def render_section(  # noqa: PLR0913
     --------
     ::
 
-        from anndata._repr import (
+        from . import (
             FormattedEntry,
             FormattedOutput,
             render_formatted_entry,

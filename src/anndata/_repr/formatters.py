@@ -22,12 +22,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from anndata._repr.registry import (
+from .registry import (
     FormattedOutput,
     TypeFormatter,
     formatter_registry,
 )
-from anndata._repr.utils import (
+from .utils import (
     format_number,
     is_serializable,
 )
@@ -35,12 +35,7 @@ from anndata._repr.utils import (
 if TYPE_CHECKING:
     from typing import Any
 
-    from anndata._repr.registry import FormatterContext
-
-
-# =============================================================================
-# Helper functions
-# =============================================================================
+    from .registry import FormatterContext
 
 
 def check_column_name(name: str) -> tuple[bool, str, bool]:
@@ -64,7 +59,7 @@ def _check_array_has_writer(array: Any) -> bool:
     is registered for a new type (e.g., datetime64), this will detect it.
     """
     try:
-        from anndata._io.specs.registry import _REGISTRY
+        from .._io.specs.registry import _REGISTRY
 
         _REGISTRY.get_spec(array)
         return True
@@ -148,11 +143,6 @@ def _check_series_serializability(series: pd.Series) -> tuple[bool, str]:
     return True, ""
 
 
-# =============================================================================
-# NumPy Formatters
-# =============================================================================
-
-
 class NumpyArrayFormatter(TypeFormatter):
     """Formatter for numpy.ndarray."""
 
@@ -215,11 +205,6 @@ class NumpyMaskedArrayFormatter(TypeFormatter):
             },
             is_serializable=True,
         )
-
-
-# =============================================================================
-# SciPy Sparse Formatters
-# =============================================================================
 
 
 class SparseMatrixFormatter(TypeFormatter):
@@ -312,11 +297,6 @@ class SparseMatrixFormatter(TypeFormatter):
             },
             is_serializable=True,
         )
-
-
-# =============================================================================
-# Pandas Formatters
-# =============================================================================
 
 
 class DataFrameFormatter(TypeFormatter):
@@ -470,11 +450,6 @@ class CategoricalFormatter(TypeFormatter):
         )
 
 
-# =============================================================================
-# Dask Array Formatter
-# =============================================================================
-
-
 class DaskArrayFormatter(TypeFormatter):
     """Formatter for dask.array.Array."""
 
@@ -509,11 +484,6 @@ class DaskArrayFormatter(TypeFormatter):
         )
 
 
-# =============================================================================
-# CuPy Array Formatter
-# =============================================================================
-
-
 class CuPyArrayFormatter(TypeFormatter):
     """Formatter for cupy.ndarray (GPU arrays)."""
 
@@ -541,11 +511,6 @@ class CuPyArrayFormatter(TypeFormatter):
             },
             is_serializable=True,
         )
-
-
-# =============================================================================
-# Awkward Array Formatter
-# =============================================================================
 
 
 class AwkwardArrayFormatter(TypeFormatter):
@@ -576,11 +541,6 @@ class AwkwardArrayFormatter(TypeFormatter):
             },
             is_serializable=True,
         )
-
-
-# =============================================================================
-# Array-API Compatible Array Formatter
-# =============================================================================
 
 
 class ArrayAPIFormatter(TypeFormatter):
@@ -672,11 +632,6 @@ class ArrayAPIFormatter(TypeFormatter):
         )
 
 
-# =============================================================================
-# AnnData Formatter (for nested AnnData in .uns)
-# =============================================================================
-
-
 class AnnDataFormatter(TypeFormatter):
     """Formatter for nested AnnData objects."""
 
@@ -701,11 +656,6 @@ class AnnDataFormatter(TypeFormatter):
             is_expandable=context.depth < context.max_depth,
             is_serializable=True,
         )
-
-
-# =============================================================================
-# Python Built-in Type Formatters
-# =============================================================================
 
 
 class NoneFormatter(TypeFormatter):
@@ -838,11 +788,6 @@ class ListFormatter(TypeFormatter):
         )
 
 
-# =============================================================================
-# Color List Formatter
-# =============================================================================
-
-
 class ColorListFormatter(TypeFormatter):
     """Special formatter for color lists (*_colors in .uns)."""
 
@@ -855,11 +800,6 @@ class ColorListFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         # Not used directly - handled specially in UnsSection
         raise NotImplementedError
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
 
 
 def _get_dtype_css_class(dtype: np.dtype) -> str:
@@ -894,11 +834,6 @@ def _get_pandas_dtype_css_class(dtype) -> str:
         return "dtype-string"
     else:
         return "dtype-object"
-
-
-# =============================================================================
-# Register all formatters
-# =============================================================================
 
 
 def _register_builtin_formatters() -> None:

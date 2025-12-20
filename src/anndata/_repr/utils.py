@@ -33,7 +33,7 @@ def _check_serializable_single(obj: Any) -> tuple[bool, str]:
 
     # Use the actual IO registry
     try:
-        from anndata._io.specs.registry import _REGISTRY
+        from .._io.specs.registry import _REGISTRY
 
         _REGISTRY.get_spec(obj)
         return True, ""

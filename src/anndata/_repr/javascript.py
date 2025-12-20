@@ -11,7 +11,7 @@ Provides:
 
 from __future__ import annotations
 
-from anndata._repr.markdown import get_markdown_parser_js
+from .markdown import get_markdown_parser_js
 
 
 def get_javascript(container_id: str) -> str:

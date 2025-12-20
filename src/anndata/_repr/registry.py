@@ -430,7 +430,7 @@ class FormatterRegistry:
                     return formatter.format(obj, context)
             except Exception as e:  # noqa: BLE001
                 # Intentional broad catch: formatters shouldn't crash the entire repr
-                from anndata._warnings import warn
+                from .._warnings import warn
 
                 warn(
                     f"Formatter {type(formatter).__name__} failed for "
@@ -454,10 +454,6 @@ class FormatterRegistry:
 # Global registry instance
 formatter_registry = FormatterRegistry()
 
-
-# =============================================================================
-# Type hint extraction for tagged data in uns
-# =============================================================================
 
 # Type hint key used in uns dicts to indicate custom rendering
 UNS_TYPE_HINT_KEY = "__anndata_repr__"

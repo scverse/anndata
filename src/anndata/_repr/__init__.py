@@ -221,7 +221,7 @@ for a full implementation with images, labels, points, shapes, and nested tables
 from __future__ import annotations
 
 # Import constants from dedicated module (single source of truth)
-from anndata._repr.constants import (
+from .constants import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
@@ -253,16 +253,16 @@ SECTION_ORDER = (
 
 # Import main functionality
 # Inline styles for graceful degradation (from single source of truth)
-from anndata._repr.constants import STYLE_HIDDEN  # noqa: E402
+from .constants import STYLE_HIDDEN  # noqa: E402
 
 # Building blocks for packages that want to create their own _repr_html_
 # These allow reusing anndata's styling while building custom representations
-from anndata._repr.css import get_css  # noqa: E402
+from .css import get_css  # noqa: E402
 
 # HTML rendering helpers for building custom sections
 # UI component helpers (search box, fold icon, badges, etc.)
-from anndata._repr.formatters import check_column_name  # noqa: E402
-from anndata._repr.html import (  # noqa: E402  # noqa: E402
+from .formatters import check_column_name  # noqa: E402
+from .html import (  # noqa: E402
     generate_repr_html,
     render_badge,
     render_copy_button,
@@ -273,8 +273,8 @@ from anndata._repr.html import (  # noqa: E402  # noqa: E402
     render_section,
     render_warning_icon,
 )
-from anndata._repr.javascript import get_javascript  # noqa: E402
-from anndata._repr.registry import (  # noqa: E402
+from .javascript import get_javascript  # noqa: E402
+from .registry import (  # noqa: E402
     UNS_TYPE_HINT_KEY,
     FormattedEntry,
     FormattedOutput,
@@ -288,7 +288,7 @@ from anndata._repr.registry import (  # noqa: E402
     formatter_registry,
     register_formatter,
 )
-from anndata._repr.utils import (  # noqa: E402
+from .utils import (  # noqa: E402
     escape_html,
     format_memory_size,
     format_number,
