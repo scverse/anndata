@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from copy import deepcopy
+from functools import partial
 from importlib.metadata import version
 from operator import mul
 from typing import TYPE_CHECKING
@@ -39,7 +40,11 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from types import EllipsisType
+    from collections.abc import Callable
+    from types import EllipsisType, FunctionType
+
+    from anndata.compat import Index
+
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(
     "ignore:Changing the sparsity structure:scipy.sparse.SparseEfficiencyWarning"
@@ -801,6 +806,51 @@ def test_dataframe_view_index_setting():
     assert isinstance(a2.obs, pd.DataFrame)
     assert a1.obs.index.values.tolist() == ["aa", "bb"]
     assert a2.obs.index.values.tolist() == ["a", "b"]
+
+
+def _n(t: type | FunctionType) -> str:
+    match t.__module__.split(".")[0], t.__name__:
+        case "pandas", name:
+            return f"pd.{name}"
+        case "numpy", name:
+            return f"np.{name}"
+        case mod, name:
+            return f"{mod}.{name}"
+
+
+# only test 1D since 2D is tested by all the other tests
+@pytest.mark.parametrize(
+    ("mk_idx", "expected"),
+    [
+        pytest.param(lambda: slice(None), [[1, 2], [3, 4], [5, 6]], id="slice-all"),
+        pytest.param(lambda: slice(2), [[1, 2], [3, 4]], id="slice-some"),
+        pytest.param(lambda: [0], [[1, 2]], id="list-int"),
+        pytest.param(lambda: ["0"], [[1, 2]], id="list-str"),
+        pytest.param(lambda: [False, False, True], [[5, 6]], id="list-bool"),
+        *(
+            pytest.param(
+                partial(t, [0, 2], dtype=dt), [[1, 2], [5, 6]], id=f"{_n(t)}-{dt}"
+            )
+            for t in [np.array, pd.Index, pd.Series, pd.array]
+            for dt in [
+                "int",
+                *(["T"] if t is np.array else ["string[python]", "string[pyarrow]"]),
+            ]
+        ),
+        *(
+            pytest.param(
+                partial(t, [False, True, False], dtype=dt), [[3, 4]], id=f"{_n(t)}-{dt}"
+            )
+            for t in [pd.Index, pd.Series, pd.array]
+            for dt in ["bool", *([] if t is np.array else ["bool[pyarrow]"])]
+        ),
+    ],
+)
+def test_index_types(mk_idx: Callable[[], Index], expected: ad.AnnData) -> None:
+    index = mk_idx()
+    adata = ad.AnnData(X=np.array([[1, 2], [3, 4], [5, 6]]))
+    view = adata[index]
+    np.testing.assert_array_equal(view.X, np.array(expected))
 
 
 def test_ellipsis_index(
