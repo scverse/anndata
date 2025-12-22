@@ -25,14 +25,6 @@ def _normalize_indices(
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
-    # deal with pd.Series
-    if isinstance(index, pd.Series | pd.Index):
-        index = index.array
-    if isinstance(index, tuple):
-        # TODO: The series should probably be aligned first
-        index = tuple(
-            i.array if isinstance(i, pd.Series | pd.Index) else i for i in index
-        )
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
@@ -46,6 +38,9 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
+
+    if isinstance(indexer, pd.Index | pd.Series):
+        indexer = indexer.array
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
