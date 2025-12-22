@@ -714,7 +714,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 if var_names.equals(adata.var_names):
                     self.adatas_vidx.append(None)
                 else:
-                    adata_vidx = _normalize_index(var_names, adata.var_names)
+                    adata_vidx = _normalize_index(var_names.array, adata.var_names)
                     self.adatas_vidx.append(adata_vidx)
             self.var_names = var_names
         else:
