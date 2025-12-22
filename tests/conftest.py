@@ -6,63 +6,28 @@ from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import joblib
-
-# Avoid ArrowStringArray in tests (AnnData cannot write these yet)
-# import pandas as pd
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
 from anndata.compat import is_zarr_v2
 
-# if hasattr(pd.options.mode, "string_storage"):
-#     pd.options.mode.string_storage = "python"
-
 if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
 
-import pandas as pd
 from filelock import FileLock
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
 
-ad.settings.allow_write_nullable_strings = True
-
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from types import EllipsisType
     from typing import Literal
-
-# Use a marker present in the environment so VS Code’s tests behave identical
-IS_PRE = Version(version("zarr")).is_prerelease
-
-
-def setup_env() -> None:
-    import anndata
-
-    anndata.settings.reset(anndata.settings._registered_options.keys())
-
-    if IS_PRE:
-        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
-        pd.options.future.infer_string = True
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _anndata_session_env(request: pytest.FixtureRequest) -> None:
-    setup_env()
-
-
-@pytest.fixture(autouse=True)
-def _anndata_test_env(request: pytest.FixtureRequest) -> None:
-    if isinstance(request.node, pytest.DoctestItem):
-        request.getfixturevalue("_doctest_env")
-
-    setup_env()
 
 
 @pytest.fixture
