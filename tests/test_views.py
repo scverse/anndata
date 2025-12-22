@@ -818,6 +818,14 @@ def _n(t: type | FunctionType) -> str:
             return f"{mod}.{name}"
 
 
+def _string_dtypes(t: type | FunctionType) -> list[str]:
+    if t.__module__.startswith("pandas"):
+        return ["string[python]", "string[pyarrow]"]
+    if Version(version("numpy")) >= Version("2"):
+        return ["T"]
+    return []
+
+
 # only test 1D since 2D is tested by all the other tests
 @pytest.mark.parametrize(
     ("mk_idx", "expected"),
@@ -832,10 +840,7 @@ def _n(t: type | FunctionType) -> str:
                 partial(t, [0, 2], dtype=dt), [[1, 2], [5, 6]], id=f"{_n(t)}-{dt}"
             )
             for t in [np.array, pd.Index, pd.Series, pd.array]
-            for dt in [
-                "int",
-                *(["T"] if t is np.array else ["string[python]", "string[pyarrow]"]),
-            ]
+            for dt in ["int", *_string_dtypes(t)]
         ),
         *(
             pytest.param(
