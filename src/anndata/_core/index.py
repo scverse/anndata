@@ -92,16 +92,23 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if (is_pandas and issubclass(indexer.dtype.type, np.integer | np.floating)) or (
+        if (
+            is_pandas
+            and (
+                issubclass(indexer.dtype.type, np.integer | np.floating)
+                or indexer.dtype.kind in "iuf"
+            )
+        ) or (
             not is_pandas
             and xp.isdtype(
                 indexer.dtype, ("signed integer", "unsigned integer", "real floating")
             )
         ):
             return indexer  # Might not work for range indexes
-        elif (is_pandas and issubclass(indexer.dtype.type, np.bool_)) or (
-            not is_pandas and xp.isdtype(indexer.dtype, "bool")
-        ):
+        elif (
+            is_pandas
+            and (issubclass(indexer.dtype.type, np.bool_) or indexer.dtype.kind == "b")
+        ) or (not is_pandas and xp.isdtype(indexer.dtype, "bool")):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
