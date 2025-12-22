@@ -66,16 +66,16 @@ except ImportError:
     )
 
 # jax extension
-from contextlib import suppress
 
 # Enable DLPack interop for JAX, CuPy, etc., only if installed
-with suppress(ImportError):
+try:
     import jax
-    import jax.dlpack
     import jax.numpy as jnp
 
     # Enable JAX to use 64-bit floats by default
     jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+except ImportError:
+    jnp = None
 
 # handle fast-array-utils presence for dask sparray support
 try:
@@ -121,9 +121,10 @@ GEN_ADATA_NO_XARRAY_ARGS = dict(
 # default array API registry cubed is commented out for now, since it is not yet implemented
 ARRAY_API_REGISTRY = {
     "numpy": lambda: np,
-    "jax": lambda: jnp,
     # "cubed": lambda: __import__("cubed.array_api", fromlist=[""]),
 }
+if jnp is not None:
+    ARRAY_API_REGISTRY["jax"] = lambda: jnp
 
 
 def gen_vstr_recarray(m, n, dtype=None):
@@ -700,9 +701,11 @@ def report_name(func):
 @report_name
 def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    if has_xp(a):
-        xp = a.__array_namespace__()
-
+    if (
+        has_xp(a)
+        and has_xp(b)
+        and (xp := a.__array_namespace__()) is b.__array_namespace__()
+    ):
         if exact:
             assert xp.all(a == b)
         else:
@@ -1224,9 +1227,7 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]
 
-with suppress(ImportError):
-    import jax.numpy as jnp
-
+if jnp is not None:
     BASE_MATRIX_PARAMS.append(pytest.param(jnp.asarray, id="jax_array"))
 
 DASK_MATRIX_PARAMS = [
