@@ -51,6 +51,7 @@ Index1D = (
     | Sequence[bool]
     | pd.Series  # bool, int, str
     | pd.Index
+    | pd.api.extensions.ExtensionArray  # bool | int | str
     | NDArray[np.str_]
     | np.matrix  # bool
     | CSMatrix  # bool
