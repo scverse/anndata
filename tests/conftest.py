@@ -23,6 +23,7 @@ if Version(version("dask")) < Version("2024.8.0"):
 else:
     from dask.tokenize import normalize_seq
 
+import pandas as pd
 from filelock import FileLock
 from scipy import sparse
 
@@ -36,6 +37,32 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import EllipsisType
     from typing import Literal
+
+# Use a marker present in the environment so VS Code’s tests behave identical
+IS_PRE = Version(version("zarr")).is_prerelease
+
+
+def setup_env() -> None:
+    import anndata
+
+    anndata.settings.reset(anndata.settings._registered_options.keys())
+
+    if IS_PRE:
+        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
+        pd.options.future.infer_string = True
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _anndata_session_env(request: pytest.FixtureRequest) -> None:
+    setup_env()
+
+
+@pytest.fixture(autouse=True)
+def _anndata_test_env(request: pytest.FixtureRequest) -> None:
+    if isinstance(request.node, pytest.DoctestItem):
+        request.getfixturevalue("_doctest_env")
+
+    setup_env()
 
 
 @pytest.fixture
