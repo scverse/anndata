@@ -26,11 +26,13 @@ def _normalize_indices(
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
     # deal with pd.Series
-    if isinstance(index, pd.Series):
-        index = index.values
+    if isinstance(index, pd.Series | pd.Index):
+        index = index.array
     if isinstance(index, tuple):
         # TODO: The series should probably be aligned first
-        index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
+        index = tuple(
+            i.array if isinstance(i, pd.Series | pd.Index) else i for i in index
+        )
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
@@ -65,16 +67,21 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
+        indexer,
+        Sequence
+        | np.ndarray
+        | pd.api.extensions.ExtensionArray
+        | CSMatrix
+        | np.matrix
+        | CSArray,
     ):
-        if hasattr(indexer, "shape") and (
-            (indexer.shape == (index.shape[0], 1))
-            or (indexer.shape == (1, index.shape[0]))
+        if (shape := getattr(indexer, "shape", None)) is not None and (
+            shape == (index.shape[0], 1) or shape == (1, index.shape[0])
         ):
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
-        if not isinstance(indexer, np.ndarray | pd.Index):
+        if not isinstance(indexer, np.ndarray | pd.api.extensions.ExtensionArray):
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
@@ -85,9 +92,11 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             if np.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if issubclass(indexer.dtype.type, np.integer | np.floating):
+        if issubclass(indexer.dtype.type, int | np.integer | np.floating):
+            if isinstance(indexer, pd.api.extensions.ExtensionArray):
+                indexer = indexer.to_numpy()
             return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+        elif issubclass(indexer.dtype.type, bool | np.bool_):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -95,6 +104,8 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                     f"AnnData index has shape {index.shape}."
                 )
                 raise IndexError(msg)
+            if isinstance(indexer, pd.api.extensions.ExtensionArray):
+                indexer = indexer.to_numpy()
             return indexer
         else:  # indexer should be string array
             positions = index.get_indexer(indexer)
