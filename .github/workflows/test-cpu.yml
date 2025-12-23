@@ -45,8 +45,8 @@ jobs:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
         io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
         exclude:
-          - env: "hatch-test.array_api"
-            io_mark: dask_distributed
+          - { env: { name: "hatch-test.array_api" }, io_mark: "dask_distributed" }
+
     env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}
