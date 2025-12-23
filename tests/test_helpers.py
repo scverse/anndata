@@ -318,7 +318,6 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
 def test_gen_adata_jax_backend():
     adata = gen_adata(
         (5, 5),
-        array_namespace="jax",
         X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
     )
 

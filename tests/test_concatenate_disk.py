@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from contextlib import suppress
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import awkward as ak
 import h5py
@@ -21,12 +20,9 @@ from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
 from anndata.utils import asarray
 
-jnp = None
-with suppress(ImportError):
-    import jax.numpy as jnp
-
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
     from anndata._types import Join_T
 
@@ -52,14 +48,8 @@ def axis(request) -> Literal[0, 1]:
     return request.param
 
 
-if jnp is not None:
-    ArrayType = Literal["array", "sparse", "sparse_array", "jax_array"]
-else:
-    ArrayType = Literal["array", "sparse", "sparse_array"]
-
-
-@pytest.fixture(params=ArrayType.__args__)
-def array_type(request) -> ArrayType:
+@pytest.fixture(params=["array", "sparse", "sparse_array"])
+def array_type(request) -> Literal["array", "sparse", "sparse_array"]:
     return request.param
 
 
@@ -133,8 +123,6 @@ def get_array_type(array_type, axis):
         return sparse.csr_array if axis == 0 else sparse.csc_array
     if array_type == "array":
         return asarray
-    if array_type == "jax_array":
-        return jnp.array
     msg = f"array_type {array_type} not implemented"
     raise NotImplementedError(msg)
 
@@ -144,7 +132,7 @@ def get_array_type(array_type, axis):
 def test_anndatas(
     *,
     axis: Literal[0, 1],
-    array_type: ArrayType,
+    array_type: Literal["array", "sparse", "sparse_array"],
     join_type: Join_T,
     tmp_path: Path,
     max_loaded_elems: int,
@@ -164,16 +152,6 @@ def test_anndatas(
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
     )
-
-    if array_type == "jax_array":
-        if file_format == "zarr":
-            pytest.xfail(
-                "Zarr cannot preserve JAX arrays in `.X`; results in `X is None` on read."
-            )
-        elif file_format == "h5ad":
-            pytest.xfail(
-                "h5ad I/O cannot preserve JAX arrays; .X becomes None after reload."
-            )
 
     adatas = []
     for i in range(3):

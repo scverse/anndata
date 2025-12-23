@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
-from contextlib import suppress
 from copy import deepcopy
 from functools import partial, singledispatch
 from importlib.metadata import version
@@ -38,13 +37,14 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
-JaxArray = None
-jax = None
-jnp = None
-
-with suppress(ImportError):
+try:
     import jax.numpy as jnp
-    from jaxlib._jax import ArrayImpl as JaxArray
+
+    JaxArray = jnp.ndarray
+except ImportError:
+    JaxArray = None
+    jnp = None
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -111,6 +111,15 @@ def make_idx_tuple(idx, axis):
     tup = [slice(None), slice(None)]
     tup[axis] = idx
     return tuple(tup)
+
+
+if jnp is not None:
+    BASE_MATRIX_PARAMS += [
+        pytest.param(
+            lambda x: jnp.array(x.toarray()) if sparse.issparse(x) else jnp.array(x),
+            id="jax",
+        )
+    ]
 
 
 # Will call func(sparse_matrix) so these types should be sparse compatible
@@ -377,8 +386,6 @@ def test_concatenate_dense():
 
 @mark_legacy_concatenate
 def test_concatenate_layers(array_type, join_type):
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
@@ -545,8 +552,6 @@ def test_concat_annot_join(obsm_adatas, join_type):
 
 @mark_legacy_concatenate
 def test_concatenate_layers_misaligned(array_type, join_type):
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
     adatas = []
     for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
@@ -562,9 +567,6 @@ def test_concatenate_layers_misaligned(array_type, join_type):
 @mark_legacy_concatenate
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
-
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices via `asarray()`")
 
     a = AnnData(
         X=np.ones((10, 20)),
@@ -925,8 +927,6 @@ def test_awkward_does_not_mix(join_type, other):
 
 
 def test_pairwise_concat(axis_name, array_type):
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices to arrays")
     axis, axis_name = merge._resolve_axis(axis_name)
     _, alt_axis_name = merge._resolve_axis(1 - axis)
     axis_sizes = [[100, 200, 50], [50, 50, 50]]
@@ -985,8 +985,6 @@ def test_pairwise_concat(axis_name, array_type):
 
 
 def test_nan_merge(axis_name, join_type, array_type):
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices")
 
     axis, _ = merge._resolve_axis(axis_name)
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
@@ -1266,6 +1264,8 @@ def test_transposed_concat(
     use_xdataset,
     force_lazy,
 ):
+    if jnp is not None and isinstance(array_type(np.array([0])), jnp.ndarray):
+        pytest.xfail("jax arrays are no supported in dask")
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
     lhs = gen_adata(
@@ -1535,15 +1535,15 @@ def expected_shape(
     return tuple(shape)
 
 
-array_namespaces_contact_size_0_axis = ["numpy"]
-if jax is not None:
-    array_namespaces_contact_size_0_axis.append("jax")
-
-
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
-@pytest.mark.parametrize("array_namespace", array_namespaces_contact_size_0_axis)
+@pytest.mark.parametrize(
+    "array_type",
+    [pytest.param(np.array, id="np")]
+    if jnp is None
+    else [pytest.param(np.array, id="np"), pytest.param(jnp.array, id="jax")],
+)
 def test_concat_size_0_axis(
     axis_name,
     join_type,
@@ -1551,7 +1551,7 @@ def test_concat_size_0_axis(
     shape,
     use_xdataset,
     force_lazy,
-    array_namespace,
+    array_type,
 ):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
@@ -1563,7 +1563,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
-        array_namespace=array_namespace,
+        X_type=array_type,
     )
     b = gen_adata(
         shape,
@@ -1571,7 +1571,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
-        array_namespace=array_namespace,
+        X_type=array_type,
     )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
@@ -1728,9 +1728,6 @@ def test_concat_different_types_dask(merge_strategy, array_type):
 
     import anndata as ad
 
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("JAX cannot convert SciPy sparse matrices with `asarray()`")
-
     varm_array = sparse.random(5, 20, density=0.5, format="csr")
 
     ad1 = ad.AnnData(X=np.ones((5, 5)), varm={"a": varm_array})
@@ -1864,8 +1861,6 @@ def test_error_on_mixed_device():
 
 def test_concat_on_var_outer_join(array_type):
     # https://github.com/scverse/anndata/issues/1286
-    if jnp is not None and array_type is jnp.asarray:
-        pytest.xfail("concat across different array backends is not supported")
 
     a = AnnData(
         obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),

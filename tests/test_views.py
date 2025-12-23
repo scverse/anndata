@@ -1000,7 +1000,7 @@ def test_normalize_index_jax_flatten_2d():
 @pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_index_jax_both_axes():
     # Generate AnnData with JAX-backed arrays
-    adata = gen_adata((10, 10), array_namespace="jax")
+    adata = gen_adata((10, 10), X_type=jnp.array)
     obs_subset = jnp.array([0, 2, 4, 6])
     var_subset = jnp.array([1, 3, 5, 7])
     v1 = adata[obs_subset, var_subset]
@@ -1012,7 +1012,7 @@ def test_index_jax_both_axes():
 @pytest.mark.skipif(jnp is None, reason="JAX not installed")
 def test_double_index_jax():
     # Generate AnnData with JAX-backed arrays
-    adata = gen_adata((10, 10), array_namespace="jax")
+    adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]
     v2 = adata[jnp.array([0, 1, 2, 3, 4, 5]), :][jnp.array(subset), :]
