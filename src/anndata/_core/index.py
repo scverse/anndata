@@ -111,7 +111,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                 indexer.dtype, ("signed integer", "unsigned integer", "real floating")
             )
         ):
-            return indexer  # Might not work for range indexes
+            return np.asarray(indexer)  # Might not work for range indexes
         elif (
             is_pandas
             and (issubclass(indexer.dtype.type, np.bool_) or indexer.dtype.kind == "b")
@@ -125,7 +125,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                     f"AnnData index has shape {index.shape}."
                 )
                 raise IndexError(msg)
-            return indexer
+            return np.asarray(indexer)
         else:
             positions = index.get_indexer(indexer)
             if xp.any(positions < 0):
