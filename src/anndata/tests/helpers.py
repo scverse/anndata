@@ -633,8 +633,10 @@ def report_name(func):
 @report_name
 def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    if has_xp(a):
+    if has_xp(a) and not np.isscalar(a):
         xp = a.__array_namespace__()
+        if xp is np and np.isscalar(a):
+            return a == b
         # really force it on b
         b = xp.array(asarray(b))
         if exact:
