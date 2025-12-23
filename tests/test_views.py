@@ -173,7 +173,7 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
     # jax immutability case
-    if "jax" in getattr(adata, mapping_name)["m"].__module__:
+    if jnp is not None and isinstance(getattr(adata, mapping_name)["m"], jnp.ndarray):
         msg = (
             "JAX arrays are immutable; view-modification warning will not be triggered"
         )
