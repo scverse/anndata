@@ -8,7 +8,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import sparse as sp
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
@@ -35,13 +34,6 @@ if TYPE_CHECKING:
     from ..._core.xarray import Dataset2D
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
-
-
-def is_sparse_like(x):
-    try:
-        return sp.issparse(x)
-    except AttributeError:
-        return False
 
 
 def to_writeable(x):

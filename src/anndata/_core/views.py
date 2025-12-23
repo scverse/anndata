@@ -461,7 +461,6 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
 
     from ..compat import has_xp
 
-    # error out to make sure that object is array-API compatible, will xFAIL it later
     if not has_xp(old):
         msg = f"Expected array-API–compatible array, got {type(old)}"
         raise TypeError(msg)
