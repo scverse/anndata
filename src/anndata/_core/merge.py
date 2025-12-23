@@ -670,12 +670,8 @@ class Reindexer:
         #     return taken
         if not xp.any(missing_mask):
             return taken
-
-        # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
         fv = xp.asarray(fill_value)
-        fv_broadcast = xp.broadcast_to(fv, taken.shape)
-
-        return xp.where(mask, fv_broadcast, taken)
+        return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
         self, el: CSMatrix | CSArray, *, axis, fill_value=None
@@ -930,7 +926,7 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
 
         # use first as a reference to check if all of the arrays are the same type
         if len(array_apis := {a.__array_namespace__() for a in arrays}) > 1:
-            msg = "Cannot concatenate array-api arrays from different backends."
+            msg = f"Cannot concatenate array-api arrays from different backends: {array_apis}."
             raise ValueError(msg)
 
         return next(iter(array_apis)).concatenate(
@@ -1073,7 +1069,16 @@ def missing_element(
         return da.full(
             shape, default_fill_value(els) if fill_value is None else fill_value
         )
-    return np.zeros(shape, dtype=bool)
+    non_numpy_array_apis = {
+        a.__array_namespace__()
+        for a in els
+        if has_xp(a) and not isinstance(a, np.ndarray)
+    }
+    if len(non_numpy_array_apis) not in {0, 1}:
+        msg = "Cannot generate missing elements when there are multiple array backends supported including at least one that is array api compatible."
+        raise ValueError(msg)
+    xp = next(iter(non_numpy_array_apis)) if len(non_numpy_array_apis) == 1 else np
+    return xp.zeros(shape, dtype=bool)
 
 
 def outer_concat_aligned_mapping(

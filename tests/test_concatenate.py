@@ -113,15 +113,6 @@ def make_idx_tuple(idx, axis):
     return tuple(tup)
 
 
-if jnp is not None:
-    BASE_MATRIX_PARAMS += [
-        pytest.param(
-            lambda x: jnp.array(x.toarray()) if sparse.issparse(x) else jnp.array(x),
-            id="jax",
-        )
-    ]
-
-
 # Will call func(sparse_matrix) so these types should be sparse compatible
 # See array_type if only dense arrays are expected as input.
 @pytest.fixture(params=BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS)
@@ -1264,8 +1255,6 @@ def test_transposed_concat(
     use_xdataset,
     force_lazy,
 ):
-    if jnp is not None and isinstance(array_type(np.array([0])), jnp.ndarray):
-        pytest.xfail("jax arrays are no supported in dask")
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
     lhs = gen_adata(

@@ -320,14 +320,6 @@ def _is_array_api_dense(x):
         return False
 
 
-def _keep_for_types(val, allowed_types):
-    # exact type allowed
-    if type(val) in allowed_types:
-        return True
-    # if np.ndarray is allowed, also accept any array-API dense array
-    return bool(np.ndarray in allowed_types and _is_array_api_dense(val))
-
-
 # TODO: Use hypothesis for this?
 def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
@@ -401,13 +393,11 @@ def gen_adata(  # noqa: PLR0913
         X = None
         xp = np
     else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)))
+        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype("float32"))
         xp = X.__array_namespace__() if has_xp(X) else np
 
     # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
-        # array=np.random.random((M, 50)),
-        # random_state.random to not interfere with other test code or modules
         array=xp.asarray(random_state.random((M, 50))),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
@@ -415,7 +405,6 @@ def gen_adata(  # noqa: PLR0913
         da=da.random.random((M, 50)),
     )
     varm = dict(
-        # array=np.random.random((N, 50)),
         array=xp.asarray(random_state.random((N, 50))),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
@@ -429,8 +418,7 @@ def gen_adata(  # noqa: PLR0913
         varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
-    # obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
-    obsm = {k: v for k, v in obsm.items() if _keep_for_types(v, obsm_types)}
+    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
         types=obsm_types,
@@ -438,8 +426,7 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, 100),
     )
-    # varm = {k: v for k, v in varm.items() if type(v) in varm_types}
-    varm = {k: v for k, v in varm.items() if _keep_for_types(v, varm_types)}
+    varm = {k: v for k, v in varm.items() if type(v) in varm_types}
     varm = maybe_add_sparse_array(
         mapping=varm,
         types=varm_types,
@@ -448,7 +435,6 @@ def gen_adata(  # noqa: PLR0913
         shape=(N, 100),
     )
     layers = dict(
-        # array=np.random.random((M, N)),
         array=xp.asarray(random_state.random((M, N))),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
@@ -460,10 +446,8 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, N),
     )
-    # layers = {k: v for k, v in layers.items() if type(v) in layers_types}
-    layers = {k: v for k, v in layers.items() if _keep_for_types(v, layers_types)}
+    layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        # array=np.random.random((M, M)),
         array=xp.asarray(random_state.random((M, M))),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
@@ -471,7 +455,6 @@ def gen_adata(  # noqa: PLR0913
         sparse.random(M, M, format=sparse_fmt, random_state=random_state)
     )
     varp = dict(
-        # array=np.random.random((N, N)),
         array=xp.asarray(random_state.random((N, N))),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
@@ -1177,7 +1160,7 @@ BASE_MATRIX_PARAMS = [
 ]
 
 if jnp is not None:
-    BASE_MATRIX_PARAMS.append(pytest.param(jnp.asarray, id="jax_array"))
+    BASE_MATRIX_PARAMS.append(pytest.param(as_dense_jax_array, id="jax_array"))
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
