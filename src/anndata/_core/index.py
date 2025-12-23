@@ -86,8 +86,14 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             use_xp = True
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
+        # https://github.com/numpy/numpy/issues/27545
+        is_numpy_string = indexer.dtype == np.dtypes.StringDType()
         # if it is a float array or something along those lines, convert it to integers
-        if use_xp and xp.isdtype(indexer.dtype, "real floating"):
+        if (
+            use_xp
+            and not is_numpy_string
+            and xp.isdtype(indexer.dtype, "real floating")
+        ):
             indexer_int = xp.astype(indexer, xp.int64)
             if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
@@ -100,6 +106,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             )
         ) or (
             not is_pandas
+            and not is_numpy_string
             and xp.isdtype(
                 indexer.dtype, ("signed integer", "unsigned integer", "real floating")
             )
@@ -108,7 +115,9 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         elif (
             is_pandas
             and (issubclass(indexer.dtype.type, np.bool_) or indexer.dtype.kind == "b")
-        ) or (not is_pandas and xp.isdtype(indexer.dtype, "bool")):
+        ) or (
+            not is_pandas and not is_numpy_string and xp.isdtype(indexer.dtype, "bool")
+        ):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
