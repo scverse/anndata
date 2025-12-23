@@ -633,11 +633,10 @@ def report_name(func):
 @report_name
 def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    if (
-        has_xp(a)
-        and has_xp(b)
-        and (xp := a.__array_namespace__()) is b.__array_namespace__()
-    ):
+    if has_xp(a):
+        xp = a.__array_namespace__()
+        # really force it on b
+        b = xp.array(asarray(b))
         if exact:
             assert xp.all(a == b)
         else:
