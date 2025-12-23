@@ -144,6 +144,7 @@ skip_if_no_jax_gpu = pytest.mark.skipif(
 
 
 @skip_if_no_jax_gpu
+@pytest.mark.array_api
 def test_to_writeable_jax_gpu_array():
     x = jax.device_put(jnp.array([1.0, 2.0]), device=jax.devices("gpu")[0])
     result = to_writeable(x)
@@ -151,7 +152,7 @@ def test_to_writeable_jax_gpu_array():
     np.testing.assert_array_equal(result, np.array([1.0, 2.0]))
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_to_writeable_does_not_recurse():
     x = {"a": jnp.array([1.0, 2.0])}
     result = to_writeable(x)

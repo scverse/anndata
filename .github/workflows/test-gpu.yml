@@ -72,7 +72,7 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
+          uv pip install -e ".[dev,test,cu12,test-jax]" -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
@@ -81,7 +81,7 @@ jobs:
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
-          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage run -m pytest -m array_api or gpu
           uv run coverage combine
           uv run coverage xml
 

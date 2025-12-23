@@ -314,7 +314,7 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
 
 
-@pytest.mark.skipif(jax is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_gen_adata_jax_backend():
     adata = gen_adata(
         (5, 5),
@@ -326,7 +326,7 @@ def test_gen_adata_jax_backend():
     assert adata.X.dtype == jnp.float32
 
 
-@pytest.mark.skipif(jax is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_gen_adata_jax_subfields():
     adata = gen_adata(
         (5, 5),

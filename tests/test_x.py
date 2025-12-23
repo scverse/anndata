@@ -13,8 +13,6 @@ from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
-# jax option (more later)
-# jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
 UNLABELLED_ARRAY_TYPES = [
@@ -23,7 +21,7 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
-    pytest.param(jnp.asarray, id="jax"),
+    pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
 ]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]

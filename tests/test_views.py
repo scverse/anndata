@@ -921,7 +921,7 @@ def test_index_float_sequence_raises_error(index):
         gen_adata((10, 10))[index]
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_jax_indexer():
     index = np.array([0, 3, 6])
     index_jax = jnp.array(index)
@@ -954,14 +954,14 @@ def test_jax_indexer():
         "mixed-array-type",
     ],
 )
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_index_into_jax(index):
     adata = ad.AnnData(X=np.ones((10, 10)))
     adata_as_jax = ad.AnnData(X=jnp.ones((10, 10)))
     assert_equal(adata[index], adata_as_jax[index])
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_normalize_index_jax_boolean():
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     mask = jnp.array([True, False, True, False, True, False, True, False, True, False])
@@ -970,7 +970,7 @@ def test_normalize_index_jax_boolean():
     assert out.dtype == jnp.bool_
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_normalize_index_jax_float_valid():
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     idx = jnp.array([0, 2, 4])
@@ -978,7 +978,7 @@ def test_normalize_index_jax_float_valid():
     assert (out == jnp.array([0, 2, 4])).all()
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_normalize_index_jax_flatten_2d():
     index = pd.Index([f"cell_{i}" for i in range(5)])
 
@@ -997,7 +997,7 @@ def test_normalize_index_jax_flatten_2d():
     assert (out_row == jnp.array([0, 1, 2, 3, 4])).all()
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_index_jax_both_axes():
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), X_type=jnp.array)
@@ -1009,7 +1009,7 @@ def test_index_jax_both_axes():
     assert_equal(v1, v2)
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_double_index_jax():
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), X_type=jnp.array)

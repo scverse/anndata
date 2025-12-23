@@ -1531,7 +1531,10 @@ def expected_shape(
     "array_type",
     [pytest.param(np.array, id="np")]
     if jnp is None
-    else [pytest.param(np.array, id="np"), pytest.param(jnp.array, id="jax")],
+    else [
+        pytest.param(np.array, id="np"),
+        pytest.param(jnp.array, id="jax", marks=pytest.mark.array_api),
+    ],
 )
 def test_concat_size_0_axis(
     axis_name,

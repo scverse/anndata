@@ -48,7 +48,11 @@ if TYPE_CHECKING:
     from typing import Literal
 
 HERE = Path(__file__).parent
-MAYBE_JAX_TYPE = [pytest.param(jnp.array, id="jax.array")] if jnp is not None else []
+MAYBE_JAX_TYPE = (
+    [pytest.param(jnp.array, id="jax.array", marks=pytest.mark.array_api)]
+    if jnp is not None
+    else []
+)
 ARRAY_TYPES = [
     pytest.param(np.array, id="np.array"),
     pytest.param(as_dense_dask_array, id="dask_dense"),
