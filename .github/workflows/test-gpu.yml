@@ -82,7 +82,7 @@ jobs:
         env:
           COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
         run: |
-          uv run coverage run -m pytest -m array_api or gpu
+          uv run coverage run -m pytest -m "array_api or gpu"
           uv run coverage combine
           uv run coverage xml
 
