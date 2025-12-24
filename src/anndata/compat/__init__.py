@@ -476,3 +476,7 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def has_xp(x):
+    return hasattr(x, "__array_namespace__")

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
+from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray, has_xp
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -35,6 +35,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     indexer: Index1D, index: pd.Index
 ) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    # protect aroound weird numeric index
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
@@ -49,6 +50,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             i = index.get_loc(i)
         return i
 
+    # converting start and stop of the slide to the integer positions if they are strings
     if isinstance(indexer, slice):
         start = name_idx(indexer.start)
         stop = name_idx(indexer.stop)
@@ -61,35 +63,63 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         return indexer
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
-    elif isinstance(
+    elif (use_xp := has_xp(indexer)) or isinstance(
         indexer,
-        Sequence
-        | np.ndarray
-        | pd.api.extensions.ExtensionArray
-        | CSMatrix
-        | np.matrix
-        | CSArray,
+        Sequence | pd.api.extensions.ExtensionArray | CSMatrix | np.matrix | CSArray,
     ):
-        if (shape := getattr(indexer, "shape", None)) is not None and (
-            shape == (index.shape[0], 1) or shape == (1, index.shape[0])
+        # convert to the 1D if it's accidentally 2D column/row vector
+        # convert sparse into dense arrays if needed
+        xp = indexer.__array_namespace__() if use_xp else np
+        if hasattr(indexer, "shape") and (
+            (indexer.shape == (index.shape[0], 1))
+            or (indexer.shape == (1, index.shape[0]))
         ):
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
-            indexer = np.ravel(indexer)
-        if not isinstance(indexer, np.ndarray):
+            indexer = xp.ravel(indexer)
+        # if it is something else, convert it to numpy
+        if (
+            not (is_pandas := isinstance(indexer, pd.api.extensions.ExtensionArray))
+            and not use_xp
+        ):
             indexer = np.array(indexer)
+            use_xp = True
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
-        if isinstance(indexer, np.ndarray) and np.issubdtype(
-            indexer.dtype, np.floating
+        # https://github.com/numpy/numpy/issues/27545
+        is_numpy_string = indexer.dtype == np.dtypes.StringDType()
+        # if it is a float array or something along those lines, convert it to integers
+        if (
+            use_xp
+            and not is_numpy_string
+            and xp.isdtype(indexer.dtype, "real floating")
         ):
-            indexer_int = indexer.astype(int)
-            if np.all((indexer - indexer_int) != 0):
+            indexer_int = xp.astype(indexer, xp.int64)
+            if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if issubclass(indexer.dtype.type, np.integer | np.floating):
-            return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+        if (
+            is_pandas
+            and (
+                issubclass(indexer.dtype.type, np.integer | np.floating)
+                or indexer.dtype.kind in "iuf"
+            )
+        ) or (
+            not is_pandas
+            and not is_numpy_string
+            and xp.isdtype(
+                indexer.dtype, ("signed integer", "unsigned integer", "real floating")
+            )
+        ):
+            return (
+                np.asarray(indexer) if is_pandas else indexer
+            )  # Might not work for range indexes
+        elif (
+            is_pandas
+            and (issubclass(indexer.dtype.type, np.bool_) or indexer.dtype.kind == "b")
+        ) or (
+            not is_pandas and not is_numpy_string and xp.isdtype(indexer.dtype, "bool")
+        ):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -97,10 +127,10 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                     f"AnnData index has shape {index.shape}."
                 )
                 raise IndexError(msg)
-            return indexer
-        else:  # indexer should be string array
+            return np.asarray(indexer) if is_pandas else indexer
+        else:
             positions = index.get_indexer(indexer)
-            if np.any(positions < 0):
+            if xp.any(positions < 0):
                 not_found = indexer[positions < 0]
                 msg = (
                     f"Values {list(not_found)}, from {list(indexer)}, "
@@ -112,6 +142,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         if isinstance(indexer.data, DaskArray):
             return indexer.data.compute()
         return indexer.data
+
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
 
