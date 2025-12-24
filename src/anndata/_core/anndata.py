@@ -644,7 +644,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
+                        msg = "Cannot write to views of sparse backed files"
+                        raise NotImplementedError(msg)
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)
