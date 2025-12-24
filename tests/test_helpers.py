@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from string import ascii_letters
 
 import numpy as np
@@ -30,11 +29,12 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import axis_len
 
-jax = None
-jnp = None
-with suppress(ImportError):
+try:
     import jax
     import jax.numpy as jnp
+except ImportError:
+    jax = None
+    jnp = None
 
 
 @pytest.fixture
@@ -101,8 +101,7 @@ def test_report_name():
 @pytest.fixture
 def enable_jax_float64() -> None:
     if jax is None:
-        pytest.skip("JAX not installed")
-    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+        jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
 def test_assert_equal():
@@ -288,6 +287,8 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     rng = np.random.default_rng(42)
     X_source = rng.poisson(size=SHAPE).astype(np.float32)
     X_input = input_type(X_source)
+    if jnp is not None and isinstance(X_input, jnp.ndarray):
+        pytest.xfail("Jax inside of dask is not supported")
     X_output = as_dask_type(X_input)
     X_computed = X_output.compute()
 
