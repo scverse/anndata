@@ -25,12 +25,6 @@ def _normalize_indices(
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
-    # deal with pd.Series
-    if isinstance(index, pd.Series):
-        index = index.values
-    if isinstance(index, tuple):
-        # TODO: The series should probably be aligned first
-        index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
@@ -44,6 +38,9 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
+
+    if isinstance(indexer, pd.Index | pd.Series):
+        indexer = indexer.array
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
@@ -65,16 +62,21 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     elif isinstance(indexer, str):
         return index.get_loc(indexer)  # int
     elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
+        indexer,
+        Sequence
+        | np.ndarray
+        | pd.api.extensions.ExtensionArray
+        | CSMatrix
+        | np.matrix
+        | CSArray,
     ):
-        if hasattr(indexer, "shape") and (
-            (indexer.shape == (index.shape[0], 1))
-            or (indexer.shape == (1, index.shape[0]))
+        if (shape := getattr(indexer, "shape", None)) is not None and (
+            shape == (index.shape[0], 1) or shape == (1, index.shape[0])
         ):
             if isinstance(indexer, CSMatrix | CSArray):
                 indexer = indexer.toarray()
             indexer = np.ravel(indexer)
-        if not isinstance(indexer, np.ndarray | pd.Index):
+        if not isinstance(indexer, np.ndarray):
             indexer = np.array(indexer)
             if len(indexer) == 0:
                 indexer = indexer.astype(int)
@@ -111,7 +113,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             return indexer.data.compute()
         return indexer.data
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError()
+    raise IndexError(msg)
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:

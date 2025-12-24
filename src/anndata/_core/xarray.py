@@ -8,18 +8,25 @@ from typing import TYPE_CHECKING, overload
 import numpy as np
 import pandas as pd
 
-from ..compat import XDataArray, XDataset, XVariable
+from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable, Iterator, Mapping
+    from collections.abc import (
+        Callable,
+        Collection,
+        Hashable,
+        Iterable,
+        Iterator,
+        Mapping,
+    )
     from typing import Any, Literal
 
     from .._types import Dataset2DIlocIndexer
 
 
-def requires_xarray(func):
+def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             import xarray  # noqa: F401
         except ImportError as e:
@@ -91,7 +98,7 @@ class Dataset2D:
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
-    def is_backed(self, isbacked: bool) -> bool:
+    def is_backed(self, isbacked: bool) -> None:
         if not isbacked and "is_backed" in self.ds.attrs:
             del self.ds.attrs["is_backed"]
         else:
@@ -191,18 +198,21 @@ class Dataset2D:
     @overload
     def __getitem__(self, key: Hashable) -> XDataArray: ...
     @overload
-    def __getitem__(self, key: Iterable[Hashable]) -> Dataset2D: ...
+    def __getitem__(self, key: Collection[Hashable]) -> Dataset2D: ...
     def __getitem__(
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
         ret = self.ds.__getitem__(key)
-        if len(key) == 0 and not isinstance(key, tuple):  # empty XDataset
+        if is_empty := (len(key) == 0 and not isinstance(key, tuple)):  # empty Dataset
             ret.coords[self.index_dim] = self.xr_index
         if isinstance(ret, XDataset):
             # If we get an xarray Dataset, we return a Dataset2D
             as_2d = Dataset2D(ret)
-
-            as_2d.true_index_dim = self.true_index_dim
+            if not is_empty and self.true_index_dim not in [
+                *as_2d.columns,
+                as_2d.index_dim,
+            ]:
+                as_2d[self.true_index_dim] = self.true_index
             as_2d.is_backed = self.is_backed
             return as_2d
         return ret
@@ -222,18 +232,21 @@ class Dataset2D:
         -------
             :class:`pandas.DataFrame` with index set accordingly.
         """
+        index_key = self.ds.attrs.get("indexing_key", None)
+        all_columns = {*self.columns, *([] if index_key is None else [index_key])}
         # https://github.com/pydata/xarray/issues/10419
         non_nullable_string_cols = {
             col
-            for col in self.columns
+            for col in all_columns
             if not self[col].attrs.get("is_nullable_string", False)
         }
         df = self.ds.to_dataframe()
-        index_key = self.ds.attrs.get("indexing_key", None)
+        for col in all_columns - non_nullable_string_cols:
+            df[col] = (
+                pandas_as_str(df[col]) if col == index_key else df[col].astype("string")
+            )
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
-        for col in set(self.columns) - non_nullable_string_cols:
-            df[col] = df[col].astype(dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 
@@ -263,7 +276,7 @@ class Dataset2D:
         For supported setter values see :meth:`xarray.Dataset.__setitem__`.
         """
         if key == self.index_dim:
-            msg = f"Cannot set {self.index_dim} as a variable. Use `index` instead."
+            msg = f"Cannot set the index dimension {self.index_dim} as if it were a variable. Use `ds.index = ...` instead."
             raise KeyError(msg)
         if isinstance(value, tuple):
             if isinstance(value[0], tuple):
@@ -332,9 +345,9 @@ class Dataset2D:
         return len(self.ds)
 
     @property
-    def dtypes(self) -> pd.Series:
+    def dtypes(self) -> Mapping[Hashable, np.dtype]:
         """
-        Return a Series with the dtypes of the variables in the Dataset2D.
+        Return a Mapping with the dtypes of the variables in the Dataset2D.
         """
         return self.ds.dtypes
 

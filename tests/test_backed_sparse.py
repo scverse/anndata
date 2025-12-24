@@ -643,6 +643,7 @@ def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
     assert_equal(adata_roundtripped.X, base)
 
 
+@pytest.mark.filterwarnings(r"ignore:.*array concat.*empty entries:FutureWarning")
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
 ):
