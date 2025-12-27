@@ -221,7 +221,9 @@ for a full implementation with images, labels, points, shapes, and nested tables
 from __future__ import annotations
 
 # Import constants from dedicated module (single source of truth)
-from .constants import (
+# Note: _repr_constants is outside _repr/ to avoid loading the full _repr
+# package when _settings.py imports constants at anndata import time.
+from .._repr_constants import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
@@ -253,7 +255,7 @@ SECTION_ORDER = (
 
 # Import main functionality
 # Inline styles for graceful degradation (from single source of truth)
-from .constants import STYLE_HIDDEN  # noqa: E402
+from .._repr_constants import STYLE_HIDDEN  # noqa: E402
 
 # Building blocks for packages that want to create their own _repr_html_
 # These allow reusing anndata's styling while building custom representations

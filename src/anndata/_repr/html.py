@@ -16,6 +16,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .._repr_constants import (
+    NOT_SERIALIZABLE_MSG,
+    STYLE_HIDDEN,
+    STYLE_SECTION_CONTENT,
+    STYLE_SECTION_TABLE,
+)
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -28,12 +34,6 @@ from . import (
     DEFAULT_UNIQUE_LIMIT,
     DOCS_BASE_URL,
     SECTION_ORDER,
-)
-from .constants import (
-    NOT_SERIALIZABLE_MSG,
-    STYLE_HIDDEN,
-    STYLE_SECTION_CONTENT,
-    STYLE_SECTION_TABLE,
 )
 from .css import get_css
 from .javascript import get_javascript

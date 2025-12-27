@@ -2,8 +2,10 @@
 Constants for HTML representation.
 
 This module contains default values for repr_html settings.
-It has no dependencies to avoid circular imports, allowing both
-_settings.py and _repr modules to import from here.
+It is located outside the _repr/ package to avoid loading the full
+_repr module when _settings.py imports these constants at anndata
+import time. Python loads parent packages before submodules, so
+importing from _repr.constants would trigger _repr/__init__.py.
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ from inspect import Parameter, signature
 from types import GenericAlias, NoneType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
-from ._repr.constants import (
+from ._repr_constants import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
