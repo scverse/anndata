@@ -3082,7 +3082,7 @@ class TestSeriesFormatterNonSerializable:
                 "List serialization now works! "
                 "Update _check_series_serializability() in formatters.py."
             )
-        except (TypeError, Exception):
+        except (TypeError, Exception):  # noqa: BLE001
             pass  # Expected - lists not serializable
 
         # Repr should detect and warn
@@ -3111,7 +3111,7 @@ class TestSeriesFormatterNonSerializable:
                 "Custom object serialization now works! "
                 "Update _check_series_serializability() in formatters.py."
             )
-        except (TypeError, Exception):
+        except (TypeError, Exception):  # noqa: BLE001
             pass  # Expected - custom objects not serializable
 
         # Repr should detect and warn
@@ -3159,7 +3159,7 @@ class TestSeriesFormatterNonSerializable:
                 "Non-string column name serialization now works! "
                 "Update check_column_name() in formatters.py."
             )
-        except (TypeError, Exception):
+        except (TypeError, Exception):  # noqa: BLE001
             pass  # Expected - non-string names not serializable
 
         # Repr should detect and warn
@@ -3187,7 +3187,7 @@ class TestSeriesFormatterNonSerializable:
                 "datetime64 serialization now works! "
                 "Update SeriesFormatter in formatters.py to remove the datetime64 warning."
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # Expected - datetime64 not serializable
 
         # Repr should detect and warn about it
@@ -3213,7 +3213,7 @@ class TestSeriesFormatterNonSerializable:
                 "timedelta64 serialization now works! "
                 "Update SeriesFormatter in formatters.py to remove the timedelta64 warning."
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # Expected - timedelta64 not serializable
 
         # Repr should detect and warn about it
@@ -3266,13 +3266,13 @@ class TestColumnNameValidation:
         path = tmp_path / "test_slash.h5ad"
         import warnings
 
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             try:
                 adata.write_h5ad(path)
                 # If we get here, slashes still work
                 serializes = True
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # Slashes now fail - update repr to show red instead of yellow
                 serializes = False
                 pytest.fail(

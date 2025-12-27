@@ -517,7 +517,9 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
     parts.append(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
-    parts.append(render_warning_icon(list(output.warnings), not output.is_serializable))
+    parts.append(
+        render_warning_icon(list(output.warnings), is_error=not output.is_serializable)
+    )
 
     if has_expandable_content:
         parts.append(
@@ -1051,7 +1053,7 @@ def _render_dataframe_entry(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
     is_error = not output.is_serializable or name_error
-    parts.append(render_warning_icon(entry_warnings, is_error))
+    parts.append(render_warning_icon(entry_warnings, is_error=is_error))
 
     # Add wrap button for categories in the type column
     if is_categorical and n_cats > 0:
@@ -1128,7 +1130,7 @@ def _render_type_cell(
     )
     all_warnings = (extra_warnings or []) + list(output.warnings)
     has_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, has_error))
+    parts.append(render_warning_icon(all_warnings, is_error=has_error))
 
     if has_expandable_content:
         parts.append(
@@ -1369,7 +1371,7 @@ def _render_uns_entry_with_preview(
         f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
     )
     is_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, is_error))
+    parts.append(render_warning_icon(all_warnings, is_error=is_error))
     parts.append("</td>")
 
     # Meta - value preview
@@ -1497,7 +1499,7 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     parts.append('<td class="adata-entry-type">')
     parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
     is_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, is_error))
+    parts.append(render_warning_icon(all_warnings, is_error=is_error))
     parts.append("</td>")
 
     # Meta - custom HTML content

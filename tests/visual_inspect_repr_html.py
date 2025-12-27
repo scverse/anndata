@@ -30,8 +30,8 @@ warnings.filterwarnings(
     message="Transforming to str index",
     category=ImplicitModificationWarning,
 )
-from anndata import AnnData
-from anndata._repr import (
+from anndata import AnnData  # noqa: E402
+from anndata._repr import (  # noqa: E402
     FormattedOutput,
     TypeFormatter,
     extract_uns_type_hint,
@@ -1970,12 +1970,20 @@ For more details, see the full documentation.
     adata_serial.obs["list_values"] = [["a", "b"], ["c"], ["d"], ["e"], ["f"]]
     adata_serial.obs["dict_values"] = [{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}, {"k": 5}]
     adata_serial.obs["custom_obj"] = [CustomObject() for _ in range(5)]
-    adata_serial.obs["datetime_col"] = pd.to_datetime(
-        ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"]
-    )
-    adata_serial.obs["timedelta_col"] = pd.to_timedelta(
-        ["1 days", "2 days", "3 days", "4 days", "5 days"]
-    )
+    adata_serial.obs["datetime_col"] = pd.to_datetime([
+        "2024-01-01",
+        "2024-01-02",
+        "2024-01-03",
+        "2024-01-04",
+        "2024-01-05",
+    ])
+    adata_serial.obs["timedelta_col"] = pd.to_timedelta([
+        "1 days",
+        "2 days",
+        "3 days",
+        "4 days",
+        "5 days",
+    ])
     adata_serial.obs["path/slash"] = ["a", "b", "c", "d", "e"]  # Slash in name
     adata_serial.obs[("tuple", "name")] = [1, 2, 3, 4, 5]  # Non-string name
 
