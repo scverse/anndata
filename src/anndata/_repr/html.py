@@ -571,6 +571,7 @@ def render_search_box(container_id: str = "") -> str:
 
     Example
     -------
+    >>> container_id = "spatialdata-123"
     >>> parts = ['<div class="anndata-hdr">']
     >>> parts.append('<span class="adata-type">SpatialData</span>')
     >>> parts.append('<span style="flex-grow:1;"></span>')  # Spacer
@@ -635,6 +636,7 @@ def render_copy_button(text: str, tooltip: str = "Copy") -> str:
 
     Example
     -------
+    >>> name = "gene_expression"
     >>> html = f"<span>{name}</span>{render_copy_button(name, 'Copy name')}"
     """
     escaped_text = escape_html(text)
@@ -675,7 +677,7 @@ def render_badge(
 
     Example
     -------
-    >>> render_badge("Zarr", "adata-badge-backed", "Backed by Zarr store")
+    >>> badge = render_badge("Zarr", "adata-badge-backed", "Backed by Zarr store")
     """
     escaped_text = escape_html(text)
     title_attr = f' title="{escape_html(tooltip)}"' if tooltip else ""
