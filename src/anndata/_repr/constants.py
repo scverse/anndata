@@ -6,9 +6,9 @@ It has no dependencies to avoid circular imports, allowing both
 _settings.py and _repr modules to import from here.
 """
 
-# Display behavior
 from __future__ import annotations
 
+# Display behavior
 DEFAULT_FOLD_THRESHOLD = 5  # Auto-fold sections with more than N entries
 DEFAULT_MAX_DEPTH = 3  # Maximum recursion depth for nested objects
 DEFAULT_MAX_ITEMS = 200  # Maximum items to show per section
