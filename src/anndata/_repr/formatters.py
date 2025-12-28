@@ -299,6 +299,41 @@ class SparseMatrixFormatter(TypeFormatter):
         )
 
 
+class BackedSparseDatasetFormatter(TypeFormatter):
+    """Formatter for anndata's backed sparse datasets (_CSRDataset, _CSCDataset).
+
+    These are HDF5/Zarr-backed sparse matrices that stay on disk.
+    Only metadata (shape, dtype, format) is read — no data is loaded.
+    """
+
+    priority = 110  # Higher than SparseMatrixFormatter to check first
+
+    def can_format(self, obj: Any) -> bool:
+        # Check for anndata's backed sparse dataset classes
+        module = type(obj).__module__
+        return module.startswith("anndata._core.sparse_dataset") and hasattr(
+            obj, "format"
+        )
+
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        shape_str = " × ".join(format_number(s) for s in obj.shape)
+        dtype_str = str(obj.dtype)
+        format_name = getattr(obj, "format", "sparse")
+
+        return FormattedOutput(
+            type_name=f"{format_name}_matrix ({shape_str}) {dtype_str}",
+            css_class="dtype-sparse",
+            tooltip="Backed sparse matrix (data stays on disk)",
+            details={
+                "shape": obj.shape,
+                "dtype": dtype_str,
+                "format": format_name,
+                "backed": True,
+            },
+            is_serializable=True,
+        )
+
+
 class DataFrameFormatter(TypeFormatter):
     """Formatter for pandas.DataFrame.
 
@@ -846,6 +881,7 @@ def _register_builtin_formatters() -> None:
         AwkwardArrayFormatter(),
         NumpyMaskedArrayFormatter(),
         CategoricalFormatter(),
+        BackedSparseDatasetFormatter(),  # Before SparseMatrixFormatter (backed sparse)
         # Medium priority
         NumpyArrayFormatter(),
         SparseMatrixFormatter(),

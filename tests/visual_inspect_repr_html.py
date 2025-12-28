@@ -1238,31 +1238,67 @@ def main():  # noqa: PLR0915, PLR0912
         adata_special._repr_html_(),
     ))
 
-    # Test 8: Dask array (if available)
+    # Test 8: Dask array (if available) - demonstrates lazy loading safety
     if HAS_DASK:
-        print("  8. Dask array")
-        X_dask = da.zeros((100, 50), chunks=(10, 50))
+        print("  8. Dask array (lazy loading safety)")
+        # Create Dask arrays in multiple sections to show lazy handling
+        X_dask = da.random.random((1000, 500), chunks=(100, 100))
         adata_dask = AnnData(X_dask)
+        adata_dask.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 333 + ["A"])
+        adata_dask.var["gene_name"] = [f"gene_{i}" for i in range(500)]
+        # Dask arrays in layers and obsm
+        adata_dask.layers["counts"] = da.random.randint(
+            0, 100, (1000, 500), chunks=(100, 100)
+        )
+        adata_dask.obsm["X_pca"] = da.random.random((1000, 50), chunks=(100, 50))
+        adata_dask.varm["loadings"] = da.random.random((500, 50), chunks=(100, 50))
         sections.append((
-            "8. Dask Array (lazy/chunked)",
+            "8. Dask Arrays (Lazy Loading Safety)",
             adata_dask._repr_html_(),
+            "<strong>No data is loaded from disk!</strong> The repr only reads metadata:<br>"
+            "<ul>"
+            "<li><code>X</code>: Shows shape (1,000 × 500), dtype, chunks — no <code>.compute()</code></li>"
+            "<li><code>layers['counts']</code>: Same — reads <code>.shape</code>, <code>.dtype</code>, <code>.chunks</code></li>"
+            "<li><code>obsm['X_pca']</code>: Shows (1,000 × 50) from <code>.shape</code> attribute</li>"
+            "<li><code>varm['loadings']</code>: Shows (500 × 50) from <code>.shape</code> attribute</li>"
+            "</ul>"
+            "This is safe for terabyte-scale datasets — displaying the repr never triggers computation.",
         ))
 
-    # Test 9: Backed AnnData (H5AD file)
+    # Test 9: Backed AnnData (H5AD file) - demonstrates on-disk safety
     print("  9. Backed AnnData (H5AD file)")
     with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
         tmp_path = tmp.name
     adata_backed = None
     try:
-        adata_to_save = AnnData(np.random.randn(50, 20).astype(np.float32))
-        adata_to_save.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "B"])
-        adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(20)]
+        adata_to_save = AnnData(
+            sp.random(500, 200, density=0.1, format="csr", dtype=np.float32)
+        )
+        adata_to_save.obs["cluster"] = pd.Categorical(
+            ["A", "B", "C"] * 166 + ["A", "B"]
+        )
+        adata_to_save.obs["n_counts"] = np.random.randint(1000, 10000, 500)
+        adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(200)]
+        adata_to_save.var["highly_variable"] = np.random.choice([True, False], 200)
+        adata_to_save.obsm["X_pca"] = np.random.randn(500, 50).astype(np.float32)
         adata_to_save.write_h5ad(tmp_path)
         adata_backed = ad.read_h5ad(tmp_path, backed="r")
         sections.append((
-            "9. Backed AnnData (H5AD file)",
+            "9. Backed AnnData (H5AD File)",
             adata_backed._repr_html_(),
-            f"File path: {tmp_path}. Shows badge with format and status, plus file path.",
+            "<strong>File-backed mode — X matrix stays on disk!</strong><br>"
+            f"<code>{tmp_path}</code><br><br>"
+            "What the repr reads (safe, small metadata):<br>"
+            "<ul>"
+            "<li><code>X.shape</code>, <code>X.dtype</code>, <code>X.nnz</code> — from HDF5 attributes</li>"
+            "<li><code>obs</code>/<code>var</code> DataFrames — loaded in memory (typically small)</li>"
+            "<li><code>obsm</code>/<code>varm</code> shapes — from HDF5 dataset attributes</li>"
+            "</ul>"
+            "What it does NOT load:<br>"
+            "<ul>"
+            "<li>The actual X matrix data (stays memory-mapped on disk)</li>"
+            "<li>No slicing or indexing into X</li>"
+            "</ul>",
         ))
     finally:
         if adata_backed is not None:
@@ -1779,8 +1815,6 @@ For more details, see the full documentation.
 
     # Test 21b: Raw with sparse matrix
     print("  21b. Raw section (sparse matrix)")
-    from scipy import sparse as sp
-
     adata_sparse_raw = AnnData(
         sp.random(n_obs, n_vars_filtered, density=0.1, format="csr", dtype=np.float32),
         var=pd.DataFrame(index=[f"gene_{i}" for i in range(n_vars_filtered)]),
