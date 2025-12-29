@@ -111,18 +111,16 @@ def test_access_count_dtype(
     adata_remote_tall_skinny: AnnData,
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> None:
-    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
 
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
 
-    count_expected = 2 if adata_orig.obs["cat"].cat.categories.dtype == "string" else 1
     # This should only cause categories to be read in once (and their mask if applicable)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
 
 
 def test_uns_uses_dask(adata_remote: AnnData):
