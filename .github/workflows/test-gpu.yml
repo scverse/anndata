@@ -45,9 +45,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
-        with:
-          fetch-depth: 0
-          filter: blob:none
+        with: { fetch-depth: 0, filter: "blob:none" }
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
@@ -89,6 +87,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: hatch-test.stable,gpu
           fail_ci_if_error: true
           files: test-data/coverage.xml
 
