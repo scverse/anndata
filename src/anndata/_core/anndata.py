@@ -1806,7 +1806,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         out.var = out.var.iloc[
             :,
             (
-                out.var.columns.str.extract(pat, expand=False)
+                out.var.columns.str
+                .extract(pat, expand=False)
                 .fillna("")
                 .argsort(kind="stable")
             ),
