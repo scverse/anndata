@@ -1010,11 +1010,36 @@ def test_index_jax_both_axes():
 
 
 @pytest.mark.array_api
-def test_double_index_jax():
+@pytest.mark.parametrize(
+    "to_bool",
+    [True, False],
+    ids=["bool", "int"],
+)
+def test_double_index_jax(*, to_bool: bool):
     # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]
-    v2 = adata[jnp.array([0, 1, 2, 3, 4, 5]), :][jnp.array(subset), :]
+    subset1 = jnp.array([0, 1, 2, 3, 4, 5])
+    subset2 = jnp.array(subset)
+    if to_bool:
+        mask1 = jnp.zeros(10).astype("bool")
+        mask1 = mask1.at[subset1].set(True)
+        mask2 = jnp.zeros(6).astype("bool")
+        mask2 = mask2.at[subset2].set(True)
+        v2 = adata[mask1, :][mask2, :]
+    else:
+        v2 = adata[subset1, :][subset2, :]
 
     assert_equal(v1, v2)
+
+
+@pytest.mark.array_api
+def test_array_api_index_err():
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), X_type=jnp.array)
+    subset = [0, 1, 3, 4]
+    with pytest.raises(
+        RuntimeError, match=r"Cannot resolve indices when the old indexer"
+    ):
+        adata[jnp.array([0, 1, 2, 3, 4, 5]), :][np.array(subset), :]

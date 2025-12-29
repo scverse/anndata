@@ -478,9 +478,12 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
         raise RuntimeError(msg)
     if xp.isdtype(old.dtype, "bool"):
         if xp.isdtype(new.dtype, "bool"):
-            mask = xp.zeros_like(old)
-            mask[xp.nonzero(xp.reshape(old, (-1,)))[new]] = True
-            return mask
+            n = old.shape[0]
+            selected = xp.nonzero(old)[0][new]
+            return xp.any(
+                xp.arange(n)[:, None] == selected[None, :],
+                axis=1,
+            )
         old = xp.where(old)[0]
     return old[new]
 

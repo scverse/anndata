@@ -293,33 +293,6 @@ def maybe_add_sparse_array(
     return mapping
 
 
-# fixing the ndarray issue
-def _is_sparse_like(x):
-    try:
-        import scipy.sparse as sp
-
-        return sp.issparse(x)
-    except ImportError:
-        return False
-
-
-def _is_array_api_dense(x):
-    """Check if x is a dense array-API array."""
-    if isinstance(x, np.ndarray):
-        return True
-    # ignore DataFrame/Series and scipy.sparse
-    if isinstance(x, pd.DataFrame | pd.Series) or _is_sparse_like(x):
-        return False
-    try:
-        import array_api_compat as aac
-
-        # Treat ONLY JAX/CuPy dense arrays as np.ndarray-equivalents.
-        # Excluding Dask or Awkward in here
-        return aac.is_jax_array(x) or aac.is_cupy_array(x)
-    except ImportError:
-        return False
-
-
 # TODO: Use hypothesis for this?
 def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
@@ -635,8 +608,6 @@ def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
     if has_xp(a) and not np.isscalar(a):
         xp = a.__array_namespace__()
-        if xp is np and np.isscalar(a):
-            return a == b
         # really force it on b
         b = xp.array(asarray(b))
         if exact:

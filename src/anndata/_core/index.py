@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from functools import singledispatch
+from functools import singledispatch, wraps
 from itertools import repeat
 from typing import TYPE_CHECKING, cast, overload
 
@@ -195,6 +195,20 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     raise IndexError(msg)
 
 
+def subset_idx_to_numpy(func):
+    @wraps(func)
+    def _subset_wrapper(
+        a, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    ):
+        subset_idx = tuple(
+            np.from_dlpack(axis_idx) if has_xp(axis_idx) else axis_idx
+            for axis_idx in subset_idx
+        )
+        return func(a, subset_idx)
+
+    return _subset_wrapper
+
+
 @singledispatch
 def _subset(
     a: np.ndarray | pd.DataFrame,
@@ -202,12 +216,14 @@ def _subset(
 ):
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
+    # TODO: How to handle array-api here.
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
 
 
 @_subset.register(DaskArray)
+@subset_idx_to_numpy
 def _subset_dask(
     a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
@@ -220,6 +236,7 @@ def _subset_dask(
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
+@subset_idx_to_numpy
 def _subset_sparse(
     a: CSMatrix | CSArray,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
@@ -235,6 +252,7 @@ def _subset_sparse(
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
+@subset_idx_to_numpy
 def _subset_df(
     df: pd.DataFrame | Dataset2D,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],

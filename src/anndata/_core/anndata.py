@@ -30,6 +30,7 @@ from ..compat import (
     DaskArray,
     ZarrArray,
     _move_adj_mtx,
+    has_xp,
     old_positionals,
     pandas_as_str,
 )
@@ -307,8 +308,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # the file is the same as of the reference object
         self.file = adata_ref.file
         # views on attributes of adata_ref
-        obs_sub = adata_ref.obs.iloc[oidx]
-        var_sub = adata_ref.var.iloc[vidx]
+        var_sub = adata_ref.var.iloc[np.from_dlpack(vidx) if has_xp(vidx) else vidx]
+        obs_sub = adata_ref.obs.iloc[np.from_dlpack(oidx) if has_xp(oidx) else oidx]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
