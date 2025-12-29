@@ -278,6 +278,10 @@ def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
     check_all_sharded(g)
 
 
+def test_singleton(xxxm_adatas, tmp_path, file_format):
+    assert_eq_concat_on_disk(xxxm_adatas[:1], tmp_path, file_format=file_format)
+
+
 def test_output_dir_exists(tmp_path):
     in_pth = tmp_path / "in.h5ad"
     out_pth = tmp_path / "does_not_exist" / "out.h5ad"
