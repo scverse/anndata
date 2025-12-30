@@ -222,7 +222,9 @@ def test_consecutive_bool(
     # `_normalize_indices`, which is used by `AnnData`, converts bools to ints with `np.where`
     from anndata._core import sparse_dataset
 
-    spy = mocker.spy(sparse_dataset, "get_compressed_vectors_for_slices")
+    spy = mocker.spy(
+        sparse_dataset.BackedSparseMatrix, "get_compressed_vectors_for_slices"
+    )
     assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
     if should_trigger_optimization is not None:
         assert (
