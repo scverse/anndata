@@ -356,7 +356,7 @@ def test_backed_modification_sparse(
 
     pat = r"Cannot write to views of sparse backed files"
     with pytest.raises(NotImplementedError, match=pat):
-        adata.X[0, [0, 2]] = 10
+        adata[0, [0, 2]].X = 10
 
 
 # TODO: Work around h5py not supporting this
