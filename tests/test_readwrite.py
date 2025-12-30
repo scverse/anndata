@@ -417,7 +417,7 @@ def test_zarr_compression(
                 wrongly_compressed.append(key)
             return None
         if (compressor is None and read_compressor is not None) or (
-            (compressor is not None and read_compressor is not None)
+            None not in {compressor, read_compressor}
             and read_compressor.to_dict() != compressor.to_dict()
         ):
             wrongly_compressed.append(key)
