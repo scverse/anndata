@@ -587,7 +587,7 @@ class Reindexer:
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
         elif has_xp(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
-        else:
+        else:  # pragma: no cover
             msg = "Cannot reindex element of unsupported type."
             raise TypeError(msg)
 
@@ -819,7 +819,6 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
 
 
 def np_bool_to_pd_bool_array(df: pd.DataFrame):
-    # fixes issue where pandas converts bool to object dtype when there are missing values
     for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
             df[col_name] = pd.array(df[col_name].values)

@@ -60,12 +60,9 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
 
     new = adata_view.copy()
     attr = getattr(new, attr_name)
-    container = reduce(lambda d, k: d[k], keys, attr)  # attr[k[0]][k[1]][k[2]]...
-    # Yield it (not yet converted)
+    container = reduce(lambda d, k: d[k], keys, attr)
     yield container
 
-    # # After yield, check if immutable and convert to mutable before reinserting
-    # parent[key] = _to_numpy_if_immutable(container)
     adata_view._init_as_actual(new)
 
 
@@ -305,8 +302,9 @@ def as_view(obj, view_args):
         # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
         # You should NOT update views.
         return obj
-    msg = f"No view type has been registered for {type(obj)}"
-    raise NotImplementedError(msg)
+    else:  # pragma: no cover
+        msg = f"No view type has been registered for {type(obj)}"
+        raise NotImplementedError(msg)
 
 
 @as_view.register(np.ndarray)
@@ -461,7 +459,7 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
 
     from ..compat import has_xp
 
-    if not has_xp(old):
+    if not has_xp(old):  # pragma: no cover
         msg = f"Expected array-API–compatible array, got {type(old)}"
         raise TypeError(msg)
     xp = old.__array_namespace__()
@@ -469,7 +467,7 @@ def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1
     # handle slice indexing by converting to array indices
     if isinstance(new, slice):
         new = xp.arange(*new.indices(old.shape[0]))
-    if not has_xp(new):
+    if not has_xp(new):  # pragma: no cover
         msg = "New indexer must have array api compatibility"
         raise RuntimeError(msg)
 
