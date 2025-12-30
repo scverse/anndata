@@ -95,8 +95,8 @@ GLOBAL_LOCK = Lock()
 
 
 def zarr_v3_compressor_compat(dataset_kwargs) -> dict:
-    if not is_zarr_v2() and (compressor := dataset_kwargs.pop("compressor", None)):
-        dataset_kwargs["compressors"] = compressor
+    if not is_zarr_v2() and hasattr(dataset_kwargs, "compressor"):
+        dataset_kwargs["compressors"] = dataset_kwargs.pop("compressor", None)
     return dataset_kwargs
 
 
