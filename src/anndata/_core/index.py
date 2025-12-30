@@ -194,6 +194,9 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 def subset_idx_to_numpy(func):
+    # TODO: What exactly should we be doing about this behavior?
+    # Some things like pandas dataframes *need* numpy indexers (as opposed to jax or something).
+    # Previously, for GPU arrays, there was no handling at all so things just errored.
     @wraps(func)
     def _subset_wrapper(
         a, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
