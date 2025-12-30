@@ -377,37 +377,50 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 
 
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
-def test_zarr_compression(tmp_path, zarr_write_format):
+@pytest.mark.parametrize(
+    "use_compression", [True, False], ids=["compressed", "uncompressed"]
+)
+def test_zarr_compression(
+    tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
+):
     if zarr_write_format == 3 and is_zarr_v2():
         pytest.xfail("Cannot write zarr v3 format with v2 package")
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
-    if zarr_write_format == 2 or is_zarr_v2():
-        from numcodecs import Blosc
+    if use_compression:
+        if zarr_write_format == 2 or is_zarr_v2():
+            from numcodecs import Blosc
 
-        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+            compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+        else:
+            from zarr.codecs import ZstdCodec
+
+            # Don't use Blosc since it's defaults can change:
+            # https://github.com/zarr-developers/zarr-python/pull/3545
+            compressor = ZstdCodec(level=3, checksum=True)
     else:
-        from zarr.codecs import ZstdCodec
-
-        # Don't use Blosc since it's defaults can change:
-        # https://github.com/zarr-developers/zarr-python/pull/3545
-        compressor = ZstdCodec(level=3, checksum=True)
-    not_compressed = []
+        compressor = None
+    wrongly_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(value, key):
         if not isinstance(value, ZarrArray) or value.shape == ():
             return None
-        (read_compressor,) = value.compressors
+        if len(value.compressors) > 0:
+            (read_compressor,) = value.compressors
+        else:
+            read_compressor = None
         if zarr_write_format == 2:
             if read_compressor != compressor:
-                not_compressed.append(key)
+                wrongly_compressed.append(key)
             return None
-        if read_compressor.to_dict() != compressor.to_dict():
-            print(read_compressor.to_dict(), compressor.to_dict())
-            not_compressed.append(key)
+        if (compressor is None and read_compressor is not None) or (
+            (compressor is not None and read_compressor is not None)
+            and read_compressor.to_dict() != compressor.to_dict()
+        ):
+            wrongly_compressed.append(key)
 
     if is_zarr_v2():
         with zarr.open(pth, "r") as f:
@@ -417,11 +430,11 @@ def test_zarr_compression(tmp_path, zarr_write_format):
         for key, value in f.members(max_depth=None):
             check_compressed(value, key)
 
-    if not_compressed:
+    if wrongly_compressed:
         sep = "\n\t"
         msg = (
-            f"These elements were not compressed correctly:{sep}"
-            f"{sep.join(not_compressed)}"
+            f"These elements were not (un)compressed correctly:{sep}"
+            f"{sep.join(wrongly_compressed)}"
         )
         raise AssertionError(msg)
 
