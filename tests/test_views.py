@@ -39,6 +39,11 @@ from anndata.tests.helpers import (
 )
 from anndata.utils import asarray
 
+try:
+    import jax.numpy as jnp
+except ImportError:
+    jnp = None
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType, FunctionType
@@ -167,6 +172,13 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
+    # jax immutability case
+    if jnp is not None and isinstance(getattr(adata, mapping_name)["m"], jnp.ndarray):
+        msg = (
+            "JAX arrays are immutable; view-modification warning will not be triggered"
+        )
+        pytest.xfail(msg)
+
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
     if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
@@ -332,6 +344,11 @@ def test_set_varm(adata):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_not_set_subset_X(matrix_type_base, subset_func):
     adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
+
+    if jnp is not None and isinstance(adata.X, jnp.ndarray):
+        msg = "JAX arrays do not support in-place mutation."
+        pytest.xfail(msg)
+
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
     while True:
@@ -373,6 +390,13 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
     internal_idx = _normalize_index(
         subset_func(np.arange(subset.X.shape[1])), subset.var_names
     )
+    # JAX-specific immutability check
+    if jnp is not None and isinstance(subset.X, jnp.ndarray):
+        with pytest.raises(TypeError, match=r"immutable"):
+            subset.X[:, internal_idx] = 1
+        return
+
+    # non-JAX case
     assert subset.is_view
     with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
         subset.X[:, internal_idx] = 1
@@ -390,6 +414,11 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
+
+    if jnp is not None and isinstance(adata.X, jnp.ndarray):
+        with pytest.raises(TypeError, match=r"immutable"):
+            adata_subset.X = 1
+        return
 
     adata_subset.X = 1
 
@@ -892,22 +921,125 @@ def test_index_float_sequence_raises_error(index):
         gen_adata((10, 10))[index]
 
 
-# @pytest.mark.parametrize("dim", ["obs", "var"])
-# @pytest.mark.parametrize(
-#     ("idx", "pat"),
-#     [
-#         pytest.param(
-#             [1, "cell_c"], r"Mixed type list indexers not supported", id="mixed"
-#         ),
-#         pytest.param(
-#             [[1, 2], [2]], r"setting an array element with a sequence", id="nested"
-#         ),
-#     ],
-# )
-# def test_subset_errors(dim, idx, pat):
-#     orig = gen_adata((10, 10))
-#     with pytest.raises(ValueError, match=pat):
-#         if dim == "obs":
-#             orig[idx, :].X
-#         elif dim == "var":
-#             orig[:, idx].X
+@pytest.mark.array_api
+def test_jax_indexer():
+    index = np.array([0, 3, 6])
+    index_jax = jnp.array(index)
+    adata = gen_adata((10, 10))
+    assert_equal(adata[index], adata[index_jax])
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        np.array([0, 3, 6]),
+        slice(3),
+        Ellipsis,
+        (np.array([0, 3, 6]), np.array([1, 4, 7])),
+        (
+            np.array([([True] * 5) + ([False] * 5)]),
+            np.array([([True] * 5) + ([False] * 5)]),
+        ),
+        (
+            np.array([0, 3, 6]),
+            np.array([([True] * 5) + ([False] * 5)]),
+        ),
+    ],
+    ids=[
+        "integer-array",
+        "slice",
+        "ellipsis",
+        "two-axis-integer-arrays",
+        "two-axis-boolean-arrays",
+        "mixed-array-type",
+    ],
+)
+@pytest.mark.array_api
+def test_index_into_jax(index):
+    adata = ad.AnnData(X=np.ones((10, 10)))
+    adata_as_jax = ad.AnnData(X=jnp.ones((10, 10)))
+    assert_equal(adata[index], adata_as_jax[index])
+
+
+@pytest.mark.array_api
+def test_normalize_index_jax_boolean():
+    index = pd.Index([f"cell_{i:02d}" for i in range(10)])
+    mask = jnp.array([True, False, True, False, True, False, True, False, True, False])
+    out = _normalize_index(mask, index)
+    assert out.shape == (10,)
+    assert out.dtype == jnp.bool_
+
+
+@pytest.mark.array_api
+def test_normalize_index_jax_float_valid():
+    index = pd.Index([f"cell_{i:02d}" for i in range(10)])
+    idx = jnp.array([0, 2, 4])
+    out = _normalize_index(idx, index)
+    assert (out == jnp.array([0, 2, 4])).all()
+
+
+@pytest.mark.array_api
+def test_normalize_index_jax_flatten_2d():
+    index = pd.Index([f"cell_{i}" for i in range(5)])
+
+    # column vector (5,1)
+    idx_col = jnp.array([[0], [1], [2], [3], [4]])
+    out_col = _normalize_index(idx_col, index)
+    assert out_col.shape == (5,)
+    assert isinstance(out_col, jnp.ndarray)
+    assert (out_col == jnp.array([0, 1, 2, 3, 4])).all()
+
+    # row vector (1,5)
+    idx_row = jnp.array([[0, 1, 2, 3, 4]])
+    out_row = _normalize_index(idx_row, index)
+    assert out_row.shape == (5,)
+    assert isinstance(out_row, jnp.ndarray)
+    assert (out_row == jnp.array([0, 1, 2, 3, 4])).all()
+
+
+@pytest.mark.array_api
+def test_index_jax_both_axes():
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), X_type=jnp.array)
+    obs_subset = jnp.array([0, 2, 4, 6])
+    var_subset = jnp.array([1, 3, 5, 7])
+    v1 = adata[obs_subset, var_subset]
+    v2 = adata[obs_subset, :][:, var_subset]
+
+    assert_equal(v1, v2)
+
+
+@pytest.mark.array_api
+@pytest.mark.parametrize(
+    "to_bool",
+    [True, False],
+    ids=["bool", "int"],
+)
+def test_double_index_jax(*, to_bool: bool):
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), X_type=jnp.array)
+    subset = [0, 1, 3, 4]
+    v1 = adata[subset, :]
+    subset1 = jnp.array([0, 1, 2, 3, 4, 5])
+    subset2 = jnp.array(subset)
+    if to_bool:
+        mask1 = jnp.zeros(10).astype("bool")
+        mask1 = mask1.at[subset1].set(True)
+        mask2 = jnp.zeros(6).astype("bool")
+        mask2 = mask2.at[subset2].set(True)
+        v2 = adata[mask1, :][mask2, :]
+    else:
+        v2 = adata[subset1, :][subset2, :]
+
+    assert_equal(v1, v2)
+
+
+@pytest.mark.array_api
+def test_array_api_index_err():
+    # Generate AnnData with JAX-backed arrays
+    adata = gen_adata((10, 10), X_type=jnp.array)
+    subset = [0, 1, 3, 4]
+    with pytest.raises(
+        RuntimeError, match=r"Cannot resolve indices when the old indexer"
+    ):
+        adata[jnp.array([0, 1, 2, 3, 4, 5]), :][np.array(subset), :]

@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.convenience
+from numba.core.errors import NumbaDeprecationWarning
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -36,12 +37,29 @@ from anndata.tests.helpers import (
     gen_adata,
 )
 
+try:
+    import jax.numpy as jnp
+except ImportError:
+    jnp = None
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
-
+MAYBE_JAX_TYPE = (
+    [pytest.param(jnp.array, id="jax.array", marks=pytest.mark.array_api)]
+    if jnp is not None
+    else []
+)
+ARRAY_TYPES = [
+    pytest.param(np.array, id="np.array"),
+    pytest.param(as_dense_dask_array, id="dask_dense"),
+    pytest.param(csr_matrix, id="csr_matrix"),
+    pytest.param(csr_array, id="csr_array"),
+    *MAYBE_JAX_TYPE,
+]
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -119,8 +137,9 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
+
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
@@ -133,6 +152,8 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     adata2 = read1()
     write2(adata2)
     adata3 = read2()
+    if jnp is not None and isinstance(adata1.X, jnp.ndarray):
+        adata1.X = np.from_dlpack(adata1.X)
 
     assert_equal(adata2, adata1)
     assert_equal(adata3, adata1)
@@ -159,7 +180,7 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -185,6 +206,9 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
+        adata_src.raw = adata_src.copy()
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
@@ -205,13 +229,15 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -249,7 +275,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_backed(typ, backing_h5ad):
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
@@ -265,13 +291,23 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ",
+    [
+        pytest.param(np.array, id="np.array"),
+        pytest.param(csr_matrix, id="csr_matrix"),
+        pytest.param(csc_matrix, id="csc_matrix"),
+        pytest.param(csr_array, id="csr_array"),
+        pytest.param(csc_array, id="csc_array"),
+        *MAYBE_JAX_TYPE,
+    ],
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
+    print(f"Running test with X_type = {typ.__module__}.{typ.__name__}")
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
@@ -451,6 +487,103 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
         assert_equal(read, modified, exact=True)
 
 
+@pytest.mark.parametrize("typ", [np.array, csr_matrix, *MAYBE_JAX_TYPE])
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+@pytest.mark.parametrize("obsm_mapping", [{}, dict(X_composed=["oanno3", "oanno4"])])
+@pytest.mark.parametrize("varm_mapping", [{}, dict(X_composed2=["vanno3", "vanno4"])])
+def test_readwrite_loom(typ, obsm_mapping, varm_mapping, tmp_path):
+    X = typ(X_list)
+
+    obs_dim = "meaningful_obs_dim_name"
+    var_dim = "meaningful_var_dim_name"
+    adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
+    adata_src.obs_names.name = obs_dim
+    adata_src.var_names.name = var_dim
+    adata_src.obsm["X_a"] = np.zeros((adata_src.n_obs, 2))
+    adata_src.varm["X_b"] = np.zeros((adata_src.n_vars, 3))
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        # loompy uses “is” for ints
+        warnings.filterwarnings("ignore", category=SyntaxWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(tmp_path / "test.loom", write_obsm_varm=True)
+
+    adata = ad.io.read_loom(
+        tmp_path / "test.loom",
+        sparse=typ is csr_matrix,
+        obsm_mapping=obsm_mapping,
+        obs_names=obs_dim,
+        varm_mapping=varm_mapping,
+        var_names=var_dim,
+        cleanup=True,
+    )
+
+    if isinstance(X, np.ndarray):
+        assert np.allclose(adata.X, X)
+    else:
+        # TODO: this should not be necessary
+        assert np.allclose(adata.X.toarray(), X.toarray())
+    assert "X_a" in adata.obsm
+    assert adata.obsm["X_a"].shape[1] == 2
+    assert "X_b" in adata.varm
+    assert adata.varm["X_b"].shape[1] == 3
+    # as we called with `cleanup=True`
+    assert "oanno1b" in adata.uns["loom-obs"]
+    assert "vanno2" in adata.uns["loom-var"]
+    for k, v in obsm_mapping.items():
+        assert k in adata.obsm
+        assert adata.obsm[k].shape[1] == len(v)
+    for k, v in varm_mapping.items():
+        assert k in adata.varm
+        assert adata.varm[k].shape[1] == len(v)
+    assert adata.obs_names.name == obs_dim
+    assert adata.var_names.name == var_dim
+
+
+@pytest.mark.skipif(not find_spec("loompy"), reason="Loompy is not installed")
+def test_readloom_deprecations(tmp_path):
+    loom_pth = tmp_path / "test.loom"
+    adata_src = gen_adata((5, 10), obsm_types=[np.ndarray], varm_types=[np.ndarray])
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message=r"datetime.datetime.utcnow\(\) is deprecated",
+            category=DeprecationWarning,
+        )
+        adata_src.write_loom(loom_pth, write_obsm_varm=True)
+
+    # obsm_names -> obsm_mapping
+    obsm_mapping = {"df": adata_src.obs.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.io.read_loom(loom_pth, obsm_names=obsm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
+        ad.io.read_loom(loom_pth, obsm_mapping=obsm_mapping, obsm_names=obsm_mapping)
+
+    # varm_names -> varm_mapping
+    varm_mapping = {"df": adata_src.var.columns}
+    with pytest.warns(FutureWarning):
+        depr_result = ad.io.read_loom(loom_pth, varm_names=varm_mapping)
+    actual_result = ad.io.read_loom(loom_pth, varm_mapping=varm_mapping)
+    assert_equal(actual_result, depr_result)
+    with pytest.raises(ValueError, match=r"ambiguous"), pytest.warns(FutureWarning):
+        ad.io.read_loom(loom_pth, varm_mapping=varm_mapping, varm_names=varm_mapping)
+
+    # positional -> keyword
+    with pytest.warns(FutureWarning, match=r"sparse"):
+        depr_result = ad.io.read_loom(loom_pth, True)  # noqa: FBT003
+    actual_result = ad.io.read_loom(loom_pth, sparse=True)
+    assert type(depr_result.X) == type(actual_result.X)
+
+
 def test_read_csv():
     adata = ad.io.read_csv(HERE / "data" / "adata.csv")
     assert adata.obs_names.tolist() == ["r1", "r2", "r3"]
@@ -473,14 +606,14 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
@@ -519,10 +652,22 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize("xp", [np, jnp] if jnp is not None else [np])
+def test_readwrite_empty(read, write, name, tmp_path, xp):
+    # JAX arrays are not not directly serializable by h5py
+    raw_array = xp.array([], dtype=float)
+    # convert array to numpy to make it serializable
+    if isinstance(raw_array, np.ndarray):
+        empty_arr = raw_array
+    elif hasattr(raw_array, "__dlpack__"):
+        empty_arr = np.from_dlpack(raw_array)
+    else:
+        empty_arr = np.asarray(raw_array)
+
+    adata = ad.AnnData(uns=dict(empty=empty_arr))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
+    assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
 
@@ -604,6 +749,7 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
+
     M = 30_000
     N = 1000
     ls = np.array(list(ascii_letters))

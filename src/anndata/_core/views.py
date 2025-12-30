@@ -20,6 +20,7 @@ from ..compat import (
     CupyCSRMatrix,
     DaskArray,
     ZappyArray,
+    has_xp,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -56,10 +57,12 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
 
     `adata.attr[key1][key2][keyn]...`
     """
+
     new = adata_view.copy()
     attr = getattr(new, attr_name)
     container = reduce(lambda d, k: d[k], keys, attr)
     yield container
+
     adata_view._init_as_actual(new)
 
 
@@ -294,8 +297,14 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
-    msg = f"No view type has been registered for {type(obj)}"
-    raise NotImplementedError(msg)
+    if has_xp(obj):
+        # TODO: Determine if we need some sort of specific view object for array-api, or some sort of wrapper that just warns loudly?
+        # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
+        # You should NOT update views.
+        return obj
+    else:  # pragma: no cover
+        msg = f"No view type has been registered for {type(obj)}"
+        raise NotImplementedError(msg)
 
 
 @as_view.register(np.ndarray)
@@ -447,7 +456,34 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
-    raise NotImplementedError
+
+    from ..compat import has_xp
+
+    if not has_xp(old):  # pragma: no cover
+        msg = f"Expected array-API–compatible array, got {type(old)}"
+        raise TypeError(msg)
+    xp = old.__array_namespace__()
+
+    # handle slice indexing by converting to array indices
+    if isinstance(new, slice):
+        new = xp.arange(*new.indices(old.shape[0]))
+    if not has_xp(new):  # pragma: no cover
+        msg = "New indexer must have array api compatibility"
+        raise RuntimeError(msg)
+
+    if (new_xp := new.__array_namespace__()) is not xp:
+        msg = f"Cannot resolve indices when the old indexer and new indexer are not the same array-api compatible type. old: {xp}, new: {new_xp}"
+        raise RuntimeError(msg)
+    if xp.isdtype(old.dtype, "bool"):
+        if xp.isdtype(new.dtype, "bool"):
+            n = old.shape[0]
+            selected = xp.nonzero(old)[0][new]
+            return xp.any(
+                xp.arange(n)[:, None] == selected[None, :],
+                axis=1,
+            )
+        old = xp.where(old)[0]
+    return old[new]
 
 
 @_resolve_idx.register(np.ndarray)
