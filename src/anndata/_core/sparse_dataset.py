@@ -164,8 +164,8 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     def _get_contiguous_compressed_slice(self, s: slice) -> CompressedVectors:
         new_indptr: DenseType = self.indptr[s.start : s.stop + 1].copy()
 
-        start = new_indptr[0]
-        stop = new_indptr[-1]
+        start = new_indptr[0].item()
+        stop = new_indptr[-1].item()
 
         new_indptr -= start
 
@@ -197,7 +197,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         self, slices: Iterable[slice]
     ) -> CompressedVectors:
         indptr_indices = [self.indptr[slice(s.start, s.stop + 1)] for s in slices]
-        indptr_limits = [slice(i[0], i[-1]) for i in indptr_indices]
+        indptr_limits = [slice(i[0].item(), i[-1].item()) for i in indptr_indices]
         # HDF5 cannot handle out-of-order integer indexing
         if isinstance(self.data, ZarrArray):
             indptr_int = self.np_module.concatenate([
