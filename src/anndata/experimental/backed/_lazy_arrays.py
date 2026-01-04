@@ -181,7 +181,11 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
             # HDF5 stores strings as bytes, decode them before converting to StringDType
-            if values.dtype == object and len(values) > 0 and isinstance(values.flat[0], bytes):
+            if (
+                values.dtype == object
+                and len(values) > 0
+                and isinstance(values.flat[0], bytes)
+            ):
                 values = np.array([v.decode("utf-8") for v in values], dtype=object)
             values = values.astype(self.dtype)
             values[mask] = pd.NA
