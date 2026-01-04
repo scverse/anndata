@@ -259,21 +259,22 @@ from .._repr_constants import STYLE_HIDDEN  # noqa: E402
 
 # Building blocks for packages that want to create their own _repr_html_
 # These allow reusing anndata's styling while building custom representations
-from .css import get_css  # noqa: E402
-
-# HTML rendering helpers for building custom sections
-# UI component helpers (search box, fold icon, badges, etc.)
-from .formatters import check_column_name  # noqa: E402
-from .html import (  # noqa: E402
-    generate_repr_html,
+from .components import (  # noqa: E402
     render_badge,
     render_copy_button,
     render_fold_icon,
-    render_formatted_entry,
     render_header_badges,
     render_search_box,
-    render_section,
     render_warning_icon,
+)
+from .css import get_css  # noqa: E402
+
+# HTML rendering helpers for building custom sections
+from .formatters import check_column_name  # noqa: E402
+from .html import (  # noqa: E402
+    generate_repr_html,
+    render_formatted_entry,
+    render_section,
 )
 from .javascript import get_javascript  # noqa: E402
 from .registry import (  # noqa: E402

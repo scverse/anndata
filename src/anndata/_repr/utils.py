@@ -531,3 +531,90 @@ _NAMED_COLORS = frozenset({
     "whitesmoke",
     "yellowgreen",
 })
+
+
+# -----------------------------------------------------------------------------
+# Value preview functions
+# -----------------------------------------------------------------------------
+
+
+def preview_string(value: str, max_len: int) -> str:
+    """Preview a string value."""
+    if len(value) <= max_len:
+        return f'"{value}"'
+    return f'"{value[:max_len]}..."'
+
+
+def preview_number(value: float | np.integer | np.floating) -> str:
+    """Preview a numeric value."""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, np.integer)):
+        return str(value)
+    # Float - format nicely
+    if value == int(value):
+        return str(int(value))
+    return f"{value:.6g}"
+
+
+def preview_dict(value: dict) -> str:
+    """Preview a dict value."""
+    n_keys = len(value)
+    if n_keys == 0:
+        return "{}"
+    if n_keys <= 3:
+        keys_preview = ", ".join(str(k) for k in list(value.keys())[:3])
+        return f"{{{keys_preview}}}"
+    keys_preview = ", ".join(str(k) for k in list(value.keys())[:2])
+    return f"{{{keys_preview}, ...}} ({n_keys} keys)"
+
+
+def preview_sequence(value: list | tuple) -> str:
+    """Preview a list or tuple value."""
+    n_items = len(value)
+    bracket = "[]" if isinstance(value, list) else "()"
+    if n_items == 0:
+        return bracket
+    if n_items <= 3:
+        try:
+            items = [preview_item(v) for v in value[:3]]
+            if all(items):
+                return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
+        except Exception:  # noqa: BLE001
+            # Intentional broad catch: preview generation is best-effort
+            pass
+    return f"({n_items} items)"
+
+
+def preview_item(value: Any) -> str:
+    """Generate a short preview for a single item (for list/tuple previews)."""
+    if isinstance(value, str):
+        if len(value) <= 20:
+            return f'"{value}"'
+        return f'"{value[:17]}..."'
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return str(value)
+    if value is None:
+        return "None"
+    return ""  # Empty string means skip
+
+
+def generate_value_preview(value: Any, max_len: int = 100) -> str:
+    """Generate a human-readable preview of a value.
+
+    Returns empty string if no meaningful preview can be generated.
+    """
+    if value is None:
+        return "None"
+    if isinstance(value, str):
+        return preview_string(value, max_len)
+    if isinstance(value, (bool, int, float, np.integer, np.floating)):
+        return preview_number(value)
+    if isinstance(value, dict):
+        return preview_dict(value)
+    if isinstance(value, (list, tuple)):
+        return preview_sequence(value)
+    # No preview for complex types
+    return ""

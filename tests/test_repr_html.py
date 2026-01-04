@@ -3765,188 +3765,188 @@ class TestValuePreviewFunctions:
 
     def test_preview_string_short(self):
         """Test string preview for short strings."""
-        from anndata._repr.html import _preview_string
+        from anndata._repr.utils import preview_string
 
-        result = _preview_string("hello", max_len=100)
+        result = preview_string("hello", max_len=100)
         assert result == '"hello"'
 
     def test_preview_string_long(self):
         """Test string preview for long strings."""
-        from anndata._repr.html import _preview_string
+        from anndata._repr.utils import preview_string
 
         long_str = "a" * 100
-        result = _preview_string(long_str, max_len=20)
+        result = preview_string(long_str, max_len=20)
         assert len(result) < 30  # Much shorter than original
         assert result.endswith('..."')
 
     def test_preview_number_bool(self):
         """Test number preview for booleans."""
-        from anndata._repr.html import _preview_number
+        from anndata._repr.utils import preview_number
 
-        assert _preview_number(True) == "True"  # noqa: FBT003
-        assert _preview_number(False) == "False"  # noqa: FBT003
+        assert preview_number(True) == "True"  # noqa: FBT003
+        assert preview_number(False) == "False"  # noqa: FBT003
 
     def test_preview_number_int(self):
         """Test number preview for integers."""
-        from anndata._repr.html import _preview_number
+        from anndata._repr.utils import preview_number
 
-        assert _preview_number(42) == "42"
-        assert _preview_number(np.int64(42)) == "42"
+        assert preview_number(42) == "42"
+        assert preview_number(np.int64(42)) == "42"
 
     def test_preview_number_float_whole(self):
         """Test number preview for whole number floats."""
-        from anndata._repr.html import _preview_number
+        from anndata._repr.utils import preview_number
 
-        assert _preview_number(42.0) == "42"
-        assert _preview_number(np.float32(100.0)) == "100"
+        assert preview_number(42.0) == "42"
+        assert preview_number(np.float32(100.0)) == "100"
 
     def test_preview_number_float_decimal(self):
         """Test number preview for decimal floats."""
-        from anndata._repr.html import _preview_number
+        from anndata._repr.utils import preview_number
 
-        result = _preview_number(3.14159265359)
+        result = preview_number(3.14159265359)
         # Should be formatted concisely with :.6g
         assert "3.14159" in result
 
     def test_preview_dict_empty(self):
         """Test dict preview for empty dict."""
-        from anndata._repr.html import _preview_dict
+        from anndata._repr.utils import preview_dict
 
-        assert _preview_dict({}) == "{}"
+        assert preview_dict({}) == "{}"
 
     def test_preview_dict_small(self):
         """Test dict preview for small dict (<=3 keys)."""
-        from anndata._repr.html import _preview_dict
+        from anndata._repr.utils import preview_dict
 
-        result = _preview_dict({"a": 1, "b": 2})
+        result = preview_dict({"a": 1, "b": 2})
         assert "a" in result
         assert "b" in result
         assert "{" in result
 
     def test_preview_dict_large(self):
         """Test dict preview for large dict (>3 keys)."""
-        from anndata._repr.html import _preview_dict
+        from anndata._repr.utils import preview_dict
 
         d = {f"key_{i}": i for i in range(10)}
-        result = _preview_dict(d)
+        result = preview_dict(d)
         assert "keys" in result.lower()
         assert "10" in result
 
     def test_preview_sequence_empty_list(self):
         """Test sequence preview for empty list."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
-        assert _preview_sequence([]) == "[]"
+        assert preview_sequence([]) == "[]"
 
     def test_preview_sequence_empty_tuple(self):
         """Test sequence preview for empty tuple."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
-        assert _preview_sequence(()) == "()"
+        assert preview_sequence(()) == "()"
 
     def test_preview_sequence_small_list(self):
         """Test sequence preview for small list."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
-        result = _preview_sequence([1, 2, 3])
+        result = preview_sequence([1, 2, 3])
         assert "[" in result
         assert "]" in result
         assert "1" in result
 
     def test_preview_sequence_small_tuple(self):
         """Test sequence preview for small tuple."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
-        result = _preview_sequence((1, 2, 3))
+        result = preview_sequence((1, 2, 3))
         assert "(" in result
         assert ")" in result
 
     def test_preview_sequence_large(self):
         """Test sequence preview for large sequence."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
-        result = _preview_sequence(list(range(100)))
+        result = preview_sequence(list(range(100)))
         assert "items" in result.lower()
         assert "100" in result
 
     def test_preview_sequence_with_complex_items(self):
         """Test sequence preview with complex items (returns item count)."""
-        from anndata._repr.html import _preview_sequence
+        from anndata._repr.utils import preview_sequence
 
         # Lists with nested structures should fall back to item count
-        result = _preview_sequence([{"a": 1}, {"b": 2}])
+        result = preview_sequence([{"a": 1}, {"b": 2}])
         assert "2" in result  # 2 items
 
     def test_preview_item_string(self):
         """Test item preview for strings."""
-        from anndata._repr.html import _preview_item
+        from anndata._repr.utils import preview_item
 
-        assert _preview_item("hello") == '"hello"'
-        assert _preview_item("a" * 100).endswith('..."')
+        assert preview_item("hello") == '"hello"'
+        assert preview_item("a" * 100).endswith('..."')
 
     def test_preview_item_numbers(self):
         """Test item preview for numbers."""
-        from anndata._repr.html import _preview_item
+        from anndata._repr.utils import preview_item
 
-        assert _preview_item(42) == "42"
-        assert _preview_item(3.14) == "3.14"
-        assert _preview_item(True) == "True"  # noqa: FBT003
+        assert preview_item(42) == "42"
+        assert preview_item(3.14) == "3.14"
+        assert preview_item(True) == "True"  # noqa: FBT003
 
     def test_preview_item_none(self):
         """Test item preview for None."""
-        from anndata._repr.html import _preview_item
+        from anndata._repr.utils import preview_item
 
-        assert _preview_item(None) == "None"
+        assert preview_item(None) == "None"
 
     def test_preview_item_complex(self):
         """Test item preview for complex types returns empty."""
-        from anndata._repr.html import _preview_item
+        from anndata._repr.utils import preview_item
 
-        assert _preview_item([1, 2, 3]) == ""
-        assert _preview_item({"a": 1}) == ""
+        assert preview_item([1, 2, 3]) == ""
+        assert preview_item({"a": 1}) == ""
 
     def test_generate_value_preview_none(self):
         """Test value preview for None."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
-        assert _generate_value_preview(None) == "None"
+        assert generate_value_preview(None) == "None"
 
-    def test_generate_value_preview_string(self):
+    def test_generate_valuepreview_string(self):
         """Test value preview for string."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
-        result = _generate_value_preview("hello world")
+        result = generate_value_preview("hello world")
         assert '"hello world"' in result
 
-    def test_generate_value_preview_number(self):
+    def test_generate_valuepreview_number(self):
         """Test value preview for number."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
-        assert "42" in _generate_value_preview(42)
-        assert "3.14" in _generate_value_preview(3.14)
+        assert "42" in generate_value_preview(42)
+        assert "3.14" in generate_value_preview(3.14)
 
-    def test_generate_value_preview_dict(self):
+    def test_generate_valuepreview_dict(self):
         """Test value preview for dict."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
-        result = _generate_value_preview({"key": "value"})
+        result = generate_value_preview({"key": "value"})
         assert "key" in result
 
     def test_generate_value_preview_list(self):
         """Test value preview for list."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
-        result = _generate_value_preview([1, 2, 3])
+        result = generate_value_preview([1, 2, 3])
         assert "[" in result or "items" in result
 
     def test_generate_value_preview_complex(self):
         """Test value preview for complex types returns empty."""
-        from anndata._repr.html import _generate_value_preview
+        from anndata._repr.utils import generate_value_preview
 
         class CustomClass:
             pass
 
-        assert _generate_value_preview(CustomClass()) == ""
+        assert generate_value_preview(CustomClass()) == ""
 
 
 class TestRawSectionRendering:
