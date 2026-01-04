@@ -3543,24 +3543,6 @@ class TestDtypeCSSClassHelpers:
         assert css_class == "dtype-object"  # Unknown maps to object
 
 
-class TestColorListFormatterCoverage:
-    """Tests for ColorListFormatter coverage."""
-
-    def test_color_list_formatter_raises_not_implemented(self):
-        """Test ColorListFormatter.format raises NotImplementedError (lines 719-723)."""
-        from anndata._repr.formatters import ColorListFormatter
-        from anndata._repr.registry import FormatterContext
-
-        formatter = ColorListFormatter()
-
-        # can_format always returns False (context-dependent)
-        assert not formatter.can_format(["#FF0000", "#00FF00"])
-
-        # format should raise NotImplementedError
-        with pytest.raises(NotImplementedError):
-            formatter.format(["#FF0000"], FormatterContext())
-
-
 class TestSparseFormatterDuckTyping:
     """Tests for sparse formatter duck typing fallback."""
 

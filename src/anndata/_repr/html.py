@@ -440,7 +440,13 @@ def _render_custom_section(
     )
 
 
-def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
+def render_formatted_entry(
+    entry: FormattedEntry,
+    section: str = "",
+    *,
+    extra_warnings: list[str] | None = None,
+    is_hard_error: bool = False,
+) -> str:
     """
     Render a FormattedEntry as a table row.
 
@@ -453,7 +459,12 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
     entry
         A FormattedEntry containing the key and FormattedOutput
     section
-        Optional section name (for future use)
+        Optional section name (used for meta column rendering)
+    extra_warnings
+        Additional warnings to display (e.g., key validation warnings)
+    is_hard_error
+        Whether there's a hard error (e.g., invalid key name) in addition
+        to serializability issues
 
     Returns
     -------
@@ -493,13 +504,26 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
             ),
         )
         html = render_formatted_entry(entry)
+
+    With key validation warnings::
+
+        entry = FormattedEntry(
+            key="bad/key",
+            output=FormattedOutput(...),
+        )
+        html = render_formatted_entry(entry, extra_warnings=["Contains '/' (deprecated)"])
     """
     output = entry.output
+    extra_warnings = extra_warnings or []
+
+    # Compute entry CSS classes
+    all_warnings = extra_warnings + list(output.warnings)
+    has_error = not output.is_serializable or is_hard_error
 
     entry_class = "adata-entry"
-    if output.warnings:
+    if all_warnings:
         entry_class += " warning"
-    if not output.is_serializable:
+    if has_error:
         entry_class += " error"
 
     has_expandable_content = output.html_content and output.is_expandable
@@ -512,20 +536,37 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
     # Name
     parts.append(_render_name_cell(entry.key))
 
-    # Type
+    # Type cell
     parts.append('<td class="adata-entry-type">')
-    parts.append(
-        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-    )
-    parts.append(
-        render_warning_icon(list(output.warnings), is_error=not output.is_serializable)
-    )
 
+    # Type span with optional tooltip
+    if output.tooltip:
+        parts.append(
+            f'<span class="{output.css_class}" title="{escape_html(output.tooltip)}">'
+            f'{escape_html(output.type_name)}</span>'
+        )
+    else:
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
+
+    # Warning icon
+    parts.append(render_warning_icon(all_warnings, is_error=has_error))
+
+    # Expand button for expandable content
     if has_expandable_content:
         parts.append(
             f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
         )
 
+    # Columns list toggle button (for DataFrames in obsm/varm)
+    has_columns_list = output.details.get("has_columns_list", False)
+    if has_columns_list:
+        parts.append(
+            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
+        )
+
+    # Inline custom content (non-expandable)
     if output.html_content and not output.is_expandable:
         parts.append(
             f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
@@ -535,13 +576,34 @@ def render_formatted_entry(entry: FormattedEntry, section: str = "") -> str:
 
     # Meta column (for data previews, dimensions, etc.)
     parts.append('<td class="adata-entry-meta">')
+
+    # Priority: meta_content > columns list > meta_preview > shape
     if output.meta_content:
         parts.append(output.meta_content)
+    elif has_columns_list and "columns" in output.details:
+        # Render columns list for DataFrames
+        columns = output.details["columns"]
+        col_str = ", ".join(escape_html(str(c)) for c in columns)
+        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
+    elif "meta_preview" in output.details:
+        # Render meta preview with full preview tooltip
+        full_preview = output.details.get(
+            "meta_preview_full", output.details["meta_preview"]
+        )
+        parts.append(
+            f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
+        )
+    elif "shape" in output.details and section in ("obsm", "varm"):
+        # Render shape for obsm/varm arrays
+        shape = output.details["shape"]
+        if len(shape) >= 2:
+            parts.append(f"({format_number(shape[1])} cols)")
+
     parts.append("</td>")
 
     parts.append("</tr>")
 
-    # Expandable content
+    # Expandable content row
     if has_expandable_content:
         parts.append('<tr class="adata-nested-row">')
         parts.append('<td colspan="3" class="adata-nested-content">')
@@ -842,18 +904,18 @@ def _render_index_preview(adata: AnnData) -> str:
     parts = ['<div class="adata-index-preview">']
 
     # obs_names preview
-    obs_preview = _format_index_preview(adata.obs_names, "obs_names")
+    obs_preview = _format_index_preview(adata.obs_names)
     parts.append(f"<div><strong>obs_names:</strong> {obs_preview}</div>")
 
     # var_names preview
-    var_preview = _format_index_preview(adata.var_names, "var_names")
+    var_preview = _format_index_preview(adata.var_names)
     parts.append(f"<div><strong>var_names:</strong> {var_preview}</div>")
 
     parts.append("</div>")
     return "\n".join(parts)
 
 
-def _format_index_preview(index: pd.Index, name: str) -> str:
+def _format_index_preview(index: pd.Index) -> str:
     """Format a preview of an index."""
     n = len(index)
     if n == 0:

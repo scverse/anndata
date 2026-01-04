@@ -71,9 +71,6 @@ class FormattedOutput:
     warnings: list[str] = field(default_factory=list)
     """Warning messages to display"""
 
-    children: list[FormattedEntry] | None = None
-    """Child entries for expandable types"""
-
     html_content: str | None = None
     """Custom HTML content (for expandable nested content or type column)"""
 
@@ -96,9 +93,6 @@ class FormattedEntry:
 
     output: FormattedOutput
     """Formatted output for this entry"""
-
-    copy_text: str | None = None
-    """Text to copy to clipboard (defaults to key)"""
 
 
 @dataclass

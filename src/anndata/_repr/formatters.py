@@ -823,20 +823,6 @@ class ListFormatter(TypeFormatter):
         )
 
 
-class ColorListFormatter(TypeFormatter):
-    """Special formatter for color lists (*_colors in .uns)."""
-
-    priority = 200  # High priority to catch before generic list
-
-    def can_format(self, obj: Any) -> bool:
-        # This is context-dependent, handled in section formatter
-        return False
-
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
-        # Not used directly - handled specially in UnsSection
-        raise NotImplementedError
-
-
 def _get_dtype_css_class(dtype: np.dtype) -> str:
     """Get CSS class for a numpy dtype."""
     kind = dtype.kind
