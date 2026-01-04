@@ -4419,7 +4419,7 @@ class TestSectionTooltips:
 
     def test_get_section_tooltip_all_sections(self):
         """Test tooltip text for all standard sections."""
-        from anndata._repr.html import _get_section_tooltip
+        from anndata._repr.core import get_section_tooltip
 
         sections = [
             "obs",
@@ -4433,14 +4433,14 @@ class TestSectionTooltips:
             "raw",
         ]
         for section in sections:
-            tooltip = _get_section_tooltip(section)
+            tooltip = get_section_tooltip(section)
             assert tooltip, f"Missing tooltip for section: {section}"
 
     def test_get_section_tooltip_unknown(self):
         """Test tooltip for unknown section returns empty string."""
-        from anndata._repr.html import _get_section_tooltip
+        from anndata._repr.core import get_section_tooltip
 
-        assert _get_section_tooltip("unknown_section") == ""
+        assert get_section_tooltip("unknown_section") == ""
 
 
 # =============================================================================

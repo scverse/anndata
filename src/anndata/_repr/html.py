@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING
 
 from .._repr_constants import (
     STYLE_HIDDEN,
-    STYLE_SECTION_CONTENT,
-    STYLE_SECTION_TABLE,
 )
 from . import (
     DEFAULT_FOLD_THRESHOLD,
@@ -30,15 +28,16 @@ from . import (
 )
 from .components import (
     render_badge,
-    render_copy_button,
-    render_fold_icon,
+    render_name_cell,
     render_search_box,
     render_warning_icon,
 )
+from .core import (
+    render_section,
+    render_truncation_indicator,
+    render_x_entry,
+)
 from .css import get_css
-
-# Section renderers (imported here to avoid circular imports at module load time)
-# These are used by _render_all_sections and _render_section
 from .javascript import get_javascript
 from .registry import (
     FormatterContext,
@@ -50,6 +49,7 @@ from .utils import (
     format_number,
     get_anndata_version,
     get_backing_info,
+    get_setting,
     is_backed,
     is_view,
 )
@@ -160,16 +160,16 @@ def generate_repr_html(
     """
     # Get settings with defaults
     if max_depth is None:
-        max_depth = _get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
+        max_depth = get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
     if fold_threshold is None:
-        fold_threshold = _get_setting(
+        fold_threshold = get_setting(
             "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
         )
     if max_items is None:
-        max_items = _get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
+        max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
 
     # Check if HTML repr is enabled
-    if not _get_setting("repr_html_enabled", default=True):
+    if not get_setting("repr_html_enabled", default=True):
         # Fallback to text repr
         return f"<pre>{escape_html(repr(adata))}</pre>"
 
@@ -195,13 +195,13 @@ def generate_repr_html(
         parts.append(get_css())
 
     # Calculate field name column width based on content
-    max_field_width = _get_setting(
+    max_field_width = get_setting(
         "repr_html_max_field_width", default=DEFAULT_MAX_FIELD_WIDTH
     )
     field_width = _calculate_field_name_width(adata, max_field_width)
 
     # Get type column width from settings
-    type_width = _get_setting("repr_html_type_width", default=DEFAULT_TYPE_WIDTH)
+    type_width = get_setting("repr_html_type_width", default=DEFAULT_TYPE_WIDTH)
 
     # Container with computed column widths as CSS variables
     style = f"--anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
@@ -223,7 +223,7 @@ def generate_repr_html(
 
     # Sections container
     parts.append('<div class="adata-sections">')
-    parts.append(_render_x_entry(adata, context))
+    parts.append(render_x_entry(adata, context))
     parts.extend(
         _render_all_sections(adata, context, fold_threshold, max_items, max_depth)
     )
@@ -313,7 +313,7 @@ def _render_section(
     """Render a single standard section."""
     try:
         if section == "X":
-            return _render_x_entry(adata, context)
+            return render_x_entry(adata, context)
         if section == "raw":
             return _render_raw_section(adata, context, fold_threshold, max_items)
         if section in ("obs", "var"):
@@ -397,7 +397,7 @@ def _render_custom_section(
     rows = []
     for i, entry in enumerate(entries):
         if i >= max_items:
-            rows.append(_render_truncation_indicator(n_items - max_items))
+            rows.append(render_truncation_indicator(n_items - max_items))
             break
         rows.append(render_formatted_entry(entry, section_name))
 
@@ -534,7 +534,7 @@ def render_formatted_entry(
     ]
 
     # Name
-    parts.append(_render_name_cell(entry.key))
+    parts.append(render_name_cell(entry.key))
 
     # Type cell
     parts.append('<td class="adata-entry-type">')
@@ -592,23 +592,6 @@ def render_formatted_entry(
         parts.append("</tr>")
 
     return "\n".join(parts)
-
-
-def _render_name_cell(name: str) -> str:
-    """Render a name cell with copy button and tooltip for truncated names.
-
-    The structure uses flexbox so the copy button stays visible even when
-    the name text overflows and shows ellipsis.
-    """
-    escaped_name = escape_html(name)
-    return (
-        f'<td class="adata-entry-name">'
-        f'<div class="adata-entry-name-inner">'
-        f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
-        f"{render_copy_button(name, 'Copy name')}"
-        f"</div>"
-        f"</td>"
-    )
 
 
 def _render_header(
@@ -735,46 +718,6 @@ def _format_index_preview(index: pd.Index) -> str:
     return ", ".join(items)
 
 
-def _render_x_entry(obj: Any, context: FormatterContext) -> str:
-    """Render X as a single compact entry row.
-
-    Works with both AnnData and Raw objects.
-    """
-    X = obj.X
-
-    parts = ['<div class="adata-x-entry">']
-    parts.append("<span>X</span>")
-
-    if X is None:
-        parts.append("<span><em>None</em></span>")
-    else:
-        # Format the X matrix
-        output = formatter_registry.format_value(X, context)
-
-        # Build compact type string
-        type_parts = [output.type_name]
-
-        # Add sparsity info inline for sparse matrices
-        if "sparsity" in output.details and output.details["sparsity"] is not None:
-            sparsity = output.details["sparsity"]
-            nnz = output.details.get("nnz", "?")
-            type_parts.append(f"{sparsity:.1%} sparse ({format_number(nnz)} stored)")
-
-        # Chunk info for Dask
-        if "chunks" in output.details:
-            type_parts.append(f"chunks={output.details['chunks']}")
-
-        # Backed info (only for AnnData, not Raw)
-        if is_backed(obj):
-            type_parts.append("on disk")
-
-        type_str = " · ".join(type_parts)
-        parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
-
-    parts.append("</div>")
-    return "\n".join(parts)
-
-
 # Section renderers are imported from sections.py
 from .sections import (  # noqa: E402
     _detect_unknown_sections,
@@ -787,181 +730,8 @@ from .sections import (  # noqa: E402
 )
 
 
-def _render_section_header(
-    name: str,
-    count_str: str,
-    doc_url: str | None,
-    tooltip: str,
-) -> str:
-    """Render a section header - colors handled by CSS for dark mode support."""
-    parts = ['<div class="anndata-sechdr">']
-    parts.append(render_fold_icon())  # Use helper for fold icon
-    parts.append(f'<span class="anndata-sec-name">{escape_html(name)}</span>')
-    parts.append(f'<span class="anndata-sec-count">{escape_html(count_str)}</span>')
-    if doc_url:
-        parts.append(
-            f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
-        )
-    parts.append("</div>")
-    return "\n".join(parts)
-
-
-def _render_empty_section(
-    name: str,
-    doc_url: str | None = None,
-    tooltip: str = "",
-) -> str:
-    """Render an empty section indicator."""
-    # Build help link if doc_url provided
-    help_link = ""
-    if doc_url:
-        help_link = f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
-
-    # Use render_fold_icon() helper for consistency
-    fold_icon = render_fold_icon()
-
-    return f"""
-<div class="anndata-sec" data-section="{escape_html(name)}" data-should-collapse="true">
-    <div class="anndata-sechdr">
-        {fold_icon}
-        <span class="anndata-sec-name">{escape_html(name)}</span>
-        <span class="anndata-sec-count">(empty)</span>
-        {help_link}
-    </div>
-    <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
-        <div class="adata-empty">No entries</div>
-    </div>
-</div>
-"""
-
-
-def _render_truncation_indicator(remaining: int) -> str:
-    """Render a truncation indicator."""
-    return f'<tr><td colspan="3" class="adata-truncated">... and {format_number(remaining)} more</td></tr>'
-
-
 def _render_max_depth_indicator(adata: AnnData) -> str:
     """Render indicator when max depth is reached."""
     n_obs = getattr(adata, "n_obs", "?")
     n_vars = getattr(adata, "n_vars", "?")
     return f'<div class="adata-max-depth">AnnData ({format_number(n_obs)} × {format_number(n_vars)}) - max depth reached</div>'
-
-
-def _get_section_tooltip(section: str) -> str:
-    """Get tooltip text for a section."""
-    tooltips = {
-        "obs": "Observation (cell) annotations",
-        "var": "Variable (gene) annotations",
-        "uns": "Unstructured annotation",
-        "obsm": "Multi-dimensional observation annotations",
-        "varm": "Multi-dimensional variable annotations",
-        "layers": "Additional data layers (same shape as X)",
-        "obsp": "Pairwise observation annotations",
-        "varp": "Pairwise variable annotations",
-        "raw": "Raw data (original unprocessed)",
-    }
-    return tooltips.get(section, "")
-
-
-def _get_setting(name: str, *, default: Any) -> Any:
-    """Get a setting value, falling back to default."""
-    try:
-        from anndata import settings
-
-        return getattr(settings, name, default)
-    except (ImportError, AttributeError):
-        return default
-
-
-def render_section(  # noqa: PLR0913
-    name: str,
-    entries_html: str,
-    *,
-    n_items: int,
-    doc_url: str | None = None,
-    tooltip: str = "",
-    should_collapse: bool = False,
-    section_id: str | None = None,
-    count_str: str | None = None,
-) -> str:
-    """
-    Render a complete section with header and content.
-
-    This is a public API for packages building their own _repr_html_.
-    It is also used internally for consistency.
-
-    Parameters
-    ----------
-    name
-        Display name for the section header (e.g., 'images', 'tables')
-    entries_html
-        HTML content for the section body (table rows)
-    n_items
-        Number of items (used for empty check and default count string)
-    doc_url
-        URL for the help link (? icon)
-    tooltip
-        Tooltip text for the help link
-    should_collapse
-        Whether this section should start collapsed
-    section_id
-        ID for the section in data-section attribute (defaults to name)
-    count_str
-        Custom count string for header (defaults to "(N items)")
-
-    Returns
-    -------
-    HTML string for the complete section
-
-    Examples
-    --------
-    ::
-
-        from . import (
-            FormattedEntry,
-            FormattedOutput,
-            render_formatted_entry,
-        )
-
-        rows = []
-        for key, info in items.items():
-            entry = FormattedEntry(
-                key=key,
-                output=FormattedOutput(
-                    type_name=info["type"], css_class="dtype-ndarray"
-                ),
-            )
-            rows.append(render_formatted_entry(entry))
-
-        html = render_section(
-            "images",
-            "\\n".join(rows),
-            n_items=len(items),
-            doc_url="https://docs.example.com/images",
-            tooltip="Image data",
-        )
-    """
-    if section_id is None:
-        section_id = name
-
-    if n_items == 0:
-        return _render_empty_section(name, doc_url, tooltip)
-
-    if count_str is None:
-        count_str = f"({n_items} items)"
-
-    parts = [
-        f'<div class="anndata-sec" data-section="{escape_html(section_id)}" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
-    ]
-
-    # Header
-    parts.append(_render_section_header(name, count_str, doc_url, tooltip))
-
-    # Content
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
-    parts.append(entries_html)
-    parts.append("</table></div></div>")
-
-    return "\n".join(parts)

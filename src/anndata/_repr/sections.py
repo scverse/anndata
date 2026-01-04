@@ -28,7 +28,14 @@ from . import (
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
-from .components import render_fold_icon, render_warning_icon
+from .components import render_fold_icon, render_name_cell, render_warning_icon
+from .core import (
+    get_section_tooltip,
+    render_empty_section,
+    render_section,
+    render_truncation_indicator,
+    render_x_entry,
+)
 from .formatters import check_column_name
 from .registry import (
     FormatterContext,
@@ -41,6 +48,7 @@ from .utils import (
     format_number,
     generate_value_preview,
     get_matching_column_colors,
+    get_setting,
     is_color_list,
     is_lazy_series,
     should_warn_string_column,
@@ -60,15 +68,17 @@ STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
 
 
 # -----------------------------------------------------------------------------
-# Helper imports from html.py (imported lazily to avoid circular imports)
+# Lazy import for generate_repr_html (only case requiring it)
+# Used by _render_nested_anndata_entry for recursive AnnData rendering.
+# All other shared functions are now imported from core.py.
 # -----------------------------------------------------------------------------
 
 
-def _get_html_helpers():
-    """Get helper functions from html.py (lazy import to avoid circular imports)."""
-    from . import html
+def _get_generate_repr_html():
+    """Lazy import of generate_repr_html to avoid circular imports."""
+    from .html import generate_repr_html
 
-    return html
+    return generate_repr_html
 
 
 # -----------------------------------------------------------------------------
@@ -84,8 +94,6 @@ def _render_dataframe_section(
     max_items: int,
 ) -> str:
     """Render obs or var section."""
-    html = _get_html_helpers()
-
     df: pd.DataFrame = getattr(adata, section)
     n_cols = len(df.columns)
 
@@ -94,18 +102,18 @@ def _render_dataframe_section(
     tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
 
     if n_cols == 0:
-        return html._render_empty_section(section, doc_url, tooltip)
+        return render_empty_section(section, doc_url, tooltip)
 
     # Render entries (with truncation)
     rows = []
     for i, col_name in enumerate(df.columns):
         if i >= max_items:
-            rows.append(html._render_truncation_indicator(n_cols - max_items))
+            rows.append(render_truncation_indicator(n_cols - max_items))
             break
         col = df[col_name]
         rows.append(_render_dataframe_entry(adata, section, col_name, col, context))
 
-    return html.render_section(
+    return render_section(
         section,
         "\n".join(rows),
         n_items=n_cols,
@@ -143,15 +151,11 @@ def _render_category_list(
 
 def _render_unique_count(col: pd.Series) -> str:
     """Render unique count for a non-categorical column."""
-    html = _get_html_helpers()
-
     # Show "(lazy)" for lazy series to avoid triggering data loading
     if is_lazy_series(col):
         return '<span class="adata-text-muted">(lazy)</span>'
 
-    unique_limit = html._get_setting(
-        "repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT
-    )
+    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
     if unique_limit > 0 and len(col) <= unique_limit:
         try:
             n_unique = col.nunique()
@@ -170,16 +174,12 @@ def _render_dataframe_entry(
     context: FormatterContext,
 ) -> str:
     """Render a single DataFrame column entry."""
-    html = _get_html_helpers()
-
     # Format the column
     output = formatter_registry.format_value(col, context)
 
     # Check for string->category warning (skip for large columns)
     entry_warnings = list(output.warnings)
-    unique_limit = html._get_setting(
-        "repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT
-    )
+    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
     should_warn, warn_msg = should_warn_string_column(col, unique_limit)
     if should_warn:
         entry_warnings.append(warn_msg)
@@ -215,14 +215,12 @@ def _render_dataframe_entry(
     ]
 
     # Name cell
-    parts.append(html._render_name_cell(col_name))
+    parts.append(render_name_cell(col_name))
 
     # Check if this is a categorical column (for wrap button)
     is_categorical = hasattr(col, "cat")
     categories = list(col.cat.categories) if is_categorical else []
-    max_cats = html._get_setting(
-        "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
-    )
+    max_cats = get_setting("repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES)
     n_cats = min(len(categories), max_cats) if is_categorical else 0
 
     # Type cell
@@ -265,8 +263,6 @@ def _render_mapping_section(
     max_items: int,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
-    html = _get_html_helpers()
-
     mapping = getattr(adata, section, None)
     if mapping is None:
         return ""
@@ -276,21 +272,21 @@ def _render_mapping_section(
 
     # Doc URL and tooltip for this section
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
-    tooltip = html._get_section_tooltip(section)
+    tooltip = get_section_tooltip(section)
 
     if n_items == 0:
-        return html._render_empty_section(section, doc_url, tooltip)
+        return render_empty_section(section, doc_url, tooltip)
 
     # Render entries (with truncation)
     rows = []
     for i, key in enumerate(keys):
         if i >= max_items:
-            rows.append(html._render_truncation_indicator(n_items - max_items))
+            rows.append(render_truncation_indicator(n_items - max_items))
             break
         value = mapping[key]
         rows.append(_render_mapping_entry(key, value, context, section))
 
-    return html.render_section(
+    return render_section(
         section,
         "\n".join(rows),
         n_items=n_items,
@@ -369,8 +365,6 @@ def _render_mapping_entry(
     section: str,
 ) -> str:
     """Render a single mapping entry."""
-    html = _get_html_helpers()
-
     output = formatter_registry.format_value(value, context)
 
     # Check key name validity (issue #321)
@@ -394,7 +388,7 @@ def _render_mapping_entry(
     ]
 
     # Name cell
-    parts.append(html._render_name_cell(key))
+    parts.append(render_name_cell(key))
 
     # Type cell
     parts.extend(
@@ -435,8 +429,6 @@ def _render_uns_section(
     max_depth: int,
 ) -> str:
     """Render the uns section with special handling."""
-    html = _get_html_helpers()
-
     uns = adata.uns
     keys = list(uns.keys())
     n_items = len(keys)
@@ -446,18 +438,18 @@ def _render_uns_section(
     tooltip = "Unstructured annotation"
 
     if n_items == 0:
-        return html._render_empty_section("uns", doc_url, tooltip)
+        return render_empty_section("uns", doc_url, tooltip)
 
     # Render entries (with truncation)
     rows = []
     for i, key in enumerate(keys):
         if i >= max_items:
-            rows.append(html._render_truncation_indicator(n_items - max_items))
+            rows.append(render_truncation_indicator(n_items - max_items))
             break
         value = uns[key]
         rows.append(_render_uns_entry(adata, key, value, context, max_depth))
 
-    return html.render_section(
+    return render_section(
         "uns",
         "\n".join(rows),
         n_items=n_items,
@@ -530,10 +522,8 @@ def _render_uns_entry_with_preview(
     - Small lists: length and first few items
     - Other types: type info only
     """
-    html = _get_html_helpers()
-
     output = formatter_registry.format_value(value, context)
-    max_str_len = html._get_setting(
+    max_str_len = get_setting(
         "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
     )
 
@@ -559,7 +549,7 @@ def _render_uns_entry_with_preview(
     ]
 
     # Name
-    parts.append(html._render_name_cell(key))
+    parts.append(render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -587,8 +577,6 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
     The output should have html_content set.
     """
-    html = _get_html_helpers()
-
     type_label = output.type_name
 
     # Check key name validity
@@ -609,7 +597,7 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     ]
 
     # Name
-    parts.append(html._render_name_cell(key))
+    parts.append(render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -630,8 +618,6 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
 
 def _render_color_list_entry(key: str, value: Any) -> str:
     """Render a color list entry with swatches."""
-    html = _get_html_helpers()
-
     colors = list(value) if hasattr(value, "__iter__") else []
     n_colors = len(colors)
 
@@ -642,7 +628,7 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     ]
 
     # Name
-    parts.append(html._render_name_cell(key))
+    parts.append(render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -672,8 +658,6 @@ def _render_nested_anndata_entry(
     max_depth: int,
 ) -> str:
     """Render a nested AnnData entry."""
-    html = _get_html_helpers()
-
     n_obs = getattr(value, "n_obs", "?")
     n_vars = getattr(value, "n_vars", "?")
 
@@ -687,7 +671,7 @@ def _render_nested_anndata_entry(
     ]
 
     # Name
-    parts.append(html._render_name_cell(key))
+    parts.append(render_name_cell(key))
 
     # Type
     parts.append('<td class="adata-entry-type">')
@@ -708,8 +692,9 @@ def _render_nested_anndata_entry(
         parts.append('<tr class="adata-nested-row">')
         parts.append('<td colspan="3" class="adata-nested-content">')
         parts.append('<div class="adata-nested-anndata">')
-        # Recursive call (late import to avoid circular dependency)
-        nested_html = html.generate_repr_html(
+        # Recursive call (lazy import to avoid circular dependency)
+        generate_repr_html = _get_generate_repr_html()
+        nested_html = generate_repr_html(
             value,
             depth=context.depth + 1,
             max_depth=max_depth,
@@ -793,8 +778,6 @@ def _detect_unknown_sections(adata) -> list[tuple[str, str]]:
 
 def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     """Render a section showing unknown/unrecognized attributes."""
-    html = _get_html_helpers()
-
     parts = [
         '<div class="anndata-sec anndata-sec-unknown" data-section="unknown" '
         'data-should-collapse="true">'
@@ -810,7 +793,7 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
 
     for attr_name, type_desc in unknown_sections:
         parts.append(f'<tr class="adata-entry" data-key="{escape_html(attr_name)}">')
-        parts.append(html._render_name_cell(attr_name))
+        parts.append(render_name_cell(attr_name))
         parts.append('<td class="adata-entry-type">')
         parts.append(
             f'<span class="dtype-unknown" title="Unrecognized attribute">'
@@ -895,8 +878,6 @@ def _render_raw_section(
     When expanded, shows a full AnnData-like repr for Raw contents (X, var, varm).
     The depth parameter prevents infinite recursion.
     """
-    html = _get_html_helpers()
-
     raw = getattr(adata, "raw", None)
     if raw is None:
         return ""
@@ -919,7 +900,7 @@ def _render_raw_section(
 
     # Single row with raw info and expand button
     parts.append('<tr class="adata-entry" data-key="raw" data-dtype="Raw">')
-    parts.append(html._render_name_cell("raw"))
+    parts.append(render_name_cell("raw"))
     parts.append('<td class="adata-entry-type">')
     # Show just dimensions - "raw" is already in the name cell
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
@@ -982,17 +963,15 @@ def _generate_raw_repr_html(
     max_items
         Maximum items to display per section (defaults to settings or DEFAULT_MAX_ITEMS)
     """
-    html = _get_html_helpers()
-
     # Use configured settings with fallback to defaults
     if max_depth is None:
-        max_depth = html._get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
+        max_depth = get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
     if fold_threshold is None:
-        fold_threshold = html._get_setting(
+        fold_threshold = get_setting(
             "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
         )
     if max_items is None:
-        max_items = html._get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
+        max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
 
     # Safely get dimensions
     n_obs = _safe_get_attr(raw, "n_obs", "?")
@@ -1020,7 +999,7 @@ def _generate_raw_repr_html(
     # X section - show matrix info (with error handling)
     try:
         if hasattr(raw, "X") and raw.X is not None:
-            parts.append(html._render_x_entry(raw, context))
+            parts.append(render_x_entry(raw, context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("X", str(e)))
 

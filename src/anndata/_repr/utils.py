@@ -618,3 +618,25 @@ def generate_value_preview(value: Any, max_len: int = 100) -> str:
         return preview_sequence(value)
     # No preview for complex types
     return ""
+
+
+def get_setting(name: str, *, default: Any) -> Any:
+    """Get a setting value from anndata.settings, falling back to default.
+
+    Parameters
+    ----------
+    name
+        The setting name (e.g., "repr_html_max_items")
+    default
+        Default value if setting is not available
+
+    Returns
+    -------
+    The setting value or default
+    """
+    try:
+        from anndata import settings
+
+        return getattr(settings, name, default)
+    except (ImportError, AttributeError):
+        return default

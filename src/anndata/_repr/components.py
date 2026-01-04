@@ -222,3 +222,29 @@ def render_header_badges(
         label = backing_format or "Backed"
         parts.append(render_badge(label, "adata-badge-backed", tooltip))
     return "".join(parts)
+
+
+def render_name_cell(name: str) -> str:
+    """Render a name cell with copy button and tooltip for truncated names.
+
+    The structure uses flexbox so the copy button stays visible even when
+    the name text overflows and shows ellipsis.
+
+    Parameters
+    ----------
+    name
+        The field name to display
+
+    Returns
+    -------
+    HTML string for the table cell
+    """
+    escaped_name = escape_html(name)
+    return (
+        f'<td class="adata-entry-name">'
+        f'<div class="adata-entry-name-inner">'
+        f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
+        f"{render_copy_button(name, 'Copy name')}"
+        f"</div>"
+        f"</td>"
+    )
