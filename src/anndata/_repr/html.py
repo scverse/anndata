@@ -440,6 +440,31 @@ def _render_custom_section(
     )
 
 
+def _render_entry_meta_content(
+    output: FormattedOutput, section: str, *, has_columns_list: bool
+) -> str:
+    """Render meta column content for an entry.
+
+    Priority: meta_content > columns list > meta_preview > shape
+    """
+    if output.meta_content:
+        return output.meta_content
+    if has_columns_list and "columns" in output.details:
+        columns = output.details["columns"]
+        col_str = ", ".join(escape_html(str(c)) for c in columns)
+        return f'<span class="adata-cols-list">[{col_str}]</span>'
+    if "meta_preview" in output.details:
+        full_preview = output.details.get(
+            "meta_preview_full", output.details["meta_preview"]
+        )
+        return f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
+    if "shape" in output.details and section in ("obsm", "varm"):
+        shape = output.details["shape"]
+        if len(shape) >= 2:
+            return f"({format_number(shape[1])} cols)"
+    return ""
+
+
 def render_formatted_entry(
     entry: FormattedEntry,
     section: str = "",
@@ -511,7 +536,9 @@ def render_formatted_entry(
             key="bad/key",
             output=FormattedOutput(...),
         )
-        html = render_formatted_entry(entry, extra_warnings=["Contains '/' (deprecated)"])
+        html = render_formatted_entry(
+            entry, extra_warnings=["Contains '/' (deprecated)"]
+        )
     """
     output = entry.output
     extra_warnings = extra_warnings or []
@@ -543,7 +570,7 @@ def render_formatted_entry(
     if output.tooltip:
         parts.append(
             f'<span class="{output.css_class}" title="{escape_html(output.tooltip)}">'
-            f'{escape_html(output.type_name)}</span>'
+            f"{escape_html(output.type_name)}</span>"
         )
     else:
         parts.append(
@@ -576,29 +603,9 @@ def render_formatted_entry(
 
     # Meta column (for data previews, dimensions, etc.)
     parts.append('<td class="adata-entry-meta">')
-
-    # Priority: meta_content > columns list > meta_preview > shape
-    if output.meta_content:
-        parts.append(output.meta_content)
-    elif has_columns_list and "columns" in output.details:
-        # Render columns list for DataFrames
-        columns = output.details["columns"]
-        col_str = ", ".join(escape_html(str(c)) for c in columns)
-        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
-    elif "meta_preview" in output.details:
-        # Render meta preview with full preview tooltip
-        full_preview = output.details.get(
-            "meta_preview_full", output.details["meta_preview"]
-        )
-        parts.append(
-            f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
-        )
-    elif "shape" in output.details and section in ("obsm", "varm"):
-        # Render shape for obsm/varm arrays
-        shape = output.details["shape"]
-        if len(shape) >= 2:
-            parts.append(f"({format_number(shape[1])} cols)")
-
+    parts.append(
+        _render_entry_meta_content(output, section, has_columns_list=has_columns_list)
+    )
     parts.append("</td>")
 
     parts.append("</tr>")
