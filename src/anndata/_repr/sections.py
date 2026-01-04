@@ -19,12 +19,6 @@ from .._repr_constants import (
     STYLE_SECTION_TABLE,
 )
 from . import (
-    DEFAULT_FOLD_THRESHOLD,
-    DEFAULT_MAX_CATEGORIES,
-    DEFAULT_MAX_DEPTH,
-    DEFAULT_MAX_ITEMS,
-    DEFAULT_MAX_STRING_LENGTH,
-    DEFAULT_UNIQUE_LIMIT,
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
@@ -48,7 +42,6 @@ from .utils import (
     format_number,
     generate_value_preview,
     get_matching_column_colors,
-    get_setting,
     is_color_list,
     is_lazy_series,
     should_warn_string_column,
@@ -90,8 +83,6 @@ def _render_dataframe_section(
     adata: AnnData,
     section: str,
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
 ) -> str:
     """Render obs or var section."""
     df: pd.DataFrame = getattr(adata, section)
@@ -107,8 +98,8 @@ def _render_dataframe_section(
     # Render entries (with truncation)
     rows = []
     for i, col_name in enumerate(df.columns):
-        if i >= max_items:
-            rows.append(render_truncation_indicator(n_cols - max_items))
+        if i >= context.max_items:
+            rows.append(render_truncation_indicator(n_cols - context.max_items))
             break
         col = df[col_name]
         rows.append(_render_dataframe_entry(adata, section, col_name, col, context))
@@ -119,7 +110,7 @@ def _render_dataframe_section(
         n_items=n_cols,
         doc_url=doc_url,
         tooltip=tooltip,
-        should_collapse=n_cols > fold_threshold,
+        should_collapse=n_cols > context.fold_threshold,
         count_str=f"({n_cols} columns)",
     )
 
@@ -149,14 +140,13 @@ def _render_category_list(
     return "".join(parts)
 
 
-def _render_unique_count(col: pd.Series) -> str:
+def _render_unique_count(col: pd.Series, context: FormatterContext) -> str:
     """Render unique count for a non-categorical column."""
     # Show "(lazy)" for lazy series to avoid triggering data loading
     if is_lazy_series(col):
         return '<span class="adata-text-muted">(lazy)</span>'
 
-    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
-    if unique_limit > 0 and len(col) <= unique_limit:
+    if context.unique_limit > 0 and len(col) <= context.unique_limit:
         try:
             n_unique = col.nunique()
             return f'<span class="adata-text-muted">({n_unique} unique)</span>'
@@ -179,8 +169,7 @@ def _render_dataframe_entry(
 
     # Check for string->category warning (skip for large columns)
     entry_warnings = list(output.warnings)
-    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
-    should_warn, warn_msg = should_warn_string_column(col, unique_limit)
+    should_warn, warn_msg = should_warn_string_column(col, context.unique_limit)
     if should_warn:
         entry_warnings.append(warn_msg)
 
@@ -220,7 +209,7 @@ def _render_dataframe_entry(
     # Check if this is a categorical column (for wrap button)
     is_categorical = hasattr(col, "cat")
     categories = list(col.cat.categories) if is_categorical else []
-    max_cats = get_setting("repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES)
+    max_cats = context.max_categories
     n_cats = min(len(categories), max_cats) if is_categorical else 0
 
     # Type cell
@@ -243,7 +232,7 @@ def _render_dataframe_entry(
     if is_categorical:
         parts.append(_render_category_list(categories, colors, max_cats))
     elif hasattr(col, "nunique"):
-        parts.append(_render_unique_count(col))
+        parts.append(_render_unique_count(col, context))
     parts.append("</td>")
 
     parts.append("</tr>")
@@ -259,8 +248,6 @@ def _render_mapping_section(
     adata: AnnData,
     section: str,
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
     mapping = getattr(adata, section, None)
@@ -280,8 +267,8 @@ def _render_mapping_section(
     # Render entries (with truncation)
     rows = []
     for i, key in enumerate(keys):
-        if i >= max_items:
-            rows.append(render_truncation_indicator(n_items - max_items))
+        if i >= context.max_items:
+            rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = mapping[key]
         rows.append(_render_mapping_entry(key, value, context, section))
@@ -292,7 +279,7 @@ def _render_mapping_section(
         n_items=n_items,
         doc_url=doc_url,
         tooltip=tooltip,
-        should_collapse=n_items > fold_threshold,
+        should_collapse=n_items > context.fold_threshold,
     )
 
 
@@ -424,9 +411,6 @@ def _render_mapping_entry(
 def _render_uns_section(
     adata: AnnData,
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
-    max_depth: int,
 ) -> str:
     """Render the uns section with special handling."""
     uns = adata.uns
@@ -443,11 +427,11 @@ def _render_uns_section(
     # Render entries (with truncation)
     rows = []
     for i, key in enumerate(keys):
-        if i >= max_items:
-            rows.append(render_truncation_indicator(n_items - max_items))
+        if i >= context.max_items:
+            rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = uns[key]
-        rows.append(_render_uns_entry(adata, key, value, context, max_depth))
+        rows.append(_render_uns_entry(adata, key, value, context))
 
     return render_section(
         "uns",
@@ -455,7 +439,7 @@ def _render_uns_section(
         n_items=n_items,
         doc_url=doc_url,
         tooltip=tooltip,
-        should_collapse=n_items > fold_threshold,
+        should_collapse=n_items > context.fold_threshold,
     )
 
 
@@ -464,7 +448,6 @@ def _render_uns_entry(
     key: str,
     value: Any,
     context: FormatterContext,
-    max_depth: int,
 ) -> str:
     """Render a single uns entry with special type handling.
 
@@ -500,7 +483,7 @@ def _render_uns_entry(
 
     # 3. Check for nested AnnData
     if type(value).__name__ == "AnnData" and hasattr(value, "n_obs"):
-        return _render_nested_anndata_entry(key, value, context, max_depth)
+        return _render_nested_anndata_entry(key, value, context)
 
     # 4. Generic preview for simple/small types
     return _render_uns_entry_with_preview(key, value, context)
@@ -523,12 +506,9 @@ def _render_uns_entry_with_preview(
     - Other types: type info only
     """
     output = formatter_registry.format_value(value, context)
-    max_str_len = get_setting(
-        "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
-    )
 
     # Generate preview based on type
-    preview = generate_value_preview(value, max_str_len)
+    preview = generate_value_preview(value, context.max_string_length)
     if preview_note:
         preview = f"{preview_note} {preview}" if preview else preview_note
 
@@ -655,13 +635,12 @@ def _render_nested_anndata_entry(
     key: str,
     value: Any,
     context: FormatterContext,
-    max_depth: int,
 ) -> str:
     """Render a nested AnnData entry."""
     n_obs = getattr(value, "n_obs", "?")
     n_vars = getattr(value, "n_vars", "?")
 
-    can_expand = context.depth < max_depth - 1
+    can_expand = context.depth < context.max_depth - 1
 
     # Inline styles for layout - colors via CSS
     # Expand button hidden by default - JS shows it
@@ -697,7 +676,7 @@ def _render_nested_anndata_entry(
         nested_html = generate_repr_html(
             value,
             depth=context.depth + 1,
-            max_depth=max_depth,
+            max_depth=context.max_depth,
             show_header=True,
             show_search=False,
         )
@@ -862,8 +841,6 @@ def _get_raw_meta_parts(raw) -> list[str]:
 def _render_raw_section(
     adata: AnnData,
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
 ) -> str:
     """Render the raw section as a single expandable row.
 
@@ -885,10 +862,9 @@ def _render_raw_section(
     # Safely get dimensions with fallbacks
     n_obs = _safe_get_attr(raw, "n_obs", "?")
     n_vars = _safe_get_attr(raw, "n_vars", "?")
-    max_depth = context.max_depth
 
     # Check if we can expand (same logic as nested AnnData)
-    can_expand = context.depth < max_depth - 1
+    can_expand = context.depth < context.max_depth - 1
 
     # Build meta info string safely
     meta_parts = _get_raw_meta_parts(raw)
@@ -919,13 +895,7 @@ def _render_raw_section(
         parts.append('<td colspan="3" class="adata-nested-content">')
         parts.append('<div class="adata-nested-anndata">')
 
-        nested_html = _generate_raw_repr_html(
-            raw,
-            depth=context.depth + 1,
-            max_depth=max_depth,
-            fold_threshold=fold_threshold,
-            max_items=max_items,
-        )
+        nested_html = _generate_raw_repr_html(raw, context.child("raw"))
         parts.append(nested_html)
 
         parts.append("</div>")
@@ -940,10 +910,7 @@ def _render_raw_section(
 
 def _generate_raw_repr_html(
     raw,
-    depth: int = 0,
-    max_depth: int | None = None,
-    fold_threshold: int | None = None,
-    max_items: int | None = None,
+    context: FormatterContext,
 ) -> str:
     """Generate HTML repr for a Raw object.
 
@@ -954,34 +921,12 @@ def _generate_raw_repr_html(
     ----------
     raw
         Raw object to render
-    depth
-        Current nesting depth
-    max_depth
-        Maximum nesting depth (defaults to settings or DEFAULT_MAX_DEPTH)
-    fold_threshold
-        Number of items before a section auto-folds (defaults to settings or DEFAULT_FOLD_THRESHOLD)
-    max_items
-        Maximum items to display per section (defaults to settings or DEFAULT_MAX_ITEMS)
+    context
+        FormatterContext with depth, max_depth, fold_threshold, max_items
     """
-    # Use configured settings with fallback to defaults
-    if max_depth is None:
-        max_depth = get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
-    if fold_threshold is None:
-        fold_threshold = get_setting(
-            "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
-        )
-    if max_items is None:
-        max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
-
     # Safely get dimensions
     n_obs = _safe_get_attr(raw, "n_obs", "?")
     n_vars = _safe_get_attr(raw, "n_vars", "?")
-
-    context = FormatterContext(
-        depth=depth,
-        max_depth=max_depth,
-        adata_ref=None,
-    )
 
     parts = []
 
@@ -1008,20 +953,14 @@ def _generate_raw_repr_html(
     try:
         if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
             var_context = FormatterContext(
-                depth=depth,
-                max_depth=max_depth,
+                depth=context.depth,
+                max_depth=context.max_depth,
+                fold_threshold=context.fold_threshold,
+                max_items=context.max_items,
                 adata_ref=None,
                 section="var",
             )
-            parts.append(
-                _render_dataframe_section(
-                    raw,  # Pass raw object, not raw.var
-                    "var",
-                    var_context,
-                    fold_threshold=fold_threshold,
-                    max_items=max_items,
-                )
-            )
+            parts.append(_render_dataframe_section(raw, "var", var_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("var", str(e)))
 
@@ -1029,20 +968,14 @@ def _generate_raw_repr_html(
     try:
         if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
             varm_context = FormatterContext(
-                depth=depth,
-                max_depth=max_depth,
+                depth=context.depth,
+                max_depth=context.max_depth,
+                fold_threshold=context.fold_threshold,
+                max_items=context.max_items,
                 adata_ref=None,
                 section="varm",
             )
-            parts.append(
-                _render_mapping_section(
-                    raw,  # Pass raw object, not raw.varm
-                    "varm",
-                    varm_context,
-                    fold_threshold=fold_threshold,
-                    max_items=max_items,
-                )
-            )
+            parts.append(_render_mapping_section(raw, "varm", varm_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("varm", str(e)))
 

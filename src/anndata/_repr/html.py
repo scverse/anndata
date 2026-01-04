@@ -19,11 +19,14 @@ from .._repr_constants import (
 )
 from . import (
     DEFAULT_FOLD_THRESHOLD,
+    DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_FIELD_WIDTH,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_TYPE_WIDTH,
+    DEFAULT_UNIQUE_LIMIT,
     SECTION_ORDER,
 )
 from .components import (
@@ -168,6 +171,15 @@ def generate_repr_html(
     if max_items is None:
         max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
 
+    # Get additional rendering settings (always from settings, not parameters)
+    max_categories = get_setting(
+        "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
+    )
+    max_string_length = get_setting(
+        "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
+    )
+    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
+
     # Check if HTML repr is enabled
     if not get_setting("repr_html_enabled", default=True):
         # Fallback to text repr
@@ -184,6 +196,11 @@ def generate_repr_html(
     context = FormatterContext(
         depth=depth,
         max_depth=max_depth,
+        fold_threshold=fold_threshold,
+        max_items=max_items,
+        max_categories=max_categories,
+        max_string_length=max_string_length,
+        unique_limit=unique_limit,
         adata_ref=adata,
     )
 
@@ -224,9 +241,7 @@ def generate_repr_html(
     # Sections container
     parts.append('<div class="adata-sections">')
     parts.append(render_x_entry(adata, context))
-    parts.extend(
-        _render_all_sections(adata, context, fold_threshold, max_items, max_depth)
-    )
+    parts.extend(_render_all_sections(adata, context))
     parts.append("</div>")  # adata-sections
 
     # Footer with metadata (only at top level)
@@ -245,9 +260,6 @@ def generate_repr_html(
 def _render_all_sections(
     adata: AnnData,
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
-    max_depth: int,
 ) -> list[str]:
     """Render all standard and custom sections."""
     parts = []
@@ -258,38 +270,23 @@ def _render_all_sections(
             # X is already rendered, but check for custom sections after X
             if "X" in custom_sections_after:
                 parts.extend(
-                    _render_custom_section(
-                        adata, section_formatter, context, fold_threshold, max_items
-                    )
+                    _render_custom_section(adata, section_formatter, context)
                     for section_formatter in custom_sections_after["X"]
                 )
             continue
-        parts.append(
-            _render_section(
-                adata,
-                section,
-                context,
-                fold_threshold=fold_threshold,
-                max_items=max_items,
-                max_depth=max_depth,
-            )
-        )
+        parts.append(_render_section(adata, section, context))
 
         # Render custom sections after this section
         if section in custom_sections_after:
             parts.extend(
-                _render_custom_section(
-                    adata, section_formatter, context, fold_threshold, max_items
-                )
+                _render_custom_section(adata, section_formatter, context)
                 for section_formatter in custom_sections_after[section]
             )
 
     # Custom sections at end (no specific position)
     if None in custom_sections_after:
         parts.extend(
-            _render_custom_section(
-                adata, section_formatter, context, fold_threshold, max_items
-            )
+            _render_custom_section(adata, section_formatter, context)
             for section_formatter in custom_sections_after[None]
         )
 
@@ -305,28 +302,18 @@ def _render_section(
     adata: AnnData,
     section: str,
     context: FormatterContext,
-    *,
-    fold_threshold: int,
-    max_items: int,
-    max_depth: int,
 ) -> str:
     """Render a single standard section."""
     try:
         if section == "X":
             return render_x_entry(adata, context)
         if section == "raw":
-            return _render_raw_section(adata, context, fold_threshold, max_items)
+            return _render_raw_section(adata, context)
         if section in ("obs", "var"):
-            return _render_dataframe_section(
-                adata, section, context, fold_threshold, max_items
-            )
+            return _render_dataframe_section(adata, section, context)
         if section == "uns":
-            return _render_uns_section(
-                adata, context, fold_threshold, max_items, max_depth
-            )
-        return _render_mapping_section(
-            adata, section, context, fold_threshold, max_items
-        )
+            return _render_uns_section(adata, context)
+        return _render_mapping_section(adata, section, context)
     except Exception as e:  # noqa: BLE001
         # Show error instead of hiding the section
         return _render_error_entry(section, str(e))
@@ -371,8 +358,6 @@ def _render_custom_section(
     adata: Any,
     formatter: Any,  # SectionFormatter
     context: FormatterContext,
-    fold_threshold: int,
-    max_items: int,
 ) -> str:
     """Render a custom section using its registered formatter."""
     try:
@@ -396,8 +381,8 @@ def _render_custom_section(
     # Render entries (with truncation)
     rows = []
     for i, entry in enumerate(entries):
-        if i >= max_items:
-            rows.append(render_truncation_indicator(n_items - max_items))
+        if i >= context.max_items:
+            rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         rows.append(render_formatted_entry(entry, section_name))
 
@@ -408,7 +393,7 @@ def _render_custom_section(
         n_items=n_items,
         doc_url=getattr(formatter, "doc_url", None),
         tooltip=getattr(formatter, "tooltip", ""),
-        should_collapse=n_items > fold_threshold,
+        should_collapse=n_items > context.fold_threshold,
         section_id=section_name,
     )
 

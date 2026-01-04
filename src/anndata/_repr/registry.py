@@ -48,6 +48,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .._repr_constants import (
+    DEFAULT_FOLD_THRESHOLD,
+    DEFAULT_MAX_CATEGORIES,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_STRING_LENGTH,
+    DEFAULT_UNIQUE_LIMIT,
+)
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -102,8 +111,23 @@ class FormatterContext:
     depth: int = 0
     """Current recursion depth"""
 
-    max_depth: int = 3
+    max_depth: int = DEFAULT_MAX_DEPTH
     """Maximum recursion depth"""
+
+    fold_threshold: int = DEFAULT_FOLD_THRESHOLD
+    """Auto-fold sections with more than this many entries"""
+
+    max_items: int = DEFAULT_MAX_ITEMS
+    """Maximum items to show per section"""
+
+    max_categories: int = DEFAULT_MAX_CATEGORIES
+    """Maximum category values to display inline"""
+
+    max_string_length: int = DEFAULT_MAX_STRING_LENGTH
+    """Truncate strings longer than this in previews"""
+
+    unique_limit: int = DEFAULT_UNIQUE_LIMIT
+    """Max rows to compute unique counts (0 to disable)"""
 
     parent_keys: tuple[str, ...] = ()
     """Keys of parent objects (for building access paths)"""
@@ -119,6 +143,11 @@ class FormatterContext:
         return FormatterContext(
             depth=self.depth + 1,
             max_depth=self.max_depth,
+            fold_threshold=self.fold_threshold,
+            max_items=self.max_items,
+            max_categories=self.max_categories,
+            max_string_length=self.max_string_length,
+            unique_limit=self.unique_limit,
             parent_keys=(*self.parent_keys, key),
             adata_ref=self.adata_ref,
             section=self.section,
