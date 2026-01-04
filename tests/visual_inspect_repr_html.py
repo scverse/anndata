@@ -1053,8 +1053,19 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
         List of (title, html_content, description) tuples.
         Description can be None for no description box.
     """
+    # Generate TOC entries
+    toc_items = []
+    for item in sections:
+        title = item[0]
+        # Create anchor ID from title
+        anchor_id = title.lower().replace(" ", "-").replace("(", "").replace(")", "")
+        anchor_id = "".join(c for c in anchor_id if c.isalnum() or c == "-")
+        toc_items.append(f'<a href="#{anchor_id}">{title}</a>')
+
+    toc_html = "\n            ".join(toc_items)
+
     html_parts = [
-        """<!DOCTYPE html>
+        f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1062,43 +1073,72 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https:; style-src 'self' 'unsafe-inline';">
     <title>AnnData _repr_html_ Visual Test</title>
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: 1000px;
+            margin-left: 230px;
+            margin-right: 20px;
             padding: 20px;
             background: #f5f5f5;
-        }
-        h1 {
+        }}
+        h1 {{
             color: #333;
             border-bottom: 2px solid #0d6efd;
             padding-bottom: 10px;
-        }
-        h2 {
+        }}
+        h2 {{
             color: #555;
             margin-top: 40px;
-        }
-        .test-case {
+        }}
+        .test-case {{
             background: white;
             border-radius: 8px;
             padding: 20px;
             margin: 20px 0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .test-case h3 {
+        }}
+        .test-case h3 {{
             margin-top: 0;
             color: #0d6efd;
-        }
-        .description {
+        }}
+        .description {{
             color: #666;
             font-size: 0.9em;
             margin-bottom: 15px;
             padding: 10px;
             background: #f8f9fa;
             border-radius: 4px;
-        }
+        }}
+        /* TOC sidebar */
+        .toc {{
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 180px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 12px;
+            z-index: 100;
+        }}
+        .toc a {{
+            display: block;
+            padding: 4px 0;
+            color: #555;
+            text-decoration: none;
+            border-bottom: 1px solid #eee;
+        }}
+        .toc a:last-child {{
+            border-bottom: none;
+        }}
+        .toc a:hover {{
+            color: #0d6efd;
+        }}
         /* Dark mode toggle */
-        .dark-mode-toggle {
+        .dark-mode-toggle {{
             position: fixed;
             top: 20px;
             right: 20px;
@@ -1108,24 +1148,38 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
             border: none;
             border-radius: 4px;
             cursor: pointer;
-        }
-        body.dark-mode {
+        }}
+        body.dark-mode {{
             background: #1a1a1a;
             color: #e0e0e0;
-        }
-        body.dark-mode h1, body.dark-mode h2 {
+        }}
+        body.dark-mode h1, body.dark-mode h2 {{
             color: #e0e0e0;
-        }
-        body.dark-mode .test-case {
+        }}
+        body.dark-mode .test-case {{
             background: #2d2d2d;
-        }
-        body.dark-mode .description {
+        }}
+        body.dark-mode .description {{
             background: #333;
             color: #aaa;
-        }
+        }}
+        body.dark-mode .toc {{
+            background: #2d2d2d;
+        }}
+        body.dark-mode .toc a {{
+            color: #aaa;
+            border-bottom-color: #444;
+        }}
+        body.dark-mode .toc a:hover {{
+            color: #6ea8fe;
+        }}
     </style>
 </head>
 <body>
+    <nav class="toc">
+        {toc_html}
+    </nav>
+
     <button class="dark-mode-toggle" onclick="document.body.classList.toggle('dark-mode')">
         Toggle Dark Mode
     </button>
@@ -1140,12 +1194,16 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
         html_content = item[1]
         description = item[2] if len(item) > 2 else None
 
+        # Create anchor ID from title (same logic as TOC generation)
+        anchor_id = title.lower().replace(" ", "-").replace("(", "").replace(")", "")
+        anchor_id = "".join(c for c in anchor_id if c.isalnum() or c == "-")
+
         desc_html = ""
         if description:
             desc_html = f'<div class="description">{description}</div>'
 
         html_parts.append(f"""
-    <div class="test-case">
+    <div id="{anchor_id}" class="test-case">
         <h3>{title}</h3>
         {desc_html}
         <div class="repr-output">
@@ -1350,19 +1408,15 @@ def main():  # noqa: PLR0915, PLR0912
             sections.append((
                 "9b. Lazy AnnData (Experimental)",
                 adata_lazy._repr_html_(),
-                "<strong>Fully lazy loading — obs/var columns stay on disk!</strong><br>"
-                "<code>anndata.experimental.read_lazy()</code><br><br>"
-                "Unlike standard backed mode, <code>read_lazy</code> keeps <strong>everything</strong> lazy:<br>"
-                "<ul>"
+                "<code>anndata.experimental.read_lazy()</code><br>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
                 "<li><code>obs</code>/<code>var</code> columns are lazy (xarray-backed)</li>"
                 "<li>Columns show <code>(lazy)</code> instead of unique counts</li>"
                 "<li>No <code>nunique()</code> calls that would trigger loading</li>"
                 "<li>String-to-category warnings are skipped (can't check without loading)</li>"
                 "</ul>"
-                "This enables exploring terabyte-scale datasets without loading metadata into memory.<br><br>"
-                "<strong>Note:</strong> The <code>obs_names</code>/<code>var_names</code> may display as "
-                "<code>b'...'</code> due to a known issue "
-                "(<a href='https://github.com/scverse/anndata/issues/2271'>#2271</a>).",
+                "Note: <a href='https://github.com/scverse/anndata/issues/2271'>#2271</a> "
+                "(<code>b'...'</code> index issue).",
             ))
         except (OSError, ImportError, TypeError) as e:
             print(f"    Warning: Failed to create lazy example: {e}")
