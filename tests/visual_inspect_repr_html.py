@@ -1359,7 +1359,10 @@ def main():  # noqa: PLR0915, PLR0912
                 "<li>No <code>nunique()</code> calls that would trigger loading</li>"
                 "<li>String-to-category warnings are skipped (can't check without loading)</li>"
                 "</ul>"
-                "This enables exploring terabyte-scale datasets without loading metadata into memory.",
+                "This enables exploring terabyte-scale datasets without loading metadata into memory.<br><br>"
+                "<strong>Note:</strong> The <code>obs_names</code>/<code>var_names</code> may display as "
+                "<code>b'...'</code> due to a known issue "
+                "(<a href='https://github.com/scverse/anndata/issues/2271'>#2271</a>).",
             ))
         except (OSError, ImportError, TypeError) as e:
             print(f"    Warning: Failed to create lazy example: {e}")
