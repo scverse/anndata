@@ -101,12 +101,13 @@ def is_serializable(
 
 
 def should_warn_string_column(
-    series: pd.Series, unique_limit: int = 1_000_000
+    series: pd.Series, n_unique: int | None
 ) -> tuple[bool, str]:
     """
     Check if a string column will be auto-converted to categorical on save.
 
-    This replicates the logic from AnnData.strings_to_categoricals():
+    This replicates the logic from AnnData.strings_to_categoricals()
+    (see _core/anndata.py:1249-1259):
     - Column must be string type (infer_dtype == "string")
     - Number of unique values must be less than total values
 
@@ -114,38 +115,29 @@ def should_warn_string_column(
     ----------
     series
         Pandas Series to check
-    unique_limit
-        Maximum number of rows to compute unique counts. Skip check for larger columns.
+    n_unique
+        Pre-computed nunique value (None if skipped due to unique_limit or lazy)
 
     Returns
     -------
     tuple of (should_warn, warning_message)
     """
-    # Skip for lazy series to avoid triggering data loading
-    if is_lazy_series(series):
+    # Can't check if n_unique wasn't computed
+    if n_unique is None:
         return False, ""
 
     from pandas.api.types import infer_dtype
 
+    # Same check as AnnData.strings_to_categoricals()
     dtype_str = infer_dtype(series)
     if dtype_str != "string":
         return False, ""
 
-    # Skip expensive nunique() for very large columns
-    if unique_limit > 0 and len(series) > unique_limit:
-        return False, ""
-
-    try:
-        n_unique = series.nunique()
-        n_total = len(series)
-    except TypeError:
-        # nunique() fails on unhashable types (shouldn't happen after infer_dtype check)
-        return False, ""
-
+    n_total = len(series)
     if n_unique < n_total:
         return (
             True,
-            f"String column ({n_unique} unique values). "
+            f"String column ({n_unique} unique). "
             f"Will be converted to categorical on save.",
         )
 

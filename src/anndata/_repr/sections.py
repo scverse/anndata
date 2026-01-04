@@ -140,19 +140,34 @@ def _render_category_list(
     return "".join(parts)
 
 
-def _render_unique_count(col: pd.Series, context: FormatterContext) -> str:
-    """Render unique count for a non-categorical column."""
-    # Show "(lazy)" for lazy series to avoid triggering data loading
-    if is_lazy_series(col):
-        return '<span class="adata-text-muted">(lazy)</span>'
+def _get_nunique(col: pd.Series, context: FormatterContext) -> int | None:
+    """
+    Get nunique count for a column, respecting unique_limit.
 
-    if context.unique_limit > 0 and len(col) <= context.unique_limit:
-        try:
-            n_unique = col.nunique()
-            return f'<span class="adata-text-muted">({n_unique} unique)</span>'
-        except TypeError:
-            # nunique() fails on unhashable types (e.g., object columns with lists/dicts)
-            pass
+    Returns None if:
+    - Column is lazy (to avoid triggering data loading)
+    - Column length exceeds unique_limit (performance optimization)
+    - nunique() fails (unhashable types)
+    """
+    if is_lazy_series(col):
+        return None
+
+    if context.unique_limit > 0 and len(col) > context.unique_limit:
+        return None
+
+    try:
+        return col.nunique()
+    except TypeError:
+        # nunique() fails on unhashable types (e.g., object columns with lists/dicts)
+        return None
+
+
+def _render_unique_count(n_unique: int | None, *, is_lazy: bool) -> str:
+    """Render unique count display for a non-categorical column."""
+    if is_lazy:
+        return '<span class="adata-text-muted">(lazy)</span>'
+    if n_unique is not None:
+        return f'<span class="adata-text-muted">({n_unique} unique)</span>'
     return ""
 
 
@@ -167,9 +182,17 @@ def _render_dataframe_entry(
     # Format the column
     output = formatter_registry.format_value(col, context)
 
-    # Check for string->category warning (skip for large columns)
+    # Check if categorical (determines what we show in meta cell)
+    is_categorical = hasattr(col, "cat")
+    is_lazy = is_lazy_series(col)
+
+    # Compute nunique once, reuse for warning check and display
+    # Only compute for non-categorical columns (categorical already shows categories)
+    n_unique = None if is_categorical else _get_nunique(col, context)
+
+    # Check for string->category warning (uses pre-computed n_unique)
     entry_warnings = list(output.warnings)
-    should_warn, warn_msg = should_warn_string_column(col, context.unique_limit)
+    should_warn, warn_msg = should_warn_string_column(col, n_unique)
     if should_warn:
         entry_warnings.append(warn_msg)
 
@@ -206,8 +229,7 @@ def _render_dataframe_entry(
     # Name cell
     parts.append(render_name_cell(col_name))
 
-    # Check if this is a categorical column (for wrap button)
-    is_categorical = hasattr(col, "cat")
+    # Get category info for wrap button
     categories = list(col.cat.categories) if is_categorical else []
     max_cats = context.max_categories
     n_cats = min(len(categories), max_cats) if is_categorical else 0
@@ -231,8 +253,8 @@ def _render_dataframe_entry(
     parts.append('<td class="adata-entry-meta">')
     if is_categorical:
         parts.append(_render_category_list(categories, colors, max_cats))
-    elif hasattr(col, "nunique"):
-        parts.append(_render_unique_count(col, context))
+    else:
+        parts.append(_render_unique_count(n_unique, is_lazy=is_lazy))
     parts.append("</td>")
 
     parts.append("</tr>")

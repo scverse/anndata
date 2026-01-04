@@ -937,18 +937,23 @@ class TestUtilityFunctions:
 
         # String with repeats should warn
         s = pd.Series(["A", "B", "A", "C", "B", "A"])
-        warn, msg = should_warn_string_column(s)
+        warn, msg = should_warn_string_column(s, s.nunique())
         assert warn
         assert "3" in msg  # 3 unique values
 
         # All unique should not warn
         s = pd.Series(["A", "B", "C", "D", "E"])
-        warn, msg = should_warn_string_column(s)
+        warn, msg = should_warn_string_column(s, s.nunique())
         assert not warn
 
         # Numeric should not warn
         s = pd.Series([1, 2, 1, 2, 1])
-        warn, msg = should_warn_string_column(s)
+        warn, msg = should_warn_string_column(s, s.nunique())
+        assert not warn
+
+        # When n_unique is None (e.g., lazy or large), should not warn
+        s = pd.Series(["A", "B", "A"])
+        warn, msg = should_warn_string_column(s, None)
         assert not warn
 
     def test_is_color_list(self):
@@ -2140,20 +2145,35 @@ class TestUtilsCoverage:
         assert is_serializable(np.float32(3.14))[0]
         assert is_serializable(np.bool_(True))[0]  # noqa: FBT003
 
-    def test_should_warn_string_column_exception(self):
-        """Test should_warn_string_column handles exceptions."""
+    def test_should_warn_string_column_with_none_nunique(self):
+        """Test should_warn_string_column handles None n_unique gracefully.
+
+        This tests the case where n_unique couldn't be computed (e.g., due to
+        exceptions in nunique(), lazy data, or unique_limit being exceeded).
+        """
         from anndata._repr.utils import should_warn_string_column
 
-        # Create a series that will raise on nunique
-        class BrokenSeries(pd.Series):
-            def nunique(self):
-                msg = "Broken"
-                raise RuntimeError(msg)
+        # When n_unique is None, should gracefully return False
+        s = pd.Series(["A", "B", "A", "C"])
+        warn, _msg = should_warn_string_column(s, None)
+        assert not warn  # Should return False when n_unique is None
 
-        # This is tricky to test directly, but we can test with unhashable types
-        s = pd.Series([[1, 2], [3, 4], [1, 2]])  # Lists are unhashable
-        warn, _msg = should_warn_string_column(s)
-        assert not warn  # Should return False on exception
+    def test_get_nunique_exception_handling(self):
+        """Test _get_nunique handles exceptions gracefully."""
+        from anndata._repr.registry import FormatterContext
+        from anndata._repr.sections import _get_nunique
+
+        context = FormatterContext()
+
+        # Normal case
+        s = pd.Series(["A", "B", "A", "C"])
+        result = _get_nunique(s, context)
+        assert result == 3
+
+        # Unhashable types (lists) should return None
+        s = pd.Series([[1, 2], [3, 4], [1, 2]])
+        result = _get_nunique(s, context)
+        assert result is None
 
     def test_is_color_list_named_colors(self):
         """Test is_color_list detects named colors."""
