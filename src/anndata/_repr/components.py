@@ -183,11 +183,12 @@ def render_header_badges(
     *,
     is_view: bool = False,
     is_backed: bool = False,
+    is_lazy: bool = False,
     backing_path: str | None = None,
     backing_format: str | None = None,
 ) -> str:
     """
-    Render standard header badges for view/backed status.
+    Render standard header badges for view/backed/lazy status.
 
     Parameters
     ----------
@@ -195,6 +196,8 @@ def render_header_badges(
         Whether this is a view
     is_backed
         Whether this is backed by a file
+    is_lazy
+        Whether this uses lazy loading (experimental read_lazy)
     backing_path
         Path to the backing file (for tooltip)
     backing_format
@@ -221,6 +224,12 @@ def render_header_badges(
         tooltip = f"Backed by {backing_path}" if backing_path else "Backed mode"
         label = backing_format or "Backed"
         parts.append(render_badge(label, "adata-badge-backed", tooltip))
+    if is_lazy:
+        parts.append(
+            render_badge(
+                "Lazy", "adata-badge-lazy", "Lazy loading (experimental read_lazy)"
+            )
+        )
     return "".join(parts)
 
 

@@ -166,6 +166,11 @@ body.dark-mode .anndata-repr {
     color: white;
 }
 
+.anndata-repr .adata-badge-lazy {
+    background: var(--anndata-warning-color);
+    color: white;
+}
+
 .anndata-repr .adata-badge-extension {
     background: var(--anndata-accent-color);
     color: white;

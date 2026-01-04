@@ -335,6 +335,18 @@ def is_backed(obj: Any) -> bool:
     return getattr(obj, "isbacked", False)
 
 
+def is_lazy(obj: Any) -> bool:
+    """Check if an AnnData uses lazy loading (experimental read_lazy).
+
+    Lazy AnnData has Dataset2D (xarray-backed) obs/var instead of regular DataFrames.
+    """
+    obs = getattr(obj, "obs", None)
+    if obs is None:
+        return False
+    # Dataset2D has a different class name than DataFrame
+    return obs.__class__.__name__ == "Dataset2D"
+
+
 def is_lazy_series(series: Any) -> bool:
     """
     Check if a Series-like object is lazy (backed by remote/lazy storage).

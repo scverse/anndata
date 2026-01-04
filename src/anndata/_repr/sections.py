@@ -356,12 +356,14 @@ def _render_mapping_meta_cell(output: FormattedOutput, section: str) -> list[str
             "meta_preview_full", output.details["meta_preview"]
         )
         parts.append(
-            f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
+            f'<span class="adata-text-muted" title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
         )
     elif "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
         if len(shape) >= 2:
-            parts.append(f"({format_number(shape[1])} cols)")
+            parts.append(
+                f'<span class="adata-text-muted">({format_number(shape[1])} cols)</span>'
+            )
 
     parts.append("</td>")
     return parts

@@ -54,6 +54,7 @@ from .utils import (
     get_backing_info,
     get_setting,
     is_backed,
+    is_lazy,
     is_view,
 )
 
@@ -415,11 +416,11 @@ def _render_entry_meta_content(
         full_preview = output.details.get(
             "meta_preview_full", output.details["meta_preview"]
         )
-        return f'<span title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
+        return f'<span class="adata-text-muted" title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
     if "shape" in output.details and section in ("obsm", "varm"):
         shape = output.details["shape"]
         if len(shape) >= 2:
-            return f"({format_number(shape[1])} cols)"
+            return f'<span class="adata-text-muted">({format_number(shape[1])} cols)</span>'
     return ""
 
 
@@ -615,6 +616,9 @@ def _render_header(
                 f"</span>"
             )
 
+    if is_lazy(adata):
+        parts.append(render_badge("Lazy", "adata-badge-lazy"))
+
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":
         parts.append(render_badge(type_name, "adata-badge-extension"))
@@ -684,6 +688,16 @@ def _render_index_preview(adata: AnnData) -> str:
     return "\n".join(parts)
 
 
+def _format_index_value(x: Any) -> str:
+    """Format a single index value, decoding bytes if needed."""
+    if isinstance(x, bytes):
+        try:
+            return x.decode("utf-8")
+        except UnicodeDecodeError:
+            return x.decode("latin-1")
+    return str(x)
+
+
 def _format_index_preview(index: pd.Index) -> str:
     """Format a preview of an index."""
     n = len(index)
@@ -693,11 +707,11 @@ def _format_index_preview(index: pd.Index) -> str:
     preview_n = DEFAULT_PREVIEW_ITEMS
     if n <= preview_n * 2:
         # Show all
-        items = [escape_html(str(x)) for x in index]
+        items = [escape_html(_format_index_value(x)) for x in index]
     else:
         # Show first and last
-        first = [escape_html(str(x)) for x in index[:preview_n]]
-        last = [escape_html(str(x)) for x in index[-preview_n:]]
+        first = [escape_html(_format_index_value(x)) for x in index[:preview_n]]
+        last = [escape_html(_format_index_value(x)) for x in index[-preview_n:]]
         items = [*first, "...", *last]
 
     return ", ".join(items)

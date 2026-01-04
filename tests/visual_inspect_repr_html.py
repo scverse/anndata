@@ -47,6 +47,15 @@ except ImportError:
     HAS_DASK = False
 
 try:
+    import xarray  # noqa: F401
+
+    from anndata.experimental import read_lazy
+
+    HAS_XARRAY = True
+except ImportError:
+    HAS_XARRAY = False
+
+try:
     import networkx as nx
     from treedata import TreeData
 
@@ -1266,7 +1275,7 @@ def main():  # noqa: PLR0915, PLR0912
         ))
 
     # Test 9: Backed AnnData (H5AD file) - demonstrates on-disk safety
-    print("  9. Backed AnnData (H5AD file)")
+    print("  9a. Backed AnnData (H5AD file)")
     with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
         tmp_path = tmp.name
     adata_backed = None
@@ -1284,7 +1293,7 @@ def main():  # noqa: PLR0915, PLR0912
         adata_to_save.write_h5ad(tmp_path)
         adata_backed = ad.read_h5ad(tmp_path, backed="r")
         sections.append((
-            "9. Backed AnnData (H5AD File)",
+            "9a. Backed AnnData (H5AD File)",
             adata_backed._repr_html_(),
             "<strong>File-backed mode — X matrix stays on disk!</strong><br>"
             f"<code>{tmp_path}</code><br><br>"
@@ -1304,6 +1313,62 @@ def main():  # noqa: PLR0915, PLR0912
         if adata_backed is not None:
             adata_backed.file.close()
         Path(tmp_path).unlink()
+
+    # Test 9b: Lazy AnnData (experimental) - fully lazy obs/var
+    if HAS_XARRAY:
+        print("  9b. Lazy AnnData (experimental read_lazy)")
+        with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
+            tmp_path = tmp.name
+        adata_lazy = None
+        h5_file = None
+        try:
+            import h5py
+
+            # Create a more comprehensive test file
+            adata_to_save = AnnData(
+                sp.random(1000, 500, density=0.1, format="csr", dtype=np.float32)
+            )
+            # Add various column types to show lazy behavior
+            adata_to_save.obs["cell_type"] = pd.Categorical(
+                np.random.choice(["T cell", "B cell", "Monocyte", "NK cell"], 1000)
+            )
+            adata_to_save.obs["patient_id"] = [f"patient_{i % 50}" for i in range(1000)]
+            adata_to_save.obs["n_genes"] = np.random.randint(500, 5000, 1000)
+            adata_to_save.obs["total_counts"] = np.random.randint(1000, 50000, 1000)
+            adata_to_save.obs["pct_mito"] = np.random.uniform(0, 15, 1000)
+            adata_to_save.var["gene_symbol"] = [f"GENE{i}" for i in range(500)]
+            adata_to_save.var["highly_variable"] = np.random.choice([True, False], 500)
+            adata_to_save.var["mean_expression"] = np.random.uniform(0, 10, 500)
+            adata_to_save.obsm["X_pca"] = np.random.randn(1000, 50).astype(np.float32)
+            adata_to_save.obsm["X_umap"] = np.random.randn(1000, 2).astype(np.float32)
+            adata_to_save.varm["PCs"] = np.random.randn(500, 50).astype(np.float32)
+            adata_to_save.write_h5ad(tmp_path)
+
+            # Read with experimental lazy loading
+            h5_file = h5py.File(tmp_path, "r")
+            adata_lazy = read_lazy(h5_file)
+            sections.append((
+                "9b. Lazy AnnData (Experimental)",
+                adata_lazy._repr_html_(),
+                "<strong>Fully lazy loading — obs/var columns stay on disk!</strong><br>"
+                "<code>anndata.experimental.read_lazy()</code><br><br>"
+                "Unlike standard backed mode, <code>read_lazy</code> keeps <strong>everything</strong> lazy:<br>"
+                "<ul>"
+                "<li><code>obs</code>/<code>var</code> columns are lazy (xarray-backed)</li>"
+                "<li>Columns show <code>(lazy)</code> instead of unique counts</li>"
+                "<li>No <code>nunique()</code> calls that would trigger loading</li>"
+                "<li>String-to-category warnings are skipped (can't check without loading)</li>"
+                "</ul>"
+                "This enables exploring terabyte-scale datasets without loading metadata into memory.",
+            ))
+        except (OSError, ImportError, TypeError) as e:
+            print(f"    Warning: Failed to create lazy example: {e}")
+        finally:
+            if h5_file is not None:
+                h5_file.close()
+            Path(tmp_path).unlink()
+    else:
+        print("  9b. Lazy AnnData (skipped - xarray not installed)")
 
     # Test 10: Nested AnnData at depth
     print("  10. Deeply nested AnnData")

@@ -4433,6 +4433,20 @@ class TestIndexPreviewRendering:
         # Should show ellipsis for truncation
         assert "..." in html
 
+    def test_format_index_value_decodes_bytes(self):
+        """Test that bytes index values are decoded properly."""
+        from anndata._repr.html import _format_index_value
+
+        # UTF-8 bytes should decode properly
+        assert _format_index_value(b"cell_0") == "cell_0"
+        assert _format_index_value(b"gene_123") == "gene_123"
+
+        # Regular strings pass through
+        assert _format_index_value("cell_0") == "cell_0"
+
+        # Numbers are converted to string
+        assert _format_index_value(42) == "42"
+
 
 class TestSectionTooltips:
     """Tests for section tooltip function."""
@@ -4629,6 +4643,28 @@ class TestRenderHeaderBadges:
         assert "Zarr" in html
         assert "adata-badge-view" in html
         assert "adata-badge-backed" in html
+
+    def test_lazy_badge_only(self):
+        """Test render_header_badges with lazy badge."""
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(is_lazy=True)
+        assert "Lazy" in html
+        assert "adata-badge-lazy" in html
+
+    def test_is_lazy_detection(self):
+        """Test is_lazy function detects lazy AnnData."""
+        from anndata._repr.utils import is_lazy
+
+        # Regular AnnData should not be lazy
+        adata = AnnData(np.zeros((10, 5)))
+        assert not is_lazy(adata)
+
+        # Object without obs should not be lazy
+        class NoObs:
+            pass
+
+        assert not is_lazy(NoObs())
 
 
 # =============================================================================
