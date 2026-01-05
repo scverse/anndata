@@ -18,6 +18,8 @@ defaults:
 
 jobs:
   benchmark:
+    # Skip for test-issue-* branches (used for regression test PRs)
+    if: ${{ !startsWith(github.head_ref, 'test-issue-') }}
     runs-on: ${{ matrix.os }}
 
     strategy:

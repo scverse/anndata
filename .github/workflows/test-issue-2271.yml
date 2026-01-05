@@ -23,13 +23,13 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
           uv tool install hatch
-          hatch -v env create hatch-test.py3.12
+          hatch -v env create hatch-test.stable
 
       - name: Run regression test
         run: |
-          hatch run hatch-test.py3.12:run -v tests/lazy/test_read.py::test_nullable_string_index_decoding
+          hatch run hatch-test.stable:run -v tests/lazy/test_read.py::test_nullable_string_index_decoding
