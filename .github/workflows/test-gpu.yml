@@ -73,7 +73,7 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
+          uv pip install -e ".[dev,test,cu13]" -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
