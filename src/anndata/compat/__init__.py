@@ -82,7 +82,8 @@ else:
         try:
             from h5py._hl.dataset import AsTypeView as H5AstypeView
         except ImportError:
-            from h5py._hl.dataset import AsTypeWrapper as H5AstypeView
+            # h5py 3.11 uses AstypeWrapper (lowercase 't')
+            from h5py._hl.dataset import AstypeWrapper as H5AstypeView
     except ImportError:
         warn("AsTypeView changed import location", DeprecationWarning)
         H5AstypeView = type(
