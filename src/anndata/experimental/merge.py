@@ -556,7 +556,7 @@ def concat_on_disk(  # noqa: PLR0913
 
     First, let’s get some “big” datasets with a compatible ``var`` axis:
 
-    >>> import httpx
+    >>> from urllib.request import urlretrieve
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
@@ -565,7 +565,7 @@ def concat_on_disk(  # noqa: PLR0913
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
     ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     out_path.write_bytes(httpx.get(file_url).content)
+    ...     urlretrieve(file_url, out_path)
     ...     return out_path
     >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
     >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
