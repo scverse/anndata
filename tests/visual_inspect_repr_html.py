@@ -1414,9 +1414,7 @@ def main():  # noqa: PLR0915, PLR0912
                 "<li>Columns show <code>(lazy)</code> instead of unique counts</li>"
                 "<li>No <code>nunique()</code> calls that would trigger loading</li>"
                 "<li>String-to-category warnings are skipped (can't check without loading)</li>"
-                "</ul>"
-                "Note: <a href='https://github.com/scverse/anndata/issues/2271'>#2271</a> "
-                "(<code>b'...'</code> index issue).",
+                "</ul>",
             ))
         except (OSError, ImportError, TypeError) as e:
             print(f"    Warning: Failed to create lazy example: {e}")
