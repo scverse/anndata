@@ -20,8 +20,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e ".[dev,test]"
+          uv venv
+          uv pip install -e ".[dev,test]"
 
       - name: Run regression test
         run: |
-          python -m pytest tests/lazy/test_read.py::test_nullable_string_index_decoding -v
+          uv run python -m pytest tests/lazy/test_read.py::test_nullable_string_index_decoding -v
