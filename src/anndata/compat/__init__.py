@@ -73,10 +73,25 @@ Index = (
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
-# AsStrView was renamed from AsStrWrapper in h5py 3.12
-_H5AsStrView = getattr(h5py._hl.dataset, "AsStrView", None)
-_H5AsStrWrapper = getattr(h5py._hl.dataset, "AsStrWrapper", None)
-H5AsStrView: type = _H5AsStrView or _H5AsStrWrapper
+
+# h5py recommends using .astype("T") over .asstr() when using numpy ≥2
+if TYPE_CHECKING:
+    from h5py._hl.dataset import AsTypeView as H5AstypeView
+else:
+    try:
+        from h5py._hl.dataset import AsTypeView as H5AstypeView
+    except ImportError:
+        warn("AsTypeView changed import location", DeprecationWarning)
+        H5AstypeView = type(
+            h5py.File(
+                h5py.File.__new__(h5py.File),
+                mode="w",
+                driver="core",
+                backing_store=False,
+            )
+            .create_dataset("x", shape=(), dtype="S1")
+            .astype("U1")
+        )
 
 
 #############################

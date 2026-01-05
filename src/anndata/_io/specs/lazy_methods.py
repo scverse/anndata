@@ -362,9 +362,10 @@ def read_nullable(
     )
     elem_name = get_elem_name(elem)
     values = elem["values"]
-    # HDF5 stores strings as bytes; use .asstr() to decode on access
+    # HDF5 stores strings as bytes; use .astype("T") to decode on access
+    # h5py recommends .astype("T") over .asstr() when using numpy ≥2
     if encoding_type == "nullable-string-array" and isinstance(elem, H5Group):
-        values = values.asstr()
+        values = values.astype("T")
     return MaskedArray(
         values=values,
         mask=elem.get("mask", None),
