@@ -83,7 +83,8 @@ else:
     except ImportError:
         warn("AsTypeView changed import location", DeprecationWarning)
         H5AstypeView = type(
-            h5py.File(
+            h5py
+            .File(
                 h5py.File.__new__(h5py.File),
                 mode="w",
                 driver="core",
