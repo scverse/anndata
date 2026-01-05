@@ -30,9 +30,9 @@ jobs:
           uv tool install hatch
           hatch -v env create hatch-test.min
 
-      - name: Force pandas 3.0 and install lazy dependencies
+      - name: Force pandas 3.0 and numpy <2.3 to trigger the bug
         run: |
-          hatch run hatch-test.min:pip install 'pandas>=3.0.0rc0' xarray aiohttp requests --prerelease=allow
+          hatch run hatch-test.min:pip install 'pandas>=3.0.0rc0' 'numpy<2.3' xarray aiohttp requests --pre
 
       - name: Run regression test
         run: |
