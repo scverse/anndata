@@ -13,6 +13,7 @@ from anndata._io.specs.lazy_methods import get_chunksize
 from ..._settings import settings
 from ...compat import (
     H5Array,
+    H5AsStrView,
     XBackendArray,
     XDataArray,
     XZarrArrayWrapper,
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
         from xarray.core.indexing import ExplicitIndexer
 
 
-class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
+class ZarrOrHDF5Wrapper[K: (H5Array, H5AsStrView, ZarrArray)](XZarrArrayWrapper):
     def __init__(self, array: K) -> None:
         # AsStrView from h5py .asstr() lacks chunks attribute
         self.chunks = getattr(array, "chunks", None)
@@ -70,7 +71,7 @@ class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
         if (
             isinstance(key, np.ndarray)
             and np.issubdtype(key.dtype, np.integer)
-            and isinstance(self._array, H5Array)
+            and isinstance(self._array, H5Array | H5AsStrView)
         ):
             key_mask = np.zeros(self._array.shape).astype("bool")
             key_mask[key] = True
@@ -134,10 +135,10 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
 
 
 # circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type K = H5Array | ZarrArray
+type K = H5Array | H5AsStrView | ZarrArray
 
 
-class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
+class MaskedArray[K: (H5Array, H5AsStrView, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -153,11 +154,11 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
 
     def __init__(
         self,
-        values: ZarrArray | H5Array,
+        values: ZarrArray | H5Array | H5AsStrView,
         dtype_str: Literal[
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
-        mask: ZarrArray | H5Array,
+        mask: ZarrArray | H5Array | None,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
     ):

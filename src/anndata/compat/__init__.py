@@ -73,6 +73,7 @@ Index = (
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
+H5AsStrView = h5py._hl.dataset.AsStrView
 
 
 #############################

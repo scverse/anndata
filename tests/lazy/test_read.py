@@ -245,33 +245,21 @@ def test_nullable_string_index_decoding(tmp_path: Path):
 
     Regression test for https://github.com/scverse/anndata/issues/2271
     """
-    import h5py
-
     expected_obs = ["cell_A", "cell_B", "cell_C", "cell_D", "cell_E"]
     expected_var = ["gene_X", "gene_Y", "gene_Z"]
 
-    # Create AnnData with custom index names
-    adata = AnnData(np.zeros((len(expected_obs), len(expected_var))))
-    adata.obs.index = pd.Index(expected_obs)
-    adata.var.index = pd.Index(expected_var)
+    adata = AnnData(
+        np.zeros((len(expected_obs), len(expected_var))),
+        obs=dict(obs_names=expected_obs),
+        var=dict(var_names=expected_var),
+    )
 
-    # Write to h5ad
     path = tmp_path / "test.h5ad"
     adata.write_h5ad(path)
 
-    # Read with read_lazy and verify index values are properly decoded
-    with h5py.File(path, "r") as f:
-        lazy = read_lazy(f)
-        obs_names = list(lazy.obs_names)
-        var_names = list(lazy.var_names)
+    lazy = read_lazy(path)
+    obs_names = list(lazy.obs_names)
+    var_names = list(lazy.var_names)
 
-    # Check for byte-string representation pattern first (more informative error)
-    for name in obs_names + var_names:
-        assert not name.startswith("b'"), (
-            f"Index value {name!r} contains byte-string representation. "
-            "Bytes should be decoded to strings, not converted via str()."
-        )
-
-    # Then verify exact values
     assert obs_names == expected_obs
     assert var_names == expected_var
