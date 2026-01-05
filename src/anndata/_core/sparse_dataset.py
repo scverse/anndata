@@ -574,8 +574,7 @@ class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorage
         It should therefore fit into memory, so we cache it for faster access.
         """
         if self._should_cache_indptr:
-            indptr = self.group["indptr"][...]
-            return indptr
+            return self.group["indptr"][...]
         return self.group["indptr"]
 
     @cached_property
