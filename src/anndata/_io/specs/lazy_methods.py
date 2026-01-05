@@ -361,8 +361,12 @@ def read_nullable(
         Path(filename(elem)) if isinstance(elem, H5Group) else elem
     )
     elem_name = get_elem_name(elem)
+    values = elem["values"]
+    # HDF5 stores strings as bytes; use .asstr() to decode on access
+    if encoding_type == "nullable-string-array" and isinstance(elem, H5Group):
+        values = values.asstr()
     return MaskedArray(
-        values=elem["values"],
+        values=values,
         mask=elem.get("mask", None),
         dtype_str=encoding_type,
         base_path_or_zarr_group=base_path_or_zarr_group,

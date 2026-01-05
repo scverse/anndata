@@ -37,7 +37,8 @@ if TYPE_CHECKING:
 
 class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
     def __init__(self, array: K) -> None:
-        self.chunks = array.chunks
+        # AsStrView from h5py .asstr() lacks chunks attribute
+        self.chunks = getattr(array, "chunks", None)
         if isinstance(array, ZarrArray):
             super().__init__(array)
             return
@@ -180,13 +181,6 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
             extension_array = pd.arrays.BooleanArray(values, mask=mask)
         elif self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            # HDF5 stores strings as bytes, decode them before converting to StringDType
-            if (
-                values.dtype == object
-                and len(values) > 0
-                and isinstance(values.flat[0], bytes)
-            ):
-                values = np.array([v.decode("utf-8") for v in values], dtype=object)
             values = values.astype(self.dtype)
             values[mask] = pd.NA
             return values
