@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pytest
 import zarr
 from scipy import sparse
@@ -50,14 +51,15 @@ def test_raw_gpu():
 
 
 @pytest.mark.gpu
-def test_get_with_zarr_gpu(tmp_path: Path):
+@pytest.mark.parametrize("index", [slice(0, 25, 2), np.array([0, 10, 20]), slice(None)])
+def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
     adata = AnnData(X=sparse.random(50, 100, format="csr"))
     zarr_path = tmp_path / "gpu_adata.zarr"
     # compressor None because there are no GPU compressors right now
     ad.io.write_zarr(zarr_path, adata, compressor=None)
     g = zarr.open_group(zarr_path, mode="r")
     adata = AnnData(X=sparse_dataset(g["X"]))
-    assert isinstance(adata.X[...], sparse.csr_matrix)
+    assert isinstance(adata.X[index], sparse.csr_matrix)
     with zarr.config.enable_gpu():
-        assert isinstance(adata.X[...], CupyCSRMatrix)
-    assert isinstance(adata.X[...], sparse.csr_matrix)
+        assert isinstance(adata.X[index], CupyCSRMatrix)
+    assert isinstance(adata.X[index], sparse.csr_matrix)

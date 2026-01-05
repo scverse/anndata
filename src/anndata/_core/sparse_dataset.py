@@ -305,21 +305,20 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     def _get_arrayXslice(
         self, major_index: Sequence | np.ndarray, minor_index: slice
     ) -> SparseMatrixType:
-        idxs = self.np_module.asarray(major_index)
-        if len(idxs) == 0:
+        if len(major_index) == 0:
             return self.memory_format(
                 (0, self.minor_axis_size)
                 if self.format == "csr"
                 else (self.minor_axis_size, 0)
             )
-        if idxs.dtype == bool:
-            idxs = self.np_module.where(idxs)
+        if major_index.dtype == bool:
+            major_index = np.where(major_index)
         out_shape = (
-            (len(idxs), self.minor_axis_size)
+            (len(major_index), self.minor_axis_size)
             if self.format == "csr"
-            else (self.minor_axis_size, len(idxs))
+            else (self.minor_axis_size, len(major_index))
         )
-        return self.memory_format(self.get_compressed_vectors(idxs), shape=out_shape)[
+        return self.memory_format(self.get_compressed_vectors(major_index), shape=out_shape)[
             self._gen_index(slice(None), minor_index)
         ]
 
