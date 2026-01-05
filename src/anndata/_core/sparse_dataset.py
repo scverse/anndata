@@ -234,13 +234,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
             row = key
             col = slice(None)
         major_index, minor_index = (row, col) if self.format == "csr" else (col, row)
-        if isinstance(minor_index, slice):
-            return self._get(major_index, minor_index)
-        return self.memory_format((
-            self.data[...],
-            self.indices[...],
-            self.indptr[...],
-        ))[key]
+        return self._get(major_index, minor_index)
 
     def _gen_index[Ma, Mi](
         self, major_index: Ma, minor_index: Mi
@@ -253,11 +247,14 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
 
     @singledispatchmethod
     def _get(self, major_index: Any, minor_index: slice) -> SparseMatrixType:
-        return self.memory_format((
-            self.data[...],
-            self.indices[...],
-            self.indptr[...],
-        ))[self._gen_index(major_index, minor_index)]
+        return self.memory_format(
+            (
+                self.data[...],
+                self.indices[...],
+                self.indptr[...],
+            ),
+            shape=self.shape,
+        )[self._gen_index(major_index, minor_index)]
 
     @_get.register
     def _get_intXslice(self, major_index: int, minor_index: slice) -> SparseMatrixType:
