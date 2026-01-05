@@ -73,7 +73,10 @@ Index = (
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
-H5AsStrView = h5py._hl.dataset.AsStrView
+# AsStrView was renamed from AsStrWrapper in h5py 3.12
+_H5AsStrView = getattr(h5py._hl.dataset, "AsStrView", None)
+_H5AsStrWrapper = getattr(h5py._hl.dataset, "AsStrWrapper", None)
+H5AsStrView: type = _H5AsStrView or _H5AsStrWrapper
 
 
 #############################
