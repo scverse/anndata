@@ -29,9 +29,8 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          uv pip install ".[test,lazy]" --prerelease=allow
+          uv pip install -e ".[test,lazy]" --prerelease=allow
           uv pip install 'pandas>=3.0.0rc0' 'numpy<2.2.3' --prerelease=allow
-          uv pip install -e .
 
       - name: Verify dependencies
         run: |
