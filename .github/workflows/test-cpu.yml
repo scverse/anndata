@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   get-environments:
+    # Skip full CI for test-issue-* branches (used for regression test PRs)
+    if: ${{ !startsWith(github.head_ref, 'test-issue-') }}
     runs-on: ubuntu-latest
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}

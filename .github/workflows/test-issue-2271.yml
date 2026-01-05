@@ -1,0 +1,27 @@
+name: Test Issue 2271
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-regression:
+    # Only run for test-issue-* branches
+    if: ${{ startsWith(github.head_ref, 'test-issue-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev,test]"
+
+      - name: Run regression test
+        run: |
+          python -m pytest tests/lazy/test_read.py::test_nullable_string_index_decoding -v
