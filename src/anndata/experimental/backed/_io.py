@@ -66,7 +66,7 @@ def read_lazy(
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
-    ...     out_path = sc.settings.datasetdir / f"{id_}.h5ad"
+    ...     out_path = sc.settings.datasetdir / f"lazy_{id_}.h5ad"
     ...     if out_path.exists():
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"

@@ -560,7 +560,7 @@ def concat_on_disk(  # noqa: PLR0913
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
-    ...     out_path = sc.settings.datasetdir / f'{id_}.h5ad'
+    ...     out_path = sc.settings.datasetdir / f"concat_{id_}.h5ad"
     ...     if out_path.exists():
     ...         return out_path
     ...     file_url = f"{base_url}/{id_}.h5ad"
