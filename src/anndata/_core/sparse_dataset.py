@@ -58,6 +58,15 @@ type DenseType = np.ndarray | CupyArray
 type SparseMatrixType = CupyCSMatrix | CSMatrix | CSArray
 
 
+def get_np_module() -> ModuleType:
+    is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
+    if is_gpu:
+        import cupy as cp
+
+        return cp
+    return np
+
+
 class CompressedVectors[DenseT: DenseType](NamedTuple):
     data: DenseT
     indices: DenseT
@@ -68,9 +77,9 @@ class CompressedVectors[DenseT: DenseType](NamedTuple):
         cls,
         data: DenseT,
         indices: DenseT,
-        indptr: DenseT,
+        indptr: DenseType,
     ) -> CompressedVectors[DenseT]:
-        return cls(data, indices, indptr)
+        return cls(data, indices, get_np_module().array(indptr))
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -113,12 +122,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
 
     @property
     def np_module(self) -> ModuleType:
-        is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
-        if is_gpu:
-            import cupy as cp
-
-            return cp
-        return np
+        return get_np_module()
 
     @property
     def major_axis(self):
@@ -333,7 +337,11 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
                 return self.get_compressed_vectors(np.where(mask)[0])
             else:
                 return self.get_compressed_vectors_for_slices(slices)
-        return CompressedVectors.from_buffers(np.array([]), np.array([]), np.array([0]))
+        return CompressedVectors.from_buffers(
+            self.np_module.array([]),
+            self.np_module.array([]),
+            self.np_module.array([0]),
+        )
 
 
 def _get_group_format(group: GroupStorageType) -> str:
