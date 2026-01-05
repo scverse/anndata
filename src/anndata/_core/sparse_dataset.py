@@ -227,7 +227,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         indptr: DenseType = [0, len(data)]
         return CompressedVectors.from_buffers(data, indices, indptr)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> SparseMatrixType:
         if isinstance(key, tuple):
             row, col = key
         else:
@@ -242,7 +242,9 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
             self.indptr[...],
         ))[key]
 
-    def _gen_index(self, major_index: Any, minor_index: Any):
+    def _gen_index[Ma, Mi](
+        self, major_index: Ma, minor_index: Mi
+    ) -> tuple[Ma, Mi] | tuple[Mi, Ma]:
         return (
             (major_index, minor_index)
             if self.format == "csr"
@@ -282,11 +284,11 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
             else (minor_index_size, major_index_size)
         )
         if out_shape[self.major_axis] == 1:
-            return self._get_intXslice(
+            return self._get(
                 slice_as_int(major_index, self.shape[self.major_axis]), minor_index
             )
         if major_index.step != 1:
-            return self._get_arrayXslice(
+            return self._get(
                 np.arange(*major_index.indices(self.shape[self.major_axis])),
                 minor_index,
             )
@@ -350,7 +352,7 @@ def _get_group_format(group: GroupStorageType) -> str:
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
 def is_sparse_indexing_overridden(
     format: Literal["csr", "csc"], row: Index1D, col: Index1D
-):
+) -> bool:
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         isinstance(major_indexer, int | np.integer | slice)
