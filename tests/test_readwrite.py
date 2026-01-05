@@ -388,19 +388,18 @@ def test_zarr_compression(
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
-    if use_compression:
-        if zarr_write_format == 2 or is_zarr_v2():
-            from numcodecs import Blosc
-
-            compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-        else:
-            from zarr.codecs import ZstdCodec
-
-            # Don't use Blosc since it's defaults can change:
-            # https://github.com/zarr-developers/zarr-python/pull/3545
-            compressor = ZstdCodec(level=3, checksum=True)
-    else:
+    if not use_compression:
         compressor = None
+    elif zarr_write_format == 2 or is_zarr_v2():
+        from numcodecs import Blosc
+
+        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+    else:
+        from zarr.codecs import ZstdCodec
+
+        # Don't use Blosc since it's defaults can change:
+        # https://github.com/zarr-developers/zarr-python/pull/3545
+        compressor = ZstdCodec(level=3, checksum=True)
     wrongly_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
@@ -408,10 +407,7 @@ def test_zarr_compression(
     def check_compressed(value, key):
         if not isinstance(value, ZarrArray) or value.shape == ():
             return None
-        if len(value.compressors) > 0:
-            (read_compressor,) = value.compressors
-        else:
-            read_compressor = None
+        (read_compressor,) = value.compressors or [None]
         if zarr_write_format == 2:
             if read_compressor != compressor:
                 wrongly_compressed.append(key)
@@ -429,14 +425,7 @@ def test_zarr_compression(
         f = zarr.open(pth, mode="r")
         for key, value in f.members(max_depth=None):
             check_compressed(value, key)
-
-    if wrongly_compressed:
-        sep = "\n\t"
-        msg = (
-            f"These elements were not (un)compressed correctly:{sep}"
-            f"{sep.join(wrongly_compressed)}"
-        )
-        raise AssertionError(msg)
+    assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
     expected = ad.read_zarr(pth)
     assert_equal(adata, expected)
