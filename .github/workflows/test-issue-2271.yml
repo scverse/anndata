@@ -36,7 +36,7 @@ jobs:
 
       - name: Verify dependencies
         run: |
-          hatch run hatch-test.stable:python -c 'import xarray, pandas, numpy; print(f"xarray={xarray.__version__}, pandas={pandas.__version__}, numpy={numpy.__version__}")'
+          hatch run hatch-test.stable:python -c "import xarray, pandas, numpy; print('xarray=' + xarray.__version__ + ', pandas=' + pandas.__version__ + ', numpy=' + numpy.__version__)"
 
       - name: Run regression test
         run: |
