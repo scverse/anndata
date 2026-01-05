@@ -94,7 +94,19 @@ GLOBAL_LOCK = Lock()
 #     return False
 
 
-def zarr_v3_compressor_compat(dataset_kwargs) -> dict:
+def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
+    """Handle mismatch between our compressor kwarg and :func:`zarr.create_array` in v3's `compressors` arg
+    See https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+
+    Parameters
+    ----------
+    dataset_kwarg
+        The kwarg dict potentially containing "compressor"
+
+    Returns
+    -------
+        The kwarg dict with "compressor" moved to "compressors" if zarr v3 is in use.
+    """
     if not is_zarr_v2() and "compressor" in dataset_kwargs:
         dataset_kwargs["compressors"] = dataset_kwargs.pop("compressor")
     return dataset_kwargs

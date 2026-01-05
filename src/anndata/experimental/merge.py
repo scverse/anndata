@@ -618,10 +618,10 @@ def concat_on_disk(  # noqa: PLR0913
 
     if (
         len(in_files) == 1
-        and isinstance(in_files[0], str | PathLike)
+        and isinstance(in_file := in_files[0], str | PathLike)
         and is_out_path_like
     ):
-        shutil.copy2(in_files[0], out_file)
+        (shutil.copytree if in_file.is_dir() else shutil.copy2)(in_file, out_file)
         return
 
     if keys is None:
