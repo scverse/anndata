@@ -322,7 +322,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> CompressedVectors:
         slices = np.ma.extras._ezclump(mask)
 
         def mean_slice_length(slices):
@@ -334,7 +334,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
                 return self.get_compressed_vectors(np.where(mask)[0])
             else:
                 return self.get_compressed_vectors_for_slices(slices)
-        return [], [], [0]
+        return CompressedVectors.from_buffers(np.array([]), np.array([]), np.array([0]))
 
 
 def _get_group_format(group: GroupStorageType) -> str:
