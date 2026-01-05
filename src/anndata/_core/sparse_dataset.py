@@ -100,7 +100,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     format: Literal["csr", "csc"]
     shape: tuple[int, int]
 
-    @cached_property
+    @property
     def memory_format(self) -> SparseMatrixType:
         is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
         if self.format == "csr":
