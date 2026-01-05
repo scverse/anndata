@@ -1,10 +1,10 @@
 [envs.default]
 installer = "uv"
-features = [ "dev" ]
+dependency-groups = [ "dev" ]
 
 [envs.docs]
-features = [ "doc" ]
-scripts.build = "sphinx-build -M html docs docs/_build -W --keep-going {args}"
+dependency-groups = [ "doc" ]
+scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
 
@@ -15,7 +15,7 @@ scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-n
 
 [envs.hatch-test]
 default-args = [  ]
-features = [ "dev", "test-min" ]
+dependency-groups = [ "dev", "test-min" ]
 extra-dependencies = [ "ipykernel" ]
 env-vars.UV_CONSTRAINT = "ci/constraints.txt"
 overrides.matrix.deps.env-vars = [
@@ -41,7 +41,7 @@ overrides.matrix.deps.python = [
     { if = [ "stable" ], value = "3.13" },
     { if = [ "pre" ], value = "3.14" },
 ]
-overrides.matrix.deps.features = [
+overrides.matrix.deps.dependency-groups = [
     { if = [ "stable", "pre" ], value = "test" },
 ]
 overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
