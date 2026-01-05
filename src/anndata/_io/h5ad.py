@@ -188,6 +188,7 @@ def read_h5ad_backed(
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
     adata = AnnData(**d)
+    assert adata.file._file is f
 
     # Backwards compat to <0.7
     if isinstance(f["obs"], h5py.Dataset):
