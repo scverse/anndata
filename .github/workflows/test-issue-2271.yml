@@ -23,13 +23,17 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           uv tool install hatch
-          hatch -v env create hatch-test.pre
+          hatch -v env create hatch-test.min
+
+      - name: Force pandas 3.0 and install lazy dependencies
+        run: |
+          hatch run hatch-test.min:pip install 'pandas>=3.0.0rc0' xarray aiohttp requests --prerelease=allow
 
       - name: Run regression test
         run: |
-          hatch run hatch-test.pre:run -v tests/lazy/test_read.py::test_nullable_string_index_decoding
+          hatch run hatch-test.min:run -v tests/lazy/test_read.py::test_nullable_string_index_decoding
