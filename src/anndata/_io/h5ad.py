@@ -170,9 +170,8 @@ def write_sparse_as_dense(
 def read_h5ad_backed(
     filename: str | PathLike[str], mode: Literal["r", "r+"]
 ) -> AnnData:
-    d = dict(filename=filename, filemode=mode)
-
     f = h5py.File(filename, mode)
+    d = dict(filename=f)
 
     attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
