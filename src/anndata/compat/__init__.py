@@ -82,11 +82,9 @@ else:
         from h5py._hl.dataset import AsTypeView as H5AstypeView
     except ImportError:
         warn("AsTypeView changed import location", DeprecationWarning)
-        # Create in-memory file to get the type
-        with h5py.File("dummy", mode="w", driver="core", backing_store=False) as _f:
-            H5AstypeView = type(
-                _f.create_dataset("x", shape=(), dtype="S1").astype("U1")
-            )
+        H5AstypeView = type(
+            h5py.File.in_memory().create_dataset("x", shape=(), dtype="S1").astype("U1")
+        )
 
 
 #############################
