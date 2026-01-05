@@ -25,19 +25,20 @@ jobs:
           enable-cache: true
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Create venv and install dependencies
         run: |
-          uv tool install hatch
-          hatch -v env create hatch-test.min
-
-      - name: Force pandas 3.0 and numpy <2.2.3 to trigger the bug
-        run: |
-          hatch run hatch-test.min:uv pip install 'pandas>=3.0.0rc0' 'numpy<2.2.3' xarray aiohttp requests --prerelease=allow
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install ".[test]" --prerelease=allow
+          uv pip install 'pandas>=3.0.0rc0' 'numpy<2.2.3' --prerelease=allow
+          uv pip install -e .
 
       - name: Verify dependencies
         run: |
-          hatch run hatch-test.min:python -c "import xarray, pandas, numpy; print('xarray=' + xarray.__version__ + ', pandas=' + pandas.__version__ + ', numpy=' + numpy.__version__)"
+          source .venv/bin/activate
+          python -c "import xarray, pandas, numpy; print('xarray=' + xarray.__version__ + ', pandas=' + pandas.__version__ + ', numpy=' + numpy.__version__)"
 
       - name: Run regression test
         run: |
-          hatch run hatch-test.min:run -v tests/lazy/test_read.py::test_nullable_string_index_decoding
+          source .venv/bin/activate
+          python -m pytest tests/lazy/test_read.py::test_nullable_string_index_decoding -v
