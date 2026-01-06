@@ -963,80 +963,173 @@ def create_test_treedata():
 
 
 def create_test_anndata() -> AnnData:
-    """Create a comprehensive test AnnData with all features."""
+    """Create a comprehensive test AnnData with all features.
+
+    This showcases common patterns from real single-cell analysis workflows:
+    - Sparse X matrix with typical density
+    - Categorical columns with color annotations
+    - Numeric QC metrics
+    - String columns (some will trigger serialization warnings)
+    - Datetime columns (will trigger serialization warnings)
+    - Boolean columns
+    - Cluster assignments (louvain, leiden)
+    - Dimensionality reductions (PCA, UMAP, t-SNE)
+    - Neighbor graphs
+    - Layers (raw counts, normalized)
+    - Raw attribute (unprocessed data)
+    - Various uns types (dicts, arrays, nested AnnData)
+    """
     n_obs, n_vars = 100, 50
 
+    # Main AnnData with sparse X
+    # obs: 5 columns (stays expanded below fold_threshold)
+    # var: more columns to demonstrate folding and various types
     adata = AnnData(
         sp.random(n_obs, n_vars, density=0.1, format="csr", dtype=np.float32),
         obs=pd.DataFrame({
-            "batch": pd.Categorical(["A", "B"] * (n_obs // 2)),
-            "n_counts": np.random.randint(1000, 10000, n_obs),
+            # Categorical with colors (5 categories)
             "cell_type": pd.Categorical(
-                ["T cell", "B cell", "NK cell"] * (n_obs // 3)
-                + ["T cell"] * (n_obs % 3)
+                ["T cell", "B cell", "NK cell", "Monocyte", "DC"] * (n_obs // 5)
             ),
-            "string_col": ["sample_" + str(i % 5) for i in range(n_obs)],  # Will warn
-            "donor_id": [f"donor_{i}" for i in range(n_obs)],  # All unique, no warn
+            # Categorical with colors (8 clusters)
+            "louvain": pd.Categorical([
+                f"cluster_{i}" for i in (np.random.randint(0, 8, n_obs))
+            ]),
+            # Numeric QC metric
+            "n_counts": np.random.randint(1000, 50000, n_obs),
+            # Float QC metric
+            "percent_mito": np.random.uniform(0, 15, n_obs).astype(np.float32),
+            # Boolean column
+            "is_doublet": np.random.choice([True, False], n_obs, p=[0.1, 0.9]),
         }),
         var=pd.DataFrame({
-            "gene_name": [f"gene_{i}" for i in range(n_vars)],
-            "highly_variable": np.random.choice([True, False], n_vars),
-            "mean_expression": np.random.randn(n_vars).astype(np.float32),
+            # Basic gene info
+            "gene_symbol": [f"GN{i}" for i in range(n_vars)],
+            "highly_variable": np.random.choice([True, False], n_vars, p=[0.2, 0.8]),
+            "means": np.random.exponential(1, n_vars).astype(np.float32),
+            "dispersions": np.random.exponential(0.5, n_vars).astype(np.float32),
+            # Categorical column
+            "chromosome": pd.Categorical([f"chr{i % 22 + 1}" for i in range(n_vars)]),
+            # String column (will trigger categorical conversion warning)
+            "gene_biotype": ["protein_coding"] * (n_vars - 5) + ["lncRNA"] * 5,
+            # Datetime column (will trigger serialization warning)
+            "annotation_date": pd.to_datetime(["2024-01-15"] * n_vars),
+            # All unique strings (no warning - too many unique values)
+            "ensembl_id": [f"ENSG{i:011d}" for i in range(n_vars)],
         }),
     )
 
-    # Add color annotations (matching)
-    adata.uns["batch_colors"] = ["#FF6B6B", "#4ECDC4"]
-    adata.uns["cell_type_colors"] = ["#FF6B6B", "#4ECDC4", "#45B7D1"]
+    # === Color annotations ===
+    # Matching colors for cell_type (5 categories)
+    adata.uns["cell_type_colors"] = [
+        "#FF6B6B",
+        "#4ECDC4",
+        "#45B7D1",
+        "#96CEB4",
+        "#FFEAA7",
+    ]
+    # Matching colors for louvain (8 clusters)
+    adata.uns["louvain_colors"] = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+    ]
 
-    # Add color annotations (mismatched - should warn)
-    adata.uns["mismatched_colors"] = ["#FF0000"]  # Not matching any categorical
-
-    # Add nested AnnData
-    inner_adata = AnnData(np.zeros((10, 5)))
-    inner_adata.obs["inner_col"] = list(range(10))
-    adata.uns["nested_adata"] = inner_adata
-
-    # Add various uns types
-    adata.uns["neighbors"] = {"params": {"n_neighbors": 15, "method": "umap"}}
-    adata.uns["pca"] = {
-        "variance": np.random.randn(50).astype(np.float32),
-        "variance_ratio": np.random.randn(50).astype(np.float32),
+    # === Uns: Analysis results (typical scanpy output) ===
+    adata.uns["neighbors"] = {
+        "connectivities_key": "connectivities",
+        "distances_key": "distances",
+        "params": {"n_neighbors": 15, "method": "umap", "metric": "euclidean"},
     }
-    adata.uns["string_value"] = "This is a test string"
-    adata.uns["int_value"] = 42
-    adata.uns["float_value"] = 3.14159
-    adata.uns["list_value"] = [1, 2, 3, "mixed", {"nested": True}]
+    adata.uns["pca"] = {
+        "variance": np.random.exponential(10, 50).astype(np.float32),
+        "variance_ratio": np.sort(np.random.uniform(0, 0.1, 50))[::-1].astype(
+            np.float32
+        ),
+    }
+    adata.uns["umap"] = {"params": {"min_dist": 0.5, "spread": 1.0}}
+    adata.uns["louvain"] = {"params": {"resolution": 1.0, "random_state": 0}}
 
-    # Add unserializable type in uns (should warn)
-    class CustomClass:
+    # === Uns: Simple values ===
+    adata.uns["experiment_id"] = "EXP_2024_001"
+    adata.uns["n_highly_variable"] = int(adata.var["highly_variable"].sum())
+    adata.uns["total_counts"] = float(adata.obs["n_counts"].sum())
+    adata.uns["processing_steps"] = [
+        "filtering",
+        "normalization",
+        "hvg",
+        "pca",
+        "neighbors",
+        "umap",
+        "clustering",
+    ]
+
+    # === Uns: Nested AnnData ===
+    inner_adata = AnnData(np.zeros((10, 5)))
+    inner_adata.obs["inner_cluster"] = pd.Categorical(["A", "B"] * 5)
+    inner_adata.var["gene"] = [f"gene_{i}" for i in range(5)]
+    adata.uns["subset_adata"] = inner_adata
+
+    # === Uns: Unserializable type (will warn) ===
+    class CustomAnalysisResult:
         def __repr__(self):
-            return "CustomClass()"
+            return "CustomAnalysisResult(n_clusters=8)"
 
-    adata.uns["unserializable"] = CustomClass()
+    adata.uns["custom_result"] = CustomAnalysisResult()
 
-    # Add obsm/varm
+    # === Obsm: Embeddings and metadata ===
     adata.obsm["X_pca"] = np.random.randn(n_obs, 50).astype(np.float32)
     adata.obsm["X_umap"] = np.random.randn(n_obs, 2).astype(np.float32)
     adata.obsm["X_tsne"] = np.random.randn(n_obs, 2).astype(np.float32)
-    adata.obsm["cell_metadata"] = pd.DataFrame(
+    # DataFrame in obsm (spatial coordinates)
+    adata.obsm["spatial"] = pd.DataFrame(
         {
-            "spatial_x": np.random.randn(n_obs),
-            "spatial_y": np.random.randn(n_obs),
-            "area": np.random.rand(n_obs) * 100,
+            "x": np.random.uniform(0, 1000, n_obs),
+            "y": np.random.uniform(0, 1000, n_obs),
+            "z": np.random.uniform(0, 100, n_obs),
+            "area": np.random.uniform(50, 500, n_obs),
+            "perimeter": np.random.uniform(20, 100, n_obs),
         },
         index=adata.obs_names,
     )
+
+    # === Varm: Gene loadings ===
     adata.varm["PCs"] = np.random.randn(n_vars, 50).astype(np.float32)
 
-    # Add layers
-    adata.layers["raw"] = sp.random(n_obs, n_vars, density=0.1, format="csr")
+    # === Layers: Different normalizations ===
+    adata.layers["counts"] = sp.random(
+        n_obs, n_vars, density=0.1, format="csr", dtype=np.float32
+    )
     adata.layers["normalized"] = np.random.randn(n_obs, n_vars).astype(np.float32)
+    adata.layers["log1p"] = np.log1p(np.abs(np.random.randn(n_obs, n_vars))).astype(
+        np.float32
+    )
 
-    # Add obsp/varp
-    adata.obsp["distances"] = sp.random(n_obs, n_obs, density=0.01, format="csr")
-    adata.obsp["connectivities"] = sp.random(n_obs, n_obs, density=0.01, format="csr")
-    adata.varp["gene_corr"] = sp.random(n_vars, n_vars, density=0.1, format="csr")
+    # === Obsp/Varp: Graphs ===
+    adata.obsp["distances"] = sp.random(
+        n_obs, n_obs, density=0.05, format="csr", dtype=np.float32
+    )
+    adata.obsp["connectivities"] = sp.random(
+        n_obs, n_obs, density=0.05, format="csr", dtype=np.float32
+    )
+    adata.varp["gene_correlation"] = sp.random(
+        n_vars, n_vars, density=0.1, format="csr", dtype=np.float32
+    )
+
+    # === Raw: Unprocessed data (common in scanpy workflows) ===
+    raw_adata = AnnData(
+        sp.random(n_obs, n_vars + 20, density=0.1, format="csr", dtype=np.float32),
+        var=pd.DataFrame({
+            "gene_name": [f"Gene_{i}" for i in range(n_vars + 20)],
+            "n_cells": np.random.randint(1, n_obs, n_vars + 20),
+        }),
+    )
+    adata.raw = raw_adata
 
     return adata
 
@@ -1072,7 +1165,6 @@ def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            max-width: 1000px;
             margin-left: 230px;
             margin-right: 20px;
             padding: 20px;
@@ -1302,9 +1394,9 @@ def main():  # noqa: PLR0915, PLR0912
         adata_special._repr_html_(),
     ))
 
-    # Test 8: Dask array (if available) - demonstrates lazy loading safety
+    # Test 8a: Dask array (if available) - demonstrates lazy loading safety
     if HAS_DASK:
-        print("  8. Dask array (lazy loading safety)")
+        print("  8a. Dask array (lazy loading safety)")
         # Create Dask arrays in multiple sections to show lazy handling
         X_dask = da.random.random((1000, 500), chunks=(100, 100))
         adata_dask = AnnData(X_dask)
@@ -1317,7 +1409,7 @@ def main():  # noqa: PLR0915, PLR0912
         adata_dask.obsm["X_pca"] = da.random.random((1000, 50), chunks=(100, 50))
         adata_dask.varm["loadings"] = da.random.random((500, 50), chunks=(100, 50))
         sections.append((
-            "8. Dask Arrays (Lazy Loading Safety)",
+            "8a. Dask Arrays (Lazy Loading Safety)",
             adata_dask._repr_html_(),
             "<strong>No data is loaded from disk!</strong> The repr only reads metadata:<br>"
             "<ul>"
