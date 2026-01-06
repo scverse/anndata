@@ -181,9 +181,57 @@ def is_color_list(key: str, value: Any) -> bool:
     return isinstance(first, str) and _is_color_string(first)
 
 
+def _is_categorical_column(col: Any) -> bool:
+    """
+    Check if a column is categorical.
+
+    Works for both pandas Series (.cat accessor) and xarray DataArray
+    (CategoricalDtype).
+    """
+    import pandas as pd
+
+    # Pandas Series with categorical dtype
+    if hasattr(col, "cat"):
+        return True
+
+    # xarray DataArray or other objects with CategoricalDtype
+    return hasattr(col, "dtype") and isinstance(col.dtype, pd.CategoricalDtype)
+
+
+def _get_n_categories(col: Any) -> int:
+    """
+    Get the number of categories from a categorical column.
+
+    Works for both pandas Series and xarray DataArray.
+    """
+    # Pandas Series
+    if hasattr(col, "cat"):
+        return len(col.cat.categories)
+
+    # xarray DataArray or other objects with CategoricalDtype
+    if hasattr(col, "dtype") and hasattr(col.dtype, "categories"):
+        return len(col.dtype.categories)
+
+    return 0
+
+
+def _compute_if_dask(obj: Any) -> Any:
+    """
+    Compute a dask array/object if it is one, otherwise return as-is.
+
+    For lazy AnnData, uns values may be dask arrays that need to be
+    computed to get the actual values.
+    """
+    if hasattr(obj, "compute"):
+        return obj.compute()
+    return obj
+
+
 def get_matching_column_colors(
     adata: AnnData,
     column_name: str,
+    *,
+    limit: int | None = None,
 ) -> list[str] | None:
     """
     Get colors for a categorical column if they exist and match.
@@ -194,6 +242,9 @@ def get_matching_column_colors(
         AnnData object
     column_name
         Name of the column to get colors for
+    limit
+        If provided, only load the first `limit` colors. This avoids loading
+        all colors from disk when only displaying partial categories.
 
     Returns
     -------
@@ -209,6 +260,15 @@ def get_matching_column_colors(
 
     colors = adata.uns[color_key]
 
+    # For lazy AnnData with dask arrays, slice before computing to avoid
+    # loading all colors when only displaying partial categories
+    if limit is not None and hasattr(colors, "compute"):
+        # Dask array: slice first, then compute
+        colors = colors[:limit].compute()
+    else:
+        # Compute if dask array (for lazy AnnData)
+        colors = _compute_if_dask(colors)
+
     # Find the column in obs or var
     col = None
     if hasattr(adata, "obs") and column_name in adata.obs.columns:
@@ -219,12 +279,14 @@ def get_matching_column_colors(
     if col is None:
         return None
 
-    # Must be categorical
-    if not hasattr(col, "cat"):
+    # Must be categorical (works for both pandas and xarray)
+    if not _is_categorical_column(col):
         return None
 
-    n_categories = len(col.cat.categories)
-    if len(colors) != n_categories:
+    n_categories = _get_n_categories(col)
+    # When limit is used, we can't check exact match (we only loaded partial)
+    # Just check that we have enough colors for what we loaded
+    if limit is None and len(colors) != n_categories:
         return None  # Mismatch
 
     return list(colors)
@@ -257,12 +319,18 @@ def check_color_category_mismatch(
         return None
 
     colors = adata.uns[color_key]
+    # Compute if dask array (for lazy AnnData)
+    colors = _compute_if_dask(colors)
 
     for df in (adata.obs, adata.var):
-        if column_name in df.columns and hasattr(df[column_name], "cat"):
-            n_cats = len(df[column_name].cat.categories)
-            if len(colors) != n_cats:
-                return f"Color mismatch: {len(colors)} colors for {n_cats} categories"
+        if column_name in df.columns:
+            col = df[column_name]
+            if _is_categorical_column(col):
+                n_cats = _get_n_categories(col)
+                if len(colors) != n_cats:
+                    return (
+                        f"Color mismatch: {len(colors)} colors for {n_cats} categories"
+                    )
 
     return None
 
@@ -353,10 +421,13 @@ def is_lazy_series(series: Any) -> bool:
 
     This detects Series from Dataset2D (xarray-backed DataFrames used in
     lazy AnnData) to prevent operations that would trigger data loading.
+
+    Note: We avoid accessing .data as that triggers loading for lazy
+    CategoricalArrays. Instead we check for xarray-specific attributes.
     """
-    # Check if it's from a Dataset2D (lazy DataFrame)
-    # Dataset2D columns have a .data attribute that's an xarray DataArray
-    if hasattr(series, "data") and hasattr(series.data, "dims"):
+    # Check for xarray DataArray structure without triggering data loading
+    # xarray DataArrays have 'variable' and 'dims' attributes
+    if hasattr(series, "variable") and hasattr(series, "dims"):
         return True
     # Check for xarray Variable backing
     return hasattr(series, "_variable")

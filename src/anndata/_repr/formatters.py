@@ -38,6 +38,41 @@ if TYPE_CHECKING:
     from .registry import FormatterContext
 
 
+def _get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
+    """
+    Get category count and ordered flag from a lazy categorical without loading data.
+
+    For lazy categoricals (xarray DataArray backed by CategoricalArray),
+    this accesses the underlying storage metadata directly to get the count
+    without loading the actual category values.
+
+    Returns
+    -------
+    tuple of (n_categories, ordered)
+        n_categories: Number of categories, or None if cannot be determined
+        ordered: Whether the categorical is ordered
+    """
+    try:
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        # Navigate through xarray structure to find CategoricalArray
+        if hasattr(obj, "variable") and hasattr(obj.variable, "_data"):
+            lazy_indexed = obj.variable._data
+            if hasattr(lazy_indexed, "array"):
+                arr = lazy_indexed.array
+                if isinstance(arr, CategoricalArray):
+                    # Get count from storage metadata without loading
+                    cats = arr._categories
+                    if hasattr(cats, "keys"):  # It's a group (zarr)
+                        values = cats["values"]
+                        return values.shape[0], arr._ordered
+                    elif hasattr(cats, "shape"):  # It's an array directly
+                        return cats.shape[0], arr._ordered
+    except (ImportError, Exception):  # noqa: BLE001
+        pass
+    return None, False
+
+
 def check_column_name(name: str) -> tuple[bool, str, bool]:
     """Check if a column name is valid for HDF5/Zarr serialization.
 
@@ -457,29 +492,137 @@ class SeriesFormatter(TypeFormatter):
 
 
 class CategoricalFormatter(TypeFormatter):
-    """Formatter for pandas.Categorical and categorical Series."""
+    """Formatter for pandas.Categorical, categorical Series, and xarray DataArrays."""
 
     priority = 110
 
     def can_format(self, obj: Any) -> bool:
-        return isinstance(obj, pd.Categorical) or (
-            isinstance(obj, pd.Series) and hasattr(obj, "cat")
+        # pandas Categorical
+        if isinstance(obj, pd.Categorical):
+            return True
+        # pandas Series with categorical dtype
+        if isinstance(obj, pd.Series) and hasattr(obj, "cat"):
+            return True
+        # Check for lazy categorical (CategoricalArray) without accessing dtype
+        # which would trigger loading
+        try:
+            from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+            if hasattr(obj, "variable") and hasattr(obj.variable, "_data"):
+                lazy_indexed = obj.variable._data
+                if hasattr(lazy_indexed, "array") and isinstance(
+                    lazy_indexed.array, CategoricalArray
+                ):
+                    return True
+        except ImportError:
+            pass
+        # Fallback: xarray DataArray with categorical dtype (will load data)
+        return (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, pd.CategoricalDtype)
+            and not isinstance(obj, pd.Series | pd.Categorical)
         )
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        # Determine if this is a lazy (xarray DataArray) categorical
+        is_lazy = False
+        n_categories = 0
+        ordered = False
+
+        # Get number of categories based on object type
         if isinstance(obj, pd.Series):
-            cat = obj.cat
-            n_categories = len(cat.categories)
-        else:
-            cat = obj
+            n_categories = len(obj.cat.categories)
+            ordered = obj.cat.ordered
+        elif isinstance(obj, pd.Categorical):
             n_categories = len(obj.categories)
+            ordered = obj.ordered
+        else:
+            # Try to get info from lazy categorical without loading
+            lazy_count, lazy_ordered = _get_lazy_categorical_info(obj)
+            if lazy_count is not None:
+                n_categories = lazy_count
+                ordered = lazy_ordered
+                is_lazy = True
+            elif hasattr(obj, "dtype") and hasattr(obj.dtype, "categories"):
+                # Fallback: access dtype.categories (will load data)
+                n_categories = len(obj.dtype.categories)
+                ordered = getattr(obj.dtype, "ordered", False)
+                is_lazy = True
+
+        # Format type name - indicate lazy for xarray DataArrays
+        if is_lazy:
+            type_name = f"category ({n_categories}, lazy)"
+        else:
+            type_name = f"category ({n_categories})"
 
         return FormattedOutput(
-            type_name=f"category ({n_categories})",
+            type_name=type_name,
             css_class="dtype-category",
             details={
                 "n_categories": n_categories,
-                "ordered": getattr(cat, "ordered", False),
+                "ordered": ordered,
+                "is_lazy": is_lazy,
+            },
+            is_serializable=True,
+        )
+
+
+class LazyColumnFormatter(TypeFormatter):
+    """
+    Formatter for lazy obs/var columns (xarray DataArray) from read_lazy().
+
+    For lazy AnnData, obs/var columns are xarray DataArrays instead of pandas Series.
+    This formatter shows the dtype with "(lazy)" indicator, without the shape since
+    all columns in obs/var have the same length (n_obs or n_var).
+
+    Note: Categorical columns are handled by CategoricalFormatter (higher priority).
+    """
+
+    priority = (
+        60  # Higher than ArrayAPIFormatter (50), lower than CategoricalFormatter (110)
+    )
+    sections = ("obs", "var")  # Only apply to obs/var sections
+
+    def can_format(self, obj: Any) -> bool:
+        # xarray DataArray but not categorical (categorical is handled by CategoricalFormatter)
+        if not (
+            hasattr(obj, "dtype") and hasattr(obj, "shape") and hasattr(obj, "ndim")
+        ):
+            return False
+
+        # Exclude already-handled types
+        if isinstance(obj, np.ndarray | pd.DataFrame | pd.Series | pd.Categorical):
+            return False
+
+        # Exclude categorical (handled by CategoricalFormatter)
+        if isinstance(obj.dtype, pd.CategoricalDtype):
+            return False
+
+        # Check if it looks like an xarray DataArray (has .data attribute)
+        # This is a good heuristic for lazy obs/var columns
+        return hasattr(obj, "data")
+
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        dtype_str = str(obj.dtype)
+
+        # Map common dtypes to CSS classes
+        if "int" in dtype_str:
+            css_class = "dtype-int"
+        elif "float" in dtype_str:
+            css_class = "dtype-float"
+        elif "bool" in dtype_str:
+            css_class = "dtype-bool"
+        elif "str" in dtype_str or dtype_str == "object":
+            css_class = "dtype-object"
+        else:
+            css_class = "dtype-unknown"
+
+        return FormattedOutput(
+            type_name=f"{dtype_str} (lazy)",
+            css_class=css_class,
+            details={
+                "dtype": dtype_str,
+                "is_lazy": True,
             },
             is_serializable=True,
         )
@@ -499,14 +642,22 @@ class DaskArrayFormatter(TypeFormatter):
             return False
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
-        shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
-        # Get chunk info
+        # Get chunk info for tooltip
         chunks_str = str(obj.chunksize) if hasattr(obj, "chunksize") else "unknown"
 
+        # In obsm/varm/obsp/varp sections, don't show shape (redundant info)
+        # - obsp/varp: always n_obs × n_obs or n_var × n_var
+        # - obsm/varm: meta column shows number of columns
+        if context.section in ("obsm", "varm", "obsp", "varp"):
+            type_name = f"dask.array {dtype_str}"
+        else:
+            shape_str = " × ".join(format_number(s) for s in obj.shape)
+            type_name = f"dask.array ({shape_str}) {dtype_str}"
+
         return FormattedOutput(
-            type_name=f"dask.array ({shape_str}) {dtype_str}",
+            type_name=type_name,
             css_class="dtype-dask",
             tooltip=f"Chunks: {chunks_str}, {obj.npartitions} partitions",
             details={
@@ -873,6 +1024,8 @@ def _register_builtin_formatters() -> None:
         SparseMatrixFormatter(),
         DataFrameFormatter(),
         SeriesFormatter(),
+        # Lazy obs/var columns (xarray DataArray) - must come before ArrayAPIFormatter
+        LazyColumnFormatter(),
         # Low-medium priority (Array-API compatible arrays)
         # Must come after specific array formatters (numpy, cupy, etc.) but before builtins
         # Handles JAX, PyTorch, TensorFlow arrays added in PR #2063

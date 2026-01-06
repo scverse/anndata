@@ -23,6 +23,7 @@ from . import (
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_FIELD_WIDTH,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_LAZY_CATEGORIES,
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_TYPE_WIDTH,
@@ -125,13 +126,14 @@ def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
     return max(80, min(width_px, max_width))
 
 
-def generate_repr_html(
+def generate_repr_html(  # noqa: PLR0913
     adata: AnnData,
     *,
     depth: int = 0,
     max_depth: int | None = None,
     fold_threshold: int | None = None,
     max_items: int | None = None,
+    max_lazy_categories: int | None = None,
     show_header: bool = True,
     show_search: bool = True,
     _container_id: str | None = None,
@@ -151,6 +153,9 @@ def generate_repr_html(
         Auto-fold sections with more entries than this. Uses settings/default if None.
     max_items
         Maximum items to show per section. Uses settings/default if None.
+    max_lazy_categories
+        Maximum categories to load for lazy categoricals. Set to 0 to disable
+        loading categories entirely (metadata-only mode). Uses settings/default if None.
     show_header
         Whether to show the header (for nested display)
     show_search
@@ -171,6 +176,10 @@ def generate_repr_html(
         )
     if max_items is None:
         max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
+    if max_lazy_categories is None:
+        max_lazy_categories = get_setting(
+            "repr_html_max_lazy_categories", default=DEFAULT_MAX_LAZY_CATEGORIES
+        )
 
     # Get additional rendering settings (always from settings, not parameters)
     max_categories = get_setting(
@@ -200,6 +209,7 @@ def generate_repr_html(
         fold_threshold=fold_threshold,
         max_items=max_items,
         max_categories=max_categories,
+        max_lazy_categories=max_lazy_categories,
         max_string_length=max_string_length,
         unique_limit=unique_limit,
         adata_ref=adata,

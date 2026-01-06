@@ -17,6 +17,9 @@ DEFAULT_MAX_ITEMS = 200  # Maximum items to show per section
 DEFAULT_MAX_STRING_LENGTH = 100  # Truncate strings longer than this
 DEFAULT_PREVIEW_ITEMS = 5  # Number of items to show in previews (first/last)
 DEFAULT_MAX_CATEGORIES = 100  # Max category values to display inline
+DEFAULT_MAX_LAZY_CATEGORIES = (
+    100  # Max categories to load for lazy categoricals (0 to skip)
+)
 DEFAULT_UNIQUE_LIMIT = 1_000_000  # Max rows to compute unique counts (0 to disable)
 
 # Column widths (pixels)

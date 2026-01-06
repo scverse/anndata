@@ -95,6 +95,11 @@ def _render_dataframe_section(
     if n_cols == 0:
         return render_empty_section(section, doc_url, tooltip)
 
+    # Set section for section-specific formatters (e.g., LazyColumnFormatter)
+    from dataclasses import replace
+
+    section_context = replace(context, section=section)
+
     # Render entries (with truncation)
     rows = []
     for i, col_name in enumerate(df.columns):
@@ -102,7 +107,9 @@ def _render_dataframe_section(
             rows.append(render_truncation_indicator(n_cols - context.max_items))
             break
         col = df[col_name]
-        rows.append(_render_dataframe_entry(adata, section, col_name, col, context))
+        rows.append(
+            _render_dataframe_entry(adata, section, col_name, col, section_context)
+        )
 
     return render_section(
         section,
@@ -119,8 +126,23 @@ def _render_category_list(
     categories: list,
     colors: list[str] | None,
     max_cats: int,
+    *,
+    n_hidden: int = 0,
 ) -> str:
-    """Render a list of category values with optional color dots."""
+    """Render a list of category values with optional color dots.
+
+    Parameters
+    ----------
+    categories
+        List of category values to display
+    colors
+        Optional list of colors matching categories
+    max_cats
+        Maximum number of categories to show
+    n_hidden
+        Number of additional hidden categories (for lazy truncation).
+        These are added to any truncation from max_cats.
+    """
     parts = ['<span class="adata-cats-list">']
     for i, cat in enumerate(categories[:max_cats]):
         cat_name = escape_html(str(cat))
@@ -133,9 +155,12 @@ def _render_category_list(
         parts.append(f"<span>{cat_name}</span>")
         parts.append("</span>")
 
-    if len(categories) > max_cats:
-        remaining = len(categories) - max_cats
-        parts.append(f'<span class="adata-text-muted">...+{remaining}</span>')
+    # Calculate total hidden: from max_cats truncation + lazy truncation
+    hidden_from_max_cats = max(0, len(categories) - max_cats)
+    total_hidden = hidden_from_max_cats + n_hidden
+
+    if total_hidden > 0:
+        parts.append(f'<span class="adata-text-muted">...+{total_hidden}</span>')
     parts.append("</span>")
     return "".join(parts)
 
@@ -171,7 +196,200 @@ def _render_unique_count(n_unique: int | None, *, is_lazy: bool) -> str:
     return ""
 
 
-def _render_dataframe_entry(
+def _is_categorical_column(col: Any) -> bool:
+    """
+    Check if a column is categorical.
+
+    Works for both pandas Series (.cat accessor) and xarray DataArray
+    (CategoricalDtype). For lazy categoricals, checks for CategoricalArray
+    without triggering data loading.
+    """
+    import pandas as pd
+
+    # Pandas Series with categorical dtype
+    if hasattr(col, "cat"):
+        return True
+
+    # Check for lazy categorical (CategoricalArray) without accessing dtype
+    try:
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
+            lazy_indexed = col.variable._data
+            if hasattr(lazy_indexed, "array") and isinstance(
+                lazy_indexed.array, CategoricalArray
+            ):
+                return True
+    except ImportError:
+        pass
+
+    # Fallback: xarray DataArray or other objects with CategoricalDtype
+    # Note: This may trigger loading for lazy categoricals
+    return hasattr(col, "dtype") and isinstance(col.dtype, pd.CategoricalDtype)
+
+
+def _get_categories_from_column(col: Any) -> list:
+    """
+    Get categories from a categorical column.
+
+    Works for both pandas Series (.cat.categories) and xarray DataArray
+    (dtype.categories).
+    """
+    # Pandas Series
+    if hasattr(col, "cat"):
+        return list(col.cat.categories)
+
+    # xarray DataArray or other objects with CategoricalDtype
+    if hasattr(col, "dtype") and hasattr(col.dtype, "categories"):
+        return list(col.dtype.categories)
+
+    return []
+
+
+def _get_categorical_array(col: Any):
+    """
+    Get the underlying CategoricalArray from a lazy xarray DataArray.
+
+    Returns None if not a lazy categorical column.
+    """
+    try:
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        # Navigate through xarray structure to find CategoricalArray
+        # DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
+        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
+            lazy_indexed = col.variable._data
+            if hasattr(lazy_indexed, "array"):
+                arr = lazy_indexed.array
+                if isinstance(arr, CategoricalArray):
+                    return arr
+    except ImportError:
+        pass
+    return None
+
+
+def _get_lazy_category_count(col: Any) -> int | None:
+    """
+    Get the number of categories for a lazy categorical without loading them.
+
+    For lazy categoricals, we access the underlying CategoricalArray directly
+    and read the category count from the zarr/h5 storage metadata, avoiding
+    any data loading.
+
+    Returns None if the count cannot be determined.
+    """
+    # Try to get category count from CategoricalArray without loading
+    cat_arr = _get_categorical_array(col)
+    if cat_arr is not None:
+        try:
+            # Access the raw _categories group/array shape
+            # For zarr: _categories is a Group with 'values' array
+            # For h5: similar structure
+            cats = cat_arr._categories
+            if hasattr(cats, "keys"):  # It's a group
+                values = cats["values"]
+                return values.shape[0]
+            elif hasattr(cats, "shape"):  # It's an array directly
+                return cats.shape[0]
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+def _get_lazy_categories(
+    col: Any, context: FormatterContext
+) -> tuple[list, bool, int | None]:
+    """
+    Get categories for a lazy categorical column, respecting limits.
+
+    For lazy AnnData (from read_lazy()), this accesses the underlying
+    CategoricalArray directly and reads only the needed categories from
+    storage, avoiding loading the full categorical data.
+
+    Parameters
+    ----------
+    col
+        Column (potentially lazy) to get categories from
+    context
+        FormatterContext with max_lazy_categories limit
+
+    Returns
+    -------
+    tuple of (categories_list, was_skipped, n_categories)
+        categories_list: List of category values (empty if skipped)
+        was_skipped: True if categories were skipped due to limit
+        n_categories: Number of categories (if known), for display when skipped
+    """
+    # Try to get category count without loading
+    n_cats = _get_lazy_category_count(col)
+
+    # If max_lazy_categories is 0, skip loading entirely (metadata-only mode)
+    if context.max_lazy_categories == 0:
+        return [], True, n_cats
+
+    # Determine if we need to truncate
+    should_truncate = n_cats is not None and n_cats > context.max_lazy_categories
+    n_to_read = context.max_lazy_categories if should_truncate else n_cats
+
+    # Try to read categories directly from CategoricalArray storage
+    # Use read_elem/read_elem_partial for proper decoding of string arrays
+    cat_arr = _get_categorical_array(col)
+    if cat_arr is not None:
+        try:
+            from anndata._io.specs.registry import read_elem, read_elem_partial
+
+            cats = cat_arr._categories
+            # Get values array: zarr uses group with "values" key, h5 uses array directly
+            values = cats["values"] if hasattr(cats, "keys") else cats
+
+            # Use read_elem_partial for sliced reads, read_elem for full reads
+            # This ensures proper decoding of string arrays
+            if n_to_read is not None and n_to_read < (n_cats or float("inf")):
+                categories = list(
+                    read_elem_partial(values, indices=slice(0, n_to_read))
+                )
+            else:
+                categories = list(read_elem(values))
+            return categories, should_truncate, n_cats
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Fallback to unified accessor (will trigger loading)
+    try:
+        return _get_categories_from_column(col), False, n_cats
+    except Exception:  # noqa: BLE001
+        return [], True, n_cats
+
+
+def _get_categories_for_column(
+    col: Any,
+    context: FormatterContext,
+    *,
+    is_categorical: bool,
+    is_lazy: bool,
+) -> tuple[list, bool, int | None]:
+    """
+    Get categories for a column, handling lazy loading appropriately.
+
+    Returns
+    -------
+    tuple of (categories_list, was_skipped, n_categories)
+        categories_list: List of category values
+        was_skipped: True if categories were skipped for lazy columns
+        n_categories: Number of categories (if known)
+    """
+    if not is_categorical:
+        return [], False, None
+
+    if is_lazy:
+        return _get_lazy_categories(col, context)
+
+    # Non-lazy categorical - use unified accessor
+    categories = _get_categories_from_column(col)
+    return categories, False, len(categories) if categories else None
+
+
+def _render_dataframe_entry(  # noqa: PLR0912, PLR0915
     adata: AnnData,
     section: str,
     col_name: str,
@@ -183,7 +401,8 @@ def _render_dataframe_entry(
     output = formatter_registry.format_value(col, context)
 
     # Check if categorical (determines what we show in meta cell)
-    is_categorical = hasattr(col, "cat")
+    # Use _is_categorical_column to handle both pandas Series and xarray DataArray
+    is_categorical = _is_categorical_column(col)
     is_lazy = is_lazy_series(col)
 
     # Compute nunique once, reuse for warning check and display
@@ -203,15 +422,29 @@ def _render_dataframe_entry(
         entry_warnings.append(name_reason)
         name_error = name_hard_error
 
-    # Check for color mismatch
-    color_warning = check_color_category_mismatch(adata, col_name)
-    if color_warning:
-        entry_warnings.append(color_warning)
+    # Get category info first - this determines if we load colors
+    # For lazy categoricals, respect max_lazy_categories to avoid loading too much
+    # categories_truncated is True if we only loaded first N categories (not all)
+    categories, categories_truncated, n_total_cats = _get_categories_for_column(
+        col, context, is_categorical=is_categorical, is_lazy=is_lazy
+    )
+    max_cats = context.max_categories
+    n_cats_to_show = min(len(categories), max_cats) if is_categorical else 0
 
-    # Get colors if categorical
-    colors = get_matching_column_colors(adata, col_name)
+    # Only load colors if we're actually going to display categories
+    # This avoids disk I/O in metadata-only mode (max_lazy_categories=0)
+    colors = None
+    if is_categorical and len(categories) > 0:
+        # Check for color mismatch (loads colors from uns, may trigger disk I/O)
+        color_warning = check_color_category_mismatch(adata, col_name)
+        if color_warning:
+            entry_warnings.append(color_warning)
 
-    # Copy button hidden by default - JS shows it
+        # Get colors if they match
+        # For lazy categoricals with truncated categories, only load the colors
+        # we need (up to n_cats_to_show) to avoid loading all colors from disk
+        color_limit = n_cats_to_show if (is_lazy and categories_truncated) else None
+        colors = get_matching_column_colors(adata, col_name, limit=color_limit)
 
     # Add warning/error class (CSS handles color - error is red like in uns)
     entry_class = "adata-entry"
@@ -229,11 +462,6 @@ def _render_dataframe_entry(
     # Name cell
     parts.append(render_name_cell(col_name))
 
-    # Get category info for wrap button
-    categories = list(col.cat.categories) if is_categorical else []
-    max_cats = context.max_categories
-    n_cats = min(len(categories), max_cats) if is_categorical else 0
-
     # Type cell
     parts.append('<td class="adata-entry-type">')
     parts.append(
@@ -243,7 +471,7 @@ def _render_dataframe_entry(
     parts.append(render_warning_icon(entry_warnings, is_error=is_error))
 
     # Add wrap button for categories in the type column
-    if is_categorical and n_cats > 0:
+    if is_categorical and n_cats_to_show > 0:
         parts.append(
             '<button class="adata-cats-wrap-btn" title="Toggle multi-line view">⋯</button>'
         )
@@ -252,9 +480,28 @@ def _render_dataframe_entry(
     # Meta cell - show category values with colors or unique count
     parts.append('<td class="adata-entry-meta">')
     if is_categorical:
-        parts.append(_render_category_list(categories, colors, max_cats))
-    else:
-        parts.append(_render_unique_count(n_unique, is_lazy=is_lazy))
+        if len(categories) == 0:
+            # Metadata-only mode: no categories loaded, show just count
+            if n_total_cats is not None:
+                parts.append(
+                    f'<span class="adata-text-muted">({n_total_cats} categories)</span>'
+                )
+            else:
+                parts.append('<span class="adata-text-muted">(categories)</span>')
+        elif categories_truncated:
+            # Partial categories loaded (lazy truncation): show them with truncation
+            # Calculate how many additional categories are hidden
+            n_hidden = (n_total_cats - len(categories)) if n_total_cats else 0
+            parts.append(
+                _render_category_list(categories, colors, max_cats, n_hidden=n_hidden)
+            )
+        else:
+            # All categories loaded: show with standard max_categories truncation
+            parts.append(_render_category_list(categories, colors, max_cats))
+    elif not is_lazy:
+        # Non-lazy non-categorical: show unique count
+        parts.append(_render_unique_count(n_unique, is_lazy=False))
+    # Lazy non-categorical: nothing in meta (would require loading data)
     parts.append("</td>")
 
     parts.append("</tr>")
@@ -272,6 +519,8 @@ def _render_mapping_section(
     context: FormatterContext,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
+    from dataclasses import replace
+
     mapping = getattr(adata, section, None)
     if mapping is None:
         return ""
@@ -286,6 +535,9 @@ def _render_mapping_section(
     if n_items == 0:
         return render_empty_section(section, doc_url, tooltip)
 
+    # Set section for section-specific formatters (e.g., DaskArrayFormatter)
+    section_context = replace(context, section=section)
+
     # Render entries (with truncation)
     rows = []
     for i, key in enumerate(keys):
@@ -293,7 +545,7 @@ def _render_mapping_section(
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = mapping[key]
-        rows.append(_render_mapping_entry(key, value, context, section))
+        rows.append(_render_mapping_entry(key, value, section_context, section))
 
     return render_section(
         section,

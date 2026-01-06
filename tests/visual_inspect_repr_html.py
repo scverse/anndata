@@ -1332,8 +1332,146 @@ def main():  # noqa: PLR0915, PLR0912
             "This is safe for terabyte-scale datasets — displaying the repr never triggers computation.",
         ))
 
+    # Test 8b: Lazy AnnData (experimental) - fully lazy obs/var
+    # Tests the lazy category loading behavior:
+    # - Categorical columns with few categories: load and display categories
+    # - Categorical columns with too many categories: show "(lazy)" to avoid loading
+    # - Categorical columns with colors in uns: display color swatches
+    # - Non-categorical columns: show "(lazy)" for all
+    if HAS_XARRAY:
+        print("  8b. Lazy AnnData (experimental read_lazy)")
+        with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
+            tmp_path = tmp.name
+        adata_lazy = None
+        h5_file = None
+        try:
+            import h5py
+
+            # Create a comprehensive test file for lazy loading behavior
+            adata_to_save = AnnData(
+                sp.random(1000, 500, density=0.1, format="csr", dtype=np.float32)
+            )
+
+            # --- Categorical columns ---
+            # 1. Small categorical WITH colors (should show categories + color dots)
+            adata_to_save.obs["cell_type"] = pd.Categorical(
+                np.random.choice(["T cell", "B cell", "Monocyte", "NK cell"], 1000)
+            )
+            adata_to_save.uns["cell_type_colors"] = [
+                "#e41a1c",  # T cell - red
+                "#377eb8",  # B cell - blue
+                "#4daf4a",  # Monocyte - green
+                "#984ea3",  # NK cell - purple
+            ]
+
+            # 2. Small categorical WITHOUT colors (should show categories only)
+            adata_to_save.obs["cluster"] = pd.Categorical(
+                np.random.choice(["C0", "C1", "C2", "C3", "C4"], 1000)
+            )
+
+            # 3. Medium categorical (50 cats) - will show truncation with max_lazy_categories=30
+            medium_categories = [f"sample_{i}" for i in range(50)]
+            adata_to_save.obs["sample_id"] = pd.Categorical(
+                np.random.choice(medium_categories, 1000),
+                categories=medium_categories,  # Ensure all 50 categories exist
+            )
+
+            # --- Non-categorical columns (all should show "(lazy)") ---
+            adata_to_save.obs["n_genes"] = np.random.randint(500, 5000, 1000)
+            adata_to_save.obs["total_counts"] = np.random.randint(1000, 50000, 1000)
+
+            # --- var columns ---
+            adata_to_save.var["gene_symbol"] = [f"GENE{i}" for i in range(500)]
+            adata_to_save.var["highly_variable"] = np.random.choice([True, False], 500)
+            adata_to_save.var["mean_expression"] = np.random.uniform(0, 10, 500)
+
+            # --- obsm/varm ---
+            adata_to_save.obsm["X_pca"] = np.random.randn(1000, 50).astype(np.float32)
+            adata_to_save.obsm["X_umap"] = np.random.randn(1000, 2).astype(np.float32)
+            adata_to_save.varm["PCs"] = np.random.randn(500, 50).astype(np.float32)
+
+            # --- uns with array (to show dask array WITH size in uns) ---
+            adata_to_save.uns["neighbors"] = {
+                "connectivities_key": "connectivities",
+                "distances_key": "distances",
+            }
+            adata_to_save.uns["pca_variance"] = np.random.rand(50).astype(np.float32)
+
+            adata_to_save.write_h5ad(tmp_path)
+
+            # Read with experimental lazy loading
+            h5_file = h5py.File(tmp_path, "r")
+            adata_lazy = read_lazy(h5_file)
+
+            # Use setting to demonstrate truncation behavior (default is 100)
+            # - cell_type (4 cats): all shown
+            # - cluster (5 cats): all shown
+            # - sample_id (50 cats): first 30 shown + "...+20"
+            original_max_lazy_cats = ad.settings.repr_html_max_lazy_categories
+            ad.settings.repr_html_max_lazy_categories = 30
+            custom_lazy_html = adata_lazy._repr_html_()
+            ad.settings.repr_html_max_lazy_categories = original_max_lazy_cats
+
+            sections.append((
+                "8b. Lazy AnnData (Experimental)",
+                custom_lazy_html,
+                "<code>anndata.experimental.read_lazy()</code><br>"
+                "<p style='margin: 5px 0;'><b>Design: Truly lazy category loading</b></p>"
+                "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                "Categories are read directly from storage without loading the full column data. "
+                "This example sets <code>ad.settings.repr_html_max_lazy_categories = 30</code> "
+                "(default: 100) to illustrate truncation:</p>"
+                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
+                "<li><b>cell_type</b> (4 cats): all shown with colors</li>"
+                "<li><b>cluster</b> (5 cats): all shown</li>"
+                '<li><b>sample_id</b> (50 cats): first 30 shown + "...+20"</li>'
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>What the repr avoids loading:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li>Numeric data (dask arrays not computed)</li>"
+                "<li>Category codes (only category labels are read)</li>"
+                "<li>Categories beyond <code>max_lazy_categories</code> limit</li>"
+                "<li>Colors for truncated categories (only loads colors for displayed cats)</li>"
+                "</ul>",
+            ))
+
+            # Test 8c: Lazy AnnData with max_lazy_categories=0 (metadata-only mode)
+            print("  8c. Lazy AnnData (metadata-only mode)")
+
+            # Use setting to disable category loading (instead of parameter)
+            original_max_lazy_cats = ad.settings.repr_html_max_lazy_categories
+            ad.settings.repr_html_max_lazy_categories = 0
+            metadata_only_html = adata_lazy._repr_html_()
+            ad.settings.repr_html_max_lazy_categories = original_max_lazy_cats
+
+            sections.append((
+                "8c. Lazy AnnData (Metadata-Only Mode)",
+                metadata_only_html,
+                "<code>ad.settings.repr_html_max_lazy_categories = 0</code><br>"
+                "<p style='margin: 5px 0;'><b>Zero disk I/O mode:</b> Set <code>repr_html_max_lazy_categories=0</code> to "
+                "skip all data loading from disk.</p>"
+                "<p style='margin: 5px 0;'><b>What's shown:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li>All categorical columns show <code>(N categories)</code> - count from dtype metadata (already in memory)</li>"
+                "<li>Category labels are NOT loaded from disk</li>"
+                "<li>Colors from <code>uns</code> are NOT loaded (skips <code>.compute()</code> on dask arrays)</li>"
+                "<li>Type column still shows <code>category (N, lazy)</code> with the count</li>"
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>Use case:</b> Quick inspection of lazy AnnData when you want to avoid "
+                "all data loading from disk, for the fastest possible repr.</p>",
+            ))
+
+        except (OSError, ImportError, TypeError) as e:
+            print(f"    Warning: Failed to create lazy example: {e}")
+        finally:
+            if h5_file is not None:
+                h5_file.close()
+            Path(tmp_path).unlink()
+    else:
+        print("  8b. Lazy AnnData (skipped - xarray not installed)")
+
     # Test 9: Backed AnnData (H5AD file) - demonstrates on-disk safety
-    print("  9a. Backed AnnData (H5AD file)")
+    print("  9. Backed AnnData (H5AD file)")
     with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
         tmp_path = tmp.name
     adata_backed = None
@@ -1351,7 +1489,7 @@ def main():  # noqa: PLR0915, PLR0912
         adata_to_save.write_h5ad(tmp_path)
         adata_backed = ad.read_h5ad(tmp_path, backed="r")
         sections.append((
-            "9a. Backed AnnData (H5AD File)",
+            "9. Backed AnnData (H5AD File)",
             adata_backed._repr_html_(),
             "<strong>File-backed mode — X matrix stays on disk!</strong><br>"
             f"<code>{tmp_path}</code><br><br>"
@@ -1371,59 +1509,6 @@ def main():  # noqa: PLR0915, PLR0912
         if adata_backed is not None:
             adata_backed.file.close()
         Path(tmp_path).unlink()
-
-    # Test 9b: Lazy AnnData (experimental) - fully lazy obs/var
-    if HAS_XARRAY:
-        print("  9b. Lazy AnnData (experimental read_lazy)")
-        with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
-            tmp_path = tmp.name
-        adata_lazy = None
-        h5_file = None
-        try:
-            import h5py
-
-            # Create a more comprehensive test file
-            adata_to_save = AnnData(
-                sp.random(1000, 500, density=0.1, format="csr", dtype=np.float32)
-            )
-            # Add various column types to show lazy behavior
-            adata_to_save.obs["cell_type"] = pd.Categorical(
-                np.random.choice(["T cell", "B cell", "Monocyte", "NK cell"], 1000)
-            )
-            adata_to_save.obs["patient_id"] = [f"patient_{i % 50}" for i in range(1000)]
-            adata_to_save.obs["n_genes"] = np.random.randint(500, 5000, 1000)
-            adata_to_save.obs["total_counts"] = np.random.randint(1000, 50000, 1000)
-            adata_to_save.obs["pct_mito"] = np.random.uniform(0, 15, 1000)
-            adata_to_save.var["gene_symbol"] = [f"GENE{i}" for i in range(500)]
-            adata_to_save.var["highly_variable"] = np.random.choice([True, False], 500)
-            adata_to_save.var["mean_expression"] = np.random.uniform(0, 10, 500)
-            adata_to_save.obsm["X_pca"] = np.random.randn(1000, 50).astype(np.float32)
-            adata_to_save.obsm["X_umap"] = np.random.randn(1000, 2).astype(np.float32)
-            adata_to_save.varm["PCs"] = np.random.randn(500, 50).astype(np.float32)
-            adata_to_save.write_h5ad(tmp_path)
-
-            # Read with experimental lazy loading
-            h5_file = h5py.File(tmp_path, "r")
-            adata_lazy = read_lazy(h5_file)
-            sections.append((
-                "9b. Lazy AnnData (Experimental)",
-                adata_lazy._repr_html_(),
-                "<code>anndata.experimental.read_lazy()</code><br>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li><code>obs</code>/<code>var</code> columns are lazy (xarray-backed)</li>"
-                "<li>Columns show <code>(lazy)</code> instead of unique counts</li>"
-                "<li>No <code>nunique()</code> calls that would trigger loading</li>"
-                "<li>String-to-category warnings are skipped (can't check without loading)</li>"
-                "</ul>",
-            ))
-        except (OSError, ImportError, TypeError) as e:
-            print(f"    Warning: Failed to create lazy example: {e}")
-        finally:
-            if h5_file is not None:
-                h5_file.close()
-            Path(tmp_path).unlink()
-    else:
-        print("  9b. Lazy AnnData (skipped - xarray not installed)")
 
     # Test 10: Nested AnnData at depth
     print("  10. Deeply nested AnnData")

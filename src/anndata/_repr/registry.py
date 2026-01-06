@@ -53,6 +53,7 @@ from .._repr_constants import (
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_LAZY_CATEGORIES,
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_UNIQUE_LIMIT,
 )
@@ -123,6 +124,15 @@ class FormatterContext:
     max_categories: int = DEFAULT_MAX_CATEGORIES
     """Maximum category values to display inline"""
 
+    max_lazy_categories: int = DEFAULT_MAX_LAZY_CATEGORIES
+    """Maximum categories to load for lazy categoricals.
+
+    For lazy AnnData (from read_lazy()), loading categories requires reading
+    from disk. This limit prevents loading categories for columns with many
+    unique values (which would be slow and produce cluttered output).
+    Set to 0 to skip loading categories entirely for lazy columns.
+    """
+
     max_string_length: int = DEFAULT_MAX_STRING_LENGTH
     """Truncate strings longer than this in previews"""
 
@@ -146,6 +156,7 @@ class FormatterContext:
             fold_threshold=self.fold_threshold,
             max_items=self.max_items,
             max_categories=self.max_categories,
+            max_lazy_categories=self.max_lazy_categories,
             max_string_length=self.max_string_length,
             unique_limit=self.unique_limit,
             parent_keys=(*self.parent_keys, key),

@@ -18,6 +18,7 @@ from ._repr_constants import (
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_FIELD_WIDTH,
     DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_LAZY_CATEGORIES,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
 )
@@ -571,6 +572,19 @@ settings.register(
     "repr_html_max_categories",
     default_value=DEFAULT_MAX_CATEGORIES,
     description="Maximum number of category values to display inline in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_lazy_categories",
+    default_value=DEFAULT_MAX_LAZY_CATEGORIES,
+    description=(
+        "Maximum categories to load for lazy categoricals in HTML repr. "
+        "For lazy AnnData (from read_lazy()), loading categories requires reading "
+        "from disk. This limit prevents loading too many categories. "
+        "Set to 0 to disable loading categories entirely (metadata-only mode)."
+    ),
     validate=validate_int,
     get_from_env=check_and_get_int,
 )
