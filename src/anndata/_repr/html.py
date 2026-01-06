@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from .._repr_constants import TOOLTIP_TRUNCATE_LENGTH
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -27,7 +28,6 @@ from . import (
     DEFAULT_UNIQUE_LIMIT,
     SECTION_ORDER,
 )
-from .._repr_constants import TOOLTIP_TRUNCATE_LENGTH
 from .components import (
     render_badge,
     render_entry_preview_cell,
@@ -67,19 +67,16 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from .registry import SectionFormatter
-
-    from .registry import FormattedEntry, FormattedOutput
+    from .registry import FormattedEntry, SectionFormatter
 
 # Import formatters to register them (side-effect import)
-from . import formatters as _formatters  # noqa: F401
-
 from .._repr_constants import (
     CHAR_WIDTH_PX,
     COPY_BUTTON_PADDING_PX,
     DEFAULT_FIELD_WIDTH_PX,
     MIN_FIELD_WIDTH_PX,
 )
+from . import formatters as _formatters  # noqa: F401
 
 
 def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
@@ -162,12 +159,16 @@ def _create_formatter_context(
             "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
         ),
         max_lazy_categories=_resolve_setting(
-            max_lazy_categories, "repr_html_max_lazy_categories", DEFAULT_MAX_LAZY_CATEGORIES
+            max_lazy_categories,
+            "repr_html_max_lazy_categories",
+            DEFAULT_MAX_LAZY_CATEGORIES,
         ),
         max_string_length=get_setting(
             "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
         ),
-        unique_limit=get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT),
+        unique_limit=get_setting(
+            "repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT
+        ),
         adata_ref=adata,
     )
 

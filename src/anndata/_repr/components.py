@@ -250,7 +250,9 @@ def render_expand_button() -> str:
     )
 
 
-def render_nested_content_cell(html_content: str, colspan: int = ENTRY_TABLE_COLSPAN) -> str:
+def render_nested_content_cell(
+    html_content: str, colspan: int = ENTRY_TABLE_COLSPAN
+) -> str:
     """Render a table cell containing nested/expanded content.
 
     Parameters
@@ -437,7 +439,7 @@ def render_category_list(
     return "".join(parts)
 
 
-def render_entry_type_cell(
+def render_entry_type_cell(  # noqa: PLR0913
     type_name: str,
     css_class: str,
     *,
@@ -534,7 +536,7 @@ def render_entry_type_cell(
     return "".join(parts)
 
 
-def render_entry_preview_cell(
+def render_entry_preview_cell(  # noqa: PLR0913
     preview_html: str | None = None,
     preview_text: str | None = None,
     *,

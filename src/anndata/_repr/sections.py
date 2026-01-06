@@ -41,7 +41,6 @@ from .components import (
     render_entry_preview_cell,
     render_entry_row_open,
     render_entry_type_cell,
-    render_expand_button,
     render_fold_icon,
     render_name_cell,
     render_nested_content_cell,
@@ -53,14 +52,13 @@ from .core import (
     render_truncation_indicator,
     render_x_entry,
 )
-from .utils import check_column_name
 from .registry import (
-    FormatterContext,
     extract_uns_type_hint,
     formatter_registry,
 )
 from .utils import (
     check_color_category_mismatch,
+    check_column_name,
     escape_html,
     format_number,
     generate_value_preview,
@@ -75,7 +73,7 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from .registry import FormattedOutput
+    from .registry import FormattedOutput, FormatterContext
 
 # -----------------------------------------------------------------------------
 # Lazy import for generate_repr_html
@@ -556,7 +554,9 @@ def _render_color_list_entry(key: str, value: Any) -> str:
         for color in colors[:COLOR_PREVIEW_LIMIT]
     )
     if n_colors > COLOR_PREVIEW_LIMIT:
-        parts.append(f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>')
+        parts.append(
+            f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
+        )
     parts.append("</span>")
     parts.append("</td>")
     parts.append("</tr>")

@@ -764,7 +764,9 @@ def preview_dict(value: dict) -> str:
     if n_keys <= DICT_PREVIEW_KEYS:
         keys_preview = ", ".join(str(k) for k in list(value.keys())[:DICT_PREVIEW_KEYS])
         return f"{{{keys_preview}}}"
-    keys_preview = ", ".join(str(k) for k in list(value.keys())[:DICT_PREVIEW_KEYS_LARGE])
+    keys_preview = ", ".join(
+        str(k) for k in list(value.keys())[:DICT_PREVIEW_KEYS_LARGE]
+    )
     return f"{{{keys_preview}, ...}} ({n_keys} keys)"
 
 

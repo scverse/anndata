@@ -4418,7 +4418,8 @@ class TestIndexPreviewRendering:
         assert "cell_0" in preview
         assert "gene_123" in preview
         # Should not contain 'b"' prefix from bytes repr
-        assert 'b"' not in preview and "b'" not in preview
+        assert 'b"' not in preview
+        assert "b'" not in preview
 
         # Regular strings pass through
         index = pd.Index(["cell_0", "cell_1"])

@@ -80,8 +80,6 @@ def _get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
     return None, False
 
 
-
-
 def _check_array_has_writer(array: Any) -> bool:
     """Check if an array type has a registered IO writer.
 
@@ -396,7 +394,9 @@ class DataFrameFormatter(TypeFormatter):
             if n_cols <= DF_COLS_PREVIEW_LIMIT:
                 col_str = ", ".join(str(c) for c in cols)
             else:
-                col_str = ", ".join(str(c) for c in cols[:DF_COLS_PREVIEW_LIMIT]) + ", …"
+                col_str = (
+                    ", ".join(str(c) for c in cols[:DF_COLS_PREVIEW_LIMIT]) + ", …"
+                )
             # Truncate if still too long
             if len(col_str) > DF_COLS_PREVIEW_MAX_LEN:
                 col_str = col_str[: DF_COLS_PREVIEW_MAX_LEN - 1] + "…"

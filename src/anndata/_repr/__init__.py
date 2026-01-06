@@ -270,9 +270,6 @@ from .components import (  # noqa: E402
     render_warning_icon,
 )
 from .css import get_css  # noqa: E402
-
-# HTML rendering helpers for building custom sections
-from .utils import check_column_name  # noqa: E402
 from .html import (  # noqa: E402
     generate_repr_html,
     render_formatted_entry,
@@ -293,7 +290,10 @@ from .registry import (  # noqa: E402
     formatter_registry,
     register_formatter,
 )
+
+# HTML rendering helpers for building custom sections
 from .utils import (  # noqa: E402
+    check_column_name,
     escape_html,
     format_memory_size,
     format_number,
