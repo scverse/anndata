@@ -3429,10 +3429,13 @@ else:
 """
         result = subprocess.run(
             [sys.executable, "-c", code],
+            check=False,
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"Lazy loading failed: {result.stdout}\n{result.stderr}"
+        assert result.returncode == 0, (
+            f"Lazy loading failed: {result.stdout}\n{result.stderr}"
+        )
 
     def test_repr_module_loads_on_repr_html_call(self):
         """Verify that _repr module loads when _repr_html_() is called."""
@@ -3459,10 +3462,13 @@ else:
 """
         result = subprocess.run(
             [sys.executable, "-c", code],
+            check=False,
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"Module loading failed: {result.stdout}\n{result.stderr}"
+        assert result.returncode == 0, (
+            f"Module loading failed: {result.stdout}\n{result.stderr}"
+        )
 
 
 class TestMockCuPyArrayFormatter:
