@@ -17,11 +17,13 @@ The formatters are registered automatically when this module is imported.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
+from .components import render_category_list
 from .registry import (
     FormattedOutput,
     TypeFormatter,
@@ -29,6 +31,9 @@ from .registry import (
 )
 from .utils import (
     format_number,
+    get_categories_for_display,
+    get_matching_column_colors,
+    is_lazy_series,
     is_serializable,
 )
 
@@ -479,13 +484,28 @@ class SeriesFormatter(TypeFormatter):
             if not is_serial:
                 warnings.append(reason)
 
+        # Compute unique count for meta column (only for obs/var sections)
+        meta_content = None
+        n_unique = None
+        if context.section in ("obs", "var"):
+            if context.unique_limit > 0 and len(series) <= context.unique_limit:
+                # nunique() fails on unhashable types (e.g., lists/dicts)
+                with contextlib.suppress(TypeError):
+                    n_unique = series.nunique()
+            if n_unique is not None:
+                meta_content = (
+                    f'<span class="adata-text-muted">({n_unique} unique)</span>'
+                )
+
         return FormattedOutput(
             type_name=f"{dtype_str}",
             css_class=css_class,
             details={
                 "length": len(series),
                 "dtype": dtype_str,
+                "n_unique": n_unique,  # Expose for string warning check
             },
+            meta_content=meta_content,
             is_serializable=is_serial,
             warnings=warnings,
         )
@@ -525,7 +545,7 @@ class CategoricalFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         # Determine if this is a lazy (xarray DataArray) categorical
-        is_lazy = False
+        is_lazy = is_lazy_series(obj)
         n_categories = 0
         ordered = False
 
@@ -542,18 +562,63 @@ class CategoricalFormatter(TypeFormatter):
             if lazy_count is not None:
                 n_categories = lazy_count
                 ordered = lazy_ordered
-                is_lazy = True
             elif hasattr(obj, "dtype") and hasattr(obj.dtype, "categories"):
                 # Fallback: access dtype.categories (will load data)
                 n_categories = len(obj.dtype.categories)
                 ordered = getattr(obj.dtype, "ordered", False)
-                is_lazy = True
 
         # Format type name - indicate lazy for xarray DataArrays
-        if is_lazy:
-            type_name = f"category ({n_categories}, lazy)"
-        else:
-            type_name = f"category ({n_categories})"
+        type_name = (
+            f"category ({n_categories}, lazy)"
+            if is_lazy
+            else f"category ({n_categories})"
+        )
+
+        # Build meta_content with category list and colors
+        meta_content = None
+        if context.section in ("obs", "var") and context.column_name is not None:
+            try:
+                # Get categories (respecting lazy loading limits)
+                categories, was_truncated, n_total = get_categories_for_display(
+                    obj, context, is_lazy=is_lazy
+                )
+
+                if len(categories) == 0:
+                    # Metadata-only mode or no categories: show just count
+                    if n_total is not None:
+                        meta_content = f'<span class="adata-text-muted">({n_total} categories)</span>'
+                    else:
+                        meta_content = (
+                            '<span class="adata-text-muted">(categories)</span>'
+                        )
+                else:
+                    # Get colors for categories
+                    colors = None
+                    if context.adata_ref is not None:
+                        max_cats = context.max_categories
+                        n_cats_to_show = min(len(categories), max_cats)
+                        # For lazy with truncation, only load colors we need
+                        color_limit = (
+                            n_cats_to_show if (is_lazy and was_truncated) else None
+                        )
+                        colors = get_matching_column_colors(
+                            context.adata_ref, context.column_name, limit=color_limit
+                        )
+
+                    # Render category list with colors
+                    n_hidden = (
+                        (n_total - len(categories))
+                        if (n_total and was_truncated)
+                        else 0
+                    )
+                    meta_content = render_category_list(
+                        categories, colors, context.max_categories, n_hidden=n_hidden
+                    )
+            except Exception as e:  # noqa: BLE001
+                # Never let meta_content generation crash the repr
+                meta_content = (
+                    f'<span class="adata-text-muted">(error: {type(e).__name__})</span>'
+                )
 
         return FormattedOutput(
             type_name=type_name,
@@ -563,6 +628,7 @@ class CategoricalFormatter(TypeFormatter):
                 "ordered": ordered,
                 "is_lazy": is_lazy,
             },
+            meta_content=meta_content,
             is_serializable=True,
         )
 
@@ -584,7 +650,7 @@ class LazyColumnFormatter(TypeFormatter):
     sections = ("obs", "var")  # Only apply to obs/var sections
 
     def can_format(self, obj: Any) -> bool:
-        # xarray DataArray but not categorical (categorical is handled by CategoricalFormatter)
+        # xarray DataArray (categoricals already handled by higher-priority CategoricalFormatter)
         if not (
             hasattr(obj, "dtype") and hasattr(obj, "shape") and hasattr(obj, "ndim")
         ):
@@ -592,10 +658,6 @@ class LazyColumnFormatter(TypeFormatter):
 
         # Exclude already-handled types
         if isinstance(obj, np.ndarray | pd.DataFrame | pd.Series | pd.Categorical):
-            return False
-
-        # Exclude categorical (handled by CategoricalFormatter)
-        if isinstance(obj.dtype, pd.CategoricalDtype):
             return False
 
         # Check if it looks like an xarray DataArray (has .data attribute)
@@ -617,6 +679,12 @@ class LazyColumnFormatter(TypeFormatter):
         else:
             css_class = "dtype-unknown"
 
+        # For lazy non-categorical columns, we can't compute unique count
+        # without loading data, so we just indicate it's lazy
+        meta_content = None
+        if context.section in ("obs", "var"):
+            meta_content = '<span class="adata-text-muted">(lazy)</span>'
+
         return FormattedOutput(
             type_name=f"{dtype_str} (lazy)",
             css_class=css_class,
@@ -624,6 +692,7 @@ class LazyColumnFormatter(TypeFormatter):
                 "dtype": dtype_str,
                 "is_lazy": True,
             },
+            meta_content=meta_content,
             is_serializable=True,
         )
 

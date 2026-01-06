@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
+    from .registry import FormatterContext
+
 
 def _check_serializable_single(obj: Any) -> tuple[bool, str]:
     """Check if a single (non-container) object is serializable."""
@@ -181,53 +183,170 @@ def is_color_list(key: str, value: Any) -> bool:
     return isinstance(first, str) and _is_color_string(first)
 
 
-def _is_categorical_column(col: Any) -> bool:
+def _get_categories_from_column(col: Any) -> list:
     """
-    Check if a column is categorical.
+    Get categories from a categorical column.
 
-    Works for both pandas Series (.cat accessor) and xarray DataArray
-    (CategoricalDtype). For lazy categoricals, checks for CategoricalArray
-    without triggering data loading.
-    """
-    import pandas as pd
-
-    # Pandas Series with categorical dtype
-    if hasattr(col, "cat"):
-        return True
-
-    # Check for lazy categorical (CategoricalArray) without accessing dtype
-    try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
-
-        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
-            lazy_indexed = col.variable._data
-            if hasattr(lazy_indexed, "array") and isinstance(
-                lazy_indexed.array, CategoricalArray
-            ):
-                return True
-    except ImportError:
-        pass
-
-    # Fallback: xarray DataArray or other objects with CategoricalDtype
-    # Note: This may trigger loading for lazy categoricals
-    return hasattr(col, "dtype") and isinstance(col.dtype, pd.CategoricalDtype)
-
-
-def _get_n_categories(col: Any) -> int:
-    """
-    Get the number of categories from a categorical column.
-
-    Works for both pandas Series and xarray DataArray.
+    Works for both pandas Series (.cat.categories) and xarray DataArray
+    (dtype.categories).
     """
     # Pandas Series
     if hasattr(col, "cat"):
-        return len(col.cat.categories)
+        return list(col.cat.categories)
 
     # xarray DataArray or other objects with CategoricalDtype
     if hasattr(col, "dtype") and hasattr(col.dtype, "categories"):
-        return len(col.dtype.categories)
+        return list(col.dtype.categories)
 
-    return 0
+    return []
+
+
+def _get_categorical_array(col: Any):
+    """
+    Get the underlying CategoricalArray from a lazy xarray DataArray.
+
+    Returns None if not a lazy categorical column.
+    """
+    try:
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        # Navigate through xarray structure to find CategoricalArray
+        # DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
+        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
+            lazy_indexed = col.variable._data
+            if hasattr(lazy_indexed, "array"):
+                arr = lazy_indexed.array
+                if isinstance(arr, CategoricalArray):
+                    return arr
+    except ImportError:
+        pass
+    return None
+
+
+def _get_lazy_category_count(col: Any) -> int | None:
+    """
+    Get the number of categories for a lazy categorical without loading them.
+
+    For lazy categoricals, we access the underlying CategoricalArray directly
+    and read the category count from the zarr/h5 storage metadata, avoiding
+    any data loading.
+
+    Returns None if the count cannot be determined.
+    """
+    # Try to get category count from CategoricalArray without loading
+    cat_arr = _get_categorical_array(col)
+    if cat_arr is not None:
+        try:
+            # Access the raw _categories group/array shape
+            # For zarr: _categories is a Group with 'values' array
+            # For h5: similar structure
+            cats = cat_arr._categories
+            if hasattr(cats, "keys"):  # It's a group
+                values = cats["values"]
+                return values.shape[0]
+            elif hasattr(cats, "shape"):  # It's an array directly
+                return cats.shape[0]
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+def _get_lazy_categories(
+    col: Any, context: FormatterContext
+) -> tuple[list, bool, int | None]:
+    """
+    Get categories for a lazy categorical column, respecting limits.
+
+    For lazy AnnData (from read_lazy()), this accesses the underlying
+    CategoricalArray directly and reads only the needed categories from
+    storage, avoiding loading the full categorical data.
+
+    Parameters
+    ----------
+    col
+        Column (potentially lazy) to get categories from
+    context
+        FormatterContext with max_lazy_categories limit
+
+    Returns
+    -------
+    tuple of (categories_list, was_truncated, n_categories)
+        categories_list: List of category values (empty if skipped)
+        was_truncated: True if categories were truncated due to limit
+        n_categories: Total number of categories (if known)
+    """
+    # Try to get category count without loading
+    n_cats = _get_lazy_category_count(col)
+
+    # If max_lazy_categories is 0, skip loading entirely (metadata-only mode)
+    if context.max_lazy_categories == 0:
+        return [], True, n_cats
+
+    # Determine if we need to truncate
+    should_truncate = n_cats is not None and n_cats > context.max_lazy_categories
+    n_to_read = context.max_lazy_categories if should_truncate else n_cats
+
+    # Try to read categories directly from CategoricalArray storage.
+    # We access _categories (private) to bypass the @cached_property which loads
+    # ALL categories. Instead, we use read_elem_partial (official API) to read
+    # only the first N categories. This is intentional - for large categoricals,
+    # loading everything defeats the purpose of lazy loading.
+    cat_arr = _get_categorical_array(col)
+    if cat_arr is not None:
+        try:
+            from anndata._io.specs.registry import read_elem, read_elem_partial
+
+            cats = cat_arr._categories
+            # Get values array: zarr uses group with "values" key, h5 uses array directly
+            values = cats["values"] if hasattr(cats, "keys") else cats
+            if n_to_read is not None and n_to_read < (n_cats or float("inf")):
+                categories = list(
+                    read_elem_partial(values, indices=slice(0, n_to_read))
+                )
+            else:
+                categories = list(read_elem(values))
+            return categories, should_truncate, n_cats
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Fallback to unified accessor (will trigger loading)
+    try:
+        return _get_categories_from_column(col), False, n_cats
+    except Exception:  # noqa: BLE001
+        return [], True, n_cats
+
+
+def get_categories_for_display(
+    col: Any,
+    context: FormatterContext,
+    *,
+    is_lazy: bool,
+) -> tuple[list, bool, int | None]:
+    """
+    Get categories for a column, handling lazy loading appropriately.
+
+    Parameters
+    ----------
+    col
+        The column to get categories from
+    context
+        FormatterContext with display settings
+    is_lazy
+        Whether this is a lazy column (from read_lazy())
+
+    Returns
+    -------
+    tuple of (categories_list, was_truncated, n_categories)
+        categories_list: List of category values
+        was_truncated: True if categories were truncated for lazy columns
+        n_categories: Total number of categories (if known)
+    """
+    if is_lazy:
+        return _get_lazy_categories(col, context)
+
+    # Non-lazy categorical - use unified accessor
+    categories = _get_categories_from_column(col)
+    return categories, False, len(categories) if categories else None
 
 
 def _compute_if_dask(obj: Any) -> Any:
@@ -249,7 +368,11 @@ def get_matching_column_colors(
     limit: int | None = None,
 ) -> list[str] | None:
     """
-    Get colors for a categorical column if they exist and match.
+    Get colors for a column from uns if they exist.
+
+    This function is called by CategoricalFormatter which already verified
+    the column is categorical. It just looks up and returns the colors.
+    Color count validation is done separately by check_color_category_mismatch.
 
     Parameters
     ----------
@@ -263,7 +386,7 @@ def get_matching_column_colors(
 
     Returns
     -------
-    List of color strings if colors exist and match, None otherwise
+    List of color strings if colors exist, None otherwise
     """
     # Handle objects without .uns (e.g., Raw)
     if not hasattr(adata, "uns"):
@@ -284,35 +407,19 @@ def get_matching_column_colors(
         # Compute if dask array (for lazy AnnData)
         colors = _compute_if_dask(colors)
 
-    # Find the column in obs or var
-    col = None
-    if hasattr(adata, "obs") and column_name in adata.obs.columns:
-        col = adata.obs[column_name]
-    elif hasattr(adata, "var") and column_name in adata.var.columns:
-        col = adata.var[column_name]
-
-    if col is None:
-        return None
-
-    # Must be categorical (works for both pandas and xarray)
-    if not _is_categorical_column(col):
-        return None
-
-    n_categories = _get_n_categories(col)
-    # When limit is used, we can't check exact match (we only loaded partial)
-    # Just check that we have enough colors for what we loaded
-    if limit is None and len(colors) != n_categories:
-        return None  # Mismatch
-
     return list(colors)
 
 
 def check_color_category_mismatch(
     adata: AnnData,
     column_name: str,
+    n_categories: int,
 ) -> str | None:
     """
     Check if colors exist but don't match category count.
+
+    Called by _render_dataframe_entry for categorical columns. The caller
+    already knows this is categorical and has the category count.
 
     Parameters
     ----------
@@ -320,6 +427,8 @@ def check_color_category_mismatch(
         AnnData object (or object with .uns attribute)
     column_name
         Name of the column to check
+    n_categories
+        Number of categories in the column
 
     Returns
     -------
@@ -337,15 +446,8 @@ def check_color_category_mismatch(
     # Compute if dask array (for lazy AnnData)
     colors = _compute_if_dask(colors)
 
-    for df in (adata.obs, adata.var):
-        if column_name in df.columns:
-            col = df[column_name]
-            if _is_categorical_column(col):
-                n_cats = _get_n_categories(col)
-                if len(colors) != n_cats:
-                    return (
-                        f"Color mismatch: {len(colors)} colors for {n_cats} categories"
-                    )
+    if len(colors) != n_categories:
+        return f"Color mismatch: {len(colors)} colors for {n_categories} categories"
 
     return None
 

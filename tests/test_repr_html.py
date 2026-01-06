@@ -2165,23 +2165,6 @@ class TestUtilsCoverage:
         warn, _msg = should_warn_string_column(s, None)
         assert not warn  # Should return False when n_unique is None
 
-    def test_get_nunique_exception_handling(self):
-        """Test _get_nunique handles exceptions gracefully."""
-        from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_nunique
-
-        context = FormatterContext()
-
-        # Normal case
-        s = pd.Series(["A", "B", "A", "C"])
-        result = _get_nunique(s, context)
-        assert result == 3
-
-        # Unhashable types (lists) should return None
-        s = pd.Series([[1, 2], [3, 4], [1, 2]])
-        result = _get_nunique(s, context)
-        assert result is None
-
     def test_is_color_list_named_colors(self):
         """Test is_color_list detects named colors."""
         from anndata._repr.utils import is_color_list
@@ -2213,25 +2196,15 @@ class TestUtilsCoverage:
         colors = get_matching_column_colors(adata, "gene_type")
         assert colors == ["#FF0000", "#00FF00"]
 
-    def test_get_matching_column_colors_no_column(self):
-        """Test get_matching_column_colors returns None for missing column."""
+    def test_get_matching_column_colors_no_uns_key(self):
+        """Test get_matching_column_colors returns None when no colors in uns."""
         from anndata._repr.utils import get_matching_column_colors
 
         adata = AnnData(np.zeros((10, 5)))
-        adata.uns["missing_colors"] = ["#FF0000"]
+        adata.obs["cell_type"] = pd.Categorical(["A", "B"] * 5)
+        # No colors in uns
 
-        colors = get_matching_column_colors(adata, "missing")
-        assert colors is None
-
-    def test_get_matching_column_colors_not_categorical(self):
-        """Test get_matching_column_colors returns None for non-categorical."""
-        from anndata._repr.utils import get_matching_column_colors
-
-        adata = AnnData(np.zeros((10, 5)))
-        adata.obs["numeric"] = list(range(10))
-        adata.uns["numeric_colors"] = ["#FF0000"]
-
-        colors = get_matching_column_colors(adata, "numeric")
+        colors = get_matching_column_colors(adata, "cell_type")
         assert colors is None
 
     def test_sanitize_for_id_starts_with_number(self):
@@ -4999,7 +4972,7 @@ class TestLazyCategoryLoading:
         The function is designed specifically for lazy CategoricalArrays.
         For regular pandas Series or other objects, it returns None.
         """
-        from anndata._repr.sections import _get_lazy_category_count
+        from anndata._repr.utils import _get_lazy_category_count
 
         # Regular pandas Series should return None (not a lazy CategoricalArray)
         series = pd.Series(pd.Categorical(["a", "b", "c"]))
@@ -5019,7 +4992,7 @@ class TestLazyCategoryLoading:
     def test_get_lazy_categories_max_zero_skips(self):
         """Test that max_lazy_categories=0 skips loading entirely."""
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_lazy_categories
+        from anndata._repr.utils import _get_lazy_categories
 
         context = FormatterContext(max_lazy_categories=0)
 
@@ -5031,31 +5004,16 @@ class TestLazyCategoryLoading:
         assert skipped is True
         assert n_cats is None  # No category count available
 
-    def test_get_categories_for_column_non_categorical(self):
-        """Test _get_categories_for_column with non-categorical column."""
+    def test_get_categories_for_display_non_lazy(self):
+        """Test get_categories_for_display with regular (non-lazy) categorical."""
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_categories_for_column
-
-        context = FormatterContext()
-        series = pd.Series([1, 2, 3])
-
-        categories, skipped, n_cats = _get_categories_for_column(
-            series, context, is_categorical=False, is_lazy=False
-        )
-        assert categories == []
-        assert skipped is False  # Not skipped, just no categories
-        assert n_cats is None
-
-    def test_get_categories_for_column_regular_categorical(self):
-        """Test _get_categories_for_column with regular (non-lazy) categorical."""
-        from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_categories_for_column
+        from anndata._repr.utils import get_categories_for_display
 
         context = FormatterContext()
         series = pd.Series(pd.Categorical(["a", "b", "c", "a"]))
 
-        categories, skipped, n_cats = _get_categories_for_column(
-            series, context, is_categorical=True, is_lazy=False
+        categories, skipped, n_cats = get_categories_for_display(
+            series, context, is_lazy=False
         )
         assert set(categories) == {"a", "b", "c"}
         assert skipped is False
@@ -5088,7 +5046,7 @@ class TestLazyCategoryLoading:
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_get_lazy_category_count_does_not_load_data(self, tmp_path):
         """Test that _get_lazy_category_count reads from storage metadata only."""
-        from anndata._repr.sections import _get_lazy_category_count
+        from anndata._repr.utils import _get_lazy_category_count
 
         # Create real lazy AnnData
         adata = AnnData(
@@ -5120,7 +5078,7 @@ class TestLazyCategoryLoading:
     def test_get_lazy_categories_does_not_load_data(self, tmp_path):
         """Test that _get_lazy_categories reads from storage directly."""
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_lazy_categories
+        from anndata._repr.utils import _get_lazy_categories
 
         # Create real lazy AnnData
         adata = AnnData(
@@ -5156,7 +5114,7 @@ class TestLazyCategoryLoading:
     def test_get_lazy_categories_skipping_does_not_load_categories(self, tmp_path):
         """Test that when skipping (too many cats), we don't load category values."""
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.sections import _get_lazy_categories
+        from anndata._repr.utils import _get_lazy_categories
 
         # Create large categorical (exceeds typical limit)
         large_cats = [f"cat_{i}" for i in range(150)]

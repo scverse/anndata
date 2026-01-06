@@ -38,6 +38,8 @@ The system is designed to be extensible via two registry patterns:
                 return FormattedOutput(
                     type_name=f"MyArray {obj.shape}",
                     css_class="dtype-myarray",
+                    # meta_content provides HTML for the rightmost column
+                    meta_content=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
                 )
 
     Example - format by embedded type hint (for tagged data in uns)::

@@ -21,6 +21,8 @@ Usage for extending to new types:
             return FormattedOutput(
                 type_name=f"MyArray {obj.shape}",
                 css_class="dtype-myarray",
+                # meta_content for rightmost column (data preview, counts, etc.)
+                meta_content=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
             )
 
     # Format by embedded type hint (e.g., tagged data in uns)
@@ -147,6 +149,9 @@ class FormatterContext:
 
     section: str = ""
     """Current section being formatted (obs, var, uns, etc.)"""
+
+    column_name: str | None = None
+    """Column name for obs/var entries (for color lookups in uns)"""
 
     def child(self, key: str) -> FormatterContext:
         """Create a child context for nested formatting."""

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from .._repr_constants import (
     NOT_SERIALIZABLE_MSG,
+    STYLE_CAT_DOT,
     STYLE_HIDDEN,
 )
 from .utils import escape_html
@@ -257,3 +258,50 @@ def render_name_cell(name: str) -> str:
         f"</div>"
         f"</td>"
     )
+
+
+def render_category_list(
+    categories: list,
+    colors: list[str] | None,
+    max_cats: int,
+    *,
+    n_hidden: int = 0,
+) -> str:
+    """Render a list of category values with optional color dots.
+
+    Parameters
+    ----------
+    categories
+        List of category values to display
+    colors
+        Optional list of colors matching categories
+    max_cats
+        Maximum number of categories to show
+    n_hidden
+        Number of additional hidden categories (for lazy truncation).
+        These are added to any truncation from max_cats.
+
+    Returns
+    -------
+    HTML string for the category list
+    """
+    parts = ['<span class="adata-cats-list">']
+    for i, cat in enumerate(categories[:max_cats]):
+        cat_name = escape_html(str(cat))
+        color = colors[i] if colors and i < len(colors) else None
+        parts.append('<span class="adata-cat-item">')
+        if color:
+            parts.append(
+                f'<span style="{STYLE_CAT_DOT}background:{escape_html(color)};"></span>'
+            )
+        parts.append(f"<span>{cat_name}</span>")
+        parts.append("</span>")
+
+    # Calculate total hidden: from max_cats truncation + lazy truncation
+    hidden_from_max_cats = max(0, len(categories) - max_cats)
+    total_hidden = hidden_from_max_cats + n_hidden
+
+    if total_hidden > 0:
+        parts.append(f'<span class="adata-text-muted">...+{total_hidden}</span>')
+    parts.append("</span>")
+    return "".join(parts)
