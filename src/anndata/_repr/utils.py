@@ -395,26 +395,8 @@ def get_matching_column_colors(
     -------
     List of color strings if colors exist, None otherwise
     """
-    # Handle objects without .uns (e.g., Raw)
-    if not hasattr(adata, "uns"):
-        return None
-
-    color_key = f"{column_name}_colors"
-    if color_key not in adata.uns:
-        return None
-
-    colors = adata.uns[color_key]
-
-    # For lazy AnnData with dask arrays, slice before computing to avoid
-    # loading all colors when only displaying partial categories
-    if limit is not None and hasattr(colors, "compute"):
-        # Dask array: slice first, then compute
-        colors = colors[:limit].compute()
-    else:
-        # Compute if dask array (for lazy AnnData)
-        colors = _compute_if_dask(colors)
-
-    return list(colors)
+    colors = _get_colors_from_uns(adata, column_name, limit=limit)
+    return list(colors) if colors is not None else None
 
 
 def check_color_category_mismatch(
@@ -441,6 +423,36 @@ def check_color_category_mismatch(
     -------
     Warning message if mismatch, None otherwise
     """
+    colors = _get_colors_from_uns(adata, column_name)
+    if colors is None:
+        return None
+
+    if len(colors) != n_categories:
+        return f"Color mismatch: {len(colors)} colors for {n_categories} categories"
+
+    return None
+
+
+def _get_colors_from_uns(
+    adata: AnnData,
+    column_name: str,
+    limit: int | None = None,
+) -> Any | None:
+    """Get colors from uns for a column, handling lazy loading.
+
+    Parameters
+    ----------
+    adata
+        AnnData object (or object with .uns attribute)
+    column_name
+        Name of the column (colors key will be "{column_name}_colors")
+    limit
+        If provided, only load the first `limit` colors (for dask arrays)
+
+    Returns
+    -------
+    Colors array/list if found, None otherwise
+    """
     # Handle objects without .uns (e.g., Raw)
     if not hasattr(adata, "uns"):
         return None
@@ -450,13 +462,13 @@ def check_color_category_mismatch(
         return None
 
     colors = adata.uns[color_key]
+
+    # For lazy AnnData with dask arrays, slice before computing
+    if limit is not None and hasattr(colors, "compute"):
+        return colors[:limit].compute()
+
     # Compute if dask array (for lazy AnnData)
-    colors = _compute_if_dask(colors)
-
-    if len(colors) != n_categories:
-        return f"Color mismatch: {len(colors)} colors for {n_categories} categories"
-
-    return None
+    return _compute_if_dask(colors)
 
 
 def escape_html(text: str) -> str:

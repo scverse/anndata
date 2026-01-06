@@ -145,23 +145,25 @@ def _create_formatter_context(
 ) -> FormatterContext:
     """Create a FormatterContext with settings resolution.
 
-    Resolves None values from anndata.settings, then from defaults.
-    Uses _resolve_setting() for the common pattern: override > settings > default.
+    Parameters with function overrides use _resolve_setting() (override > settings > default).
+    Settings-only parameters use get_setting() directly (settings > default).
     """
     return FormatterContext(
         depth=depth,
+        # Overridable parameters (passed to generate_repr_html)
         max_depth=_resolve_setting(max_depth, "repr_html_max_depth", DEFAULT_MAX_DEPTH),
         fold_threshold=_resolve_setting(
             fold_threshold, "repr_html_fold_threshold", DEFAULT_FOLD_THRESHOLD
         ),
         max_items=_resolve_setting(max_items, "repr_html_max_items", DEFAULT_MAX_ITEMS),
-        max_categories=get_setting(
-            "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
-        ),
         max_lazy_categories=_resolve_setting(
             max_lazy_categories,
             "repr_html_max_lazy_categories",
             DEFAULT_MAX_LAZY_CATEGORIES,
+        ),
+        # Settings-only parameters (not overridable at call time)
+        max_categories=get_setting(
+            "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
         ),
         max_string_length=get_setting(
             "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH

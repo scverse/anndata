@@ -104,6 +104,92 @@ def _validate_key_and_collect_warnings(
     return all_warnings, is_error
 
 
+def _render_entry_row(
+    key: str,
+    output: FormattedOutput,
+    *,
+    append_type_html: bool = False,
+    preview_note: str | None = None,
+) -> str:
+    """Render an entry row for DataFrame, mapping, or uns sections.
+
+    This is the unified entry renderer. The renderer only sees FormattedOutput,
+    never the original data object.
+
+    Parameters
+    ----------
+    key
+        Entry key/name to display
+    output
+        FormattedOutput from a TypeFormatter
+    append_type_html
+        If True, append type_html below type_name (for mapping entries)
+    preview_note
+        Optional note to prepend to preview (for type hints in uns)
+
+    Returns
+    -------
+    HTML string for the entry row (and optional expandable content row)
+    """
+    # Validate key and collect warnings
+    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
+
+    has_expandable_content = output.expanded_html is not None
+    # Detect wrap button needs from output
+    has_categories = output.css_class == "dtype-category" and output.preview_html
+    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
+
+    # Build row
+    parts = [
+        render_entry_row_open(
+            key,
+            output.type_name,
+            has_warnings=bool(all_warnings),
+            is_error=is_error,
+        )
+    ]
+
+    # Name cell
+    parts.append(render_name_cell(key))
+
+    # Type cell
+    parts.append(
+        render_entry_type_cell(
+            output.type_name,
+            output.css_class,
+            type_html=output.type_html if append_type_html else None,
+            warnings=all_warnings,
+            is_error=is_error,
+            has_expandable_content=has_expandable_content,
+            has_columns_list=has_columns_list,
+            has_categories_list=has_categories,
+            append_type_html=append_type_html,
+        )
+    )
+
+    # Preview cell
+    preview_text = output.preview
+    if preview_note and preview_text:
+        preview_text = f"{preview_note} {preview_text}"
+    elif preview_note:
+        preview_text = preview_note
+
+    parts.append(
+        render_entry_preview_cell(
+            preview_html=output.preview_html,
+            preview_text=preview_text,
+        )
+    )
+
+    parts.append("</tr>")
+
+    # Expandable content row
+    if has_expandable_content:
+        parts.append(render_nested_content_cell(output.expanded_html))
+
+    return "\n".join(parts)
+
+
 # -----------------------------------------------------------------------------
 # DataFrame Section (obs, var)
 # -----------------------------------------------------------------------------
@@ -137,7 +223,7 @@ def _render_dataframe_section(
         col = df[col_name]
         col_context = replace(section_context, column_name=col_name)
         output = formatter_registry.format_value(col, col_context)
-        rows.append(_render_dataframe_entry(col_name, output))
+        rows.append(_render_entry_row(col_name, output))
 
     return render_section(
         section,
@@ -148,52 +234,6 @@ def _render_dataframe_section(
         should_collapse=n_cols > context.fold_threshold,
         count_str=f"({n_cols} columns)",
     )
-
-
-def _render_dataframe_entry(col_name: str, output: FormattedOutput) -> str:
-    """Render a single DataFrame column entry.
-
-    The renderer only sees FormattedOutput, never the original object.
-    """
-    # Validate key and collect all warnings
-    all_warnings, is_error = _validate_key_and_collect_warnings(col_name, output)
-
-    # Build row using consolidated helper
-    parts = [
-        render_entry_row_open(
-            col_name,
-            output.type_name,
-            has_warnings=bool(all_warnings),
-            is_error=is_error,
-        )
-    ]
-
-    # Name cell
-    parts.append(render_name_cell(col_name))
-
-    # Type cell (using consolidated helper)
-    # Categorical columns have css_class="dtype-category" and preview_html with pills
-    has_categories = output.css_class == "dtype-category" and output.preview_html
-    parts.append(
-        render_entry_type_cell(
-            output.type_name,
-            output.css_class,
-            warnings=all_warnings,
-            is_error=is_error,
-            has_categories_list=has_categories,
-        )
-    )
-
-    # Preview cell (using consolidated helper)
-    parts.append(
-        render_entry_preview_cell(
-            preview_html=output.preview_html,
-            preview_text=output.preview,
-        )
-    )
-
-    parts.append("</tr>")
-    return "\n".join(parts)
 
 
 # -----------------------------------------------------------------------------
@@ -232,7 +272,7 @@ def _render_mapping_section(
             break
         value = mapping[key]
         output = formatter_registry.format_value(value, section_context)
-        rows.append(_render_mapping_entry(key, output))
+        rows.append(_render_entry_row(key, output, append_type_html=True))
 
     return render_section(
         section,
@@ -242,63 +282,6 @@ def _render_mapping_section(
         tooltip=tooltip,
         should_collapse=n_items > context.fold_threshold,
     )
-
-
-def _render_mapping_entry(key: str, output: FormattedOutput) -> str:
-    """Render a single mapping entry.
-
-    The renderer only sees FormattedOutput, never the original object.
-    """
-    # Validate key and collect all warnings
-    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
-
-    has_expandable_content = output.expanded_html is not None
-    # DataFrames have column list in preview_html (for wrap button in type cell)
-    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
-
-    # Build row using consolidated helper
-    parts = [
-        render_entry_row_open(
-            key,
-            output.type_name,
-            has_warnings=bool(all_warnings),
-            is_error=is_error,
-        )
-    ]
-
-    # Name cell
-    parts.append(render_name_cell(key))
-
-    # Type cell (using consolidated helper)
-    # Note: type_html is appended (not replaced) in mapping entries
-    parts.append(
-        render_entry_type_cell(
-            output.type_name,
-            output.css_class,
-            type_html=output.type_html,
-            warnings=all_warnings,
-            is_error=is_error,
-            has_expandable_content=has_expandable_content,
-            has_columns_list=has_columns_list,
-            append_type_html=True,  # Mapping entries append type_html below
-        )
-    )
-
-    # Preview cell - formatter provides complete preview_html
-    parts.append(
-        render_entry_preview_cell(
-            preview_html=output.preview_html,
-            preview_text=output.preview,
-        )
-    )
-
-    parts.append("</tr>")
-
-    # Expandable content row
-    if has_expandable_content:
-        parts.append(render_nested_content_cell(output.expanded_html))
-
-    return "\n".join(parts)
 
 
 # -----------------------------------------------------------------------------
@@ -362,7 +345,7 @@ def _render_uns_entry(
 
     # If a custom formatter produced preview_html, use it directly
     if output.preview_html:
-        return _render_uns_entry_row(key, output)
+        return _render_entry_row(key, output)
 
     # 2. Check for unhandled type hint (basic formatter matched, not custom)
     type_hint, cleaned_value = extract_uns_type_hint(value)
@@ -370,77 +353,14 @@ def _render_uns_entry(
         # Type hint present but no custom formatter - show import suggestion
         package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
         cleaned_output = formatter_registry.format_value(cleaned_value, key_context)
-        return _render_uns_entry_row(
+        return _render_entry_row(
             key,
             cleaned_output,
             preview_note=f"[{type_hint}] (import {package_name} to enable)",
         )
 
     # 3. Use formatter output
-    return _render_uns_entry_row(key, output)
-
-
-def _render_uns_entry_row(
-    key: str,
-    output: FormattedOutput,
-    *,
-    preview_note: str | None = None,
-) -> str:
-    """Render an uns entry row.
-
-    The renderer only sees FormattedOutput, never the original object.
-    Formatters are responsible for producing preview content.
-    """
-    # Validate key and collect warnings
-    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
-
-    has_expandable_content = output.expanded_html is not None
-
-    # Build row
-    parts = [
-        render_entry_row_open(
-            key,
-            output.type_name,
-            has_warnings=bool(all_warnings),
-            is_error=is_error,
-        )
-    ]
-
-    # Name cell
-    parts.append(render_name_cell(key))
-
-    # Type cell
-    parts.append(
-        render_entry_type_cell(
-            output.type_name,
-            output.css_class,
-            warnings=all_warnings,
-            is_error=is_error,
-            has_expandable_content=has_expandable_content,
-        )
-    )
-
-    # Preview cell - formatter provides all preview content
-    preview_text = output.preview
-    if preview_note and preview_text:
-        preview_text = f"{preview_note} {preview_text}"
-    elif preview_note:
-        preview_text = preview_note
-
-    parts.append(
-        render_entry_preview_cell(
-            preview_html=output.preview_html,
-            preview_text=preview_text,
-        )
-    )
-
-    parts.append("</tr>")
-
-    # Expandable content row (for nested AnnData, etc.)
-    if has_expandable_content:
-        parts.append(render_nested_content_cell(output.expanded_html))
-
-    return "\n".join(parts)
+    return _render_entry_row(key, output)
 
 # -----------------------------------------------------------------------------
 # Unknown Sections (extension attributes)

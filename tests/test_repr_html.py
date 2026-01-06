@@ -3537,21 +3537,21 @@ class TestDtypeCSSClassHelpers:
         css_class = _get_dtype_css_class(datetime_dtype)
         assert css_class == "dtype-object"  # Unknown maps to object
 
-    def test_get_pandas_dtype_css_class_category(self):
-        """Test CSS class for pandas category dtype (line 757-758)."""
-        from anndata._repr.formatters import _get_pandas_dtype_css_class
+    def test_get_dtype_css_class_category(self):
+        """Test CSS class for pandas category dtype."""
+        from anndata._repr.formatters import _get_dtype_css_class
 
         cat_dtype = pd.CategoricalDtype(categories=["a", "b", "c"])
-        css_class = _get_pandas_dtype_css_class(cat_dtype)
+        css_class = _get_dtype_css_class(cat_dtype)
         assert css_class == "dtype-category"
 
-    def test_get_pandas_dtype_css_class_unknown(self):
-        """Test CSS class for unknown pandas dtype (line 761-762)."""
-        from anndata._repr.formatters import _get_pandas_dtype_css_class
+    def test_get_dtype_css_class_timedelta(self):
+        """Test CSS class for timedelta dtype (unknown maps to object)."""
+        from anndata._repr.formatters import _get_dtype_css_class
 
         # Timedelta dtype
         timedelta_dtype = pd.to_timedelta([1, 2, 3], unit="s").dtype
-        css_class = _get_pandas_dtype_css_class(timedelta_dtype)
+        css_class = _get_dtype_css_class(timedelta_dtype)
         assert css_class == "dtype-object"  # Unknown maps to object
 
 

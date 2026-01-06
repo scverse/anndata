@@ -47,7 +47,7 @@ Usage for extending to new types:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
@@ -192,18 +192,10 @@ class FormatterContext:
 
     def child(self, key: str) -> FormatterContext:
         """Create a child context for nested formatting."""
-        return FormatterContext(
+        return replace(
+            self,
             depth=self.depth + 1,
-            max_depth=self.max_depth,
-            fold_threshold=self.fold_threshold,
-            max_items=self.max_items,
-            max_categories=self.max_categories,
-            max_lazy_categories=self.max_lazy_categories,
-            max_string_length=self.max_string_length,
-            unique_limit=self.unique_limit,
             parent_keys=(*self.parent_keys, key),
-            adata_ref=self.adata_ref,
-            section=self.section,
         )
 
     @property

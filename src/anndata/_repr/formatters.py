@@ -432,7 +432,7 @@ class SeriesFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         series: pd.Series = obj
         dtype_str = str(series.dtype)
-        css_class = _get_pandas_dtype_css_class(series.dtype)
+        css_class = _get_dtype_css_class(series.dtype)
 
         # Check serializability using the IO registry (future-proof)
         is_serial = True
@@ -1058,38 +1058,37 @@ class ListFormatter(TypeFormatter):
         )
 
 
-def _get_dtype_css_class(dtype: np.dtype) -> str:
-    """Get CSS class for a numpy dtype."""
-    kind = dtype.kind
-    if kind in ("i", "u"):
-        return "dtype-int"
-    elif kind == "f":
-        return "dtype-float"
-    elif kind == "b":
-        return "dtype-bool"
-    elif kind in ("U", "S", "O"):
-        return "dtype-string"
-    elif kind == "c":
-        return "dtype-float"  # complex
-    else:
-        return "dtype-object"
-
-
-def _get_pandas_dtype_css_class(dtype: np.dtype | pd.api.types.CategoricalDtype) -> str:
-    """Get CSS class for a pandas/numpy dtype."""
+def _get_dtype_css_class(dtype: np.dtype | pd.api.types.CategoricalDtype) -> str:  # noqa: PLR0911
+    """Get CSS class for a numpy or pandas dtype."""
+    # Check for pandas CategoricalDtype first (has kind="O" but is special)
     dtype_name = str(dtype)
+    if dtype_name == "category":
+        return "dtype-category"
+
+    # Try numpy dtype.kind (most reliable for standard dtypes)
+    kind = getattr(dtype, "kind", None)
+    if kind is not None:
+        if kind in ("i", "u"):
+            return "dtype-int"
+        if kind == "f":
+            return "dtype-float"
+        if kind == "b":
+            return "dtype-bool"
+        if kind in ("U", "S", "O"):
+            return "dtype-string"
+        if kind == "c":
+            return "dtype-float"  # complex
+
+    # Fallback to string matching for pandas extension dtypes
     if "int" in dtype_name:
         return "dtype-int"
-    elif "float" in dtype_name:
+    if "float" in dtype_name:
         return "dtype-float"
-    elif "bool" in dtype_name:
+    if "bool" in dtype_name:
         return "dtype-bool"
-    elif dtype_name == "category":
-        return "dtype-category"
-    elif "object" in dtype_name or "string" in dtype_name:
+    if "object" in dtype_name or "string" in dtype_name:
         return "dtype-string"
-    else:
-        return "dtype-object"
+    return "dtype-object"
 
 
 def _register_builtin_formatters() -> None:
