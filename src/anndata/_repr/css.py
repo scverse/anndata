@@ -10,15 +10,56 @@ Provides inline CSS with:
 
 from __future__ import annotations
 
+# Dark mode CSS variables (shared by media query and theme detection selectors)
+# Extracted to avoid duplication - the same values are used in:
+# 1. @media (prefers-color-scheme: dark) - OS-level dark mode
+# 2. Theme detection selectors - Jupyter, VS Code, manual class
+_DARK_MODE_VARS = """
+    --anndata-bg-primary: #1e1e1e;
+    --anndata-bg-secondary: #252526;
+    --anndata-bg-tertiary: #2d2d2d;
+    --anndata-highlight: #264f78;
+    --anndata-text-primary: #e0e0e0;
+    --anndata-text-secondary: #a0a0a0;
+    --anndata-text-muted: #707070;
+    --anndata-border-color: #404040;
+    --anndata-border-light: #333333;
+    --anndata-accent-color: #58a6ff;
+    --anndata-accent-hover: #79b8ff;
+    --anndata-warning-color: #d29922;
+    --anndata-warning-bg: #3d3200;
+    --anndata-error-color: #f85149;
+    --anndata-error-bg: #3d1a1a;
+    --anndata-success-color: #3fb950;
+    --anndata-info-color: #58a6ff;
+    --anndata-link-color: #58a6ff;
+    --anndata-code-bg: #2d2d2d;
+    --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    /* Dtype colors - Dark mode */
+    --anndata-dtype-category: #d2a8ff;
+    --anndata-dtype-int: #79c0ff;
+    --anndata-dtype-float: #79c0ff;
+    --anndata-dtype-bool: #ff7b72;
+    --anndata-dtype-string: #a5d6ff;
+    --anndata-dtype-sparse: #7ee787;
+    --anndata-dtype-array: #79c0ff;
+    --anndata-dtype-dataframe: #d2a8ff;
+    --anndata-dtype-anndata: #ff7b72;
+    --anndata-dtype-dask: #ffc168;
+    --anndata-dtype-gpu: #a0db63;
+    --anndata-dtype-awkward: #ff9d76;
+    --anndata-dtype-array-api: #e6c400;
+"""
+
 
 def get_css() -> str:
     """Get the complete CSS for the HTML representation."""
-    return f"""<style>
-{_CSS_CONTENT}
-</style>"""
+    # Build CSS by substituting dark mode variables into the template
+    css = _CSS_TEMPLATE.replace("__DARK_MODE_VARS__", _DARK_MODE_VARS)
+    return f"<style>\n{css}\n</style>"
 
 
-_CSS_CONTENT = """
+_CSS_TEMPLATE = """
 /* AnnData HTML Representation Styles */
 /* Scoped to .anndata-repr to avoid conflicts */
 
@@ -48,6 +89,23 @@ _CSS_CONTENT = """
     --anndata-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --anndata-font-size: 13px;
     --anndata-line-height: 1.4;
+    /* Dtype colors - Light mode */
+    --anndata-dtype-category: #8250df;
+    --anndata-dtype-int: #0550ae;
+    --anndata-dtype-float: #0550ae;
+    --anndata-dtype-bool: #cf222e;
+    --anndata-dtype-string: #0a3069;
+    --anndata-dtype-object: #6e7781;
+    --anndata-dtype-sparse: #1a7f37;
+    --anndata-dtype-array: #0550ae;
+    --anndata-dtype-dataframe: #8250df;
+    --anndata-dtype-anndata: #cf222e;
+    --anndata-dtype-unknown: #6e7781;
+    --anndata-dtype-extension: #8250df;
+    --anndata-dtype-dask: #fb8500;
+    --anndata-dtype-gpu: #76b900;
+    --anndata-dtype-awkward: #e85d04;
+    --anndata-dtype-array-api: #9a6700;
     /* Column widths are set dynamically via inline style on container */
 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -63,59 +121,17 @@ _CSS_CONTENT = """
     overflow: hidden;
 }
 
-/* Dark mode - via media query */
+/* Dark mode variables - OS-level dark mode preference */
 @media (prefers-color-scheme: dark) {
-    .anndata-repr {
-        --anndata-bg-primary: #1e1e1e;
-        --anndata-bg-secondary: #252526;
-        --anndata-bg-tertiary: #2d2d2d;
-        --anndata-highlight: #264f78;
-        --anndata-text-primary: #e0e0e0;
-        --anndata-text-secondary: #a0a0a0;
-        --anndata-text-muted: #707070;
-        --anndata-border-color: #404040;
-        --anndata-border-light: #333333;
-        --anndata-accent-color: #58a6ff;
-        --anndata-accent-hover: #79b8ff;
-        --anndata-warning-color: #d29922;
-        --anndata-warning-bg: #3d3200;
-        --anndata-error-color: #f85149;
-        --anndata-error-bg: #3d1a1a;
-        --anndata-success-color: #3fb950;
-        --anndata-info-color: #58a6ff;
-        --anndata-link-color: #58a6ff;
-        --anndata-code-bg: #2d2d2d;
-        --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
+    .anndata-repr {__DARK_MODE_VARS__}
 }
 
-/* Jupyter dark theme detection + manual dark mode class */
+/* Dark mode - Jupyter/VS Code theme detection + manual dark mode class */
 [data-jp-theme-light="false"] .anndata-repr,
 .jp-Theme-Dark .anndata-repr,
 body.vscode-dark .anndata-repr,
 body[data-vscode-theme-kind="vscode-dark"] .anndata-repr,
-body.dark-mode .anndata-repr {
-    --anndata-bg-primary: #1e1e1e;
-    --anndata-bg-secondary: #252526;
-    --anndata-bg-tertiary: #2d2d2d;
-    --anndata-highlight: #264f78;
-    --anndata-text-primary: #e0e0e0;
-    --anndata-text-secondary: #a0a0a0;
-    --anndata-text-muted: #707070;
-    --anndata-border-color: #404040;
-    --anndata-border-light: #333333;
-    --anndata-accent-color: #58a6ff;
-    --anndata-accent-hover: #79b8ff;
-    --anndata-warning-color: #d29922;
-    --anndata-warning-bg: #3d3200;
-    --anndata-error-color: #f85149;
-    --anndata-error-bg: #3d1a1a;
-    --anndata-success-color: #3fb950;
-    --anndata-info-color: #58a6ff;
-    --anndata-link-color: #58a6ff;
-    --anndata-code-bg: #2d2d2d;
-    --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
+body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 
 /* Header */
 .anndata-repr .anndata-hdr {
@@ -124,25 +140,20 @@ body.dark-mode .anndata-repr {
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: #f8f9fa; /* Fallback */
-    background: var(--anndata-bg-secondary);
-    border-bottom: 1px solid #dee2e6; /* Fallback */
-    border-bottom: 1px solid var(--anndata-border-color);
+    background: var(--anndata-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--anndata-border-color, #dee2e6);
 }
 
 .anndata-repr .adata-type {
     font-weight: 600;
     font-size: 14px;
-    color: #212529; /* Fallback */
-    color: var(--anndata-text-primary);
+    color: var(--anndata-text-primary, #212529);
 }
 
 .anndata-repr .adata-shape {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; /* Fallback */
-    font-family: var(--anndata-font-mono);
+    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
     font-size: 12px;
-    color: #6c757d; /* Fallback */
-    color: var(--anndata-text-secondary);
+    color: var(--anndata-text-secondary, #6c757d);
 }
 
 .anndata-repr .adata-badge {
@@ -470,22 +481,17 @@ body.dark-mode .anndata-repr {
 .anndata-repr .adata-index-preview {
     padding: 8px 12px;
     font-size: 11px;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; /* Fallback */
-    font-family: var(--anndata-font-mono);
-    color: #6c757d; /* Fallback */
-    color: var(--anndata-text-secondary);
-    background: #ffffff; /* Fallback */
-    background: var(--anndata-bg-primary);
-    border-bottom: 1px solid #e9ecef; /* Fallback */
-    border-bottom: 1px solid var(--anndata-border-light);
+    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    color: var(--anndata-text-secondary, #6c757d);
+    background: var(--anndata-bg-primary, #ffffff);
+    border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .anndata-repr .adata-index-preview strong {
-    color: #212529; /* Fallback */
-    color: var(--anndata-text-primary);
+    color: var(--anndata-text-primary, #212529);
     font-weight: 500;
 }
 
@@ -496,8 +502,7 @@ body.dark-mode .anndata-repr {
 
 /* Individual section */
 .anndata-repr .anndata-sec {
-    border-bottom: 1px solid #e9ecef; /* Fallback */
-    border-bottom: 1px solid var(--anndata-border-light);
+    border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
 }
 
 .anndata-repr .anndata-sec:last-child {
@@ -511,14 +516,12 @@ body.dark-mode .anndata-repr {
     padding: 8px 12px;
     cursor: pointer;
     user-select: none;
-    background: #ffffff; /* Fallback */
-    background: var(--anndata-bg-primary);
+    background: var(--anndata-bg-primary, #ffffff);
     transition: background-color 0.15s;
 }
 
 .anndata-repr .anndata-sechdr:hover {
-    background: #f8f9fa; /* Fallback */
-    background: var(--anndata-bg-secondary);
+    background: var(--anndata-bg-secondary, #f8f9fa);
 }
 
 .anndata-repr .adata-fold-icon {
@@ -528,8 +531,7 @@ body.dark-mode .anndata-repr {
     width: 16px;
     height: 16px;
     font-size: 10px;
-    color: #adb5bd; /* Fallback */
-    color: var(--anndata-text-muted);
+    color: var(--anndata-text-muted, #adb5bd);
     transition: transform 0.15s;
     transform-origin: center;
     flex-shrink: 0;
@@ -541,33 +543,27 @@ body.dark-mode .anndata-repr {
 
 .anndata-repr .anndata-sec-name {
     font-weight: 600;
-    color: #212529; /* Fallback */
-    color: var(--anndata-text-primary);
+    color: var(--anndata-text-primary, #212529);
 }
 
 .anndata-repr .anndata-sec-count {
     font-size: 11px;
-    color: #6c757d; /* Fallback */
-    color: var(--anndata-text-secondary);
+    color: var(--anndata-text-secondary, #6c757d);
 }
 
 .anndata-repr .adata-help-link {
     margin-left: auto;
     padding: 2px 6px;
     font-size: 11px;
-    color: #adb5bd; /* Fallback */
-    color: var(--anndata-text-muted);
+    color: var(--anndata-text-muted, #adb5bd);
     text-decoration: none;
-    border-radius: 4px; /* Fallback */
-    border-radius: var(--anndata-radius);
+    border-radius: var(--anndata-radius, 4px);
     transition: color 0.15s, background-color 0.15s;
 }
 
 .anndata-repr .adata-help-link:hover {
-    color: #0d6efd; /* Fallback */
-    color: var(--anndata-accent-color);
-    background: #e9ecef; /* Fallback */
-    background: var(--anndata-bg-tertiary);
+    color: var(--anndata-accent-color, #0d6efd);
+    background: var(--anndata-bg-tertiary, #e9ecef);
 }
 
 /* Section content */
@@ -603,8 +599,7 @@ body.dark-mode .anndata-repr {
 }
 
 .anndata-repr .adata-entry:hover {
-    background: #e9ecef; /* Fallback */
-    background: var(--anndata-bg-tertiary);
+    background: var(--anndata-bg-tertiary, #e9ecef);
 }
 
 .anndata-repr .adata-entry.hidden {
@@ -625,13 +620,10 @@ body.dark-mode .anndata-repr {
 }
 
 .anndata-repr .adata-entry-name {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; /* Fallback */
-    font-family: var(--anndata-font-mono);
-    font-size: 13px; /* Fallback */
-    font-size: var(--anndata-font-size);
+    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    font-size: var(--anndata-font-size, 13px);
     font-weight: 500;
-    color: #212529; /* Fallback */
-    color: var(--anndata-text-primary);
+    color: var(--anndata-text-primary, #212529);
     white-space: nowrap;
     text-align: left;
     /* Fixed width for name column */
@@ -656,11 +648,9 @@ body.dark-mode .anndata-repr {
 }
 
 .anndata-repr .adata-entry-type {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; /* Fallback */
-    font-family: var(--anndata-font-mono);
+    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
     font-size: 11px;
-    color: #6c757d; /* Fallback */
-    color: var(--anndata-text-secondary);
+    color: var(--anndata-text-secondary, #6c757d);
     text-align: left;
     white-space: nowrap;
     /* Fixed width for consistent alignment (dtype names are predictable) */
@@ -668,10 +658,9 @@ body.dark-mode .anndata-repr {
     min-width: var(--anndata-type-col-width, 180px);
 }
 
-.anndata-repr .adata-entry-meta {
+.anndata-repr .adata-entry-preview {
     font-size: 11px;
-    color: #adb5bd; /* Fallback */
-    color: var(--anndata-text-muted);
+    color: var(--anndata-text-muted, #adb5bd);
     text-align: right;
     /* Default: allow wrapping for graceful no-JS degradation */
     white-space: normal;
@@ -679,14 +668,14 @@ body.dark-mode .anndata-repr {
     /* Takes remaining space */
 }
 
-/* When JS is enabled, meta cell truncates with ellipsis */
-.anndata-repr.js-enabled .adata-entry-meta {
+/* When JS is enabled, preview cell truncates with ellipsis */
+.anndata-repr.js-enabled .adata-entry-preview {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.anndata-repr .adata-entry-meta.expanded {
+.anndata-repr .adata-entry-preview.expanded {
     white-space: normal;
     overflow: visible;
 }
@@ -761,72 +750,27 @@ body.dark-mode .anndata-repr {
     transform: translate(-50%, -50%);
 }
 
-/* Type-specific styling */
-.anndata-repr .dtype-category { color: #8250df; }
-.anndata-repr .dtype-int { color: #0550ae; }
-.anndata-repr .dtype-float { color: #0550ae; }
-.anndata-repr .dtype-bool { color: #cf222e; }
-.anndata-repr .dtype-string { color: #0a3069; }
-.anndata-repr .dtype-object { color: #6e7781; }
-.anndata-repr .dtype-sparse { color: #1a7f37; }
-.anndata-repr .dtype-array { color: #0550ae; }
-.anndata-repr .dtype-dataframe { color: #8250df; }
-.anndata-repr .dtype-anndata { color: #cf222e; font-weight: 600; }
-.anndata-repr .dtype-unknown { color: #6e7781; font-style: italic; }
-.anndata-repr .dtype-extension { color: #8250df; }
+/* Type-specific styling - uses CSS variables for dark mode support */
+.anndata-repr .dtype-category { color: var(--anndata-dtype-category); }
+.anndata-repr .dtype-int { color: var(--anndata-dtype-int); }
+.anndata-repr .dtype-float { color: var(--anndata-dtype-float); }
+.anndata-repr .dtype-bool { color: var(--anndata-dtype-bool); }
+.anndata-repr .dtype-string { color: var(--anndata-dtype-string); }
+.anndata-repr .dtype-object { color: var(--anndata-dtype-object); }
+.anndata-repr .dtype-sparse { color: var(--anndata-dtype-sparse); }
+.anndata-repr .dtype-array { color: var(--anndata-dtype-array); }
+.anndata-repr .dtype-dataframe { color: var(--anndata-dtype-dataframe); }
+.anndata-repr .dtype-anndata { color: var(--anndata-dtype-anndata); font-weight: 600; }
+.anndata-repr .dtype-unknown { color: var(--anndata-dtype-unknown); font-style: italic; }
+.anndata-repr .dtype-extension { color: var(--anndata-dtype-extension); }
+.anndata-repr .dtype-dask { color: var(--anndata-dtype-dask); }
+.anndata-repr .dtype-gpu { color: var(--anndata-dtype-gpu); }
+.anndata-repr .dtype-awkward { color: var(--anndata-dtype-awkward); }
+.anndata-repr .dtype-array-api { color: var(--anndata-dtype-array-api); }
 /* Warning class kept for backwards compatibility but no longer used for coloring */
 .anndata-repr .dtype-warning {
     /* Type name keeps its original color; only the icon is styled */
 }
-.anndata-repr .dtype-dask { color: #fb8500; }
-.anndata-repr .dtype-gpu { color: #76b900; }
-.anndata-repr .dtype-awkward { color: #e85d04; }
-.anndata-repr .dtype-array-api { color: #9a6700; } /* Array-API arrays (JAX, PyTorch, etc.) - PR #2063 */
-
-/* Dark mode type colors */
-@media (prefers-color-scheme: dark) {
-    .anndata-repr .dtype-category { color: #d2a8ff; }
-    .anndata-repr .dtype-int { color: #79c0ff; }
-    .anndata-repr .dtype-float { color: #79c0ff; }
-    .anndata-repr .dtype-bool { color: #ff7b72; }
-    .anndata-repr .dtype-string { color: #a5d6ff; }
-    .anndata-repr .dtype-sparse { color: #7ee787; }
-    .anndata-repr .dtype-array { color: #79c0ff; }
-    .anndata-repr .dtype-dataframe { color: #d2a8ff; }
-    .anndata-repr .dtype-anndata { color: #ff7b72; }
-    .anndata-repr .dtype-dask { color: #ffc168; }
-    .anndata-repr .dtype-gpu { color: #a0db63; }
-    .anndata-repr .dtype-awkward { color: #ff9d76; }
-    .anndata-repr .dtype-array-api { color: #e6c400; } /* Array-API arrays - dark mode */
-}
-
-[data-jp-theme-light="false"] .anndata-repr .dtype-category,
-.jp-Theme-Dark .anndata-repr .dtype-category,
-body.dark-mode .anndata-repr .dtype-category { color: #d2a8ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-int,
-.jp-Theme-Dark .anndata-repr .dtype-int,
-body.dark-mode .anndata-repr .dtype-int { color: #79c0ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-float,
-.jp-Theme-Dark .anndata-repr .dtype-float,
-body.dark-mode .anndata-repr .dtype-float { color: #79c0ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-bool,
-.jp-Theme-Dark .anndata-repr .dtype-bool,
-body.dark-mode .anndata-repr .dtype-bool { color: #ff7b72; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-string,
-.jp-Theme-Dark .anndata-repr .dtype-string,
-body.dark-mode .anndata-repr .dtype-string { color: #a5d6ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-sparse,
-.jp-Theme-Dark .anndata-repr .dtype-sparse,
-body.dark-mode .anndata-repr .dtype-sparse { color: #7ee787; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-array,
-.jp-Theme-Dark .anndata-repr .dtype-array,
-body.dark-mode .anndata-repr .dtype-array { color: #79c0ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-dataframe,
-.jp-Theme-Dark .anndata-repr .dtype-dataframe,
-body.dark-mode .anndata-repr .dtype-dataframe { color: #d2a8ff; }
-[data-jp-theme-light="false"] .anndata-repr .dtype-anndata,
-.jp-Theme-Dark .anndata-repr .dtype-anndata,
-body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 
 /* Color swatches */
 .anndata-repr .adata-color-swatches {
@@ -962,7 +906,8 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
 }
 
 .anndata-repr .adata-nested-content {
-    padding: 8px 12px 8px 24px;
+    /* Padding here doesn't accumulate because each nested-content is a fresh table cell */
+    padding: 12px;
     background: var(--anndata-bg-secondary);
     /* Constrain width to prevent wide tables from expanding the layout */
     max-width: 1px;
@@ -977,7 +922,8 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     /* Use width:0 + min-width:100% trick to prevent table from expanding container */
     width: 0;
     min-width: 100%;
-    padding: 8px 12px;
+    padding: 12px;
+    box-sizing: border-box;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -1033,9 +979,25 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     background: var(--anndata-highlight);
 }
 
-/* Nested AnnData */
-.anndata-repr .adata-nested-anndata {
-    margin: 8px 0;
+/* Nested AnnData wrapper - no extra padding (handled by .adata-nested-content) */
+.anndata-repr .adata-custom-expanded:has(> .adata-nested-anndata) {
+    padding: 0;
+    text-align: left;
+}
+
+/* Use higher specificity to override .adata-custom-expanded > div { display: inline-block } */
+.anndata-repr .adata-custom-expanded > .adata-nested-anndata {
+    display: block;
+    margin: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Nested .anndata-repr should not add extra margin and must fit within parent */
+.anndata-repr .adata-nested-anndata > .anndata-repr {
+    margin: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* X section (special) */
@@ -1112,10 +1074,8 @@ body.dark-mode .anndata-repr .dtype-anndata { color: #ff7b72; }
     align-items: center;
     gap: 12px;
     padding: 6px 12px;
-    border-bottom: 1px solid #e9ecef; /* Fallback */
-    border-bottom: 1px solid var(--anndata-border-light);
-    color: #6c757d; /* Fallback */
-    color: var(--anndata-text-secondary);
+    border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
+    color: var(--anndata-text-secondary, #6c757d);
 }
 
 .anndata-repr .adata-x-entry > span:first-child {

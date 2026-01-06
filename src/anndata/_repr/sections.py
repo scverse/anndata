@@ -7,27 +7,44 @@ This module contains renderers for each section type:
 - Uns section (unstructured annotations)
 - Raw section (unprocessed data)
 - Unknown sections (extension attributes)
+
+Error Handling Policy
+---------------------
+This module uses broad exception handling (``except Exception``) in several places.
+This is intentional - user data may contain arbitrary objects that raise unexpected
+exceptions when accessed. The repr should never crash; instead it should:
+
+1. Use ``# noqa: BLE001`` to acknowledge the broad catch
+2. Provide a fallback (e.g., show "?" or skip the problematic item)
+3. Continue rendering the rest of the representation
+
+This ensures a partially-rendered repr is always better than a crashed cell.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
-    STYLE_HIDDEN,
+    COLOR_PREVIEW_LIMIT,
+    ERROR_TRUNCATE_LENGTH,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
+    TOOLTIP_TRUNCATE_LENGTH,
 )
 from . import (
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
 from .components import (
-    render_categories_wrap_button,
-    render_columns_wrap_button,
+    render_entry_preview_cell,
+    render_entry_row_open,
+    render_entry_type_cell,
+    render_expand_button,
     render_fold_icon,
     render_name_cell,
-    render_warning_icon,
+    render_nested_content_cell,
 )
 from .core import (
     get_section_tooltip,
@@ -36,7 +53,7 @@ from .core import (
     render_truncation_indicator,
     render_x_entry,
 )
-from .formatters import check_column_name
+from .utils import check_column_name
 from .registry import (
     FormatterContext,
     extract_uns_type_hint,
@@ -61,17 +78,57 @@ if TYPE_CHECKING:
     from .registry import FormattedOutput
 
 # -----------------------------------------------------------------------------
-# Lazy import for generate_repr_html (only case requiring it)
-# Used by _render_nested_anndata_entry for recursive AnnData rendering.
-# All other shared functions are now imported from core.py.
+# Lazy import for generate_repr_html
 # -----------------------------------------------------------------------------
+# This lazy import is required because of circular dependencies:
+# - html.py imports section renderers from sections.py (at module load)
+# - sections.py needs generate_repr_html for nested AnnData rendering
+# The lazy import ensures html.py fully loads before we access generate_repr_html.
 
 
 def _get_generate_repr_html():
-    """Lazy import of generate_repr_html to avoid circular imports."""
+    """Lazy import of generate_repr_html to avoid circular imports.
+
+    See comment above for explanation of why this is necessary.
+    """
     from .html import generate_repr_html
 
     return generate_repr_html
+
+
+def _validate_key_and_collect_warnings(
+    key: str,
+    output: FormattedOutput,
+    extra_warnings: list[str] | None = None,
+) -> tuple[list[str], bool]:
+    """Validate key name and collect all warnings for an entry.
+
+    Checks key validity (issue #321) and combines with output warnings.
+
+    Parameters
+    ----------
+    key
+        The entry key to validate
+    output
+        FormattedOutput containing serialization info and warnings
+    extra_warnings
+        Additional warnings to include (e.g., string->category suggestion)
+
+    Returns
+    -------
+    tuple of (all_warnings, is_error)
+        all_warnings: Combined list of all warning messages
+        is_error: True if entry should be marked as error (not serializable or invalid key)
+    """
+    key_valid, key_reason, key_hard_error = check_column_name(key)
+
+    all_warnings = list(extra_warnings) if extra_warnings else []
+    all_warnings.extend(output.warnings)
+    if not key_valid:
+        all_warnings.append(key_reason)
+
+    is_error = not output.is_serializable or key_hard_error
+    return all_warnings, is_error
 
 
 # -----------------------------------------------------------------------------
@@ -96,8 +153,6 @@ def _render_dataframe_section(
         return render_empty_section(section, doc_url, tooltip)
 
     # Set section for section-specific formatters (e.g., LazyColumnFormatter)
-    from dataclasses import replace
-
     section_context = replace(context, section=section)
 
     # Render entries (with truncation)
@@ -130,16 +185,14 @@ def _render_dataframe_entry(
     context: FormatterContext,
 ) -> str:
     """Render a single DataFrame column entry."""
-    from dataclasses import replace
-
     # Create context with column_name for formatter to use
     col_context = replace(context, column_name=col_name)
 
     # Format the column - formatter produces preview_html or preview
     output = formatter_registry.format_value(col, col_context)
 
-    # Collect warnings
-    entry_warnings = list(output.warnings)
+    # Collect extra warnings specific to dataframe columns
+    extra_warnings = []
 
     # Check for string->category warning (only for non-categorical, non-lazy columns)
     if output.details.get("n_categories") is None:
@@ -149,60 +202,52 @@ def _render_dataframe_entry(
             n_unique = output.details.get("n_unique")
             should_warn, warn_msg = should_warn_string_column(col, n_unique)
             if should_warn:
-                entry_warnings.append(warn_msg)
-
-    # Check column name validity (issue #321)
-    name_valid, name_reason, name_hard_error = check_column_name(col_name)
-    name_error = False
-    if not name_valid:
-        entry_warnings.append(name_reason)
-        name_error = name_hard_error
+                extra_warnings.append(warn_msg)
 
     # Check for color mismatch (for categorical columns)
     n_categories = output.details.get("n_categories", 0)
     if n_categories > 0 and context.adata_ref is not None:
         color_warning = check_color_category_mismatch(adata, col_name, n_categories)
         if color_warning:
-            entry_warnings.append(color_warning)
+            extra_warnings.append(color_warning)
 
-    # Add warning/error class (CSS handles color - error is red like in uns)
-    entry_class = "adata-entry"
-    if entry_warnings:
-        entry_class += " warning"
-    if not output.is_serializable or name_error:
-        entry_class += " error"
+    # Validate key and collect all warnings
+    all_warnings, is_error = _validate_key_and_collect_warnings(
+        col_name, output, extra_warnings
+    )
 
-    # Build row
+    # Build row using consolidated helper
     parts = [
-        f'<tr class="{entry_class}" data-key="{escape_html(col_name)}" '
-        f'data-dtype="{escape_html(output.type_name)}">'
+        render_entry_row_open(
+            col_name,
+            output.type_name,
+            has_warnings=bool(all_warnings),
+            is_error=is_error,
+        )
     ]
 
     # Name cell
     parts.append(render_name_cell(col_name))
 
-    # Type cell
-    parts.append('<td class="adata-entry-type">')
+    # Type cell (using consolidated helper)
+    has_categories = n_categories > 0 and output.preview_html
     parts.append(
-        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-    )
-    is_error = not output.is_serializable or name_error
-    parts.append(render_warning_icon(entry_warnings, is_error=is_error))
-
-    # Add wrap button for categories in the type column
-    if n_categories > 0 and output.preview_html:
-        parts.append(render_categories_wrap_button())
-    parts.append("</td>")
-
-    # Preview cell - use formatter's preview_html or preview (text)
-    parts.append('<td class="adata-entry-meta">')
-    if output.preview_html:
-        parts.append(output.preview_html)
-    elif output.preview:
-        parts.append(
-            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
+        render_entry_type_cell(
+            output.type_name,
+            output.css_class,
+            warnings=all_warnings,
+            is_error=is_error,
+            has_categories_list=has_categories,
         )
-    parts.append("</td>")
+    )
+
+    # Preview cell (using consolidated helper)
+    parts.append(
+        render_entry_preview_cell(
+            preview_html=output.preview_html,
+            preview_text=output.preview,
+        )
+    )
 
     parts.append("</tr>")
     return "\n".join(parts)
@@ -219,8 +264,6 @@ def _render_mapping_section(
     context: FormatterContext,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
-    from dataclasses import replace
-
     mapping = getattr(adata, section, None)
     if mapping is None:
         return ""
@@ -257,78 +300,6 @@ def _render_mapping_section(
     )
 
 
-def _render_type_cell(
-    output: FormattedOutput,
-    *,
-    has_expandable_content: bool,
-    extra_warnings: list[str] | None = None,
-    key_hard_error: bool = False,
-) -> list[str]:
-    """Render the type cell for a mapping entry."""
-    parts = ['<td class="adata-entry-type">']
-
-    parts.append(
-        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-    )
-    all_warnings = (extra_warnings or []) + list(output.warnings)
-    has_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, is_error=has_error))
-
-    if has_expandable_content:
-        parts.append(
-            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
-        )
-
-    has_columns_list = output.details.get("has_columns_list", False)
-    if has_columns_list:
-        parts.append(render_columns_wrap_button())
-
-    # type_html replaces type_name in the type column (for custom inline rendering)
-    if output.type_html:
-        parts.append(
-            f'<div class="adata-custom-content" style="margin-top:4px;">{output.type_html}</div>'
-        )
-
-    parts.append("</td>")
-    return parts
-
-
-def _render_mapping_meta_cell(output: FormattedOutput, section: str) -> list[str]:
-    """Render the preview cell for a mapping entry.
-
-    Priority: preview_html > preview > columns list > meta_preview > shape
-    """
-    parts = ['<td class="adata-entry-meta">']
-
-    # Check for formatter-provided preview content first
-    if output.preview_html:
-        parts.append(output.preview_html)
-    elif output.preview:
-        parts.append(
-            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
-        )
-    elif output.details.get("has_columns_list") and "columns" in output.details:
-        columns = output.details["columns"]
-        col_str = ", ".join(escape_html(str(c)) for c in columns)
-        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
-    elif "meta_preview" in output.details:
-        full_preview = output.details.get(
-            "meta_preview_full", output.details["meta_preview"]
-        )
-        parts.append(
-            f'<span class="adata-text-muted" title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
-        )
-    elif "shape" in output.details and section in ("obsm", "varm"):
-        shape = output.details["shape"]
-        if len(shape) >= 2:
-            parts.append(
-                f'<span class="adata-text-muted">({format_number(shape[1])} cols)</span>'
-            )
-
-    parts.append("</td>")
-    return parts
-
-
 def _render_mapping_entry(
     key: str,
     value: Any,
@@ -338,51 +309,59 @@ def _render_mapping_entry(
     """Render a single mapping entry."""
     output = formatter_registry.format_value(value, context)
 
-    # Check key name validity (issue #321)
-    key_valid, key_reason, key_hard_error = check_column_name(key)
-    key_warnings = []
-    if not key_valid:
-        key_warnings.append(key_reason)
-
-    # Build class list for CSS styling
-    entry_class = "adata-entry"
-    if output.warnings or key_warnings:
-        entry_class += " warning"
-    if not output.is_serializable or key_hard_error:
-        entry_class += " error"
+    # Validate key and collect all warnings
+    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
 
     has_expandable_content = output.expanded_html is not None
+    has_columns_list = output.details.get("has_columns_list", False)
 
+    # Build row using consolidated helper
     parts = [
-        f'<tr class="{entry_class}" data-key="{escape_html(key)}" '
-        f'data-dtype="{escape_html(output.type_name)}">'
+        render_entry_row_open(
+            key,
+            output.type_name,
+            has_warnings=bool(all_warnings),
+            is_error=is_error,
+        )
     ]
 
     # Name cell
     parts.append(render_name_cell(key))
 
-    # Type cell
-    parts.extend(
-        _render_type_cell(
-            output,
+    # Type cell (using consolidated helper)
+    # Note: type_html is appended (not replaced) in mapping entries
+    parts.append(
+        render_entry_type_cell(
+            output.type_name,
+            output.css_class,
+            type_html=output.type_html,
+            warnings=all_warnings,
+            is_error=is_error,
             has_expandable_content=has_expandable_content,
-            extra_warnings=key_warnings,
-            key_hard_error=key_hard_error,
+            has_columns_list=has_columns_list,
+            append_type_html=True,  # Mapping entries append type_html below
         )
     )
 
-    # Preview cell
-    parts.extend(_render_mapping_meta_cell(output, section))
+    # Preview cell (using consolidated helper)
+    parts.append(
+        render_entry_preview_cell(
+            preview_html=output.preview_html,
+            preview_text=output.preview,
+            columns=output.details.get("columns"),
+            has_columns_list=has_columns_list,
+            tooltip_preview=output.details.get("meta_preview"),
+            tooltip_full=output.details.get("meta_preview_full"),
+            shape=output.details.get("shape"),
+            section=section,
+        )
+    )
 
     parts.append("</tr>")
 
     # Expandable content row
     if has_expandable_content:
-        parts.append('<tr class="adata-nested-row">')
-        parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append(f'<div class="adata-custom-expanded">{output.expanded_html}</div>')
-        parts.append("</td>")
-        parts.append("</tr>")
+        parts.append(render_nested_content_cell(output.expanded_html))
 
     return "\n".join(parts)
 
@@ -447,17 +426,19 @@ def _render_uns_entry(
     output = formatter_registry.format_value(value, context)
     if output.preview_html or output.preview:
         # A TypeFormatter provided custom preview content
-        return _render_uns_entry_with_custom_preview(key, output)
+        return _render_uns_entry_row(key, output)
 
     # Check if there's an unhandled type hint (no formatter matched but hint exists)
     type_hint, cleaned_value = extract_uns_type_hint(value)
     if type_hint is not None:
         # Type hint present but no formatter registered - show helpful message
         package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
-        return _render_uns_entry_with_preview(
+        cleaned_output = formatter_registry.format_value(cleaned_value, context)
+        return _render_uns_entry_row(
             key,
-            cleaned_value,
-            context,
+            cleaned_output,
+            value=cleaned_value,
+            context=context,
             preview_note=f"[{type_hint}] (import {package_name} to enable)",
         )
 
@@ -470,118 +451,84 @@ def _render_uns_entry(
         return _render_nested_anndata_entry(key, value, context)
 
     # 4. Generic preview for simple/small types
-    return _render_uns_entry_with_preview(key, value, context)
+    return _render_uns_entry_row(key, output, value=value, context=context)
 
 
-def _render_uns_entry_with_preview(
+def _render_uns_entry_row(
     key: str,
-    value: Any,
-    context: FormatterContext,
+    output: FormattedOutput,
+    *,
+    value: Any = None,
+    context: FormatterContext | None = None,
     preview_note: str | None = None,
 ) -> str:
-    """Render an uns entry with a value preview in the meta column.
+    """Render an uns entry row (unified handler for all uns entry types).
 
-    Generates previews for:
-    - Strings: truncated to max length
-    - Numbers (int, float): shown directly
-    - Booleans: shown directly
-    - Small dicts: key count and first few keys
-    - Small lists: length and first few items
-    - Other types: type info only
+    This function handles two cases:
+    1. Custom preview from TypeFormatter: uses output.preview_html/preview
+    2. Generic preview: generates preview from value using generate_value_preview()
+
+    Parameters
+    ----------
+    key
+        The entry key name
+    output
+        FormattedOutput from the formatter
+    value
+        The actual value (needed for generating generic preview)
+    context
+        FormatterContext (needed for max_string_length in generic preview)
+    preview_note
+        Optional note to prepend to generic preview (e.g., type hint info)
     """
-    output = formatter_registry.format_value(value, context)
+    # Validate key and collect warnings
+    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
 
-    # Generate preview based on type
-    preview = generate_value_preview(value, context.max_string_length)
-    if preview_note:
-        preview = f"{preview_note} {preview}" if preview else preview_note
-
-    # Check key name validity
-    key_valid, key_reason, key_hard_error = check_column_name(key)
-    all_warnings = list(output.warnings)
-    if not key_valid:
-        all_warnings.append(key_reason)
-
-    entry_class = "adata-entry"
-    if all_warnings:
-        entry_class += " warning"
-    if not output.is_serializable or key_hard_error:
-        entry_class += " error"
-
+    # Build row
     parts = [
-        f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(output.type_name)}">'
+        render_entry_row_open(
+            key,
+            output.type_name,
+            has_warnings=bool(all_warnings),
+            is_error=is_error,
+        )
     ]
 
-    # Name
+    # Name cell
     parts.append(render_name_cell(key))
 
-    # Type
-    parts.append('<td class="adata-entry-type">')
+    # Type cell
     parts.append(
-        f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        render_entry_type_cell(
+            output.type_name,
+            output.css_class,
+            warnings=all_warnings,
+            is_error=is_error,
+        )
     )
-    is_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, is_error=is_error))
-    parts.append("</td>")
 
-    # Meta - value preview
-    parts.append('<td class="adata-entry-meta">')
-    if preview:
+    # Preview cell - use custom preview if available, otherwise generate
+    if output.preview_html or output.preview:
         parts.append(
-            f'<span class="adata-text-muted" title="{escape_html(str(value)[:500])}">{escape_html(preview)}</span>'
+            render_entry_preview_cell(
+                preview_html=output.preview_html,
+                preview_text=output.preview,
+            )
         )
-    parts.append("</td>")
-    parts.append("</tr>")
-
-    return "\n".join(parts)
-
-
-def _render_uns_entry_with_custom_preview(key: str, output: FormattedOutput) -> str:
-    """Render an uns entry with custom preview content from a TypeFormatter.
-
-    Uses preview_html if available, otherwise preview (text).
-    """
-    type_label = output.type_name
-
-    # Check key name validity
-    key_valid, key_reason, key_hard_error = check_column_name(key)
-    all_warnings = list(output.warnings)
-    if not key_valid:
-        all_warnings.append(key_reason)
-
-    # Build class list for CSS styling
-    entry_class = "adata-entry"
-    if all_warnings:
-        entry_class += " warning"
-    if not output.is_serializable or key_hard_error:
-        entry_class += " error"
-
-    parts = [
-        f'<tr class="{entry_class}" data-key="{escape_html(key)}" data-dtype="{escape_html(type_label)}">'
-    ]
-
-    # Name
-    parts.append(render_name_cell(key))
-
-    # Type
-    parts.append('<td class="adata-entry-type">')
-    parts.append(f'<span class="{output.css_class}">{escape_html(type_label)}</span>')
-    is_error = not output.is_serializable or key_hard_error
-    parts.append(render_warning_icon(all_warnings, is_error=is_error))
-    parts.append("</td>")
-
-    # Preview cell - use preview_html if available, otherwise preview (text)
-    parts.append('<td class="adata-entry-meta">')
-    if output.preview_html:
-        # HTML is trusted from registered TypeFormatter (package must be imported)
-        parts.append(output.preview_html)
-    elif output.preview:
+    else:
+        # Generate generic preview from value
+        max_len = context.max_string_length if context else 100
+        preview = generate_value_preview(value, max_len)
+        if preview_note:
+            preview = f"{preview_note} {preview}" if preview else preview_note
         parts.append(
-            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
+            render_entry_preview_cell(
+                tooltip_preview=preview,
+                tooltip_full=str(value)[:TOOLTIP_TRUNCATE_LENGTH] if preview else None,
+            )
         )
-    parts.append("</td>")
-    parts.append("</tr>")
 
+    parts.append("</tr>")
     return "\n".join(parts)
 
 
@@ -590,11 +537,8 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     colors = list(value) if hasattr(value, "__iter__") else []
     n_colors = len(colors)
 
-    # Inline styles for layout - colors via CSS
-
-    parts = [
-        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="colors">'
-    ]
+    # Build row using consolidated helper
+    parts = [render_entry_row_open(key, "colors")]
 
     # Name
     parts.append(render_name_cell(key))
@@ -605,14 +549,14 @@ def _render_color_list_entry(key: str, value: Any) -> str:
     parts.append("</td>")
 
     # Meta - color swatches
-    parts.append('<td class="adata-entry-meta">')
+    parts.append('<td class="adata-entry-preview">')
     parts.append('<span class="adata-color-swatches">')
     parts.extend(
         f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
-        for color in colors[:15]  # Limit preview
+        for color in colors[:COLOR_PREVIEW_LIMIT]
     )
-    if n_colors > 15:
-        parts.append(f'<span class="adata-text-muted">+{n_colors - 15}</span>')
+    if n_colors > COLOR_PREVIEW_LIMIT:
+        parts.append(f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>')
     parts.append("</span>")
     parts.append("</td>")
     parts.append("</tr>")
@@ -631,35 +575,20 @@ def _render_nested_anndata_entry(
 
     can_expand = context.depth < context.max_depth - 1
 
-    # Inline styles for layout - colors via CSS
-    # Expand button hidden by default - JS shows it
-
-    parts = [
-        f'<tr class="adata-entry" data-key="{escape_html(key)}" data-dtype="AnnData">'
-    ]
-
-    # Name
+    # Build row using consolidated helpers
+    type_name = f"AnnData ({format_number(n_obs)} × {format_number(n_vars)})"
+    parts = [render_entry_row_open(key, "AnnData")]
     parts.append(render_name_cell(key))
-
-    # Type
-    parts.append('<td class="adata-entry-type">')
     parts.append(
-        f'<span class="dtype-anndata">AnnData ({format_number(n_obs)} × {format_number(n_vars)})</span>'
-    )
-    if can_expand:
-        parts.append(
-            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
+        render_entry_type_cell(
+            type_name, "dtype-anndata", has_expandable_content=can_expand
         )
-    parts.append("</td>")
-
-    parts.append('<td class="adata-entry-meta"></td>')
+    )
+    parts.append(render_entry_preview_cell())
     parts.append("</tr>")
 
     # Nested content (hidden by default)
     if can_expand:
-        parts.append('<tr class="adata-nested-row">')
-        parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append('<div class="adata-nested-anndata">')
         # Recursive call (lazy import to avoid circular dependency)
         generate_repr_html = _get_generate_repr_html()
         nested_html = generate_repr_html(
@@ -669,10 +598,9 @@ def _render_nested_anndata_entry(
             show_header=True,
             show_search=False,
         )
-        parts.append(nested_html)
-        parts.append("</div>")
-        parts.append("</td>")
-        parts.append("</tr>")
+        # Wrap in adata-nested-anndata for specific styling
+        wrapped_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
+        parts.append(render_nested_content_cell(wrapped_html))
 
     return "\n".join(parts)
 
@@ -682,7 +610,7 @@ def _render_nested_anndata_entry(
 # -----------------------------------------------------------------------------
 
 
-def _detect_unknown_sections(adata) -> list[tuple[str, str]]:
+def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
     """Detect mapping-like attributes that aren't in SECTION_ORDER.
 
     Returns list of (attr_name, type_description) tuples for unknown sections.
@@ -760,7 +688,7 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
 
     for attr_name, type_desc in unknown_sections:
-        parts.append(f'<tr class="adata-entry" data-key="{escape_html(attr_name)}">')
+        parts.append(render_entry_row_open(attr_name, type_desc))
         parts.append(render_name_cell(attr_name))
         parts.append('<td class="adata-entry-type">')
         parts.append(
@@ -768,7 +696,7 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
             f"{escape_html(type_desc)}</span>"
         )
         parts.append("</td>")
-        parts.append('<td class="adata-entry-meta"></td>')
+        parts.append('<td class="adata-entry-preview"></td>')
         parts.append("</tr>")
 
     parts.append("</table>")
@@ -780,16 +708,18 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
 
 def _render_error_entry(section: str, error: str) -> str:
     """Render an error indicator for a section that failed to render."""
-    error_escaped = escape_html(str(error)[:200])  # Truncate long errors
+    error_escaped = escape_html(str(error)[:ERROR_TRUNCATE_LENGTH])
+    # Use --anndata-error-color CSS variable (defined in css.py) with fallback
+    error_color = "var(--anndata-error-color, #dc3545)"
     return f"""
 <div class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}">
     <div class="anndata-sechdr">
         {render_fold_icon()}
         <span class="anndata-sec-name">{escape_html(section)}</span>
-        <span class="anndata-sec-count adata-error-badge" style="color: var(--anndata-warning, #dc3545);">(error)</span>
+        <span class="anndata-sec-count adata-error-badge" style="color: {error_color};">(error)</span>
     </div>
     <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
-        <div class="adata-error" style="color: var(--anndata-warning, #dc3545); padding: 4px 8px; font-size: 12px;">
+        <div class="adata-error" style="color: {error_color}; padding: 4px 8px; font-size: 12px;">
             Failed to render: {error_escaped}
         </div>
     </div>
@@ -802,8 +732,22 @@ def _render_error_entry(section: str, error: str) -> str:
 # -----------------------------------------------------------------------------
 
 
-def _safe_get_attr(obj, attr: str, default="?"):
-    """Safely get an attribute with fallback."""
+def _safe_get_attr(obj: Any, attr: str, default: Any = "?") -> Any:
+    """Safely get an attribute with fallback.
+
+    Parameters
+    ----------
+    obj
+        Object to get attribute from
+    attr
+        Attribute name
+    default
+        Default value if attribute is missing or access raises exception
+
+    Returns
+    -------
+    Attribute value or default
+    """
     try:
         val = getattr(obj, attr, None)
         return val if val is not None else default
@@ -811,8 +755,18 @@ def _safe_get_attr(obj, attr: str, default="?"):
         return default
 
 
-def _get_raw_meta_parts(raw) -> list[str]:
-    """Build meta info parts for raw section."""
+def _get_raw_meta_parts(raw: Any) -> list[str]:
+    """Build meta info parts for raw section.
+
+    Parameters
+    ----------
+    raw
+        Raw object to extract metadata from
+
+    Returns
+    -------
+    List of metadata strings like ["var: 5 cols", "varm: 2"]
+    """
     meta_parts = []
     try:
         if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
@@ -864,32 +818,23 @@ def _render_raw_section(
     parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
 
     # Single row with raw info and expand button
-    parts.append('<tr class="adata-entry" data-key="raw" data-dtype="Raw">')
-    parts.append(render_name_cell("raw"))
-    parts.append('<td class="adata-entry-type">')
-    # Show just dimensions - "raw" is already in the name cell
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
-    parts.append(f'<span class="dtype-anndata">{escape_html(type_str)}</span>')
-    if can_expand:
-        parts.append(
-            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
+    parts.append(render_entry_row_open("raw", "Raw"))
+    parts.append(render_name_cell("raw"))
+    parts.append(
+        render_entry_type_cell(
+            type_str, "dtype-anndata", has_expandable_content=can_expand
         )
-    parts.append("</td>")
-    parts.append(f'<td class="adata-entry-meta">{escape_html(meta_text)}</td>')
+    )
+    parts.append(render_entry_preview_cell(preview_text=meta_text))
     parts.append("</tr>")
 
     # Nested content (hidden by default, shown on expand)
     if can_expand:
-        parts.append('<tr class="adata-nested-row">')
-        parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append('<div class="adata-nested-anndata">')
-
         nested_html = _generate_raw_repr_html(raw, context.child("raw"))
-        parts.append(nested_html)
-
-        parts.append("</div>")
-        parts.append("</td>")
-        parts.append("</tr>")
+        # Wrap in adata-nested-anndata for specific styling
+        wrapped_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
+        parts.append(render_nested_content_cell(wrapped_html))
 
     parts.append("</table>")
     parts.append("</div>")
@@ -941,14 +886,8 @@ def _generate_raw_repr_html(
     # _render_dataframe_section expects an object with a .var attribute
     try:
         if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
-            var_context = FormatterContext(
-                depth=context.depth,
-                max_depth=context.max_depth,
-                fold_threshold=context.fold_threshold,
-                max_items=context.max_items,
-                adata_ref=None,
-                section="var",
-            )
+            # Raw doesn't have the same structure as AnnData, so clear adata_ref
+            var_context = replace(context, adata_ref=None, section="var")
             parts.append(_render_dataframe_section(raw, "var", var_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("var", str(e)))
@@ -956,14 +895,7 @@ def _generate_raw_repr_html(
     # varm section (like AnnData's varm)
     try:
         if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
-            varm_context = FormatterContext(
-                depth=context.depth,
-                max_depth=context.max_depth,
-                fold_threshold=context.fold_threshold,
-                max_items=context.max_items,
-                adata_ref=None,
-                section="varm",
-            )
+            varm_context = replace(context, adata_ref=None, section="varm")
             parts.append(_render_mapping_section(raw, "varm", varm_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("varm", str(e)))

@@ -272,7 +272,7 @@ from .components import (  # noqa: E402
 from .css import get_css  # noqa: E402
 
 # HTML rendering helpers for building custom sections
-from .formatters import check_column_name  # noqa: E402
+from .utils import check_column_name  # noqa: E402
 from .html import (  # noqa: E402
     generate_repr_html,
     render_formatted_entry,

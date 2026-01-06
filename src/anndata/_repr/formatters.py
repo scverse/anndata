@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from .._repr_constants import DF_COLS_PREVIEW_LIMIT, DF_COLS_PREVIEW_MAX_LEN
 from .components import render_category_list
 from .registry import (
     FormattedOutput,
@@ -33,6 +34,7 @@ from .utils import (
     format_number,
     get_categories_for_display,
     get_matching_column_colors,
+    get_setting,
     is_lazy_series,
     is_serializable,
 )
@@ -78,18 +80,6 @@ def _get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
     return None, False
 
 
-def check_column_name(name: str) -> tuple[bool, str, bool]:
-    """Check if a column name is valid for HDF5/Zarr serialization.
-
-    Returns (is_valid, reason, is_hard_error).
-    is_hard_error=True means it fails NOW, False means it's a deprecation warning.
-    """
-    if not isinstance(name, str):
-        return False, f"Non-string name ({type(name).__name__})", True
-    # Slashes will be disallowed in h5 stores (FutureWarning)
-    if "/" in name:
-        return False, "Contains '/' (deprecated)", False
-    return True, "", False
 
 
 def _check_array_has_writer(array: Any) -> bool:
@@ -402,25 +392,18 @@ class DataFrameFormatter(TypeFormatter):
         meta_preview = ""
         meta_preview_full = ""
         if n_cols > 0:
-            max_cols_preview = 5
-            max_total_len = 40
             meta_preview_full = f"columns: [{', '.join(str(c) for c in cols)}]"
-            if n_cols <= max_cols_preview:
+            if n_cols <= DF_COLS_PREVIEW_LIMIT:
                 col_str = ", ".join(str(c) for c in cols)
             else:
-                col_str = ", ".join(str(c) for c in cols[:max_cols_preview]) + ", …"
+                col_str = ", ".join(str(c) for c in cols[:DF_COLS_PREVIEW_LIMIT]) + ", …"
             # Truncate if still too long
-            if len(col_str) > max_total_len:
-                col_str = col_str[: max_total_len - 1] + "…"
+            if len(col_str) > DF_COLS_PREVIEW_MAX_LEN:
+                col_str = col_str[: DF_COLS_PREVIEW_MAX_LEN - 1] + "…"
             meta_preview = f"[{col_str}]"
 
         # Check if expandable _repr_html_ is enabled
-        try:
-            from anndata import settings
-
-            expand_dataframes = getattr(settings, "repr_html_dataframe_expand", False)
-        except (ImportError, AttributeError):
-            expand_dataframes = False
+        expand_dataframes = get_setting("repr_html_dataframe_expand", default=False)
 
         expanded_html = None
         if expand_dataframes and n_rows > 0 and n_cols > 0:
@@ -1058,8 +1041,8 @@ def _get_dtype_css_class(dtype: np.dtype) -> str:
         return "dtype-object"
 
 
-def _get_pandas_dtype_css_class(dtype) -> str:
-    """Get CSS class for a pandas dtype."""
+def _get_pandas_dtype_css_class(dtype: np.dtype | pd.api.types.CategoricalDtype) -> str:
+    """Get CSS class for a pandas/numpy dtype."""
     dtype_name = str(dtype)
     if "int" in dtype_name:
         return "dtype-int"

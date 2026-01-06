@@ -16,11 +16,63 @@ build compatible representations.
 from __future__ import annotations
 
 from .._repr_constants import (
+    CSS_ENTRY,
+    ENTRY_TABLE_COLSPAN,
     NOT_SERIALIZABLE_MSG,
     STYLE_CAT_DOT,
     STYLE_HIDDEN,
 )
-from .utils import escape_html
+from .utils import escape_html, format_number
+
+
+def render_entry_row_open(
+    key: str,
+    dtype: str,
+    *,
+    has_warnings: bool = False,
+    is_error: bool = False,
+    extra_classes: str = "",
+) -> str:
+    """Render the opening <tr> tag for an entry row.
+
+    This consolidates the repeated pattern of building entry row opening tags
+    with data attributes for search/filter functionality.
+
+    Parameters
+    ----------
+    key
+        The entry key (column name, field name, etc.)
+    dtype
+        The data type string (for data-dtype attribute)
+    has_warnings
+        Whether the entry has warnings
+    is_error
+        Whether the entry has errors (not serializable, invalid key)
+    extra_classes
+        Additional CSS classes to include
+
+    Returns
+    -------
+    Opening <tr> tag with class and data attributes
+
+    Example
+    -------
+    >>> open_tag = render_entry_row_open("gene_name", "category", has_warnings=True)
+    >>> # Returns: '<tr class="adata-entry warning" data-key="gene_name" data-dtype="category">'
+    """
+    # Build CSS class string
+    classes = [CSS_ENTRY]
+    if extra_classes:
+        classes.append(extra_classes)
+    if has_warnings:
+        classes.append("warning")
+    if is_error:
+        classes.append("error")
+    css_class = " ".join(classes)
+
+    escaped_key = escape_html(key)
+    escaped_dtype = escape_html(dtype)
+    return f'<tr class="{css_class}" data-key="{escaped_key}" data-dtype="{escaped_dtype}">'
 
 
 def render_warning_icon(warnings: list[str], *, is_error: bool = False) -> str:
@@ -142,6 +194,14 @@ def render_copy_button(text: str, tooltip: str = "Copy") -> str:
     )
 
 
+def _render_wrap_button(css_class: str) -> str:
+    """Render a wrap toggle button with the specified CSS class.
+
+    Internal helper used by render_categories_wrap_button and render_columns_wrap_button.
+    """
+    return f'<button class="{css_class}" title="Expand to multi-line view">▼</button>'
+
+
 def render_categories_wrap_button() -> str:
     """Render a button to toggle category list between single-line and multi-line.
 
@@ -149,7 +209,7 @@ def render_categories_wrap_button() -> str:
     -------
     HTML string for the wrap button (▼ expands, ▲ collapses)
     """
-    return '<button class="adata-cats-wrap-btn" title="Expand to multi-line view">▼</button>'
+    return _render_wrap_button("adata-cats-wrap-btn")
 
 
 def render_columns_wrap_button() -> str:
@@ -159,7 +219,57 @@ def render_columns_wrap_button() -> str:
     -------
     HTML string for the wrap button (▼ expands, ▲ collapses)
     """
-    return '<button class="adata-cols-wrap-btn" title="Expand to multi-line view">▼</button>'
+    return _render_wrap_button("adata-cols-wrap-btn")
+
+
+def render_muted_span(text: str) -> str:
+    """Render text in a muted span (gray color).
+
+    Parameters
+    ----------
+    text
+        Text to render (will be HTML-escaped)
+
+    Returns
+    -------
+    HTML string with muted styling
+    """
+    return f'<span class="adata-text-muted">{escape_html(text)}</span>'
+
+
+def render_expand_button() -> str:
+    """Render an expand/collapse button for nested content.
+
+    Returns
+    -------
+    HTML string for the expand button (hidden by default, shown by JS)
+    """
+    return (
+        f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" '
+        f'aria-expanded="false">Expand ▼</button>'
+    )
+
+
+def render_nested_content_cell(html_content: str, colspan: int = ENTRY_TABLE_COLSPAN) -> str:
+    """Render a table cell containing nested/expanded content.
+
+    Parameters
+    ----------
+    html_content
+        The HTML content to display in the nested cell
+    colspan
+        Number of columns to span (default: 3)
+
+    Returns
+    -------
+    HTML string for a table row with nested content
+    """
+    return (
+        f'<tr class="adata-nested-row">'
+        f'<td colspan="{colspan}" class="adata-nested-content">'
+        f'<div class="adata-custom-expanded">{html_content}</div>'
+        f"</td></tr>"
+    )
 
 
 def render_badge(
@@ -324,4 +434,171 @@ def render_category_list(
     if total_hidden > 0:
         parts.append(f'<span class="adata-text-muted">...+{total_hidden}</span>')
     parts.append("</span>")
+    return "".join(parts)
+
+
+def render_entry_type_cell(
+    type_name: str,
+    css_class: str,
+    *,
+    type_html: str | None = None,
+    tooltip: str = "",
+    warnings: list[str] | None = None,
+    is_error: bool = False,
+    has_expandable_content: bool = False,
+    has_columns_list: bool = False,
+    has_categories_list: bool = False,
+    append_type_html: bool = False,
+) -> str:
+    """Render the type cell for an entry row.
+
+    This is a unified helper that handles all type cell variations:
+    - Type label with optional tooltip
+    - Custom type_html (as replacement or appended content)
+    - Warning icon
+    - Expand/wrap buttons
+
+    The type_html and append_type_html parameters control content rendering:
+
+    1. No type_html: Shows type_name in a styled span
+       ``<span class="dtype-X">type_name</span>``
+
+    2. type_html with append_type_html=False (default): type_html REPLACES type_name
+       Used for fully custom type content (e.g., category swatches instead of text)
+
+    3. type_html with append_type_html=True: type_html is shown BELOW type_name
+       Used to add extra content while keeping the type label
+       (e.g., showing category list below "categorical" label)
+
+    Parameters
+    ----------
+    type_name
+        The type name to display (e.g., "ndarray (100, 50) float32")
+    css_class
+        CSS class for the type span (e.g., "dtype-ndarray")
+    type_html
+        Optional custom HTML content for the type cell
+    tooltip
+        Optional tooltip for the type label
+    warnings
+        List of warning messages
+    is_error
+        Whether this is an error (not serializable, invalid key)
+    has_expandable_content
+        Whether to show expand button
+    has_columns_list
+        Whether to show columns wrap button
+    has_categories_list
+        Whether to show categories wrap button
+    append_type_html
+        If True, type_html is appended below type_name instead of replacing it
+
+    Returns
+    -------
+    HTML string for the complete type cell
+    """
+    parts = ['<td class="adata-entry-type">']
+
+    # Type content: handle different cases
+    if type_html and not append_type_html:
+        # type_html replaces the type label entirely
+        parts.append(type_html)
+    elif tooltip:
+        parts.append(
+            f'<span class="{css_class}" title="{escape_html(tooltip)}">'
+            f"{escape_html(type_name)}</span>"
+        )
+    else:
+        parts.append(f'<span class="{css_class}">{escape_html(type_name)}</span>')
+
+    # Warning icon
+    parts.append(render_warning_icon(warnings or [], is_error=is_error))
+
+    # Expand button for expandable content
+    if has_expandable_content:
+        parts.append(render_expand_button())
+
+    # Wrap buttons
+    if has_columns_list:
+        parts.append(render_columns_wrap_button())
+    if has_categories_list:
+        parts.append(render_categories_wrap_button())
+
+    # Appended type_html (for custom inline rendering below the type)
+    if type_html and append_type_html:
+        parts.append(
+            f'<div class="adata-custom-content" style="margin-top:4px;">{type_html}</div>'
+        )
+
+    parts.append("</td>")
+    return "".join(parts)
+
+
+def render_entry_preview_cell(
+    preview_html: str | None = None,
+    preview_text: str | None = None,
+    *,
+    columns: list | None = None,
+    has_columns_list: bool = False,
+    tooltip_preview: str | None = None,
+    tooltip_full: str | None = None,
+    shape: tuple | None = None,
+    section: str = "",
+) -> str:
+    """Render the preview cell (third column) for an entry row.
+
+    Content is rendered with the following priority:
+    1. preview_html (raw HTML from formatter)
+    2. preview_text (plain text, will be muted and escaped)
+    3. columns list (if has_columns_list and columns provided)
+    4. tooltip_preview (short text with full text tooltip)
+    5. shape (only for obsm/varm sections)
+
+    Parameters
+    ----------
+    preview_html
+        Raw HTML content for preview (highest priority)
+    preview_text
+        Plain text preview (will be escaped and muted)
+    columns
+        List of column names for columns list display
+    has_columns_list
+        Whether to show columns as a list
+    tooltip_preview
+        Short preview text shown inline
+    tooltip_full
+        Full text shown as tooltip (defaults to tooltip_preview)
+    shape
+        Shape tuple for array-like objects (shown for obsm/varm)
+    section
+        Current section name (used for shape display logic)
+
+    Returns
+    -------
+    HTML string for the preview cell
+    """
+    parts = ['<td class="adata-entry-preview">']
+
+    # Priority 1: Raw HTML from formatter
+    if preview_html:
+        parts.append(preview_html)
+    # Priority 2: Plain text preview
+    elif preview_text:
+        parts.append(render_muted_span(preview_text))
+    # Priority 3: Columns list
+    elif has_columns_list and columns:
+        col_str = ", ".join(escape_html(str(c)) for c in columns)
+        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
+    # Priority 4: Tooltip preview
+    elif tooltip_preview:
+        full_text = tooltip_full or tooltip_preview
+        parts.append(
+            f'<span class="adata-text-muted" title="{escape_html(full_text)}">'
+            f"{escape_html(tooltip_preview)}</span>"
+        )
+    # Priority 5: Shape (only for obsm/varm)
+    elif shape and section in ("obsm", "varm") and len(shape) >= 2:
+        parts.append(render_muted_span(f"({format_number(shape[1])} cols)"))
+
+    parts.append("</td>")
     return "".join(parts)

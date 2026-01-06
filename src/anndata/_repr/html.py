@@ -14,9 +14,6 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from .._repr_constants import (
-    STYLE_HIDDEN,
-)
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -30,12 +27,15 @@ from . import (
     DEFAULT_UNIQUE_LIMIT,
     SECTION_ORDER,
 )
+from .._repr_constants import TOOLTIP_TRUNCATE_LENGTH
 from .components import (
     render_badge,
-    render_columns_wrap_button,
+    render_entry_preview_cell,
+    render_entry_row_open,
+    render_entry_type_cell,
     render_name_cell,
+    render_nested_content_cell,
     render_search_box,
-    render_warning_icon,
 )
 from .core import (
     render_section,
@@ -67,25 +67,19 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
+    from .registry import SectionFormatter
+
     from .registry import FormattedEntry, FormattedOutput
 
 # Import formatters to register them (side-effect import)
 from . import formatters as _formatters  # noqa: F401
 
-# Approximate character width in pixels for monospace font at 13px
-CHAR_WIDTH_PX = 8
-
-# CSS classes in css.py provide full styling with dark mode support.
-# These inline styles are minimal fallbacks that ensure basic readability
-# if CSS fails to load (e.g., email clients, restrictive embeds).
-# Colors and theming are intentionally CSS-only to support dark mode.
-# STYLE_HIDDEN, STYLE_SECTION_CONTENT, STYLE_SECTION_TABLE are imported
-# from constants.py (single source of truth).
-
-STYLE_SECTION_INFO = "padding:6px 12px;"
-
-# Category color dot - needs inline for dynamic background color
-STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
+from .._repr_constants import (
+    CHAR_WIDTH_PX,
+    COPY_BUTTON_PADDING_PX,
+    DEFAULT_FIELD_WIDTH_PX,
+    MIN_FIELD_WIDTH_PX,
+)
 
 
 def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
@@ -94,6 +88,8 @@ def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
 
     Collects field names from obs, var, uns, obsm, varm, layers, obsp, varp
     and returns a pixel width that fits the longest name (up to max_width).
+
+    Uses constants from _repr_constants.py tuned for the default 13px monospace font.
     """
     all_names: list[str] = []
 
@@ -114,17 +110,66 @@ def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
             pass
 
     if not all_names:
-        return 100  # Minimum default
+        return DEFAULT_FIELD_WIDTH_PX
 
-    # Find longest name
+    # Find longest name and convert to pixels
     max_len = max(len(name) for name in all_names)
-
-    # Convert to pixels (with some padding for copy button)
-    # Add ~30px for padding and copy button
-    width_px = (max_len * CHAR_WIDTH_PX) + 30
+    width_px = (max_len * CHAR_WIDTH_PX) + COPY_BUTTON_PADDING_PX
 
     # Clamp to reasonable range
-    return max(80, min(width_px, max_width))
+    return max(MIN_FIELD_WIDTH_PX, min(width_px, max_width))
+
+
+def _resolve_setting(override: int | None, setting_name: str, default: int) -> int:
+    """Resolve a setting value with priority: explicit override > anndata.settings > default.
+
+    Parameters
+    ----------
+    override
+        Explicit value passed to generate_repr_html (highest priority)
+    setting_name
+        Name of the anndata.settings attribute to check
+    default
+        Fallback default value (lowest priority)
+    """
+    if override is not None:
+        return override
+    return get_setting(setting_name, default=default)
+
+
+def _create_formatter_context(
+    adata: AnnData,
+    *,
+    depth: int = 0,
+    max_depth: int | None = None,
+    fold_threshold: int | None = None,
+    max_items: int | None = None,
+    max_lazy_categories: int | None = None,
+) -> FormatterContext:
+    """Create a FormatterContext with settings resolution.
+
+    Resolves None values from anndata.settings, then from defaults.
+    Uses _resolve_setting() for the common pattern: override > settings > default.
+    """
+    return FormatterContext(
+        depth=depth,
+        max_depth=_resolve_setting(max_depth, "repr_html_max_depth", DEFAULT_MAX_DEPTH),
+        fold_threshold=_resolve_setting(
+            fold_threshold, "repr_html_fold_threshold", DEFAULT_FOLD_THRESHOLD
+        ),
+        max_items=_resolve_setting(max_items, "repr_html_max_items", DEFAULT_MAX_ITEMS),
+        max_categories=get_setting(
+            "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
+        ),
+        max_lazy_categories=_resolve_setting(
+            max_lazy_categories, "repr_html_max_lazy_categories", DEFAULT_MAX_LAZY_CATEGORIES
+        ),
+        max_string_length=get_setting(
+            "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
+        ),
+        unique_limit=get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT),
+        adata_ref=adata,
+    )
 
 
 def generate_repr_html(  # noqa: PLR0913
@@ -168,53 +213,26 @@ def generate_repr_html(  # noqa: PLR0913
     -------
     HTML string
     """
-    # Get settings with defaults
-    if max_depth is None:
-        max_depth = get_setting("repr_html_max_depth", default=DEFAULT_MAX_DEPTH)
-    if fold_threshold is None:
-        fold_threshold = get_setting(
-            "repr_html_fold_threshold", default=DEFAULT_FOLD_THRESHOLD
-        )
-    if max_items is None:
-        max_items = get_setting("repr_html_max_items", default=DEFAULT_MAX_ITEMS)
-    if max_lazy_categories is None:
-        max_lazy_categories = get_setting(
-            "repr_html_max_lazy_categories", default=DEFAULT_MAX_LAZY_CATEGORIES
-        )
-
-    # Get additional rendering settings (always from settings, not parameters)
-    max_categories = get_setting(
-        "repr_html_max_categories", default=DEFAULT_MAX_CATEGORIES
-    )
-    max_string_length = get_setting(
-        "repr_html_max_string_length", default=DEFAULT_MAX_STRING_LENGTH
-    )
-    unique_limit = get_setting("repr_html_unique_limit", default=DEFAULT_UNIQUE_LIMIT)
-
     # Check if HTML repr is enabled
     if not get_setting("repr_html_enabled", default=True):
-        # Fallback to text repr
         return f"<pre>{escape_html(repr(adata))}</pre>"
 
-    # Check max depth
-    if depth >= max_depth:
-        return _render_max_depth_indicator(adata)
-
-    # Generate unique container ID
-    container_id = _container_id or f"anndata-repr-{uuid.uuid4().hex[:8]}"
-
-    # Create formatter context
-    context = FormatterContext(
+    # Create formatter context (resolves settings)
+    context = _create_formatter_context(
+        adata,
         depth=depth,
         max_depth=max_depth,
         fold_threshold=fold_threshold,
         max_items=max_items,
-        max_categories=max_categories,
         max_lazy_categories=max_lazy_categories,
-        max_string_length=max_string_length,
-        unique_limit=unique_limit,
-        adata_ref=adata,
     )
+
+    # Check max depth
+    if depth >= context.max_depth:
+        return _render_max_depth_indicator(adata)
+
+    # Generate unique container ID
+    container_id = _container_id or f"anndata-repr-{uuid.uuid4().hex[:8]}"
 
     # Build HTML parts
     parts = []
@@ -367,8 +385,8 @@ def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
 
 
 def _render_custom_section(
-    adata: Any,
-    formatter: Any,  # SectionFormatter
+    adata: AnnData,
+    formatter: SectionFormatter,
     context: FormatterContext,
 ) -> str:
     """Render a custom section using its registered formatter."""
@@ -408,33 +426,6 @@ def _render_custom_section(
         should_collapse=n_items > context.fold_threshold,
         section_id=section_name,
     )
-
-
-def _render_entry_preview_content(
-    output: FormattedOutput, section: str, *, has_columns_list: bool
-) -> str:
-    """Render preview column content for an entry.
-
-    Priority: preview_html > preview > columns list > meta_preview > shape
-    """
-    if output.preview_html:
-        return output.preview_html
-    if output.preview:
-        return f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
-    if has_columns_list and "columns" in output.details:
-        columns = output.details["columns"]
-        col_str = ", ".join(escape_html(str(c)) for c in columns)
-        return f'<span class="adata-cols-list">[{col_str}]</span>'
-    if "meta_preview" in output.details:
-        full_preview = output.details.get(
-            "meta_preview_full", output.details["meta_preview"]
-        )
-        return f'<span class="adata-text-muted" title="{escape_html(full_preview)}">{escape_html(output.details["meta_preview"])}</span>'
-    if "shape" in output.details and section in ("obsm", "varm"):
-        shape = output.details["shape"]
-        if len(shape) >= 2:
-            return f'<span class="adata-text-muted">({format_number(shape[1])} cols)</span>'
-    return ""
 
 
 def render_formatted_entry(
@@ -518,72 +509,55 @@ def render_formatted_entry(
     all_warnings = extra_warnings + list(output.warnings)
     has_error = not output.is_serializable or is_hard_error
 
-    entry_class = "adata-entry"
-    if all_warnings:
-        entry_class += " warning"
-    if has_error:
-        entry_class += " error"
-
     has_expandable_content = output.expanded_html is not None
+    has_columns_list = output.details.get("has_columns_list", False)
 
+    # Build row using consolidated helper
     parts = [
-        f'<tr class="{entry_class}" data-key="{escape_html(entry.key)}" '
-        f'data-dtype="{escape_html(output.type_name)}">'
+        render_entry_row_open(
+            entry.key,
+            output.type_name,
+            has_warnings=bool(all_warnings),
+            is_error=has_error,
+        )
     ]
 
-    # Name
+    # Name cell
     parts.append(render_name_cell(entry.key))
 
-    # Type cell
-    parts.append('<td class="adata-entry-type">')
-
-    # Type content: use type_html if provided, otherwise escape type_name
-    if output.type_html:
-        parts.append(output.type_html)
-    elif output.tooltip:
-        parts.append(
-            f'<span class="{output.css_class}" title="{escape_html(output.tooltip)}">'
-            f"{escape_html(output.type_name)}</span>"
-        )
-    else:
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
-
-    # Warning icon
-    parts.append(render_warning_icon(all_warnings, is_error=has_error))
-
-    # Expand button for expandable content
-    if has_expandable_content:
-        parts.append(
-            f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" aria-expanded="false">Expand ▼</button>'
-        )
-
-    # Columns list toggle button (for DataFrames in obsm/varm)
-    has_columns_list = output.details.get("has_columns_list", False)
-    if has_columns_list:
-        parts.append(render_columns_wrap_button())
-
-    parts.append("</td>")
-
-    # Preview column (for data previews, dimensions, etc.)
-    parts.append('<td class="adata-entry-meta">')
+    # Type cell (using consolidated helper)
     parts.append(
-        _render_entry_preview_content(
-            output, section, has_columns_list=has_columns_list
+        render_entry_type_cell(
+            output.type_name,
+            output.css_class,
+            type_html=output.type_html,
+            tooltip=output.tooltip,
+            warnings=all_warnings,
+            is_error=has_error,
+            has_expandable_content=has_expandable_content,
+            has_columns_list=has_columns_list,
         )
     )
-    parts.append("</td>")
+
+    # Preview cell (using consolidated helper)
+    parts.append(
+        render_entry_preview_cell(
+            preview_html=output.preview_html,
+            preview_text=output.preview,
+            columns=output.details.get("columns"),
+            has_columns_list=has_columns_list,
+            tooltip_preview=output.details.get("meta_preview"),
+            tooltip_full=output.details.get("meta_preview_full"),
+            shape=output.details.get("shape"),
+            section=section,
+        )
+    )
 
     parts.append("</tr>")
 
     # Expandable content row
     if has_expandable_content:
-        parts.append('<tr class="adata-nested-row">')
-        parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append(f'<div class="adata-custom-expanded">{output.expanded_html}</div>')
-        parts.append("</td>")
-        parts.append("</tr>")
+        parts.append(render_nested_content_cell(output.expanded_html))
 
     return "\n".join(parts)
 
@@ -636,8 +610,8 @@ def _render_header(
     if isinstance(readme_content, str) and readme_content.strip():
         escaped_readme = escape_html(readme_content)
         # Truncate for no-JS tooltip (first 500 chars)
-        tooltip_text = readme_content[:500]
-        if len(readme_content) > 500:
+        tooltip_text = readme_content[:TOOLTIP_TRUNCATE_LENGTH]
+        if len(readme_content) > TOOLTIP_TRUNCATE_LENGTH:
             tooltip_text += "..."
         escaped_tooltip = escape_html(tooltip_text)
 
@@ -696,30 +670,32 @@ def _render_index_preview(adata: AnnData) -> str:
     return "\n".join(parts)
 
 
-def _format_index_value(x: Any) -> str:
-    """Format a single index value, decoding bytes if needed."""
-    if isinstance(x, bytes):
-        try:
-            return x.decode("utf-8")
-        except UnicodeDecodeError:
-            return x.decode("latin-1")
-    return str(x)
-
-
 def _format_index_preview(index: pd.Index) -> str:
-    """Format a preview of an index."""
+    """Format a preview of an index.
+
+    Handles bytes index values (from older h5ad files) by decoding them.
+    """
     n = len(index)
     if n == 0:
         return "<em>empty</em>"
 
+    def format_value(x: Any) -> str:
+        """Format a single index value, decoding bytes if needed."""
+        if isinstance(x, bytes):
+            try:
+                return x.decode("utf-8")
+            except UnicodeDecodeError:
+                return x.decode("latin-1")
+        return str(x)
+
     preview_n = DEFAULT_PREVIEW_ITEMS
     if n <= preview_n * 2:
         # Show all
-        items = [escape_html(_format_index_value(x)) for x in index]
+        items = [escape_html(format_value(x)) for x in index]
     else:
         # Show first and last
-        first = [escape_html(_format_index_value(x)) for x in index[:preview_n]]
-        last = [escape_html(_format_index_value(x)) for x in index[-preview_n:]]
+        first = [escape_html(format_value(x)) for x in index[:preview_n]]
+        last = [escape_html(format_value(x)) for x in index[-preview_n:]]
         items = [*first, "...", *last]
 
     return ", ".join(items)

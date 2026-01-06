@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .._repr_constants import (
+    DICT_PREVIEW_KEYS,
+    DICT_PREVIEW_KEYS_LARGE,
+    LIST_PREVIEW_ITEMS,
+    STRING_INLINE_LIMIT,
+)
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -754,10 +761,10 @@ def preview_dict(value: dict) -> str:
     n_keys = len(value)
     if n_keys == 0:
         return "{}"
-    if n_keys <= 3:
-        keys_preview = ", ".join(str(k) for k in list(value.keys())[:3])
+    if n_keys <= DICT_PREVIEW_KEYS:
+        keys_preview = ", ".join(str(k) for k in list(value.keys())[:DICT_PREVIEW_KEYS])
         return f"{{{keys_preview}}}"
-    keys_preview = ", ".join(str(k) for k in list(value.keys())[:2])
+    keys_preview = ", ".join(str(k) for k in list(value.keys())[:DICT_PREVIEW_KEYS_LARGE])
     return f"{{{keys_preview}, ...}} ({n_keys} keys)"
 
 
@@ -767,9 +774,9 @@ def preview_sequence(value: list | tuple) -> str:
     bracket = "[]" if isinstance(value, list) else "()"
     if n_items == 0:
         return bracket
-    if n_items <= 3:
+    if n_items <= LIST_PREVIEW_ITEMS:
         try:
-            items = [preview_item(v) for v in value[:3]]
+            items = [preview_item(v) for v in value[:LIST_PREVIEW_ITEMS]]
             if all(items):
                 return f"{bracket[0]}{', '.join(items)}{bracket[1]}"
         except Exception:  # noqa: BLE001
@@ -781,9 +788,10 @@ def preview_sequence(value: list | tuple) -> str:
 def preview_item(value: Any) -> str:
     """Generate a short preview for a single item (for list/tuple previews)."""
     if isinstance(value, str):
-        if len(value) <= 20:
+        if len(value) <= STRING_INLINE_LIMIT:
             return f'"{value}"'
-        return f'"{value[:17]}..."'
+        truncate_at = STRING_INLINE_LIMIT - 3  # Leave room for "..."
+        return f'"{value[:truncate_at]}..."'
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, (int, float, np.integer, np.floating)):
@@ -832,3 +840,29 @@ def get_setting(name: str, *, default: Any) -> Any:
         return getattr(settings, name, default)
     except (ImportError, AttributeError):
         return default
+
+
+def check_column_name(name: str) -> tuple[bool, str, bool]:
+    """Check if a column name is valid for HDF5/Zarr serialization.
+
+    Column/key names are validated because certain characters cause issues
+    with the underlying storage formats (HDF5 and Zarr).
+
+    Parameters
+    ----------
+    name
+        Column or key name to validate
+
+    Returns
+    -------
+    tuple of (is_valid, reason, is_hard_error)
+        is_valid: False if there's an issue
+        reason: Description of the issue
+        is_hard_error: True means write fails NOW, False means deprecation warning
+    """
+    if not isinstance(name, str):
+        return False, f"Non-string name ({type(name).__name__})", True
+    # Slashes will be disallowed in h5 stores (FutureWarning)
+    if "/" in name:
+        return False, "Contains '/' (deprecated)", False
+    return True, "", False

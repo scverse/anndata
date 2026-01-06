@@ -403,63 +403,45 @@ _JS_CONTENT = """
         btn.style.display = (overflows || isWrapped) ? 'inline' : 'none';
     }
 
-    // Toggle category list wrap mode (single line vs multi-line)
-    container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
-        const typeCell = btn.closest('.adata-entry-type');
-        const metaCell = typeCell ? typeCell.nextElementSibling : null;
-        const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
+    // Factory function to set up wrap button handlers (DRY pattern for cats/cols buttons)
+    function setupWrapButtons(buttonSelector, listSelector) {
+        container.querySelectorAll(buttonSelector).forEach(btn => {
+            const typeCell = btn.closest('.adata-entry-type');
+            const metaCell = typeCell ? typeCell.nextElementSibling : null;
+            const list = metaCell ? metaCell.querySelector(listSelector) : null;
 
-        // Initial visibility check
-        updateWrapButtonVisibility(btn, catsList, metaCell);
+            // Initial visibility check
+            updateWrapButtonVisibility(btn, list, metaCell);
 
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (!catsList || !metaCell) return;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!list || !metaCell) return;
 
-            const isWrapped = catsList.classList.toggle('wrapped');
-            metaCell.classList.toggle('expanded', isWrapped);
-            btn.textContent = isWrapped ? '▲' : '▼';
-            btn.title = isWrapped ? 'Collapse to single line' : 'Expand to multi-line view';
-            // Always show button when wrapped
-            btn.style.display = 'inline';
+                const isWrapped = list.classList.toggle('wrapped');
+                metaCell.classList.toggle('expanded', isWrapped);
+                btn.textContent = isWrapped ? '▲' : '▼';
+                btn.title = isWrapped ? 'Collapse to single line' : 'Expand to multi-line view';
+                // Always show button when wrapped
+                btn.style.display = 'inline';
+            });
         });
-    });
+    }
 
-    // Toggle DataFrame columns list wrap mode (single line vs multi-line)
-    container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
-        const typeCell = btn.closest('.adata-entry-type');
-        const metaCell = typeCell ? typeCell.nextElementSibling : null;
-        const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
-
-        // Initial visibility check
-        updateWrapButtonVisibility(btn, colsList, metaCell);
-
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (!colsList || !metaCell) return;
-
-            const isWrapped = colsList.classList.toggle('wrapped');
-            metaCell.classList.toggle('expanded', isWrapped);
-            btn.textContent = isWrapped ? '▲' : '▼';
-            btn.title = isWrapped ? 'Collapse to single line' : 'Expand to multi-line view';
-            // Always show button when wrapped
-            btn.style.display = 'inline';
-        });
-    });
+    // Set up wrap buttons for categories and columns lists
+    setupWrapButtons('.adata-cats-wrap-btn', '.adata-cats-list');
+    setupWrapButtons('.adata-cols-wrap-btn', '.adata-cols-list');
 
     // Update button visibility on container resize (works for JupyterLab panes too)
+    // Uses the same selector pairs as setupWrapButtons for consistency
     function updateAllWrapButtons() {
-        container.querySelectorAll('.adata-cats-wrap-btn').forEach(btn => {
-            const typeCell = btn.closest('.adata-entry-type');
-            const metaCell = typeCell ? typeCell.nextElementSibling : null;
-            const catsList = metaCell ? metaCell.querySelector('.adata-cats-list') : null;
-            updateWrapButtonVisibility(btn, catsList, metaCell);
-        });
-        container.querySelectorAll('.adata-cols-wrap-btn').forEach(btn => {
-            const typeCell = btn.closest('.adata-entry-type');
-            const metaCell = typeCell ? typeCell.nextElementSibling : null;
-            const colsList = metaCell ? metaCell.querySelector('.adata-cols-list') : null;
-            updateWrapButtonVisibility(btn, colsList, metaCell);
+        [['.adata-cats-wrap-btn', '.adata-cats-list'],
+         ['.adata-cols-wrap-btn', '.adata-cols-list']].forEach(([btnSel, listSel]) => {
+            container.querySelectorAll(btnSel).forEach(btn => {
+                const typeCell = btn.closest('.adata-entry-type');
+                const metaCell = typeCell ? typeCell.nextElementSibling : null;
+                const list = metaCell ? metaCell.querySelector(listSel) : null;
+                updateWrapButtonVisibility(btn, list, metaCell);
+            });
         });
     }
 

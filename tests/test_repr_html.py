@@ -3222,7 +3222,7 @@ class TestColumnNameValidation:
 
     def test_check_column_name_valid(self):
         """Test that valid column names pass."""
-        from anndata._repr.formatters import check_column_name
+        from anndata._repr.utils import check_column_name
 
         valid, _, _ = check_column_name("gene_name")
         assert valid
@@ -3231,7 +3231,7 @@ class TestColumnNameValidation:
 
     def test_check_column_name_slash(self):
         """Test slashes are flagged as warning (not hard error - still works for now)."""
-        from anndata._repr.formatters import check_column_name
+        from anndata._repr.utils import check_column_name
 
         valid, reason, is_hard_error = check_column_name("path/to/gene")
         assert not valid
@@ -3240,7 +3240,7 @@ class TestColumnNameValidation:
 
     def test_check_column_name_non_string(self):
         """Test non-string names are flagged as hard error."""
-        from anndata._repr.formatters import check_column_name
+        from anndata._repr.utils import check_column_name
 
         valid, reason, is_hard_error = check_column_name(("a", "b"))
         assert not valid
@@ -4406,19 +4406,29 @@ class TestIndexPreviewRendering:
         # Should show ellipsis for truncation
         assert "..." in html
 
-    def test_format_index_value_decodes_bytes(self):
-        """Test that bytes index values are decoded properly."""
-        from anndata._repr.html import _format_index_value
+    def test_format_index_preview_decodes_bytes(self):
+        """Test that bytes index values are decoded properly in index preview."""
+        import pandas as pd
+
+        from anndata._repr.html import _format_index_preview
 
         # UTF-8 bytes should decode properly
-        assert _format_index_value(b"cell_0") == "cell_0"
-        assert _format_index_value(b"gene_123") == "gene_123"
+        index = pd.Index([b"cell_0", b"gene_123"])
+        preview = _format_index_preview(index)
+        assert "cell_0" in preview
+        assert "gene_123" in preview
+        # Should not contain 'b"' prefix from bytes repr
+        assert 'b"' not in preview and "b'" not in preview
 
         # Regular strings pass through
-        assert _format_index_value("cell_0") == "cell_0"
+        index = pd.Index(["cell_0", "cell_1"])
+        preview = _format_index_preview(index)
+        assert "cell_0" in preview
 
         # Numbers are converted to string
-        assert _format_index_value(42) == "42"
+        index = pd.Index([42, 43])
+        preview = _format_index_preview(index)
+        assert "42" in preview
 
 
 class TestSectionTooltips:
