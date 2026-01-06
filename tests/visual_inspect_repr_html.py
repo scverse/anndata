@@ -2325,6 +2325,12 @@ For more details, see the full documentation.
     adata_serial.layers[("tuple", "key")] = np.eye(5)  # Non-string - fails NOW
     adata_serial.obsm["path/embed"] = np.random.randn(5, 2)  # Slash - deprecated
 
+    # uns: non-serializable types (common edge cases)
+    adata_serial.uns["custom_obj"] = CustomObject()  # Custom class
+    adata_serial.uns["lambda_func"] = lambda x: x  # Function
+    adata_serial.uns["nested_bad"] = {"ok": 1, "bad": CustomObject()}  # Nested
+    adata_serial.uns["valid_dict"] = {"a": 1, "b": [1, 2, 3]}  # This is fine
+
     sections.append((
         "23. Serialization Warnings",
         adata_serial._repr_html_(),
@@ -2337,6 +2343,9 @@ For more details, see the full documentation.
         "<li><code>var.datetime_col</code> - datetime64 not serializable</li>"
         "<li><code>var.timedelta_col</code> - timedelta64 not serializable</li>"
         "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
+        "<li><code>uns.custom_obj</code> - CustomObject not serializable</li>"
+        "<li><code>uns.lambda_func</code> - Function not serializable</li>"
+        "<li><code>uns.nested_bad</code> - Contains non-serializable nested value</li>"
         "</ul>"
         "<strong>Will fail in future (yellow):</strong>"
         "<ul>"
@@ -2348,6 +2357,7 @@ For more details, see the full documentation.
         "<li><code>var.gène_名前</code> - Non-ASCII is valid UTF-8</li>"
         "<li><code>var.normal_col</code> - Normal float values</li>"
         "<li><code>var.string_col</code> - String values</li>"
+        "<li><code>uns.valid_dict</code> - Dict with serializable values</li>"
         "</ul>",
     ))
 
