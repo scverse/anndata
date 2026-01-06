@@ -208,10 +208,17 @@ class NumpyArrayFormatter(TypeFormatter):
         else:
             type_name = f"ndarray {arr.shape} {dtype_str}"
 
+        # For obsm/varm sections, show number of columns in preview
+        preview = None
+        if context.section in ("obsm", "varm") and arr.ndim == 2:
+            n_cols = arr.shape[1]
+            preview = f"({format_number(n_cols)} columns)"
+
         return FormattedOutput(
             type_name=type_name,
             css_class=css_class,
             details=details,
+            preview=preview,
             is_serializable=True,
         )
 
@@ -685,19 +692,26 @@ class DaskArrayFormatter(TypeFormatter):
         # Get chunk info
         chunks_str = str(obj.chunksize) if hasattr(obj, "chunksize") else "unknown"
 
-        # In obsm/varm/obsp/varp sections, don't show shape (redundant info)
+        # In obsm/varm/obsp/varp sections, don't show shape in type (redundant)
         # - obsp/varp: always n_obs × n_obs or n_var × n_var
-        # - obsm/varm: meta column shows number of columns
+        # - obsm/varm: preview column shows number of columns
         if context.section in ("obsm", "varm", "obsp", "varp"):
             type_name = f"dask.array {dtype_str} · chunks={chunks_str}"
         else:
             shape_str = " × ".join(format_number(s) for s in obj.shape)
             type_name = f"dask.array ({shape_str}) {dtype_str} · chunks={chunks_str}"
 
+        # For obsm/varm sections, show number of columns in preview
+        preview = None
+        if context.section in ("obsm", "varm") and len(obj.shape) == 2:
+            n_cols = obj.shape[1]
+            preview = f"({format_number(n_cols)} columns)"
+
         return FormattedOutput(
             type_name=type_name,
             css_class="dtype-dask",
             tooltip=f"{obj.npartitions} partitions",
+            preview=preview,
             is_serializable=True,
         )
 
@@ -718,10 +732,17 @@ class CuPyArrayFormatter(TypeFormatter):
         if hasattr(obj, "device"):
             device_info = f"GPU:{obj.device.id}"
 
+        # For obsm/varm sections, show number of columns in preview
+        preview = None
+        if context.section in ("obsm", "varm") and len(obj.shape) == 2:
+            n_cols = obj.shape[1]
+            preview = f"({format_number(n_cols)} columns)"
+
         return FormattedOutput(
             type_name=f"cupy.ndarray ({shape_str}) {dtype_str}",
             css_class="dtype-gpu",
             tooltip=device_info,
+            preview=preview,
             details={
                 "shape": obj.shape,
                 "dtype": dtype_str,
@@ -836,10 +857,17 @@ class ArrayAPIFormatter(TypeFormatter):
             # Intentional broad catch: device access varies by backend and can fail
             pass
 
+        # For obsm/varm sections, show number of columns in preview
+        preview = None
+        if context.section in ("obsm", "varm") and obj.ndim == 2:
+            n_cols = obj.shape[1]
+            preview = f"({format_number(n_cols)} columns)"
+
         return FormattedOutput(
             type_name=f"{type_name} ({shape_str}) {dtype_str}",
             css_class="dtype-array-api",
             tooltip=f"{backend_label} array{device_info}",
+            preview=preview,
             details={
                 "shape": obj.shape,
                 "dtype": dtype_str,
