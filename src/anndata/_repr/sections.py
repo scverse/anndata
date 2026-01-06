@@ -69,6 +69,7 @@ if TYPE_CHECKING:
 
     from .registry import FormattedOutput, FormatterContext
 
+
 def _validate_key_and_collect_warnings(
     key: str,
     output: FormattedOutput,
@@ -136,8 +137,10 @@ def _render_entry_row(
 
     has_expandable_content = output.expanded_html is not None
     # Detect wrap button needs from output
-    has_categories = output.css_class == "dtype-category" and output.preview_html
-    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
+    has_categories = output.css_class == "dtype-category" and bool(output.preview_html)
+    has_columns_list = output.css_class == "dtype-dataframe" and bool(
+        output.preview_html
+    )
 
     # Build row
     parts = [
@@ -184,7 +187,7 @@ def _render_entry_row(
     parts.append("</tr>")
 
     # Expandable content row
-    if has_expandable_content:
+    if output.expanded_html is not None:
         parts.append(render_nested_content_cell(output.expanded_html))
 
     return "\n".join(parts)
@@ -361,6 +364,7 @@ def _render_uns_entry(
 
     # 3. Use formatter output
     return _render_entry_row(key, output)
+
 
 # -----------------------------------------------------------------------------
 # Unknown Sections (extension attributes)

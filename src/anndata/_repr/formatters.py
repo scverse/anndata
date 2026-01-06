@@ -79,10 +79,10 @@ def _get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
                     # Get count from storage metadata without loading
                     cats = arr._categories
                     if hasattr(cats, "keys"):  # It's a group (zarr)
-                        values = cats["values"]
-                        return values.shape[0], arr._ordered
+                        values = cats["values"]  # type: ignore[index]
+                        return values.shape[0], arr._ordered  # type: ignore[union-attr]
                     elif hasattr(cats, "shape"):  # It's an array directly
-                        return cats.shape[0], arr._ordered
+                        return cats.shape[0], arr._ordered  # type: ignore[union-attr]
     except (ImportError, Exception):  # noqa: BLE001
         pass
     return None, False
@@ -740,17 +740,18 @@ class AwkwardArrayFormatter(TypeFormatter):
         return type(obj).__module__.startswith("awkward")
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        length: int | None = None
         try:
             length = len(obj)
             type_str = str(obj.type) if hasattr(obj, "type") else "unknown"
         except Exception:  # noqa: BLE001
             # Intentional broad catch: awkward arrays can fail on len/type access
             # in edge cases (lazy evaluation, corrupt data) - show placeholder
-            length = "?"
             type_str = "unknown"
 
+        length_str = str(length) if length is not None else "?"
         return FormattedOutput(
-            type_name=f"awkward.Array ({length} records)",
+            type_name=f"awkward.Array ({length_str} records)",
             css_class="dtype-awkward",
             tooltip=f"Type: {type_str}",
             details={

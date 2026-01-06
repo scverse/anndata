@@ -311,7 +311,7 @@ def _get_lazy_categories(
                     read_elem_partial(values, indices=slice(0, n_to_read))
                 )
             else:
-                categories = list(read_elem(values))
+                categories = list(read_elem(values))  # type: ignore[arg-type]
             return categories, should_truncate, n_cats
         except Exception:  # noqa: BLE001
             pass
@@ -509,8 +509,13 @@ def format_memory_size(size_bytes: float) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-def format_number(n: float) -> str:
-    """Format a number with thousand separators."""
+def format_number(n: float | str) -> str:
+    """Format a number with thousand separators.
+
+    Accepts int, float, or str (for fallback values like "?").
+    """
+    if isinstance(n, str):
+        return n
     if isinstance(n, float):
         if n == int(n):
             n = int(n)
@@ -574,9 +579,10 @@ def get_backing_info(obj: Any) -> dict[str, Any]:
     if not is_backed(obj):
         return {"backed": False}
 
-    info = {
+    filename = str(getattr(obj, "filename", None) or "")
+    info: dict[str, Any] = {
         "backed": True,
-        "filename": str(getattr(obj, "filename", None)),
+        "filename": filename,
     }
 
     # Try to get file status
@@ -585,7 +591,6 @@ def get_backing_info(obj: Any) -> dict[str, Any]:
         info["is_open"] = getattr(file_obj, "is_open", None)
 
     # Detect format from filename
-    filename = info["filename"]
     if filename:
         if filename.endswith(".h5ad"):
             info["format"] = "H5AD"

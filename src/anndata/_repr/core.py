@@ -206,7 +206,9 @@ def render_x_entry(obj: Any, context: FormatterContext) -> str:
     else:
         # Format the X matrix (formatter includes all info like sparsity, on disk, etc.)
         output = formatter_registry.format_value(X, context)
-        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
+        parts.append(
+            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+        )
 
     parts.append("</div>")
     return "\n".join(parts)

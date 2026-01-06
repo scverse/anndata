@@ -295,7 +295,7 @@ def _render_all_sections(
     context: FormatterContext,
 ) -> list[str]:
     """Render all standard and custom sections."""
-    parts = []
+    parts: list[str] = []
     custom_sections_after = _get_custom_sections_by_position(adata)
 
     for section in SECTION_ORDER:
@@ -514,7 +514,9 @@ def render_formatted_entry(
 
     has_expandable_content = output.expanded_html is not None
     # DataFrames have column list in preview_html (for wrap button in type cell)
-    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
+    has_columns_list = output.css_class == "dtype-dataframe" and bool(
+        output.preview_html
+    )
 
     # Build row using consolidated helper
     parts = [
@@ -554,7 +556,7 @@ def render_formatted_entry(
     parts.append("</tr>")
 
     # Expandable content row
-    if has_expandable_content:
+    if output.expanded_html is not None:
         parts.append(render_nested_content_cell(output.expanded_html))
 
     return "\n".join(parts)
