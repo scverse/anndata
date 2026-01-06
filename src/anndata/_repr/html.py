@@ -409,15 +409,17 @@ def _render_custom_section(
     )
 
 
-def _render_entry_meta_content(
+def _render_entry_preview_content(
     output: FormattedOutput, section: str, *, has_columns_list: bool
 ) -> str:
-    """Render meta column content for an entry.
+    """Render preview column content for an entry.
 
-    Priority: meta_content > columns list > meta_preview > shape
+    Priority: preview_html > preview > columns list > meta_preview > shape
     """
-    if output.meta_content:
-        return output.meta_content
+    if output.preview_html:
+        return output.preview_html
+    if output.preview:
+        return f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
     if has_columns_list and "columns" in output.details:
         columns = output.details["columns"]
         col_str = ", ".join(escape_html(str(c)) for c in columns)
@@ -493,8 +495,7 @@ def render_formatted_entry(
             output=FormattedOutput(
                 type_name="AnnData (150 × 30)",
                 css_class="dtype-anndata",
-                html_content=nested_html,
-                is_expandable=True,
+                expanded_html=nested_html,
             ),
         )
         html = render_formatted_entry(entry)
@@ -522,7 +523,7 @@ def render_formatted_entry(
     if has_error:
         entry_class += " error"
 
-    has_expandable_content = output.html_content and output.is_expandable
+    has_expandable_content = output.expanded_html is not None
 
     parts = [
         f'<tr class="{entry_class}" data-key="{escape_html(entry.key)}" '
@@ -535,8 +536,10 @@ def render_formatted_entry(
     # Type cell
     parts.append('<td class="adata-entry-type">')
 
-    # Type span with optional tooltip
-    if output.tooltip:
+    # Type content: use type_html if provided, otherwise escape type_name
+    if output.type_html:
+        parts.append(output.type_html)
+    elif output.tooltip:
         parts.append(
             f'<span class="{output.css_class}" title="{escape_html(output.tooltip)}">'
             f"{escape_html(output.type_name)}</span>"
@@ -562,18 +565,14 @@ def render_formatted_entry(
             '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
         )
 
-    # Inline custom content (non-expandable)
-    if output.html_content and not output.is_expandable:
-        parts.append(
-            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
-        )
-
     parts.append("</td>")
 
-    # Meta column (for data previews, dimensions, etc.)
+    # Preview column (for data previews, dimensions, etc.)
     parts.append('<td class="adata-entry-meta">')
     parts.append(
-        _render_entry_meta_content(output, section, has_columns_list=has_columns_list)
+        _render_entry_preview_content(
+            output, section, has_columns_list=has_columns_list
+        )
     )
     parts.append("</td>")
 
@@ -583,7 +582,7 @@ def render_formatted_entry(
     if has_expandable_content:
         parts.append('<tr class="adata-nested-row">')
         parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append(f'<div class="adata-custom-expanded">{output.html_content}</div>')
+        parts.append(f'<div class="adata-custom-expanded">{output.expanded_html}</div>')
         parts.append("</td>")
         parts.append("</tr>")
 

@@ -422,24 +422,19 @@ class DataFrameFormatter(TypeFormatter):
         except (ImportError, AttributeError):
             expand_dataframes = False
 
-        html_content = None
-        is_expandable = False
+        expanded_html = None
         if expand_dataframes and n_rows > 0 and n_cols > 0:
             # Use pandas _repr_html_() for native Jupyter-style output
             # Respects pd.options.display settings (max_rows, max_columns, etc.)
-            try:
-                html_content = df._repr_html_()
-                is_expandable = True
-            except Exception:  # noqa: BLE001
-                # Intentional broad catch: _repr_html_() can fail in many ways
-                # (memory, recursion, custom dtypes, etc.) - gracefully degrade
-                pass
+            # Intentional broad catch: _repr_html_() can fail in many ways
+            # (memory, recursion, custom dtypes, etc.) - gracefully degrade
+            with contextlib.suppress(Exception):
+                expanded_html = df._repr_html_()
 
         return FormattedOutput(
             type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
             css_class="dtype-dataframe",
-            html_content=html_content,
-            is_expandable=is_expandable,
+            expanded_html=expanded_html,
             details={
                 "n_rows": n_rows,
                 "n_cols": n_cols,
@@ -484,8 +479,8 @@ class SeriesFormatter(TypeFormatter):
             if not is_serial:
                 warnings.append(reason)
 
-        # Compute unique count for meta column (only for obs/var sections)
-        meta_content = None
+        # Compute unique count for preview column (only for obs/var sections)
+        preview = None
         n_unique = None
         if context.section in ("obs", "var"):
             if context.unique_limit > 0 and len(series) <= context.unique_limit:
@@ -493,9 +488,7 @@ class SeriesFormatter(TypeFormatter):
                 with contextlib.suppress(TypeError):
                     n_unique = series.nunique()
             if n_unique is not None:
-                meta_content = (
-                    f'<span class="adata-text-muted">({n_unique} unique)</span>'
-                )
+                preview = f"({n_unique} unique)"
 
         return FormattedOutput(
             type_name=f"{dtype_str}",
@@ -505,7 +498,7 @@ class SeriesFormatter(TypeFormatter):
                 "dtype": dtype_str,
                 "n_unique": n_unique,  # Expose for string warning check
             },
-            meta_content=meta_content,
+            preview=preview,
             is_serializable=is_serial,
             warnings=warnings,
         )
@@ -574,8 +567,8 @@ class CategoricalFormatter(TypeFormatter):
             else f"category ({n_categories})"
         )
 
-        # Build meta_content with category list and colors
-        meta_content = None
+        # Build preview_html with category list and colors
+        preview_html = None
         if context.section in ("obs", "var") and context.column_name is not None:
             try:
                 # Get categories (respecting lazy loading limits)
@@ -586,9 +579,9 @@ class CategoricalFormatter(TypeFormatter):
                 if len(categories) == 0:
                     # Metadata-only mode or no categories: show just count
                     if n_total is not None:
-                        meta_content = f'<span class="adata-text-muted">({n_total} categories)</span>'
+                        preview_html = f'<span class="adata-text-muted">({n_total} categories)</span>'
                     else:
-                        meta_content = (
+                        preview_html = (
                             '<span class="adata-text-muted">(categories)</span>'
                         )
                 else:
@@ -611,12 +604,12 @@ class CategoricalFormatter(TypeFormatter):
                         if (n_total and was_truncated)
                         else 0
                     )
-                    meta_content = render_category_list(
+                    preview_html = render_category_list(
                         categories, colors, context.max_categories, n_hidden=n_hidden
                     )
             except Exception as e:  # noqa: BLE001
-                # Never let meta_content generation crash the repr
-                meta_content = (
+                # Never let preview generation crash the repr
+                preview_html = (
                     f'<span class="adata-text-muted">(error: {type(e).__name__})</span>'
                 )
 
@@ -628,7 +621,7 @@ class CategoricalFormatter(TypeFormatter):
                 "ordered": ordered,
                 "is_lazy": is_lazy,
             },
-            meta_content=meta_content,
+            preview_html=preview_html,
             is_serializable=True,
         )
 
@@ -681,9 +674,9 @@ class LazyColumnFormatter(TypeFormatter):
 
         # For lazy non-categorical columns, we can't compute unique count
         # without loading data, so we just indicate it's lazy
-        meta_content = None
+        preview = None
         if context.section in ("obs", "var"):
-            meta_content = '<span class="adata-text-muted">(lazy)</span>'
+            preview = "(lazy)"
 
         return FormattedOutput(
             type_name=f"{dtype_str} (lazy)",
@@ -692,7 +685,7 @@ class LazyColumnFormatter(TypeFormatter):
                 "dtype": dtype_str,
                 "is_lazy": True,
             },
-            meta_content=meta_content,
+            preview=preview,
             is_serializable=True,
         )
 
@@ -899,6 +892,8 @@ class AnnDataFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         shape_str = f"{format_number(obj.n_obs)} × {format_number(obj.n_vars)}"
 
+        # Note: expansion is handled by _render_nested_anndata_entry in sections.py
+        # which generates the nested HTML recursively with depth control
         return FormattedOutput(
             type_name=f"AnnData ({shape_str})",
             css_class="dtype-anndata",
@@ -907,8 +902,8 @@ class AnnDataFormatter(TypeFormatter):
                 "n_obs": obj.n_obs,
                 "n_vars": obj.n_vars,
                 "is_view": getattr(obj, "is_view", False),
+                "can_expand": context.depth < context.max_depth,
             },
-            is_expandable=context.depth < context.max_depth,
             is_serializable=True,
         )
 
@@ -1011,8 +1006,11 @@ class DictFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="dict",
             css_class="dtype-object",
-            details={"n_items": n_items, "keys": list(obj.keys())[:10]},
-            is_expandable=n_items > 0 and context.depth < context.max_depth,
+            details={
+                "n_items": n_items,
+                "keys": list(obj.keys())[:10],
+                "can_expand": n_items > 0 and context.depth < context.max_depth,
+            },
             is_serializable=is_serial,
             warnings=warnings,
         )

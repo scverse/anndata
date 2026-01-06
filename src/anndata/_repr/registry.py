@@ -21,8 +21,8 @@ Usage for extending to new types:
             return FormattedOutput(
                 type_name=f"MyArray {obj.shape}",
                 css_class="dtype-myarray",
-                # meta_content for rightmost column (data preview, counts, etc.)
-                meta_content=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
+                # preview_html for rightmost column (data preview, counts, etc.)
+                preview_html=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
             )
 
     # Format by embedded type hint (e.g., tagged data in uns)
@@ -40,7 +40,7 @@ Usage for extending to new types:
             hint, data = extract_uns_type_hint(obj)
             return FormattedOutput(
                 type_name="config",
-                html_content='<span>Custom config preview</span>',
+                preview_html='<span>Custom config preview</span>',
             )
 """
 
@@ -66,34 +66,61 @@ if TYPE_CHECKING:
 
 @dataclass
 class FormattedOutput:
-    """Output from a formatter."""
+    """Output from a formatter.
+
+    Visual structure of an entry row::
+
+        ┌─────────────┬────────────────────────────┬─────────────────┐
+        │ Name        │ Type                       │ Preview         │
+        ├─────────────┼────────────────────────────┼─────────────────┤
+        │ (from key)  │ type_html or type_name     │ preview_html or │
+        │             │ + warnings + [Expand ▼]    │ preview (text)  │
+        └─────────────┴────────────────────────────┴─────────────────┘
+                               │ (if expanded_html provided and clicked)
+                               ▼
+                  ┌─────────────────────────────────────────────────┐
+                  │ expanded_html content (collapsible row)         │
+                  └─────────────────────────────────────────────────┘
+
+    Field naming convention:
+        - ``*_html`` fields contain raw HTML (caller responsible for escaping)
+        - Other string fields are plain text (auto-escaped when rendered)
+    """
 
     type_name: str
-    """Display name for the type (e.g., 'ndarray (100, 50) float32')"""
+    """Required. Text for the type column (e.g., 'ndarray (100, 50) float32').
+    Always used for data-dtype attribute (search/filter). Auto-escaped."""
+
+    type_html: str | None = None
+    """Optional. Raw HTML to render in type column instead of type_name.
+    If provided, replaces the visual rendering but type_name still used for data-dtype."""
 
     css_class: str = "dtype-unknown"
-    """CSS class for styling"""
+    """CSS class for styling the type column."""
 
     tooltip: str = ""
-    """Tooltip text on hover"""
+    """Tooltip text on hover."""
 
     details: dict[str, Any] = field(default_factory=dict)
-    """Additional details (shape, dtype, sparsity, etc.)"""
+    """Additional details (shape, dtype, sparsity, etc.) for programmatic access."""
 
     warnings: list[str] = field(default_factory=list)
-    """Warning messages to display"""
+    """Warning messages to display with warning icon."""
 
-    html_content: str | None = None
-    """Custom HTML content (for expandable nested content or type column)"""
+    preview: str | None = None
+    """Optional. Plain text for preview column (rightmost). Auto-escaped.
+    Mutually exclusive with preview_html."""
 
-    meta_content: str | None = None
-    """HTML content for the meta column (data previews, dimensions, etc.)"""
+    preview_html: str | None = None
+    """Optional. Raw HTML for preview column (e.g., category pills with colors).
+    Takes precedence over preview if both provided (with warning)."""
 
-    is_expandable: bool = False
-    """Whether this entry can be expanded"""
+    expanded_html: str | None = None
+    """Optional. Raw HTML for expandable content shown in collapsible row below.
+    If provided, an 'Expand ▼' button is added to the type column."""
 
     is_serializable: bool = True
-    """Whether this type can be serialized to H5AD/Zarr"""
+    """Whether this type can be serialized to H5AD/Zarr."""
 
 
 @dataclass
@@ -553,7 +580,7 @@ def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
                 # Render your custom visualization
                 return FormattedOutput(
                     type_name="mytype",
-                    html_content="<span>Custom rendering</span>",
+                    preview_html="<span>Custom rendering</span>",
                 )
 
     2. When the user imports your package, the formatter is registered

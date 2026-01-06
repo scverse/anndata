@@ -1736,7 +1736,7 @@ class TestUnsRendererRegistry:
                 items = data.get("data", {})
                 return FormattedOutput(
                     type_name="test config",
-                    html_content=f'<span class="test-custom">Items: {len(items)}</span>',
+                    preview_html=f'<span class="test-custom">Items: {len(items)}</span>',
                 )
 
         formatter = TestConfigFormatter()
@@ -2530,17 +2530,15 @@ class TestBuiltinFormattersCoverage:
 
         # Default: not expandable
         result = formatter.format(df, ctx)
-        assert not result.is_expandable
-        assert result.html_content is None
+        assert result.expanded_html is None
 
         # Enable expansion
         original = anndata.settings.repr_html_dataframe_expand
         try:
             anndata.settings.repr_html_dataframe_expand = True
             result_expanded = formatter.format(df, ctx)
-            assert result_expanded.is_expandable
-            assert result_expanded.html_content is not None
-            assert "<table" in result_expanded.html_content  # pandas to_html output
+            assert result_expanded.expanded_html is not None
+            assert "<table" in result_expanded.expanded_html  # pandas to_html output
         finally:
             anndata.settings.repr_html_dataframe_expand = original
 
@@ -2623,7 +2621,7 @@ class TestCustomHtmlContent:
     """Tests for custom HTML content in Type Formatters."""
 
     def test_inline_html_content(self):
-        """Test inline (non-expandable) custom HTML content."""
+        """Test inline (non-expandable) custom HTML content in preview column."""
         from anndata._repr.registry import (
             FormattedOutput,
             TypeFormatter,
@@ -2646,8 +2644,7 @@ class TestCustomHtmlContent:
                 return FormattedOutput(
                     type_name="CustomInline",
                     css_class="dtype-custom",
-                    html_content='<span class="test-inline">Inline Preview</span>',
-                    is_expandable=False,
+                    preview_html='<span class="test-inline">Inline Preview</span>',
                 )
 
         formatter = InlineHtmlFormatter()
@@ -2703,8 +2700,7 @@ class TestCustomHtmlContent:
                 return FormattedOutput(
                     type_name="TreeData (3 nodes)",
                     css_class="dtype-tree",
-                    html_content=tree_html,
-                    is_expandable=True,
+                    expanded_html=tree_html,
                 )
 
         formatter = ExpandableHtmlFormatter()
@@ -2833,8 +2829,7 @@ class TestCustomSectionFormatters:
                         output=FormattedOutput(
                             type_name="PhyloTree (25 nodes)",
                             css_class="dtype-tree",
-                            html_content=tree_html,
-                            is_expandable=True,
+                            expanded_html=tree_html,
                         ),
                     ),
                 ]
@@ -3588,11 +3583,11 @@ class TestAnnDataFormatterCoverage:
 
         # At depth 0, should be expandable (0 < max_depth default 3)
         result_shallow = formatter.format(inner, FormatterContext(depth=0, max_depth=3))
-        assert result_shallow.is_expandable
+        assert result_shallow.details.get("can_expand", False)
 
         # At depth 3, should NOT be expandable (3 >= max_depth 3)
         result_deep = formatter.format(inner, FormatterContext(depth=3, max_depth=3))
-        assert not result_deep.is_expandable
+        assert not result_deep.details.get("can_expand", False)
 
 
 # =============================================================================
@@ -4234,8 +4229,7 @@ class TestFormattedEntryRendering:
                         output=FormattedOutput(
                             type_name="Expandable",
                             css_class="test",
-                            html_content="<div>Expanded content here</div>",
-                            is_expandable=True,
+                            expanded_html="<div>Expanded content here</div>",
                         ),
                     ),
                 ]
@@ -4279,8 +4273,7 @@ class TestFormattedEntryRendering:
                         output=FormattedOutput(
                             type_name="Inline",
                             css_class="test",
-                            html_content="<span>Inline preview</span>",
-                            is_expandable=False,
+                            preview_html="<span>Inline preview</span>",
                         ),
                     ),
                 ]

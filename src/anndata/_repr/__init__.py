@@ -38,8 +38,8 @@ The system is designed to be extensible via two registry patterns:
                 return FormattedOutput(
                     type_name=f"MyArray {obj.shape}",
                     css_class="dtype-myarray",
-                    # meta_content provides HTML for the rightmost column
-                    meta_content=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
+                    # preview_html provides HTML for the preview column (rightmost)
+                    preview_html=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
                 )
 
     Example - format by embedded type hint (for tagged data in uns)::
@@ -61,7 +61,7 @@ The system is designed to be extensible via two registry patterns:
                 hint, data = extract_uns_type_hint(obj)
                 return FormattedOutput(
                     type_name="config",
-                    html_content="<span>Custom config preview</span>",
+                    preview_html="<span>Custom config preview</span>",
                 )
 
     Data structure for type hints (works in any section)::
@@ -211,8 +211,7 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
         key="table",
         output=FormattedOutput(
             type_name=f"AnnData ({adata.n_obs} x {adata.n_vars})",
-            html_content=nested_html,
-            is_expandable=True,
+            expanded_html=nested_html,  # Collapsible content below the row
         ),
     )
 

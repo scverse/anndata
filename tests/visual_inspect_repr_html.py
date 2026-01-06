@@ -203,8 +203,7 @@ try:
                     type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
                     css_class="dtype-tree",
                     tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
-                    html_content=svg_html,
-                    is_expandable=True,
+                    expanded_html=svg_html,
                 )
                 entries.append(FormattedEntry(key=key, output=output))
             return entries
@@ -243,8 +242,7 @@ try:
                     type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
                     css_class="dtype-tree",
                     tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
-                    html_content=svg_html,
-                    is_expandable=True,
+                    expanded_html=svg_html,
                 )
                 entries.append(FormattedEntry(key=key, output=output))
             return entries
@@ -342,9 +340,9 @@ try:
                     details={
                         "n_obs": adata.n_obs,
                         "n_vars": adata.n_vars,
+                        "can_expand": can_expand,
                     },
-                    html_content=nested_html,
-                    is_expandable=can_expand,
+                    expanded_html=nested_html if can_expand else None,
                     is_serializable=True,
                 )
                 entries.append(FormattedEntry(key=mod_name, output=output))
@@ -557,7 +555,7 @@ try:
                     output=FormattedOutput(
                         type_name=f"DataArray {info['shape']} {info['dtype']}",
                         css_class="dtype-ndarray",
-                        meta_content=meta,  # Content in meta column (rightmost)
+                        preview_html=meta,  # Content in preview column (rightmost)
                     ),
                 )
                 # render_formatted_entry() creates the table row HTML
@@ -583,7 +581,7 @@ try:
                     output=FormattedOutput(
                         type_name=f"Labels {info['shape']} {info['dtype']}",
                         css_class="dtype-ndarray",
-                        meta_content=meta,
+                        preview_html=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -606,7 +604,7 @@ try:
                     output=FormattedOutput(
                         type_name=f"dask.DataFrame ({format_number(info['n_points'])} × {info['n_dims']})",
                         css_class="dtype-dataframe",
-                        meta_content=meta,
+                        preview_html=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -629,7 +627,7 @@ try:
                     output=FormattedOutput(
                         type_name=f"GeoDataFrame ({format_number(info['n_shapes'])} shapes)",
                         css_class="dtype-dataframe",
-                        meta_content=meta,
+                        preview_html=meta,
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -659,14 +657,13 @@ try:
                     show_search=False,
                 )
 
-                # FormattedOutput with is_expandable=True makes it collapsible
+                # FormattedOutput with expanded_html makes it collapsible
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"AnnData ({adata.n_obs} × {adata.n_vars})",
                         css_class="dtype-anndata",
-                        html_content=nested_html,
-                        is_expandable=True,  # Makes the nested content collapsible
+                        expanded_html=nested_html,  # Makes the nested content collapsible
                     ),
                 )
                 rows.append(render_formatted_entry(entry))
@@ -1645,7 +1642,7 @@ def main():  # noqa: PLR0915, PLR0912
 
             return FormattedOutput(
                 type_name="analysis history",
-                html_content="".join(html_parts),
+                preview_html="".join(html_parts),  # Use preview_html for inline preview
             )
 
     adata_uns = AnnData(np.zeros((10, 5)))
@@ -1966,11 +1963,11 @@ For more details, see the full documentation.
             "<ul>"
             "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
             "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
-            "<li><code>render_formatted_entry()</code> with <code>meta_content</code> - table rows with meta column</li>"
+            "<li><code>render_formatted_entry()</code> with <code>preview_html</code> - table rows with preview column</li>"
             "<li><code>generate_repr_html()</code> - embed nested AnnData (see 'tables' section)</li>"
             "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
             "</ul>"
-            "Note the meta column shows dimension info like <code>[c, y, x]</code>. "
+            "Note the preview column shows dimension info like <code>[c, y, x]</code>. "
             "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand). "
             "Hover over coordinate system names to see associated elements.",
         ))

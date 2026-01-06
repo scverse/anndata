@@ -129,7 +129,7 @@ def _render_dataframe_entry(
     # Create context with column_name for formatter to use
     col_context = replace(context, column_name=col_name)
 
-    # Format the column - formatter now produces meta_content
+    # Format the column - formatter produces preview_html or preview
     output = formatter_registry.format_value(col, col_context)
 
     # Collect warnings
@@ -184,17 +184,20 @@ def _render_dataframe_entry(
     parts.append(render_warning_icon(entry_warnings, is_error=is_error))
 
     # Add wrap button for categories in the type column
-    n_categories = output.details.get("n_categories", 0)
-    if n_categories > 0 and output.meta_content:
+    if n_categories > 0 and output.preview_html:
         parts.append(
             '<button class="adata-cats-wrap-btn" title="Toggle multi-line view">⋯</button>'
         )
     parts.append("</td>")
 
-    # Meta cell - use formatter's meta_content
+    # Preview cell - use formatter's preview_html or preview (text)
     parts.append('<td class="adata-entry-meta">')
-    if output.meta_content:
-        parts.append(output.meta_content)
+    if output.preview_html:
+        parts.append(output.preview_html)
+    elif output.preview:
+        parts.append(
+            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
+        )
     parts.append("</td>")
 
     parts.append("</tr>")
@@ -278,9 +281,10 @@ def _render_type_cell(
             '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
         )
 
-    if output.html_content and not output.is_expandable:
+    # type_html replaces type_name in the type column (for custom inline rendering)
+    if output.type_html:
         parts.append(
-            f'<div class="adata-custom-content" style="margin-top:4px;">{output.html_content}</div>'
+            f'<div class="adata-custom-content" style="margin-top:4px;">{output.type_html}</div>'
         )
 
     parts.append("</td>")
@@ -288,11 +292,20 @@ def _render_type_cell(
 
 
 def _render_mapping_meta_cell(output: FormattedOutput, section: str) -> list[str]:
-    """Render the meta cell for a mapping entry."""
+    """Render the preview cell for a mapping entry.
+
+    Priority: preview_html > preview > columns list > meta_preview > shape
+    """
     parts = ['<td class="adata-entry-meta">']
 
-    has_columns_list = output.details.get("has_columns_list", False)
-    if has_columns_list and "columns" in output.details:
+    # Check for formatter-provided preview content first
+    if output.preview_html:
+        parts.append(output.preview_html)
+    elif output.preview:
+        parts.append(
+            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
+        )
+    elif output.details.get("has_columns_list") and "columns" in output.details:
         columns = output.details["columns"]
         col_str = ", ".join(escape_html(str(c)) for c in columns)
         parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
@@ -336,7 +349,7 @@ def _render_mapping_entry(
     if not output.is_serializable or key_hard_error:
         entry_class += " error"
 
-    has_expandable_content = output.html_content and output.is_expandable
+    has_expandable_content = output.expanded_html is not None
 
     parts = [
         f'<tr class="{entry_class}" data-key="{escape_html(key)}" '
@@ -356,7 +369,7 @@ def _render_mapping_entry(
         )
     )
 
-    # Meta cell
+    # Preview cell
     parts.extend(_render_mapping_meta_cell(output, section))
 
     parts.append("</tr>")
@@ -365,7 +378,7 @@ def _render_mapping_entry(
     if has_expandable_content:
         parts.append('<tr class="adata-nested-row">')
         parts.append('<td colspan="3" class="adata-nested-content">')
-        parts.append(f'<div class="adata-custom-expanded">{output.html_content}</div>')
+        parts.append(f'<div class="adata-custom-expanded">{output.expanded_html}</div>')
         parts.append("</td>")
         parts.append("</tr>")
 
@@ -428,11 +441,11 @@ def _render_uns_entry(
     5. Default type info only
     """
     # 1. Check for custom TypeFormatter (may check type hint in can_format)
-    # First try formatting - if a TypeFormatter matches and provides html_content, use it
+    # If a TypeFormatter matches and provides preview content, use it
     output = formatter_registry.format_value(value, context)
-    if output.html_content:
-        # A TypeFormatter provided custom HTML - render it
-        return _render_uns_entry_with_custom_html(key, output)
+    if output.preview_html or output.preview:
+        # A TypeFormatter provided custom preview content
+        return _render_uns_entry_with_custom_preview(key, output)
 
     # Check if there's an unhandled type hint (no formatter matched but hint exists)
     type_hint, cleaned_value = extract_uns_type_hint(value)
@@ -521,10 +534,10 @@ def _render_uns_entry_with_preview(
     return "\n".join(parts)
 
 
-def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str:
-    """Render an uns entry with custom HTML from a TypeFormatter.
+def _render_uns_entry_with_custom_preview(key: str, output: FormattedOutput) -> str:
+    """Render an uns entry with custom preview content from a TypeFormatter.
 
-    The output should have html_content set.
+    Uses preview_html if available, otherwise preview (text).
     """
     type_label = output.type_name
 
@@ -555,10 +568,15 @@ def _render_uns_entry_with_custom_html(key: str, output: FormattedOutput) -> str
     parts.append(render_warning_icon(all_warnings, is_error=is_error))
     parts.append("</td>")
 
-    # Meta - custom HTML content
+    # Preview cell - use preview_html if available, otherwise preview (text)
     parts.append('<td class="adata-entry-meta">')
-    # Note: HTML is trusted from registered TypeFormatter (package must be imported)
-    parts.append(output.html_content)
+    if output.preview_html:
+        # HTML is trusted from registered TypeFormatter (package must be imported)
+        parts.append(output.preview_html)
+    elif output.preview:
+        parts.append(
+            f'<span class="adata-text-muted">{escape_html(output.preview)}</span>'
+        )
     parts.append("</td>")
     parts.append("</tr>")
 
