@@ -27,11 +27,9 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
-    COLOR_PREVIEW_LIMIT,
     ERROR_TRUNCATE_LENGTH,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
-    TOOLTIP_TRUNCATE_LENGTH,
 )
 from . import (
     DOCS_BASE_URL,
@@ -57,13 +55,9 @@ from .registry import (
     formatter_registry,
 )
 from .utils import (
-    check_color_category_mismatch,
     check_column_name,
     escape_html,
     format_number,
-    generate_value_preview,
-    is_color_list,
-    should_warn_string_column,
 )
 
 if TYPE_CHECKING:
@@ -74,25 +68,6 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
     from .registry import FormattedOutput, FormatterContext
-
-# -----------------------------------------------------------------------------
-# Lazy import for generate_repr_html
-# -----------------------------------------------------------------------------
-# This lazy import is required because of circular dependencies:
-# - html.py imports section renderers from sections.py (at module load)
-# - sections.py needs generate_repr_html for nested AnnData rendering
-# The lazy import ensures html.py fully loads before we access generate_repr_html.
-
-
-def _get_generate_repr_html():
-    """Lazy import of generate_repr_html to avoid circular imports.
-
-    See comment above for explanation of why this is necessary.
-    """
-    from .html import generate_repr_html
-
-    return generate_repr_html
-
 
 def _validate_key_and_collect_warnings(
     key: str,
@@ -160,9 +135,9 @@ def _render_dataframe_section(
             rows.append(render_truncation_indicator(n_cols - context.max_items))
             break
         col = df[col_name]
-        rows.append(
-            _render_dataframe_entry(adata, section, col_name, col, section_context)
-        )
+        col_context = replace(section_context, column_name=col_name)
+        output = formatter_registry.format_value(col, col_context)
+        rows.append(_render_dataframe_entry(col_name, output))
 
     return render_section(
         section,
@@ -175,44 +150,13 @@ def _render_dataframe_section(
     )
 
 
-def _render_dataframe_entry(
-    adata: AnnData,
-    section: str,
-    col_name: str,
-    col: pd.Series,
-    context: FormatterContext,
-) -> str:
-    """Render a single DataFrame column entry."""
-    # Create context with column_name for formatter to use
-    col_context = replace(context, column_name=col_name)
+def _render_dataframe_entry(col_name: str, output: FormattedOutput) -> str:
+    """Render a single DataFrame column entry.
 
-    # Format the column - formatter produces preview_html or preview
-    output = formatter_registry.format_value(col, col_context)
-
-    # Collect extra warnings specific to dataframe columns
-    extra_warnings = []
-
-    # Check for string->category warning (only for non-categorical, non-lazy columns)
-    if output.details.get("n_categories") is None:
-        is_lazy = output.details.get("is_lazy", False)
-        if not is_lazy:
-            # Use n_unique from SeriesFormatter (avoids recomputation)
-            n_unique = output.details.get("n_unique")
-            should_warn, warn_msg = should_warn_string_column(col, n_unique)
-            if should_warn:
-                extra_warnings.append(warn_msg)
-
-    # Check for color mismatch (for categorical columns)
-    n_categories = output.details.get("n_categories", 0)
-    if n_categories > 0 and context.adata_ref is not None:
-        color_warning = check_color_category_mismatch(adata, col_name, n_categories)
-        if color_warning:
-            extra_warnings.append(color_warning)
-
+    The renderer only sees FormattedOutput, never the original object.
+    """
     # Validate key and collect all warnings
-    all_warnings, is_error = _validate_key_and_collect_warnings(
-        col_name, output, extra_warnings
-    )
+    all_warnings, is_error = _validate_key_and_collect_warnings(col_name, output)
 
     # Build row using consolidated helper
     parts = [
@@ -228,7 +172,8 @@ def _render_dataframe_entry(
     parts.append(render_name_cell(col_name))
 
     # Type cell (using consolidated helper)
-    has_categories = n_categories > 0 and output.preview_html
+    # Categorical columns have css_class="dtype-category" and preview_html with pills
+    has_categories = output.css_class == "dtype-category" and output.preview_html
     parts.append(
         render_entry_type_cell(
             output.type_name,
@@ -286,7 +231,8 @@ def _render_mapping_section(
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = mapping[key]
-        rows.append(_render_mapping_entry(key, value, section_context, section))
+        output = formatter_registry.format_value(value, section_context)
+        rows.append(_render_mapping_entry(key, output))
 
     return render_section(
         section,
@@ -298,20 +244,17 @@ def _render_mapping_section(
     )
 
 
-def _render_mapping_entry(
-    key: str,
-    value: Any,
-    context: FormatterContext,
-    section: str,
-) -> str:
-    """Render a single mapping entry."""
-    output = formatter_registry.format_value(value, context)
+def _render_mapping_entry(key: str, output: FormattedOutput) -> str:
+    """Render a single mapping entry.
 
+    The renderer only sees FormattedOutput, never the original object.
+    """
     # Validate key and collect all warnings
     all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
 
     has_expandable_content = output.expanded_html is not None
-    has_columns_list = output.details.get("has_columns_list", False)
+    # DataFrames have column list in preview_html (for wrap button in type cell)
+    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
 
     # Build row using consolidated helper
     parts = [
@@ -341,17 +284,11 @@ def _render_mapping_entry(
         )
     )
 
-    # Preview cell (using consolidated helper)
+    # Preview cell - formatter provides complete preview_html
     parts.append(
         render_entry_preview_cell(
             preview_html=output.preview_html,
             preview_text=output.preview,
-            columns=output.details.get("columns"),
-            has_columns_list=has_columns_list,
-            tooltip_preview=output.details.get("meta_preview"),
-            tooltip_full=output.details.get("meta_preview_full"),
-            shape=output.details.get("shape"),
-            section=section,
         )
     )
 
@@ -413,74 +350,51 @@ def _render_uns_entry(
     """Render a single uns entry with special type handling.
 
     Rendering priority:
-    1. Custom TypeFormatter (checks type hint via can_format)
-    2. Color list (keys ending in _colors)
-    3. Nested AnnData objects
-    4. Generic preview for simple types (str, int, float, bool, small dict/list)
-    5. Default type info only
+    1. Custom TypeFormatter (may handle type hints, color lists, AnnData)
+    2. Unhandled type hint (show import suggestion)
+    3. Default formatter
     """
-    # 1. Check for custom TypeFormatter (may check type hint in can_format)
-    # If a TypeFormatter matches and provides preview content, use it
-    output = formatter_registry.format_value(value, context)
-    if output.preview_html or output.preview:
-        # A TypeFormatter provided custom preview content
+    # Pass key to formatter via column_name for key-based detection (e.g., color lists)
+    key_context = replace(context, column_name=key)
+
+    # 1. Try formatter first - handles type hints, color lists, AnnData
+    output = formatter_registry.format_value(value, key_context)
+
+    # If a custom formatter produced preview_html, use it directly
+    if output.preview_html:
         return _render_uns_entry_row(key, output)
 
-    # Check if there's an unhandled type hint (no formatter matched but hint exists)
+    # 2. Check for unhandled type hint (basic formatter matched, not custom)
     type_hint, cleaned_value = extract_uns_type_hint(value)
     if type_hint is not None:
-        # Type hint present but no formatter registered - show helpful message
+        # Type hint present but no custom formatter - show import suggestion
         package_name = type_hint.split(".")[0] if "." in type_hint else type_hint
-        cleaned_output = formatter_registry.format_value(cleaned_value, context)
+        cleaned_output = formatter_registry.format_value(cleaned_value, key_context)
         return _render_uns_entry_row(
             key,
             cleaned_output,
-            value=cleaned_value,
-            context=context,
             preview_note=f"[{type_hint}] (import {package_name} to enable)",
         )
 
-    # 2. Check for color list
-    if is_color_list(key, value):
-        return _render_color_list_entry(key, value)
-
-    # 3. Check for nested AnnData
-    if type(value).__name__ == "AnnData" and hasattr(value, "n_obs"):
-        return _render_nested_anndata_entry(key, value, context)
-
-    # 4. Generic preview for simple/small types
-    return _render_uns_entry_row(key, output, value=value, context=context)
+    # 3. Use formatter output
+    return _render_uns_entry_row(key, output)
 
 
 def _render_uns_entry_row(
     key: str,
     output: FormattedOutput,
     *,
-    value: Any = None,
-    context: FormatterContext | None = None,
     preview_note: str | None = None,
 ) -> str:
-    """Render an uns entry row (unified handler for all uns entry types).
+    """Render an uns entry row.
 
-    This function handles two cases:
-    1. Custom preview from TypeFormatter: uses output.preview_html/preview
-    2. Generic preview: generates preview from value using generate_value_preview()
-
-    Parameters
-    ----------
-    key
-        The entry key name
-    output
-        FormattedOutput from the formatter
-    value
-        The actual value (needed for generating generic preview)
-    context
-        FormatterContext (needed for max_string_length in generic preview)
-    preview_note
-        Optional note to prepend to generic preview (e.g., type hint info)
+    The renderer only sees FormattedOutput, never the original object.
+    Formatters are responsible for producing preview content.
     """
     # Validate key and collect warnings
     all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
+
+    has_expandable_content = output.expanded_html is not None
 
     # Build row
     parts = [
@@ -502,108 +416,31 @@ def _render_uns_entry_row(
             output.css_class,
             warnings=all_warnings,
             is_error=is_error,
+            has_expandable_content=has_expandable_content,
         )
     )
 
-    # Preview cell - use custom preview if available, otherwise generate
-    if output.preview_html or output.preview:
-        parts.append(
-            render_entry_preview_cell(
-                preview_html=output.preview_html,
-                preview_text=output.preview,
-            )
-        )
-    else:
-        # Generate generic preview from value
-        max_len = context.max_string_length if context else 100
-        preview = generate_value_preview(value, max_len)
-        if preview_note:
-            preview = f"{preview_note} {preview}" if preview else preview_note
-        parts.append(
-            render_entry_preview_cell(
-                tooltip_preview=preview,
-                tooltip_full=str(value)[:TOOLTIP_TRUNCATE_LENGTH] if preview else None,
-            )
-        )
+    # Preview cell - formatter provides all preview content
+    preview_text = output.preview
+    if preview_note and preview_text:
+        preview_text = f"{preview_note} {preview_text}"
+    elif preview_note:
+        preview_text = preview_note
 
-    parts.append("</tr>")
-    return "\n".join(parts)
-
-
-def _render_color_list_entry(key: str, value: Any) -> str:
-    """Render a color list entry with swatches."""
-    colors = list(value) if hasattr(value, "__iter__") else []
-    n_colors = len(colors)
-
-    # Build row using consolidated helper
-    parts = [render_entry_row_open(key, "colors")]
-
-    # Name
-    parts.append(render_name_cell(key))
-
-    # Type
-    parts.append('<td class="adata-entry-type">')
-    parts.append(f'<span class="dtype-object">colors ({n_colors})</span>')
-    parts.append("</td>")
-
-    # Meta - color swatches
-    parts.append('<td class="adata-entry-preview">')
-    parts.append('<span class="adata-color-swatches">')
-    parts.extend(
-        f'<span class="adata-color-swatch" style="background:{escape_html(str(color))}" title="{escape_html(str(color))}"></span>'
-        for color in colors[:COLOR_PREVIEW_LIMIT]
-    )
-    if n_colors > COLOR_PREVIEW_LIMIT:
-        parts.append(
-            f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
-        )
-    parts.append("</span>")
-    parts.append("</td>")
-    parts.append("</tr>")
-
-    return "\n".join(parts)
-
-
-def _render_nested_anndata_entry(
-    key: str,
-    value: Any,
-    context: FormatterContext,
-) -> str:
-    """Render a nested AnnData entry."""
-    n_obs = getattr(value, "n_obs", "?")
-    n_vars = getattr(value, "n_vars", "?")
-
-    can_expand = context.depth < context.max_depth - 1
-
-    # Build row using consolidated helpers
-    type_name = f"AnnData ({format_number(n_obs)} × {format_number(n_vars)})"
-    parts = [render_entry_row_open(key, "AnnData")]
-    parts.append(render_name_cell(key))
     parts.append(
-        render_entry_type_cell(
-            type_name, "dtype-anndata", has_expandable_content=can_expand
+        render_entry_preview_cell(
+            preview_html=output.preview_html,
+            preview_text=preview_text,
         )
     )
-    parts.append(render_entry_preview_cell())
+
     parts.append("</tr>")
 
-    # Nested content (hidden by default)
-    if can_expand:
-        # Recursive call (lazy import to avoid circular dependency)
-        generate_repr_html = _get_generate_repr_html()
-        nested_html = generate_repr_html(
-            value,
-            depth=context.depth + 1,
-            max_depth=context.max_depth,
-            show_header=True,
-            show_search=False,
-        )
-        # Wrap in adata-nested-anndata for specific styling
-        wrapped_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
-        parts.append(render_nested_content_cell(wrapped_html))
+    # Expandable content row (for nested AnnData, etc.)
+    if has_expandable_content:
+        parts.append(render_nested_content_cell(output.expanded_html))
 
     return "\n".join(parts)
-
 
 # -----------------------------------------------------------------------------
 # Unknown Sections (extension attributes)

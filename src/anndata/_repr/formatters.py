@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .._repr_constants import DF_COLS_PREVIEW_LIMIT, DF_COLS_PREVIEW_MAX_LEN
+from .._repr_constants import COLOR_PREVIEW_LIMIT
 from .components import render_category_list
 from .registry import (
     FormattedOutput,
@@ -31,12 +31,20 @@ from .registry import (
     formatter_registry,
 )
 from .utils import (
+    check_color_category_mismatch,
+    escape_html,
     format_number,
     get_categories_for_display,
     get_matching_column_colors,
     get_setting,
+    is_color_list,
     is_lazy_series,
     is_serializable,
+    preview_dict,
+    preview_number,
+    preview_sequence,
+    preview_string,
+    should_warn_string_column,
 )
 
 if TYPE_CHECKING:
@@ -271,7 +279,7 @@ class SparseMatrixFormatter(TypeFormatter):
 
         return is_sparse_module and has_sparse_attrs
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
@@ -312,17 +320,20 @@ class SparseMatrixFormatter(TypeFormatter):
         if format_name is None:
             format_name = type(obj).__name__
 
+        # Build type_name with sparsity info inline
+        nnz_formatted = format_number(obj.nnz)
+        if sparsity_str:
+            type_name = (
+                f"{format_name} ({shape_str}) {dtype_str} · "
+                f"{sparsity_str} ({nnz_formatted} stored)"
+            )
+        else:
+            type_name = f"{format_name} ({shape_str}) {dtype_str}"
+
         return FormattedOutput(
-            type_name=f"{format_name} ({shape_str}) {dtype_str}",
+            type_name=type_name,
             css_class="dtype-sparse",
-            tooltip=f"{format_number(obj.nnz)} stored elements, {sparsity_str}",
-            details={
-                "shape": obj.shape,
-                "dtype": dtype_str,
-                "nnz": obj.nnz,
-                "format": format_name,
-                "sparsity": sparsity if n_elements > 0 else None,
-            },
+            tooltip=f"{nnz_formatted} stored elements",
             is_serializable=True,
         )
 
@@ -349,15 +360,9 @@ class BackedSparseDatasetFormatter(TypeFormatter):
         format_name = getattr(obj, "format", "sparse")
 
         return FormattedOutput(
-            type_name=f"{format_name}_matrix ({shape_str}) {dtype_str}",
+            type_name=f"{format_name}_matrix ({shape_str}) {dtype_str} · on disk",
             css_class="dtype-sparse",
             tooltip="Backed sparse matrix (data stays on disk)",
-            details={
-                "shape": obj.shape,
-                "dtype": dtype_str,
-                "format": format_name,
-                "backed": True,
-            },
             is_serializable=True,
         )
 
@@ -386,21 +391,12 @@ class DataFrameFormatter(TypeFormatter):
         n_rows, n_cols = len(df), len(df.columns)
         cols = list(df.columns)
 
-        # Build compact column preview for meta column
-        meta_preview = ""
-        meta_preview_full = ""
-        if n_cols > 0:
-            meta_preview_full = f"columns: [{', '.join(str(c) for c in cols)}]"
-            if n_cols <= DF_COLS_PREVIEW_LIMIT:
-                col_str = ", ".join(str(c) for c in cols)
-            else:
-                col_str = (
-                    ", ".join(str(c) for c in cols[:DF_COLS_PREVIEW_LIMIT]) + ", …"
-                )
-            # Truncate if still too long
-            if len(col_str) > DF_COLS_PREVIEW_MAX_LEN:
-                col_str = col_str[: DF_COLS_PREVIEW_MAX_LEN - 1] + "…"
-            meta_preview = f"[{col_str}]"
+        # Build preview_html with column list for obsm/varm sections
+        # Uses adata-cols-list class for CSS truncation and JS wrap button
+        preview_html = None
+        if n_cols > 0 and context.section in ("obsm", "varm"):
+            col_str = ", ".join(escape_html(str(c)) for c in cols)
+            preview_html = f'<span class="adata-cols-list">[{col_str}]</span>'
 
         # Check if expandable _repr_html_ is enabled
         expand_dataframes = get_setting("repr_html_dataframe_expand", default=False)
@@ -418,14 +414,7 @@ class DataFrameFormatter(TypeFormatter):
             type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
             css_class="dtype-dataframe",
             expanded_html=expanded_html,
-            details={
-                "n_rows": n_rows,
-                "n_cols": n_cols,
-                "columns": cols,
-                "meta_preview": meta_preview,
-                "meta_preview_full": meta_preview_full,
-                "has_columns_list": n_cols > 0,  # Flag for wrap button
-            },
+            preview_html=preview_html,
             is_serializable=True,
         )
 
@@ -473,14 +462,14 @@ class SeriesFormatter(TypeFormatter):
             if n_unique is not None:
                 preview = f"({n_unique} unique)"
 
+            # Check for string->category conversion warning
+            should_warn, warn_msg = should_warn_string_column(series, n_unique)
+            if should_warn:
+                warnings.append(warn_msg)
+
         return FormattedOutput(
             type_name=f"{dtype_str}",
             css_class=css_class,
-            details={
-                "length": len(series),
-                "dtype": dtype_str,
-                "n_unique": n_unique,  # Expose for string warning check
-            },
             preview=preview,
             is_serializable=is_serial,
             warnings=warnings,
@@ -519,29 +508,24 @@ class CategoricalFormatter(TypeFormatter):
             and not isinstance(obj, pd.Series | pd.Categorical)
         )
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
         # Determine if this is a lazy (xarray DataArray) categorical
         is_lazy = is_lazy_series(obj)
         n_categories = 0
-        ordered = False
 
         # Get number of categories based on object type
         if isinstance(obj, pd.Series):
             n_categories = len(obj.cat.categories)
-            ordered = obj.cat.ordered
         elif isinstance(obj, pd.Categorical):
             n_categories = len(obj.categories)
-            ordered = obj.ordered
         else:
             # Try to get info from lazy categorical without loading
-            lazy_count, lazy_ordered = _get_lazy_categorical_info(obj)
+            lazy_count, _lazy_ordered = _get_lazy_categorical_info(obj)
             if lazy_count is not None:
                 n_categories = lazy_count
-                ordered = lazy_ordered
             elif hasattr(obj, "dtype") and hasattr(obj.dtype, "categories"):
                 # Fallback: access dtype.categories (will load data)
                 n_categories = len(obj.dtype.categories)
-                ordered = getattr(obj.dtype, "ordered", False)
 
         # Format type name - indicate lazy for xarray DataArrays
         type_name = (
@@ -596,16 +580,25 @@ class CategoricalFormatter(TypeFormatter):
                     f'<span class="adata-text-muted">(error: {type(e).__name__})</span>'
                 )
 
+        # Check for color mismatch warning
+        warnings = []
+        if (
+            n_categories > 0
+            and context.adata_ref is not None
+            and context.column_name is not None
+        ):
+            color_warning = check_color_category_mismatch(
+                context.adata_ref, context.column_name, n_categories
+            )
+            if color_warning:
+                warnings.append(color_warning)
+
         return FormattedOutput(
             type_name=type_name,
             css_class="dtype-category",
-            details={
-                "n_categories": n_categories,
-                "ordered": ordered,
-                "is_lazy": is_lazy,
-            },
             preview_html=preview_html,
             is_serializable=True,
+            warnings=warnings,
         )
 
 
@@ -689,28 +682,22 @@ class DaskArrayFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         dtype_str = str(obj.dtype)
 
-        # Get chunk info for tooltip
+        # Get chunk info
         chunks_str = str(obj.chunksize) if hasattr(obj, "chunksize") else "unknown"
 
         # In obsm/varm/obsp/varp sections, don't show shape (redundant info)
         # - obsp/varp: always n_obs × n_obs or n_var × n_var
         # - obsm/varm: meta column shows number of columns
         if context.section in ("obsm", "varm", "obsp", "varp"):
-            type_name = f"dask.array {dtype_str}"
+            type_name = f"dask.array {dtype_str} · chunks={chunks_str}"
         else:
             shape_str = " × ".join(format_number(s) for s in obj.shape)
-            type_name = f"dask.array ({shape_str}) {dtype_str}"
+            type_name = f"dask.array ({shape_str}) {dtype_str} · chunks={chunks_str}"
 
         return FormattedOutput(
             type_name=type_name,
             css_class="dtype-dask",
-            tooltip=f"Chunks: {chunks_str}, {obj.npartitions} partitions",
-            details={
-                "shape": obj.shape,
-                "dtype": dtype_str,
-                "chunks": obj.chunks,
-                "npartitions": obj.npartitions,
-            },
+            tooltip=f"{obj.npartitions} partitions",
             is_serializable=True,
         )
 
@@ -875,18 +862,26 @@ class AnnDataFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         shape_str = f"{format_number(obj.n_obs)} × {format_number(obj.n_vars)}"
 
-        # Note: expansion is handled by _render_nested_anndata_entry in sections.py
-        # which generates the nested HTML recursively with depth control
+        # Generate expanded HTML if within depth limit
+        expanded_html = None
+        if context.depth < context.max_depth - 1:
+            # Lazy import to avoid circular dependency
+            from .html import generate_repr_html
+
+            nested_html = generate_repr_html(
+                obj,
+                depth=context.depth + 1,
+                max_depth=context.max_depth,
+                show_header=True,
+                show_search=False,
+            )
+            expanded_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
+
         return FormattedOutput(
             type_name=f"AnnData ({shape_str})",
             css_class="dtype-anndata",
             tooltip="Nested AnnData object",
-            details={
-                "n_obs": obj.n_obs,
-                "n_vars": obj.n_vars,
-                "is_view": getattr(obj, "is_view", False),
-                "can_expand": context.depth < context.max_depth,
-            },
+            expanded_html=expanded_html,
             is_serializable=True,
         )
 
@@ -903,6 +898,7 @@ class NoneFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="NoneType",
             css_class="dtype-object",
+            preview="None",
             is_serializable=True,
         )
 
@@ -919,6 +915,7 @@ class BoolFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="bool",
             css_class="dtype-bool",
+            preview=preview_number(obj),
             is_serializable=True,
         )
 
@@ -935,6 +932,7 @@ class IntFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="int",
             css_class="dtype-int",
+            preview=preview_number(obj),
             is_serializable=True,
         )
 
@@ -951,6 +949,7 @@ class FloatFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="float",
             css_class="dtype-float",
+            preview=preview_number(obj),
             is_serializable=True,
         )
 
@@ -967,6 +966,7 @@ class StringFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="str",
             css_class="dtype-string",
+            preview=preview_string(obj, context.max_string_length),
             is_serializable=True,
         )
 
@@ -980,8 +980,6 @@ class DictFormatter(TypeFormatter):
         return isinstance(obj, dict)
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
-        n_items = len(obj)
-
         # Check serializability of contents
         is_serial, reason = is_serializable(obj)
         warnings = [] if is_serial else [reason]
@@ -989,13 +987,50 @@ class DictFormatter(TypeFormatter):
         return FormattedOutput(
             type_name="dict",
             css_class="dtype-object",
-            details={
-                "n_items": n_items,
-                "keys": list(obj.keys())[:10],
-                "can_expand": n_items > 0 and context.depth < context.max_depth,
-            },
+            preview=preview_dict(obj),
             is_serializable=is_serial,
             warnings=warnings,
+        )
+
+
+class ColorListFormatter(TypeFormatter):
+    """Formatter for color lists (uns entries ending in _colors)."""
+
+    priority = 60  # Higher than ListFormatter to check first
+
+    def can_format(self, obj: Any) -> bool:
+        # Requires context.column_name to be set (from uns key)
+        return False  # Will be checked with context in format()
+
+    def can_format_with_context(self, obj: Any, context: FormatterContext) -> bool:
+        """Check if this is a color list based on key name and value."""
+        key = context.column_name
+        return key is not None and is_color_list(key, obj)
+
+    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+        colors = list(obj) if hasattr(obj, "__iter__") else []
+        n_colors = len(colors)
+
+        # Build color swatch HTML
+        swatches = []
+        for color in colors[:COLOR_PREVIEW_LIMIT]:
+            color_str = escape_html(str(color))
+            swatches.append(
+                f'<span class="adata-color-swatch" '
+                f'style="background:{color_str}" title="{color_str}"></span>'
+            )
+        if n_colors > COLOR_PREVIEW_LIMIT:
+            swatches.append(
+                f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
+            )
+
+        preview_html = f'<span class="adata-color-swatches">{"".join(swatches)}</span>'
+
+        return FormattedOutput(
+            type_name=f"colors ({n_colors})",
+            css_class="dtype-object",
+            preview_html=preview_html,
+            is_serializable=True,
         )
 
 
@@ -1009,7 +1044,6 @@ class ListFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         type_name = "list" if isinstance(obj, list) else "tuple"
-        n_items = len(obj)
 
         # Check serializability
         is_serial, reason = is_serializable(obj)
@@ -1018,7 +1052,7 @@ class ListFormatter(TypeFormatter):
         return FormattedOutput(
             type_name=type_name,
             css_class="dtype-object",
-            details={"n_items": n_items},
+            preview=preview_sequence(obj),
             is_serializable=is_serial,
             warnings=warnings,
         )
@@ -1087,6 +1121,7 @@ def _register_builtin_formatters() -> None:
         FloatFormatter(),
         StringFormatter(),
         DictFormatter(),
+        ColorListFormatter(),  # Before ListFormatter (higher priority for *_colors keys)
         ListFormatter(),
     ]
 

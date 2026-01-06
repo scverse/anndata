@@ -19,7 +19,7 @@ from .._repr_constants import (
 )
 from .components import render_fold_icon
 from .registry import formatter_registry
-from .utils import escape_html, format_number, is_backed
+from .utils import escape_html, format_number
 
 if TYPE_CHECKING:
     from typing import Any
@@ -204,28 +204,9 @@ def render_x_entry(obj: Any, context: FormatterContext) -> str:
     if X is None:
         parts.append("<span><em>None</em></span>")
     else:
-        # Format the X matrix
+        # Format the X matrix (formatter includes all info like sparsity, on disk, etc.)
         output = formatter_registry.format_value(X, context)
-
-        # Build compact type string
-        type_parts = [output.type_name]
-
-        # Add sparsity info inline for sparse matrices
-        if "sparsity" in output.details and output.details["sparsity"] is not None:
-            sparsity = output.details["sparsity"]
-            nnz = output.details.get("nnz", "?")
-            type_parts.append(f"{sparsity:.1%} sparse ({format_number(nnz)} stored)")
-
-        # Chunk info for Dask
-        if "chunks" in output.details:
-            type_parts.append(f"chunks={output.details['chunks']}")
-
-        # Backed info (only for AnnData, not Raw)
-        if is_backed(obj):
-            type_parts.append("on disk")
-
-        type_str = " · ".join(type_parts)
-        parts.append(f'<span class="{output.css_class}">{escape_html(type_str)}</span>')
+        parts.append(f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>')
 
     parts.append("</div>")
     return "\n".join(parts)

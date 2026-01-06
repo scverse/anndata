@@ -22,7 +22,7 @@ from .._repr_constants import (
     STYLE_CAT_DOT,
     STYLE_HIDDEN,
 )
-from .utils import escape_html, format_number
+from .utils import escape_html
 
 
 def render_entry_row_open(
@@ -536,25 +536,14 @@ def render_entry_type_cell(  # noqa: PLR0913
     return "".join(parts)
 
 
-def render_entry_preview_cell(  # noqa: PLR0913
+def render_entry_preview_cell(
     preview_html: str | None = None,
     preview_text: str | None = None,
-    *,
-    columns: list | None = None,
-    has_columns_list: bool = False,
-    tooltip_preview: str | None = None,
-    tooltip_full: str | None = None,
-    shape: tuple | None = None,
-    section: str = "",
 ) -> str:
     """Render the preview cell (third column) for an entry row.
 
-    Content is rendered with the following priority:
-    1. preview_html (raw HTML from formatter)
-    2. preview_text (plain text, will be muted and escaped)
-    3. columns list (if has_columns_list and columns provided)
-    4. tooltip_preview (short text with full text tooltip)
-    5. shape (only for obsm/varm sections)
+    Formatters are responsible for producing complete preview content.
+    This function just wraps it in the appropriate cell element.
 
     Parameters
     ----------
@@ -562,18 +551,6 @@ def render_entry_preview_cell(  # noqa: PLR0913
         Raw HTML content for preview (highest priority)
     preview_text
         Plain text preview (will be escaped and muted)
-    columns
-        List of column names for columns list display
-    has_columns_list
-        Whether to show columns as a list
-    tooltip_preview
-        Short preview text shown inline
-    tooltip_full
-        Full text shown as tooltip (defaults to tooltip_preview)
-    shape
-        Shape tuple for array-like objects (shown for obsm/varm)
-    section
-        Current section name (used for shape display logic)
 
     Returns
     -------
@@ -581,26 +558,10 @@ def render_entry_preview_cell(  # noqa: PLR0913
     """
     parts = ['<td class="adata-entry-preview">']
 
-    # Priority 1: Raw HTML from formatter
     if preview_html:
         parts.append(preview_html)
-    # Priority 2: Plain text preview
     elif preview_text:
         parts.append(render_muted_span(preview_text))
-    # Priority 3: Columns list
-    elif has_columns_list and columns:
-        col_str = ", ".join(escape_html(str(c)) for c in columns)
-        parts.append(f'<span class="adata-cols-list">[{col_str}]</span>')
-    # Priority 4: Tooltip preview
-    elif tooltip_preview:
-        full_text = tooltip_full or tooltip_preview
-        parts.append(
-            f'<span class="adata-text-muted" title="{escape_html(full_text)}">'
-            f"{escape_html(tooltip_preview)}</span>"
-        )
-    # Priority 5: Shape (only for obsm/varm)
-    elif shape and section in ("obsm", "varm") and len(shape) >= 2:
-        parts.append(render_muted_span(f"({format_number(shape[1])} cols)"))
 
     parts.append("</td>")
     return "".join(parts)

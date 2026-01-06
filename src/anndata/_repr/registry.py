@@ -102,7 +102,17 @@ class FormattedOutput:
     """Tooltip text on hover."""
 
     details: dict[str, Any] = field(default_factory=dict)
-    """Additional details (shape, dtype, sparsity, etc.) for programmatic access."""
+    """Optional metadata for custom TypeFormatters.
+
+    Most formatters don't need this - use the standard fields instead:
+    - ``type_name`` / ``type_html``: Type display (include all info inline)
+    - ``preview_html`` / ``preview``: Preview content
+    - ``warnings``: Warning messages
+    - ``expanded_html``: Expandable content
+
+    This dict is available for edge cases where custom formatters need to
+    pass additional data for programmatic access or custom rendering.
+    """
 
     warnings: list[str] = field(default_factory=list)
     """Warning messages to display with warning icon."""
@@ -492,7 +502,13 @@ class FormatterRegistry:
                 continue
 
             try:
-                if formatter.can_format(obj):
+                # Check with context if formatter supports it, else use basic check
+                if hasattr(formatter, "can_format_with_context"):
+                    can_fmt = formatter.can_format_with_context(obj, context)
+                else:
+                    can_fmt = formatter.can_format(obj)
+
+                if can_fmt:
                     return formatter.format(obj, context)
             except Exception as e:  # noqa: BLE001
                 # Intentional broad catch: formatters shouldn't crash the entire repr

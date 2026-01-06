@@ -1041,8 +1041,9 @@ class TestFormatters:
         result = formatter.format(mat, FormatterContext())
 
         assert "csr" in result.type_name.lower()
-        assert result.details["nnz"] == mat.nnz
-        assert result.details["sparsity"] is not None
+        # Sparsity info is now included in type_name
+        assert "sparse" in result.type_name.lower()
+        assert "stored" in result.type_name.lower()
 
     def test_categorical_formatter(self):
         """Test categorical formatting."""
@@ -1055,8 +1056,9 @@ class TestFormatters:
         assert formatter.can_format(cat_series)
         result = formatter.format(cat_series, FormatterContext())
 
+        # Category count is now in type_name as "category (3)"
         assert "category" in result.type_name.lower()
-        assert result.details["n_categories"] == 3
+        assert "(3)" in result.type_name
 
     def test_dict_formatter(self):
         """Test dictionary formatting."""
@@ -1070,7 +1072,9 @@ class TestFormatters:
         result = formatter.format(d, FormatterContext())
 
         assert "dict" in result.type_name.lower()
-        assert result.details["n_items"] == 3
+        # Dict formatter now produces preview with keys
+        assert result.preview is not None
+        assert "a" in result.preview
 
 
 # =============================================================================
@@ -1472,7 +1476,8 @@ class TestFutureCompatibility:
         result = formatter.format(sparse_matrix, context)
         assert "csr" in result.type_name.lower()
         assert result.css_class == "dtype-sparse"
-        assert result.details["nnz"] == 6
+        # nnz info is now included in type_name (e.g., "6 stored")
+        assert "6 stored" in result.type_name
 
     def test_array_api_formatter_with_mock_jax_array(self):
         """
@@ -2371,9 +2376,8 @@ class TestFormattersCoverage:
         mat = sp.csr_matrix((0, 0))
 
         result = formatter.format(mat, FormatterContext())
-        assert (
-            result.details["sparsity"] is None
-        )  # Can't compute sparsity for 0 elements
+        # For 0-element matrices, sparsity info is omitted from type_name
+        assert "sparse" not in result.type_name.lower() or "stored" not in result.type_name
 
 
 class TestBuiltinFormattersCoverage:
@@ -2390,7 +2394,8 @@ class TestBuiltinFormattersCoverage:
         assert formatter.can_format(obj)
         result = formatter.format(obj, FormatterContext())
         assert "list" in result.type_name.lower()
-        assert result.details["n_items"] == 5
+        # List formatter now produces preview with items
+        assert result.preview is not None
 
     def test_dict_formatter(self):
         """Test dict formatter."""
@@ -2403,7 +2408,8 @@ class TestBuiltinFormattersCoverage:
         assert formatter.can_format(obj)
         result = formatter.format(obj, FormatterContext())
         assert "dict" in result.type_name.lower()
-        assert result.details["n_items"] == 3
+        # Dict formatter now produces preview with keys
+        assert result.preview is not None
 
     def test_string_formatter(self):
         """Test string formatter."""
@@ -2474,8 +2480,9 @@ class TestBuiltinFormattersCoverage:
 
         assert formatter.can_format(cat)
         result = formatter.format(cat, FormatterContext())
+        # Category count is now in type_name as "category (3)"
         assert "category" in result.type_name.lower()
-        assert result.details["n_categories"] == 3
+        assert "(3)" in result.type_name
 
     def test_series_formatter_simple(self):
         """Test SeriesFormatter with simple numeric series."""
@@ -2487,7 +2494,8 @@ class TestBuiltinFormattersCoverage:
 
         assert formatter.can_format(series)
         result = formatter.format(series, FormatterContext())
-        assert result.details["length"] == 5
+        # Series formatter produces dtype in type_name
+        assert "float64" in result.type_name
 
     def test_dataframe_formatter(self):
         """Test DataFrameFormatter."""
@@ -2495,28 +2503,33 @@ class TestBuiltinFormattersCoverage:
         from anndata._repr.registry import FormatterContext
 
         formatter = DataFrameFormatter()
-        ctx = FormatterContext()
 
         # Basic DataFrame
         df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
         assert formatter.can_format(df)
-        result = formatter.format(df, ctx)
-        assert result.details["n_rows"] == 3
-        assert result.details["n_cols"] == 2
+        # Size is now in type_name
+        result = formatter.format(df, FormatterContext())
         assert "3 × 2" in result.type_name
-        # Column names in meta_preview
-        assert "[a, b]" in result.details["meta_preview"]
 
-        # DataFrame with many columns (truncated preview)
+        # For obsm/varm sections, columns are in preview_html
+        result_obsm = formatter.format(df, FormatterContext(section="obsm"))
+        assert result_obsm.preview_html is not None
+        assert "a" in result_obsm.preview_html
+        assert "b" in result_obsm.preview_html
+
+        # DataFrame with many columns - all columns in preview_html (CSS handles truncation)
         df_many = pd.DataFrame({f"col_{i}": [1] for i in range(10)})
-        result_many = formatter.format(df_many, ctx)
-        assert "…" in result_many.details["meta_preview"]  # Should be truncated
+        result_many = formatter.format(df_many, FormatterContext(section="obsm"))
+        assert "col_0" in result_many.preview_html
+        assert "col_9" in result_many.preview_html
 
         # Empty DataFrame
         df_empty = pd.DataFrame()
-        result_empty = formatter.format(df_empty, ctx)
+        result_empty = formatter.format(df_empty, FormatterContext())
         assert "0 × 0" in result_empty.type_name
-        assert result_empty.details["meta_preview"] == ""  # No column preview for empty
+        # Empty DataFrame in obsm has no preview_html (no columns)
+        result_empty_obsm = formatter.format(df_empty, FormatterContext(section="obsm"))
+        assert result_empty_obsm.preview_html is None
 
     def test_dataframe_formatter_expandable(self):
         """Test DataFrameFormatter with expandable to_html enabled."""
@@ -2917,8 +2930,8 @@ class TestRareSparseMatrixFormats:
 
         assert formatter.can_format(mat)
         result = formatter.format(mat, FormatterContext())
+        # Format info is now in type_name directly
         assert "lil" in result.type_name.lower()
-        assert result.details["format"] == "lil_matrix"
 
     def test_sparse_dok_formatter(self):
         """Test sparse formatter with DOK matrix (line 176-177)."""
@@ -2932,8 +2945,8 @@ class TestRareSparseMatrixFormats:
 
         assert formatter.can_format(mat)
         result = formatter.format(mat, FormatterContext())
+        # Format info is now in type_name directly
         assert "dok" in result.type_name.lower()
-        assert result.details["format"] == "dok_matrix"
 
     def test_sparse_dia_formatter(self):
         """Test sparse formatter with DIA matrix (line 178-179)."""
@@ -2948,8 +2961,8 @@ class TestRareSparseMatrixFormats:
 
         assert formatter.can_format(mat)
         result = formatter.format(mat, FormatterContext())
+        # Format info is now in type_name directly
         assert "dia" in result.type_name.lower()
-        assert result.details["format"] == "dia_matrix"
 
     def test_sparse_bsr_formatter(self):
         """Test sparse formatter with BSR matrix (line 180-181)."""
@@ -2964,15 +2977,15 @@ class TestRareSparseMatrixFormats:
 
         assert formatter.can_format(mat)
         result = formatter.format(mat, FormatterContext())
+        # Format info is now in type_name directly
         assert "bsr" in result.type_name.lower()
-        assert result.details["format"] == "bsr_matrix"
 
 
 class TestDataFrameFormatterEdgeCases:
     """Tests for DataFrame formatter edge cases."""
 
     def test_dataframe_long_column_names_truncation(self):
-        """Test DataFrame with long column names gets truncated (line 247-248)."""
+        """Test DataFrame with long column names in preview (line 247-248)."""
         from anndata._repr.formatters import DataFrameFormatter
         from anndata._repr.registry import FormatterContext
 
@@ -2983,11 +2996,15 @@ class TestDataFrameFormatterEdgeCases:
         }
         df = pd.DataFrame(long_names)
 
-        result = formatter.format(df, FormatterContext())
-        # Preview should be truncated
-        assert "…" in result.details["meta_preview"]
-        # Full preview should have all columns
-        assert "meta_preview_full" in result.details
+        # For obsm/varm sections, preview_html includes columns
+        result = formatter.format(df, FormatterContext(section="obsm"))
+        # preview_html should contain the column list in adata-cols-list span
+        assert result.preview_html is not None
+        assert "adata-cols-list" in result.preview_html
+        # All column names should be present (CSS handles visual truncation)
+        assert "very_long_column_name_0" in result.preview_html
+        assert "very_long_column_name_1" in result.preview_html
+        assert "very_long_column_name_2" in result.preview_html
 
 
 class TestSeriesFormatterNonSerializable:
@@ -3565,9 +3582,8 @@ class TestSparseFormatterDuckTyping:
         assert formatter.can_format(mock_sparse)
         result = formatter.format(mock_sparse, FormatterContext())
 
-        # Should use type name as fallback
+        # Should use type name as fallback (format info is now in type_name)
         assert "MockSparseArray" in result.type_name
-        assert result.details["format"] == "MockSparseArray"
 
 
 class TestAnnDataFormatterCoverage:
@@ -3581,13 +3597,13 @@ class TestAnnDataFormatterCoverage:
         formatter = AnnDataFormatter()
         inner = AnnData(np.zeros((5, 3)))
 
-        # At depth 0, should be expandable (0 < max_depth default 3)
+        # At depth 0, should produce expanded_html (0 < max_depth - 1)
         result_shallow = formatter.format(inner, FormatterContext(depth=0, max_depth=3))
-        assert result_shallow.details.get("can_expand", False)
+        assert result_shallow.expanded_html is not None
 
-        # At depth 3, should NOT be expandable (3 >= max_depth 3)
-        result_deep = formatter.format(inner, FormatterContext(depth=3, max_depth=3))
-        assert not result_deep.details.get("can_expand", False)
+        # At depth 2 with max_depth 3, should NOT produce expanded_html (2 >= 3 - 1)
+        result_deep = formatter.format(inner, FormatterContext(depth=2, max_depth=3))
+        assert result_deep.expanded_html is None
 
 
 # =============================================================================

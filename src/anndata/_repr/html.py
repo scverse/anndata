@@ -511,7 +511,8 @@ def render_formatted_entry(
     has_error = not output.is_serializable or is_hard_error
 
     has_expandable_content = output.expanded_html is not None
-    has_columns_list = output.details.get("has_columns_list", False)
+    # DataFrames have column list in preview_html (for wrap button in type cell)
+    has_columns_list = output.css_class == "dtype-dataframe" and output.preview_html
 
     # Build row using consolidated helper
     parts = [
@@ -540,17 +541,11 @@ def render_formatted_entry(
         )
     )
 
-    # Preview cell (using consolidated helper)
+    # Preview cell - formatter provides complete preview_html
     parts.append(
         render_entry_preview_cell(
             preview_html=output.preview_html,
             preview_text=output.preview,
-            columns=output.details.get("columns"),
-            has_columns_list=has_columns_list,
-            tooltip_preview=output.details.get("meta_preview"),
-            tooltip_full=output.details.get("meta_preview_full"),
-            shape=output.details.get("shape"),
-            section=section,
         )
     )
 
