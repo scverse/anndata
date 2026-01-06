@@ -2377,7 +2377,9 @@ class TestFormattersCoverage:
 
         result = formatter.format(mat, FormatterContext())
         # For 0-element matrices, sparsity info is omitted from type_name
-        assert "sparse" not in result.type_name.lower() or "stored" not in result.type_name
+        assert (
+            "sparse" not in result.type_name.lower() or "stored" not in result.type_name
+        )
 
 
 class TestBuiltinFormattersCoverage:
