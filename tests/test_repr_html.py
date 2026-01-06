@@ -3323,6 +3323,147 @@ class TestColumnNameValidation:
         assert "Non-string" in html
         assert "Not serializable" in html
 
+    def test_dict_in_obs_column_not_serializable(self, tmp_path):
+        """Test that dicts in obs columns are flagged as non-serializable.
+
+        This complements test_list_in_obs_column_not_serializable by testing
+        dict values which are also common but unsupported in obs columns.
+        """
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["dict_col"] = [{"k": 1}, {"k": 2}, {"k": 3}]
+
+        # Verify dicts fail to serialize
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "Dict serialization in obs now works! "
+                "Update _check_series_serializability() in formatters.py."
+            )
+        except (TypeError, Exception):  # noqa: BLE001
+            pass  # Expected - dicts not serializable
+
+        # Repr should detect and warn
+        html = adata._repr_html_()
+        assert "dict" in html
+        assert "(!)" in html
+
+    def test_lambda_in_uns_not_serializable(self, tmp_path):
+        """Test that lambda/functions in uns are flagged as non-serializable.
+
+        Functions are a common mistake when users accidentally store
+        callables in uns instead of their results.
+        """
+        adata = ad.AnnData(X=np.eye(3))
+        adata.uns["my_func"] = lambda x: x
+
+        # Verify functions fail to serialize
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "Function serialization now works! "
+                "Update is_serializable() in utils.py."
+            )
+        except (TypeError, Exception):  # noqa: BLE001
+            pass  # Expected - functions not serializable
+
+        # Repr should detect and warn
+        html = adata._repr_html_()
+        assert "function" in html.lower() or "lambda" in html.lower()
+        assert "Not serializable" in html
+
+    def test_nested_unserializable_in_uns(self, tmp_path):
+        """Test that nested non-serializable values in uns dicts are detected.
+
+        This tests the recursive serialization check for nested structures
+        like {"ok": 1, "bad": CustomObject()}.
+        """
+
+        class CustomObject:
+            pass
+
+        adata = ad.AnnData(X=np.eye(3))
+        adata.uns["nested"] = {"ok": 1, "bad": CustomObject()}
+
+        # Verify nested non-serializable fails
+        try:
+            adata.write_h5ad(tmp_path / "test.h5ad")
+            pytest.fail(
+                "Nested non-serializable now works! "
+                "Check is_serializable() recursive behavior."
+            )
+        except (TypeError, Exception):  # noqa: BLE001
+            pass  # Expected - nested custom objects not serializable
+
+        # Repr should detect and warn
+        html = adata._repr_html_()
+        assert "nested" in html
+        assert "Not serializable" in html
+
+
+class TestModuleLazyLoading:
+    """Tests to ensure _repr module doesn't load on import anndata."""
+
+    def test_repr_module_not_loaded_on_import(self):
+        """Verify that importing anndata doesn't load the full _repr module.
+
+        The _repr module is ~6000 lines of CSS/HTML/JS that should only load
+        when _repr_html_() is actually called, not on import anndata.
+        """
+        import subprocess
+        import sys
+
+        # Run a subprocess to check if _repr is loaded after import
+        code = """
+import sys
+import anndata
+# Check if _repr submodules are loaded
+repr_modules = [m for m in sys.modules if 'anndata._repr' in m and m != 'anndata._repr']
+# _repr_constants is OK to be loaded (it's lightweight)
+repr_modules = [m for m in repr_modules if '_repr_constants' not in m]
+if repr_modules:
+    print(f"FAIL: These _repr modules were loaded on import: {repr_modules}")
+    sys.exit(1)
+else:
+    print("OK: _repr module not loaded on import")
+    sys.exit(0)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"Lazy loading failed: {result.stdout}\n{result.stderr}"
+
+    def test_repr_module_loads_on_repr_html_call(self):
+        """Verify that _repr module loads when _repr_html_() is called."""
+        import subprocess
+        import sys
+
+        code = """
+import sys
+import anndata as ad
+import numpy as np
+
+# Create AnnData and call _repr_html_
+adata = ad.AnnData(np.eye(3))
+_ = adata._repr_html_()
+
+# Now _repr should be loaded
+repr_modules = [m for m in sys.modules if 'anndata._repr.' in m]
+if not repr_modules:
+    print("FAIL: _repr modules not loaded after _repr_html_()")
+    sys.exit(1)
+else:
+    print(f"OK: _repr modules loaded: {len(repr_modules)} submodules")
+    sys.exit(0)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"Module loading failed: {result.stdout}\n{result.stderr}"
+
 
 class TestMockCuPyArrayFormatter:
     """Tests for CuPy array formatter using mock objects."""
@@ -5169,6 +5310,42 @@ class TestLazyCategoryLoading:
         assert "categories" not in cat_arr.__dict__, (
             "Categories should still not be loaded"
         )
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_lazy_categories_h5ad(self, tmp_path):
+        """Test _get_lazy_categories works with H5AD files (not just Zarr).
+
+        This complements the Zarr-based tests above to ensure H5AD partial
+        loading works correctly. H5AD uses a different storage structure
+        (h5py.Group vs zarr.Group).
+        """
+        import h5py
+
+        from anndata._repr.registry import FormatterContext
+        from anndata._repr.utils import _get_lazy_categories, _get_lazy_category_count
+
+        # Create test data
+        adata = AnnData(np.random.randn(100, 50).astype(np.float32))
+        adata.obs["cat_col"] = pd.Categorical(["x", "y", "z"] * 33 + ["x"])
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy = ad.experimental.read_lazy(f)
+            col = lazy.obs._ds["cat_col"]
+
+            # Test count retrieval
+            n_cats = _get_lazy_category_count(col)
+            assert n_cats == 3
+
+            # Test category retrieval
+            context = FormatterContext(max_lazy_categories=100)
+            categories, skipped, n = _get_lazy_categories(col, context)
+
+            assert set(categories) == {"x", "y", "z"}
+            assert not skipped
+            assert n == 3
 
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_repr_html_does_not_load_lazy_categorical_data(self, tmp_path):
