@@ -37,6 +37,7 @@ from .registry import (
     formatter_registry,
 )
 from .utils import (
+    _is_categorical_column,
     check_color_category_mismatch,
     escape_html,
     format_number,
@@ -196,38 +197,6 @@ def _render_unique_count(n_unique: int | None, *, is_lazy: bool) -> str:
     return ""
 
 
-def _is_categorical_column(col: Any) -> bool:
-    """
-    Check if a column is categorical.
-
-    Works for both pandas Series (.cat accessor) and xarray DataArray
-    (CategoricalDtype). For lazy categoricals, checks for CategoricalArray
-    without triggering data loading.
-    """
-    import pandas as pd
-
-    # Pandas Series with categorical dtype
-    if hasattr(col, "cat"):
-        return True
-
-    # Check for lazy categorical (CategoricalArray) without accessing dtype
-    try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
-
-        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
-            lazy_indexed = col.variable._data
-            if hasattr(lazy_indexed, "array") and isinstance(
-                lazy_indexed.array, CategoricalArray
-            ):
-                return True
-    except ImportError:
-        pass
-
-    # Fallback: xarray DataArray or other objects with CategoricalDtype
-    # Note: This may trigger loading for lazy categoricals
-    return hasattr(col, "dtype") and isinstance(col.dtype, pd.CategoricalDtype)
-
-
 def _get_categories_from_column(col: Any) -> list:
     """
     Get categories from a categorical column.
@@ -331,8 +300,11 @@ def _get_lazy_categories(
     should_truncate = n_cats is not None and n_cats > context.max_lazy_categories
     n_to_read = context.max_lazy_categories if should_truncate else n_cats
 
-    # Try to read categories directly from CategoricalArray storage
-    # Use read_elem/read_elem_partial for proper decoding of string arrays
+    # Try to read categories directly from CategoricalArray storage.
+    # We access _categories (private) to bypass the @cached_property which loads
+    # ALL categories. Instead, we use read_elem_partial (official API) to read
+    # only the first N categories. This is intentional - for large categoricals,
+    # loading everything defeats the purpose of lazy loading.
     cat_arr = _get_categorical_array(col)
     if cat_arr is not None:
         try:
@@ -341,9 +313,6 @@ def _get_lazy_categories(
             cats = cat_arr._categories
             # Get values array: zarr uses group with "values" key, h5 uses array directly
             values = cats["values"] if hasattr(cats, "keys") else cats
-
-            # Use read_elem_partial for sliced reads, read_elem for full reads
-            # This ensures proper decoding of string arrays
             if n_to_read is not None and n_to_read < (n_cats or float("inf")):
                 categories = list(
                     read_elem_partial(values, indices=slice(0, n_to_read))

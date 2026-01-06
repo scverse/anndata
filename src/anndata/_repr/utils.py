@@ -186,7 +186,8 @@ def _is_categorical_column(col: Any) -> bool:
     Check if a column is categorical.
 
     Works for both pandas Series (.cat accessor) and xarray DataArray
-    (CategoricalDtype).
+    (CategoricalDtype). For lazy categoricals, checks for CategoricalArray
+    without triggering data loading.
     """
     import pandas as pd
 
@@ -194,7 +195,21 @@ def _is_categorical_column(col: Any) -> bool:
     if hasattr(col, "cat"):
         return True
 
-    # xarray DataArray or other objects with CategoricalDtype
+    # Check for lazy categorical (CategoricalArray) without accessing dtype
+    try:
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
+            lazy_indexed = col.variable._data
+            if hasattr(lazy_indexed, "array") and isinstance(
+                lazy_indexed.array, CategoricalArray
+            ):
+                return True
+    except ImportError:
+        pass
+
+    # Fallback: xarray DataArray or other objects with CategoricalDtype
+    # Note: This may trigger loading for lazy categoricals
     return hasattr(col, "dtype") and isinstance(col.dtype, pd.CategoricalDtype)
 
 
