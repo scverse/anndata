@@ -1362,19 +1362,8 @@ class TestCoverageEdgeCases:
             assert "cat_9" in html or "cat_8" in html  # Might show 9 or stop at 8
             assert "...+" in html or "more" in html.lower()
 
-    def test_non_serializable_object_in_uns(self):
-        """Test warning for non-serializable objects in uns."""
-
-        class NonSerializable:
-            """A class that can't be serialized to H5AD."""
-
-        adata = AnnData(np.zeros((10, 5)))
-        adata.uns["non_serializable"] = NonSerializable()
-
-        html = adata._repr_html_()
-
-        # Should show warning icon
-        assert "⚠" in html or "warn" in html.lower()
+    # NOTE: test_non_serializable_object_in_uns removed - duplicates
+    # TestWarnings.test_unserializable_uns_warning
 
     def test_max_depth_with_multiple_nested_anndata(self):
         """Test max depth indicator with deeply nested AnnData."""
