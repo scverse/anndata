@@ -22,7 +22,13 @@ from . import (
     DOCS_BASE_URL,
     SECTION_ORDER,
 )
-from .components import render_fold_icon, render_name_cell, render_warning_icon
+from .components import (
+    render_categories_wrap_button,
+    render_columns_wrap_button,
+    render_fold_icon,
+    render_name_cell,
+    render_warning_icon,
+)
 from .core import (
     get_section_tooltip,
     render_empty_section,
@@ -185,9 +191,7 @@ def _render_dataframe_entry(
 
     # Add wrap button for categories in the type column
     if n_categories > 0 and output.preview_html:
-        parts.append(
-            '<button class="adata-cats-wrap-btn" title="Toggle multi-line view">⋯</button>'
-        )
+        parts.append(render_categories_wrap_button())
     parts.append("</td>")
 
     # Preview cell - use formatter's preview_html or preview (text)
@@ -277,9 +281,7 @@ def _render_type_cell(
 
     has_columns_list = output.details.get("has_columns_list", False)
     if has_columns_list:
-        parts.append(
-            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
-        )
+        parts.append(render_columns_wrap_button())
 
     # type_html replaces type_name in the type column (for custom inline rendering)
     if output.type_html:

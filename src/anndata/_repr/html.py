@@ -32,6 +32,7 @@ from . import (
 )
 from .components import (
     render_badge,
+    render_columns_wrap_button,
     render_name_cell,
     render_search_box,
     render_warning_icon,
@@ -561,9 +562,7 @@ def render_formatted_entry(
     # Columns list toggle button (for DataFrames in obsm/varm)
     has_columns_list = output.details.get("has_columns_list", False)
     if has_columns_list:
-        parts.append(
-            '<button class="adata-cols-wrap-btn" title="Toggle multi-line view">⋯</button>'
-        )
+        parts.append(render_columns_wrap_button())
 
     parts.append("</td>")
 

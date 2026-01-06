@@ -142,6 +142,26 @@ def render_copy_button(text: str, tooltip: str = "Copy") -> str:
     )
 
 
+def render_categories_wrap_button() -> str:
+    """Render a button to toggle category list between single-line and multi-line.
+
+    Returns
+    -------
+    HTML string for the wrap button (▼ expands, ▲ collapses)
+    """
+    return '<button class="adata-cats-wrap-btn" title="Expand to multi-line view">▼</button>'
+
+
+def render_columns_wrap_button() -> str:
+    """Render a button to toggle column list between single-line and multi-line.
+
+    Returns
+    -------
+    HTML string for the wrap button (▼ expands, ▲ collapses)
+    """
+    return '<button class="adata-cols-wrap-btn" title="Expand to multi-line view">▼</button>'
+
+
 def render_badge(
     text: str,
     variant: str = "",

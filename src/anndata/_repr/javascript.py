@@ -418,8 +418,8 @@ _JS_CONTENT = """
 
             const isWrapped = catsList.classList.toggle('wrapped');
             metaCell.classList.toggle('expanded', isWrapped);
-            btn.textContent = isWrapped ? '▲' : '⋯';
-            btn.title = isWrapped ? 'Collapse to single line' : 'Toggle multi-line view';
+            btn.textContent = isWrapped ? '▲' : '▼';
+            btn.title = isWrapped ? 'Collapse to single line' : 'Expand to multi-line view';
             // Always show button when wrapped
             btn.style.display = 'inline';
         });
@@ -440,8 +440,8 @@ _JS_CONTENT = """
 
             const isWrapped = colsList.classList.toggle('wrapped');
             metaCell.classList.toggle('expanded', isWrapped);
-            btn.textContent = isWrapped ? '▲' : '⋯';
-            btn.title = isWrapped ? 'Collapse to single line' : 'Toggle multi-line view';
+            btn.textContent = isWrapped ? '▲' : '▼';
+            btn.title = isWrapped ? 'Collapse to single line' : 'Expand to multi-line view';
             // Always show button when wrapped
             btn.style.display = 'inline';
         });
