@@ -84,14 +84,13 @@ class LazyCategories:
 
     Examples
     --------
-    >>> cats = lazy_adata.obs["cell_type"].cat.categories  # doctest: +SKIP
-    >>> len(cats)  # cheap (metadata only)  # doctest: +SKIP
-    100000
-    >>> cats[:10]  # partial read (head)  # doctest: +SKIP
-    array(['TypeA', 'TypeB', ...])
-    >>> cats[-5:]  # partial read (tail)  # doctest: +SKIP
-    array(['TypeX', 'TypeY', 'TypeZ', ...])
-    >>> np.array(cats)  # full load when needed  # doctest: +SKIP
+    .. code-block:: python
+
+        cats = lazy_adata.obs["cell_type"].cat.categories
+        len(cats)  # cheap (metadata only)
+        cats[:10]  # partial read (head)
+        cats[-5:]  # partial read (tail)
+        np.array(cats)  # full load when needed
     """
 
     def __init__(self, cat_array: CategoricalArray):
@@ -343,16 +342,14 @@ def _register_cat_accessor():
 
             Examples
             --------
-            >>> lazy_adata = ad.experimental.read_lazy("dataset.zarr")  # doctest: +SKIP
-            >>> cats = lazy_adata.obs["cell_type"].cat.categories  # doctest: +SKIP
-            >>> len(cats)  # cheap, metadata only  # doctest: +SKIP
-            100000
-            >>> cats[:5]  # efficient partial read  # doctest: +SKIP
-            array(['TypeA', 'TypeB', 'TypeC', 'TypeD', 'TypeE'], dtype=object)
-            >>> cats[-3:]  # efficient partial read  # doctest: +SKIP
-            array(['TypeX', 'TypeY', 'TypeZ'], dtype=object)
-            >>> lazy_adata.obs["numeric_col"].cat.categories  # doctest: +SKIP
-            None
+            .. code-block:: python
+
+                lazy_adata = ad.experimental.read_lazy("dataset.zarr")
+                cats = lazy_adata.obs["cell_type"].cat.categories
+                len(cats)  # cheap, metadata only
+                cats[:5]  # efficient partial read
+                cats[-3:]  # efficient partial read
+                lazy_adata.obs["numeric_col"].cat.categories  # returns None
             """
 
             def __init__(self, xarray_obj: XDataArray):
@@ -374,11 +371,13 @@ def _register_cat_accessor():
 
                 Examples
                 --------
-                >>> cats = col.cat.categories
-                >>> len(cats)  # cheap for lazy data
-                >>> cats[:10]  # efficient partial read for lazy data
-                >>> cats[-5:]  # efficient partial read for lazy data
-                >>> np.array(cats)  # full load
+                .. code-block:: python
+
+                    cats = col.cat.categories
+                    len(cats)  # cheap for lazy data
+                    cats[:10]  # efficient partial read
+                    cats[-5:]  # efficient partial read
+                    np.array(cats)  # full load
                 """
                 if self._cat_array is not None:
                     return LazyCategories(self._cat_array)
