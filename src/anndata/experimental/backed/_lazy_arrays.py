@@ -323,20 +323,6 @@ def _(a: CategoricalArray):
     return get_chunksize(a._codes)
 
 
-def _get_categorical_array(xarray_obj: XDataArray) -> CategoricalArray | None:
-    """Extract CategoricalArray from an xarray DataArray if present."""
-    try:
-        # Navigate: DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
-        lazy_indexed = xarray_obj.variable._data
-        if hasattr(lazy_indexed, "array") and isinstance(
-            lazy_indexed.array, CategoricalArray
-        ):
-            return lazy_indexed.array
-    except (AttributeError, TypeError):
-        pass
-    return None
-
-
 def _register_cat_accessor():
     """Register the cat accessor on xarray DataArray."""
     try:
@@ -365,7 +351,16 @@ def _register_cat_accessor():
 
             def __init__(self, xarray_obj: XDataArray):
                 self._obj = xarray_obj
-                self._cat_array = _get_categorical_array(xarray_obj)
+                # Extract CategoricalArray if present
+                self._cat_array = None
+                try:
+                    lazy_indexed = xarray_obj.variable._data
+                    if hasattr(lazy_indexed, "array") and isinstance(
+                        lazy_indexed.array, CategoricalArray
+                    ):
+                        self._cat_array = lazy_indexed.array
+                except (AttributeError, TypeError):
+                    pass
 
             def _is_categorical(self) -> bool:
                 """Check if the underlying data is categorical."""
