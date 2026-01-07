@@ -84,14 +84,14 @@ class LazyCategories:
 
     Examples
     --------
-    >>> cats = lazy_adata.obs["cell_type"].cat.categories
-    >>> len(cats)  # cheap (metadata only)
+    >>> cats = lazy_adata.obs["cell_type"].cat.categories  # doctest: +SKIP
+    >>> len(cats)  # cheap (metadata only)  # doctest: +SKIP
     100000
-    >>> cats[:10]  # partial read (head)
+    >>> cats[:10]  # partial read (head)  # doctest: +SKIP
     array(['TypeA', 'TypeB', ...])
-    >>> cats[-5:]  # partial read (tail)
+    >>> cats[-5:]  # partial read (tail)  # doctest: +SKIP
     array(['TypeX', 'TypeY', 'TypeZ', ...])
-    >>> np.array(cats)  # full load when needed
+    >>> np.array(cats)  # full load when needed  # doctest: +SKIP
     """
 
     def __init__(self, cat_array: CategoricalArray):
