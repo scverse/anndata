@@ -237,12 +237,13 @@ def test_chunks_df(
 
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
-def test_categorical_head_categories(tmp_path: Path, diskfmt: str):
-    """Test CategoricalArray.head_categories and n_categories."""
+def test_categorical_get_categories(tmp_path: Path, diskfmt: str):
+    """Test CategoricalArray.get_categories and n_categories."""
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
 
     n_cats = 100
-    categories = [f"Type_{i}" for i in range(n_cats)]
+    # Use zero-padded numbers to ensure consistent ordering
+    categories = [f"Type_{i:03d}" for i in range(n_cats)]
     adata = AnnData(
         X=np.zeros((n_cats, 2)),
         obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
@@ -261,25 +262,36 @@ def test_categorical_head_categories(tmp_path: Path, diskfmt: str):
     # Test n_categories (should be cheap, no full data load)
     assert cat_arr.n_categories == n_cats
 
-    # Test head_categories
-    head5 = cat_arr.head_categories(5)
+    # Test get_categories with positive int (head)
+    head5 = cat_arr.get_categories(5)
     assert len(head5) == 5
-    assert isinstance(head5, np.ndarray)
+    assert list(head5) == [f"Type_{i:03d}" for i in range(5)]
 
-    # Test head_categories with n > n_categories
-    head_all = cat_arr.head_categories(n_cats + 10)
+    # Test get_categories with n > n_categories
+    head_all = cat_arr.get_categories(n_cats + 10)
     assert len(head_all) == n_cats
 
-    # Test default n=10
-    head_default = cat_arr.head_categories()
-    assert len(head_default) == 10
+    # Test get_categories with negative int (tail)
+    tail5 = cat_arr.get_categories(-5)
+    assert len(tail5) == 5
+    assert list(tail5) == [f"Type_{i:03d}" for i in range(95, 100)]
+
+    # Test get_categories with slice
+    middle = cat_arr.get_categories(slice(10, 20))
+    assert len(middle) == 10
+    assert list(middle) == [f"Type_{i:03d}" for i in range(10, 20)]
+
+    # Test default (all categories)
+    all_cats = cat_arr.get_categories()
+    assert len(all_cats) == n_cats
 
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
 def test_cat_accessor(tmp_path: Path, diskfmt: str):
     """Test the .cat accessor for user-facing API."""
     n_cats = 50
-    categories = [f"Cell_{i}" for i in range(n_cats)]
+    # Use zero-padded numbers to ensure consistent ordering
+    categories = [f"Cell_{i:02d}" for i in range(n_cats)]
     adata = AnnData(
         X=np.zeros((n_cats, 2)),
         obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
@@ -297,14 +309,20 @@ def test_cat_accessor(tmp_path: Path, diskfmt: str):
     # Test n_categories via accessor
     assert col.cat.n_categories == n_cats
 
-    # Test head_categories via accessor
-    head5 = col.cat.head_categories(5)
+    # Test get_categories via accessor - positive int (head)
+    head5 = col.cat.get_categories(5)
     assert len(head5) == 5
-    assert isinstance(head5, np.ndarray)
+    assert list(head5) == [f"Cell_{i:02d}" for i in range(5)]
 
-    # Test default
-    head_default = col.cat.head_categories()
-    assert len(head_default) == 10
+    # Test get_categories via accessor - negative int (tail)
+    tail3 = col.cat.get_categories(-3)
+    assert len(tail3) == 3
+    assert list(tail3) == [f"Cell_{i:02d}" for i in range(47, 50)]
+
+    # Test get_categories via accessor - slice
+    middle = col.cat.get_categories(slice(10, 15))
+    assert len(middle) == 5
+    assert list(middle) == [f"Cell_{i:02d}" for i in range(10, 15)]
 
     # Test .categories property
     all_cats = col.cat.categories
@@ -326,5 +344,5 @@ def test_cat_accessor_non_categorical(tmp_path: Path):
 
     # Accessor returns None for non-categorical columns
     assert col.cat.n_categories is None
-    assert col.cat.head_categories() is None
+    assert col.cat.get_categories() is None
     assert col.cat.categories is None

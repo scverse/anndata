@@ -113,22 +113,38 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         """Number of categories (cheap, from metadata only)."""
         return self._categories["values"].shape[0]
 
-    def head_categories(self, n: int = 10) -> np.ndarray:
-        """Get first n categories without loading all.
+    def get_categories(self, indices: int | slice = slice(None)) -> np.ndarray:
+        """Get categories by index without loading all.
 
         Parameters
         ----------
-        n
-            Number of categories to return.
+        indices
+            - Positive int: return first n categories (head)
+            - Negative int: return last n categories (tail)
+            - slice: return categories at specified indices
 
         Returns
         -------
-        First n category values as a numpy array.
+        Category values as a numpy array.
+
+        Examples
+        --------
+        >>> cat_arr.get_categories(5)  # first 5 (head)
+        >>> cat_arr.get_categories(-5)  # last 5 (tail)
+        >>> cat_arr.get_categories(slice(10, 20))  # indices 10-19
         """
         from anndata._io.specs.registry import read_elem_partial
 
-        n = min(n, self.n_categories)
-        return read_elem_partial(self._categories["values"], indices=slice(0, n))
+        n_cats = self.n_categories
+        if isinstance(indices, int):
+            if indices >= 0:
+                # head: first n
+                indices = slice(0, min(indices, n_cats))
+            else:
+                # tail: last n
+                start = max(0, n_cats + indices)
+                indices = slice(start, n_cats)
+        return read_elem_partial(self._categories["values"], indices=indices)
 
     @cached_property
     def categories(self) -> np.ndarray:
@@ -281,8 +297,14 @@ def _register_cat_accessor():
             >>> lazy_adata = ad.experimental.read_lazy("dataset.zarr")  # doctest: +SKIP
             >>> lazy_adata.obs["cell_type"].cat.n_categories  # doctest: +SKIP
             100000
-            >>> lazy_adata.obs["cell_type"].cat.head_categories(5)  # doctest: +SKIP
+            >>> lazy_adata.obs["cell_type"].cat.get_categories(
+            ...     5
+            ... )  # first 5  # doctest: +SKIP
             array(['TypeA', 'TypeB', 'TypeC', 'TypeD', 'TypeE'], dtype=object)
+            >>> lazy_adata.obs["cell_type"].cat.get_categories(
+            ...     -3
+            ... )  # last 3  # doctest: +SKIP
+            array(['TypeX', 'TypeY', 'TypeZ'], dtype=object)
             >>> lazy_adata.obs["numeric_col"].cat.n_categories  # doctest: +SKIP
             None
             """
@@ -308,8 +330,10 @@ def _register_cat_accessor():
                     return len(self._obj.dtype.categories)
                 return None
 
-            def head_categories(self, n: int = 10) -> np.ndarray | None:
-                """Get first n categories.
+            def get_categories(
+                self, indices: int | slice = slice(None)
+            ) -> np.ndarray | None:
+                """Get categories by index.
 
                 For lazy CategoricalArray, uses partial read (efficient for H5AD).
                 For other categoricals, accesses categories via dtype.
@@ -317,18 +341,31 @@ def _register_cat_accessor():
 
                 Parameters
                 ----------
-                n
-                    Number of categories to return.
+                indices
+                    - Positive int: return first n categories (head)
+                    - Negative int: return last n categories (tail)
+                    - slice: return categories at specified indices
 
                 Returns
                 -------
-                First n category values as a numpy array, or None for non-categorical.
+                Category values as a numpy array, or None for non-categorical.
+
+                Examples
+                --------
+                >>> col.cat.get_categories(5)  # first 5 (head)
+                >>> col.cat.get_categories(-5)  # last 5 (tail)
+                >>> col.cat.get_categories(slice(10, 20))  # indices 10-19
                 """
                 if self._cat_array is not None:
-                    return self._cat_array.head_categories(n)
+                    return self._cat_array.get_categories(indices)
                 if self._is_categorical():
                     cats = self._obj.dtype.categories
-                    return np.asarray(cats[:n])
+                    if isinstance(indices, int):
+                        if indices >= 0:
+                            return np.asarray(cats[:indices])
+                        else:
+                            return np.asarray(cats[indices:])
+                    return np.asarray(cats[indices])
                 return None
 
             @property
