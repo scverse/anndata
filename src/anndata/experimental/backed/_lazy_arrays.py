@@ -216,9 +216,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
 
     @cached_property
     def dtype(self):
-        return pd.CategoricalDtype(
-            categories=self.categories, ordered=self._ordered
-        )
+        return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
 # circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
