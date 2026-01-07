@@ -313,3 +313,371 @@ class TestMigrationExamples:
         # NEW: Explicit shape check
         v = validate_html(html)
         v.assert_shape_displayed(123, 456)
+
+
+class TestJupyterNotebookCompatibility:
+    """Tests for Jupyter Notebook/Lab HTML compatibility.
+
+    These tests ensure the HTML repr works correctly when embedded
+    in Jupyter output cells, including:
+    - CSS scoping (no style leakage)
+    - JavaScript isolation (no global pollution)
+    - Multiple cell compatibility (unique IDs)
+    - Jupyter theming support
+    """
+
+    def test_css_scoped_to_anndata_repr(self, adata_full):
+        """Test CSS rules are scoped to .anndata-repr container.
+
+        Unscoped CSS could affect other notebook cells or UI elements.
+        """
+        import re
+
+        html = adata_full._repr_html_()
+        style_match = re.search(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
+
+        if style_match:
+            css = style_match.group(1)
+
+            # Remove CSS comments
+            css_clean = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+
+            # Remove @media query wrappers but keep their content
+            # This regex removes @media ... { but keeps the inner CSS
+            css_without_at_rules = re.sub(r"@media[^{]*\{", "", css_clean)
+            # Also remove @keyframes and other @ rules
+            css_without_at_rules = re.sub(
+                r"@[\w-]+[^{]*\{[^}]*\}", "", css_without_at_rules
+            )
+
+            # Extract all CSS selectors (before the { )
+            selectors = re.findall(r"([^{}]+)\s*\{", css_without_at_rules)
+
+            for selector in selectors:
+                selector = selector.strip()
+                # Skip empty selectors
+                if not selector:
+                    continue
+                # Skip :root (used for CSS variables)
+                if ":root" in selector:
+                    continue
+                # Skip Jupyter theme selectors (these are intentionally global)
+                if "[data-jp-theme" in selector or ".jp-" in selector:
+                    continue
+                # Skip selectors that look like media query remnants
+                if selector.startswith("(") or "prefers-color-scheme" in selector:
+                    continue
+
+                # All other selectors should be scoped to anndata-repr
+                assert ".anndata-repr" in selector or "anndata" in selector.lower(), (
+                    f"CSS selector '{selector}' is not scoped to .anndata-repr. "
+                    "This could affect other Jupyter cells."
+                )
+
+    def test_no_global_element_selectors(self, adata_full):
+        """Test no unscoped element selectors like 'div', 'span', etc.
+
+        Global element selectors would style ALL divs/spans in the notebook.
+        """
+        import re
+
+        html = adata_full._repr_html_()
+        style_match = re.search(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
+
+        if style_match:
+            css = style_match.group(1)
+            # Pattern for bare element selectors at start of rule
+            # Matches "div {" or "span," but not ".class div {" or "div.class {"
+            global_elements = re.findall(
+                r"(?:^|[,}])\s*(div|span|table|tr|td|th|ul|li|p|a|button)\s*[,{]",
+                css,
+                re.MULTILINE,
+            )
+            assert not global_elements, (
+                f"Found global element selectors: {global_elements}. "
+                "These would affect the entire notebook."
+            )
+
+    def test_javascript_uses_iife_or_closure(self, adata_full):
+        """Test JavaScript is wrapped to avoid global scope pollution."""
+        import re
+
+        html = adata_full._repr_html_()
+        script_matches = re.findall(
+            r"<script[^>]*>(.*?)</script>", html, re.DOTALL | re.I
+        )
+
+        for script in script_matches:
+            script = script.strip()
+            if not script:
+                continue
+
+            # Check for IIFE pattern: (function() { ... })() or (() => { ... })()
+            has_iife = bool(
+                re.search(r"\(\s*function\s*\([^)]*\)\s*\{", script)
+                or re.search(r"\(\s*\([^)]*\)\s*=>\s*\{", script)
+            )
+
+            # Check for block scope (const/let at top level within braces)
+            has_block_scope = bool(re.search(r"\{\s*(const|let)\s+", script))
+
+            # Check for event handler inline (scoped to element)
+            is_event_handler = bool(re.search(r"\.addEventListener\s*\(", script))
+
+            # Should use one of these isolation patterns
+            assert has_iife or has_block_scope or is_event_handler, (
+                "JavaScript should use IIFE, block scope, or event handlers "
+                "to avoid polluting global scope in Jupyter."
+            )
+
+    def test_no_global_function_declarations(self, adata_full):
+        """Test no unscoped 'function name()' declarations.
+
+        Named function declarations at top level would pollute global scope.
+        """
+        import re
+
+        html = adata_full._repr_html_()
+        script_matches = re.findall(
+            r"<script[^>]*>(.*?)</script>", html, re.DOTALL | re.I
+        )
+
+        for script in script_matches:
+            # Look for "function name(" not inside another function/IIFE
+            # This is a simplified check - looks for function at start of line
+            global_funcs = re.findall(
+                r"^\s*function\s+(\w+)\s*\(", script, re.MULTILINE
+            )
+
+            # Filter out functions that are clearly inside IIFEs
+            # (script starts with "(function" or "(() =>")
+            if script.strip().startswith("("):
+                continue  # Inside IIFE, OK
+
+            assert not global_funcs, (
+                f"Found global function declarations: {global_funcs}. "
+                "Use const name = function() or wrap in IIFE."
+            )
+
+    def test_unique_ids_per_render(self, adata):
+        """Test each render produces unique element IDs.
+
+        Multiple AnnData cells in same notebook must not have ID collisions.
+        """
+        import re
+
+        html1 = adata._repr_html_()
+        html2 = adata._repr_html_()
+
+        ids1 = set(re.findall(r'id=["\']([^"\']+)["\']', html1))
+        ids2 = set(re.findall(r'id=["\']([^"\']+)["\']', html2))
+
+        # If both have IDs, they should be different (use unique prefixes)
+        if ids1 and ids2:
+            # At least the container IDs should be different
+            overlap = ids1 & ids2
+            # Allow empty overlap or ensure IDs use unique suffixes
+            for id_val in overlap:
+                # IDs like "anndata-repr" without unique suffix are problematic
+                assert re.search(r"[a-f0-9]{6,}|_\d+$", id_val), (
+                    f"ID '{id_val}' appears in both renders without unique suffix. "
+                    "This could cause conflicts in Jupyter notebooks with multiple cells."
+                )
+
+    def test_jupyter_dark_mode_support(self, adata, validate_html):
+        """Test dark mode CSS uses Jupyter-compatible selectors."""
+        html = adata._repr_html_()
+
+        # Should support at least one Jupyter dark mode detection method
+        has_jp_theme = "[data-jp-theme-light" in html
+        has_prefers_color = "prefers-color-scheme: dark" in html
+        has_jp_dark_class = ".jp-Theme-Dark" in html
+
+        assert has_jp_theme or has_prefers_color or has_jp_dark_class, (
+            "HTML should support Jupyter dark mode via "
+            "[data-jp-theme-light], prefers-color-scheme, or .jp-Theme-Dark"
+        )
+
+    def test_no_document_level_operations(self, adata_full):
+        """Test JavaScript doesn't use document-level operations unsafely.
+
+        Operations like document.querySelector without scoping could
+        affect elements in other cells.
+        """
+        import re
+
+        html = adata_full._repr_html_()
+        script_matches = re.findall(
+            r"<script[^>]*>(.*?)</script>", html, re.DOTALL | re.I
+        )
+
+        for script in script_matches:
+            # Check for document.querySelector without container scoping
+            # OK: container.querySelector, element.querySelector
+            # Risky: document.querySelector(".class") without context
+
+            # This is a heuristic check - look for document.querySelector
+            # that doesn't immediately follow a variable assignment from
+            # a scoped search
+            if "document.querySelector" in script:
+                # Should be immediately scoped, e.g.:
+                # const container = document.getElementById('unique-id')
+                # container.querySelector(...)
+                has_scoped_search = bool(
+                    re.search(r"getElementById\s*\(['\"][\w-]+['\"]", script)
+                )
+                assert has_scoped_search, (
+                    "document.querySelector should be scoped to a container "
+                    "obtained via getElementById with unique ID"
+                )
+
+    def test_html_valid_as_fragment(self, adata_full, validate_html5):
+        """Test HTML is valid when embedded in a typical Jupyter output div.
+
+        Jupyter wraps output in: <div class="output_subarea">...</div>
+        """
+        html = adata_full._repr_html_()
+
+        # Wrap in typical Jupyter output structure
+        jupyter_wrapper = f"""
+        <div class="output_wrapper">
+            <div class="output">
+                <div class="output_area">
+                    <div class="output_subarea output_html rendered_html">
+                        {html}
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+
+        errors = validate_html5(jupyter_wrapper)
+        # Filter expected fragment-related warnings
+        critical = [
+            e
+            for e in errors
+            if not e.startswith("info:")
+            and "style" not in e.lower()
+            and "script" not in e.lower()
+        ]
+        assert not critical, "HTML invalid in Jupyter context:\n" + "\n".join(critical)
+
+    def test_multiple_cells_valid_html(self, validate_html5):
+        """Test multiple AnnData reprs together produce valid HTML.
+
+        Simulates having multiple AnnData output cells in one notebook view.
+        """
+        # Create different AnnData objects
+        adata1 = AnnData(np.zeros((10, 5)))
+        adata1.obs["batch"] = ["A", "B"] * 5
+
+        adata2 = AnnData(np.zeros((20, 8)))
+        adata2.uns["key"] = "value"
+
+        adata3 = AnnData(sp.random(100, 50, density=0.1, format="csr"))
+
+        html1 = adata1._repr_html_()
+        html2 = adata2._repr_html_()
+        html3 = adata3._repr_html_()
+
+        # Combine as if in multiple notebook cells
+        combined = f"""
+        <div class="cell output">{html1}</div>
+        <div class="cell output">{html2}</div>
+        <div class="cell output">{html3}</div>
+        """
+
+        errors = validate_html5(combined)
+        critical = [
+            e
+            for e in errors
+            if not e.startswith("info:")
+            and "style" not in e.lower()
+            and "script" not in e.lower()
+            # Duplicate styles are OK in fragments
+            and "duplicate" not in e.lower()
+        ]
+        assert not critical, "Combined cells invalid:\n" + "\n".join(critical)
+
+    def test_no_id_collisions_multiple_cells(self):
+        """Test no ID collisions when multiple cells are rendered."""
+        import re
+
+        adata1 = AnnData(np.zeros((10, 5)))
+        adata2 = AnnData(np.zeros((20, 8)))
+        adata3 = AnnData(np.zeros((15, 6)))
+
+        html1 = adata1._repr_html_()
+        html2 = adata2._repr_html_()
+        html3 = adata3._repr_html_()
+
+        ids1 = re.findall(r'id=["\']([^"\']+)["\']', html1)
+        ids2 = re.findall(r'id=["\']([^"\']+)["\']', html2)
+        ids3 = re.findall(r'id=["\']([^"\']+)["\']', html3)
+
+        all_ids = ids1 + ids2 + ids3
+        if all_ids:
+            # Check for duplicates
+            seen = set()
+            duplicates = []
+            for id_val in all_ids:
+                if id_val in seen:
+                    duplicates.append(id_val)
+                seen.add(id_val)
+
+            assert not duplicates, (
+                f"Duplicate IDs across cells: {duplicates}. "
+                "Each cell must have unique IDs."
+            )
+
+    def test_css_variables_prefixed(self, adata):
+        """Test CSS variables use anndata prefix to avoid conflicts."""
+        import re
+
+        html = adata._repr_html_()
+
+        # Find all CSS variable definitions
+        css_vars = re.findall(r"--([\w-]+)\s*:", html)
+
+        for var in css_vars:
+            # Should use anndata prefix OR be a standard Jupyter variable
+            is_anndata_prefixed = var.startswith("anndata")
+            is_jupyter_var = var.startswith("jp-")
+
+            assert is_anndata_prefixed or is_jupyter_var, (
+                f"CSS variable '--{var}' should be prefixed with 'anndata' "
+                "to avoid conflicts with other Jupyter extensions."
+            )
+
+    def test_inline_styles_for_isolation(self, adata):
+        """Test critical styles use inline or scoped approach."""
+        html = adata._repr_html_()
+
+        # The HTML should either:
+        # 1. Use inline styles for critical layout
+        # 2. Use scoped <style> with unique ID prefix
+        # 3. Use CSS variables that cascade properly
+
+        # Check that the main container uses scoped class
+        assert 'class="anndata-repr' in html or "class='anndata-repr" in html, (
+            "Main container should use .anndata-repr class for CSS scoping"
+        )
+
+    def test_works_without_jupyter_css_variables(self, adata, validate_html):
+        """Test repr works even without Jupyter CSS variables defined.
+
+        The repr should have sensible defaults when --jp-* variables
+        are not available (e.g., when viewed outside Jupyter).
+        """
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        # Should still render all key elements
+        v.assert_element_exists(".anndata-repr")
+        v.assert_shape_displayed(100, 50)
+
+        # Should have fallback colors defined (not relying solely on --jp-* vars)
+        # Check that colors are defined in the CSS, not just referenced
+        assert "#" in html or "rgb" in html.lower(), (
+            "Should define fallback colors for non-Jupyter environments"
+        )
