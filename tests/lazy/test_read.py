@@ -266,8 +266,10 @@ def test_lazy_categories(tmp_path: Path, diskfmt: str):
     cats = col.cat.categories
     assert isinstance(cats, LazyCategories)
 
-    # Test len() is cheap (n_categories)
+    # Test len() and shape are cheap (n_categories)
     assert len(cats) == n_cats
+    assert cats.shape == (n_cats,)
+    assert cats.shape[0] == n_cats
 
     # Test slicing - head
     head5 = cats[:5]

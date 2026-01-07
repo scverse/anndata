@@ -100,6 +100,11 @@ class LazyCategories:
         """Number of categories (cheap, metadata only)."""
         return self._cat_array.n_categories
 
+    @property
+    def shape(self) -> tuple[int]:
+        """Shape of categories array (cheap, metadata only)."""
+        return (len(self),)
+
     def __getitem__(self, key: int | slice) -> np.ndarray | str:
         """Get categories by index with efficient partial reads."""
         # If already cached, slice from cache
