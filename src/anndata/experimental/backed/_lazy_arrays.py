@@ -96,7 +96,6 @@ class LazyCategories:
 
     def __init__(self, cat_array: CategoricalArray):
         self._cat_array = cat_array
-        self._cached: np.ndarray | None = None
 
     def __len__(self) -> int:
         """Number of categories (cheap, metadata only)."""
@@ -115,7 +114,7 @@ class LazyCategories:
                 raise IndexError(msg)
             idx = key if key >= 0 else n_cats + key
             return read_elem_partial(
-                self._cat_array._categories_group["values"], indices=slice(idx, idx + 1)
+                self._cat_array._categories["values"], indices=slice(idx, idx + 1)
             )[0]
         elif isinstance(key, slice):
             # Normalize slice to handle negative indices and None
@@ -123,12 +122,12 @@ class LazyCategories:
             if step != 1:
                 # For non-unit steps, load the range and slice
                 arr = read_elem_partial(
-                    self._cat_array._categories_group["values"],
+                    self._cat_array._categories["values"],
                     indices=slice(start, stop),
                 )
                 return arr[::step]
             return read_elem_partial(
-                self._cat_array._categories_group["values"], indices=slice(start, stop)
+                self._cat_array._categories["values"], indices=slice(start, stop)
             )
         else:
             msg = f"indices must be integers or slices, not {type(key).__name__}"
@@ -149,10 +148,8 @@ class LazyCategories:
         return f"LazyCategories(n={len(self)})"
 
     def _get_all(self) -> np.ndarray:
-        """Get all categories, caching the result."""
-        if self._cached is None:
-            self._cached = self._cat_array._read_all_categories()
-        return self._cached
+        """Get all categories (uses CategoricalArray.categories cached_property)."""
+        return np.asarray(self._cat_array.categories)
 
 
 class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
@@ -163,7 +160,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
 
     _codes: ZarrOrHDF5Wrapper[K]
-    _categories_group: ZarrArray | H5Array
+    _categories: ZarrArray | H5Array
     shape: tuple[int, ...]
     base_path_or_zarr_group: Path | ZarrGroup
     elem_name: str
@@ -178,47 +175,27 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         ordered: bool,
         **kwargs,
     ):
-        self._categories_group = categories
+        self._categories = categories
         self._ordered = ordered
         self._codes = ZarrOrHDF5Wrapper(codes)
         self.shape = self._codes.shape
         self.base_path_or_zarr_group = base_path_or_zarr_group
         self.file_format = "zarr" if isinstance(codes, ZarrArray) else "h5"
         self.elem_name = elem_name
-        self._lazy_categories: LazyCategories | None = None
 
     @property
     def n_categories(self) -> int:
         """Number of categories (cheap, from metadata only)."""
-        return self._categories_group["values"].shape[0]
+        return self._categories["values"].shape[0]
 
-    @property
-    def categories(self) -> LazyCategories:
-        """Lazy accessor for categories supporting efficient slicing.
-
-        Returns
-        -------
-        LazyCategories object supporting len(), slicing, and iteration.
-
-        Examples
-        --------
-        >>> cats = cat_arr.categories
-        >>> len(cats)  # cheap
-        >>> cats[:10]  # partial read
-        >>> cats[-5:]  # partial read
-        >>> np.array(cats)  # full load
-        """
-        if self._lazy_categories is None:
-            self._lazy_categories = LazyCategories(self)
-        return self._lazy_categories
-
-    def _read_all_categories(self) -> np.ndarray:
-        """Read all categories from storage."""
-        if isinstance(self._categories_group, ZarrArray):
-            return self._categories_group[...]
+    @cached_property
+    def categories(self) -> np.ndarray:
+        """All categories (cached, loads all on first access)."""
+        if isinstance(self._categories, ZarrArray):
+            return self._categories[...]
         from anndata.io import read_elem
 
-        return read_elem(self._categories_group)
+        return read_elem(self._categories)
 
     def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
         from xarray.core.extension_array import PandasExtensionArray
@@ -236,7 +213,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     @cached_property
     def dtype(self):
         return pd.CategoricalDtype(
-            categories=np.asarray(self.categories), ordered=self._ordered
+            categories=self.categories, ordered=self._ordered
         )
 
 
@@ -402,7 +379,7 @@ def _register_cat_accessor():
                 >>> np.array(cats)  # full load
                 """
                 if self._cat_array is not None:
-                    return self._cat_array.categories
+                    return LazyCategories(self._cat_array)
                 if self._is_categorical():
                     return np.asarray(self._obj.dtype.categories)
                 return None

@@ -238,7 +238,7 @@ def test_chunks_df(
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
 def test_lazy_categories(tmp_path: Path, diskfmt: str):
-    """Test LazyCategories slicing on CategoricalArray.categories."""
+    """Test LazyCategories slicing via .cat.categories accessor."""
     from anndata.experimental.backed._lazy_arrays import (
         CategoricalArray,
         LazyCategories,
@@ -258,12 +258,12 @@ def test_lazy_categories(tmp_path: Path, diskfmt: str):
     lazy = read_lazy(path)
     col = lazy.obs["cell_type"]
 
-    # Navigate to the CategoricalArray
+    # Verify underlying CategoricalArray exists
     cat_arr = col.variable._data.array
     assert isinstance(cat_arr, CategoricalArray)
 
-    # Test categories property returns LazyCategories
-    cats = cat_arr.categories
+    # Test .cat.categories returns LazyCategories
+    cats = col.cat.categories
     assert isinstance(cats, LazyCategories)
 
     # Test len() is cheap (n_categories)
