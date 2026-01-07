@@ -51,7 +51,25 @@ def test_raw_gpu():
 
 
 @pytest.mark.gpu
-@pytest.mark.parametrize("index", [pytest.param(slice(0, 25, 2), marks=pytest.mark.xfail(reason="see https://github.com/zarr-developers/zarr-python/issues/3640")), pytest.param(np.array([0, 10, 20]), marks=pytest.mark.xfail(reason="see https://github.com/zarr-developers/zarr-python/issues/3640")), slice(None), slice(3, 10)])
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(
+            slice(0, 25, 2),
+            marks=pytest.mark.xfail(
+                reason="see https://github.com/zarr-developers/zarr-python/issues/3640"
+            ),
+        ),
+        pytest.param(
+            np.array([0, 10, 20]),
+            marks=pytest.mark.xfail(
+                reason="see https://github.com/zarr-developers/zarr-python/issues/3640"
+            ),
+        ),
+        slice(None),
+        slice(3, 10),
+    ],
+)
 def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
     adata = AnnData(X=sparse.random(50, 100, format="csr"))
     zarr_path = tmp_path / "gpu_adata.zarr"
