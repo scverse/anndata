@@ -108,6 +108,28 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         self.file_format = "zarr" if isinstance(codes, ZarrArray) else "h5"
         self.elem_name = elem_name
 
+    @property
+    def n_categories(self) -> int:
+        """Number of categories (cheap, from metadata only)."""
+        return self._categories["values"].shape[0]
+
+    def head_categories(self, n: int = 10) -> np.ndarray:
+        """Get first n categories without loading all.
+
+        Parameters
+        ----------
+        n
+            Number of categories to return.
+
+        Returns
+        -------
+        First n category values as a numpy array.
+        """
+        from anndata._io.specs.registry import read_elem_partial
+
+        n = min(n, self.n_categories)
+        return read_elem_partial(self._categories["values"], indices=slice(0, n))
+
     @cached_property
     def categories(self) -> np.ndarray:
         if isinstance(self._categories, ZarrArray):
@@ -224,3 +246,109 @@ def _(a: MaskedArray):
 @get_chunksize.register(CategoricalArray)
 def _(a: CategoricalArray):
     return get_chunksize(a._codes)
+
+
+def _get_categorical_array(xarray_obj: XDataArray) -> CategoricalArray | None:
+    """Extract CategoricalArray from an xarray DataArray if present."""
+    try:
+        # Navigate: DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
+        lazy_indexed = xarray_obj.variable._data
+        if hasattr(lazy_indexed, "array") and isinstance(
+            lazy_indexed.array, CategoricalArray
+        ):
+            return lazy_indexed.array
+    except (AttributeError, TypeError):
+        pass
+    return None
+
+
+def _register_cat_accessor():
+    """Register the cat accessor on xarray DataArray."""
+    try:
+        import xarray as xr
+
+        @xr.register_dataarray_accessor("cat")
+        class CatAccessor:
+            """Accessor for categorical operations on xarray DataArrays.
+
+            Provides efficient access to category information. For lazy categorical
+            columns backed by CategoricalArray, uses partial reads to avoid loading
+            all data. For other categorical columns, falls back to dtype access.
+            Returns None for non-categorical columns.
+
+            Examples
+            --------
+            >>> lazy_adata = ad.experimental.read_lazy("dataset.zarr")  # doctest: +SKIP
+            >>> lazy_adata.obs["cell_type"].cat.n_categories  # doctest: +SKIP
+            100000
+            >>> lazy_adata.obs["cell_type"].cat.head_categories(5)  # doctest: +SKIP
+            array(['TypeA', 'TypeB', 'TypeC', 'TypeD', 'TypeE'], dtype=object)
+            >>> lazy_adata.obs["numeric_col"].cat.n_categories  # doctest: +SKIP
+            None
+            """
+
+            def __init__(self, xarray_obj: XDataArray):
+                self._obj = xarray_obj
+                self._cat_array = _get_categorical_array(xarray_obj)
+
+            def _is_categorical(self) -> bool:
+                """Check if the underlying data is categorical."""
+                return isinstance(self._obj.dtype, pd.CategoricalDtype)
+
+            @property
+            def n_categories(self) -> int | None:
+                """Number of categories.
+
+                For lazy CategoricalArray, this is cheap (metadata only).
+                Returns None for non-categorical columns.
+                """
+                if self._cat_array is not None:
+                    return self._cat_array.n_categories
+                if self._is_categorical():
+                    return len(self._obj.dtype.categories)
+                return None
+
+            def head_categories(self, n: int = 10) -> np.ndarray | None:
+                """Get first n categories.
+
+                For lazy CategoricalArray, uses partial read (efficient for H5AD).
+                For other categoricals, accesses categories via dtype.
+                Returns None for non-categorical columns.
+
+                Parameters
+                ----------
+                n
+                    Number of categories to return.
+
+                Returns
+                -------
+                First n category values as a numpy array, or None for non-categorical.
+                """
+                if self._cat_array is not None:
+                    return self._cat_array.head_categories(n)
+                if self._is_categorical():
+                    cats = self._obj.dtype.categories
+                    return np.asarray(cats[:n])
+                return None
+
+            @property
+            def categories(self) -> np.ndarray | None:
+                """All categories.
+
+                Note: For lazy CategoricalArray, this loads all categories.
+                Use head_categories() for partial access.
+                Returns None for non-categorical columns.
+                """
+                if self._cat_array is not None:
+                    return self._cat_array.categories
+                if self._is_categorical():
+                    return np.asarray(self._obj.dtype.categories)
+                return None
+
+        return CatAccessor
+    except ImportError:
+        return None
+
+
+# Register the accessor when xarray is available
+_CatAccessor = _register_cat_accessor()
