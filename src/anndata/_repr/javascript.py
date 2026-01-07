@@ -480,16 +480,18 @@ _JS_CONTENT = """
             overlay.className = 'adata-readme-overlay';
 
             // Create modal with accessibility attributes
+            // Use container.id to make IDs unique across multiple cells
+            const modalTitleId = container.id + '-readme-modal-title';
             const modal = document.createElement('div');
             modal.className = 'adata-readme-modal';
             modal.setAttribute('role', 'dialog');
             modal.setAttribute('aria-modal', 'true');
-            modal.setAttribute('aria-labelledby', 'readme-modal-title');
+            modal.setAttribute('aria-labelledby', modalTitleId);
 
             // Header
             const header = document.createElement('div');
             header.className = 'adata-readme-header';
-            header.innerHTML = '<h3 id="readme-modal-title">README</h3>';
+            header.innerHTML = '<h3 id="' + modalTitleId + '">README</h3>';
 
             const closeBtn = document.createElement('button');
             closeBtn.className = 'adata-readme-close';
