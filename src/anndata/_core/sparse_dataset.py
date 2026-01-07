@@ -318,9 +318,9 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
             if self.format == "csr"
             else (self.minor_axis_size, len(major_index))
         )
-        return self.memory_format(self.get_compressed_vectors(major_index), shape=out_shape)[
-            self._gen_index(slice(None), minor_index)
-        ]
+        return self.memory_format(
+            self.get_compressed_vectors(major_index), shape=out_shape
+        )[self._gen_index(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
