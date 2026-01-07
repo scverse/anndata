@@ -105,6 +105,21 @@ class LazyCategories:
         """Shape of categories array (cheap, metadata only)."""
         return (len(self),)
 
+    @property
+    def ndim(self) -> int:
+        """Number of dimensions (always 1)."""
+        return 1
+
+    @property
+    def size(self) -> int:
+        """Total number of categories (same as len)."""
+        return len(self)
+
+    @property
+    def dtype(self) -> np.dtype:
+        """Data type of categories (cheap, metadata only)."""
+        return self._cat_array._categories["values"].dtype
+
     def __getitem__(self, key: int | slice) -> np.ndarray | str:
         """Get categories by index with efficient partial reads."""
         # If already cached, slice from cache
