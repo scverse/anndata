@@ -103,6 +103,10 @@ class LazyCategories:
 
     def __getitem__(self, key: int | slice) -> np.ndarray | str:
         """Get categories by index with efficient partial reads."""
+        # If already cached, slice from cache
+        if "categories" in self._cat_array.__dict__:
+            return self._cat_array.categories[key]
+
         from anndata._io.specs.registry import read_elem_partial
 
         n_cats = len(self)
