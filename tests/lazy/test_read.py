@@ -341,6 +341,32 @@ def test_cat_accessor(tmp_path: Path, diskfmt: str):
     all_cats = np.array(cats)
     assert len(all_cats) == n_cats
 
+    # Test .codes returns the underlying integer codes
+    codes = col.cat.codes
+    assert codes is not None
+    assert codes.shape[0] == n_cats
+    assert list(codes[:5]) == [0, 1, 2, 3, 4]  # integer codes, not category values
+
+    # Test .ordered
+    assert col.cat.ordered is False  # default is unordered
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_cat_accessor_ordered(tmp_path: Path, diskfmt: str):
+    """Test .cat.ordered for ordered categorical."""
+    adata = AnnData(
+        X=np.zeros((10, 2)),
+        obs=pd.DataFrame({
+            "ordered_cat": pd.Categorical(["a", "b", "c"] * 3 + ["a"], ordered=True)
+        }),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    assert lazy.obs["ordered_cat"].cat.ordered is True
+
 
 def test_cat_accessor_non_categorical(tmp_path: Path):
     """Test that .cat accessor returns None for non-categorical columns."""
@@ -357,3 +383,5 @@ def test_cat_accessor_non_categorical(tmp_path: Path):
 
     # Accessor returns None for non-categorical columns
     assert col.cat.categories is None
+    assert col.cat.codes is None
+    assert col.cat.ordered is None

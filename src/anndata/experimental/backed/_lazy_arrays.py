@@ -376,6 +376,30 @@ def _register_cat_accessor():
                     return np.asarray(self._obj.dtype.categories)
                 return None
 
+            @property
+            def codes(self) -> ZarrArray | H5Array | None:
+                """Integer codes for the categorical values.
+
+                For lazy CategoricalArray, returns the underlying zarr/h5 array
+                containing the integer codes. Supports lazy slicing.
+                For non-categorical columns, returns None.
+                """
+                if self._cat_array is not None:
+                    return self._cat_array._codes._array
+                return None
+
+            @property
+            def ordered(self) -> bool | None:
+                """Whether the categorical is ordered.
+
+                Returns True/False for categorical columns, None for non-categorical.
+                """
+                if self._cat_array is not None:
+                    return bool(self._cat_array._ordered)
+                if self._is_categorical():
+                    return bool(self._obj.dtype.ordered)
+                return None
+
         return CatAccessor
     except ImportError:
         return None
