@@ -109,32 +109,23 @@ class LazyCategories:
         from anndata._io.specs.registry import read_elem_partial
 
         n_cats = len(self)
+        single = isinstance(key, int)
 
-        if isinstance(key, int):
-            # Single item access
+        # Normalize to slice
+        if single:
             if key < -n_cats or key >= n_cats:
                 msg = f"index {key} is out of bounds for categories with size {n_cats}"
                 raise IndexError(msg)
             idx = key if key >= 0 else n_cats + key
-            return read_elem_partial(
-                self._cat_array._categories["values"], indices=slice(idx, idx + 1)
-            )[0]
-        elif isinstance(key, slice):
-            # Normalize slice to handle negative indices and None
-            start, stop, step = key.indices(n_cats)
-            if step != 1:
-                # For non-unit steps, load the range and slice
-                arr = read_elem_partial(
-                    self._cat_array._categories["values"],
-                    indices=slice(start, stop),
-                )
-                return arr[::step]
-            return read_elem_partial(
-                self._cat_array._categories["values"], indices=slice(start, stop)
-            )
-        else:
-            msg = f"indices must be integers or slices, not {type(key).__name__}"
-            raise TypeError(msg)
+            key = slice(idx, idx + 1)
+
+        start, stop, step = key.indices(n_cats)
+        arr = read_elem_partial(
+            self._cat_array._categories["values"], indices=slice(start, stop)
+        )
+        if step != 1:
+            arr = arr[::step]
+        return arr[0] if single else arr  # scalar for int key, array for slice
 
     def __iter__(self):
         """Iterate over all categories (loads all data)."""
