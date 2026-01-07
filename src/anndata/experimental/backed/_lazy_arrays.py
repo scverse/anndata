@@ -141,9 +141,9 @@ class LazyCategories:
     def __repr__(self) -> str:
         return f"LazyCategories(n={len(self)})"
 
-    def _get_all(self) -> np.ndarray:
+    def _get_all(self) -> np.ndarray | pd.api.extensions.ExtensionArray:
         """Get all categories (uses CategoricalArray.categories cached_property)."""
-        return np.asarray(self._cat_array.categories)
+        return self._cat_array.categories
 
 
 class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
@@ -183,7 +183,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         return self._categories["values"].shape[0]
 
     @cached_property
-    def categories(self) -> np.ndarray:
+    def categories(self) -> np.ndarray | pd.api.extensions.ExtensionArray:
         """All categories (cached, loads all on first access)."""
         if isinstance(self._categories, ZarrArray):
             return self._categories[...]
@@ -197,7 +197,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes,
-            categories=np.asarray(self.categories),
+            categories=self.categories,
             ordered=self._ordered,
         )
         if settings.remove_unused_categories:
@@ -373,7 +373,7 @@ def _register_cat_accessor():
                 if self._cat_array is not None:
                     return LazyCategories(self._cat_array)
                 if self._is_categorical():
-                    return np.asarray(self._obj.dtype.categories)
+                    return self._obj.dtype.categories
                 return None
 
             @property
