@@ -237,9 +237,12 @@ def test_chunks_df(
 
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
-def test_categorical_get_categories(tmp_path: Path, diskfmt: str):
-    """Test CategoricalArray.get_categories and n_categories."""
-    from anndata.experimental.backed._lazy_arrays import CategoricalArray
+def test_lazy_categories(tmp_path: Path, diskfmt: str):
+    """Test LazyCategories slicing on CategoricalArray.categories."""
+    from anndata.experimental.backed._lazy_arrays import (
+        CategoricalArray,
+        LazyCategories,
+    )
 
     n_cats = 100
     # Use zero-padded numbers to ensure consistent ordering
@@ -259,36 +262,42 @@ def test_categorical_get_categories(tmp_path: Path, diskfmt: str):
     cat_arr = col.variable._data.array
     assert isinstance(cat_arr, CategoricalArray)
 
-    # Test n_categories (should be cheap, no full data load)
-    assert cat_arr.n_categories == n_cats
+    # Test categories property returns LazyCategories
+    cats = cat_arr.categories
+    assert isinstance(cats, LazyCategories)
 
-    # Test get_categories with positive int (head)
-    head5 = cat_arr.get_categories(5)
+    # Test len() is cheap (n_categories)
+    assert len(cats) == n_cats
+
+    # Test slicing - head
+    head5 = cats[:5]
     assert len(head5) == 5
     assert list(head5) == [f"Type_{i:03d}" for i in range(5)]
 
-    # Test get_categories with n > n_categories
-    head_all = cat_arr.get_categories(n_cats + 10)
-    assert len(head_all) == n_cats
-
-    # Test get_categories with negative int (tail)
-    tail5 = cat_arr.get_categories(-5)
+    # Test slicing - tail
+    tail5 = cats[-5:]
     assert len(tail5) == 5
     assert list(tail5) == [f"Type_{i:03d}" for i in range(95, 100)]
 
-    # Test get_categories with slice
-    middle = cat_arr.get_categories(slice(10, 20))
+    # Test slicing - middle
+    middle = cats[10:20]
     assert len(middle) == 10
     assert list(middle) == [f"Type_{i:03d}" for i in range(10, 20)]
 
-    # Test default (all categories)
-    all_cats = cat_arr.get_categories()
+    # Test single item access
+    assert cats[0] == "Type_000"
+    assert cats[-1] == "Type_099"
+
+    # Test full array conversion
+    all_cats = np.array(cats)
     assert len(all_cats) == n_cats
 
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
 def test_cat_accessor(tmp_path: Path, diskfmt: str):
     """Test the .cat accessor for user-facing API."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategories
+
     n_cats = 50
     # Use zero-padded numbers to ensure consistent ordering
     categories = [f"Cell_{i:02d}" for i in range(n_cats)]
@@ -306,26 +315,30 @@ def test_cat_accessor(tmp_path: Path, diskfmt: str):
     # Test .cat accessor exists
     assert hasattr(col, "cat")
 
-    # Test n_categories via accessor
-    assert col.cat.n_categories == n_cats
+    # Test .categories returns LazyCategories
+    cats = col.cat.categories
+    assert isinstance(cats, LazyCategories)
 
-    # Test get_categories via accessor - positive int (head)
-    head5 = col.cat.get_categories(5)
+    # Test len() via accessor
+    assert len(cats) == n_cats
+
+    # Test slicing via accessor - head
+    head5 = cats[:5]
     assert len(head5) == 5
     assert list(head5) == [f"Cell_{i:02d}" for i in range(5)]
 
-    # Test get_categories via accessor - negative int (tail)
-    tail3 = col.cat.get_categories(-3)
+    # Test slicing via accessor - tail
+    tail3 = cats[-3:]
     assert len(tail3) == 3
     assert list(tail3) == [f"Cell_{i:02d}" for i in range(47, 50)]
 
-    # Test get_categories via accessor - slice
-    middle = col.cat.get_categories(slice(10, 15))
+    # Test slicing via accessor - middle
+    middle = cats[10:15]
     assert len(middle) == 5
     assert list(middle) == [f"Cell_{i:02d}" for i in range(10, 15)]
 
-    # Test .categories property
-    all_cats = col.cat.categories
+    # Test full array conversion
+    all_cats = np.array(cats)
     assert len(all_cats) == n_cats
 
 
@@ -343,6 +356,4 @@ def test_cat_accessor_non_categorical(tmp_path: Path):
     col = lazy.obs["numeric"]
 
     # Accessor returns None for non-categorical columns
-    assert col.cat.n_categories is None
-    assert col.cat.get_categories() is None
     assert col.cat.categories is None
