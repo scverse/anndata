@@ -1097,7 +1097,7 @@ def write_categorical(
         "categories",
         v.categories._values
         if not pd.api.types.is_string_dtype(v.categories)
-        else np.array(v.categories),
+        else v.categories.to_numpy(),
         dataset_kwargs=dataset_kwargs,
     )
 
