@@ -337,11 +337,6 @@ try:
                     type_name=f"AnnData ({shape_str})",
                     css_class="dtype-anndata",
                     tooltip=f"Modality: {mod_name}",
-                    details={
-                        "n_obs": adata.n_obs,
-                        "n_vars": adata.n_vars,
-                        "can_expand": can_expand,
-                    },
                     expanded_html=nested_html if can_expand else None,
                     is_serializable=True,
                 )

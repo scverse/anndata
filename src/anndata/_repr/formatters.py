@@ -160,12 +160,6 @@ class NumpyArrayFormatter(TypeFormatter):
         # Determine CSS class based on dtype
         css_class = _get_dtype_css_class(arr.dtype)
 
-        details = {
-            "shape": arr.shape,
-            "dtype": dtype_str,
-            "ndim": arr.ndim,
-        }
-
         if arr.ndim == 2:
             type_name = f"ndarray ({shape_str}) {dtype_str}"
         elif arr.ndim == 1:
@@ -182,7 +176,6 @@ class NumpyArrayFormatter(TypeFormatter):
         return FormattedOutput(
             type_name=type_name,
             css_class=css_class,
-            details=details,
             preview=preview,
             is_serializable=True,
         )
@@ -206,11 +199,6 @@ class NumpyMaskedArrayFormatter(TypeFormatter):
             type_name=f"MaskedArray ({shape_str}) {dtype_str}",
             css_class=_get_dtype_css_class(arr.dtype),
             tooltip=f"{n_masked} masked values" if n_masked > 0 else "",
-            details={
-                "shape": arr.shape,
-                "dtype": dtype_str,
-                "n_masked": n_masked,
-            },
             is_serializable=True,
         )
 
@@ -629,10 +617,6 @@ class LazyColumnFormatter(TypeFormatter):
         return FormattedOutput(
             type_name=f"{dtype_str} (lazy)",
             css_class=css_class,
-            details={
-                "dtype": dtype_str,
-                "is_lazy": True,
-            },
             preview=preview,
             is_serializable=True,
         )
@@ -708,11 +692,6 @@ class CuPyArrayFormatter(TypeFormatter):
             css_class="dtype-gpu",
             tooltip=device_info,
             preview=preview,
-            details={
-                "shape": obj.shape,
-                "dtype": dtype_str,
-                "device": getattr(obj, "device", None),
-            },
             is_serializable=True,
         )
 
@@ -740,10 +719,6 @@ class AwkwardArrayFormatter(TypeFormatter):
             type_name=f"awkward.Array ({length_str} records)",
             css_class="dtype-awkward",
             tooltip=f"Type: {type_str}",
-            details={
-                "length": length,
-                "type": type_str,
-            },
             is_serializable=True,
         )
 
@@ -833,13 +808,6 @@ class ArrayAPIFormatter(TypeFormatter):
             css_class="dtype-array-api",
             tooltip=f"{backend_label} array{device_info}",
             preview=preview,
-            details={
-                "shape": obj.shape,
-                "dtype": dtype_str,
-                "backend": module_name,
-                "type": type_name,
-                "ndim": obj.ndim,
-            },
             is_serializable=True,
         )
 

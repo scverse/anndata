@@ -37,7 +37,6 @@ class TestNumpyFormatters:
         assert "100" in result.type_name
         assert "50" in result.type_name
         assert "float32" in result.type_name
-        assert result.details["shape"] == (100, 50)
 
     def test_numpy_array_3d(self):
         """Test numpy array formatter with 3D+ arrays."""
@@ -62,7 +61,7 @@ class TestNumpyFormatters:
         result = formatter.format(arr, FormatterContext())
 
         assert "MaskedArray" in result.type_name
-        assert result.details["n_masked"] == 2
+        assert "2 masked values" in result.tooltip
 
     def test_masked_array_no_mask(self):
         """Test MaskedArray formatter with no masked values."""
@@ -73,7 +72,7 @@ class TestNumpyFormatters:
         arr = np.ma.array([1, 2, 3, 4, 5])
 
         result = formatter.format(arr, FormatterContext())
-        assert result.details["n_masked"] == 0
+        assert result.tooltip == ""  # No masked values means empty tooltip
 
 
 class TestSparseFormatters:
@@ -700,7 +699,7 @@ class TestFutureCompatibility:
         assert "100 × 50" in result.type_name
         assert "float32" in result.type_name
         assert result.css_class == "dtype-array-api"
-        assert result.details["backend"] == "jax"
+        assert "jax" in result.tooltip.lower()  # Backend info in tooltip
 
     def test_unknown_array_type_graceful_fallback(self):
         """Test that completely unknown array types don't break HTML rendering."""

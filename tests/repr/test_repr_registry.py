@@ -49,7 +49,6 @@ class TestFormatterRegistry:
                 return FormattedOutput(
                     type_name="CustomType",
                     css_class="dtype-custom",
-                    details={"custom": True},
                     is_serializable=False,
                 )
 
@@ -62,7 +61,6 @@ class TestFormatterRegistry:
             result = formatter_registry.format_value(obj, context)
             assert result.type_name == "CustomType"
             assert result.css_class == "dtype-custom"
-            assert result.details.get("custom") is True
             assert result.is_serializable is False
         finally:
             formatter_registry.unregister_type_formatter(formatter)
@@ -184,7 +182,7 @@ class TestFormatterRegistry:
 
         assert result is not None
         assert "ExtensionData" in result.type_name
-        assert "shape" in result.details
+        assert "Shape:" in result.tooltip  # Shape info in tooltip for fallback
 
     def test_anndata_in_uns_detected(self):
         """Test nested AnnData in .uns is properly detected."""
@@ -394,9 +392,8 @@ class TestFallbackFormatter:
 
         result = formatter.format(obj, context)
 
-        assert result.details["shape"] == (10, 5)
-        assert result.details["dtype"] == "float32"
         assert "Shape: (10, 5)" in result.tooltip
+        assert "Dtype: float32" in result.tooltip
 
     def test_fallback_with_len(self):
         """Test fallback formatter extracts length."""
@@ -412,7 +409,7 @@ class TestFallbackFormatter:
 
         result = formatter.format(obj, context)
 
-        assert result.details["length"] == 42
+        assert "Length: 42" in result.tooltip
 
     def test_fallback_len_raises_error(self):
         """Test fallback formatter handles __len__ errors gracefully."""
@@ -428,7 +425,7 @@ class TestFallbackFormatter:
         context = FormatterContext()
 
         result = formatter.format(obj, context)
-        assert "length" not in result.details
+        assert "Length:" not in result.tooltip
 
 
 class TestRegistryAbstractMethods:

@@ -46,6 +46,7 @@ Usage for extending to new types:
 
 from __future__ import annotations
 
+import contextlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -132,19 +133,6 @@ class FormattedOutput:
 
     tooltip: str = ""
     """Tooltip text on hover."""
-
-    details: dict[str, Any] = field(default_factory=dict)
-    """Optional metadata for custom TypeFormatters.
-
-    Most formatters don't need this - use the standard fields instead:
-    - ``type_name`` / ``type_html``: Type display (include all info inline)
-    - ``preview_html`` / ``preview``: Preview content
-    - ``warnings``: Warning messages
-    - ``expanded_html``: Expandable content
-
-    This dict is available for edge cases where custom formatters need to
-    pass additional data for programmatic access or custom rendering.
-    """
 
     warnings: list[str] = field(default_factory=list)
     """Warning messages to display with warning icon."""
@@ -432,24 +420,18 @@ class FallbackFormatter(TypeFormatter):
         else:
             full_name = type_name
 
-        # Try to get useful info
-        details = {}
+        # Try to get useful info for tooltip
         tooltip_parts = [f"Type: {full_name}"]
 
         if hasattr(obj, "shape"):
-            details["shape"] = obj.shape
             tooltip_parts.append(f"Shape: {obj.shape}")
 
         if hasattr(obj, "dtype"):
-            details["dtype"] = str(obj.dtype)
             tooltip_parts.append(f"Dtype: {obj.dtype}")
 
         if hasattr(obj, "__len__"):
-            try:
-                details["length"] = len(obj)
+            with contextlib.suppress(TypeError, RuntimeError):
                 tooltip_parts.append(f"Length: {len(obj)}")
-            except (TypeError, RuntimeError):
-                pass
 
         # Check if this might be from an extension package
         is_extension = module and not module.startswith((
@@ -463,7 +445,6 @@ class FallbackFormatter(TypeFormatter):
             type_name=type_name,
             css_class="dtype-unknown" if not is_extension else "dtype-extension",
             tooltip="\n".join(tooltip_parts),
-            details=details,
             warnings=[f"Unknown type: {full_name}"] if not is_extension else [],
             is_serializable=False,  # Assume unknown types aren't serializable
         )
