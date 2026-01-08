@@ -143,8 +143,6 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
             array_type = pd.arrays.BooleanArray
         case "i" | "u":
             array_type = pd.arrays.IntegerArray
-        case "f":
-            array_type = pd.arrays.FloatingArray
         case _:
             raise NotImplementedError
     return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
