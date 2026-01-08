@@ -76,17 +76,17 @@ H5File = h5py.File
 
 # h5py recommends using .astype("T") over .asstr() when using numpy ≥2
 if TYPE_CHECKING:
-    from h5py._hl.dataset import AsTypeView as H5AstypeView
+    from h5py._hl.dataset import AsTypeView as H5AsTypeView
 else:
     try:
         try:
-            from h5py._hl.dataset import AsTypeView as H5AstypeView
+            from h5py._hl.dataset import AsTypeView as H5AsTypeView
         except ImportError:
             # h5py 3.11 uses AstypeWrapper (lowercase 't')
-            from h5py._hl.dataset import AstypeWrapper as H5AstypeView
+            from h5py._hl.dataset import AstypeWrapper as H5AsTypeView
     except ImportError:  # pragma: no cover
         warn("AsTypeView changed import location", DeprecationWarning)
-        H5AstypeView = type(
+        H5AsTypeView = type(
             h5py.File.in_memory().create_dataset("x", shape=(), dtype="S1").astype("U1")
         )
 

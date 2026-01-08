@@ -368,7 +368,7 @@ def read_nullable(
         values = values.astype("T")
     return MaskedArray(
         values=values,
-        mask=elem.get("mask", None),
+        mask=elem["mask"],
         dtype_str=encoding_type,
         base_path_or_zarr_group=base_path_or_zarr_group,
         elem_name=elem_name,
