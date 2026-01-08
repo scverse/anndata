@@ -130,23 +130,23 @@ class LazyCategories:
         from anndata._io.specs.registry import read_elem_partial
 
         n_cats = len(self)
-        single = isinstance(key, int)
 
-        # Normalize to slice
-        if single:
+        # Single item access
+        if isinstance(key, int):
             if key < -n_cats or key >= n_cats:
                 msg = f"index {key} is out of bounds for categories with size {n_cats}"
                 raise IndexError(msg)
             idx = key if key >= 0 else n_cats + key
-            key = slice(idx, idx + 1)
+            return read_elem_partial(
+                self._cat_array._categories_array, indices=slice(idx, idx + 1)
+            )[0]
 
+        # Slice access
         start, stop, step = key.indices(n_cats)
         arr = read_elem_partial(
             self._cat_array._categories_array, indices=slice(start, stop)
         )
-        if step != 1:
-            arr = arr[::step]
-        return arr[0] if single else arr  # scalar for int key, array for slice
+        return arr[::step] if step != 1 else arr
 
     def __iter__(self):
         """Iterate over all categories (loads all data)."""
@@ -391,10 +391,6 @@ class CatAccessor:
         except (AttributeError, TypeError):
             pass
 
-    def _is_categorical(self) -> bool:
-        """Check if the underlying data is categorical."""
-        return isinstance(self._obj.dtype, pd.CategoricalDtype)
-
     @property
     def categories(self) -> LazyCategories | pd.Index | None:
         """Category values with efficient slicing support.
@@ -404,7 +400,7 @@ class CatAccessor:
         """
         if self._cat_array is not None:
             return LazyCategories(self._cat_array)
-        if self._is_categorical():
+        if isinstance(self._obj.dtype, pd.CategoricalDtype):
             return self._obj.dtype.categories
         return None
 
@@ -428,7 +424,7 @@ class CatAccessor:
         """
         if self._cat_array is not None:
             return bool(self._cat_array._ordered)
-        if self._is_categorical():
+        if isinstance(self._obj.dtype, pd.CategoricalDtype):
             return bool(self._obj.dtype.ordered)
         return None
 
