@@ -166,17 +166,21 @@ def test_concat_to_memory_obs(
 
 
 def test_concat_to_memory_obs_dtypes(
+    subtests: pytest.Subtests,
     lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
-):
+) -> None:
     concated_remote = ad.concat(lazy_adatas_for_concat, join=join)
     # check preservation of non-categorical dtypes on the concat axis
-    assert concated_remote.obs["int64"].dtype == "int64"
-    assert concated_remote.obs["uint8"].dtype == "uint8"
-    assert concated_remote.obs["nullable-int"].dtype == "int32"
-    assert concated_remote.obs["float64"].dtype == "float64"
-    assert concated_remote.obs["bool"].dtype == "bool"
-    assert concated_remote.obs["nullable-bool"].dtype == "bool"
+    for name in concated_remote.obs.columns:
+        dtype = name.removeprefix("nullable-")
+        with subtests.test(col=name):
+            try:
+                assert concated_remote.obs[name].dtype == dtype
+            except AssertionError:
+                if "cat" in name:
+                    pytest.xfail("categorical dtypes are not preserved")
+                raise
 
 
 def test_concat_to_memory_var(
