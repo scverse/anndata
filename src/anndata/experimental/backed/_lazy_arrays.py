@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
 
+from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
 from ...compat import (
     H5Array,
@@ -23,8 +24,9 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from numpy.typing import NDArray
     from pandas._libs.missing import NAType
-    from pandas.core.dtypes.base import ExtensionDtype
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from anndata.compat import ZarrGroup
 
@@ -143,7 +145,7 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
     by :class:`xarray.backends.BackendArray`.
     """
 
-    _mask: ZarrOrHDF5Wrapper[K]
+    _mask: ZarrOrHDF5Wrapper[K] | None
     _values: ZarrOrHDF5Wrapper[K]
     _dtype_str: Literal["nullable-integer", "nullable-boolean", "nullable-string-array"]
     shape: tuple[int, ...]
@@ -152,15 +154,15 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
 
     def __init__(
         self,
-        values: ZarrArray | H5Array,
+        values: K,
         dtype_str: Literal[
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
-        mask: ZarrArray | H5Array,
+        mask: K | None,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
-    ):
-        self._mask = ZarrOrHDF5Wrapper(mask)
+    ) -> None:
+        self._mask = None if mask is None else ZarrOrHDF5Wrapper(mask)
         self._values = ZarrOrHDF5Wrapper(values)
         self._dtype_str = dtype_str
         self.shape = self._values.shape
@@ -168,33 +170,35 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
         self.file_format = "zarr" if isinstance(mask, ZarrArray) else "h5"
         self.elem_name = elem_name
 
-    def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray | np.ndarray:
-        from xarray.core.extension_array import PandasExtensionArray
-
+    def __getitem__(
+        self, key: ExplicitIndexer
+    ) -> PandasExtensionArray | NDArray[np.str_]:
         values = self._values[key]
-        mask = self._mask[key]
-        if self._dtype_str == "nullable-integer":
-            # numpy does not support nan ints
-            extension_array = pd.arrays.IntegerArray(values, mask=mask)
-        elif self._dtype_str == "nullable-boolean":
-            extension_array = pd.arrays.BooleanArray(values, mask=mask)
-        elif self._dtype_str == "nullable-string-array":
+        mask = None if self._mask is None else self._mask[key]
+
+        # numpy does not support nan ints
+        if self._dtype_str in {"nullable-integer", "nullable-boolean"}:
+            from xarray.core.extension_array import PandasExtensionArray
+
+            if mask is None:
+                mask = np.ones(len(values), dtype=bool)
+            cls = cast("BaseMaskedDtype", self.dtype).construct_array_type()
+            return PandasExtensionArray(cls(values, mask=mask))
+
+        if self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
             values = values.astype(self.dtype)
-            values[mask] = pd.NA
+            if mask is not None:
+                values[mask] = pd.NA
             return values
-        else:
-            msg = f"Invalid dtype_str {self._dtype_str}"
-            raise RuntimeError(msg)
-        return PandasExtensionArray(extension_array)
+
+        msg = f"Invalid dtype_str {self._dtype_str}"
+        raise RuntimeError(msg)
 
     @cached_property
-    def dtype(self) -> np.dtypes.StringDType[NAType] | ExtensionDtype:
+    def dtype(self) -> np.dtypes.StringDType[NAType] | BaseMaskedDtype:
         if self._dtype_str == "nullable-integer":
-            return pd.array(
-                [],
-                dtype=str(pd.api.types.pandas_dtype(self._values.dtype)).capitalize(),
-            ).dtype
+            return pandas_nullable_dtype(pd.arrays.IntegerArray, self._values.dtype)
         elif self._dtype_str == "nullable-boolean":
             return pd.BooleanDtype()
         elif self._dtype_str == "nullable-string-array":

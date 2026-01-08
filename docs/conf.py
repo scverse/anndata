@@ -173,6 +173,7 @@ qualname_overrides = {
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
+    "pandas.core.dtypes.dtypes.BaseMaskedDtype": "pandas.api.extensions.ExtensionDtype",
     # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
     "types.EllipsisType": ("py:data", "types.EllipsisType"),
     "pathlib._local.Path": "pathlib.Path",

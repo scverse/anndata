@@ -20,7 +20,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._io.utils import check_key, pandas_nullable_dtype, zero_dim_array_as_scalar
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -45,12 +45,11 @@ from ...utils import warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Any, Literal
 
     from numpy import typing as npt
-    from numpy.typing import NDArray
 
     from anndata._types import ArrayStorageType, GroupStorageType
     from anndata.compat import CSArray, CSMatrix
@@ -1214,39 +1213,39 @@ def _read_nullable(
     elem: GroupStorageType,
     *,
     _reader: Reader,
-    # BaseMaskedArray
-    array_type: Callable[
-        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
-    ],
+    array_type: type[pd.arrays.IntegerArray | pd.arrays.BooleanArray],
 ) -> pd.api.extensions.ExtensionArray:
-    return array_type(
-        _reader.read_elem(elem["values"]),
-        mask=_reader.read_elem(elem["mask"]),
+    values = _reader.read_elem(elem["values"])
+    if "mask" in elem:
+        mask = _reader.read_elem(elem["mask"])
+        return array_type(values, mask=mask)
+
+    return pd.array(values, dtype=pandas_nullable_dtype(array_type, values.dtype))
+
+
+read_nullable = dict(
+    integer=partial(_read_nullable, array_type=pd.arrays.IntegerArray),
+    boolean=partial(_read_nullable, array_type=pd.arrays.BooleanArray),
+)
+
+
+for dtype, store_type, _version in product(
+    ("integer", "boolean"), (H5Group, ZarrGroup), ("0.1.0", "0.1.1")
+):
+    _REGISTRY.register_read(store_type, IOSpec(f"nullable-{dtype}", _version))(
+        read_nullable[dtype]
     )
 
 
-_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
-    read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
-)
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
-    read_nullable_integer
-)
-
-_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
-    read_nullable_boolean := partial(_read_nullable, array_type=pd.arrays.BooleanArray)
-)
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
-    read_nullable_boolean
-)
-
-
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.1"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.1"))
 def _read_nullable_string(
     elem: GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
-    mask = _reader.read_elem(elem["mask"])
+    mask = _reader.read_elem(elem["mask"]) if "mask" in elem else None
     dtype = (
         pd.StringDtype(
             na_value=np.nan
@@ -1261,7 +1260,8 @@ def _read_nullable_string(
         values.astype(np.dtypes.StringDType(na_object=dtype.na_value)),  # TODO: why?
         dtype=dtype,
     )
-    arr[mask] = pd.NA
+    if mask is not None:
+        arr[mask] = pd.NA
     return arr
 
 
