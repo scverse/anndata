@@ -40,9 +40,9 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
     """A CategoricalDtype that lazily loads categories from zarr/h5 storage.
 
     This dtype provides efficient access to categorical metadata without loading
-    all categories into memory. Use :meth:`n_categories`, :meth:`head_categories`,
-    and :meth:`tail_categories` for efficient partial access. The full
-    :attr:`categories` are loaded lazily on first access and cached thereafter.
+    all categories into memory via :meth:`head_categories`, :meth:`tail_categories`,
+    and :attr:`n_categories`. Accessing :attr:`categories` will load all categories
+    into memory.
 
     Parameters
     ----------
@@ -51,20 +51,6 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         encoding) containing category values. Can be None for empty dtype.
     ordered
         Whether the categorical is ordered.
-
-    Examples
-    --------
-    .. code-block:: python
-
-        dtype = col.dtype  # LazyCategoricalDtype
-        dtype.n_categories  # cheap, metadata only
-        # 100000
-        dtype.head_categories(5)  # partial read, first 5
-        # array(['cat_0', 'cat_1', 'cat_2', 'cat_3', 'cat_4'], dtype='<U6')
-        dtype.tail_categories(3)  # partial read, last 3
-        # array(['cat_99997', 'cat_99998', 'cat_99999'], dtype='<U6')
-        dtype.categories  # full load, cached
-        # Index(['cat_0', 'cat_1', ...], dtype='str')
     """
 
     # Attributes that should be preserved during copying/pickling
