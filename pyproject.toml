@@ -99,6 +99,7 @@ test-min = [
     "dask[distributed]",
     "awkward>=2.6.3",
     "pyarrow",
+    "pooch",
     "anndata[dask]",
 ]
 

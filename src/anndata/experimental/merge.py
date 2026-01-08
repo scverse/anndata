@@ -554,19 +554,18 @@ def concat_on_disk(  # noqa: PLR0913
     See :func:`anndata.concat` for the semantics.
     The following examples highlight the differences this function has.
 
-    First, let’s get some “big” datasets with a compatible ``var`` axis:
+    First, let's get some "big" datasets with a compatible ``var`` axis:
 
-    >>> from urllib.request import urlretrieve
+    >>> import pooch
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
     >>> def get_cellxgene_data(id_: str):
-    ...     out_path = sc.settings.datasetdir / f"concat_{id_}.h5ad"
-    ...     if out_path.exists():
-    ...         return out_path
-    ...     file_url = f"{base_url}/{id_}.h5ad"
-    ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     urlretrieve(file_url, out_path)
-    ...     return out_path
+    ...     return pooch.retrieve(
+    ...         f"{base_url}/{id_}.h5ad",
+    ...         known_hash=None,
+    ...         fname=f"{id_}.h5ad",
+    ...         path=sc.settings.datasetdir,
+    ...     )
     >>> path_b_cells = get_cellxgene_data('a93eab58-3d82-4b61-8a2f-d7666dcdb7c4')
     >>> path_fetal = get_cellxgene_data('d170ff04-6da0-4156-a719-f8e1bbefbf53')
 
