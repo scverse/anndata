@@ -151,14 +151,9 @@ def gen_random_column(  # noqa: PLR0911
             ),
         )
     if issubdtype(dtype, IntegerDtype):
-        k, v = gen_random_column(n, dtype.numpy_dtype)
-        return (
-            f"nullable-{k}",
-            pd.arrays.IntegerArray(
-                v,
-                mask=np.random.randint(0, 2, size=n, dtype=bool),
-            ),
-        )
+        name, values = gen_random_column(n, dtype.numpy_dtype)
+        mask = np.random.randint(0, 2, size=n, dtype=bool)
+        return f"nullable-{name}", pd.arrays.IntegerArray(values, mask)
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
         array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
