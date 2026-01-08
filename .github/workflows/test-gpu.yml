@@ -52,9 +52,10 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install yq
+      - name: Install yq # https://cirun.slack.com/archives/C09SNDRB3A8/p1766512487317849?thread_ts=1766512112.938459&cid=C09SNDRB3A8
         run: |
-          sudo snap install yq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Extract max Python version from classifiers
         run: |
@@ -72,14 +73,12 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
+          uv pip install -e ".[cu12]" --group=test -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
 
-      - name: Run test
-        env:
-          COVERAGE_PROCESS_START: ${{ github.workspace }}/pyproject.toml
+      - name: Run tests
         run: |
           uv run coverage run -m pytest -m gpu -n auto
           uv run coverage combine
