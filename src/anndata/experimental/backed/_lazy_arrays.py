@@ -14,6 +14,8 @@ from ..._settings import settings
 from ...compat import (
     NULLABLE_NUMPY_STRING_TYPE,
     H5Array,
+    H5AsStrView,
+    H5AsTypeView,
     XBackendArray,
     XDataArray,
     XZarrArrayWrapper,
@@ -36,12 +38,13 @@ if TYPE_CHECKING:
         from xarray.core.indexing import ExplicitIndexer
 
 
-K = TypeVar("K", H5Array, ZarrArray)
+K = TypeVar("K", H5Array | H5AsStrView | H5AsTypeView, ZarrArray)
 
 
 class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
-    def __init__(self, array: K):
-        self.chunks = array.chunks
+    def __init__(self, array: K) -> None:
+        # AstypeView from h5py .astype() lacks chunks attribute
+        self.chunks = getattr(array, "chunks", None)
         if isinstance(array, ZarrArray):
             super().__init__(array)
             return
@@ -73,7 +76,7 @@ class ZarrOrHDF5Wrapper(XZarrArrayWrapper, Generic[K]):
         if (
             isinstance(key, np.ndarray)
             and np.issubdtype(key.dtype, np.integer)
-            and isinstance(self._array, H5Array)
+            and isinstance(self._array, H5Array | H5AsTypeView | H5AsStrView)
         ):
             key_mask = np.zeros(self._array.shape).astype("bool")
             key_mask[key] = True
@@ -89,7 +92,7 @@ class CategoricalArray(XBackendArray, Generic[K]):
     """
 
     _codes: ZarrOrHDF5Wrapper[K]
-    _categories: ZarrArray | H5Array
+    _categories: K
     shape: tuple[int, ...]
     base_path_or_zarr_group: Path | ZarrGroup
     elem_name: str
@@ -97,7 +100,7 @@ class CategoricalArray(XBackendArray, Generic[K]):
     def __init__(
         self,
         codes: K,
-        categories: ZarrArray | H5Array,
+        categories: K,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
         *args,
@@ -153,11 +156,11 @@ class MaskedArray(XBackendArray, Generic[K]):
 
     def __init__(
         self,
-        values: ZarrArray | H5Array,
+        values: K,
         dtype_str: Literal[
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
-        mask: ZarrArray | H5Array,
+        mask: K,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
     ):

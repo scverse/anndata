@@ -24,7 +24,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CSArray, CupyCSCMatrix, DaskArray
+from anndata.compat import NUMPY_2, CSArray, CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -821,7 +821,7 @@ def _n(t: type | FunctionType) -> str:
 def _string_dtypes(t: type | FunctionType) -> list[str]:
     if t.__module__.startswith("pandas"):
         return ["string[python]", "string[pyarrow]"]
-    if Version(version("numpy")) >= Version("2"):
+    if NUMPY_2:
         return ["T"]
     return []
 
