@@ -771,7 +771,8 @@ def test_scanpy_krumsiek11(
     orig.var.columns = orig.var.columns.astype(str)
     with ad.settings.override(allow_write_nullable_strings=True):
         curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
-
+    # These categories are constructed manually in scanpy's code so are not "roundtripped" from disk.
+    orig.obs["cell_type"] = orig.obs["cell_type"].astype(curr.obs["cell_type"].dtype)
     assert_equal(orig, curr, exact=True)
 
 
