@@ -415,3 +415,174 @@ def test_lazy_categorical_dtype_repr(tmp_path: Path):
     # After loading: standard CategoricalDtype repr
     repr_after = repr(dtype)
     assert "CategoricalDtype" in repr_after
+
+
+def test_lazy_categorical_dtype_equality(tmp_path: Path):
+    """Test LazyCategoricalDtype equality comparisons."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["a", "b", "c"]
+    adata = AnnData(
+        X=np.zeros((3, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Test string comparison (dtype == "category")
+    assert dtype == "category"
+    assert not (dtype == "int64")
+
+    # Test comparison with regular CategoricalDtype
+    regular_dtype = pd.CategoricalDtype(categories=["a", "b", "c"], ordered=False)
+    assert dtype == regular_dtype
+
+    # Test comparison with different categories
+    different_dtype = pd.CategoricalDtype(categories=["x", "y", "z"], ordered=False)
+    assert not (dtype == different_dtype)
+
+    # Test comparison with different ordered flag
+    ordered_dtype = pd.CategoricalDtype(categories=["a", "b", "c"], ordered=True)
+    assert not (dtype == ordered_dtype)
+
+    # Test comparison with non-CategoricalDtype
+    assert not (dtype == np.dtype("int64"))
+    assert not (dtype == 123)
+    assert not (dtype == None)
+
+
+def test_lazy_categorical_dtype_equality_same_array(tmp_path: Path):
+    """Test LazyCategoricalDtype equality between instances with same underlying array."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["x", "y", "z"]
+    adata = AnnData(
+        X=np.zeros((3, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype1 = lazy.obs["cat"].dtype
+    dtype2 = lazy.obs["cat"].dtype  # Same underlying array
+
+    # Same object should be equal
+    assert dtype1 is dtype2  # They are the same instance
+    assert dtype1 == dtype2
+
+
+def test_lazy_categorical_dtype_hash(tmp_path: Path):
+    """Test LazyCategoricalDtype is hashable."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["a", "b", "c"]
+    adata = AnnData(
+        X=np.zeros((3, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Should be hashable (required for pandas internals)
+    h = hash(dtype)
+    assert isinstance(h, int)
+
+    # Can be used in a set
+    s = {dtype}
+    assert dtype in s
+
+
+def test_lazy_categorical_dtype_n_categories_from_cache(tmp_path: Path):
+    """Test n_categories returns from cache when categories already loaded."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["a", "b", "c", "d", "e"]
+    adata = AnnData(
+        X=np.zeros((5, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Load categories first
+    cats = dtype.categories
+    assert cats is not None
+
+    # Now n_categories should return from cached categories
+    assert dtype.n_categories == 5
+
+
+def test_lazy_categorical_dtype_empty_array():
+    """Test LazyCategoricalDtype with None categories_array."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    # Create dtype with None categories_array
+    dtype = LazyCategoricalDtype(categories_array=None, ordered=False)
+
+    # Properties should handle None gracefully
+    assert dtype.n_categories == 0
+    assert dtype.categories is None
+
+    # head_categories and tail_categories should return empty arrays
+    head = dtype.head_categories(5)
+    assert len(head) == 0
+
+    tail = dtype.tail_categories(5)
+    assert len(tail) == 0
+
+    # repr should still work
+    r = repr(dtype)
+    assert "LazyCategoricalDtype" in r
+    assert "n_categories=0" in r
+
+
+def test_lazy_categorical_dtype_name(tmp_path: Path):
+    """Test LazyCategoricalDtype.name property."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["a", "b"]
+    adata = AnnData(
+        X=np.zeros((2, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # name should be "category"
+    assert dtype.name == "category"
+
+
+def test_lazy_categorical_dtype_equality_with_none_categories(tmp_path: Path):
+    """Test LazyCategoricalDtype equality when comparing dtypes with None categories."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    # Create dtype with None categories
+    dtype1 = LazyCategoricalDtype(categories_array=None, ordered=False)
+
+    # Regular CategoricalDtype without categories set
+    dtype2 = pd.CategoricalDtype(categories=None, ordered=False)
+
+    # Both have None categories, should be equal
+    assert dtype1 == dtype2
