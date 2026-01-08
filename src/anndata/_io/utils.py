@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import WRAPPER_ASSIGNMENTS, wraps
+from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, cast
+
+import numpy as np
+import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
@@ -11,6 +14,8 @@ from ..utils import warn
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
+
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
@@ -117,6 +122,32 @@ def check_key(key):
     else:
         msg = f"{key} of type {typ} is an invalid key. Should be str."
         raise TypeError(msg)
+
+
+@cache
+def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
+    """Infer nullable dtype from numpy dtype.
+
+    There is no public pandas API for this, so this is the cleanest way.
+    See <https://github.com/pandas-dev/pandas/issues/63608>
+    """
+    try:
+        from pandas.core.dtypes.dtypes import BaseMaskedDtype
+    except ImportError:
+        pass
+    else:
+        return BaseMaskedDtype.from_numpy_dtype(dtype)
+
+    match dtype.kind:
+        case "b":
+            array_type = pd.arrays.BooleanArray
+        case "i" | "u":
+            array_type = pd.arrays.IntegerArray
+        case "f":
+            array_type = pd.arrays.FloatingArray
+        case _:
+            raise NotImplementedError
+    return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
 
 
 # -------------------------------------------------------------------------------

@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
 from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
 
+from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
 from ...compat import (
     H5Array,
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
     from pandas._libs.missing import NAType
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from anndata.compat import ZarrGroup
 
@@ -192,7 +193,7 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
             # https://github.com/pydata/xarray/issues/10419
             return np.dtypes.StringDType(na_object=pd.NA)
         try:
-            return BaseMaskedDtype.from_numpy_dtype(self._values.dtype)
+            return pandas_nullable_dtype(self._values.dtype)
         except NotImplementedError:
             msg = f"Invalid dtype_str {self._dtype_str}"
             raise RuntimeError(msg) from None
