@@ -24,7 +24,8 @@
     --anndata-code-bg: #f8f9fa;
     --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     --anndata-radius: 4px;
-    --anndata-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --anndata-font-mono:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --anndata-font-size: 13px;
     --anndata-line-height: 1.4;
     /* Dtype colors - Light mode */
@@ -46,7 +47,9 @@
     --anndata-dtype-array-api: #9a6700;
     /* Column widths are set dynamically via inline style on container */
 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+        sans-serif;
     font-size: var(--anndata-font-size);
     line-height: var(--anndata-line-height);
     color: var(--anndata-text-primary);
@@ -61,7 +64,9 @@
 
 /* Dark mode variables - OS-level dark mode preference */
 @media (prefers-color-scheme: dark) {
-    .anndata-repr {__DARK_MODE_VARS__}
+    .anndata-repr {
+        /* __DARK_MODE_VARS__ */
+    }
 }
 
 /* Dark mode - Jupyter/VS Code theme detection + manual dark mode class */
@@ -69,7 +74,9 @@
 .jp-Theme-Dark .anndata-repr,
 body.vscode-dark .anndata-repr,
 body[data-vscode-theme-kind="vscode-dark"] .anndata-repr,
-body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
+body.dark-mode .anndata-repr {
+    /* __DARK_MODE_VARS__ */
+}
 
 /* Header */
 .anndata-repr .anndata-hdr {
@@ -89,7 +96,15 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 }
 
 .anndata-repr .adata-shape {
-    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    font-family: var(
+        --anndata-font-mono,
+        ui-monospace,
+        SFMono-Regular,
+        "SF Mono",
+        Menlo,
+        Consolas,
+        monospace
+    );
     font-size: 12px;
     color: var(--anndata-text-secondary, #6c757d);
 }
@@ -221,8 +236,12 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     padding-bottom: 8px;
     border-bottom: 1px solid var(--anndata-border-color);
 }
-.anndata-repr .adata-readme-content h2 { font-size: 1.3em; }
-.anndata-repr .adata-readme-content h3 { font-size: 1.1em; }
+.anndata-repr .adata-readme-content h2 {
+    font-size: 1.3em;
+}
+.anndata-repr .adata-readme-content h3 {
+    font-size: 1.1em;
+}
 
 .anndata-repr .adata-readme-content p {
     margin: 0 0 12px 0;
@@ -363,7 +382,7 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 }
 
 .anndata-repr .adata-search-toggle {
-    display: none;  /* Hidden until JS enables */
+    display: none; /* Hidden until JS enables */
     align-items: center;
     justify-content: center;
     width: 20px;
@@ -419,7 +438,15 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 .anndata-repr .adata-index-preview {
     padding: 8px 12px;
     font-size: 11px;
-    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    font-family: var(
+        --anndata-font-mono,
+        ui-monospace,
+        SFMono-Regular,
+        "SF Mono",
+        Menlo,
+        Consolas,
+        monospace
+    );
     color: var(--anndata-text-secondary, #6c757d);
     background: var(--anndata-bg-primary, #ffffff);
     border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
@@ -496,7 +523,9 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     color: var(--anndata-text-muted, #adb5bd);
     text-decoration: none;
     border-radius: var(--anndata-radius, 4px);
-    transition: color 0.15s, background-color 0.15s;
+    transition:
+        color 0.15s,
+        background-color 0.15s;
 }
 
 .anndata-repr .adata-help-link:hover {
@@ -558,7 +587,15 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 }
 
 .anndata-repr .adata-entry-name {
-    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    font-family: var(
+        --anndata-font-mono,
+        ui-monospace,
+        SFMono-Regular,
+        "SF Mono",
+        Menlo,
+        Consolas,
+        monospace
+    );
     font-size: var(--anndata-font-size, 13px);
     font-weight: 500;
     color: var(--anndata-text-primary, #212529);
@@ -573,7 +610,7 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     display: flex;
     align-items: center;
     gap: 4px;
-    min-width: 0;  /* Allow flex child to shrink below content size */
+    min-width: 0; /* Allow flex child to shrink below content size */
 }
 
 .anndata-repr .adata-name-text {
@@ -581,12 +618,20 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
-    min-width: 0;  /* Allow text to shrink and show ellipsis */
-    font-size: inherit;  /* Prevent mobile browsers from auto-sizing truncated text */
+    min-width: 0; /* Allow text to shrink and show ellipsis */
+    font-size: inherit; /* Prevent mobile browsers from auto-sizing truncated text */
 }
 
 .anndata-repr .adata-entry-type {
-    font-family: var(--anndata-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+    font-family: var(
+        --anndata-font-mono,
+        ui-monospace,
+        SFMono-Regular,
+        "SF Mono",
+        Menlo,
+        Consolas,
+        monospace
+    );
     font-size: 11px;
     color: var(--anndata-text-secondary, #6c757d);
     text-align: left;
@@ -631,15 +676,17 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     border-radius: 2px;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s, background-color 0.15s;
-    flex-shrink: 0;  /* Don't shrink the button */
+    transition:
+        opacity 0.15s,
+        background-color 0.15s;
+    flex-shrink: 0; /* Don't shrink the button */
     position: relative;
 }
 
 /* Two overlapping squares icon using pseudo-elements */
 .anndata-repr .adata-copy-btn::before,
 .anndata-repr .adata-copy-btn::after {
-    content: '';
+    content: "";
     position: absolute;
     width: 7px;
     height: 8px;
@@ -675,7 +722,7 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 
 .anndata-repr .adata-copy-btn.copied::before {
     display: block;
-    content: '✓';
+    content: "✓";
     width: auto;
     height: auto;
     border: none;
@@ -689,22 +736,56 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
 }
 
 /* Type-specific styling - uses CSS variables for dark mode support */
-.anndata-repr .dtype-category { color: var(--anndata-dtype-category); }
-.anndata-repr .dtype-int { color: var(--anndata-dtype-int); }
-.anndata-repr .dtype-float { color: var(--anndata-dtype-float); }
-.anndata-repr .dtype-bool { color: var(--anndata-dtype-bool); }
-.anndata-repr .dtype-string { color: var(--anndata-dtype-string); }
-.anndata-repr .dtype-object { color: var(--anndata-dtype-object); }
-.anndata-repr .dtype-sparse { color: var(--anndata-dtype-sparse); }
-.anndata-repr .dtype-array { color: var(--anndata-dtype-array); }
-.anndata-repr .dtype-dataframe { color: var(--anndata-dtype-dataframe); }
-.anndata-repr .dtype-anndata { color: var(--anndata-dtype-anndata); font-weight: 600; }
-.anndata-repr .dtype-unknown { color: var(--anndata-dtype-unknown); font-style: italic; }
-.anndata-repr .dtype-extension { color: var(--anndata-dtype-extension); }
-.anndata-repr .dtype-dask { color: var(--anndata-dtype-dask); }
-.anndata-repr .dtype-gpu { color: var(--anndata-dtype-gpu); }
-.anndata-repr .dtype-awkward { color: var(--anndata-dtype-awkward); }
-.anndata-repr .dtype-array-api { color: var(--anndata-dtype-array-api); }
+.anndata-repr .dtype-category {
+    color: var(--anndata-dtype-category);
+}
+.anndata-repr .dtype-int {
+    color: var(--anndata-dtype-int);
+}
+.anndata-repr .dtype-float {
+    color: var(--anndata-dtype-float);
+}
+.anndata-repr .dtype-bool {
+    color: var(--anndata-dtype-bool);
+}
+.anndata-repr .dtype-string {
+    color: var(--anndata-dtype-string);
+}
+.anndata-repr .dtype-object {
+    color: var(--anndata-dtype-object);
+}
+.anndata-repr .dtype-sparse {
+    color: var(--anndata-dtype-sparse);
+}
+.anndata-repr .dtype-array {
+    color: var(--anndata-dtype-array);
+}
+.anndata-repr .dtype-dataframe {
+    color: var(--anndata-dtype-dataframe);
+}
+.anndata-repr .dtype-anndata {
+    color: var(--anndata-dtype-anndata);
+    font-weight: 600;
+}
+.anndata-repr .dtype-unknown {
+    color: var(--anndata-dtype-unknown);
+    font-style: italic;
+}
+.anndata-repr .dtype-extension {
+    color: var(--anndata-dtype-extension);
+}
+.anndata-repr .dtype-dask {
+    color: var(--anndata-dtype-dask);
+}
+.anndata-repr .dtype-gpu {
+    color: var(--anndata-dtype-gpu);
+}
+.anndata-repr .dtype-awkward {
+    color: var(--anndata-dtype-awkward);
+}
+.anndata-repr .dtype-array-api {
+    color: var(--anndata-dtype-array-api);
+}
 
 /* Color swatches */
 .anndata-repr .adata-color-swatches {
@@ -820,7 +901,9 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     border: 1px solid var(--anndata-accent-color);
     border-radius: var(--anndata-radius);
     cursor: pointer;
-    transition: background-color 0.15s, color 0.15s;
+    transition:
+        background-color 0.15s,
+        color 0.15s;
     vertical-align: middle;
     margin-left: 4px;
 }
@@ -992,7 +1075,8 @@ body.dark-mode .anndata-repr {__DARK_MODE_VARS__}
     justify-content: space-between;
     padding: 4px 12px;
     font-size: 10px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--anndata-text-muted);
     border-top: 1px solid var(--anndata-border-light);
 }

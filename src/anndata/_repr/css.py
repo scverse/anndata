@@ -17,12 +17,12 @@ from functools import lru_cache
 from importlib.resources import files
 
 # Dark mode CSS variables (shared by media query and theme detection selectors)
-# These values are substituted into the CSS template at the __DARK_MODE_VARS__ placeholder.
+# These values are substituted into the CSS template at the /* __DARK_MODE_VARS__ */ placeholder.
+# Using a CSS comment as placeholder keeps the CSS valid for linters/formatters.
 # The same values are used in:
 # 1. @media (prefers-color-scheme: dark) - OS-level dark mode
 # 2. Theme detection selectors - Jupyter, VS Code, manual class
-_DARK_MODE_VARS = """
-    --anndata-bg-primary: #1e1e1e;
+_DARK_MODE_VARS = """--anndata-bg-primary: #1e1e1e;
     --anndata-bg-secondary: #252526;
     --anndata-bg-tertiary: #2d2d2d;
     --anndata-highlight: #264f78;
@@ -70,5 +70,5 @@ def _load_css_template() -> str:
 def get_css() -> str:
     """Get the complete CSS for the HTML representation."""
     # Build CSS by substituting dark mode variables into the template
-    css = _load_css_template().replace("__DARK_MODE_VARS__", _DARK_MODE_VARS)
+    css = _load_css_template().replace("/* __DARK_MODE_VARS__ */", _DARK_MODE_VARS)
     return f"<style>\n{css}\n</style>"
