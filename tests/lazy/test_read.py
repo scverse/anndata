@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 import zarr
 
+import anndata as ad
 from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
@@ -528,7 +529,9 @@ def test_lazy_categories_nullable_strings(tmp_path: Path, diskfmt: str):
     )
 
     path = tmp_path / f"test.{diskfmt}"
-    getattr(adata, f"write_{diskfmt}")(path)
+    # Enable nullable string writing (required for ArrowStringArray categories)
+    with ad.settings.override(allow_write_nullable_strings=True):
+        getattr(adata, f"write_{diskfmt}")(path)
 
     lazy = read_lazy(path)
     cats = lazy.obs["cell_type"].cat.categories
