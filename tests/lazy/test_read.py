@@ -342,20 +342,19 @@ def test_lazy_categorical_dtype_categories_caching(tmp_path: Path, diskfmt: str)
     dtype = lazy.obs["cat"].dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
-    # Before loading, categories should not be cached
-    # (accessing internal state for testing)
-    assert dtype._LazyCategoricalDtype__categories is None
+    # Before loading, categories should not be cached (uses @cached_property)
+    assert "categories" not in dtype.__dict__
 
     # Load categories
     cats = dtype.categories
     assert cats is not None
     assert list(cats) == categories
 
-    # After loading, should be cached
-    assert dtype._LazyCategoricalDtype__categories is not None
+    # After loading, should be cached in __dict__ (cached_property pattern)
+    assert "categories" in dtype.__dict__
 
-    # Verify head/tail_categories use cache by modifying cache
-    dtype._LazyCategoricalDtype__categories = pd.Index(["x", "y", "z", "w", "v"])
+    # Verify head/tail_categories use cache by modifying the cached value
+    dtype.__dict__["categories"] = pd.Index(["x", "y", "z", "w", "v"])
     head = dtype.head_categories(3)
     assert list(head) == ["x", "y", "z"]  # Returns cached values, not disk values
     tail = dtype.tail_categories(3)
@@ -527,17 +526,17 @@ def test_lazy_categorical_dtype_n_categories_from_cache(tmp_path: Path):
     cats = dtype.categories
     assert cats is not None
 
-    # Verify n_categories uses cache by modifying cache
-    dtype._LazyCategoricalDtype__categories = pd.Index(["x", "y", "z"])
+    # Verify n_categories uses cache by modifying the cached value
+    dtype.__dict__["categories"] = pd.Index(["x", "y", "z"])
     assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
 def test_lazy_categorical_dtype_empty_array():
-    """Test LazyCategoricalDtype with None categories_array."""
+    """Test LazyCategoricalDtype with None categories_elem."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    # Create dtype with None categories_array
-    dtype = LazyCategoricalDtype(categories_array=None, ordered=False)
+    # Create dtype with None categories_elem
+    dtype = LazyCategoricalDtype(categories_elem=None, ordered=False)
 
     # Properties should handle None gracefully
     assert dtype.n_categories == 0
@@ -582,7 +581,7 @@ def test_lazy_categorical_dtype_equality_with_none_categories(tmp_path: Path):
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     # Create dtype with None categories
-    dtype1 = LazyCategoricalDtype(categories_array=None, ordered=False)
+    dtype1 = LazyCategoricalDtype(categories_elem=None, ordered=False)
 
     # Regular CategoricalDtype without categories set
     dtype2 = pd.CategoricalDtype(categories=None, ordered=False)
