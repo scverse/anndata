@@ -111,18 +111,29 @@ def test_access_count_dtype(
     adata_remote_tall_skinny: AnnData,
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> None:
-    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
-
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
 
-    count_expected = 2 if adata_orig.obs["cat"].cat.categories.dtype == "string" else 1
-    # This should only cause categories to be read in once (and their mask if applicable)
+    # Accessing dtype alone should NOT load categories (lazy loading)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
-    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
-    remote_store_tall_skinny.assert_access_count("obs/cat/categories", count_expected)
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
+
+    # n_categories should also be cheap (metadata only)
+    _ = adata_remote_tall_skinny.obs["cat"].dtype.n_categories
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
+
+    # Accessing categories should trigger loading (once, then cached)
+    count_before = remote_store_tall_skinny.get_access_count("obs/cat/categories")
+    _ = adata_remote_tall_skinny.obs["cat"].dtype.categories
+    count_after = remote_store_tall_skinny.get_access_count("obs/cat/categories")
+    assert count_after > count_before, "categories access should trigger read"
+
+    # Subsequent accesses should use cache (no additional reads)
+    _ = adata_remote_tall_skinny.obs["cat"].dtype.categories
+    _ = adata_remote_tall_skinny.obs["cat"].dtype.categories
+    assert (
+        remote_store_tall_skinny.get_access_count("obs/cat/categories") == count_after
+    ), "cached categories should not trigger additional reads"
 
 
 def test_uns_uses_dask(adata_remote: AnnData):
@@ -234,3 +245,173 @@ def test_chunks_df(
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categorical_dtype_n_categories(tmp_path: Path, diskfmt: str):
+    """Test LazyCategoricalDtype.n_categories is cheap (metadata only)."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    n_cats = 100
+    categories = [f"Cat_{i:03d}" for i in range(n_cats)]
+    adata = AnnData(
+        X=np.zeros((n_cats, 2)),
+        obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cell_type"].dtype
+
+    # dtype should be LazyCategoricalDtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # n_categories should work without loading all categories
+    assert dtype.n_categories == n_cats
+
+    # ordered should be accessible
+    assert dtype.ordered is False
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categorical_dtype_head_tail_categories(tmp_path: Path, diskfmt: str):
+    """Test LazyCategoricalDtype.head_categories and tail_categories for partial reads."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    n_cats = 50
+    categories = [f"Type_{i:02d}" for i in range(n_cats)]
+    adata = AnnData(
+        X=np.zeros((n_cats, 2)),
+        obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cell_type"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Test head_categories (first n)
+    first5 = dtype.head_categories(5)
+    assert len(first5) == 5
+    assert list(first5) == [f"Type_{i:02d}" for i in range(5)]
+
+    # Test head_categories default (first 5)
+    default_head = dtype.head_categories()
+    assert len(default_head) == 5
+    assert list(default_head) == [f"Type_{i:02d}" for i in range(5)]
+
+    # Test tail_categories (last n)
+    last3 = dtype.tail_categories(3)
+    assert len(last3) == 3
+    assert list(last3) == [f"Type_{i:02d}" for i in range(47, 50)]
+
+    # Test tail_categories default (last 5)
+    default_tail = dtype.tail_categories()
+    assert len(default_tail) == 5
+    assert list(default_tail) == [f"Type_{i:02d}" for i in range(45, 50)]
+
+    # Test requesting more than available
+    all_head = dtype.head_categories(100)
+    assert len(all_head) == n_cats
+    assert list(all_head) == categories
+
+    all_tail = dtype.tail_categories(100)
+    assert len(all_tail) == n_cats
+    assert list(all_tail) == categories
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categorical_dtype_categories_caching(tmp_path: Path, diskfmt: str):
+    """Test that categories are cached after full load."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = ["a", "b", "c", "d", "e"]
+    adata = AnnData(
+        X=np.zeros((5, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Before loading, categories should not be cached
+    # (accessing internal state for testing)
+    assert dtype._LazyCategoricalDtype__categories is None
+
+    # Load categories
+    cats = dtype.categories
+    assert cats is not None
+    assert list(cats) == categories
+
+    # After loading, should be cached
+    assert dtype._LazyCategoricalDtype__categories is not None
+
+    # head_categories should now use cache
+    head = dtype.head_categories(3)
+    assert list(head) == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categorical_dtype_ordered(tmp_path: Path, diskfmt: str):
+    """Test LazyCategoricalDtype with ordered categories."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    adata = AnnData(
+        X=np.zeros((10, 2)),
+        obs=pd.DataFrame({
+            "ordered_cat": pd.Categorical(
+                ["low", "medium", "high"] * 3 + ["low"],
+                categories=["low", "medium", "high"],
+                ordered=True,
+            )
+        }),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["ordered_cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    assert dtype.ordered is True
+    assert dtype.n_categories == 3
+    assert list(dtype.categories) == ["low", "medium", "high"]
+
+
+def test_lazy_categorical_dtype_repr(tmp_path: Path):
+    """Test LazyCategoricalDtype repr before and after loading."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    categories = [f"cat_{i}" for i in range(100)]
+    adata = AnnData(
+        X=np.zeros((100, 2)),
+        obs=pd.DataFrame({"cat": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / "test.zarr"
+    adata.write_zarr(path)
+
+    lazy = read_lazy(path)
+    dtype = lazy.obs["cat"].dtype
+    assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Before loading: lazy repr
+    repr_before = repr(dtype)
+    assert "LazyCategoricalDtype" in repr_before
+    assert "n_categories=100" in repr_before
+
+    # Load categories
+    _ = dtype.categories
+
+    # After loading: standard CategoricalDtype repr
+    repr_after = repr(dtype)
+    assert "CategoricalDtype" in repr_after

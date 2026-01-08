@@ -35,6 +35,202 @@ if TYPE_CHECKING:
         from xarray.core.indexing import ExplicitIndexer
 
 
+class LazyCategoricalDtype(pd.CategoricalDtype):
+    """A CategoricalDtype that lazily loads categories from zarr/h5 storage.
+
+    This dtype provides efficient access to categorical metadata without loading
+    all categories into memory. Categories are loaded lazily on first full access
+    and cached thereafter.
+
+    Parameters
+    ----------
+    categories_array
+        The underlying zarr or h5 array containing category values.
+    ordered
+        Whether the categorical is ordered.
+
+    Examples
+    --------
+    >>> dtype = col.dtype  # LazyCategoricalDtype
+    >>> dtype.n_categories  # cheap, metadata only
+    100000
+    >>> dtype.head_categories(5)  # partial read, first 5
+    array(['cat_0', 'cat_1', 'cat_2', 'cat_3', 'cat_4'], dtype='<U6')
+    >>> dtype.tail_categories(3)  # partial read, last 3
+    array(['cat_99997', 'cat_99998', 'cat_99999'], dtype='<U6')
+    >>> dtype.categories  # full load, cached
+    Index(['cat_0', 'cat_1', ...], dtype='str')
+    """
+
+    # Attributes that should be preserved during copying/pickling
+    _metadata = ("_categories_array", "_ordered_flag", "_cached_n_categories")
+
+    def __new__(
+        cls,
+        categories_array: ZarrArray | H5Array | None = None,
+        *,
+        ordered: bool = False,
+    ):
+        # Create instance without calling parent __init__ with categories
+        instance = object.__new__(cls)
+        return instance
+
+    def __init__(
+        self,
+        categories_array: ZarrArray | H5Array | None = None,
+        *,
+        ordered: bool = False,
+    ):
+        self._categories_array = categories_array
+        self._ordered_flag = bool(ordered)
+        self._cached_n_categories: int | None = None
+        self.__categories: pd.Index | None = (
+            None  # Double underscore to avoid conflicts
+        )
+
+    def _get_categories_array(self) -> ZarrArray | H5Array:
+        """Get the underlying categories array (handles both encodings).
+
+        For string-array encoding: _categories_array is directly the array.
+        For nullable-string-array encoding: _categories_array is a Group with "values" key.
+        """
+        if isinstance(self._categories_array, (ZarrArray, H5Array)):
+            return self._categories_array
+        # nullable-string-array encoding: Group with "values" and "mask"
+        return self._categories_array["values"]
+
+    @property
+    def categories(self) -> pd.Index | None:
+        """Categories index. Loads all categories on first access and caches."""
+        if self.__categories is None and self._categories_array is not None:
+            arr = self._get_categories_array()
+            if isinstance(arr, ZarrArray):
+                values = arr[...]
+            else:
+                from anndata.io import read_elem
+
+                values = read_elem(self._categories_array)
+            self.__categories = pd.Index(values)
+        return self.__categories
+
+    @property
+    def ordered(self) -> bool:
+        """Whether the categorical is ordered."""
+        return self._ordered_flag
+
+    @property
+    def n_categories(self) -> int:
+        """Number of categories (cheap, metadata only)."""
+        if self._cached_n_categories is not None:
+            return self._cached_n_categories
+        if self.__categories is not None:
+            return len(self.__categories)
+        if self._categories_array is not None:
+            n = self._get_categories_array().shape[0]
+            self._cached_n_categories = n
+            return n
+        return 0
+
+    def head_categories(
+        self, n: int = 5
+    ) -> np.ndarray | pd.api.extensions.ExtensionArray:
+        """Return first n categories without loading all into memory.
+
+        Parameters
+        ----------
+        n
+            Number of categories to return. Default 5.
+
+        Returns
+        -------
+        np.ndarray or ExtensionArray
+            The first n categories.
+
+        Examples
+        --------
+        >>> dtype.head_categories()  # first 5
+        >>> dtype.head_categories(10)  # first 10
+        """
+        # If already fully loaded, slice from cache
+        if self.__categories is not None:
+            return np.asarray(self.__categories[:n])
+
+        if self._categories_array is None:
+            return np.array([])
+
+        from anndata._io.specs.registry import read_elem_partial
+
+        arr = self._get_categories_array()
+        total = self.n_categories
+        return read_elem_partial(arr, indices=slice(0, min(n, total)))
+
+    def tail_categories(
+        self, n: int = 5
+    ) -> np.ndarray | pd.api.extensions.ExtensionArray:
+        """Return last n categories without loading all into memory.
+
+        Parameters
+        ----------
+        n
+            Number of categories to return. Default 5.
+
+        Returns
+        -------
+        np.ndarray or ExtensionArray
+            The last n categories.
+
+        Examples
+        --------
+        >>> dtype.tail_categories()  # last 5
+        >>> dtype.tail_categories(10)  # last 10
+        """
+        # If already fully loaded, slice from cache
+        if self.__categories is not None:
+            return np.asarray(self.__categories[-n:])
+
+        if self._categories_array is None:
+            return np.array([])
+
+        from anndata._io.specs.registry import read_elem_partial
+
+        arr = self._get_categories_array()
+        total = self.n_categories
+        start = max(total - n, 0)
+        return read_elem_partial(arr, indices=slice(start, total))
+
+    def __repr__(self) -> str:
+        if self.__categories is not None:
+            # Fully loaded - use standard repr
+            return f"CategoricalDtype(categories={self.__categories!r}, ordered={self.ordered})"
+        return f"LazyCategoricalDtype(n_categories={self.n_categories}, ordered={self.ordered})"
+
+    @property
+    def name(self) -> str:
+        """String identifier for this dtype."""
+        return "category"
+
+    def __hash__(self) -> int:
+        # Need to be hashable for pandas internals
+        return hash((id(self._categories_array), self._ordered_flag))
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, LazyCategoricalDtype):
+            return (
+                self._categories_array is other._categories_array
+                and self._ordered_flag == other._ordered_flag
+            )
+        if isinstance(other, pd.CategoricalDtype):
+            # Compare with regular CategoricalDtype - need to load categories
+            if self.ordered != other.ordered:
+                return False
+            if other.categories is None:
+                return self.categories is None
+            if self.categories is None:
+                return False
+            return self.categories.equals(other.categories)
+        return False
+
+
 class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
     def __init__(self, array: K) -> None:
         self.chunks = array.chunks
@@ -85,7 +281,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
 
     _codes: ZarrOrHDF5Wrapper[K]
-    _categories: ZarrArray | H5Array
+    _categories_array: ZarrArray | H5Array
     shape: tuple[int, ...]
     base_path_or_zarr_group: Path | ZarrGroup
     elem_name: str
@@ -100,21 +296,22 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         ordered: bool,
         **kwargs,
     ):
-        self._categories = categories
+        self._categories_array = categories
         self._ordered = ordered
         self._codes = ZarrOrHDF5Wrapper(codes)
         self.shape = self._codes.shape
         self.base_path_or_zarr_group = base_path_or_zarr_group
         self.file_format = "zarr" if isinstance(codes, ZarrArray) else "h5"
         self.elem_name = elem_name
+        # Create the lazy dtype - this is where categories are cached
+        self._lazy_dtype = LazyCategoricalDtype(
+            categories_array=categories, ordered=ordered
+        )
 
-    @cached_property
-    def categories(self) -> np.ndarray:
-        if isinstance(self._categories, ZarrArray):
-            return self._categories[...]
-        from anndata.io import read_elem
-
-        return read_elem(self._categories)
+    @property
+    def categories(self) -> pd.Index | None:
+        """All categories. Loads and caches on first access."""
+        return self._lazy_dtype.categories
 
     def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
         from xarray.core.extension_array import PandasExtensionArray
@@ -127,9 +324,10 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
             categorical_array = categorical_array.remove_unused_categories()
         return PandasExtensionArray(categorical_array)
 
-    @cached_property
-    def dtype(self):
-        return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
+    @property
+    def dtype(self) -> LazyCategoricalDtype:
+        """The dtype with lazy category loading support."""
+        return self._lazy_dtype
 
 
 # circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
