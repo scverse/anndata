@@ -25,6 +25,7 @@ import pandas as pd
 
 from .._repr_constants import COLOR_PREVIEW_LIMIT
 from .components import render_category_list
+from .lazy import get_lazy_categorical_info, is_lazy_column
 from .registry import (
     FormattedOutput,
     TypeFormatter,
@@ -38,7 +39,6 @@ from .utils import (
     get_matching_column_colors,
     get_setting,
     is_color_list,
-    is_lazy_series,
     is_serializable,
     preview_dict,
     preview_number,
@@ -51,41 +51,6 @@ if TYPE_CHECKING:
     from typing import Any
 
     from .registry import FormatterContext
-
-
-def _get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
-    """
-    Get category count and ordered flag from a lazy categorical without loading data.
-
-    For lazy categoricals (xarray DataArray backed by CategoricalArray),
-    this accesses the underlying storage metadata directly to get the count
-    without loading the actual category values.
-
-    Returns
-    -------
-    tuple of (n_categories, ordered)
-        n_categories: Number of categories, or None if cannot be determined
-        ordered: Whether the categorical is ordered
-    """
-    try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
-
-        # Navigate through xarray structure to find CategoricalArray
-        if hasattr(obj, "variable") and hasattr(obj.variable, "_data"):
-            lazy_indexed = obj.variable._data
-            if hasattr(lazy_indexed, "array"):
-                arr = lazy_indexed.array
-                if isinstance(arr, CategoricalArray):
-                    # Get count from storage metadata without loading
-                    cats = arr._categories
-                    if hasattr(cats, "keys"):  # It's a group (zarr)
-                        values = cats["values"]  # type: ignore[index]
-                        return values.shape[0], arr._ordered  # type: ignore[union-attr]
-                    elif hasattr(cats, "shape"):  # It's an array directly
-                        return cats.shape[0], arr._ordered  # type: ignore[union-attr]
-    except (ImportError, Exception):  # noqa: BLE001
-        pass
-    return None, False
 
 
 def _check_array_has_writer(array: Any) -> bool:
@@ -517,7 +482,7 @@ class CategoricalFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
         # Determine if this is a lazy (xarray DataArray) categorical
-        is_lazy = is_lazy_series(obj)
+        is_lazy = is_lazy_column(obj)
         n_categories = 0
 
         # Get number of categories based on object type
@@ -527,7 +492,7 @@ class CategoricalFormatter(TypeFormatter):
             n_categories = len(obj.categories)
         else:
             # Try to get info from lazy categorical without loading
-            lazy_count, _lazy_ordered = _get_lazy_categorical_info(obj)
+            lazy_count, _lazy_ordered = get_lazy_categorical_info(obj)
             if lazy_count is not None:
                 n_categories = lazy_count
             elif hasattr(obj, "dtype") and hasattr(obj.dtype, "categories"):

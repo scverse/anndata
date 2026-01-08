@@ -681,18 +681,18 @@ class TestRenderHeaderBadges:
         v.assert_badge_shown("lazy")
 
     def test_is_lazy_detection(self):
-        """Test is_lazy function detects lazy AnnData."""
-        from anndata._repr.utils import is_lazy
+        """Test is_lazy_adata function detects lazy AnnData."""
+        from anndata._repr.lazy import is_lazy_adata
 
         # Regular AnnData should not be lazy
         adata = AnnData(np.zeros((10, 5)))
-        assert not is_lazy(adata)
+        assert not is_lazy_adata(adata)
 
         # Object without obs should not be lazy
         class NoObs:
             pass
 
-        assert not is_lazy(NoObs())
+        assert not is_lazy_adata(NoObs())
 
 
 class TestReadmeIcon:

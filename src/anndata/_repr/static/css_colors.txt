@@ -1,0 +1,197 @@
+# CSS3 Named Colors for AnnData HTML Representation
+# ==================================================
+#
+# This file contains CSS named colors used to detect color lists in AnnData
+# .uns entries (e.g., cluster_colors, batch_colors). When a key ends with
+# "_colors" and contains values from this list (or hex/rgb values), it's
+# rendered with color swatches in the HTML repr.
+#
+# Source: CSS Color Module Level 3 (W3C Recommendation)
+# https://www.w3.org/TR/css-color-3/#svg-color
+#
+# Relation to Matplotlib
+# ----------------------
+# Matplotlib's CSS4_COLORS dictionary contains the same 148 colors (147 CSS3
+# + rebeccapurple from CSS4). Scanpy and other tools use matplotlib to generate
+# colors stored in adata.uns["{column}_colors"]. These are typically:
+#
+# - Hex colors: "#1f77b4", "#ff7f0e" (from matplotlib's default palettes)
+# - Named colors: "red", "blue", "cornflowerblue" (from CSS/matplotlib)
+#
+# This file ensures named colors are recognized WITHOUT requiring matplotlib
+# as a dependency. Hex and rgb() colors are always recognized regardless of
+# this file.
+#
+# Format
+# ------
+# - One color name per line, lowercase
+# - Lines starting with # are comments (ignored)
+# - Empty lines are ignored
+#
+# How to Update
+# -------------
+# Option 1: From W3C specification
+#   Visit https://www.w3.org/TR/css-color-3/#svg-color
+#
+# Option 2: From MDN (more readable)
+#   Visit https://developer.mozilla.org/en-US/docs/Web/CSS/named-color
+#
+# Option 3: From matplotlib (if installed)
+#   python -c "from matplotlib.colors import CSS4_COLORS; print('\n'.join(sorted(CSS4_COLORS.keys())))"
+#
+# After updating, run: pytest tests/repr/ -x -q
+#
+# Note: Hex (#RGB, #RRGGBB, #RRGGBBAA) and functional (rgb(), rgba()) color
+# formats are always recognized and don't need to be listed here.
+
+# Basic colors (HTML 4.01 / CSS 1)
+black
+white
+gray
+grey
+silver
+red
+green
+blue
+yellow
+cyan
+magenta
+maroon
+navy
+olive
+purple
+teal
+aqua
+lime
+fuchsia
+orange
+
+# Extended CSS3 colors (sorted alphabetically)
+aliceblue
+antiquewhite
+aquamarine
+azure
+beige
+bisque
+blanchedalmond
+blueviolet
+brown
+burlywood
+cadetblue
+chartreuse
+chocolate
+coral
+cornflowerblue
+cornsilk
+crimson
+darkblue
+darkcyan
+darkgoldenrod
+darkgray
+darkgrey
+darkgreen
+darkkhaki
+darkmagenta
+darkolivegreen
+darkorange
+darkorchid
+darkred
+darksalmon
+darkseagreen
+darkslateblue
+darkslategray
+darkslategrey
+darkturquoise
+darkviolet
+deeppink
+deepskyblue
+dimgray
+dimgrey
+dodgerblue
+firebrick
+floralwhite
+forestgreen
+gainsboro
+ghostwhite
+gold
+goldenrod
+greenyellow
+honeydew
+hotpink
+indianred
+indigo
+ivory
+khaki
+lavender
+lavenderblush
+lawngreen
+lemonchiffon
+lightblue
+lightcoral
+lightcyan
+lightgoldenrodyellow
+lightgray
+lightgrey
+lightgreen
+lightpink
+lightsalmon
+lightseagreen
+lightskyblue
+lightslategray
+lightslategrey
+lightsteelblue
+lightyellow
+limegreen
+linen
+mediumaquamarine
+mediumblue
+mediumorchid
+mediumpurple
+mediumseagreen
+mediumslateblue
+mediumspringgreen
+mediumturquoise
+mediumvioletred
+midnightblue
+mintcream
+mistyrose
+moccasin
+navajowhite
+oldlace
+olivedrab
+orangered
+orchid
+palegoldenrod
+palegreen
+paleturquoise
+palevioletred
+papayawhip
+peachpuff
+peru
+pink
+plum
+powderblue
+rebeccapurple
+rosybrown
+royalblue
+saddlebrown
+salmon
+sandybrown
+seagreen
+seashell
+sienna
+skyblue
+slateblue
+slategray
+slategrey
+snow
+springgreen
+steelblue
+tan
+thistle
+tomato
+turquoise
+violet
+wheat
+whitesmoke
+yellowgreen

@@ -84,32 +84,32 @@ class TestLazyCategoryLoading:
     """Tests for lazy category loading in HTML repr."""
 
     def test_get_lazy_category_count(self):
-        """Test _get_lazy_category_count returns None for non-lazy columns."""
-        from anndata._repr.utils import _get_lazy_category_count
+        """Test get_lazy_category_count returns None for non-lazy columns."""
+        from anndata._repr.lazy import get_lazy_category_count
 
         series = pd.Series(pd.Categorical(["a", "b", "c"]))
-        result = _get_lazy_category_count(series)
+        result = get_lazy_category_count(series)
         assert result is None
 
         class MockCol:
             pass
 
-        assert _get_lazy_category_count(MockCol()) is None
+        assert get_lazy_category_count(MockCol()) is None
 
         non_cat = pd.Series([1, 2, 3])
-        assert _get_lazy_category_count(non_cat) is None
+        assert get_lazy_category_count(non_cat) is None
 
     def test_get_lazy_categories_max_zero_skips(self):
         """Test that max_lazy_categories=0 skips loading entirely."""
+        from anndata._repr.lazy import get_lazy_categories
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.utils import _get_lazy_categories
 
         context = FormatterContext(max_lazy_categories=0)
 
         class MockCol:
             pass
 
-        categories, skipped, n_cats = _get_lazy_categories(MockCol(), context)
+        categories, skipped, n_cats = get_lazy_categories(MockCol(), context)
         assert categories == []
         assert skipped is True
         assert n_cats is None
@@ -155,8 +155,8 @@ class TestLazyCategoryLoading:
 
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_get_lazy_category_count_does_not_load_data(self, tmp_path):
-        """Test that _get_lazy_category_count reads from storage metadata only."""
-        from anndata._repr.utils import _get_lazy_category_count
+        """Test that get_lazy_category_count reads from storage metadata only."""
+        from anndata._repr.lazy import get_lazy_category_count
 
         adata = AnnData(
             sp.random(100, 50, density=0.1, format="csr", dtype=np.float32),
@@ -171,16 +171,16 @@ class TestLazyCategoryLoading:
         cat_arr = col.variable._data.array
         assert "categories" not in cat_arr.__dict__
 
-        n_cats = _get_lazy_category_count(col)
+        n_cats = get_lazy_category_count(col)
         assert n_cats == 3
 
         assert "categories" not in cat_arr.__dict__
 
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_get_lazy_categories_does_not_load_data(self, tmp_path):
-        """Test that _get_lazy_categories reads from storage directly."""
+        """Test that get_lazy_categories reads from storage directly."""
+        from anndata._repr.lazy import get_lazy_categories
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.utils import _get_lazy_categories
 
         adata = AnnData(
             sp.random(100, 50, density=0.1, format="csr", dtype=np.float32),
@@ -196,7 +196,7 @@ class TestLazyCategoryLoading:
         assert "categories" not in cat_arr.__dict__
 
         context = FormatterContext(max_lazy_categories=100)
-        categories, skipped, n_cats = _get_lazy_categories(col, context)
+        categories, skipped, n_cats = get_lazy_categories(col, context)
 
         assert set(categories) == {"x", "y", "z"}
         assert not skipped
@@ -207,8 +207,8 @@ class TestLazyCategoryLoading:
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_get_lazy_categories_skipping_does_not_load_categories(self, tmp_path):
         """Test that when skipping (too many cats), we don't load category values."""
+        from anndata._repr.lazy import get_lazy_categories
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.utils import _get_lazy_categories
 
         large_cats = [f"cat_{i}" for i in range(150)]
         adata = AnnData(
@@ -225,7 +225,7 @@ class TestLazyCategoryLoading:
         assert "categories" not in cat_arr.__dict__
 
         context = FormatterContext(max_lazy_categories=100)
-        categories, truncated, n_cats = _get_lazy_categories(col, context)
+        categories, truncated, n_cats = get_lazy_categories(col, context)
 
         assert len(categories) == 100
         assert categories[0] == "cat_0"
@@ -236,11 +236,11 @@ class TestLazyCategoryLoading:
 
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_get_lazy_categories_h5ad(self, tmp_path):
-        """Test _get_lazy_categories works with H5AD files."""
+        """Test get_lazy_categories works with H5AD files."""
         import h5py
 
+        from anndata._repr.lazy import get_lazy_categories, get_lazy_category_count
         from anndata._repr.registry import FormatterContext
-        from anndata._repr.utils import _get_lazy_categories, _get_lazy_category_count
 
         adata = AnnData(np.random.randn(100, 50).astype(np.float32))
         adata.obs["cat_col"] = pd.Categorical(["x", "y", "z"] * 33 + ["x"])
@@ -252,11 +252,11 @@ class TestLazyCategoryLoading:
             lazy = ad.experimental.read_lazy(f)
             col = lazy.obs._ds["cat_col"]
 
-            n_cats = _get_lazy_category_count(col)
+            n_cats = get_lazy_category_count(col)
             assert n_cats == 3
 
             context = FormatterContext(max_lazy_categories=100)
-            categories, skipped, n = _get_lazy_categories(col, context)
+            categories, skipped, n = get_lazy_categories(col, context)
 
             assert set(categories) == {"x", "y", "z"}
             assert not skipped

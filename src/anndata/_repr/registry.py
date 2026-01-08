@@ -82,9 +82,41 @@ class FormattedOutput:
                   │ expanded_html content (collapsible row)         │
                   └─────────────────────────────────────────────────┘
 
-    Field naming convention:
-        - ``*_html`` fields contain raw HTML (caller responsible for escaping)
-        - Other string fields are plain text (auto-escaped when rendered)
+    Field precedence rules
+    ----------------------
+    Some fields have precedence relationships when multiple are provided:
+
+    **Type column** (``type_name`` vs ``type_html``):
+        - ``type_name`` is always required and used for search/filter (data-dtype)
+        - If ``type_html`` is provided, it replaces the visual display
+        - ``type_name`` is still used for the data-dtype attribute regardless
+
+    **Preview column** (``preview`` vs ``preview_html``):
+        - If ``preview_html`` is provided, it is used (raw HTML)
+        - Otherwise, ``preview`` is used as plain text (auto-escaped)
+        - A warning is logged if both are provided
+
+    Field naming convention
+    -----------------------
+    - ``*_html`` fields contain raw HTML (caller responsible for escaping)
+    - Other string fields are plain text (auto-escaped when rendered)
+
+    Available CSS classes
+    ---------------------
+    Built-in dtype classes for ``css_class``:
+        - ``dtype-category``: Categorical data (purple)
+        - ``dtype-int``, ``dtype-float``: Numeric types (blue)
+        - ``dtype-bool``: Boolean (red)
+        - ``dtype-string``: String data (dark blue)
+        - ``dtype-sparse``: Sparse matrices (green)
+        - ``dtype-array``, ``dtype-ndarray``: Arrays (blue)
+        - ``dtype-dataframe``: DataFrames (purple)
+        - ``dtype-anndata``: Nested AnnData (red, bold)
+        - ``dtype-dask``: Dask arrays (orange)
+        - ``dtype-gpu``: GPU arrays (lime)
+        - ``dtype-awkward``: Awkward arrays (orange-red)
+        - ``dtype-unknown``: Unknown types (gray, italic)
+        - ``dtype-extension``: Extension types (purple)
     """
 
     type_name: str
@@ -523,6 +555,103 @@ class FormatterRegistry:
     def get_registered_sections(self) -> list[str]:
         """Get list of registered section names."""
         return list(self._section_formatters.keys())
+
+    def get_formatter_for(
+        self, obj: Any, context: FormatterContext | None = None
+    ) -> tuple[TypeFormatter | None, str]:
+        """
+        Debug helper: find which formatter would handle an object.
+
+        This is useful for understanding formatter priority and debugging
+        why a specific formatter is or isn't being selected.
+
+        Parameters
+        ----------
+        obj
+            The object to find a formatter for
+        context
+            Optional FormatterContext. If None, creates a minimal context.
+
+        Returns
+        -------
+        tuple of (formatter, reason)
+            formatter: The TypeFormatter that would handle this object, or None
+            reason: String explaining why this formatter was selected or why none matched
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from anndata._repr import formatter_registry, FormatterContext
+        >>> arr = np.array([1, 2, 3])
+        >>> formatter, reason = formatter_registry.get_formatter_for(arr)
+        >>> print(f"{type(formatter).__name__}: {reason}")
+        NumpyArrayFormatter: can_format returned True (priority=100)
+        """
+        if context is None:
+            context = FormatterContext()
+
+        current_section = context.section
+        for formatter in self._type_formatters:
+            # Check section restriction
+            if (
+                formatter.sections is not None
+                and current_section not in formatter.sections
+            ):
+                continue
+
+            try:
+                if hasattr(formatter, "can_format_with_context"):
+                    can_fmt = formatter.can_format_with_context(obj, context)
+                else:
+                    can_fmt = formatter.can_format(obj)
+
+                if can_fmt:
+                    sections_str = (
+                        f", sections={formatter.sections}" if formatter.sections else ""
+                    )
+                    return (
+                        formatter,
+                        f"can_format returned True (priority={formatter.priority}{sections_str})",
+                    )
+            except Exception as e:  # noqa: BLE001
+                return (
+                    None,
+                    f"{type(formatter).__name__} raised {type(e).__name__}: {e}",
+                )
+
+        return (self._fallback, "No formatter matched, using fallback")
+
+    def list_formatters(self) -> list[dict[str, Any]]:
+        """
+        List all registered type formatters with their properties.
+
+        Returns a list of dicts with formatter info, sorted by priority (highest first).
+        Useful for debugging formatter registration and priority ordering.
+
+        Returns
+        -------
+        List of dicts with keys: name, priority, sections, module
+
+        Examples
+        --------
+        >>> from anndata._repr import formatter_registry
+        >>> for f in formatter_registry.list_formatters()[:5]:
+        ...     print(f"{f['priority']:4d} {f['name']}")
+         150 AnnDataFormatter
+         120 DaskArrayFormatter
+         120 CuPyArrayFormatter
+         120 AwkwardArrayFormatter
+         110 NumpyMaskedArrayFormatter
+        """
+        return [
+            {
+                "name": type(formatter).__name__,
+                "priority": formatter.priority,
+                "sections": formatter.sections,
+                "module": type(formatter).__module__,
+            }
+            for formatter in self._type_formatters
+        ]
 
 
 # Global registry instance

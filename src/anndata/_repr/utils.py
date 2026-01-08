@@ -208,121 +208,6 @@ def _get_categories_from_column(col: Any) -> list:
     return []
 
 
-def _get_categorical_array(col: Any):
-    """
-    Get the underlying CategoricalArray from a lazy xarray DataArray.
-
-    Returns None if not a lazy categorical column.
-    """
-    try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
-
-        # Navigate through xarray structure to find CategoricalArray
-        # DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
-        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
-            lazy_indexed = col.variable._data
-            if hasattr(lazy_indexed, "array"):
-                arr = lazy_indexed.array
-                if isinstance(arr, CategoricalArray):
-                    return arr
-    except ImportError:
-        pass
-    return None
-
-
-def _get_lazy_category_count(col: Any) -> int | None:
-    """
-    Get the number of categories for a lazy categorical without loading them.
-
-    For lazy categoricals, we access the underlying CategoricalArray directly
-    and read the category count from the zarr/h5 storage metadata, avoiding
-    any data loading.
-
-    Returns None if the count cannot be determined.
-    """
-    # Try to get category count from CategoricalArray without loading
-    cat_arr = _get_categorical_array(col)
-    if cat_arr is not None:
-        try:
-            # Access the raw _categories group/array shape
-            # For zarr: _categories is a Group with 'values' array
-            # For h5: similar structure
-            cats = cat_arr._categories
-            if hasattr(cats, "keys"):  # It's a group
-                values = cats["values"]
-                return values.shape[0]
-            elif hasattr(cats, "shape"):  # It's an array directly
-                return cats.shape[0]
-        except Exception:  # noqa: BLE001
-            pass
-    return None
-
-
-def _get_lazy_categories(
-    col: Any, context: FormatterContext
-) -> tuple[list, bool, int | None]:
-    """
-    Get categories for a lazy categorical column, respecting limits.
-
-    For lazy AnnData (from read_lazy()), this accesses the underlying
-    CategoricalArray directly and reads only the needed categories from
-    storage, avoiding loading the full categorical data.
-
-    Parameters
-    ----------
-    col
-        Column (potentially lazy) to get categories from
-    context
-        FormatterContext with max_lazy_categories limit
-
-    Returns
-    -------
-    tuple of (categories_list, was_truncated, n_categories)
-        categories_list: List of category values (empty if skipped)
-        was_truncated: True if categories were truncated due to limit
-        n_categories: Total number of categories (if known)
-    """
-    # Try to get category count without loading
-    n_cats = _get_lazy_category_count(col)
-
-    # If max_lazy_categories is 0, skip loading entirely (metadata-only mode)
-    if context.max_lazy_categories == 0:
-        return [], True, n_cats
-
-    # Determine if we need to truncate
-    should_truncate = n_cats is not None and n_cats > context.max_lazy_categories
-    n_to_read = context.max_lazy_categories if should_truncate else n_cats
-
-    # Try to read categories directly from CategoricalArray storage.
-    # We access _categories (private) to bypass the @cached_property which loads
-    # ALL categories. Instead, we use read_elem_partial (official API) to read
-    # only the first N categories. This is intentional - for large categoricals,
-    # loading everything defeats the purpose of lazy loading.
-    cat_arr = _get_categorical_array(col)
-    if cat_arr is not None:
-        try:
-            from anndata._io.specs.registry import read_elem, read_elem_partial
-
-            cats = cat_arr._categories
-            # Get values array: zarr uses group with "values" key, h5 uses array directly
-            values = cats["values"] if hasattr(cats, "keys") else cats
-            if n_to_read is not None and n_to_read < (n_cats or float("inf")):
-                categories = list(
-                    read_elem_partial(values, indices=slice(0, n_to_read))
-                )
-            else:
-                categories = list(read_elem(values))  # type: ignore[arg-type]
-            return categories, should_truncate, n_cats
-        except Exception:  # noqa: BLE001
-            pass
-
-    # Fallback to unified accessor (will trigger loading)
-    try:
-        return _get_categories_from_column(col), False, n_cats
-    except Exception:  # noqa: BLE001
-        return [], True, n_cats
-
-
 def get_categories_for_display(
     col: Any,
     context: FormatterContext,
@@ -349,7 +234,9 @@ def get_categories_for_display(
         n_categories: Total number of categories (if known)
     """
     if is_lazy:
-        return _get_lazy_categories(col, context)
+        from .lazy import get_lazy_categories
+
+        return get_lazy_categories(col, context)
 
     # Non-lazy categorical - use unified accessor
     categories = _get_categories_from_column(col)
@@ -544,36 +431,6 @@ def is_backed(obj: Any) -> bool:
     return getattr(obj, "isbacked", False)
 
 
-def is_lazy(obj: Any) -> bool:
-    """Check if an AnnData uses lazy loading (experimental read_lazy).
-
-    Lazy AnnData has Dataset2D (xarray-backed) obs/var instead of regular DataFrames.
-    """
-    obs = getattr(obj, "obs", None)
-    if obs is None:
-        return False
-    # Dataset2D has a different class name than DataFrame
-    return obs.__class__.__name__ == "Dataset2D"
-
-
-def is_lazy_series(series: Any) -> bool:
-    """
-    Check if a Series-like object is lazy (backed by remote/lazy storage).
-
-    This detects Series from Dataset2D (xarray-backed DataFrames used in
-    lazy AnnData) to prevent operations that would trigger data loading.
-
-    Note: We avoid accessing .data as that triggers loading for lazy
-    CategoricalArrays. Instead we check for xarray-specific attributes.
-    """
-    # Check for xarray DataArray structure without triggering data loading
-    # xarray DataArrays have 'variable' and 'dims' attributes
-    if hasattr(series, "variable") and hasattr(series, "dims"):
-        return True
-    # Check for xarray Variable backing
-    return hasattr(series, "_variable")
-
-
 def get_backing_info(obj: Any) -> dict[str, Any]:
     """Get information about backing for an AnnData-like object."""
     if not is_backed(obj):
@@ -602,151 +459,40 @@ def get_backing_info(obj: Any) -> dict[str, Any]:
     return info
 
 
-# Basic named colors for color detection
-_NAMED_COLORS = frozenset({
-    "red",
-    "green",
-    "blue",
-    "yellow",
-    "cyan",
-    "magenta",
-    "black",
-    "white",
-    "gray",
-    "grey",
-    "orange",
-    "pink",
-    "purple",
-    "brown",
-    "navy",
-    "teal",
-    "olive",
-    "maroon",
-    "lime",
-    "aqua",
-    "silver",
-    "fuchsia",
-    # CSS color names (partial list)
-    "aliceblue",
-    "antiquewhite",
-    "aquamarine",
-    "azure",
-    "beige",
-    "bisque",
-    "blanchedalmond",
-    "blueviolet",
-    "burlywood",
-    "cadetblue",
-    "chartreuse",
-    "chocolate",
-    "coral",
-    "cornflowerblue",
-    "cornsilk",
-    "crimson",
-    "darkblue",
-    "darkcyan",
-    "darkgoldenrod",
-    "darkgray",
-    "darkgreen",
-    "darkkhaki",
-    "darkmagenta",
-    "darkolivegreen",
-    "darkorange",
-    "darkorchid",
-    "darkred",
-    "darksalmon",
-    "darkseagreen",
-    "darkslateblue",
-    "darkslategray",
-    "darkturquoise",
-    "darkviolet",
-    "deeppink",
-    "deepskyblue",
-    "dimgray",
-    "dodgerblue",
-    "firebrick",
-    "floralwhite",
-    "forestgreen",
-    "gainsboro",
-    "ghostwhite",
-    "gold",
-    "goldenrod",
-    "greenyellow",
-    "honeydew",
-    "hotpink",
-    "indianred",
-    "indigo",
-    "ivory",
-    "khaki",
-    "lavender",
-    "lavenderblush",
-    "lawngreen",
-    "lemonchiffon",
-    "lightblue",
-    "lightcoral",
-    "lightcyan",
-    "lightgoldenrodyellow",
-    "lightgray",
-    "lightgreen",
-    "lightpink",
-    "lightsalmon",
-    "lightseagreen",
-    "lightskyblue",
-    "lightslategray",
-    "lightsteelblue",
-    "lightyellow",
-    "limegreen",
-    "linen",
-    "mediumaquamarine",
-    "mediumblue",
-    "mediumorchid",
-    "mediumpurple",
-    "mediumseagreen",
-    "mediumslateblue",
-    "mediumspringgreen",
-    "mediumturquoise",
-    "mediumvioletred",
-    "midnightblue",
-    "mintcream",
-    "mistyrose",
-    "moccasin",
-    "navajowhite",
-    "oldlace",
-    "olivedrab",
-    "orangered",
-    "orchid",
-    "palegoldenrod",
-    "palegreen",
-    "paleturquoise",
-    "palevioletred",
-    "papayawhip",
-    "peachpuff",
-    "peru",
-    "plum",
-    "powderblue",
-    "rosybrown",
-    "royalblue",
-    "saddlebrown",
-    "salmon",
-    "sandybrown",
-    "seagreen",
-    "seashell",
-    "sienna",
-    "skyblue",
-    "slateblue",
-    "slategray",
-    "snow",
-    "springgreen",
-    "steelblue",
-    "tan",
-    "thistle",
-    "tomato",
-    "turquoise",
-    "violet",
-    "wheat",
-    "whitesmoke",
-    "yellowgreen",
-})
+def _load_css_colors() -> frozenset[str]:
+    """Load CSS named colors from static file.
+
+    The colors are loaded from static/css_colors.txt which contains the
+    147 CSS3 named colors. This file can be easily updated if needed.
+
+    Returns
+    -------
+    frozenset of lowercase color names
+    """
+    from functools import lru_cache
+    from importlib.resources import files
+
+    @lru_cache(maxsize=1)
+    def _load() -> frozenset[str]:
+        content = (
+            files("anndata._repr.static")
+            .joinpath("css_colors.txt")
+            .read_text(encoding="utf-8")
+        )
+        colors = set()
+        for line in content.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                colors.add(line.lower())
+        return frozenset(colors)
+
+    return _load()
+
+
+# CSS named colors for color detection in _is_color_string().
+# Loaded from static/css_colors.txt - see that file for the full list.
+# Colors can also be specified as hex (#RGB, #RRGGBB), rgb(), or rgba().
+_NAMED_COLORS = _load_css_colors()
 
 
 # -----------------------------------------------------------------------------

@@ -1,6 +1,50 @@
 """
 Rich HTML representation for AnnData objects in Jupyter notebooks.
 
+Module Architecture
+-------------------
+This package uses a layered import hierarchy to avoid circular imports.
+When modifying imports, maintain this order:
+
+.. code-block:: text
+
+    _repr_constants.py (outside _repr/, no internal imports)
+    │   Constants only. Imported by _settings.py at anndata import time.
+    │   Must not import anything from anndata.
+    │
+    └─► utils.py (depends only on external: numpy, pandas)
+        │   HTML escaping, formatting, serialization checks.
+        │
+        └─► components.py (depends on: utils)
+            │   UI building blocks: badges, buttons, icons.
+            │
+            └─► registry.py (depends on: _repr_constants)
+                │   Formatter registry, TypeFormatter, SectionFormatter.
+                │   NOTE: formatters.py imports registry for registration.
+                │
+                └─► core.py (depends on: components, registry, utils)
+                    │   Shared rendering primitives: render_section().
+                    │
+                    ├─► sections.py (depends on: core, components, registry, utils)
+                    │   │   Section-specific renderers (obs, var, uns, etc.).
+                    │   │   Uses late import of html.render_formatted_entry.
+                    │   │
+                    │   └─► html.py (depends on: core, sections, components, registry, utils)
+                    │           Main orchestrator: generate_repr_html().
+                    │           Side-effect import of formatters.py for registration.
+                    │
+                    └─► formatters.py (depends on: registry, components, utils)
+                            Built-in type formatters. Auto-registers on import.
+                            Late import of html.generate_repr_html for AnnDataFormatter.
+
+    __init__.py (imports from all modules for public API)
+
+Key patterns for avoiding circular imports:
+1. ``_repr_constants.py`` is outside ``_repr/`` - safe to import anywhere
+2. Side-effect imports use ``from . import formatters as _formatters  # noqa: F401``
+3. Late imports inside functions for cross-module dependencies
+4. Type hints use ``if TYPE_CHECKING:`` blocks
+
 This module provides an extensible HTML representation system with:
 - Foldable sections with auto-collapse
 - Search/filter functionality
@@ -262,6 +306,7 @@ from .._repr_constants import STYLE_HIDDEN  # noqa: E402
 # Building blocks for packages that want to create their own _repr_html_
 # These allow reusing anndata's styling while building custom representations
 from .components import (  # noqa: E402
+    TypeCellConfig,
     render_badge,
     render_copy_button,
     render_fold_icon,
@@ -344,6 +389,7 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "render_badge",
     "render_header_badges",
     "render_warning_icon",
+    "TypeCellConfig",
     # Validation helpers
     "check_column_name",
 ]

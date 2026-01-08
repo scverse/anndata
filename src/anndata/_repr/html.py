@@ -14,7 +14,18 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from .._repr_constants import TOOLTIP_TRUNCATE_LENGTH
+from .._repr_constants import (
+    CSS_BADGE_BACKED,
+    CSS_BADGE_EXTENSION,
+    CSS_BADGE_LAZY,
+    CSS_BADGE_VIEW,
+    CSS_DTYPE_CATEGORY,
+    CSS_DTYPE_DATAFRAME,
+    SECTION_OBS,
+    SECTION_VAR,
+    SECTION_X,
+    TOOLTIP_TRUNCATE_LENGTH,
+)
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -29,6 +40,7 @@ from . import (
     SECTION_ORDER,
 )
 from .components import (
+    TypeCellConfig,
     render_badge,
     render_entry_preview_cell,
     render_entry_row_open,
@@ -44,6 +56,7 @@ from .core import (
 )
 from .css import get_css
 from .javascript import get_javascript
+from .lazy import is_lazy_adata
 from .registry import (
     FormatterContext,
     formatter_registry,
@@ -56,7 +69,6 @@ from .utils import (
     get_backing_info,
     get_setting,
     is_backed,
-    is_lazy,
     is_view,
 )
 
@@ -299,12 +311,12 @@ def _render_all_sections(
     custom_sections_after = _get_custom_sections_by_position(adata)
 
     for section in SECTION_ORDER:
-        if section == "X":
+        if section == SECTION_X:
             # X is already rendered, but check for custom sections after X
-            if "X" in custom_sections_after:
+            if SECTION_X in custom_sections_after:
                 parts.extend(
                     _render_custom_section(adata, section_formatter, context)
-                    for section_formatter in custom_sections_after["X"]
+                    for section_formatter in custom_sections_after[SECTION_X]
                 )
             continue
         parts.append(_render_section(adata, section, context))
@@ -337,14 +349,16 @@ def _render_section(
     context: FormatterContext,
 ) -> str:
     """Render a single standard section."""
+    from .._repr_constants import SECTION_RAW, SECTION_UNS
+
     try:
-        if section == "X":
+        if section == SECTION_X:
             return render_x_entry(adata, context)
-        if section == "raw":
+        if section == SECTION_RAW:
             return _render_raw_section(adata, context)
-        if section in ("obs", "var"):
+        if section in (SECTION_OBS, SECTION_VAR):
             return _render_dataframe_section(adata, section, context)
-        if section == "uns":
+        if section == SECTION_UNS:
             return _render_uns_section(adata, context)
         return _render_mapping_section(adata, section, context)
     except Exception as e:  # noqa: BLE001
@@ -437,13 +451,14 @@ def render_formatted_entry(
     *,
     extra_warnings: list[str] | None = None,
     is_hard_error: bool = False,
+    append_type_html: bool = False,
+    preview_note: str | None = None,
 ) -> str:
     """
     Render a FormattedEntry as a table row.
 
-    This is a public API for packages building their own _repr_html_.
-    It provides the same flexibility as internal code by accepting
-    FormattedEntry/FormattedOutput objects.
+    This is the unified entry renderer used both internally and as a public API
+    for packages building their own _repr_html_.
 
     Parameters
     ----------
@@ -456,6 +471,11 @@ def render_formatted_entry(
     is_hard_error
         Whether there's a hard error (e.g., invalid key name) in addition
         to serializability issues
+    append_type_html
+        If True, append type_html below type_name instead of replacing it.
+        Used for mapping entries (obsm, varm, etc.) to show extra content.
+    preview_note
+        Optional note to prepend to preview text (for type hints in uns)
 
     Returns
     -------
@@ -513,8 +533,11 @@ def render_formatted_entry(
     has_error = not output.is_serializable or is_hard_error
 
     has_expandable_content = output.expanded_html is not None
-    # DataFrames have column list in preview_html (for wrap button in type cell)
-    has_columns_list = output.css_class == "dtype-dataframe" and bool(
+    # Detect wrap button needs from output css_class
+    has_categories = output.css_class == CSS_DTYPE_CATEGORY and bool(
+        output.preview_html
+    )
+    has_columns_list = output.css_class == CSS_DTYPE_DATAFRAME and bool(
         output.preview_html
     )
 
@@ -531,25 +554,32 @@ def render_formatted_entry(
     # Name cell
     parts.append(render_name_cell(entry.key))
 
-    # Type cell (using consolidated helper)
-    parts.append(
-        render_entry_type_cell(
-            output.type_name,
-            output.css_class,
-            type_html=output.type_html,
-            tooltip=output.tooltip,
-            warnings=all_warnings,
-            is_error=has_error,
-            has_expandable_content=has_expandable_content,
-            has_columns_list=has_columns_list,
-        )
+    # Type cell
+    type_cell_config = TypeCellConfig(
+        type_name=output.type_name,
+        css_class=output.css_class,
+        type_html=output.type_html if append_type_html else None,
+        tooltip=output.tooltip,
+        warnings=all_warnings,
+        is_error=has_error,
+        has_expandable_content=has_expandable_content,
+        has_columns_list=has_columns_list,
+        has_categories_list=has_categories,
+        append_type_html=append_type_html,
     )
+    parts.append(render_entry_type_cell(type_cell_config))
 
-    # Preview cell - formatter provides complete preview_html
+    # Preview cell
+    preview_text = output.preview
+    if preview_note and preview_text:
+        preview_text = f"{preview_note} {preview_text}"
+    elif preview_note:
+        preview_text = preview_note
+
     parts.append(
         render_entry_preview_cell(
             preview_html=output.preview_html,
-            preview_text=output.preview,
+            preview_text=preview_text,
         )
     )
 
@@ -578,14 +608,14 @@ def _render_header(
 
     # Badges - use render_badge() helper
     if is_view(adata):
-        parts.append(render_badge("View", "adata-badge-view"))
+        parts.append(render_badge("View", CSS_BADGE_VIEW))
 
     if is_backed(adata):
         backing = get_backing_info(adata)
         filename = backing.get("filename", "")
         format_str = backing.get("format", "")
         status = "Open" if backing.get("is_open") else "Closed"
-        parts.append(render_badge(f"{format_str} ({status})", "adata-badge-backed"))
+        parts.append(render_badge(f"{format_str} ({status})", CSS_BADGE_BACKED))
         # Inline file path (full path, no truncation)
         if filename:
             path_style = (
@@ -598,12 +628,12 @@ def _render_header(
                 f"</span>"
             )
 
-    if is_lazy(adata):
-        parts.append(render_badge("Lazy", "adata-badge-lazy"))
+    if is_lazy_adata(adata):
+        parts.append(render_badge("Lazy", CSS_BADGE_LAZY))
 
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":
-        parts.append(render_badge(type_name, "adata-badge-extension"))
+        parts.append(render_badge(type_name, CSS_BADGE_EXTENSION))
 
     # README icon if uns["README"] exists with a string
     readme_content = adata.uns.get("README") if hasattr(adata, "uns") else None

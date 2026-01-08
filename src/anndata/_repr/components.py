@@ -15,6 +15,8 @@ build compatible representations.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from .._repr_constants import (
     CSS_ENTRY,
     ENTRY_TABLE_COLSPAN,
@@ -439,40 +441,14 @@ def render_category_list(
     return "".join(parts)
 
 
-def render_entry_type_cell(  # noqa: PLR0913
-    type_name: str,
-    css_class: str,
-    *,
-    type_html: str | None = None,
-    tooltip: str = "",
-    warnings: list[str] | None = None,
-    is_error: bool = False,
-    has_expandable_content: bool = False,
-    has_columns_list: bool = False,
-    has_categories_list: bool = False,
-    append_type_html: bool = False,
-) -> str:
-    """Render the type cell for an entry row.
+@dataclass
+class TypeCellConfig:
+    """Configuration for rendering a type cell.
 
-    This is a unified helper that handles all type cell variations:
-    - Type label with optional tooltip
-    - Custom type_html (as replacement or appended content)
-    - Warning icon
-    - Expand/wrap buttons
+    Groups the many parameters of render_entry_type_cell into a single object,
+    making call sites cleaner and easier to understand.
 
-    The type_html and append_type_html parameters control content rendering:
-
-    1. No type_html: Shows type_name in a styled span
-       ``<span class="dtype-X">type_name</span>``
-
-    2. type_html with append_type_html=False (default): type_html REPLACES type_name
-       Used for fully custom type content (e.g., category swatches instead of text)
-
-    3. type_html with append_type_html=True: type_html is shown BELOW type_name
-       Used to add extra content while keeping the type label
-       (e.g., showing category list below "categorical" label)
-
-    Parameters
+    Attributes
     ----------
     type_name
         The type name to display (e.g., "ndarray (100, 50) float32")
@@ -495,10 +471,87 @@ def render_entry_type_cell(  # noqa: PLR0913
     append_type_html
         If True, type_html is appended below type_name instead of replacing it
 
+    Examples
+    --------
+    >>> config = TypeCellConfig(
+    ...     type_name="ndarray (100, 50) float32",
+    ...     css_class="dtype-ndarray",
+    ...     tooltip="Dense array",
+    ... )
+    >>> html = render_entry_type_cell(config)
+
+    With warnings::
+
+        >>> config = TypeCellConfig(
+        ...     type_name="object",
+        ...     css_class="dtype-object",
+        ...     warnings=["Not serializable"],
+        ...     is_error=True,
+        ... )
+    """
+
+    type_name: str
+    css_class: str
+    type_html: str | None = None
+    tooltip: str = ""
+    warnings: list[str] = field(default_factory=list)
+    is_error: bool = False
+    has_expandable_content: bool = False
+    has_columns_list: bool = False
+    has_categories_list: bool = False
+    append_type_html: bool = False
+
+
+def render_entry_type_cell(config: TypeCellConfig) -> str:
+    """Render the type cell for an entry row.
+
+    This is a unified helper that handles all type cell variations:
+    - Type label with optional tooltip
+    - Custom type_html (as replacement or appended content)
+    - Warning icon
+    - Expand/wrap buttons
+
+    The type_html and append_type_html config fields control content rendering:
+
+    1. No type_html: Shows type_name in a styled span
+       ``<span class="dtype-X">type_name</span>``
+
+    2. type_html with append_type_html=False (default): type_html REPLACES type_name
+       Used for fully custom type content (e.g., category swatches instead of text)
+
+    3. type_html with append_type_html=True: type_html is shown BELOW type_name
+       Used to add extra content while keeping the type label
+       (e.g., showing category list below "categorical" label)
+
+    Parameters
+    ----------
+    config
+        TypeCellConfig object with all rendering options
+
     Returns
     -------
     HTML string for the complete type cell
+
+    Examples
+    --------
+    >>> config = TypeCellConfig(
+    ...     type_name="ndarray (100, 50) float32",
+    ...     css_class="dtype-ndarray",
+    ...     tooltip="Dense array",
+    ... )
+    >>> html = render_entry_type_cell(config)
     """
+    type_name = config.type_name
+    css_class = config.css_class
+    type_html = config.type_html
+    tooltip = config.tooltip
+    warnings = config.warnings
+    is_error = config.is_error
+    has_expandable_content = config.has_expandable_content
+    has_columns_list = config.has_columns_list
+    has_categories_list = config.has_categories_list
+    append_type_html = config.append_type_html
+
     parts = ['<td class="adata-entry-type">']
 
     # Type content: handle different cases

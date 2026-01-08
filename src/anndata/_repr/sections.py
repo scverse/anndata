@@ -36,6 +36,7 @@ from . import (
     SECTION_ORDER,
 )
 from .components import (
+    TypeCellConfig,
     render_entry_preview_cell,
     render_entry_row_open,
     render_entry_type_cell,
@@ -73,36 +74,32 @@ if TYPE_CHECKING:
 def _validate_key_and_collect_warnings(
     key: str,
     output: FormattedOutput,
-    extra_warnings: list[str] | None = None,
 ) -> tuple[list[str], bool]:
-    """Validate key name and collect all warnings for an entry.
+    """Validate key name and return key-specific warnings.
 
-    Checks key validity (issue #321) and combines with output warnings.
+    Checks key validity (issue #321) and returns warnings specific to the key.
+    The output.warnings are handled separately by render_formatted_entry.
 
     Parameters
     ----------
     key
         The entry key to validate
     output
-        FormattedOutput containing serialization info and warnings
-    extra_warnings
-        Additional warnings to include (e.g., string->category suggestion)
+        FormattedOutput (unused, kept for API compatibility)
 
     Returns
     -------
-    tuple of (all_warnings, is_error)
-        all_warnings: Combined list of all warning messages
-        is_error: True if entry should be marked as error (not serializable or invalid key)
+    tuple of (key_warnings, is_hard_error)
+        key_warnings: List of key-specific warning messages
+        is_hard_error: True if key has a hard error (write fails NOW, not just deprecated)
     """
     key_valid, key_reason, key_hard_error = check_column_name(key)
 
-    all_warnings = list(extra_warnings) if extra_warnings else []
-    all_warnings.extend(output.warnings)
+    key_warnings: list[str] = []
     if not key_valid:
-        all_warnings.append(key_reason)
+        key_warnings.append(key_reason)
 
-    is_error = not output.is_serializable or key_hard_error
-    return all_warnings, is_error
+    return key_warnings, key_hard_error
 
 
 def _render_entry_row(
@@ -114,8 +111,9 @@ def _render_entry_row(
 ) -> str:
     """Render an entry row for DataFrame, mapping, or uns sections.
 
-    This is the unified entry renderer. The renderer only sees FormattedOutput,
-    never the original data object.
+    This is a thin wrapper around render_formatted_entry that handles
+    key validation. The renderer only sees FormattedOutput, never the
+    original data object.
 
     Parameters
     ----------
@@ -132,65 +130,20 @@ def _render_entry_row(
     -------
     HTML string for the entry row (and optional expandable content row)
     """
+    from .html import render_formatted_entry
+    from .registry import FormattedEntry
+
     # Validate key and collect warnings
-    all_warnings, is_error = _validate_key_and_collect_warnings(key, output)
+    extra_warnings, is_hard_error = _validate_key_and_collect_warnings(key, output)
 
-    has_expandable_content = output.expanded_html is not None
-    # Detect wrap button needs from output
-    has_categories = output.css_class == "dtype-category" and bool(output.preview_html)
-    has_columns_list = output.css_class == "dtype-dataframe" and bool(
-        output.preview_html
+    entry = FormattedEntry(key=key, output=output)
+    return render_formatted_entry(
+        entry,
+        extra_warnings=extra_warnings if extra_warnings else None,
+        is_hard_error=is_hard_error,
+        append_type_html=append_type_html,
+        preview_note=preview_note,
     )
-
-    # Build row
-    parts = [
-        render_entry_row_open(
-            key,
-            output.type_name,
-            has_warnings=bool(all_warnings),
-            is_error=is_error,
-        )
-    ]
-
-    # Name cell
-    parts.append(render_name_cell(key))
-
-    # Type cell
-    parts.append(
-        render_entry_type_cell(
-            output.type_name,
-            output.css_class,
-            type_html=output.type_html if append_type_html else None,
-            warnings=all_warnings,
-            is_error=is_error,
-            has_expandable_content=has_expandable_content,
-            has_columns_list=has_columns_list,
-            has_categories_list=has_categories,
-            append_type_html=append_type_html,
-        )
-    )
-
-    # Preview cell
-    preview_text = output.preview
-    if preview_note and preview_text:
-        preview_text = f"{preview_note} {preview_text}"
-    elif preview_note:
-        preview_text = preview_note
-
-    parts.append(
-        render_entry_preview_cell(
-            preview_html=output.preview_html,
-            preview_text=preview_text,
-        )
-    )
-
-    parts.append("</tr>")
-
-    # Expandable content row
-    if output.expanded_html is not None:
-        parts.append(render_nested_content_cell(output.expanded_html))
-
-    return "\n".join(parts)
 
 
 # -----------------------------------------------------------------------------
@@ -582,11 +535,12 @@ def _render_raw_section(
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
     parts.append(render_entry_row_open("raw", "Raw"))
     parts.append(render_name_cell("raw"))
-    parts.append(
-        render_entry_type_cell(
-            type_str, "dtype-anndata", has_expandable_content=can_expand
-        )
+    type_cell_config = TypeCellConfig(
+        type_name=type_str,
+        css_class="dtype-anndata",
+        has_expandable_content=can_expand,
     )
+    parts.append(render_entry_type_cell(type_cell_config))
     parts.append(render_entry_preview_cell(preview_text=meta_text))
     parts.append("</tr>")
 
