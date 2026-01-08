@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -335,102 +336,104 @@ def _(a: CategoricalArray):
     return get_chunksize(a._codes)
 
 
-def _register_cat_accessor():
-    """Register the cat accessor on xarray DataArray."""
-    try:
-        import xarray as xr
+class CatAccessor:
+    """Accessor for categorical operations on lazy xarray DataArrays.
 
-        @xr.register_dataarray_accessor("cat")
-        class CatAccessor:
-            """Accessor for categorical operations on xarray DataArrays.
+    Mimics the pandas ``.cat`` accessor API for lazy AnnData columns.
+    For columns backed by :class:`CategoricalArray`, provides efficient
+    partial reads without loading all data. For non-lazy categoricals,
+    falls back to dtype-based access. Returns ``None`` for non-categorical columns.
 
-            Provides efficient access to category information. For lazy categorical
-            columns backed by CategoricalArray, uses partial reads to avoid loading
-            all data. For other categorical columns, falls back to dtype access.
-            Returns None for non-categorical columns.
+    Attributes
+    ----------
+    categories : LazyCategories | pd.Index | None
+        Category values. Returns :class:`LazyCategories` for lazy data
+        (supports slicing like ``categories[:10]``), ``pd.Index`` for
+        non-lazy categoricals, or ``None`` for non-categorical columns.
+    codes : ZarrArray | H5Array | None
+        Integer codes array for lazy categoricals, ``None`` otherwise.
+    ordered : bool | None
+        Whether categories are ordered, ``None`` for non-categorical columns.
 
-            Examples
-            --------
-            .. code-block:: python
+    Examples
+    --------
+    .. code-block:: python
 
-                lazy_adata = ad.experimental.read_lazy("dataset.zarr")
-                cats = lazy_adata.obs["cell_type"].cat.categories
-                len(cats)  # cheap, metadata only
-                cats[:5]  # efficient partial read
-                cats[-3:]  # efficient partial read
-                lazy_adata.obs["numeric_col"].cat.categories  # returns None
-            """
+        lazy_adata = ad.experimental.read_lazy("dataset.zarr")
 
-            def __init__(self, xarray_obj: XDataArray):
-                self._obj = xarray_obj
-                # Extract CategoricalArray if present
-                self._cat_array = None
-                try:
-                    lazy_indexed = xarray_obj.variable._data
-                    if hasattr(lazy_indexed, "array") and isinstance(
-                        lazy_indexed.array, CategoricalArray
-                    ):
-                        self._cat_array = lazy_indexed.array
-                except (AttributeError, TypeError):
-                    pass
+        # Access categories efficiently
+        cats = lazy_adata.obs["cell_type"].cat.categories
+        len(cats)  # cheap (metadata only)
+        cats[:10]  # partial read
+        cats[-5:]  # partial read
+        np.array(cats)  # full load when needed
 
-            def _is_categorical(self) -> bool:
-                """Check if the underlying data is categorical."""
-                return isinstance(self._obj.dtype, pd.CategoricalDtype)
+        # Access codes
+        codes = lazy_adata.obs["cell_type"].cat.codes
+        codes[:100]  # partial read
 
-            @property
-            def categories(self) -> LazyCategories | pd.Index | None:
-                """Categories with support for efficient slicing.
+        # Check if ordered
+        lazy_adata.obs["cell_type"].cat.ordered  # bool
 
-                For lazy CategoricalArray, returns LazyCategories supporting
-                efficient partial reads via slicing (e.g., categories[:10]).
-                For other categoricals, returns the pandas Index from dtype.
-                Returns None for non-categorical columns.
+        # Non-categorical columns return None
+        lazy_adata.obs["numeric_col"].cat.categories  # None
+    """
 
-                Examples
-                --------
-                .. code-block:: python
+    def __init__(self, xarray_obj: XDataArray):
+        self._obj = xarray_obj
+        self._cat_array = None
+        try:
+            lazy_indexed = xarray_obj.variable._data
+            if hasattr(lazy_indexed, "array") and isinstance(
+                lazy_indexed.array, CategoricalArray
+            ):
+                self._cat_array = lazy_indexed.array
+        except (AttributeError, TypeError):
+            pass
 
-                    cats = col.cat.categories
-                    len(cats)  # cheap for lazy data
-                    cats[:10]  # efficient partial read
-                    cats[-5:]  # efficient partial read
-                    np.array(cats)  # full load
-                """
-                if self._cat_array is not None:
-                    return LazyCategories(self._cat_array)
-                if self._is_categorical():
-                    return self._obj.dtype.categories
-                return None
+    def _is_categorical(self) -> bool:
+        """Check if the underlying data is categorical."""
+        return isinstance(self._obj.dtype, pd.CategoricalDtype)
 
-            @property
-            def codes(self) -> ZarrArray | H5Array | None:
-                """Integer codes for the categorical values.
+    @property
+    def categories(self) -> LazyCategories | pd.Index | None:
+        """Category values with efficient slicing support.
 
-                For lazy CategoricalArray, returns the underlying zarr/h5 array
-                containing the integer codes. Supports lazy slicing.
-                For non-categorical columns, returns None.
-                """
-                if self._cat_array is not None:
-                    return self._cat_array._codes._array
-                return None
+        Returns :class:`LazyCategories` for lazy data, ``pd.Index`` for
+        non-lazy categoricals, or ``None`` for non-categorical columns.
+        """
+        if self._cat_array is not None:
+            return LazyCategories(self._cat_array)
+        if self._is_categorical():
+            return self._obj.dtype.categories
+        return None
 
-            @property
-            def ordered(self) -> bool | None:
-                """Whether the categorical is ordered.
+    @property
+    def codes(self) -> ZarrArray | H5Array | None:
+        """Integer codes for lazy categorical values.
 
-                Returns True/False for categorical columns, None for non-categorical.
-                """
-                if self._cat_array is not None:
-                    return bool(self._cat_array._ordered)
-                if self._is_categorical():
-                    return bool(self._obj.dtype.ordered)
-                return None
+        Returns the underlying zarr/h5 array for lazy categoricals,
+        ``None`` otherwise. Supports lazy slicing.
+        """
+        if self._cat_array is not None:
+            return self._cat_array._codes._array
+        return None
 
-        return CatAccessor
-    except ImportError:
+    @property
+    def ordered(self) -> bool | None:
+        """Whether the categorical is ordered.
+
+        Returns ``True``/``False`` for categorical columns,
+        ``None`` for non-categorical.
+        """
+        if self._cat_array is not None:
+            return bool(self._cat_array._ordered)
+        if self._is_categorical():
+            return bool(self._obj.dtype.ordered)
         return None
 
 
-# Register the accessor when xarray is available
-_CatAccessor = _register_cat_accessor()
+if find_spec("xarray"):
+    import xarray as xr
+
+    xr.register_dataarray_accessor("cat")(CatAccessor)
