@@ -85,6 +85,7 @@ napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
 napoleon_custom_sections = [("Params", "Parameters")]
 typehints_defaults = "braces"
+always_use_bars_union = True  # use `|`, not `Union` in types even when on Python ≤3.14
 todo_include_todos = False
 nitpicky = True  # Report broken links
 nitpick_ignore = [  # APIs without an intersphinx entry
@@ -134,9 +135,7 @@ intersphinx_mapping = dict(
     numpy=("https://numpy.org/doc/stable", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
-    # TODO: switch to `/3` once docs are built with Python 3.14
-    # https://github.com/readthedocs/readthedocs.org/issues/12523
-    python=("https://docs.python.org/3.13", None),
+    python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
