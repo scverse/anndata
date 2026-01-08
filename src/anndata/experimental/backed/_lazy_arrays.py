@@ -51,15 +51,17 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
     Examples
     --------
-    >>> dtype = col.dtype  # LazyCategoricalDtype
-    >>> dtype.n_categories  # cheap, metadata only
-    100000
-    >>> dtype.head_categories(5)  # partial read, first 5
-    array(['cat_0', 'cat_1', 'cat_2', 'cat_3', 'cat_4'], dtype='<U6')
-    >>> dtype.tail_categories(3)  # partial read, last 3
-    array(['cat_99997', 'cat_99998', 'cat_99999'], dtype='<U6')
-    >>> dtype.categories  # full load, cached
-    Index(['cat_0', 'cat_1', ...], dtype='str')
+    .. code-block:: python
+
+        dtype = col.dtype  # LazyCategoricalDtype
+        dtype.n_categories  # cheap, metadata only
+        # 100000
+        dtype.head_categories(5)  # partial read, first 5
+        # array(['cat_0', 'cat_1', 'cat_2', 'cat_3', 'cat_4'], dtype='<U6')
+        dtype.tail_categories(3)  # partial read, last 3
+        # array(['cat_99997', 'cat_99998', 'cat_99999'], dtype='<U6')
+        dtype.categories  # full load, cached
+        # Index(['cat_0', 'cat_1', ...], dtype='str')
     """
 
     # Attributes that should be preserved during copying/pickling
@@ -148,8 +150,10 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
         Examples
         --------
-        >>> dtype.head_categories()  # first 5
-        >>> dtype.head_categories(10)  # first 10
+        .. code-block:: python
+
+            dtype.head_categories()  # first 5
+            dtype.head_categories(10)  # first 10
         """
         # If already fully loaded, slice from cache
         if self.__categories is not None:
@@ -181,8 +185,10 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
         Examples
         --------
-        >>> dtype.tail_categories()  # last 5
-        >>> dtype.tail_categories(10)  # last 10
+        .. code-block:: python
+
+            dtype.tail_categories()  # last 5
+            dtype.tail_categories(10)  # last 10
         """
         # If already fully loaded, slice from cache
         if self.__categories is not None:
@@ -214,21 +220,22 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         return hash((id(self._categories_array), self._ordered_flag))
 
     def __eq__(self, other) -> bool:
+        # Handle string comparison (e.g., dtype == "category")
+        if isinstance(other, str):
+            return other == self.name
         if isinstance(other, LazyCategoricalDtype):
             return (
                 self._categories_array is other._categories_array
                 and self._ordered_flag == other._ordered_flag
             )
-        if isinstance(other, pd.CategoricalDtype):
-            # Compare with regular CategoricalDtype - need to load categories
-            if self.ordered != other.ordered:
-                return False
-            if other.categories is None:
-                return self.categories is None
-            if self.categories is None:
-                return False
-            return self.categories.equals(other.categories)
-        return False
+        if not isinstance(other, pd.CategoricalDtype):
+            return False
+        # Compare with regular CategoricalDtype - need to load categories
+        if self.ordered != other.ordered:
+            return False
+        if other.categories is None or self.categories is None:
+            return other.categories is None and self.categories is None
+        return self.categories.equals(other.categories)
 
 
 class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
