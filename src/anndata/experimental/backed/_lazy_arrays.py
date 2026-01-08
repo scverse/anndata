@@ -118,7 +118,7 @@ class LazyCategories:
     @property
     def dtype(self) -> np.dtype:
         """Data type of categories (cheap, metadata only)."""
-        return self._cat_array._categories["values"].dtype
+        return self._cat_array._categories_array.dtype
 
     def __getitem__(self, key: int | slice) -> np.ndarray | str:
         """Get categories by index with efficient partial reads."""
@@ -141,7 +141,7 @@ class LazyCategories:
 
         start, stop, step = key.indices(n_cats)
         arr = read_elem_partial(
-            self._cat_array._categories["values"], indices=slice(start, stop)
+            self._cat_array._categories_array, indices=slice(start, stop)
         )
         if step != 1:
             arr = arr[::step]
@@ -198,9 +198,21 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         self.elem_name = elem_name
 
     @property
+    def _categories_array(self) -> ZarrArray | H5Array:
+        """Get the underlying categories array (handles both encodings).
+
+        For string-array encoding: _categories is directly the array.
+        For nullable-string-array encoding: _categories is a Group with "values" key.
+        """
+        if isinstance(self._categories, (ZarrArray, H5Array)):
+            return self._categories
+        # nullable-string-array encoding: Group with "values" and "mask"
+        return self._categories["values"]
+
+    @property
     def n_categories(self) -> int:
         """Number of categories (cheap, from metadata only)."""
-        return self._categories["values"].shape[0]
+        return self._categories_array.shape[0]
 
     @cached_property
     def categories(self) -> np.ndarray | pd.api.extensions.ExtensionArray:
