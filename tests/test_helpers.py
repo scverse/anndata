@@ -88,7 +88,7 @@ def test_gen_awkward(shape, datashape):
     assert arr.type == arr_type
 
 
-@pytest.mark.parametrize("dtype", [*DEFAULT_COL_TYPES, pd.StringDtype])
+@pytest.mark.parametrize("dtype", [*DEFAULT_COL_TYPES, pd.StringDtype()])
 def test_gen_random_column(dtype):
     _, col = gen_random_column(10, dtype)
     assert len(col) == 10
