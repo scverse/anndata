@@ -84,7 +84,7 @@ else:
         except ImportError:
             # h5py 3.11 uses AstypeWrapper (lowercase 't')
             from h5py._hl.dataset import AstypeWrapper as H5AstypeView
-    except ImportError:
+    except ImportError:  # pragma: no cover
         warn("AsTypeView changed import location", DeprecationWarning)
         H5AstypeView = type(
             h5py.File.in_memory().create_dataset("x", shape=(), dtype="S1").astype("U1")
