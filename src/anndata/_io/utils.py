@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import WRAPPER_ASSIGNMENTS, wraps
+from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, cast
+
+import numpy as np
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
@@ -11,6 +13,9 @@ from ..utils import warn
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
+
+    from pandas.core.arrays.masked import BaseMaskedArray
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
@@ -117,6 +122,17 @@ def check_key(key):
     else:
         msg = f"{key} of type {typ} is an invalid key. Should be str."
         raise TypeError(msg)
+
+
+@cache
+def pandas_nullable_dtype(
+    array_type: type[BaseMaskedArray], dtype: np.dtype
+) -> BaseMaskedDtype:
+    """Infer nullable dtype from numpy dtype.
+
+    There is no public pandas API for this, so this is the cleanest way.
+    """
+    return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
 
 
 # -------------------------------------------------------------------------------
