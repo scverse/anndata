@@ -87,7 +87,15 @@ def test_gen_awkward(shape, datashape):
     assert arr.type == arr_type
 
 
-@pytest.mark.parametrize("dtype", [*DEFAULT_COL_TYPES, pd.StringDtype])
+@pytest.mark.parametrize(
+    "dtype",
+    [*DEFAULT_COL_TYPES, pd.StringDtype()],
+    ids=lambda dt: (
+        f"{dt}-{'' if dt.ordered else 'un'}ordered"
+        if isinstance(dt, pd.CategoricalDtype)
+        else str(dt)
+    ),
+)
 def test_gen_random_column(dtype):
     _, col = gen_random_column(10, dtype)
     assert len(col) == 10
@@ -96,7 +104,7 @@ def test_gen_random_column(dtype):
         assert issubdtype(col.dtype, pd.CategoricalDtype)
         assert col.dtype.ordered == dtype.ordered
     else:
-        assert issubdtype(col.dtype, dtype)
+        assert col.dtype == dtype
 
 
 # Does this work for every warning?

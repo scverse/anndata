@@ -93,8 +93,8 @@ def adata_remote_orig_with_path(
     orig = gen_adata(
         (100, 110),
         mtx_format,
-        obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
-        var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
+        obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
+        var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
         obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
         varm_types=(*DEFAULT_KEY_TYPES, AwkArray),
     )
