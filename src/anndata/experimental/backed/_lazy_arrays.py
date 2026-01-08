@@ -143,13 +143,6 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         -------
         np.ndarray or ExtensionArray
             The first n categories.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            dtype.head_categories()  # first 5
-            dtype.head_categories(10)  # first 10
         """
         if self._categories_elem is None:
             return np.array([])
@@ -175,13 +168,6 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         -------
         np.ndarray or ExtensionArray
             The last n categories.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            dtype.tail_categories()  # last 5
-            dtype.tail_categories(10)  # last 10
         """
         if self._categories_elem is None:
             return np.array([])
