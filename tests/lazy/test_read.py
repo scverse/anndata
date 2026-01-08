@@ -354,9 +354,12 @@ def test_lazy_categorical_dtype_categories_caching(tmp_path: Path, diskfmt: str)
     # After loading, should be cached
     assert dtype._LazyCategoricalDtype__categories is not None
 
-    # head_categories should now use cache
+    # Verify head/tail_categories use cache by modifying cache
+    dtype._LazyCategoricalDtype__categories = pd.Index(["x", "y", "z", "w", "v"])
     head = dtype.head_categories(3)
-    assert list(head) == ["a", "b", "c"]
+    assert list(head) == ["x", "y", "z"]  # Returns cached values, not disk values
+    tail = dtype.tail_categories(3)
+    assert list(tail) == ["z", "w", "v"]  # Returns cached values, not disk values
 
 
 @pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
@@ -524,8 +527,9 @@ def test_lazy_categorical_dtype_n_categories_from_cache(tmp_path: Path):
     cats = dtype.categories
     assert cats is not None
 
-    # Now n_categories should return from cached categories
-    assert dtype.n_categories == 5
+    # Verify n_categories uses cache by modifying cache
+    dtype._LazyCategoricalDtype__categories = pd.Index(["x", "y", "z"])
+    assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
 def test_lazy_categorical_dtype_empty_array():
