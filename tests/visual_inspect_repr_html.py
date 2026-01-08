@@ -1323,6 +1323,12 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "1. Full AnnData (all features)",
         adata_full._repr_html_(),
+        "A comprehensive AnnData with all standard attributes populated: X (sparse matrix), "
+        "obs/var with multiple columns including categoricals with colors, "
+        "obsm/varm with embeddings, uns with nested data, layers, and obsp/varp. "
+        "Use this as the baseline reference for a typical annotated dataset. "
+        "Each section header has a <b>?</b> icon that links to the relevant anndata documentation, "
+        "and hovering over the section name shows a tooltip describing that attribute.",
     ))
 
     # Test 2: Empty AnnData
@@ -1331,6 +1337,8 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "2. Empty AnnData",
         adata_empty._repr_html_(),
+        "An AnnData with no data (0 × 0). Tests graceful handling of the edge case "
+        "where all sections are empty. Should show the header with shape and no sections.",
     ))
 
     # Test 3: Minimal AnnData
@@ -1339,6 +1347,8 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "3. Minimal AnnData (just X matrix)",
         adata_minimal._repr_html_(),
+        "Only an X matrix with no annotations. Tests the minimal case where only X section "
+        "is shown. obs/var exist with default integer indices but have no columns.",
     ))
 
     # Test 4: View
@@ -1347,6 +1357,8 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "4. AnnData View (subset)",
         view._repr_html_(),
+        "A view (subset) of Test 1. Should display a 'View' badge in the header indicating "
+        "this is a reference to underlying data, not a copy. The shape shows the subset dimensions.",
     ))
 
     # Test 5: Dense matrix
@@ -1363,6 +1375,8 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "5. Dense Matrix with Categories",
         adata_dense._repr_html_(),
+        "Dense numpy array X (not sparse). The X section shows 'ndarray' instead of CSR/CSC. "
+        "Also demonstrates categorical column with associated colors from uns (color dots appear).",
     ))
 
     # Test 6: Many columns (collapsed sections)
@@ -1375,6 +1389,9 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "6. Many Columns (tests auto-folding)",
         adata_many._repr_html_(),
+        "Sections with many entries (15 obs columns, 12 obsm embeddings) to test auto-folding. "
+        "Sections with >8 items collapse by default and show a fold indicator. "
+        "Click the section header or fold icon to expand/collapse.",
     ))
 
     # Test 7: Special characters
@@ -1387,6 +1404,9 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "7. Special Characters (XSS/Unicode test)",
         adata_special._repr_html_(),
+        "Tests proper HTML escaping and Unicode handling. Column names with &lt;html&gt; tags, "
+        "ampersands, quotes, and Japanese characters should render correctly without breaking "
+        "the layout or causing XSS vulnerabilities.",
     ))
 
     # Test 8a: Dask array (if available) - demonstrates lazy loading safety
@@ -1406,14 +1426,17 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "8a. Dask Arrays (Lazy Loading Safety)",
             adata_dask._repr_html_(),
-            "<strong>No data is loaded from disk!</strong> The repr only reads metadata:<br>"
-            "<ul>"
-            "<li><code>X</code>: Shows shape (1,000 × 500), dtype, chunks — no <code>.compute()</code></li>"
-            "<li><code>layers['counts']</code>: Same — reads <code>.shape</code>, <code>.dtype</code>, <code>.chunks</code></li>"
-            "<li><code>obsm['X_pca']</code>: Shows (1,000 × 50) from <code>.shape</code> attribute</li>"
-            "<li><code>varm['loadings']</code>: Shows (500 × 50) from <code>.shape</code> attribute</li>"
+            "<strong>Regular AnnData with Dask arrays — no <code>.compute()</code> triggered!</strong><br>"
+            "<p style='margin: 5px 0;'>This is a normal (in-memory) AnnData where X, layers, obsm, and varm "
+            "are Dask arrays. The repr reads only metadata attributes:</p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li><code>X</code>: shape, dtype, chunks from Dask's lazy metadata</li>"
+            "<li><code>layers['counts']</code>: Same — no computation</li>"
+            "<li><code>obsm['X_pca']</code>, <code>varm['loadings']</code>: shape from <code>.shape</code></li>"
             "</ul>"
-            "This is safe for terabyte-scale datasets — displaying the repr never triggers computation.",
+            "<p style='margin: 5px 0;'><b>Key distinction from 8b/8c:</b> This object is not backed by "
+            "a file. The obs/var DataFrames are regular pandas objects in memory. "
+            "The 'lazy' aspect here refers only to Dask not computing array values.</p>",
         ))
 
     # Test 8b: Lazy AnnData (experimental) - fully lazy obs/var
@@ -1500,23 +1523,24 @@ def main():  # noqa: PLR0915, PLR0912
                 "8b. Lazy AnnData (Experimental)",
                 custom_lazy_html,
                 "<code>anndata.experimental.read_lazy()</code><br>"
-                "<p style='margin: 5px 0;'><b>Design: Truly lazy category loading</b></p>"
+                "<p style='margin: 5px 0;'><b>File-backed lazy AnnData — category labels loaded from disk!</b></p>"
                 "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                "Categories are read directly from storage without loading the full column data. "
-                "This example sets <code>ad.settings.repr_html_max_lazy_categories = 30</code> "
-                "(default: 100) to illustrate truncation:</p>"
+                "Unlike 8a (in-memory) and 8c (metadata-only), this repr <b>actually reads data from the HDF5 file</b>:</p>"
+                "<p style='margin: 5px 0;'><b>What IS loaded from disk:</b></p>"
                 "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                "<li><b>cell_type</b> (4 cats): all shown with colors</li>"
-                "<li><b>cluster</b> (5 cats): all shown</li>"
-                '<li><b>sample_id</b> (50 cats): first 30 shown + "...+20"</li>'
+                "<li><b>cell_type</b>: 4 category labels + 4 colors from <code>uns</code></li>"
+                "<li><b>cluster</b>: 5 category labels (no colors)</li>"
+                "<li><b>sample_id</b>: first 30 of 50 category labels (truncated by <code>max_lazy_categories=30</code>)</li>"
                 "</ul>"
-                "<p style='margin: 5px 0;'><b>What the repr avoids loading:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<p style='margin: 5px 0;'><b>What is NOT loaded:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
                 "<li>Numeric data (dask arrays not computed)</li>"
-                "<li>Category codes (only category labels are read)</li>"
-                "<li>Categories beyond <code>max_lazy_categories</code> limit</li>"
-                "<li>Colors for truncated categories (only loads colors for displayed cats)</li>"
-                "</ul>",
+                "<li>Category codes (only labels, not which cell has which category)</li>"
+                "<li>Categories beyond the <code>max_lazy_categories</code> limit</li>"
+                "<li>Non-categorical column values (show as '(lazy)')</li>"
+                "</ul>"
+                "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                "<b>Compare with 8c</b> to see the same object with zero disk I/O.</p>",
             ))
 
             # Test 8c: Lazy AnnData with max_lazy_categories=0 (metadata-only mode)
@@ -1532,17 +1556,23 @@ def main():  # noqa: PLR0915, PLR0912
                 "8c. Lazy AnnData (Metadata-Only Mode)",
                 metadata_only_html,
                 "<code>ad.settings.repr_html_max_lazy_categories = 0</code><br>"
-                "<p style='margin: 5px 0;'><b>Zero disk I/O mode:</b> Set <code>repr_html_max_lazy_categories=0</code> to "
-                "skip all data loading from disk.</p>"
-                "<p style='margin: 5px 0;'><b>What's shown:</b></p>"
+                "<p style='margin: 5px 0;'><b>Same object as 8b, but with zero disk I/O!</b></p>"
+                "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                "Compare this output to 8b — this is the exact same lazy AnnData object, "
+                "but with <code>max_lazy_categories=0</code> to prevent any data loading.</p>"
+                "<p style='margin: 5px 0;'><b>What's NOT loaded (unlike 8b):</b></p>"
                 "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li>All categorical columns show <code>(N categories)</code> - count from dtype metadata (already in memory)</li>"
-                "<li>Category labels are NOT loaded from disk</li>"
-                "<li>Colors from <code>uns</code> are NOT loaded (skips <code>.compute()</code> on dask arrays)</li>"
-                "<li>Type column still shows <code>category (N, lazy)</code> with the count</li>"
+                "<li>Category labels — only shows <code>(N categories)</code> count from dtype metadata</li>"
+                "<li>Colors from <code>uns</code> — no color dots displayed</li>"
                 "</ul>"
-                "<p style='margin: 5px 0;'><b>Use case:</b> Quick inspection of lazy AnnData when you want to avoid "
-                "all data loading from disk, for the fastest possible repr.</p>",
+                "<p style='margin: 5px 0;'><b>What IS shown (from already-loaded metadata):</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li>Category count (e.g., '4 categories') from the dtype (already in memory)</li>"
+                "<li>Column names and types</li>"
+                "<li>Array shapes and dtypes</li>"
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>Use case:</b> Fastest possible repr when you want to avoid "
+                "all disk access (e.g., network-mounted storage, very large files).</p>",
             ))
 
         except (OSError, ImportError, TypeError) as e:
@@ -1575,18 +1605,19 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "9. Backed AnnData (H5AD File)",
             adata_backed._repr_html_(),
-            "<strong>File-backed mode — X matrix stays on disk!</strong><br>"
+            "<strong>File-backed mode via <code>read_h5ad(backed='r')</code></strong><br>"
             f"<code>{tmp_path}</code><br><br>"
-            "What the repr reads (safe, small metadata):<br>"
-            "<ul>"
+            "<p style='margin: 5px 0;'><b>Key difference from 8b (lazy):</b> Backed mode loads obs/var "
+            "DataFrames fully into memory, while lazy mode keeps them as dask-backed xarray.</p>"
+            "<p style='margin: 5px 0;'><b>What the repr reads:</b></p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
             "<li><code>X.shape</code>, <code>X.dtype</code>, <code>X.nnz</code> — from HDF5 attributes</li>"
-            "<li><code>obs</code>/<code>var</code> DataFrames — loaded in memory (typically small)</li>"
+            "<li><code>obs</code>/<code>var</code> DataFrames — fully loaded in memory</li>"
             "<li><code>obsm</code>/<code>varm</code> shapes — from HDF5 dataset attributes</li>"
             "</ul>"
-            "What it does NOT load:<br>"
-            "<ul>"
-            "<li>The actual X matrix data (stays memory-mapped on disk)</li>"
-            "<li>No slicing or indexing into X</li>"
+            "<p style='margin: 5px 0;'><b>What stays on disk:</b></p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li>The actual X matrix data (memory-mapped, not loaded)</li>"
             "</ul>",
         ))
     finally:
@@ -1606,6 +1637,10 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "10. Deeply Nested AnnData (tests max depth)",
         outer._repr_html_(),
+        "AnnData with 3 levels of nesting in uns (outer → level1 → level2 → level3). "
+        "Tests the max_depth limit for nested repr. By default, nesting stops at depth 3, "
+        "so level3 should show as a collapsed entry without further expansion. "
+        "Click expand arrows to drill into the nested structure.",
     ))
 
     # Test 11: Many categories (tests truncation and wrap button)
@@ -1680,8 +1715,14 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "11. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
-        "Default max_categories is 100; set to 20 here to test truncation. "
-        "cell_type has 30 categories (shows 20 + '...+10'). Click ⋯ button to expand.",
+        "<p style='margin: 5px 0;'><b>Category truncation with <code>max_categories=20</code></b> (default: 100)</p>"
+        "<ul style='margin: 5px 0; padding-left: 20px;'>"
+        "<li><b>cell_type</b> (30 cats): shows first 20 with colors, then '...+10' indicator</li>"
+        "<li><b>batch</b> (20 cats): shows all 20 (exactly at limit)</li>"
+        "</ul>"
+        "<p style='margin: 5px 0;'>Click the <b>▼</b> arrow button to expand and see all categories. "
+        "The expand button appears only when categories are truncated. "
+        "Colors are shown for all displayed categories from <code>uns['{col}_colors']</code>.</p>",
     ))
     ad.settings.repr_html_max_categories = original_max_cats
 
@@ -1772,8 +1813,16 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "12. Uns Value Previews and Type Hints",
         adata_uns._repr_html_(),
-        "Shows: (1) preview values for simple types, (2) 'analysis_history' with registered TypeFormatter "
-        "(shows '3 runs · params: method=umap...'), (3) unregistered type hints show 'import X to enable' message.",
+        "<p style='margin: 5px 0;'><b>Uns entries with value previews and type hint system</b></p>"
+        "<ul style='margin: 5px 0; padding-left: 20px;'>"
+        "<li><b>Simple types:</b> strings, ints, floats, bools, None show inline previews</li>"
+        "<li><b>long_string:</b> truncated with ellipsis when exceeding max length</li>"
+        "<li><b>small_list/dict:</b> shows content preview; larger_dict shows key count</li>"
+        "<li><b>analysis_history:</b> custom <code>TypeFormatter</code> renders '3 runs · params: ...'</li>"
+        "<li><b>unregistered_data:</b> has <code>__anndata_repr__</code> hint but no formatter → shows 'import X to enable'</li>"
+        "</ul>"
+        "<p style='margin: 5px 0;'>The <code>__anndata_repr__</code> type hint system allows packages to register "
+        "custom renderers for their data types stored in uns.</p>",
     ))
 
     # Test 13: No JavaScript (graceful degradation)
@@ -1835,7 +1884,7 @@ def main():  # noqa: PLR0915, PLR0912
             "to show 'obst' and 'vart' sections "
             "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>). "
             "The 'obst' section appears after 'obsm' and 'vart' after 'varm'. "
-            "Click the expand button (▸) to see an SVG tree visualization. "
+            "Click the <b>▼</b> arrow button to see an SVG tree visualization. "
             "Trees with >30 leaves show a text message instead of the full preview.",
         ))
 
@@ -1908,7 +1957,7 @@ def main():  # noqa: PLR0915, PLR0912
         "The name column width should expand to fit longer names but be capped by "
         "<code>repr_html_max_field_width</code> (default: 400px). Names exceeding the max width "
         "show an ellipsis (...) via CSS text-overflow; hover over truncated names to see the "
-        "full name in a tooltip.",
+        "full name in a tooltip. The copy button still copies the full field name even when truncated.",
     ))
 
     # Test 17: README icon
@@ -2098,8 +2147,13 @@ For more details, see the full documentation.
     sections.append((
         "21a. Raw Section - Dense Matrix with var and varm",
         adata_raw._repr_html_(),
-        "Shows the <code>.raw</code> attribute with dense matrix, var columns, and varm. "
-        "Click the raw row to expand and see the full Raw repr with X, var, and varm sections.",
+        "<p style='margin: 5px 0;'><b>Typical workflow: filtered AnnData with .raw preserving all genes</b></p>"
+        "<ul style='margin: 5px 0; padding-left: 20px;'>"
+        "<li><b>Current:</b> 100 × 500 (filtered to highly variable genes)</li>"
+        "<li><b>Raw:</b> 100 × 2,000 (original unfiltered data)</li>"
+        "</ul>"
+        "<p style='margin: 5px 0;'>Click the <b>raw</b> row to expand and see the nested repr with "
+        "X (dense), var (2 columns), and varm (PCs). The raw section header shows the shape difference.</p>",
     ))
 
     # Test 21b: Raw with sparse matrix
@@ -2115,7 +2169,10 @@ For more details, see the full documentation.
     sections.append((
         "21b. Raw Section - Sparse Matrix",
         adata_sparse_raw._repr_html_(),
-        "Raw with sparse CSR matrix. The X section should show sparsity info.",
+        "<p style='margin: 5px 0;'><b>Raw with sparse CSR matrix</b></p>"
+        "<p style='margin: 5px 0;'>Both current X (10% density) and raw X (5% density) are sparse. "
+        "The expanded raw section should show CSR matrix type and sparsity percentage. "
+        "Compare with 21a which uses dense matrices.</p>",
     ))
 
     # Test 21c: Raw with no varm (minimal raw)
@@ -2135,7 +2192,10 @@ For more details, see the full documentation.
     sections.append((
         "21c. Raw Section - Minimal (no varm)",
         adata_minimal_raw._repr_html_(),
-        "Raw with only X and var (no varm). Shows graceful handling of optional attributes.",
+        "<p style='margin: 5px 0;'><b>Minimal raw: only X and var (no varm)</b></p>"
+        "<p style='margin: 5px 0;'>Tests that raw section renders correctly when varm is empty. "
+        "The expanded raw should show only X and var sections, with no varm section visible. "
+        "Compare with 21a which includes varm['PCs'].</p>",
     ))
 
     # Test 21d: Raw with empty var columns
@@ -2152,7 +2212,10 @@ For more details, see the full documentation.
     sections.append((
         "21d. Raw Section - Empty var columns",
         adata_empty_var_raw._repr_html_(),
-        "Raw where var has no columns (only index). The meta info should not show 'var: 0 cols'.",
+        "<p style='margin: 5px 0;'><b>Edge case: raw.var has no columns (only index)</b></p>"
+        "<p style='margin: 5px 0;'>Tests graceful handling when raw.var is just an index with no annotation columns. "
+        "The raw meta info should show the shape but not display 'var: 0 cols' or an empty var section. "
+        "This is the minimal valid raw structure (just X data with gene names in the index).</p>",
     ))
 
     # Test 22: Unknown sections and error handling
