@@ -436,7 +436,7 @@ def test_lazy_categorical_dtype_equality(tmp_path: Path):
 
     # Test string comparison (dtype == "category")
     assert dtype == "category"
-    assert not (dtype == "int64")
+    assert dtype != "int64"
 
     # Test comparison with regular CategoricalDtype
     regular_dtype = pd.CategoricalDtype(categories=["a", "b", "c"], ordered=False)
@@ -444,21 +444,20 @@ def test_lazy_categorical_dtype_equality(tmp_path: Path):
 
     # Test comparison with different categories
     different_dtype = pd.CategoricalDtype(categories=["x", "y", "z"], ordered=False)
-    assert not (dtype == different_dtype)
+    assert dtype != different_dtype
 
     # Test comparison with different ordered flag
     ordered_dtype = pd.CategoricalDtype(categories=["a", "b", "c"], ordered=True)
-    assert not (dtype == ordered_dtype)
+    assert dtype != ordered_dtype
 
     # Test comparison with non-CategoricalDtype
-    assert not (dtype == np.dtype("int64"))
-    assert not (dtype == 123)
-    assert not (dtype == None)
+    assert dtype != np.dtype("int64")
+    assert dtype != 123
+    assert dtype is not None
 
 
 def test_lazy_categorical_dtype_equality_same_array(tmp_path: Path):
     """Test LazyCategoricalDtype equality between instances with same underlying array."""
-    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     categories = ["x", "y", "z"]
     adata = AnnData(
@@ -586,3 +585,32 @@ def test_lazy_categorical_dtype_equality_with_none_categories(tmp_path: Path):
 
     # Both have None categories, should be equal
     assert dtype1 == dtype2
+
+
+def test_nullable_string_index_decoding(tmp_path: Path):
+    """Test that nullable string indices are properly decoded from bytes.
+
+    HDF5 stores strings as bytes. When reading nullable-string-array indices,
+    they should be decoded to proper strings, not converted using str() which
+    would produce "b'...'" representations.
+
+    Regression test for https://github.com/scverse/anndata/issues/2271
+    """
+    expected_obs = ["cell_A", "cell_B", "cell_C", "cell_D", "cell_E"]
+    expected_var = ["gene_X", "gene_Y", "gene_Z"]
+
+    adata = AnnData(
+        np.zeros((len(expected_obs), len(expected_var))),
+        obs=dict(obs_names=expected_obs),
+        var=dict(var_names=expected_var),
+    )
+
+    path = tmp_path / "test.h5ad"
+    adata.write_h5ad(path)
+
+    lazy = read_lazy(path)
+    obs_names = list(lazy.obs_names)
+    var_names = list(lazy.var_names)
+
+    assert obs_names == expected_obs
+    assert var_names == expected_var
