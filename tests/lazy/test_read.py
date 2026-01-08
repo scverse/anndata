@@ -232,3 +232,32 @@ def test_chunks_df(
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks
+
+
+def test_nullable_string_index_decoding(tmp_path: Path):
+    """Test that nullable string indices are properly decoded from bytes.
+
+    HDF5 stores strings as bytes. When reading nullable-string-array indices,
+    they should be decoded to proper strings, not converted using str() which
+    would produce "b'...'" representations.
+
+    Regression test for https://github.com/scverse/anndata/issues/2271
+    """
+    expected_obs = ["cell_A", "cell_B", "cell_C", "cell_D", "cell_E"]
+    expected_var = ["gene_X", "gene_Y", "gene_Z"]
+
+    adata = AnnData(
+        np.zeros((len(expected_obs), len(expected_var))),
+        obs=dict(obs_names=expected_obs),
+        var=dict(var_names=expected_var),
+    )
+
+    path = tmp_path / "test.h5ad"
+    adata.write_h5ad(path)
+
+    lazy = read_lazy(path)
+    obs_names = list(lazy.obs_names)
+    var_names = list(lazy.var_names)
+
+    assert obs_names == expected_obs
+    assert var_names == expected_var
