@@ -38,6 +38,7 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
+    has_xp,
     is_zarr_v2,
 )
 from anndata.utils import asarray
@@ -64,6 +65,19 @@ except ImportError:
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
 
+# jax extension
+
+# Enable DLPack interop for JAX, CuPy, etc., only if installed
+try:
+    import jax
+    import jax.numpy as jnp
+
+    # Enable JAX to use 64-bit floats by default
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+except ImportError:
+    jnp = None
+
+# handle fast-array-utils presence for dask sparray support
 try:
     import fast_array_utils as _
 except ImportError:
@@ -280,10 +294,12 @@ def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
-    X_dtype: np.dtype = np.float32,
+    # controlling column types for obs and var
+    # numpy + pandas only construct
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
+    # numpy + pandas only construct
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
@@ -292,6 +308,7 @@ def gen_adata(  # noqa: PLR0913
     obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
+    # numpy specific
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
 ) -> AnnData:
@@ -343,18 +360,21 @@ def gen_adata(  # noqa: PLR0913
 
     if X_type is None:
         X = None
+        xp = np
     else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype("float32"))
+        xp = X.__array_namespace__() if has_xp(X) else np
 
+    # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
-        array=np.random.random((M, 50)),
+        array=xp.asarray(random_state.random((M, 50))),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     varm = dict(
-        array=np.random.random((N, 50)),
+        array=xp.asarray(random_state.random((N, 50))),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -384,7 +404,7 @@ def gen_adata(  # noqa: PLR0913
         shape=(N, 100),
     )
     layers = dict(
-        array=np.random.random((M, N)),
+        array=xp.asarray(random_state.random((M, N))),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -397,14 +417,14 @@ def gen_adata(  # noqa: PLR0913
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)),
+        array=xp.asarray(random_state.random((M, M))),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
         sparse.random(M, M, format=sparse_fmt, random_state=random_state)
     )
     varp = dict(
-        array=np.random.random((N, N)),
+        array=xp.asarray(random_state.random((N, N))),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(
@@ -416,7 +436,7 @@ def gen_adata(  # noqa: PLR0913
             scalar_str="str",
             scalar_int=42,
             scalar_float=3.0,
-            nested_further=dict(array=np.arange(5)),
+            nested_further=dict(array=xp.arange(5)),
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
@@ -580,16 +600,26 @@ def report_name(func):
 
 
 @report_name
-def _assert_equal(a, b):
+def _assert_equal(a, b, exact):
     """Allows reporting elem name for simple assertion."""
-    assert a == b
+    if has_xp(a) and not np.isscalar(a):
+        xp = a.__array_namespace__()
+        # really force it on b
+        b = xp.array(asarray(b))
+        if exact:
+            assert xp.all(a == b)
+        else:
+            # for padding with NaN
+            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
+    else:
+        assert a == b
 
 
 @singledispatch
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    _assert_equal(a, b, _elem_name=elem_name)
+    _assert_equal(a, b, exact, _elem_name=elem_name)
 
 
 @assert_equal.register(CupyArray)
@@ -879,6 +909,22 @@ def _(a):
 
 
 @singledispatch
+def as_dense_jax_array(a):
+    # for cases where jax does not support sparse arrays
+    return jnp.asarray(asarray(a))
+
+
+@as_dense_jax_array.register(CSMatrix)
+def _(a):
+    return jnp.array(a.toarray())
+
+
+@as_dense_jax_array.register(DaskArray)
+def _(a):
+    return jnp.array(a.compute())  # fallback for lazy arrays
+
+
+@singledispatch
 def _as_sparse_dask(
     a: NDArray | CSArray | CSMatrix | DaskArray,
     *,
@@ -1080,6 +1126,9 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
 ]
+
+if jnp is not None:
+    BASE_MATRIX_PARAMS.append(pytest.param(as_dense_jax_array, id="jax_array"))
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
