@@ -554,7 +554,7 @@ def concat_on_disk(  # noqa: PLR0913
     See :func:`anndata.concat` for the semantics.
     The following examples highlight the differences this function has.
 
-    First, let's get some "big" datasets with a compatible ``var`` axis:
+    First, let’s get some “big” datasets with a compatible ``var`` axis:
 
     >>> import pooch
     >>> import scanpy as sc
