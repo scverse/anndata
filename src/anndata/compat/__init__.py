@@ -72,6 +72,26 @@ H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
 
+# h5py recommends using .astype("T") over .asstr() when using numpy ≥2
+if TYPE_CHECKING:
+    from h5py._hl.dataset import AsStrView as H5AsStrView
+    from h5py._hl.dataset import AsTypeView as H5AsTypeView
+else:
+    try:
+        try:
+            from h5py._hl.dataset import AsStrView as H5AsStrView
+            from h5py._hl.dataset import AsTypeView as H5AsTypeView
+        except ImportError:
+            # h5py 3.11 uses AsStrWrapper/AstypeWrapper (lowercase 't')
+            from h5py._hl.dataset import AsStrWrapper as H5AsStrView
+            from h5py._hl.dataset import AstypeWrapper as H5AsTypeView
+    except ImportError:  # pragma: no cover
+        warn("AsTypeView changed import location", DeprecationWarning, stacklevel=1)
+        _ds = h5py.File.in_memory().create_dataset("x", shape=(), dtype="S1")
+        H5AsStrView = type(_ds.asstr())
+        H5AsTypeView = type(_ds.astype("U1"))
+        del _ds
+
 
 #############################
 # Optional deps
@@ -210,11 +230,10 @@ else:
 # IO helpers
 #############################
 
+NUMPY_2 = Version(version("numpy")) >= Version("2")
 
 NULLABLE_NUMPY_STRING_TYPE = (
-    np.dtype("O")
-    if Version(version("numpy")) < Version("2")
-    else np.dtypes.StringDType(na_object=pd.NA)
+    np.dtypes.StringDType(na_object=pd.NA) if NUMPY_2 else np.dtype("O")
 )
 
 PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
