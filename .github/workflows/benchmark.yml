@@ -32,7 +32,7 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           # no blob filter so asv can checkout other commits
