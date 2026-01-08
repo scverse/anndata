@@ -1509,7 +1509,7 @@ def test_concat_size_0_axis(
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
+    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype())
     a = gen_adata(
         (5, 7),
         obs_dtypes=col_dtypes,
