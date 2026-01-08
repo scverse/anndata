@@ -56,7 +56,7 @@ from .core import (
 )
 from .css import get_css
 from .javascript import get_javascript
-from .lazy import is_lazy_adata
+from .lazy import get_lazy_backing_info, is_lazy_adata
 from .registry import (
     FormatterContext,
     formatter_registry,
@@ -629,7 +629,24 @@ def _render_header(
             )
 
     if is_lazy_adata(adata):
-        parts.append(render_badge("Lazy", CSS_BADGE_LAZY))
+        lazy_info = get_lazy_backing_info(adata)
+        lazy_format = lazy_info.get("format", "")
+        if lazy_format:
+            parts.append(render_badge(f"Lazy ({lazy_format})", CSS_BADGE_LAZY))
+        else:
+            parts.append(render_badge("Lazy", CSS_BADGE_LAZY))
+        # Show file path for lazy AnnData (similar to backed)
+        lazy_filename = lazy_info.get("filename", "")
+        if lazy_filename:
+            path_style = (
+                "font-family:ui-monospace,monospace;font-size:11px;"
+                "color:var(--anndata-text-secondary, #6c757d);"
+            )
+            parts.append(
+                f'<span class="adata-file-path" style="{path_style}">'
+                f"{escape_html(lazy_filename)}"
+                f"</span>"
+            )
 
     # Check for extension type (not standard AnnData)
     if type_name != "AnnData":

@@ -383,3 +383,153 @@ class TestLazyCategoryLoading:
             html_metadata = generate_repr_html(lazy_adata, max_lazy_categories=0)
             assert "#ff0000" not in html_metadata
             assert "(2 categories)" in html_metadata
+
+
+class TestLazyBackingInfo:
+    """Tests for lazy AnnData backing file info extraction."""
+
+    def test_get_lazy_backing_info_non_lazy_returns_empty(self):
+        """Test that non-lazy AnnData returns empty backing info."""
+        from anndata._repr.lazy import get_lazy_backing_info
+
+        adata = AnnData(np.random.randn(10, 5).astype(np.float32))
+        info = get_lazy_backing_info(adata)
+
+        assert info == {"filename": "", "format": ""}
+
+    def test_is_lazy_adata_false_for_regular(self):
+        """Test that is_lazy_adata returns False for regular AnnData."""
+        from anndata._repr.lazy import is_lazy_adata
+
+        adata = AnnData(np.random.randn(10, 5).astype(np.float32))
+        assert is_lazy_adata(adata) is False
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_lazy_backing_info_h5ad(self, tmp_path):
+        """Test backing info extraction from lazy H5AD."""
+        import h5py
+
+        from anndata._repr.lazy import get_lazy_backing_info, is_lazy_adata
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "A"])
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy_adata = read_lazy(f)
+
+            assert is_lazy_adata(lazy_adata) is True
+
+            info = get_lazy_backing_info(lazy_adata)
+            assert info["format"] == "H5AD"
+            assert str(path) in info["filename"] or info["filename"] != ""
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_lazy_backing_info_zarr(self, tmp_path):
+        """Test backing info extraction from lazy Zarr."""
+        from anndata._repr.lazy import get_lazy_backing_info, is_lazy_adata
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(sp.random(50, 20, density=0.1, format="csr", dtype=np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "A"])
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy_adata = read_lazy(path)
+
+        assert is_lazy_adata(lazy_adata) is True
+
+        info = get_lazy_backing_info(lazy_adata)
+        assert info["format"] == "Zarr"
+        # Zarr path should be extracted
+        assert str(path) in info["filename"] or info["filename"] != ""
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_lazy_badge_h5ad_in_html(self, tmp_path, validate_html):
+        """Test that lazy H5AD shows correct badge in HTML repr."""
+        import h5py
+
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy_adata = read_lazy(f)
+            html = lazy_adata._repr_html_()
+
+            v = validate_html(html)
+            # Should show "Lazy (H5AD)" badge with lazy badge styling
+            v.assert_badge_shown("lazy")
+            v.assert_text_visible("Lazy")
+            v.assert_text_visible("H5AD")
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_lazy_badge_zarr_in_html(self, tmp_path, validate_html):
+        """Test that lazy Zarr shows correct badge in HTML repr."""
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(sp.random(50, 20, density=0.1, format="csr", dtype=np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy_adata = read_lazy(path)
+        html = lazy_adata._repr_html_()
+
+        v = validate_html(html)
+        # Should show "Lazy (Zarr)" badge with lazy badge styling
+        v.assert_badge_shown("lazy")
+        v.assert_text_visible("Lazy")
+        v.assert_text_visible("Zarr")
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_lazy_file_path_in_html_h5ad(self, tmp_path, validate_html):
+        """Test that lazy H5AD file path appears in HTML repr."""
+        import h5py
+
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy_adata = read_lazy(f)
+            html = lazy_adata._repr_html_()
+
+            v = validate_html(html)
+            # File path should appear in visible content
+            v.assert_text_visible(str(path))
+            # Also verify it's in the file path element
+            v.assert_element_exists(".adata-file-path")
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_lazy_file_path_in_html_zarr(self, tmp_path, validate_html):
+        """Test that lazy Zarr file path appears in HTML repr."""
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(sp.random(50, 20, density=0.1, format="csr", dtype=np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy_adata = read_lazy(path)
+        html = lazy_adata._repr_html_()
+
+        v = validate_html(html)
+        # File path should appear in visible content
+        v.assert_text_visible(str(path))
+        # Also verify it's in the file path element
+        v.assert_element_exists(".adata-file-path")

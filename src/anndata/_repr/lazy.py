@@ -83,6 +83,92 @@ def is_lazy_adata(obj: Any) -> bool:
     return obs.__class__.__name__ == "Dataset2D"
 
 
+def _extract_path_from_lazy_array(arr: Any) -> dict[str, Any] | None:
+    """Extract file path and format from a lazy array (CategoricalArray/MaskedArray)."""
+    from pathlib import Path
+
+    base_path = arr.base_path_or_zarr_group
+    file_format = getattr(arr, "file_format", "")
+
+    # H5AD files have a Path as base_path
+    if isinstance(base_path, Path):
+        fmt = "H5AD" if file_format == "h5" else "Zarr"
+        return {"filename": str(base_path), "format": fmt}
+
+    # For zarr groups, extract the store path (v2 uses .path, v3 uses .root)
+    if hasattr(base_path, "store"):
+        store = base_path.store
+        store_path = getattr(store, "path", None) or getattr(store, "root", None)
+        if store_path is not None:
+            return {"filename": str(store_path), "format": "Zarr"}
+        return {"filename": "", "format": "Zarr"}
+
+    return None
+
+
+def get_lazy_backing_info(obj: Any) -> dict[str, Any]:
+    """Get backing file information from a lazy AnnData.
+
+    Extracts the file path and format from the underlying lazy arrays
+    (CategoricalArray or MaskedArray) in obs/var columns.
+
+    Parameters
+    ----------
+    obj
+        A lazy AnnData object (from read_lazy())
+
+    Returns
+    -------
+    Dictionary with:
+        - 'filename': str - path to the backing file (empty if not found)
+        - 'format': str - 'H5AD' or 'Zarr' (empty if not found)
+    """
+    empty_result: dict[str, Any] = {"filename": "", "format": ""}
+
+    if not is_lazy_adata(obj):
+        return empty_result
+
+    # Try to get path from adata.file (set for H5AD files opened via path)
+    file_obj = getattr(obj, "file", None)
+    if file_obj is not None:
+        filename = getattr(file_obj, "filename", None)
+        if filename is not None:
+            filename_str = str(filename)
+            fmt = "H5AD" if filename_str.endswith(".h5ad") else "Zarr"
+            return {"filename": filename_str, "format": fmt}
+
+    # Try to extract from underlying lazy arrays in obs/var
+    obs = getattr(obj, "obs", None)
+    ds = getattr(obs, "ds", None) if obs is not None and hasattr(obs, "ds") else None
+    if ds is None:
+        return empty_result
+
+    # Search through columns for a backing array with path info
+    try:
+        from anndata.experimental.backed._lazy_arrays import (
+            CategoricalArray,
+            MaskedArray,
+        )
+
+        for col_name in ds.data_vars:
+            col = ds[col_name]
+            # Navigate: DataArray -> Variable -> LazilyIndexedArray -> BackingArray
+            if not (hasattr(col, "variable") and hasattr(col.variable, "_data")):
+                continue
+            lazy_indexed = col.variable._data
+            if not hasattr(lazy_indexed, "array"):
+                continue
+            arr = lazy_indexed.array
+            if isinstance(arr, (CategoricalArray, MaskedArray)):
+                result = _extract_path_from_lazy_array(arr)
+                if result is not None:
+                    return result
+    except ImportError:
+        pass
+
+    return empty_result
+
+
 def is_lazy_column(series: Any) -> bool:
     """
     Check if a Series-like object is lazy (backed by remote/lazy storage).

@@ -1525,6 +1525,7 @@ def main():  # noqa: PLR0915, PLR0912
                 "<code>anndata.experimental.read_lazy()</code><br>"
                 "<p style='margin: 5px 0;'><b>File-backed lazy AnnData — category labels loaded from disk!</b></p>"
                 "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                "The header shows a <b>Lazy (H5AD)</b> badge and the <b>file path</b> (similar to backed mode). "
                 "Unlike 8a (in-memory) and 8c (metadata-only), this repr <b>actually reads data from the HDF5 file</b>:</p>"
                 "<p style='margin: 5px 0;'><b>What IS loaded from disk:</b></p>"
                 "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
@@ -1559,7 +1560,8 @@ def main():  # noqa: PLR0915, PLR0912
                 "<p style='margin: 5px 0;'><b>Same object as 8b, but with zero disk I/O!</b></p>"
                 "<p style='margin: 5px 0; font-size: 0.9em;'>"
                 "Compare this output to 8b — this is the exact same lazy AnnData object, "
-                "but with <code>max_lazy_categories=0</code> to prevent any data loading.</p>"
+                "but with <code>max_lazy_categories=0</code> to prevent any data loading. "
+                "The header still shows the <b>Lazy (H5AD)</b> badge and <b>file path</b>.</p>"
                 "<p style='margin: 5px 0;'><b>What's NOT loaded (unlike 8b):</b></p>"
                 "<ul style='margin: 5px 0; padding-left: 20px;'>"
                 "<li>Category labels — only shows <code>(N categories)</code> count from dtype metadata</li>"
@@ -1581,6 +1583,65 @@ def main():  # noqa: PLR0915, PLR0912
             if h5_file is not None:
                 h5_file.close()
             Path(tmp_path).unlink()
+
+        # Test 8d: Lazy AnnData with Zarr format
+        print("  8d. Lazy AnnData (Zarr format)")
+        import shutil
+
+        zarr_path = Path(tempfile.mkdtemp(suffix=".zarr"))
+        try:
+            import zarr
+
+            # Create test data for zarr
+            adata_zarr_save = AnnData(
+                sp.random(800, 400, density=0.1, format="csr", dtype=np.float32)
+            )
+            adata_zarr_save.obs["tissue"] = pd.Categorical(
+                np.random.choice(["Brain", "Heart", "Liver", "Lung", "Kidney"], 800)
+            )
+            adata_zarr_save.uns["tissue_colors"] = [
+                "#e41a1c",
+                "#377eb8",
+                "#4daf4a",
+                "#984ea3",
+                "#ff7f00",
+            ]
+            adata_zarr_save.obs["donor"] = pd.Categorical(
+                np.random.choice([f"D{i}" for i in range(10)], 800)
+            )
+            adata_zarr_save.obs["n_counts"] = np.random.randint(1000, 50000, 800)
+            adata_zarr_save.var["gene_name"] = [f"GENE{i}" for i in range(400)]
+            adata_zarr_save.obsm["X_umap"] = np.random.randn(800, 2).astype(np.float32)
+
+            # Write to zarr
+            adata_zarr_save.write_zarr(zarr_path)
+
+            # Read lazily from zarr
+            zarr_store = zarr.open_group(zarr_path, mode="r")
+            adata_lazy_zarr = read_lazy(zarr_store)
+
+            sections.append((
+                "8d. Lazy AnnData (Zarr Format)",
+                adata_lazy_zarr._repr_html_(),
+                "<code>anndata.experimental.read_lazy(zarr_store)</code><br>"
+                "<p style='margin: 5px 0;'><b>Lazy AnnData backed by Zarr storage</b></p>"
+                "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                "The header shows a <b>Lazy (Zarr)</b> badge and the <b>zarr directory path</b>. "
+                "Zarr is particularly useful for cloud storage (S3, GCS) and parallel access.</p>"
+                "<p style='margin: 5px 0;'><b>Same lazy behavior as 8b/8c:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
+                "<li>Category labels loaded on demand (respects <code>max_lazy_categories</code>)</li>"
+                "<li>Numeric columns show '(lazy)'</li>"
+                "<li>Arrays show shape/dtype without loading data</li>"
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>Zarr advantages:</b> chunked storage, cloud-native, "
+                "supports concurrent reads, consolidatable metadata.</p>",
+            ))
+
+        except (OSError, ImportError, TypeError) as e:
+            print(f"    Warning: Failed to create zarr lazy example: {e}")
+        finally:
+            shutil.rmtree(zarr_path, ignore_errors=True)
     else:
         print("  8b. Lazy AnnData (skipped - xarray not installed)")
 
