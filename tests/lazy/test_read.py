@@ -390,3 +390,151 @@ def test_cat_accessor_non_categorical(tmp_path: Path):
     assert col.cat.categories is None
     assert col.cat.codes is None
     assert col.cat.ordered is None
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categories_strided_slicing(tmp_path: Path, diskfmt: str):
+    """Test LazyCategories with step != 1 slicing."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategories
+
+    n_cats = 20
+    categories = [f"Cat_{i:02d}" for i in range(n_cats)]
+    adata = AnnData(
+        X=np.zeros((n_cats, 2)),
+        obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    cats = lazy.obs["cell_type"].cat.categories
+    assert isinstance(cats, LazyCategories)
+
+    # Test positive step > 1
+    step2 = cats[::2]
+    assert list(step2) == [f"Cat_{i:02d}" for i in range(0, 20, 2)]
+
+    step3 = cats[1::3]
+    assert list(step3) == [f"Cat_{i:02d}" for i in range(1, 20, 3)]
+
+    # Test negative step (reverse)
+    reversed_cats = cats[::-1]
+    assert list(reversed_cats) == [f"Cat_{i:02d}" for i in range(19, -1, -1)]
+
+    # Test negative step with stride
+    rev_step2 = cats[::-2]
+    assert list(rev_step2) == [f"Cat_{i:02d}" for i in range(19, -1, -2)]
+
+    # Test partial reverse
+    partial_rev = cats[10:5:-1]
+    assert list(partial_rev) == [f"Cat_{i:02d}" for i in range(10, 5, -1)]
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categories_edge_cases(tmp_path: Path, diskfmt: str):
+    """Test LazyCategories edge cases: empty slices, out of bounds, etc."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategories
+
+    n_cats = 10
+    categories = [f"Cat_{i}" for i in range(n_cats)]
+    adata = AnnData(
+        X=np.zeros((n_cats, 2)),
+        obs=pd.DataFrame({"cell_type": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    cats = lazy.obs["cell_type"].cat.categories
+    assert isinstance(cats, LazyCategories)
+
+    # Empty slice
+    empty = cats[5:5]
+    assert len(empty) == 0
+
+    # Out of bounds slice (should clamp like numpy)
+    oob = cats[100:200]
+    assert len(oob) == 0
+
+    oob2 = cats[5:100]
+    assert list(oob2) == [f"Cat_{i}" for i in range(5, 10)]
+
+    # Single element slice
+    single = cats[3:4]
+    assert len(single) == 1
+    assert single[0] == "Cat_3"
+
+    # Out of bounds single index should raise
+    with pytest.raises(IndexError):
+        _ = cats[100]
+
+    with pytest.raises(IndexError):
+        _ = cats[-100]
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categories_methods(tmp_path: Path, diskfmt: str):
+    """Test LazyCategories helper methods: __contains__, tolist, __array__."""
+    from anndata.experimental.backed._lazy_arrays import LazyCategories
+
+    categories = ["apple", "banana", "cherry"]
+    adata = AnnData(
+        X=np.zeros((3, 2)),
+        obs=pd.DataFrame({"fruit": pd.Categorical(categories)}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    cats = lazy.obs["fruit"].cat.categories
+    assert isinstance(cats, LazyCategories)
+
+    # Test __contains__
+    assert "apple" in cats
+    assert "banana" in cats
+    assert "grape" not in cats
+
+    # Test tolist
+    cat_list = cats.tolist()
+    assert isinstance(cat_list, list)
+    assert cat_list == categories
+
+    # Test __array__ with copy parameter
+    arr1 = np.array(cats)
+    arr2 = np.array(cats, copy=True)
+    assert list(arr1) == categories
+    assert list(arr2) == categories
+
+    # Test __array__ with dtype
+    arr_obj = np.array(cats, dtype=object)
+    assert arr_obj.dtype == object
+
+
+@pytest.mark.parametrize("diskfmt", ["zarr", "h5ad"])
+def test_lazy_categories_nullable_strings(tmp_path: Path, diskfmt: str):
+    """Test LazyCategories with nullable string categories (ArrowStringArray)."""
+    pytest.importorskip("pyarrow")
+
+    # Create categorical with nullable string dtype
+    categories = pd.array(["type_a", "type_b", "type_c"], dtype="string[pyarrow]")
+    cat_data = pd.Categorical.from_codes([0, 1, 2, 0, 1], categories=categories)
+
+    adata = AnnData(
+        X=np.zeros((5, 2)),
+        obs=pd.DataFrame({"cell_type": cat_data}),
+    )
+
+    path = tmp_path / f"test.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+
+    lazy = read_lazy(path)
+    cats = lazy.obs["cell_type"].cat.categories
+
+    # Should still work - may return ArrowStringArray or converted array
+    assert len(cats) == 3
+    # Check we can access elements
+    assert cats[0] in ["type_a", "type_b", "type_c"]
+    assert cats[-1] in ["type_a", "type_b", "type_c"]

@@ -117,12 +117,19 @@ class LazyCategories:
         return len(self)
 
     @property
-    def dtype(self) -> np.dtype:
+    def dtype(self) -> np.dtype | pd.api.extensions.ExtensionDtype:
         """Data type of categories (cheap, metadata only)."""
         return self._cat_array._categories_array.dtype
 
     def __getitem__(self, key: int | slice) -> np.ndarray | str:
-        """Get categories by index with efficient partial reads."""
+        """Get categories by index with efficient partial reads.
+
+        Note
+        ----
+        For slices with ``step != 1`` (e.g., ``cats[::2]``), all elements in
+        the range are read first, then the step is applied. This is less
+        efficient than contiguous slices but preserves correctness.
+        """
         # If already cached, slice from cache
         if "categories" in self._cat_array.__dict__:
             return self._cat_array.categories[key]
@@ -143,6 +150,17 @@ class LazyCategories:
 
         # Slice access
         start, stop, step = key.indices(n_cats)
+
+        if step < 0:
+            # Negative step: read the range in forward order, then reverse and apply step
+            # For [::-1], indices() returns (n-1, -1, -1), so we read [0:n] then reverse
+            read_start = stop + 1 if stop >= 0 else 0
+            read_stop = start + 1
+            arr = read_elem_partial(
+                self._cat_array._categories_array, indices=slice(read_start, read_stop)
+            )
+            return arr[::-1] if step == -1 else arr[::-1][::(-step)]
+
         arr = read_elem_partial(
             self._cat_array._categories_array, indices=slice(start, stop)
         )
@@ -156,11 +174,29 @@ class LazyCategories:
         """Convert to numpy array (loads all data)."""
         arr = np.asarray(self._get_all())
         if dtype is not None:
-            return arr.astype(dtype)
+            arr = arr.astype(dtype, copy=False)
+        if copy:
+            arr = arr.copy()
         return arr
 
     def __repr__(self) -> str:
         return f"LazyCategories(n={len(self)})"
+
+    def __contains__(self, item) -> bool:
+        """Check if item is in categories.
+
+        Note
+        ----
+        This loads all categories into memory. For large category sets,
+        consider using partial reads if you only need to check a few items.
+        Efficient membership testing would require chunking awareness and
+        sorted categories, which is not guaranteed.
+        """
+        return item in self._get_all()
+
+    def tolist(self) -> list:
+        """Convert to Python list (loads all data)."""
+        return list(self._get_all())
 
     def _get_all(self) -> np.ndarray | pd.api.extensions.ExtensionArray:
         """Get all categories (uses CategoricalArray.categories cached_property)."""
@@ -429,6 +465,9 @@ class CatAccessor:
         return None
 
 
+# Register .cat accessor on xarray DataArrays at import time.
+# This is consistent with other import-time registrations in anndata
+# (e.g., da.register_chunk_type in compat/__init__.py).
 if find_spec("xarray"):
     import xarray as xr
 
