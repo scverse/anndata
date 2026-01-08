@@ -543,31 +543,32 @@ nullable_integer/values <zarr.core.Array '/nullable_integer/values' (4,) int64>
 ```
 
 (nullable-integer)=
-### Nullable integer specifications (v0.1.0)
+### Nullable integer specifications (v0.1.1)
 
 * Nullable integers MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0" | "0.1.1"`
 * The group MUST contain an integer valued array under the key `"values"`
-* The group MUST contain an boolean valued array under the key `"mask"`
+* The group MAY contain a boolean valued array under the key `"mask"` (it MUST contain `"mask"` for `"encoding-version": "0.1.0"`)
+* The `"values"` and `"mask"` arrays MUST be the same shape if both exist
 
 (nullable-boolean)=
-### Nullable boolean specifications (v0.1.0)
+### Nullable boolean specifications (v0.1.1)
 
 * Nullable booleans MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0" | "0.1.1"`
 * The group MUST contain an boolean valued array under the key `"values"`
-* The group MUST contain an boolean valued array under the key `"mask"`
-* The `"values"` and `"mask"` arrays MUST be the same shape
+* The group MAY contain a boolean valued array under the key `"mask"` (it MUST contain `"mask"` for `"encoding-version": "0.1.0"`)
+* The `"values"` and `"mask"` arrays MUST be the same shape if both exist
 
 (nullable-string-array)=
-### Nullable string specifications (v0.1.0)
+### Nullable string specifications (v0.1.1)
 
 * Nullable strings MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0"`
+* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0" | "0.1.1"`
 * The group’s attributes MAY contain `"na-value"` as an indicator for missing value semantics with the possible value `"NA"` or `"NaN"` described in [](#missing-value-semantics), and the default being `"NA"`
 * The group MUST contain a string valued array under the key `"values"`
-* The group MUST contain a boolean valued array under the key `"mask"`
-* The `"values"` and `"mask"` arrays MUST be the same shape
+* The group MAY contain a boolean valued array under the key `"mask"` (it MUST contain `"mask"` for `"encoding-version": "0.1.0"`)
+* The `"values"` and `"mask"` arrays MUST be the same shape if both exist
 
 (missing-value-semantics)=
 ### Missing value semantics
