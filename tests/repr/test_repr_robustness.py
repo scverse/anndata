@@ -599,7 +599,8 @@ class TestBrokenObjects:
 
     def test_get_categories_with_exploding_cat_accessor(self) -> None:
         """_get_categories_from_column should return [] when .cat raises."""
-        result = _get_categories_from_column(BrokenCategories())
+        with pytest.warns(UserWarning, match="Failed to extract categories"):
+            result = _get_categories_from_column(BrokenCategories())
         assert result == []
 
     def test_is_serializable_with_circular_reference(self) -> None:
@@ -644,7 +645,8 @@ class TestBrokenObjects:
             def shape(self) -> None:
                 raise TypeError("shape exploded")
 
-        output = formatter_registry.format_value(ShapeRaises(), context)
+        with pytest.warns(UserWarning, match="shape exploded"):
+            output = formatter_registry.format_value(ShapeRaises(), context)
         assert any(".shape" in w for w in output.warnings)
 
     def test_fallback_formatter_dtype_raises(self, context) -> None:
@@ -657,7 +659,8 @@ class TestBrokenObjects:
             def dtype(self) -> None:
                 raise TypeError("dtype exploded")
 
-        output = formatter_registry.format_value(DtypeRaises(), context)
+        with pytest.warns(UserWarning, match="dtype exploded"):
+            output = formatter_registry.format_value(DtypeRaises(), context)
         assert any(".dtype" in w for w in output.warnings)
 
     def test_fallback_formatter_broken_repr(self, context) -> None:
@@ -1196,7 +1199,8 @@ class TestErrorVisibility:
         adata = AnnData(np.zeros((3, 3)))
         adata.uns["exploding_shape"] = ExplodingShape()
 
-        html = adata._repr_html_()
+        with pytest.warns(UserWarning, match="BOOM! shape exploded"):
+            html = adata._repr_html_()
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1220,7 +1224,8 @@ class TestErrorVisibility:
         adata = AnnData(np.zeros((3, 3)))
         adata.uns["long_error"] = VeryLongError()
 
-        html = adata._repr_html_()
+        with pytest.warns(UserWarning, match="LONG_ERROR_MSG"):
+            html = adata._repr_html_()
         v = validate_html(html)
 
         v.assert_html_well_formed()

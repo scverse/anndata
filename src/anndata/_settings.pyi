@@ -55,5 +55,6 @@ class _AnnDataSettingsManager(SettingsManager):
     repr_html_max_field_width: int = 400
     repr_html_type_width: int = 220
     repr_html_max_lazy_categories: int = 100
+    repr_html_max_readme_size: int = 100_000
 
 settings: _AnnDataSettingsManager
