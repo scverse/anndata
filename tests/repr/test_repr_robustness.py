@@ -695,7 +695,7 @@ class TestThreadSafety:
         # Successful reprs should be valid HTML (not corrupted)
         for html in successful_reprs:
             # HTML can start with <style> or <div> depending on structure
-            assert html.startswith("<style") or html.startswith("<div"), (
+            assert html.startswith(("<style", "<div")), (
                 f"Corrupted HTML start: {html[:100]}"
             )
             assert "</div>" in html, "HTML missing closing div"
