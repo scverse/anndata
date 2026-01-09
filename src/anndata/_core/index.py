@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from functools import singledispatch, wraps
+from functools import singledispatch
 from itertools import repeat
 from typing import TYPE_CHECKING, cast, overload
 
@@ -15,6 +15,8 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+
+    from anndata.types import SupportsArrayApi
 
     from ..compat import Index, Index1D, Index1DNorm
 
@@ -193,21 +195,131 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     raise IndexError(msg)
 
 
-def subset_idx_to_numpy(func):
-    # TODO: What exactly should we be doing about this behavior?
-    # Some things like pandas dataframes *need* numpy indexers (as opposed to jax or something).
-    # Previously, for GPU arrays, there was no handling at all so things just errored.
-    @wraps(func)
-    def _subset_wrapper(
-        a, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
-    ):
-        subset_idx = tuple(
-            np.from_dlpack(axis_idx) if has_xp(axis_idx) else axis_idx
-            for axis_idx in subset_idx
-        )
-        return func(a, subset_idx)
+class IndexManager:
+    """Manages index arrays across multiple devices for efficient subsetting.
 
-    return _subset_wrapper
+    This class stores index arrays (for subsetting AnnData views) on different
+    devices and can produce the appropriate index array when subsetting arrays
+    that live on those devices. For numpy/pandas/sparse operations, use
+    ``np.asarray(index_manager)`` or let the ``__array__`` method be invoked.
+    """
+
+    _manager: dict[str, SupportsArrayApi]
+
+    def __init__(self, *, device: str, arr: SupportsArrayApi):
+        self._manager = {device: arr}
+
+    @classmethod
+    def from_array(cls, arr: SupportsArrayApi):
+        """Create an IndexManager from an array-api compatible array."""
+        return cls(device=arr.device, arr=arr)
+
+    def __array__(self) -> np.ndarray:
+        """Return numpy array for compatibility with numpy/pandas/sparse operations."""
+        if "cpu" not in self:
+            arr = self._manager[next(iter(self.keys()))]
+            self._manager["cpu"] = np.from_dlpack(arr.to_device("cpu"))
+        return np.from_dlpack(self._manager["cpu"])
+
+    def __contains__(self, device: str) -> bool:
+        """Check if an index array exists for the given device."""
+        return device in self._manager
+
+    def __len__(self) -> int:
+        """Return the length of the index array."""
+        return self._manager[next(iter(self._manager))].shape[0]
+
+    def __iter__(self):
+        """Iterate over the index values (as numpy for compatibility)."""
+        return iter(np.asarray(self))
+
+    def keys(self):
+        """Return the devices for which index arrays are available."""
+        return self._manager.keys()
+
+    @property
+    def dtype(self):
+        """Return the dtype of the index array."""
+        arr = self._manager[next(iter(self._manager))]
+        return arr.dtype
+
+    def add_array(self, arr: SupportsArrayApi):
+        """Add an index array for a specific device."""
+        self._manager[arr.device] = arr
+
+    def get_array_with_device(self, device: str) -> SupportsArrayApi:
+        """Get the index array for a specific device."""
+        return self._manager[device]
+
+    def get_for_array(self, arr: SupportsArrayApi) -> SupportsArrayApi:
+        """Get an index array on the same device as the input array.
+
+        If an index doesn't exist for the array's device, it will be
+        created by transferring from an existing device. If an index
+        exists but has a different array-api implementation, it will
+        be converted to match the input array's array-api.
+        """
+        device = arr.device
+        xp = arr.__array_namespace__()
+
+        if device in self._manager:
+            existing = self._manager[device]
+            existing_xp = existing.__array_namespace__()
+            # Check if array-api implementations match
+            if existing_xp is xp:
+                return existing
+            # Convert to matching array-api implementation
+            return xp.from_dlpack(existing, device=device)
+
+        # Transfer from an existing device
+        src_arr = self._manager[next(iter(self._manager))]
+        self._manager[device] = xp.from_dlpack(src_arr.to_device(device))
+        return self._manager[device]
+
+
+def _ensure_numpy_idx(
+    subset_idx: tuple,
+) -> tuple:
+    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+    return tuple(
+        np.asarray(idx) if isinstance(idx, IndexManager) else idx for idx in subset_idx
+    )
+
+
+def _prepare_array_api_idx(
+    a: SupportsArrayApi,
+    subset_idx: tuple,
+) -> tuple:
+    """Prepare indices for array-api subsetting, implementing np.ix_-like behavior.
+
+    For array-api arrays, this returns indices on the same device as `a` and
+    implements coordinate-based indexing similar to np.ix_.
+    """
+    xp = a.__array_namespace__()
+
+    def get_idx(idx):
+        if isinstance(idx, IndexManager):
+            return idx.get_for_array(a)
+        elif isinstance(idx, slice) or has_xp(idx):
+            return idx
+        else:
+            # Convert numpy/list to array-api array on the target device
+            return xp.asarray(idx, device=a.device)
+
+    processed = tuple(get_idx(idx) for idx in subset_idx)
+
+    # Implement np.ix_-like behavior for 2D indexing
+    if len(processed) == 2 and all(not isinstance(x, slice) for x in processed):
+        # For 2D fancy indexing, we need to reshape indices
+        # np.ix_ produces (n,1) and (1,m) shaped arrays for coordinate indexing
+        row_idx, col_idx = processed
+        # Use outer indexing pattern: first index rows, then index columns
+        # This is equivalent to a[row_idx][:, col_idx] but in one operation
+        row_idx = xp.reshape(row_idx, (-1, 1))
+        col_idx = xp.reshape(col_idx, (1, -1))
+        return (row_idx, col_idx)
+
+    return processed
 
 
 @singledispatch
@@ -215,19 +327,34 @@ def _subset(
     a: np.ndarray | pd.DataFrame,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
+    """Select a subset of array `a` using the given indices.
+
+    For numpy arrays with array indices (not slices), this uses np.ix_ for
+    coordinate-based indexing. For array-api arrays, it uses device-aware
+    indexing with IndexManager support.
+    """
+    # Check if this is an array-api array (not numpy)
+    if has_xp(a) and not isinstance(a, np.ndarray):
+        # Use array-api aware indexing
+        subset_idx = _prepare_array_api_idx(a, subset_idx)
+        return a[subset_idx]
+
+    # For numpy arrays and other types, ensure we have numpy indices
+    subset_idx = _ensure_numpy_idx(subset_idx)
+
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
-    # TODO: How to handle array-api here.
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
 
 
 @_subset.register(DaskArray)
-@subset_idx_to_numpy
 def _subset_dask(
     a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
+    # Dask uses numpy-style indexing, convert IndexManager to numpy
+    subset_idx = _ensure_numpy_idx(subset_idx)
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -237,11 +364,12 @@ def _subset_dask(
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
-@subset_idx_to_numpy
 def _subset_sparse(
     a: CSMatrix | CSArray,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
+    # Sparse matrices use numpy indexing, convert IndexManager to numpy
+    subset_idx = _ensure_numpy_idx(subset_idx)
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -253,11 +381,12 @@ def _subset_sparse(
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
-@subset_idx_to_numpy
 def _subset_df(
     df: pd.DataFrame | Dataset2D,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
+    # DataFrames use numpy indexing, convert IndexManager to numpy
+    subset_idx = _ensure_numpy_idx(subset_idx)
     return df.iloc[subset_idx]
 
 
@@ -265,6 +394,8 @@ def _subset_df(
 def _subset_awkarray(
     a: AwkArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
+    # Awkward arrays use numpy indexing, convert IndexManager to numpy
+    subset_idx = _ensure_numpy_idx(subset_idx)
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]

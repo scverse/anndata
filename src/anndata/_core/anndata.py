@@ -47,7 +47,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import IndexManager, _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -205,8 +205,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     # view attributes
     _adata_ref: AnnData | None
-    _oidx: Index1DNorm | None
-    _vidx: Index1DNorm | None
+    _oidx: Index1DNorm | IndexManager | None
+    _vidx: Index1DNorm | IndexManager | None
+
+    @staticmethod
+    def _to_numpy_idx(idx):
+        if isinstance(idx, IndexManager):
+            return np.asarray(idx)
+        return idx
 
     @old_positionals(
         "obsm",
@@ -301,15 +307,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
+        if has_xp(oidx):
+            oidx = IndexManager.from_array(oidx)
+        if has_xp(vidx):
+            vidx = IndexManager.from_array(vidx)
+
         # self._adata_ref is never a view
         self._adata_ref = adata_ref
         self._oidx = oidx
         self._vidx = vidx
         # the file is the same as of the reference object
         self.file = adata_ref.file
+
         # views on attributes of adata_ref
-        var_sub = adata_ref.var.iloc[np.from_dlpack(vidx) if has_xp(vidx) else vidx]
-        obs_sub = adata_ref.obs.iloc[np.from_dlpack(oidx) if has_xp(oidx) else oidx]
+        var_sub = adata_ref.var.iloc[self._to_numpy_idx(vidx)]
+        obs_sub = adata_ref.obs.iloc[self._to_numpy_idx(oidx)]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
@@ -324,7 +336,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.isbacked:
             self._X = None
 
-        # set raw, easy, as it’s immutable anyways...
+        # set raw, easy, as it's immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
@@ -610,14 +622,19 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
         # This can occur if there are successive views
+        # Handle IndexManager by extracting numpy arrays
+
+        oidx_np = self._to_numpy_idx(self._oidx)
+        vidx_np = self._to_numpy_idx(self._vidx)
+
         if (
             self.is_view
-            and isinstance(self._oidx, np.ndarray)
-            and isinstance(self._vidx, np.ndarray)
+            and isinstance(oidx_np, np.ndarray)
+            and isinstance(vidx_np, np.ndarray)
         ):
-            oidx, vidx = np.ix_(self._oidx, self._vidx)
+            oidx, vidx = np.ix_(oidx_np, vidx_np)
         else:
-            oidx, vidx = self._oidx, self._vidx
+            oidx, vidx = oidx_np, vidx_np
         if (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
