@@ -44,6 +44,7 @@ from .utils import (
     preview_number,
     preview_sequence,
     preview_string,
+    sanitize_css_color,
     should_warn_string_column,
 )
 
@@ -973,14 +974,22 @@ class ColorListFormatter(TypeFormatter):
         colors = list(obj) if hasattr(obj, "__iter__") else []
         n_colors = len(colors)
 
-        # Build color swatch HTML
+        # Build color swatch HTML with sanitized colors
         swatches = []
         for color in colors[:COLOR_PREVIEW_LIMIT]:
-            color_str = escape_html(str(color))
-            swatches.append(
-                f'<span class="adata-color-swatch" '
-                f'style="background:{color_str}" title="{color_str}"></span>'
-            )
+            # Sanitize color to prevent CSS injection
+            safe_color = sanitize_css_color(str(color))
+            if safe_color:
+                swatches.append(
+                    f'<span class="adata-color-swatch" '
+                    f'style="background:{safe_color}" title="{escape_html(str(color))}"></span>'
+                )
+            else:
+                # Invalid/unsafe color - show as text only, no style
+                swatches.append(
+                    f'<span class="adata-color-swatch adata-invalid-color" '
+                    f'title="{escape_html(str(color))}">?</span>'
+                )
         if n_colors > COLOR_PREVIEW_LIMIT:
             swatches.append(
                 f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'

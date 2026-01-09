@@ -1531,6 +1531,129 @@ class TestBadColorArrays:
         v.assert_html_well_formed()
         v.assert_section_contains_entry("obs", "cat")
 
+    def test_css_injection_in_colors_blocked(self, validate_html) -> None:
+        """CSS injection attempts in color values must be blocked."""
+        adata = AnnData(np.zeros((10, 3)))
+        adata.obs["batch"] = pd.Categorical(["a", "b", "c"] * 3 + ["a"])
+
+        # Attempt CSS injection through "color" values
+        adata.uns["batch_colors"] = [
+            "#ff0000",  # Valid color (passes is_color_list check)
+            "blue; } .adata-table { display:none } .x {",  # CSS injection!
+            "red; background-image: url(https://evil.com/steal)",  # Data exfil
+        ]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+
+        # Extract all style attributes to check for CSS injection
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            # These patterns in a style attribute would indicate CSS injection
+            assert ".adata-table" not in style, f"CSS injection in style: {style}"
+            assert "url(https://evil" not in style, f"URL injection in style: {style}"
+            assert "background-image" not in style, (
+                f"background-image in style: {style}"
+            )
+
+        # Valid color should still work
+        assert "background:#ff0000" in html, "Valid color should be rendered"
+
+        # Malicious strings should appear escaped in title attributes (which is safe)
+        assert 'title="blue; }' in html or "title=&quot;blue;" in html
+
+    def test_css_injection_via_semicolon_blocked(self, validate_html) -> None:
+        """Colors with semicolons (CSS property separator) must be blocked."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.obs["cat"] = pd.Categorical(["x", "y"] * 2 + ["x"])
+        adata.uns["cat_colors"] = [
+            "red;padding:100px",  # Semicolon injection
+            "blue;font-size:100px",  # Another injection
+        ]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_html_well_formed()
+
+        # Extract all style attributes to check for CSS injection
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            # Semicolon-based injection patterns should not appear in styles
+            assert "padding:100px" not in style, f"padding injection: {style}"
+            assert "font-size:100px" not in style, f"font-size injection: {style}"
+
+    def test_css_url_injection_blocked(self, validate_html) -> None:
+        """CSS url() and expression() must be blocked."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.obs["cat"] = pd.Categorical(["x", "y"] * 2 + ["x"])
+        adata.uns["cat_colors"] = [
+            "url(https://evil.com/track)",  # URL injection
+            "expression(alert(1))",  # IE expression injection
+        ]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_html_well_formed()
+
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            assert "url(" not in style, f"url() in style: {style}"
+            assert "expression(" not in style, f"expression() in style: {style}"
+
+    def test_css_escape_sequences_blocked(self, validate_html) -> None:
+        """CSS escape sequences and special chars must be blocked."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
+        adata.uns["cat_colors"] = [
+            "red\\;background:url(evil)",  # Backslash escape
+            "blue\nbackground:url(x)",  # Newline injection
+        ]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_html_well_formed()
+
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            assert "url(" not in style, f"url via escape in style: {style}"
+
+    def test_very_long_color_rejected(self, validate_html) -> None:
+        """Very long color strings must be rejected (DoS protection)."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
+        # Create a very long "color" string
+        long_color = "red" + "x" * 1000
+        adata.uns["cat_colors"] = [long_color, "blue"]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_html_well_formed()
+
+        # The long string should not appear in any style attribute
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            assert "xxxx" not in style, f"Long color in style: {style[:100]}"
+
+    def test_hsl_var_blocked(self, validate_html) -> None:
+        """CSS hsl() and var() must be blocked (not whitelisted)."""
+        adata = AnnData(np.zeros((5, 3)))
+        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
+        adata.uns["cat_colors"] = [
+            "hsl(120, 100%, 50%)",  # HSL not supported
+            "var(--user-color)",  # CSS variables not supported
+        ]
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_html_well_formed()
+
+        style_attrs = re.findall(r'style="([^"]*)"', html)
+        for style in style_attrs:
+            assert "hsl(" not in style, f"hsl() in style: {style}"
+            assert "var(" not in style, f"var() in style: {style}"
+
 
 # =============================================================================
 # Nested AnnData with errors tests

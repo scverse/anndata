@@ -2817,6 +2817,34 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     )
     adata_evil.uns["cat_empty_colors_colors"] = []
 
+    # CSS injection attempts (must be blocked by whitelist)
+    adata_evil.obs["cat_css_injection"] = pd.Categorical(
+        np.random.choice(["x", "y", "z"], size=50)
+    )
+    adata_evil.uns["cat_css_injection_colors"] = [
+        "#ff0000",  # Valid (should render)
+        "blue; } .adata-table { display:none } .x {",  # CSS injection
+        "red; background-image: url(https://evil.com/steal)",  # Data exfil
+    ]
+
+    # URL/expression injection (must be blocked)
+    adata_evil.obs["cat_url_injection"] = pd.Categorical(
+        np.random.choice(["a", "b"], size=50)
+    )
+    adata_evil.uns["cat_url_injection_colors"] = [
+        "url(https://evil.com/track)",  # URL injection
+        "expression(alert(1))",  # IE expression injection
+    ]
+
+    # Very long color strings (DoS protection)
+    adata_evil.obs["cat_long_colors"] = pd.Categorical(
+        np.random.choice(["m", "n"], size=50)
+    )
+    adata_evil.uns["cat_long_colors_colors"] = [
+        "red" + "x" * 1000,  # Very long string
+        "blue",
+    ]
+
     # NESTED ANNDATA WITH ERRORS (should show yellow/red rows in nested content)
     nested_with_errors = ad.AnnData(np.zeros((10, 10)))
     nested_with_errors.uns["bad_obj_in_nested"] = ExplodingRepr()
@@ -2940,6 +2968,9 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li><code>cat_bad_colors</code> - invalid color strings</li>"
         "<li><code>cat_strange_colors</code> - hex, rgb(), rgba() formats</li>"
         "<li><code>cat_empty_colors</code> - empty colors array</li>"
+        "<li><code>cat_css_injection</code> - CSS injection via semicolons (blocked by whitelist)</li>"
+        "<li><code>cat_url_injection</code> - url()/expression() injection (blocked)</li>"
+        "<li><code>cat_long_colors</code> - very long strings (DoS protection, blocked)</li>"
         "</ul>"
         "<b>Nested AnnData with errors:</b><br>"
         "<ul>"

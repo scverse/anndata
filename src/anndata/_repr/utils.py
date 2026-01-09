@@ -163,6 +163,69 @@ def _is_color_string(s: str) -> bool:
     return s_lower.startswith(("rgb(", "rgba("))
 
 
+def sanitize_css_color(color: str) -> str | None:  # noqa: PLR0911
+    """
+    Sanitize a color string for safe use in CSS style attributes.
+
+    Returns the sanitized color if valid, or None if the color is invalid
+    or potentially dangerous (contains CSS injection attempts).
+
+    This is critical for security - color values go into style attributes
+    and must not allow CSS injection (e.g., "red; background-image: url(...)").
+
+    Note: Multiple returns are intentional for clarity in validating different
+    color formats (hex, named, rgb/rgba).
+
+    Parameters
+    ----------
+    color
+        The color string to sanitize
+
+    Returns
+    -------
+    The sanitized color string, or None if invalid/unsafe
+    """
+    if not isinstance(color, str):
+        return None
+
+    color = color.strip()
+    if not color:
+        return None
+
+    # Length limit to prevent DoS via very long strings
+    if len(color) > 50:
+        return None
+
+    # Hex colors: #RGB, #RRGGBB, or #RRGGBBAA (strict whitelist)
+    if color.startswith("#"):
+        hex_part = color[1:]
+        if len(hex_part) in (3, 4, 6, 8) and all(
+            c in "0123456789abcdefABCDEF" for c in hex_part
+        ):
+            return color
+        return None
+
+    # Named colors - must exactly match a known CSS color name (whitelist)
+    color_lower = color.lower()
+    if color_lower in _NAMED_COLORS:
+        return color_lower
+
+    # rgb() and rgba() - WHITELIST approach: only allow safe characters
+    if color_lower.startswith("rgb"):
+        # Only these characters can appear in valid rgb/rgba colors
+        safe_chars = set("rgbaRGBA0123456789(),. %")
+        if not all(c in safe_chars for c in color):
+            return None
+        # Validate rgb/rgba format strictly with regex
+        rgb_pattern = r"^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(,\s*(0|1|0?\.\d+))?\s*\)$"
+        if re.match(rgb_pattern, color_lower):
+            return color
+        return None
+
+    # Reject everything else - no hsl(), var(), url(), expression(), etc.
+    return None
+
+
 def is_color_list(key: str, value: Any) -> bool:
     """
     Check if a value is a color list following the *_colors convention.

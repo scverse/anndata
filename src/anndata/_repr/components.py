@@ -24,7 +24,7 @@ from .._repr_constants import (
     STYLE_CAT_DOT,
     STYLE_HIDDEN,
 )
-from .utils import escape_html
+from .utils import escape_html, sanitize_css_color
 
 
 def render_entry_row_open(
@@ -425,9 +425,13 @@ def render_category_list(
         color = colors[i] if colors and i < len(colors) else None
         parts.append('<span class="adata-cat-item">')
         if color:
-            parts.append(
-                f'<span style="{STYLE_CAT_DOT}background:{escape_html(color)};"></span>'
-            )
+            # Sanitize color to prevent CSS injection
+            safe_color = sanitize_css_color(str(color))
+            if safe_color:
+                parts.append(
+                    f'<span style="{STYLE_CAT_DOT}background:{safe_color};"></span>'
+                )
+            # Skip color dot if color is invalid/unsafe
         parts.append(f"<span>{cat_name}</span>")
         parts.append("</span>")
 
