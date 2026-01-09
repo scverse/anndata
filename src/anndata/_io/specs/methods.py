@@ -1105,7 +1105,10 @@ def write_categorical(
 
     _writer.write_elem(g, "codes", v.codes, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(
-        g, "categories", v.categories._values, dataset_kwargs=dataset_kwargs
+        g,
+        "categories",
+        v.categories.to_numpy(),
+        dataset_kwargs=dataset_kwargs,
     )
 
 

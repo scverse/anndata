@@ -84,12 +84,13 @@ DEFAULT_KEY_TYPES = (
 DEFAULT_COL_TYPES = (
     pd.CategoricalDtype(ordered=False),
     pd.CategoricalDtype(ordered=True),
-    np.int64,
-    np.float64,
-    np.uint8,
-    np.bool_,
-    pd.BooleanDtype,
-    pd.Int32Dtype,
+    np.dtype(np.int64),
+    np.dtype(np.float64),
+    np.dtype(np.uint8),
+    np.dtype(bool),
+    pd.BooleanDtype(),
+    pd.Int32Dtype(),
+    pd.UInt8Dtype(),
 )
 
 
@@ -117,13 +118,11 @@ def gen_vstr_recarray(m, n, dtype=None):
 
 
 def issubdtype[DT](
-    a: np.dtype | pd.api.extensions.ExtensionDtype | type,
-    b: type[DT] | tuple[type[DT], ...],
+    a: np.dtype | pd.api.extensions.ExtensionDtype, b: type[DT] | tuple[type[DT], ...]
 ) -> TypeGuard[DT]:
+    assert not isinstance(a, type)
     if isinstance(b, tuple):
         return any(issubdtype(a, t) for t in b)
-    if isinstance(a, type) and issubclass(a, pd.api.extensions.ExtensionDtype):
-        return issubclass(a, b)
     if isinstance(a, pd.api.extensions.ExtensionDtype):
         return isinstance(a, b)
     try:
@@ -135,6 +134,7 @@ def issubdtype[DT](
 def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
+    assert isinstance(dtype, np.dtype | pd.api.extensions.ExtensionDtype)
     if issubdtype(dtype, pd.CategoricalDtype):
         # TODO: Think about allowing index to be passed for n
         letters = np.fromiter(iter(ascii_letters), "U1")
@@ -151,13 +151,9 @@ def gen_random_column(  # noqa: PLR0911
             ),
         )
     if issubdtype(dtype, IntegerDtype):
-        return (
-            "nullable-int",
-            pd.arrays.IntegerArray(
-                np.random.randint(0, 1000, size=n, dtype=np.int32),
-                mask=np.random.randint(0, 2, size=n, dtype=bool),
-            ),
-        )
+        name, values = gen_random_column(n, dtype.numpy_dtype)
+        mask = np.random.randint(0, 2, size=n, dtype=bool)
+        return f"nullable-{name}", pd.arrays.IntegerArray(values, mask)
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
         array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
@@ -171,7 +167,7 @@ def gen_random_column(  # noqa: PLR0911
     if not issubdtype(dtype, np.number):  # pragma: no cover
         pytest.fail(f"Unexpected dtype: {dtype}")
 
-    n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
+    n_bits = 8 * dtype.itemsize
 
     if issubdtype(dtype, np.unsignedinteger):
         return f"uint{n_bits}", np.random.randint(0, 255, n, dtype=dtype)
