@@ -268,6 +268,37 @@ class TestXSSPrevention:
             "Raw javascript: URL found - XSS!"
         )
 
+    def test_markdown_link_attribute_injection(self, validate_html):
+        """Markdown links with quotes in URL must be escaped to prevent XSS.
+
+        This tests that the markdown parser properly escapes quotes in URLs.
+        Attack: [text](https://evil.com" onclick="alert(1)) would break out
+        of the href attribute if quotes aren't escaped.
+        """
+        adata = AnnData(np.zeros((3, 3)))
+        # Markdown link with quote injection attempt
+        adata.uns["README"] = '[Click me](https://evil.com" onclick="alert(1)" x=")'
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        v.assert_element_exists(".adata-readme-icon")
+
+        # The README content is stored in data-readme attribute (HTML-escaped)
+        # Check that quote injection is escaped in the data attribute
+        readme_match = re.search(r'data-readme="([^"]*)"', html)
+        assert readme_match, "README icon should have data-readme attribute"
+
+        readme_content = readme_match.group(1)
+        # Quotes should be escaped as &quot;
+        assert "onclick" in readme_content, "Attack payload should be present"
+        assert "&quot;" in readme_content, "Quotes should be HTML-escaped"
+        # Raw unescaped quote followed by onclick should NOT appear
+        assert '" onclick=' not in readme_content, (
+            "Unescaped quote before onclick - XSS risk!"
+        )
+
     def test_css_breakout_attempt(self, validate_html):
         """CSS breakout attempts must be escaped."""
         adata = AnnData(np.zeros((3, 3)))

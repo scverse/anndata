@@ -9,10 +9,13 @@ function parseMarkdown(text) {
     text = textarea.value;
 
     // Escape HTML to prevent XSS, then apply markdown
+    // SECURITY: Must escape ALL characters that could break HTML context
     text = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 
     // Tables: |col1|col2| format with |---|---| separator
     text = text.replace(/(^\|.+\|\n?)+/gm, function (tableBlock) {

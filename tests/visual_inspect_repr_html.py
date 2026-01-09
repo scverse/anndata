@@ -2687,6 +2687,7 @@ PWNED
 
 ## Markdown Edge Cases
 [Evil Link](javascript:alert('markdown_link'))
+[Attribute Injection](https://evil.com" onclick="alert('injection')" x=")
 ![Evil Image](x" onerror="alert('markdown_img'))
 `<script>alert('in code')</script>`
 
@@ -2936,7 +2937,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li>XSS attempts: script, img onerror, svg onload, iframe, event handlers</li>"
         "<li>HTML injection: closing tags, style injection, link injection</li>"
         "<li>CSS injection: position fixed overlay</li>"
-        "<li>Markdown edge cases: javascript: links, malformed images</li>"
+        "<li>Markdown edge cases: javascript: links, attribute injection in URLs, malformed images</li>"
         "<li>Unicode chaos: RTL override, null bytes, zero-width, zalgo text</li>"
         "<li>Size bomb: 50KB of repeated characters</li>"
         "<li>Form injection, meta refresh, data URIs, template injection</li>"
