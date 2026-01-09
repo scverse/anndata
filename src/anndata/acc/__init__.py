@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import re
+from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
@@ -50,7 +51,7 @@ __all__ = [
 ]
 
 
-class AdPath[I]:
+class AdPath[I: Hashable]:
     """A path referencing an array in an AnnData object."""
 
     acc: VecAcc[Self, I]
@@ -64,6 +65,23 @@ class AdPath[I]:
     def axes(self) -> Axes:
         """Which axes are spanned by the array?"""
         return self.acc.axes(self.idx)
+
+    def __hash__(self) -> int:
+        return hash((self.acc, self.idx))
+
+    def __eq__(self, value: object) -> bool:
+        match value:
+            case AdPath():
+                return self.acc == value.acc and self.idx == value.idx
+            case str():
+                # TODO: more elegant: access `A` through `acc`?
+                a = (
+                    A
+                    if type(self).__eq__ is AdPath.__eq__
+                    else AdAcc(path_class=type(self))
+                )
+                return self == a.resolve(value, strict=False)
+        return False
 
     @cached_property
     def __repr(self) -> str:
@@ -85,6 +103,7 @@ class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
     path_class: type[P]
 
     def process_idx(self, idx: Any, /) -> I:
+        self.axes(idx)
         return idx
 
     def __getitem__(self, idx: Any, /) -> P:
@@ -92,13 +111,13 @@ class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
         return self.path_class(self, idx)  # type: ignore
 
     @abc.abstractmethod
-    def __call__(self, adata: AnnData, idx: I, /) -> Vector: ...
-    @abc.abstractmethod
     def axes(self, idx: I, /) -> Axes: ...
     @abc.abstractmethod
     def __repr__(self, /) -> str: ...
     @abc.abstractmethod
     def idx_repr(self, idx: I, /) -> str: ...
+    @abc.abstractmethod
+    def __call__(self, adata: AnnData, idx: I, /) -> Vector: ...
 
 
 @dataclass(frozen=True)
@@ -135,14 +154,6 @@ class LayerVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
-        ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
-        if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
-            ver_or_mat = ver_or_mat.toarray()
-        # TODO: pandas
-        axes = self.axes(idx)
-        return ver_or_mat.flatten() if len(axes) == 1 else ver_or_mat
-
     def axes(self, idx: Idx2D[str], /) -> Axes:
         return _idx2axes(idx)
 
@@ -151,6 +162,14 @@ class LayerVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
 
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
+
+    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+        ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
+        if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
+            ver_or_mat = ver_or_mat.toarray()
+        # TODO: pandas
+        axes = self.axes(idx)
+        return ver_or_mat.flatten() if len(axes) == 1 else ver_or_mat
 
 
 @dataclass(frozen=True)
@@ -182,10 +201,6 @@ class MetaVecAcc[P: AdPath](VecAcc[P, str | type[pd.Index]]):
 
         return super().__getitem__(k)
 
-    def __call__(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
-        df = cast("pd.DataFrame", getattr(adata, self.ax))
-        return df.index.values if k is pd.Index else df[k].values
-
     def axes(self, k: str, /) -> Axes:
         return {self.ax}
 
@@ -194,6 +209,10 @@ class MetaVecAcc[P: AdPath](VecAcc[P, str | type[pd.Index]]):
 
     def idx_repr(self, k: str | type[pd.Index]) -> str:
         return ".index" if k is pd.Index else f"[{k!r}]"
+
+    def __call__(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
+        df = cast("pd.DataFrame", getattr(adata, self.ax))
+        return df.index.values if k is pd.Index else df[k].values
 
 
 @dataclass(frozen=True)
@@ -247,9 +266,6 @@ class MultiVecAcc[P: AdPath](VecAcc[P, int]):
             return [self[j] for j in i]
         return super().__getitem__(i)
 
-    def __call__(self, adata: AnnData, i: int, /) -> Vector:
-        return getattr(adata, self.ax)[self.k][:, i]
-
     def axes(self, i: int, /) -> Axes:
         return {cast("Literal['obs', 'var']", self.ax[:-1])}
 
@@ -258,6 +274,9 @@ class MultiVecAcc[P: AdPath](VecAcc[P, int]):
 
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
+
+    def __call__(self, adata: AnnData, i: int, /) -> Vector:
+        return getattr(adata, self.ax)[self.k][:, i]
 
 
 @dataclass(frozen=True)
@@ -308,11 +327,6 @@ class GraphVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
-        df = cast("pd.DataFrame", getattr(adata, self.ax[:-1]))
-        iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
-        return getattr(adata, self.ax)[self.k][iloc].toarray()
-
     def axes(self, idx: Idx2D[str], /) -> Axes:
         n_slices = sum(isinstance(i, slice) for i in idx)
         ax = cast("Literal['obs', 'var']", self.ax[:-1])
@@ -323,6 +337,11 @@ class GraphVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
 
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
+
+    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+        df = cast("pd.DataFrame", getattr(adata, self.ax[:-1]))
+        iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
+        return getattr(adata, self.ax)[self.k][iloc].toarray()
 
 
 @dataclass(frozen=True)
