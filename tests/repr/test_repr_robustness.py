@@ -333,7 +333,7 @@ class TestXSSPrevention:
         adata = AnnData(np.zeros((5, 3)))
         adata.uns["attack"] = MaliciousObject()
 
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="Formatter.*failed"):
             html = adata._repr_html_()
         v = validate_html(html)
 
