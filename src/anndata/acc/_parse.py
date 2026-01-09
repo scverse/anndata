@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING, overload
+
+from . import GraphAcc, LayerAcc, MetaVecAcc, MultiAcc
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Literal
+
+    from . import AdAcc, AdPath, GraphVecAcc, Idx2D, LayerVecAcc
+
+
+@overload
+def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: Literal[True] = True) -> P: ...
+@overload
+def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: Literal[False]) -> P | None: ...
+def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
+    """Create accessor from string."""
+    if not strict:
+        try:
+            parse(a, spec)
+        except ValueError:
+            return None
+
+    if spec.startswith("X["):
+        return _parse_path_2d(lambda _: a, spec)
+    if "." not in spec:
+        msg = f"Cannot parse accessor {spec!r}"
+        raise ValueError(msg)
+    acc_name, rest = spec.split(".", 1)
+    match getattr(a, acc_name, None):
+        case LayerAcc() | GraphAcc() as acc:
+            return _parse_path_2d(acc.__getitem__, rest)
+        case MetaVecAcc() as meta:
+            return meta[rest]
+        case MultiAcc() as multi:
+            return _parse_path_multi(multi, rest)
+        case None:  # pragma: no cover
+            msg = (
+                f"Unknown accessor {spec!r}. "
+                f"We support '{a.ATTRS}.*' and `AdPath` instances."
+            )
+            raise ValueError(msg)
+    msg = f"Unhandled accessor {spec!r}. This is a bug!"  # pragma: no cover
+    raise AssertionError(msg)  # pragma: no cover
+
+
+def _parse_path_2d[P: AdPath](
+    get_vec_acc: Callable[[str], LayerVecAcc[P] | GraphVecAcc[P]], spec: str
+) -> P:
+    if not (
+        m := re.fullmatch(r"([^\[]+)\[([^,]+),\s?([^\]]+)\]", spec)
+    ):  # pragma: no cover
+        msg = f"Cannot parse accessor {spec!r}: should be `name[i,:]`/`name[:,j]`"
+        raise ValueError(msg)
+    name, i, j = m.groups("")  # "" just for typing
+    vec_acc = get_vec_acc(name)
+    return vec_acc[_parse_idx_2d(i, j, str)]
+
+
+def _parse_path_multi[P: AdPath](multi: MultiAcc[P], spec: str) -> P:
+    if not (m := re.fullmatch(r"([^.]+)\.([\d_]+)", spec)):  # pragma: no cover
+        msg = f"Cannot parse multi accessor {spec!r}: should be `name.i`"
+        raise ValueError(msg)
+    key, i = m.groups("")  # "" just for typing
+    return multi[key][int(i)]
+
+
+def _parse_idx_2d[Idx: int | str](i: str, j: str, cls: type[Idx]) -> Idx2D[Idx]:
+    match i, j:
+        case ":", ":":
+            return slice(None), slice(None)
+        case _, ":":
+            return cls(i), slice(None)
+        case ":", _:
+            return slice(None), cls(j)
+        case _:  # pragma: no cover
+            msg = f"Unknown indices {i!r}, {j!r}"
+            raise ValueError(msg)

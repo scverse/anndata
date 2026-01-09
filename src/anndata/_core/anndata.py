@@ -56,10 +56,11 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal, NoReturn
+    from typing import Any, ClassVar, Literal
 
     from zarr.storage import StoreLike
 
+    from ..acc import AdPath
     from ..compat import Index1D, Index1DNorm, XDataset
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1837,9 +1838,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: Any) -> NoReturn:
-        msg = "AnnData has no attribute __contains__, don’t check `in adata`."
-        raise AttributeError(msg)
+    def __contains__(self, key: AdPath) -> bool:
+        """Check if array is in AnnData."""
+        try:
+            key(self)
+        except (IndexError, KeyError):
+            return False
+        return True
 
     def _check_dimensions(self, key=None):
         key = {"obsm", "varm"} if key is None else {key}
