@@ -39,18 +39,11 @@ def mk_label(p: AdPath, /) -> str | None:
 
 
 class AdDim[I](AdPath[I], Dimension):
-    def __init__(
-        self,
-        acc: VecAcc[Self, I],
-        idx: I,
-        /,
-        *,
-        label: str | None = None,
-        **params: object,
-    ) -> None:
-        label_kw = {} if label is None else dict(label=label)
+    def __init__(self, acc: VecAcc[Self, I], idx: I, /, **params: object) -> None:
         AdPath.__init__(self, acc, idx)  # type: ignore
-        Dimension.__init__(self, repr(self), label=mk_label(self), **params, **label_kw)
+        spec = params.pop("spec", repr(self))
+        label = params.pop("label", mk_label(self))
+        Dimension.__init__(self, spec, label=label, **params)
 
     @overload
     @classmethod
@@ -91,11 +84,6 @@ class AdDim[I](AdPath[I], Dimension):
         ----------
         spec
             Dimension tuple specification
-        func
-            Function to resolve the dimension values
-            given the AnnData object.
-        axes
-            The axes represented by the Dimension
         overrides
             Dimension parameter overrides
 
@@ -105,29 +93,28 @@ class AdDim[I](AdPath[I], Dimension):
 
         """
         settings = dict(self.param.values(), **overrides)
-        func = settings.pop("func", self._func)
-        axes = settings.pop("axes", self.axes)
+        acc = settings.pop("acc", self.acc)
+        idx = settings.pop("idx", self.idx)
 
-        if spec is None:
-            spec = (self.name, overrides.get("label", self.label))
-        if "label" in overrides and isinstance(spec, str):
-            spec = (spec, overrides["label"])
-        elif "label" in overrides and isinstance(spec, tuple):
-            if overrides["label"] != spec[1]:
-                self.param.warning(
-                    f"Using label as supplied by keyword ({overrides['label']!r}), "
-                    f"ignoring tuple value {spec[1]!r}"
-                )
-            spec = (spec[0], overrides["label"])
-        return self.__class__(
-            spec,
-            func,
-            axes,
+        match spec, ("label" in overrides):
+            case None | str(), _:
+                spec = (spec or self.name, overrides.get("label", self.label))
+            case (name, label), True:
+                if overrides["label"] != label:
+                    self.param.warning(
+                        f"Using label as supplied by keyword ({overrides['label']!r}), "
+                        f"ignoring tuple value {label!r}"
+                    )
+                spec = (name, overrides["label"])
+
+        return type(self)(
+            acc,
+            idx,
             **{k: v for k, v in settings.items() if k not in ["name", "label"]},
         )
 
     def __hash__(self) -> int:
-        return hash(self._repr)
+        return hash((type(self), repr(self)))
 
     def __eq__(self, dim: object) -> bool:
         # shortcut if label, number, or so matches

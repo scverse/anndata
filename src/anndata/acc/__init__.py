@@ -119,7 +119,7 @@ class LayerAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class LayerVecAcc[P: AdPath](VecAcc[P, Idx2D[str]]):
+class LayerVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
     """Accessor for layer vectors."""
 
     k: str | None
@@ -173,12 +173,10 @@ class MetaVecAcc[P: AdPath](VecAcc[P, str | type[pd.Index]]):
         return k
 
     @overload
-    def __getitem__(self, k: str | type[pd.Index], /) -> P: ...
+    def __getitem__[K: str | type[pd.Index]](self, k: K, /) -> P: ...
     @overload
-    def __getitem__(self, k: list[str | type[pd.Index]], /) -> list[P]: ...
-    def __getitem__(
-        self, k: str | type[pd.Index] | list[str | type[pd.Index]], /
-    ) -> P | list[P]:
+    def __getitem__[K: str | type[pd.Index]](self, k: list[K], /) -> list[P]: ...
+    def __getitem__[K: str | type[pd.Index]](self, k: K | list[K], /) -> P | list[P]:
         if isinstance(k, list):
             return [self[i] for i in k]
 
@@ -281,7 +279,7 @@ class GraphAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class GraphVecAcc[P: AdPath](VecAcc[P, Idx2D[str]]):
+class GraphVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
     """Accessor for arrays from graph containers (obsp/varp)."""
 
     ax: Literal["obsp", "varp"]
