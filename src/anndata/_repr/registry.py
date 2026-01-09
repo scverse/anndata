@@ -52,6 +52,8 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
+    CSS_TEXT_ERROR,
+    CSS_TEXT_WARNING,
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
@@ -421,17 +423,50 @@ class FallbackFormatter(TypeFormatter):
             full_name = type_name
 
         # Try to get useful info for tooltip
+        # All attribute access is wrapped in try/except because objects may have
+        # properties that raise exceptions, hang, or behave unexpectedly
         tooltip_parts = [f"Type: {full_name}"]
+        access_errors = []
 
-        if hasattr(obj, "shape"):
-            tooltip_parts.append(f"Shape: {obj.shape}")
+        try:
+            if hasattr(obj, "shape"):
+                tooltip_parts.append(f"Shape: {obj.shape}")
+        except Exception as e:  # noqa: BLE001
+            access_errors.append(f".shape raised {type(e).__name__}")
 
-        if hasattr(obj, "dtype"):
-            tooltip_parts.append(f"Dtype: {obj.dtype}")
+        try:
+            if hasattr(obj, "dtype"):
+                tooltip_parts.append(f"Dtype: {obj.dtype}")
+        except Exception as e:  # noqa: BLE001
+            access_errors.append(f".dtype raised {type(e).__name__}")
 
-        if hasattr(obj, "__len__"):
-            with contextlib.suppress(TypeError, RuntimeError):
-                tooltip_parts.append(f"Length: {len(obj)}")
+        try:
+            if hasattr(obj, "__len__"):
+                length = len(obj)
+                tooltip_parts.append(f"Length: {length}")
+                # Warn about suspiciously large lengths
+                if length > 1_000_000_000:  # > 1 billion
+                    access_errors.append(f"len() = {length:,} (suspicious)")
+        except Exception as e:  # noqa: BLE001
+            access_errors.append(f"len() raised {type(e).__name__}")
+
+        # Try to get repr (might fail for broken objects)
+        try:
+            repr_str = repr(obj)
+            # Only add if it's useful (not just the default object repr)
+            if repr_str and not repr_str.startswith("<"):
+                tooltip_parts.append(f"Repr: {repr_str[:100]}")
+        except Exception as e:  # noqa: BLE001
+            access_errors.append(f"repr() raised {type(e).__name__}")
+
+        # Try to get str (might fail for broken objects)
+        try:
+            str_val = str(obj)
+            # Only note if different from repr
+            if str_val and str_val != repr_str:
+                pass  # str() worked, nothing to report
+        except Exception as e:  # noqa: BLE001
+            access_errors.append(f"str() raised {type(e).__name__}")
 
         # Check if this might be from an extension package
         is_extension = module and not module.startswith((
@@ -441,11 +476,32 @@ class FallbackFormatter(TypeFormatter):
             "scipy",
         ))
 
+        # Build warnings list
+        warnings = []
+        if not is_extension:
+            warnings.append(f"Unknown type: {full_name}")
+        if access_errors:
+            warnings.append(f"Errors accessing attributes: {', '.join(access_errors)}")
+
+        # Show errors/warnings visibly in preview
+        preview = None
+        preview_html = None
+        if access_errors:
+            # Make error info visible in RED
+            error_text = ", ".join(access_errors)
+            preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
+        elif warnings:
+            # Show warnings in ORANGE/YELLOW when there are no errors
+            warning_text = "; ".join(warnings)
+            preview_html = f'<span class="{CSS_TEXT_WARNING}">{warning_text}</span>'
+
         return FormattedOutput(
             type_name=type_name,
             css_class="dtype-unknown" if not is_extension else "dtype-extension",
             tooltip="\n".join(tooltip_parts),
-            warnings=[f"Unknown type: {full_name}"] if not is_extension else [],
+            warnings=warnings,
+            preview=preview,
+            preview_html=preview_html,
             is_serializable=False,  # Assume unknown types aren't serializable
         )
 

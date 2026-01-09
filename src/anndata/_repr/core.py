@@ -194,21 +194,37 @@ def get_section_tooltip(section: str) -> str:
 def render_x_entry(obj: Any, context: FormatterContext) -> str:
     """Render X as a single compact entry row.
 
-    Works with both AnnData and Raw objects.
+    Works with AnnData, Raw, and any object with an X attribute.
+    Handles missing or broken X attributes gracefully.
     """
-    X = obj.X
-
     parts = ['<div class="adata-x-entry">']
     parts.append("<span>X</span>")
+
+    try:
+        X = obj.X
+    except Exception as e:  # noqa: BLE001
+        # Handle missing or broken X attribute gracefully
+        error_msg = f"error: {type(e).__name__}"
+        parts.append(
+            f'<span class="adata-text-muted"><em>({escape_html(error_msg)})</em></span>'
+        )
+        parts.append("</div>")
+        return "\n".join(parts)
 
     if X is None:
         parts.append("<span><em>None</em></span>")
     else:
         # Format the X matrix (formatter includes all info like sparsity, on disk, etc.)
-        output = formatter_registry.format_value(X, context)
-        parts.append(
-            f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
-        )
+        try:
+            output = formatter_registry.format_value(X, context)
+            parts.append(
+                f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+            )
+        except Exception as e:  # noqa: BLE001
+            error_msg = f"error formatting: {type(e).__name__}"
+            parts.append(
+                f'<span class="adata-text-muted"><em>({escape_html(error_msg)})</em></span>'
+            )
 
     parts.append("</div>")
     return "\n".join(parts)

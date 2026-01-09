@@ -195,15 +195,23 @@ def _get_categories_from_column(col: Any) -> list:
     Get categories from a categorical column.
 
     Works for both pandas Series (.cat.categories) and xarray DataArray
-    (dtype.categories).
+    (dtype.categories). Returns empty list if categories cannot be extracted.
     """
-    # Pandas Series
-    if hasattr(col, "cat"):
-        return list(col.cat.categories)
+    try:
+        # Pandas Series
+        if hasattr(col, "cat"):
+            return list(col.cat.categories)
 
-    # xarray DataArray or other objects with CategoricalDtype
-    if hasattr(col, "dtype") and hasattr(col.dtype, "categories"):
-        return list(col.dtype.categories)
+        # xarray DataArray or other objects with CategoricalDtype
+        if hasattr(col, "dtype") and hasattr(col.dtype, "categories"):
+            return list(col.dtype.categories)
+    except Exception as e:  # noqa: BLE001
+        from .._warnings import warn
+
+        warn(
+            f"Failed to extract categories from column: {type(e).__name__}: {e}",
+            UserWarning,
+        )
 
     return []
 
@@ -423,40 +431,49 @@ def get_anndata_version() -> str:
 
 def is_view(obj: Any) -> bool:
     """Check if an object is a view (for AnnData-like objects)."""
-    return getattr(obj, "is_view", False)
+    try:
+        return getattr(obj, "is_view", False)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def is_backed(obj: Any) -> bool:
     """Check if an object is backed (for AnnData-like objects)."""
-    return getattr(obj, "isbacked", False)
+    try:
+        return getattr(obj, "isbacked", False)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def get_backing_info(obj: Any) -> dict[str, Any]:
     """Get information about backing for an AnnData-like object."""
-    if not is_backed(obj):
+    try:
+        if not is_backed(obj):
+            return {"backed": False}
+
+        filename = str(getattr(obj, "filename", None) or "")
+        info: dict[str, Any] = {
+            "backed": True,
+            "filename": filename,
+        }
+
+        # Try to get file status
+        file_obj = getattr(obj, "file", None)
+        if file_obj is not None:
+            info["is_open"] = getattr(file_obj, "is_open", None)
+
+        # Detect format from filename
+        if filename:
+            if filename.endswith(".h5ad"):
+                info["format"] = "H5AD"
+            elif ".zarr" in filename:
+                info["format"] = "Zarr"
+            else:
+                info["format"] = "Unknown"
+
+        return info
+    except Exception:  # noqa: BLE001
         return {"backed": False}
-
-    filename = str(getattr(obj, "filename", None) or "")
-    info: dict[str, Any] = {
-        "backed": True,
-        "filename": filename,
-    }
-
-    # Try to get file status
-    file_obj = getattr(obj, "file", None)
-    if file_obj is not None:
-        info["is_open"] = getattr(file_obj, "is_open", None)
-
-    # Detect format from filename
-    if filename:
-        if filename.endswith(".h5ad"):
-            info["format"] = "H5AD"
-        elif ".zarr" in filename:
-            info["format"] = "Zarr"
-        else:
-            info["format"] = "Unknown"
-
-    return info
 
 
 def _load_css_colors() -> frozenset[str]:

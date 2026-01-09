@@ -21,6 +21,7 @@ from .._repr_constants import (
     CSS_BADGE_VIEW,
     CSS_DTYPE_CATEGORY,
     CSS_DTYPE_DATAFRAME,
+    DEFAULT_MAX_README_SIZE,
     SECTION_OBS,
     SECTION_VAR,
     SECTION_X,
@@ -655,6 +656,20 @@ def _render_header(
     # README icon if uns["README"] exists with a string
     readme_content = adata.uns.get("README") if hasattr(adata, "uns") else None
     if isinstance(readme_content, str) and readme_content.strip():
+        # Check max README size setting (0 means no limit)
+        max_readme_size = get_setting(
+            "repr_html_max_readme_size", default=DEFAULT_MAX_README_SIZE
+        )
+        original_len = len(readme_content)
+        if max_readme_size > 0 and original_len > max_readme_size:
+            # Truncate and add note
+            readme_content = readme_content[:max_readme_size]
+            truncation_note = (
+                f"\n\n---\n*README truncated: showing {max_readme_size:,} of "
+                f"{original_len:,} characters*"
+            )
+            readme_content += truncation_note
+
         escaped_readme = escape_html(readme_content)
         # Truncate for no-JS tooltip (first 500 chars)
         tooltip_text = readme_content[:TOOLTIP_TRUNCATE_LENGTH]

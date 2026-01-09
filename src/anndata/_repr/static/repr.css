@@ -574,11 +574,11 @@ body.dark-mode .anndata-repr {
 }
 
 .anndata-repr .adata-entry.warning {
-    background: var(--anndata-warning-bg);
+    background: var(--anndata-warning-bg) !important;
 }
 
 .anndata-repr .adata-entry.error {
-    background: var(--anndata-error-bg);
+    background: var(--anndata-error-bg) !important;
 }
 
 .anndata-repr .adata-entry td {
@@ -1084,6 +1084,18 @@ body.dark-mode .anndata-repr {
 /* Muted text helper */
 .anndata-repr .adata-text-muted {
     color: var(--anndata-text-muted);
+}
+
+/* Error text helper - red color for visible errors */
+.anndata-repr .adata-error-text {
+    color: var(--anndata-error-color);
+    font-weight: 500;
+}
+
+/* Warning text helper - orange/yellow color for visible warnings */
+.anndata-repr .adata-warning-text {
+    color: var(--anndata-warning-color);
+    font-weight: 500;
 }
 
 /* X entry row */

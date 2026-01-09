@@ -19,6 +19,7 @@ from ._repr_constants import (
     DEFAULT_MAX_FIELD_WIDTH,
     DEFAULT_MAX_ITEMS,
     DEFAULT_MAX_LAZY_CATEGORIES,
+    DEFAULT_MAX_README_SIZE,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
 )
@@ -622,6 +623,18 @@ settings.register(
     "repr_html_type_width",
     default_value=DEFAULT_TYPE_WIDTH,
     description="Width in pixels for the type column in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_readme_size",
+    default_value=DEFAULT_MAX_README_SIZE,
+    description=(
+        "Maximum size in characters for README content in HTML repr. "
+        "READMEs larger than this will be truncated with a note. "
+        "Set to 0 to disable truncation (not recommended for very large READMEs)."
+    ),
     validate=validate_int,
     get_from_env=check_and_get_int,
 )

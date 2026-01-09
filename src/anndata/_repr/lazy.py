@@ -75,12 +75,21 @@ def is_lazy_adata(obj: Any) -> bool:
     Returns
     -------
     True if obj is a lazy AnnData
+
+    Notes
+    -----
+    This function accesses the .obs attribute which may trigger I/O for some
+    objects. If .obs raises an exception, returns False.
     """
-    obs = getattr(obj, "obs", None)
-    if obs is None:
+    try:
+        obs = getattr(obj, "obs", None)
+        if obs is None:
+            return False
+        # Dataset2D has a different class name than DataFrame
+        return obs.__class__.__name__ == "Dataset2D"
+    except Exception:  # noqa: BLE001
+        # Intentional broad catch: .obs access may raise anything
         return False
-    # Dataset2D has a different class name than DataFrame
-    return obs.__class__.__name__ == "Dataset2D"
 
 
 def _extract_path_from_lazy_array(arr: Any) -> dict[str, Any] | None:

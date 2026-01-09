@@ -23,6 +23,7 @@ DEFAULT_MAX_LAZY_CATEGORIES = (
     100  # Max categories to load for lazy categoricals (0 to skip)
 )
 DEFAULT_UNIQUE_LIMIT = 1_000_000  # Max rows to compute unique counts (0 to disable)
+DEFAULT_MAX_README_SIZE = 100_000  # Max README size in chars (100KB, 0 to disable)
 
 # Column widths (pixels)
 DEFAULT_MAX_FIELD_WIDTH = 400  # Max width for field name column
@@ -73,6 +74,8 @@ CSS_ENTRY_NAME = "adata-entry-name"
 CSS_ENTRY_TYPE = "adata-entry-type"
 CSS_ENTRY_PREVIEW = "adata-entry-preview"
 CSS_TEXT_MUTED = "adata-text-muted"
+CSS_TEXT_ERROR = "adata-error-text"
+CSS_TEXT_WARNING = "adata-warning-text"
 CSS_NESTED_ROW = "adata-nested-row"
 CSS_NESTED_CONTENT = "adata-nested-content"
 CSS_NESTED_ANNDATA = "adata-nested-anndata"

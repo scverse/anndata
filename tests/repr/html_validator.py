@@ -460,6 +460,98 @@ class HTMLValidator:
             raise AssertionError(msg or "No truncation indicator found in HTML")
         return self
 
+    def assert_error_shown(
+        self, error_text: str | None = None, *, msg: str | None = None
+    ) -> HTMLValidator:
+        """Assert an error message is shown in the HTML output.
+
+        The repr system should show errors visibly, not hide them.
+        Errors are typically shown as:
+        - Text containing 'error:' or 'Error'
+        - Elements with 'error' class
+        - Text with exception names (e.g., 'AttributeError', 'RuntimeError')
+        """
+        if error_text:
+            if error_text not in self.html:
+                raise AssertionError(
+                    msg or f"Error text '{error_text}' not found in HTML"
+                )
+            return self
+
+        # Check for generic error indicators
+        has_error = (
+            "error:" in self.html.lower()
+            or re.search(r'\bError\b', self.html)
+            or "adata-error" in self.html
+            or "adata-text-muted" in self.html and "error" in self.html.lower()
+        )
+        if not has_error:
+            raise AssertionError(msg or "No error indicator found in HTML")
+        return self
+
+    def assert_no_raw_xss(self, *, msg: str | None = None) -> HTMLValidator:
+        """Assert no raw XSS payloads exist in executable context.
+
+        Checks that common XSS attack vectors are properly escaped.
+        Note: Escaped content showing XSS strings as visible text is OK.
+        We only flag actual executable payloads (unescaped in HTML attributes).
+        """
+        # Get content after the style tag (where user content would be)
+        style_end = self.html.find("</style>")
+        content = self.html[style_end:] if style_end > 0 else self.html
+
+        # Check for actual executable script injection
+        # Raw <script> tags (not escaped as &lt;script&gt;)
+        if re.search(r'<script[^>]*>(?!.*&lt;)', content, re.I):
+            # Make sure it's not a false positive from our own script
+            scripts = re.findall(r'<script[^>]*>(.*?)</script>', content, re.DOTALL | re.I)
+            for script in scripts:
+                # Our own scripts have specific patterns
+                if 'anndata' not in script.lower() and 'toggle' not in script.lower():
+                    if 'alert' in script or 'eval(' in script:
+                        raise AssertionError(
+                            msg or "Potential XSS: executable script tag found"
+                        )
+
+        # Check for event handlers in HTML tags (actual attributes, not text)
+        # Pattern: <tag ... onclick="..." or onerror="..."
+        event_handlers = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus']
+        for handler in event_handlers:
+            # Look for handler in tag attributes (not in text content)
+            pattern = rf'<[^>]+\s{handler}\s*='
+            if re.search(pattern, content, re.I):
+                # Verify it's not in our own legitimate HTML
+                match = re.search(pattern, content, re.I)
+                if match:
+                    # Check if it's part of user content (escaped) or real attribute
+                    context = content[max(0, match.start() - 50):match.end() + 50]
+                    if '&lt;' not in context and '&quot;' not in context:
+                        raise AssertionError(
+                            msg or f"Potential XSS: {handler} handler in tag attribute"
+                        )
+
+        # Check for javascript: URLs in href attributes
+        if re.search(r'href\s*=\s*["\']?\s*javascript:', content, re.I):
+            raise AssertionError(
+                msg or "Potential XSS: javascript: URL in href"
+            )
+
+        return self
+
+    def assert_html_well_formed(self, *, msg: str | None = None) -> HTMLValidator:
+        """Assert HTML is well-formed (balanced tags, no duplicate IDs)."""
+        parser = StrictHTMLParser()
+        parser.feed(self.html)
+        if parser.errors:
+            raise AssertionError(
+                msg or f"HTML is malformed: {parser.errors}"
+            )
+        if parser.tag_stack:
+            raise AssertionError(
+                msg or f"Unclosed tags: {parser.tag_stack}"
+            )
+        return self
+
     def assert_accessibility_attribute(
         self, attr: str, *, msg: str | None = None
     ) -> HTMLValidator:

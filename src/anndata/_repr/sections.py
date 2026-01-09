@@ -207,8 +207,8 @@ def _render_mapping_section(
     if mapping is None:
         return ""
 
-    keys = list(mapping.keys())
-    n_items = len(keys)
+    # Get count without creating full list (O(1) for most mappings)
+    n_items = len(mapping)
 
     # Doc URL and tooltip for this section
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
@@ -220,9 +220,9 @@ def _render_mapping_section(
     # Set section for section-specific formatters (e.g., DaskArrayFormatter)
     section_context = replace(context, section=section)
 
-    # Render entries (with truncation)
+    # Render entries (with truncation) - iterate lazily, stop at max_items
     rows = []
-    for i, key in enumerate(keys):
+    for i, key in enumerate(mapping.keys()):
         if i >= context.max_items:
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
@@ -251,8 +251,8 @@ def _render_uns_section(
 ) -> str:
     """Render the uns section with special handling."""
     uns = adata.uns
-    keys = list(uns.keys())
-    n_items = len(keys)
+    # Get count without creating full list (O(1) for dict)
+    n_items = len(uns)
 
     # Doc URL and tooltip
     doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.uns.html"
@@ -261,9 +261,9 @@ def _render_uns_section(
     if n_items == 0:
         return render_empty_section("uns", doc_url, tooltip)
 
-    # Render entries (with truncation)
+    # Render entries (with truncation) - iterate lazily, stop at max_items
     rows = []
-    for i, key in enumerate(keys):
+    for i, key in enumerate(uns.keys()):
         if i >= context.max_items:
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
