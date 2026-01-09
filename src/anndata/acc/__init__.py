@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import abc
-import re
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
@@ -383,54 +382,12 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
     def resolve(self, spec: str, *, strict: Literal[False]) -> P | None: ...
     def resolve(self, spec: str, *, strict: bool = True) -> P | None:
         """Create accessor from string."""
-        if not strict:
-            try:
-                self.resolve(spec)
-            except ValueError:
-                return None
+        from ._parse import parse
 
-        if "." not in spec:
-            msg = f"Cannot parse accessor {spec!r}"
-            raise ValueError(msg)
-        acc, rest = spec.split(".", 1)
-        match getattr(self, acc, None):
-            # TODO: X
-            case LayerAcc() as layers:
-                return self._parse_path_layer(layers, rest)
-            case MetaVecAcc() as meta:
-                return meta[rest]
-            case MultiAcc() as multi:
-                return self._parse_path_multi(multi, rest)
-            case GraphAcc():
-                msg = "TODO"
-                raise NotImplementedError(msg)
-            case None:  # pragma: no cover
-                msg = (
-                    f"Unknown accessor {spec!r}. "
-                    f"We support '{self.ATTRS}.*' and `AdPath` instances."
-                )
-                raise ValueError(msg)
-        msg = f"Unhandled accessor {spec!r}. This is a bug!"  # pragma: no cover
-        raise AssertionError(msg)  # pragma: no cover
+        return parse(self, spec, strict=strict)
 
     def __repr__(self) -> str:
         return "A"
-
-    def _parse_path_layer(self, layers: LayerAcc, spec: str) -> P:
-        if not (
-            m := re.fullmatch(r"([^\[]+)\[([^,]+),\s?([^\]]+)\]", spec)
-        ):  # pragma: no cover
-            msg = f"Cannot parse layer accessor {spec!r}: should be `name[i,:]`/`name[:,j]`"
-            raise ValueError(msg)
-        layer, i, j = m.groups("")  # "" just for typing
-        return layers[layer][_parse_idx_2d(i, j, str)]
-
-    def _parse_path_multi(self, multi: MultiAcc, spec: str) -> P:
-        if not (m := re.fullmatch(r"([^.]+)\.([\d_]+)", spec)):  # pragma: no cover
-            msg = f"Cannot parse multi accessor {spec!r}: should be `name.i`"
-            raise ValueError(msg)
-        key, i = m.groups("")  # "" just for typing
-        return multi[key][int(i)]
 
 
 A = AdAcc(path_class=AdPath)
@@ -484,17 +441,6 @@ def _idx2axes(idx: Idx2D[str]) -> set[Literal["obs", "var"]]:
         case _:  # pragma: no cover
             msg = f"Invalid index: {idx}"
             raise TypeError(msg)
-
-
-def _parse_idx_2d[Idx: int | str](i: str, j: str, cls: type[Idx]) -> Idx2D[Idx]:
-    match i, j:
-        case _, ":":
-            return cls(i), slice(None)
-        case ":", _:
-            return slice(None), cls(j)
-        case _:  # pragma: no cover
-            msg = f"Unknown indices {i!r}, {j!r}"
-            raise ValueError(msg)
 
 
 def __getattr__(name: Literal["hv"]) -> Any:
