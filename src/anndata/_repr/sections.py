@@ -422,7 +422,10 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
 
 def _render_error_entry(section: str, error: str) -> str:
     """Render an error indicator for a section that failed to render."""
-    error_escaped = escape_html(str(error)[:ERROR_TRUNCATE_LENGTH])
+    error_str = str(error)
+    if len(error_str) > ERROR_TRUNCATE_LENGTH:
+        error_str = error_str[:ERROR_TRUNCATE_LENGTH] + "..."
+    error_escaped = escape_html(error_str)
     # Use --anndata-error-color CSS variable (defined in css.py) with fallback
     error_color = "var(--anndata-error-color, #dc3545)"
     return f"""

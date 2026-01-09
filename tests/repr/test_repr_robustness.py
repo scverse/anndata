@@ -1206,16 +1206,15 @@ class TestErrorVisibility:
         v.assert_text_visible("TypeError")
         v.assert_text_visible(".shape")
 
-    def test_very_long_error_message_truncated(self, validate_html) -> None:
-        """Very long error messages should be truncated to prevent HTML bloat."""
+    def test_very_long_error_message_not_in_html(self, validate_html) -> None:
+        """Very long error messages should NOT appear in HTML (only exception type)."""
 
         class VeryLongError:
             @property
             def shape(self):
                 # Create a very long error message (2KB+)
                 raise TypeError(
-                    "ERROR: " * 100
-                    + "This is additional context. " * 50
+                    "LONG_ERROR_MSG " * 100 + "This is additional context. " * 50
                 )
 
         adata = AnnData(np.zeros((3, 3)))
@@ -1227,12 +1226,29 @@ class TestErrorVisibility:
         v.assert_html_well_formed()
         v.assert_section_contains_entry("uns", "long_error")
         v.assert_text_visible("VeryLongError")
-        # The full 2KB+ error message should NOT appear
-        # (HTML should not be bloated by repeated error text)
-        error_count = html.count("ERROR:")
-        assert error_count < 10, (
-            f"Long error message not truncated: found {error_count} occurrences"
+        # Only the exception TYPE should be in HTML, not the full message
+        # The error display shows ".shape raised TypeError", not the message content
+        assert ".shape raised TypeError" in html, "Error indicator should be visible"
+        # The full error message content should NOT be in HTML
+        assert "LONG_ERROR_MSG" not in html, (
+            "Full error message should not appear in HTML (only type name)"
         )
+
+    def test_section_error_truncation_shows_ellipsis(self, validate_html) -> None:
+        """Section rendering errors with long messages should show '...' truncation."""
+        from anndata._repr.sections import _render_error_entry
+
+        # Create a very long error message (>200 chars)
+        long_error = "X" * 300
+
+        html = _render_error_entry("test_section", long_error)
+
+        # Should be truncated with "..."
+        assert "..." in html, "Truncated error should show '...' indicator"
+        # Should not contain the full 300 X's
+        assert "X" * 250 not in html, "Error message should be truncated"
+        # Should contain some of the error
+        assert "X" * 50 in html, "Some error content should be visible"
 
 
 # =============================================================================
@@ -1706,5 +1722,3 @@ class TestEncodingAttacks:
         v.assert_html_well_formed()
         # All three columns should be shown
         assert html.count("bom") >= 3, "All BOM columns should be visible"
-
-
