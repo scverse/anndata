@@ -2,31 +2,35 @@
 
 from __future__ import annotations
 
+import abc
 import re
-from collections.abc import Iterable
 from dataclasses import KW_ONLY, dataclass, field
+from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
 
+import pandas as pd
 import scipy.sparse as sp
+from numpy.typing import NDArray
+
+from anndata import AnnData
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection
-    from typing import Any, Literal, TypeIs
+    from typing import Any, Literal, Self, TypeIs
 
-    import pandas as pd
     from numpy.typing import NDArray
 
     from anndata import AnnData
 
     from . import hv
 
+    type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
+
     # full slices: e.g. a[:, 5], a[18, :], or a[:, :]
     type Sf = slice[None, None, None]
     type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
     type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
-    type AdPathFunc = Callable[
-        [AnnData], pd.api.extensions.ExtensionArray | NDArray[Any]
-    ]
+    type AdPathFunc[I] = Callable[[AnnData, I], Vector]
     type Axes = Collection[Literal["obs", "var"]]
 
 
@@ -38,41 +42,63 @@ __all__ = [
     "GraphVecAcc",
     "LayerAcc",
     "LayerVecAcc",
-    "MetaAcc",
+    "MetaVecAcc",
     "MultiAcc",
     "MultiVecAcc",
+    "VecAcc",
     "hv",
 ]
 
 
-class AdPath:
+class AdPath[I]:
     """A path referencing an array in an AnnData object."""
 
-    _repr: str
-    _func: AdPathFunc
-    axes: Axes
+    acc: VecAcc[Self, I]
+    idx: I
 
-    def __init__(
-        self, _repr: str | tuple[str, str], func: AdPathFunc, axes: Axes
-    ) -> None:
-        # TODO: prettier
-        if isinstance(_repr, str):
-            _repr = _repr.replace("slice(None, None, None)", ":")
-        self._repr = _repr[0] if isinstance(_repr, tuple) else _repr
-        self._func = func
-        self.axes = axes
+    def __init__(self, acc: VecAcc[Self, I], idx: I) -> None:
+        self.acc = acc
+        self.idx = idx
+
+    @cached_property
+    def axes(self) -> Axes:
+        """Which axes are spanned by the array?"""
+        return self.acc.axes(self.idx)
+
+    @cached_property
+    def __repr(self) -> str:
+        idx_repr = self.acc.idx_repr(self.idx).replace("slice(None, None, None)", ":")
+        return f"{self.acc!r}{idx_repr}"
 
     def __str__(self) -> str:
-        return self._repr
+        return self.__repr
 
     def __repr__(self) -> str:
-        return self._repr
+        return self.__repr
 
-    def __call__(
-        self, adata: AnnData
-    ) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
+    def __call__(self, adata: AnnData) -> Vector:
         """Retrieve referenced array from AnnData."""
-        return self._func(adata)
+        return self.acc(adata, self.idx)
+
+
+class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
+    path_class: type[P]
+
+    def process_idx(self, idx: Any, /) -> I:
+        return idx
+
+    def __getitem__(self, idx: Any, /) -> P:
+        idx = self.process_idx(idx)
+        return self.path_class(self, idx)  # type: ignore
+
+    @abc.abstractmethod
+    def __call__(self, adata: AnnData, idx: I, /) -> Vector: ...
+    @abc.abstractmethod
+    def axes(self, idx: I, /) -> Axes: ...
+    @abc.abstractmethod
+    def __repr__(self, /) -> str: ...
+    @abc.abstractmethod
+    def idx_repr(self, idx: I, /) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -82,7 +108,7 @@ class LayerAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    def __getitem__(self, k: str) -> LayerVecAcc[P]:
+    def __getitem__(self, k: str, /) -> LayerVecAcc[P]:
         if not isinstance(k, str):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
@@ -93,7 +119,7 @@ class LayerAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class LayerVecAcc[P: AdPath]:
+class LayerVecAcc[P: AdPath](VecAcc[P, Idx2D[str]]):
     """Accessor for layer vectors."""
 
     k: str | None
@@ -101,35 +127,34 @@ class LayerVecAcc[P: AdPath]:
     path_class: type[P]
 
     @overload
-    def __getitem__(self, idx: Idx2D[str]) -> P: ...
+    def __getitem__(self, idx: Idx2D[str], /) -> P: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str]) -> list[P]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str]) -> P | list[P]:
+    def __getitem__(self, idx: Idx2DList[str], /) -> list[P]: ...
+    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> P | list[P]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
+        return super().__getitem__(idx)
 
-        axes = _idx2axes(idx)
+    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+        ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
+        if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
+            ver_or_mat = ver_or_mat.toarray()
+        # TODO: pandas
+        axes = self.axes(idx)
+        return ver_or_mat.flatten() if len(axes) == 1 else ver_or_mat
 
-        def get(ad: AnnData) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
-            ver_or_mat = ad[idx].X if self.k is None else ad[idx].layers[self.k]
-            if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
-                ver_or_mat = ver_or_mat.toarray()
-            # TODO: pandas
-            return ver_or_mat.flatten() if len(axes) == 1 else ver_or_mat
-
-        label = next(
-            (f"{self.k} {i}" if self.k else i for i in idx if isinstance(i, str)), None
-        )
-        return self.path_class(
-            f"{self!r}[{idx[0]!r}, {idx[1]!r}]", get, axes, label=label
-        )
+    def axes(self, idx: Idx2D[str], /) -> Axes:
+        return _idx2axes(idx)
 
     def __repr__(self) -> str:
         return f"A.layers[{self.k!r}]"
 
+    def idx_repr(self, idx: Idx2D[str]) -> str:
+        return f"[{idx[0]!r}, {idx[1]!r}]"
+
 
 @dataclass(frozen=True)
-class MetaAcc[P: AdPath]:
+class MetaVecAcc[P: AdPath](VecAcc[P, str | type[pd.Index]]):
     """Accessor for metadata (obs/var)."""
 
     ax: Literal["obs", "var"]
@@ -139,33 +164,38 @@ class MetaAcc[P: AdPath]:
     @property
     def index(self) -> P:
         """Index accessor."""
+        return self[pd.Index]
 
-        def get(ad: P) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
-            return cast("pd.DataFrame", getattr(ad, self.ax)).index.values
-
-        return self.path_class(
-            f"A.{self.ax}.index", get, {self.ax}, label=f"{self.ax} index"
-        )
-
-    @overload
-    def __getitem__(self, k: str) -> P: ...
-    @overload
-    def __getitem__(self, k: list[str]) -> list[P]: ...
-    def __getitem__(self, k: str | Iterable[str]) -> P | list[P]:
-        if not isinstance(k, str) and isinstance(k, Iterable):
-            return [self[i] for i in k]
-
-        if not isinstance(k, str):
+    def process_idx(self, k: object, /) -> str | type[pd.Index]:
+        if k is not pd.Index and not isinstance(k, str):
             msg = f"Unsupported {self.ax} column {k!r}"
             raise TypeError(msg)
+        return k
 
-        def get(ad: AnnData) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
-            return cast("pd.DataFrame", getattr(ad, self.ax))[k].values
+    @overload
+    def __getitem__(self, k: str | type[pd.Index], /) -> P: ...
+    @overload
+    def __getitem__(self, k: list[str | type[pd.Index]], /) -> list[P]: ...
+    def __getitem__(
+        self, k: str | type[pd.Index] | list[str | type[pd.Index]], /
+    ) -> P | list[P]:
+        if isinstance(k, list):
+            return [self[i] for i in k]
 
-        return self.path_class(f"{self!r}[{k!r}]", get, {self.ax}, label=k)
+        return super().__getitem__(k)
+
+    def __call__(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
+        df = cast("pd.DataFrame", getattr(adata, self.ax))
+        return df.index.values if k is pd.Index else df[k].values
+
+    def axes(self, k: str, /) -> Axes:
+        return {self.ax}
 
     def __repr__(self) -> str:
         return f"A.{self.ax}"
+
+    def idx_repr(self, k: str | type[pd.Index]) -> str:
+        return ".index" if k is pd.Index else f"[{k!r}]"
 
 
 @dataclass(frozen=True)
@@ -176,7 +206,7 @@ class MultiAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    def __getitem__(self, k: str) -> MultiVecAcc[P]:
+    def __getitem__(self, k: str, /) -> MultiVecAcc[P]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax} key {k!r}"
             raise TypeError(msg)
@@ -187,7 +217,7 @@ class MultiAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class MultiVecAcc[P: AdPath]:
+class MultiVecAcc[P: AdPath](VecAcc[P, int]):
     """Accessor for arrays from multi-dimensional containers (obsm/varm)."""
 
     ax: Literal["obsm", "varm"]
@@ -195,33 +225,41 @@ class MultiVecAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    @overload
-    def __getitem__(self, i: int | tuple[slice, int]) -> P: ...
-    @overload
-    def __getitem__(self, i: list[int] | tuple[slice, list[int]]) -> list[P]: ...
-    def __getitem__(
-        self, i: int | tuple[slice, int] | list[int] | tuple[slice, list[int]]
-    ) -> P | list[P]:
+    @staticmethod
+    def process_idx[T](i: T | tuple[Sf, T], /) -> T:
         if isinstance(i, tuple):
             if len(i) != 2 or i[0] != slice(None):
                 msg = f"Unsupported slice {i!r}"
                 raise ValueError(msg)
-            i = i[1]
-        if isinstance(i, list):
-            return [self[j] for j in i]
-
-        if not isinstance(i, int):
+            i = cast("T", i[1])
+        if not isinstance(i, list | int):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
+        return i
 
-        def get(ad: AnnData) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
-            return getattr(ad, self.ax)[self.k][:, i]
+    @overload
+    def __getitem__(self, i: int | tuple[Sf, int], /) -> P: ...
+    @overload
+    def __getitem__(self, i: list[int] | tuple[Sf, list[int]], /) -> list[P]: ...
+    def __getitem__(
+        self, i: int | list[int] | tuple[Sf, int | list[int]], /
+    ) -> P | list[P]:
+        i = self.process_idx(i)
+        if isinstance(i, list):
+            return [self[j] for j in i]
+        return super().__getitem__(i)
 
-        ax = cast("Literal['obs', 'var']", self.ax[:-1])
-        return self.path_class(f"{self!r}[:, {i!r}]", get, {ax}, label=f"{self.k} {i}")
+    def __call__(self, adata: AnnData, i: int, /) -> Vector:
+        return getattr(adata, self.ax)[self.k][:, i]
+
+    def axes(self, i: int, /) -> Axes:
+        return {cast("Literal['obs', 'var']", self.ax[:-1])}
 
     def __repr__(self) -> str:
         return f"A.{self.ax}[{self.k!r}]"
+
+    def idx_repr(self, i: int) -> str:
+        return f"[:, {i!r}]"
 
 
 @dataclass(frozen=True)
@@ -232,7 +270,7 @@ class GraphAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    def __getitem__(self, k: str) -> GraphVecAcc[P]:
+    def __getitem__(self, k: str, /) -> GraphVecAcc[P]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax} key {k!r}"
             raise TypeError(msg)
@@ -243,7 +281,7 @@ class GraphAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class GraphVecAcc[P: AdPath]:
+class GraphVecAcc[P: AdPath](VecAcc[P, Idx2D[str]]):
     """Accessor for arrays from graph containers (obsp/varp)."""
 
     ax: Literal["obsp", "varp"]
@@ -251,40 +289,42 @@ class GraphVecAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    @overload
-    def __getitem__(self, idx: Idx2D[str]) -> P: ...
-    @overload
-    def __getitem__(self, idx: Idx2DList[str]) -> list[P]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str]) -> P | list[P]:
-        if _is_idx2d_list(idx):
-            return [self[i] for i in _expand_idx2d_list(idx)]
-
+    def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
         if not all(isinstance(i, str | slice) for i in idx):
             msg = f"Unsupported index {idx!r}"
             raise TypeError(msg)
-        if (n_slices := sum(isinstance(i, slice) for i in idx)) not in {1, 2}:
+        if sum(isinstance(i, slice) for i in idx) not in {1, 2}:
             msg = (
                 f"Unsupported index {idx!r}: "
                 f"should be ['c1', :], ['c1', 'c2'], or [:, 'c2']"
             )
             raise TypeError(msg)
+        return idx
 
-        def get(ad: AnnData) -> pd.api.extensions.ExtensionArray | NDArray[Any]:
-            df = cast("pd.DataFrame", getattr(ad, self.ax[:-1]))
-            iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
-            return getattr(ad, self.ax)[self.k][iloc].toarray()
+    @overload
+    def __getitem__(self, idx: Idx2D[str], /) -> P: ...
+    @overload
+    def __getitem__(self, idx: Idx2DList[str], /) -> list[P]: ...
+    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> P | list[P]:
+        if _is_idx2d_list(idx):
+            return [self[i] for i in _expand_idx2d_list(idx)]
+        return super().__getitem__(idx)
 
-        label = next((f"{self.k} {i}" for i in idx if isinstance(i, str)), None)
+    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+        df = cast("pd.DataFrame", getattr(adata, self.ax[:-1]))
+        iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
+        return getattr(adata, self.ax)[self.k][iloc].toarray()
+
+    def axes(self, idx: Idx2D[str], /) -> Axes:
+        n_slices = sum(isinstance(i, slice) for i in idx)
         ax = cast("Literal['obs', 'var']", self.ax[:-1])
-        axes: Collection[Literal["obs", "var"]] = (
-            (ax,) * n_slices if n_slices > 1 else {ax}
-        )
-        return self.path_class(
-            f"{self!r}[{idx[0]!r}, {idx[1]!r}]", get, axes, label=label
-        )
+        return (ax,) * n_slices if n_slices > 1 else {ax}
 
     def __repr__(self) -> str:
         return f"A.{self.ax}[{self.k!r}]"
+
+    def idx_repr(self, idx: Idx2D[str]) -> str:
+        return f"[{idx[0]!r}, {idx[1]!r}]"
 
 
 @dataclass(frozen=True)
@@ -294,8 +334,8 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
     k: None = field(init=False, default=None)
 
     layers: LayerAcc[P] = field(init=False)
-    obs: MetaAcc[P] = field(init=False)
-    var: MetaAcc[P] = field(init=False)
+    obs: MetaVecAcc[P] = field(init=False)
+    var: MetaVecAcc[P] = field(init=False)
     obsm: MultiAcc[P] = field(init=False)
     varm: MultiAcc[P] = field(init=False)
     obsp: GraphAcc[P] = field(init=False)
@@ -313,8 +353,8 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", LayerAcc(path_class=self.path_class))
-        object.__setattr__(self, "obs", MetaAcc("obs", path_class=self.path_class))
-        object.__setattr__(self, "var", MetaAcc("var", path_class=self.path_class))
+        object.__setattr__(self, "obs", MetaVecAcc("obs", path_class=self.path_class))
+        object.__setattr__(self, "var", MetaVecAcc("var", path_class=self.path_class))
         object.__setattr__(self, "obsm", MultiAcc("obsm", path_class=self.path_class))
         object.__setattr__(self, "varm", MultiAcc("varm", path_class=self.path_class))
         object.__setattr__(self, "obsp", GraphAcc("obsp", path_class=self.path_class))
@@ -340,7 +380,7 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
             # TODO: X
             case LayerAcc() as layers:
                 return self._parse_path_layer(layers, rest)
-            case MetaAcc() as meta:
+            case MetaVecAcc() as meta:
                 return meta[rest]
             case MultiAcc() as multi:
                 return self._parse_path_multi(multi, rest)

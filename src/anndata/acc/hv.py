@@ -2,33 +2,55 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
+import pandas as pd
 from holoviews.core.dimension import Dimension
 
-from . import AdAcc, AdPath
+from . import AdAcc, AdPath, GraphVecAcc, LayerVecAcc, MetaVecAcc, MultiVecAcc
 
 if TYPE_CHECKING:
     from typing import Any, Literal, Self
 
-    from . import AdPathFunc, Axes
+    from . import VecAcc
 
 
 __all__ = ["A", "AdDim"]
 
 
-class AdDim(AdPath, Dimension):
+def mk_label(p: AdPath, /) -> str | None:
+    match p.acc:
+        case MultiVecAcc():
+            return f"{p.acc.k} {p.idx}"
+        case GraphVecAcc():
+            return next((f"{p.acc.k} {i}" for i in p.idx if isinstance(i, str)), None)
+        case LayerVecAcc():
+            return next(
+                (
+                    f"{p.acc.k} {i}" if p.acc.k else i
+                    for i in p.idx
+                    if isinstance(i, str)
+                ),
+                None,
+            )
+        case MetaVecAcc():
+            return f"{p.acc.ax} index" if p.idx is pd.Index else p.idx
+        case _:  # pragma: no cover
+            msg = f"Unsupported vector accessor {p.acc!r}"
+            raise AssertionError(msg)
+
+
+class AdDim[I](AdPath[I], Dimension):
     def __init__(
         self,
-        _repr: str | tuple[str, str],
-        func: AdPathFunc,
-        axes: Axes,
+        acc: VecAcc[Self, I],
+        idx: I,
         /,
         *,
         label: str | None = None,
         **params: object,
     ) -> None:
         label_kw = {} if label is None else dict(label=label)
-        AdPath.__init__(self, _repr, func, axes)
-        Dimension.__init__(self, _repr, **params, **label_kw)
+        AdPath.__init__(self, acc, idx)  # type: ignore
+        Dimension.__init__(self, repr(self), label=mk_label(self), **params, **label_kw)
 
     @overload
     @classmethod
@@ -127,4 +149,4 @@ class AdDim(AdPath, Dimension):
         return False
 
 
-A = AdAcc(AdDim)
+A = AdAcc(path_class=AdDim)
