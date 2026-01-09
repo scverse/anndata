@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, overload
 from . import GraphAcc, LayerAcc, MetaVecAcc, MultiAcc
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Literal
 
-    from . import AdAcc, AdPath, Idx2D
+    from . import AdAcc, AdPath, GraphVecAcc, Idx2D, LayerVecAcc
 
 
 @overload
@@ -23,21 +24,19 @@ def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None
         except ValueError:
             return None
 
+    if spec.startswith("X["):
+        return _parse_path_2d(lambda _: a, spec)
     if "." not in spec:
         msg = f"Cannot parse accessor {spec!r}"
         raise ValueError(msg)
-    acc, rest = spec.split(".", 1)
-    match getattr(a, acc, None):
-        # TODO: X
-        case LayerAcc() as layers:
-            return _parse_path_layer(layers, rest)
+    acc_name, rest = spec.split(".", 1)
+    match getattr(a, acc_name, None):
+        case LayerAcc() | GraphAcc() as acc:
+            return _parse_path_2d(acc.__getitem__, rest)
         case MetaVecAcc() as meta:
             return meta[rest]
         case MultiAcc() as multi:
             return _parse_path_multi(multi, rest)
-        case GraphAcc():
-            msg = "TODO"
-            raise NotImplementedError(msg)
         case None:  # pragma: no cover
             msg = (
                 f"Unknown accessor {spec!r}. "
@@ -48,14 +47,17 @@ def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None
     raise AssertionError(msg)  # pragma: no cover
 
 
-def _parse_path_layer[P: AdPath](layers: LayerAcc[P], spec: str) -> P:
+def _parse_path_2d[P: AdPath](
+    get_vec_acc: Callable[[str], LayerVecAcc[P] | GraphVecAcc[P]], spec: str
+) -> P:
     if not (
         m := re.fullmatch(r"([^\[]+)\[([^,]+),\s?([^\]]+)\]", spec)
     ):  # pragma: no cover
-        msg = f"Cannot parse layer accessor {spec!r}: should be `name[i,:]`/`name[:,j]`"
+        msg = f"Cannot parse accessor {spec!r}: should be `name[i,:]`/`name[:,j]`"
         raise ValueError(msg)
-    layer, i, j = m.groups("")  # "" just for typing
-    return layers[layer][_parse_idx_2d(i, j, str)]
+    name, i, j = m.groups("")  # "" just for typing
+    vec_acc = get_vec_acc(name)
+    return vec_acc[_parse_idx_2d(i, j, str)]
 
 
 def _parse_path_multi[P: AdPath](multi: MultiAcc[P], spec: str) -> P:
@@ -68,6 +70,8 @@ def _parse_path_multi[P: AdPath](multi: MultiAcc[P], spec: str) -> P:
 
 def _parse_idx_2d[Idx: int | str](i: str, j: str, cls: type[Idx]) -> Idx2D[Idx]:
     match i, j:
+        case ":", ":":
+            return slice(None), slice(None)
         case _, ":":
             return cls(i), slice(None)
         case ":", _:

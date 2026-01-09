@@ -108,29 +108,6 @@ def test_axes(ad_path: AdPath, axes: Collection[Literal["obs", "var"]]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("spec", "expected"),
-    [
-        # TODO: pytest.param("???", A[:, :], id="x"),
-        pytest.param("layers.y[c,:]", A.layers["y"]["c", :], id="layer-obs"),
-        pytest.param("layers.y[:,g]", A.layers["y"][:, "g"], id="layer-var"),
-        pytest.param("obs.a", A.obs["a"], id="obs"),
-        pytest.param("var.b", A.var["b"], id="var"),
-        pytest.param("obsm.c.0", A.obsm["c"][:, 0], id="obsm"),
-        pytest.param("varm.d.1", A.varm["d"][:, 1], id="varm"),
-        pytest.param("obsp.g[c1,:]", A.obsp["d"]["c1", :], id="obsp"),
-        pytest.param("obsp.g[:,c2]", A.obsp["d"][:, "c2"], id="varp"),
-    ],
-)
-def test_resolve(spec: str, expected: AdPath) -> None:
-    try:
-        assert A.resolve(spec) == expected
-        assert spec == expected
-        assert expected != ""
-    except NotImplementedError:
-        pytest.xfail("not implemented")
-
-
-@pytest.mark.parametrize(
     "mk_path",
     [
         pytest.param(lambda: A[:3, :], id="x-partslice"),

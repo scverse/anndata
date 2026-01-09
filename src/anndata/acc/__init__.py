@@ -381,7 +381,29 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
     @overload
     def resolve(self, spec: str, *, strict: Literal[False]) -> P | None: ...
     def resolve(self, spec: str, *, strict: bool = True) -> P | None:
-        """Create accessor from string."""
+        """Create accessor from string.
+
+        Examples
+        --------
+        >>> A.resolve("X[:,:]")
+        A[:, :]
+        >>> A.resolve("layers.y[c,:]")
+        A.layers['y']['c', :]
+        >>> A.resolve("layers.y[:,g]")
+        A.layers['y'][:, 'g']
+        >>> A.resolve("obs.a")
+        A.obs['a']
+        >>> A.resolve("var.b")
+        A.var['b']
+        >>> A.resolve("obsm.c.0")
+        A.obsm['c'][:, 0]
+        >>> A.resolve("varm.d.1")
+        A.varm['d'][:, 1]
+        >>> A.resolve("obsp.g[c1,:]")
+        A.obsp['g']['c1', :]
+        >>> A.resolve("obsp.g[:,c2]")
+        A.obsp['g'][:, 'c2']
+        """
         from ._parse import parse
 
         return parse(self, spec, strict=strict)
