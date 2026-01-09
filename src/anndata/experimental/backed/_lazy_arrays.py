@@ -48,7 +48,7 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
     ----------
     categories_elem
         The underlying zarr or h5 array (or group for nullable-string-array
-        encoding) containing category values. Can be None for empty dtype.
+        encoding) containing category values.
     ordered
         Whether the categorical is ordered.
     """
@@ -58,7 +58,7 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
     def __new__(
         cls,
-        categories_elem: ZarrArray | H5Array | ZarrGroup | H5Group | None = None,
+        categories_elem: ZarrArray | H5Array | ZarrGroup | H5Group,
         *,
         ordered: bool = False,
     ):
@@ -68,11 +68,10 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
     def __init__(
         self,
-        categories_elem: ZarrArray | H5Array | ZarrGroup | H5Group | None = None,
+        categories_elem: ZarrArray | H5Array | ZarrGroup | H5Group,
         *,
         ordered: bool = False,
     ):
-        # Can be None for edge cases (empty dtype). See test_lazy_categorical_dtype_empty_array.
         self._categories_elem = categories_elem
         self._ordered_flag = bool(ordered)
 
@@ -90,18 +89,11 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         return self._categories_elem["values"]
 
     @cached_property
-    def categories(self) -> pd.Index | None:
+    def categories(self) -> pd.Index:
         """Categories index. Loads all categories on first access and caches."""
-        if self._categories_elem is None:
-            return None
-        arr = self._get_categories_array()
-        if isinstance(arr, ZarrArray):
-            values = arr[...]
-        else:
-            from anndata.io import read_elem
+        from anndata.io import read_elem
 
-            values = read_elem(self._categories_elem)
-        return pd.Index(values)
+        return pd.Index(read_elem(self._categories_elem))
 
     @property
     def ordered(self) -> bool:
@@ -111,22 +103,41 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
     @property
     def n_categories(self) -> int:
         """Number of categories (cheap, metadata only)."""
-        if self._categories_elem is None:
-            return 0
         if "categories" in self.__dict__:
             return len(self.categories)
         return self._get_categories_array().shape[0]
 
-    def _read_partial_categories(
-        self, start: int, stop: int
+    def _get_categories_slice(
+        self, n: int, *, from_end: bool = False
     ) -> np.ndarray | pd.api.extensions.ExtensionArray:
-        """Read a slice of categories from disk.
+        """Get n categories from start or end.
 
-        Uses read_elem_partial for proper HDF5 string decoding.
+        Parameters
+        ----------
+        n
+            Number of categories to return.
+        from_end
+            If True, return last n categories. If False, return first n.
+
+        Returns
+        -------
+        np.ndarray or ExtensionArray
+            The requested categories.
         """
+        # If already fully loaded, slice from cache
+        if "categories" in self.__dict__:
+            sliced = self.categories[-n:] if from_end else self.categories[:n]
+            return np.asarray(sliced)
+
+        # Read partial from disk
         from anndata._io.specs.registry import read_elem_partial
 
         arr = self._get_categories_array()
+        total = arr.shape[0]
+        if from_end:
+            start, stop = max(total - n, 0), total
+        else:
+            start, stop = 0, min(n, total)
         return read_elem_partial(arr, indices=slice(start, stop))
 
     def head_categories(
@@ -144,15 +155,7 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         np.ndarray or ExtensionArray
             The first n categories.
         """
-        if self._categories_elem is None:
-            return np.array([])
-
-        # If already fully loaded, slice from cache
-        if "categories" in self.__dict__:
-            return np.asarray(self.categories[:n])
-
-        total = self.n_categories
-        return self._read_partial_categories(0, min(n, total))
+        return self._get_categories_slice(n, from_end=False)
 
     def tail_categories(
         self, n: int = 5
@@ -169,31 +172,13 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         np.ndarray or ExtensionArray
             The last n categories.
         """
-        if self._categories_elem is None:
-            return np.array([])
-
-        # If already fully loaded, slice from cache
-        if "categories" in self.__dict__:
-            return np.asarray(self.categories[-n:])
-
-        total = self.n_categories
-        start = max(total - n, 0)
-        return self._read_partial_categories(start, total)
+        return self._get_categories_slice(n, from_end=True)
 
     def __repr__(self) -> str:
-        if "categories" in self.__dict__ and self.categories is not None:
+        if "categories" in self.__dict__:
             # Fully loaded - use standard repr
             return f"CategoricalDtype(categories={self.categories!r}, ordered={self.ordered})"
         return f"LazyCategoricalDtype(n_categories={self.n_categories}, ordered={self.ordered})"
-
-    @property
-    def name(self) -> str:
-        """String identifier for this dtype.
-
-        Required for string comparison (e.g., dtype == "category") used in
-        anndata merge operations.
-        """
-        return "category"
 
     def __hash__(self) -> int:
         """Hash based on identity of underlying array and ordered flag.
@@ -217,8 +202,8 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         # Compare with regular CategoricalDtype - need to load categories
         if self.ordered != other.ordered:
             return False
-        if other.categories is None or self.categories is None:
-            return other.categories is None and self.categories is None
+        if other.categories is None:
+            return False  # LazyCategoricalDtype always has categories
         return self.categories.equals(other.categories)
 
 
