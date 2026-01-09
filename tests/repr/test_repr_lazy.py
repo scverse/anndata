@@ -385,6 +385,232 @@ class TestLazyCategoryLoading:
             assert "(2 categories)" in html_metadata
 
 
+class TestIsLazyColumn:
+    """Tests for is_lazy_column detection."""
+
+    def test_is_lazy_column_regular_series(self):
+        """Test that regular pandas Series is not detected as lazy."""
+        from anndata._repr.lazy import is_lazy_column
+
+        series = pd.Series([1, 2, 3])
+        assert is_lazy_column(series) is False
+
+    def test_is_lazy_column_categorical_series(self):
+        """Test that categorical pandas Series is not detected as lazy."""
+        from anndata._repr.lazy import is_lazy_column
+
+        series = pd.Series(pd.Categorical(["a", "b", "c"]))
+        assert is_lazy_column(series) is False
+
+    def test_is_lazy_column_numpy_array(self):
+        """Test that numpy array is not detected as lazy."""
+        from anndata._repr.lazy import is_lazy_column
+
+        arr = np.array([1, 2, 3])
+        assert is_lazy_column(arr) is False
+
+    def test_is_lazy_column_mock_xarray_like(self):
+        """Test that object with xarray-like attributes is detected as lazy."""
+        from anndata._repr.lazy import is_lazy_column
+
+        class MockXarrayColumn:
+            variable = "something"
+            dims = ("x",)
+
+        assert is_lazy_column(MockXarrayColumn()) is True
+
+    def test_is_lazy_column_mock_variable_backed(self):
+        """Test that object with _variable attribute is detected as lazy."""
+        from anndata._repr.lazy import is_lazy_column
+
+        class MockVariableBacked:
+            _variable = "something"
+
+        assert is_lazy_column(MockVariableBacked()) is True
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_is_lazy_column_real_xarray(self, tmp_path):
+        """Test is_lazy_column with real xarray DataArray from lazy AnnData."""
+        from anndata._repr.lazy import is_lazy_column
+
+        adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy = ad.experimental.read_lazy(path)
+        col = lazy.obs._ds["cat"]
+
+        assert is_lazy_column(col) is True
+
+
+class TestGetLazyCategoricalInfo:
+    """Tests for get_lazy_categorical_info function."""
+
+    def test_get_lazy_categorical_info_non_lazy(self):
+        """Test that non-lazy objects return (None, False)."""
+        from anndata._repr.lazy import get_lazy_categorical_info
+
+        series = pd.Series(pd.Categorical(["a", "b", "c"]))
+        n_cats, ordered = get_lazy_categorical_info(series)
+        assert n_cats is None
+        assert ordered is False
+
+    def test_get_lazy_categorical_info_plain_object(self):
+        """Test that plain objects return (None, False)."""
+        from anndata._repr.lazy import get_lazy_categorical_info
+
+        n_cats, ordered = get_lazy_categorical_info("not a categorical")
+        assert n_cats is None
+        assert ordered is False
+
+    def test_get_lazy_categorical_info_mock_without_categorical(self):
+        """Test object with xarray structure but no CategoricalArray."""
+        from anndata._repr.lazy import get_lazy_categorical_info
+
+        class MockVariable:
+            _data = None
+
+        class MockCol:
+            variable = MockVariable()
+
+        n_cats, ordered = get_lazy_categorical_info(MockCol())
+        assert n_cats is None
+        assert ordered is False
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_lazy_categorical_info_zarr(self, tmp_path):
+        """Test get_lazy_categorical_info with Zarr-backed categorical."""
+        from anndata._repr.lazy import get_lazy_categorical_info
+
+        adata = AnnData(sp.random(100, 50, density=0.1, format="csr", dtype=np.float32))
+        adata.obs["cat"] = pd.Categorical(["a", "b", "c", "d", "e"] * 20)
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy = ad.experimental.read_lazy(path)
+        col = lazy.obs._ds["cat"]
+
+        n_cats, ordered = get_lazy_categorical_info(col)
+        assert n_cats == 5
+        assert not ordered
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_lazy_categorical_info_h5ad(self, tmp_path):
+        """Test get_lazy_categorical_info with H5AD-backed categorical."""
+        import h5py
+
+        from anndata._repr.lazy import get_lazy_categorical_info
+
+        adata = AnnData(np.random.randn(100, 50).astype(np.float32))
+        adata.obs["cat"] = pd.Categorical(["x", "y", "z"] * 33 + ["x"], ordered=False)
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy = ad.experimental.read_lazy(f)
+            col = lazy.obs._ds["cat"]
+
+            n_cats, ordered = get_lazy_categorical_info(col)
+            assert n_cats == 3
+            assert not ordered
+
+
+class TestGetCategoricalArrayHelper:
+    """Tests for _get_categorical_array helper function."""
+
+    def test_get_categorical_array_non_lazy(self):
+        """Test that non-lazy objects return None."""
+        from anndata._repr.lazy import _get_categorical_array
+
+        series = pd.Series(pd.Categorical(["a", "b", "c"]))
+        assert _get_categorical_array(series) is None
+
+    def test_get_categorical_array_plain_object(self):
+        """Test that plain objects return None."""
+        from anndata._repr.lazy import _get_categorical_array
+
+        assert _get_categorical_array("string") is None
+        assert _get_categorical_array(123) is None
+        assert _get_categorical_array(None) is None
+
+    def test_get_categorical_array_mock_structure_no_categorical(self):
+        """Test object with partial xarray structure returns None."""
+        from anndata._repr.lazy import _get_categorical_array
+
+        class MockLazyIndexed:
+            array = "not a CategoricalArray"
+
+        class MockVariable:
+            _data = MockLazyIndexed()
+
+        class MockCol:
+            variable = MockVariable()
+
+        assert _get_categorical_array(MockCol()) is None
+
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_get_categorical_array_real(self, tmp_path):
+        """Test _get_categorical_array with real lazy categorical."""
+        from anndata._repr.lazy import _get_categorical_array
+        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+        adata = AnnData(sp.random(50, 20, density=0.1, format="csr", dtype=np.float32))
+        adata.obs["cat"] = pd.Categorical(["A", "B", "C"] * 16 + ["A", "A"])
+
+        path = tmp_path / "test.zarr"
+        adata.write_zarr(path)
+
+        lazy = ad.experimental.read_lazy(path)
+        col = lazy.obs._ds["cat"]
+
+        result = _get_categorical_array(col)
+        assert isinstance(result, CategoricalArray)
+
+
+class TestLazyAdataDetection:
+    """Tests for is_lazy_adata detection with edge cases."""
+
+    def test_is_lazy_adata_none(self):
+        """Test that None returns False."""
+        from anndata._repr.lazy import is_lazy_adata
+
+        assert is_lazy_adata(None) is False
+
+    def test_is_lazy_adata_no_obs(self):
+        """Test object without obs attribute returns False."""
+        from anndata._repr.lazy import is_lazy_adata
+
+        class NoObs:
+            pass
+
+        assert is_lazy_adata(NoObs()) is False
+
+    def test_is_lazy_adata_obs_raises(self):
+        """Test object where .obs raises returns False."""
+        from anndata._repr.lazy import is_lazy_adata
+
+        class RaisingObs:
+            @property
+            def obs(self):
+                msg = "Cannot access obs"
+                raise RuntimeError(msg)
+
+        assert is_lazy_adata(RaisingObs()) is False
+
+    def test_is_lazy_adata_obs_none(self):
+        """Test object with obs=None returns False."""
+        from anndata._repr.lazy import is_lazy_adata
+
+        class NoneObs:
+            obs = None
+
+        assert is_lazy_adata(NoneObs()) is False
+
+
 class TestLazyBackingInfo:
     """Tests for lazy AnnData backing file info extraction."""
 
