@@ -10,6 +10,10 @@ Usage:
 Then open tests/repr_html_visual_test.html in your browser.
 """
 
+# ruff: noqa: EM101
+# EM101: Exception string literals are used intentionally in evil test objects
+# RUF001/RUF003: Unicode lookalike characters are intentional - testing confusable chars
+
 from __future__ import annotations
 
 import tempfile
@@ -2126,7 +2130,9 @@ For more details, see the full documentation.
     print("  18b. README Truncation (large README)")
     adata_large_readme = ad.AnnData(np.zeros((5, 5)))
     # Create a README larger than 100KB (default limit)
-    large_readme = "# Large README\n\n" + "This is a very long README. " * 5000  # ~150KB
+    large_readme = (
+        "# Large README\n\n" + "This is a very long README. " * 5000
+    )  # ~150KB
     adata_large_readme.uns["README"] = large_readme
 
     large_readme_html = adata_large_readme._repr_html_()
@@ -2515,57 +2521,73 @@ For more details, see the full documentation.
 
     class ExplodingRepr:
         """Object whose __repr__ crashes."""
+
         def __repr__(self):
             raise RuntimeError("BOOM! __repr__ exploded")
 
     class ExplodingLen:
         """Object whose __len__ crashes."""
+
         def __len__(self):
             raise MemoryError("BOOM! __len__ exploded")
 
     class ExplodingStr:
         """Object whose __str__ crashes."""
+
         def __str__(self):
             raise ValueError("BOOM! __str__ exploded")
+
         def __repr__(self):
             return "ExplodingStr(str crashes)"
 
     class LyingObject:
         """Object that lies about all its properties."""
+
         @property
         def shape(self):
             raise AttributeError("I have no shape")
+
         @property
         def dtype(self):
             raise AttributeError("I have no dtype")
+
         def __len__(self):
             raise AttributeError("I have no length")
+
         def __repr__(self):
             return "LyingObject(all properties lie)"
+
         def __str__(self):
             raise AttributeError("I have no str")
 
     class InfiniteLen:
         """Object claiming impossibly large length."""
+
         def __len__(self):
             return 10**18  # 1 quintillion items
+
         def __repr__(self):
             return "InfiniteLen(10^18 items)"
 
     class ExplodingShape:
         """Object whose shape property explodes."""
+
         @property
         def shape(self):
             raise TypeError("BOOM! shape exploded")
+
         def __repr__(self):
             return "ExplodingShape(.shape crashes)"
 
     class ExplodingDtype:
         """Object whose dtype property explodes."""
+
         shape = (10, 10)  # Normal shape
+
         @property
         def dtype(self):
             raise TypeError("BOOM! dtype exploded")
+
         def __repr__(self):
             return "ExplodingDtype(.dtype crashes)"
 
@@ -2577,11 +2599,11 @@ For more details, see the full documentation.
     adata_evil.obs['<script>alert("XSS")</script>'] = np.random.randint(0, 10, size=50)
     adata_evil.obs["<img onerror=alert(1)>"] = np.random.rand(50)
     adata_evil.obs['onclick="evil()"'] = np.random.rand(50)
-    adata_evil.obs['<svg onload=alert(1)>'] = np.random.rand(50)
-    adata_evil.obs['javascript:alert(1)'] = np.random.rand(50)
+    adata_evil.obs["<svg onload=alert(1)>"] = np.random.rand(50)
+    adata_evil.obs["javascript:alert(1)"] = np.random.rand(50)
 
     # Unicode bombs
-    adata_evil.obs["emoji_\U0001F4A9_poop"] = np.random.rand(50)
+    adata_evil.obs["emoji_\U0001f4a9_poop"] = np.random.rand(50)
     adata_evil.obs["chinese_\u4e2d\u6587"] = pd.Categorical(
         np.random.choice(["cat", "dog", "bird"], size=50)
     )
@@ -2606,13 +2628,17 @@ For more details, see the full documentation.
     # UNKNOWN TYPE WARNING (orange text) - object pretending to be from anndata package
     class FakeAnndataType:
         """Unknown type from anndata package triggers warning (not error)."""
+
         __module__ = "anndata.experimental.fake"
+
         def __repr__(self):
             return "FakeAnndataType()"
+
     adata_evil.uns["unknown_anndata_type"] = FakeAnndataType()
 
     # EVIL README - tests the readme modal with all kinds of malicious content
-    evil_readme = """# Evil README - XSS and Injection Test
+    evil_readme = (
+        """# Evil README - XSS and Injection Test
 
 ## XSS Attempts
 <script>alert('XSS in readme!')</script>
@@ -2698,7 +2724,9 @@ ${alert('template_literal')}
 The end. If you see this without any alerts or broken layout, the sanitization works!
 
 ## Size Bomb (50KB of repeated text below)
-""" + "A" * 50000
+"""
+        + "A" * 50000
+    )
     adata_evil.uns["README"] = evil_readme
 
     # CIRCULAR REFERENCE (dict)
@@ -2735,8 +2763,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # HUGE categorical (10,000 categories!)
     huge_cats = [f"category_{i:05d}" for i in range(10000)]
     adata_evil.obs["huge_categorical_10k"] = pd.Categorical(
-        np.random.choice(huge_cats[:50], size=50),
-        categories=huge_cats
+        np.random.choice(huge_cats[:50], size=50), categories=huge_cats
     )
 
     # === MANY ENTRIES IN ONE SECTION ===
@@ -2753,7 +2780,14 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     adata_evil.obs["cat_too_many_colors"] = pd.Categorical(
         np.random.choice(["A", "B", "C"], size=50)
     )
-    adata_evil.uns["cat_too_many_colors_colors"] = ["red", "green", "blue", "yellow", "purple", "orange"]
+    adata_evil.uns["cat_too_many_colors_colors"] = [
+        "red",
+        "green",
+        "blue",
+        "yellow",
+        "purple",
+        "orange",
+    ]
 
     # Too few colors (fewer than categories)
     adata_evil.obs["cat_too_few_colors"] = pd.Categorical(
@@ -2792,22 +2826,28 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # OBJECT WITH VERY LONG ERROR MESSAGE (in uns to test truncation)
     class VeryLongErrorObject:
         """Object that produces a very long error message."""
+
         @property
         def shape(self):
             raise TypeError(
-                "This is a VERY LONG ERROR MESSAGE that should be properly truncated. " * 10 +
-                "It contains lots of details about what went wrong: " +
-                "ValueError: The input array has shape (100, 200, 300) but expected (50, 100). " +
-                "Additional context: This error occurred while processing the data matrix. " +
-                "Stack trace would go here with many lines of debugging information. " * 5
+                "This is a VERY LONG ERROR MESSAGE that should be properly truncated. "
+                * 10
+                + "It contains lots of details about what went wrong: "
+                + "ValueError: The input array has shape (100, 200, 300) but expected (50, 100). "
+                + "Additional context: This error occurred while processing the data matrix. "
+                + "Stack trace would go here with many lines of debugging information. "
+                * 5
             )
+
         def __repr__(self):
             return "VeryLongErrorObject(produces long error)"
 
     adata_evil.uns["long_error_object_uns"] = VeryLongErrorObject()
 
     # Add long error object to varm (bypass validation via internal store)
-    adata_evil.varm["gene_scores"] = np.random.rand(30, 5)  # Need at least one valid entry
+    adata_evil.varm["gene_scores"] = np.random.rand(
+        30, 5
+    )  # Need at least one valid entry
     adata_evil.varm._data["long_error_object"] = VeryLongErrorObject()
 
     # Standard sections to show they still work
@@ -2926,17 +2966,19 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # === UNICODE LOOKALIKES (confusable characters) ===
     # Not a security issue, but tests correct Unicode display
     adata_advanced.obs["normal_name"] = np.random.rand(20)
-    adata_advanced.obs["n\u0430me_cyrillic_a"] = np.random.rand(20)  # Cyrillic а
-    adata_advanced.obs["n\u0435w_cyrillic_e"] = np.random.rand(20)  # Cyrillic е
-    # Greek lookalikes (ο=U+03BF looks like o)
-    adata_advanced.obs["z\u03BFne_greek_o"] = np.random.rand(20)  # Greek ο
-    # Fullwidth lookalikes (Ａ=U+FF21 looks like A)
-    adata_advanced.obs["\uFF21\uFF22\uFF23_fullwidth"] = np.random.rand(20)
+    adata_advanced.obs["n\u0430me_cyrillic_a"] = np.random.rand(20)
+    adata_advanced.obs["n\u0435w_cyrillic_e"] = np.random.rand(20)
+    # Greek lookalikes - U+03BF looks like o
+    adata_advanced.obs["z\u03bfne_greek_o"] = np.random.rand(20)
+    # Fullwidth lookalikes - U+FF21 looks like A
+    adata_advanced.obs["\uff21\uff22\uff23_fullwidth"] = np.random.rand(20)
 
     # === ZERO-WIDTH DECEPTION ===
     # Invisible characters that could hide content
-    adata_advanced.obs["visible\u200Bhidden\u200Btext"] = np.random.rand(20)  # Zero-width space
-    adata_advanced.obs["join\u200Der_test"] = np.random.rand(20)  # Zero-width joiner
+    adata_advanced.obs["visible\u200bhidden\u200btext"] = np.random.rand(
+        20
+    )  # Zero-width space
+    adata_advanced.obs["join\u200der_test"] = np.random.rand(20)  # Zero-width joiner
     adata_advanced.obs["word\u2060breaker"] = np.random.rand(20)  # Word joiner
     # Invisible separator attack
     adata_advanced.uns["safe\u2063key"] = "invisible separator in key"
@@ -2944,7 +2986,9 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # === BIDI SPOOFING (Trojan Source - CVE-2021-42574) ===
     # RLI (Right-to-Left Isolate) + PDI (Pop Directional Isolate)
     adata_advanced.obs["user\u2067admin\u2069_bidi"] = np.random.rand(20)
-    adata_advanced.uns["access\u202Edenied\u202C"] = "RLO attack"  # Right-to-Left Override
+    adata_advanced.uns["access\u202edenied\u202c"] = (
+        "RLO attack"  # Right-to-Left Override
+    )
     # Homoglyph + Bidi combo
     adata_advanced.uns["file\u2066\u2069.exe"] = "hidden extension"
 
@@ -2962,20 +3006,30 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     adata_advanced.var["@keyframes evil { }"] = np.random.rand(15)
     adata_advanced.var["filter: blur(100px)"] = np.random.rand(15)
     adata_advanced.var["cursor: url(evil.cur)"] = np.random.rand(15)
-    adata_advanced.uns["css_animation"] = "@keyframes spin { from { transform: rotate(0); } }"
+    adata_advanced.uns["css_animation"] = (
+        "@keyframes spin { from { transform: rotate(0); } }"
+    )
     adata_advanced.uns["css_content"] = "content: attr(data-secret)"
 
     # === SVG XSS ===
     adata_advanced.uns["svg_script"] = "<svg><script>alert(1)</script></svg>"
-    adata_advanced.uns["svg_foreignobject"] = "<svg><foreignObject><body onload=alert(1)></foreignObject></svg>"
-    adata_advanced.uns["svg_use"] = "<svg><use href='data:image/svg+xml,<svg onload=alert(1)>'></use></svg>"
-    adata_advanced.uns["svg_animate"] = "<svg><animate onbegin=alert(1)></animate></svg>"
+    adata_advanced.uns["svg_foreignobject"] = (
+        "<svg><foreignObject><body onload=alert(1)></foreignObject></svg>"
+    )
+    adata_advanced.uns["svg_use"] = (
+        "<svg><use href='data:image/svg+xml,<svg onload=alert(1)>'></use></svg>"
+    )
+    adata_advanced.uns["svg_animate"] = (
+        "<svg><animate onbegin=alert(1)></animate></svg>"
+    )
 
     # === MUTATION XSS (mXSS) ===
     # Malformed HTML that could mutate during parsing
     adata_advanced.uns["mxss_img"] = "<img src=x onerror=alert(1)//"  # Missing >
     adata_advanced.uns["mxss_cdata"] = "<svg><![CDATA[><script>alert(1)</script>]]>"
-    adata_advanced.uns["mxss_noscript"] = '<noscript><p title="</noscript><script>alert(1)</script>">'
+    adata_advanced.uns["mxss_noscript"] = (
+        '<noscript><p title="</noscript><script>alert(1)</script>">'
+    )
     adata_advanced.uns["mxss_double_lt"] = "<<script>alert(1)</script>"
     adata_advanced.uns["mxss_nested_tag"] = "<div<script>alert(1)</script>>"
 
@@ -2993,13 +3047,17 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # === ACCESSIBILITY ATTACKS ===
     adata_advanced.uns["aria_spoof"] = 'aria-label="Click to win $1000"'
     adata_advanced.uns["role_spoof"] = 'role="button" aria-pressed="false"'
-    adata_advanced.uns["hidden_content"] = '<span aria-hidden="false" style="display:none">secret</span>'
+    adata_advanced.uns["hidden_content"] = (
+        '<span aria-hidden="false" style="display:none">secret</span>'
+    )
 
     # === TEMPLATE INJECTION ===
     adata_advanced.uns["angular_inject"] = "{{constructor.constructor('alert(1)')()}}"
     adata_advanced.uns["vue_inject"] = "{{_c.constructor('alert(1)')()}}"
     adata_advanced.uns["jinja_inject"] = "{{ config.items() }}"
-    adata_advanced.uns["ejs_inject"] = "<%= global.process.mainModule.require('child_process').execSync('id') %>"
+    adata_advanced.uns["ejs_inject"] = (
+        "<%= global.process.mainModule.require('child_process').execSync('id') %>"
+    )
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -3012,10 +3070,10 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "prototype pollution, bidi spoofing, and template injection patterns.<br><br>"
         "<b>Unicode Lookalikes (confusable characters):</b><br>"
         "<ul>"
-        "<li>Cyrillic а (U+0430) looks like Latin a</li>"
-        "<li>Cyrillic е (U+0435) looks like Latin e</li>"
-        "<li>Greek ο (U+03BF) looks like Latin o</li>"
-        "<li>Fullwidth ＡＢＣ looks like ABC</li>"
+        "<li>Cyrillic U+0430 looks like Latin a</li>"
+        "<li>Cyrillic U+0435 looks like Latin e</li>"
+        "<li>Greek U+03BF looks like Latin o</li>"
+        "<li>Fullwidth U+FF21/22/23 looks like ABC</li>"
         "<li><i>Not a security issue - tests correct Unicode display</i></li>"
         "</ul>"
         "<b>Zero-Width Characters (invisible):</b><br>"

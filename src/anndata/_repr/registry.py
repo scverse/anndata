@@ -46,7 +46,6 @@ Usage for extending to new types:
 
 from __future__ import annotations
 
-import contextlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -412,7 +411,10 @@ class FallbackFormatter(TypeFormatter):
     def can_format(self, obj: Any) -> bool:
         return True  # Can format anything
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(  # noqa: PLR0912, PLR0915
+        self, obj: Any, context: FormatterContext
+    ) -> FormattedOutput:
+        # Note: Complexity is intentional - defensive handling of unknown/malicious objects
         type_name = type(obj).__name__
         module = type(obj).__module__
 

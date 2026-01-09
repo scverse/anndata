@@ -481,9 +481,9 @@ class HTMLValidator:
         # Check for generic error indicators
         has_error = (
             "error:" in self.html.lower()
-            or re.search(r'\bError\b', self.html)
+            or re.search(r"\bError\b", self.html)
             or "adata-error" in self.html
-            or "adata-text-muted" in self.html and "error" in self.html.lower()
+            or ("adata-text-muted" in self.html and "error" in self.html.lower())
         )
         if not has_error:
             raise AssertionError(msg or "No error indicator found in HTML")
@@ -502,39 +502,42 @@ class HTMLValidator:
 
         # Check for actual executable script injection
         # Raw <script> tags (not escaped as &lt;script&gt;)
-        if re.search(r'<script[^>]*>(?!.*&lt;)', content, re.I):
+        if re.search(r"<script[^>]*>(?!.*&lt;)", content, re.I):
             # Make sure it's not a false positive from our own script
-            scripts = re.findall(r'<script[^>]*>(.*?)</script>', content, re.DOTALL | re.I)
+            scripts = re.findall(
+                r"<script[^>]*>(.*?)</script>", content, re.DOTALL | re.I
+            )
             for script in scripts:
                 # Our own scripts have specific patterns
-                if 'anndata' not in script.lower() and 'toggle' not in script.lower():
-                    if 'alert' in script or 'eval(' in script:
-                        raise AssertionError(
-                            msg or "Potential XSS: executable script tag found"
-                        )
+                is_our_script = (
+                    "anndata" in script.lower() or "toggle" in script.lower()
+                )
+                has_xss_pattern = "alert" in script or "eval(" in script
+                if not is_our_script and has_xss_pattern:
+                    raise AssertionError(
+                        msg or "Potential XSS: executable script tag found"
+                    )
 
         # Check for event handlers in HTML tags (actual attributes, not text)
         # Pattern: <tag ... onclick="..." or onerror="..."
-        event_handlers = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus']
+        event_handlers = ["onclick", "onerror", "onload", "onmouseover", "onfocus"]
         for handler in event_handlers:
             # Look for handler in tag attributes (not in text content)
-            pattern = rf'<[^>]+\s{handler}\s*='
+            pattern = rf"<[^>]+\s{handler}\s*="
             if re.search(pattern, content, re.I):
                 # Verify it's not in our own legitimate HTML
                 match = re.search(pattern, content, re.I)
                 if match:
                     # Check if it's part of user content (escaped) or real attribute
-                    context = content[max(0, match.start() - 50):match.end() + 50]
-                    if '&lt;' not in context and '&quot;' not in context:
+                    context = content[max(0, match.start() - 50) : match.end() + 50]
+                    if "&lt;" not in context and "&quot;" not in context:
                         raise AssertionError(
                             msg or f"Potential XSS: {handler} handler in tag attribute"
                         )
 
         # Check for javascript: URLs in href attributes
         if re.search(r'href\s*=\s*["\']?\s*javascript:', content, re.I):
-            raise AssertionError(
-                msg or "Potential XSS: javascript: URL in href"
-            )
+            raise AssertionError(msg or "Potential XSS: javascript: URL in href")
 
         return self
 
@@ -543,13 +546,9 @@ class HTMLValidator:
         parser = StrictHTMLParser()
         parser.feed(self.html)
         if parser.errors:
-            raise AssertionError(
-                msg or f"HTML is malformed: {parser.errors}"
-            )
+            raise AssertionError(msg or f"HTML is malformed: {parser.errors}")
         if parser.tag_stack:
-            raise AssertionError(
-                msg or f"Unclosed tags: {parser.tag_stack}"
-            )
+            raise AssertionError(msg or f"Unclosed tags: {parser.tag_stack}")
         return self
 
     def assert_accessibility_attribute(

@@ -18,12 +18,21 @@ Test categories:
 All tests use the HTMLValidator to ensure proper HTML output and error reporting.
 """
 
+# ruff: noqa: EM101, RUF003
+# EM101: Exception string literals are used intentionally in test fixtures to create
+# identifiable error messages that can be verified in test assertions.
+# RUF003: Unicode lookalike characters in comments are intentional - we're testing
+# that the repr handles confusable characters correctly (e.g., Cyrillic 'а' vs Latin 'a').
+
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from typing import Any
 import pandas as pd
 import pytest
 import scipy.sparse as sp
@@ -41,12 +50,6 @@ from anndata._repr.utils import (
     is_serializable,
     is_view,
 )
-
-from .conftest import HTMLValidator, StrictHTMLParser
-
-if TYPE_CHECKING:
-    pass
-
 
 # =============================================================================
 # Evil object fixtures - the most absurd data and behavior
@@ -270,8 +273,8 @@ class TestUnicodeEdgeCases:
     def test_emoji_in_column_names(self, validate_html):
         """Emoji in column names should work."""
         adata = AnnData(np.zeros((3, 3)))
-        adata.obs["emoji_\U0001F4A9_poop"] = [1, 2, 3]
-        adata.obs["\U0001F600\U0001F601\U0001F602"] = [4, 5, 6]  # Multiple emoji
+        adata.obs["emoji_\U0001f4a9_poop"] = [1, 2, 3]
+        adata.obs["\U0001f600\U0001f601\U0001f602"] = [4, 5, 6]  # Multiple emoji
 
         html = adata._repr_html_()
         v = validate_html(html)
@@ -337,7 +340,7 @@ class TestUnicodeEdgeCases:
             "日本語",
             "العربية",
             "עברית",
-            "emoji\U0001F600",
+            "emoji\U0001f600",
             "Ελληνικά",
         ])
 
@@ -642,8 +645,6 @@ class TestThreadSafety:
 class SegmentationError(Exception):
     """Placeholder for segfault (should never happen)."""
 
-    pass
-
 
 # =============================================================================
 # Ultimate evil AnnData - combines ALL adversarial scenarios
@@ -684,7 +685,7 @@ class TestUltimateEvilAnnData:
         adata.obs['onclick="evil()"'] = np.random.rand(50)
 
         # Unicode edge cases
-        adata.obs["emoji_\U0001F4A9_poop"] = np.random.rand(50)
+        adata.obs["emoji_\U0001f4a9_poop"] = np.random.rand(50)
         adata.obs["中文_chinese"] = pd.Categorical(
             np.random.choice(["猫", "狗", "鸟", "魚"], size=50)
         )
@@ -790,9 +791,7 @@ class TestUltimateEvilAnnData:
         # At least check we have obs section with entries
         v.assert_section_exists("obs")
 
-    def test_evil_adata_css_breakout_prevented(
-        self, evil_adata, validate_html
-    ) -> None:
+    def test_evil_adata_css_breakout_prevented(self, evil_adata, validate_html) -> None:
         """CSS breakout attempts should be prevented."""
         html = evil_adata._repr_html_()
 
@@ -930,9 +929,7 @@ class TestRealAnnDataWithErrors:
     def test_empty_categorical(self, validate_html) -> None:
         """Empty categorical (all None values) should be handled."""
         adata = AnnData(np.zeros((5, 3)))
-        adata.obs["empty_cat"] = pd.Categorical(
-            [None] * 5, categories=["a", "b", "c"]
-        )
+        adata.obs["empty_cat"] = pd.Categorical([None] * 5, categories=["a", "b", "c"])
 
         html = adata._repr_html_()
         v = validate_html(html)
@@ -955,7 +952,7 @@ class TestRealAnnDataWithErrors:
         """Special characters in keys should be escaped."""
         adata = AnnData(np.zeros((3, 3)))
         adata.uns["key<with>special&chars"] = "value"
-        adata.uns['quotes"and\'apostrophes'] = "value"
+        adata.uns["quotes\"and'apostrophes"] = "value"
 
         html = adata._repr_html_()
         v = validate_html(html)
@@ -1358,7 +1355,9 @@ class TestVeryLongErrorMessages:
         # The full 2KB+ error message should be truncated
         # Verify HTML isn't bloated by repeated error text
         error_count = html.count("VERY LONG ERROR MESSAGE")
-        assert error_count < 5, f"Error message not truncated: {error_count} occurrences"
+        assert error_count < 5, (
+            f"Error message not truncated: {error_count} occurrences"
+        )
 
     def test_long_error_in_varm(self, validate_html) -> None:
         """Long errors in varm entries should be truncated."""
@@ -1775,7 +1774,9 @@ class TestZeroWidthDeception:
 
         v.assert_html_well_formed()
         # All 5 columns should be shown
-        assert html.count("col") >= 5, "All columns with invisible chars should be shown"
+        assert html.count("col") >= 5, (
+            "All columns with invisible chars should be shown"
+        )
 
 
 class TestBidiSpoofing:
@@ -1897,7 +1898,9 @@ class TestCSSAttacks:
 
         v.assert_html_well_formed()
         # Should only have one style tag (ours) - user CSS should be escaped
-        assert html.lower().count("</style>") == 1, "User CSS style tag should be escaped"
+        assert html.lower().count("</style>") == 1, (
+            "User CSS style tag should be escaped"
+        )
         # The @keyframes should appear as text, not as CSS
         assert "@keyframes" not in html or "&" in html, "CSS should be escaped"
 
@@ -2106,7 +2109,9 @@ class TestSlowAndBlockingObjects:
         # Should show the type name even if accessing shape failed
         v.assert_text_visible("MemoryBomb")
         # Should show an error indicator
-        assert "MemoryError" in html or "error" in html.lower(), "Error should be indicated"
+        assert "MemoryError" in html or "error" in html.lower(), (
+            "Error should be indicated"
+        )
 
 
 class TestEncodingAttacks:
@@ -2176,7 +2181,7 @@ class TestMutationXSS:
             "<img src=x onerror=alert(1)//",  # Missing closing >
             "<svg><![CDATA[><script>alert(1)</script>]]>",
             "<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>",
-            "<noscript><p title=\"</noscript><script>alert(1)</script>\">",
+            '<noscript><p title="</noscript><script>alert(1)</script>">',
             "<<script>alert(1)</script>",
             "<div<script>alert(1)</script>>",
         ]
@@ -2210,7 +2215,9 @@ class TestMutationXSS:
         v.assert_no_raw_xss()
         # Entity-encoded content should be double-escaped or shown as-is
         # It should NOT decode into executable script tags
-        assert "<script>alert(1)</script>" not in html, "Entities should not decode to XSS"
+        assert "<script>alert(1)</script>" not in html, (
+            "Entities should not decode to XSS"
+        )
 
 
 class TestAccessibilityAttacks:
@@ -2246,7 +2253,9 @@ class TestAccessibilityAttacks:
 
         v.assert_html_well_formed()
         # The inline style attempting to hide content should be escaped
-        assert 'style="position:absolute;left:-9999px"' not in html, "Style should be escaped"
+        assert 'style="position:absolute;left:-9999px"' not in html, (
+            "Style should be escaped"
+        )
         # User content should not inject CSS positioning
         # The text "Secret malicious instructions" should still be visible
         assert "Secret" in html or "malicious" in html, "Text content should be visible"
