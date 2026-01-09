@@ -252,10 +252,10 @@ class GraphVecAcc[P: AdPath]:
     path_class: type[P]
 
     @overload
-    def __getitem__(self, idx: Idx2D[str]) -> AdPath: ...
+    def __getitem__(self, idx: Idx2D[str]) -> P: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str]) -> list[AdPath]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str]) -> AdPath | list[AdPath]:
+    def __getitem__(self, idx: Idx2DList[str]) -> list[P]: ...
+    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str]) -> P | list[P]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
 
@@ -279,7 +279,9 @@ class GraphVecAcc[P: AdPath]:
         axes: Collection[Literal["obs", "var"]] = (
             (ax,) * n_slices if n_slices > 1 else {ax}
         )
-        return AdPath(f"{self!r}[{idx[0]!r}, {idx[1]!r}]", get, axes, label=label)
+        return self.path_class(
+            f"{self!r}[{idx[0]!r}, {idx[1]!r}]", get, axes, label=label
+        )
 
     def __repr__(self) -> str:
         return f"A.{self.ax}[{self.k!r}]"
