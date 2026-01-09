@@ -214,6 +214,8 @@ else:
             return "mock cupy.ndarray"
 
 
+CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+
 old_positionals = partial(legacy_api, category=FutureWarning)
 
 
