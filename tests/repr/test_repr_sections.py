@@ -216,7 +216,7 @@ class TestMappingSectionEdgeCases:
             v = validate_html(html)
             v.assert_section_exists("layers")
             v.assert_section_contains_entry("layers", "layer_0")
-            assert "more" in html.lower() or "..." in html
+            v.assert_truncation_indicator()
 
 
 class TestUnsEntryRendering:
@@ -510,7 +510,7 @@ class TestCompleteDataVisibility:
         for key in keys:
             v.assert_section_contains_entry("varm", key)
 
-    def test_truncation_indicator_when_many_items(self):
+    def test_truncation_indicator_when_many_items(self, validate_html):
         """Test truncation indicator appears for many items."""
         from anndata import settings
 
@@ -520,8 +520,9 @@ class TestCompleteDataVisibility:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            # Should indicate more items exist
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            # Should indicate more items exist with specific truncation pattern
+            v.assert_truncation_indicator()
 
     def test_category_truncation_indicator(self):
         """Test category truncation indicator appears."""
@@ -782,7 +783,7 @@ class TestTruncationIndicators:
     this should be indicated clearly to the user.
     """
 
-    def test_obs_columns_truncation_shows_count(self):
+    def test_obs_columns_truncation_shows_count(self, validate_html):
         """Test obs section shows truncation count when columns are truncated."""
         from anndata import settings
 
@@ -791,10 +792,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            # Should indicate how many more items exist
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_var_columns_truncation_shows_count(self):
+    def test_var_columns_truncation_shows_count(self, validate_html):
         """Test var section shows truncation count when columns are truncated."""
         from anndata import settings
 
@@ -803,9 +804,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_uns_keys_truncation_shows_count(self):
+    def test_uns_keys_truncation_shows_count(self, validate_html):
         """Test uns section shows truncation count when keys are truncated."""
         from anndata import settings
 
@@ -815,9 +817,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_obsm_keys_truncation_shows_count(self):
+    def test_obsm_keys_truncation_shows_count(self, validate_html):
         """Test obsm section shows truncation count when keys are truncated."""
         from anndata import settings
 
@@ -827,9 +830,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_layers_truncation_shows_count(self):
+    def test_layers_truncation_shows_count(self, validate_html):
         """Test layers section shows truncation count when truncated."""
         from anndata import settings
 
@@ -839,9 +843,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_varp_keys_truncation_shows_count(self):
+    def test_varp_keys_truncation_shows_count(self, validate_html):
         """Test varp section shows truncation count when keys are truncated."""
         from anndata import settings
 
@@ -851,9 +856,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_obsp_keys_truncation_shows_count(self):
+    def test_obsp_keys_truncation_shows_count(self, validate_html):
         """Test obsp section shows truncation count when keys are truncated."""
         from anndata import settings
 
@@ -863,9 +869,10 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html or "+" in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
-    def test_category_truncation_shows_count(self):
+    def test_category_truncation_shows_count(self, validate_html):
         """Test category display shows count when categories are truncated."""
         from anndata import settings
 
@@ -881,8 +888,8 @@ class TestTruncationIndicators:
 
         with settings.override(repr_html_max_categories=10):
             html = adata._repr_html_()
-            # Should show "+N more" or similar indicator
-            assert "...+" in html or "more" in html.lower()
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
     def test_index_preview_truncation_shows_ellipsis(self, validate_html):
         """Test index preview shows ellipsis when names are truncated."""

@@ -198,9 +198,22 @@ class HTMLValidator:
             else:
                 section_html = html_from_section
 
-            # Check for entry by data-key attribute or text content
-            if re.search(entry_pattern, section_html) or entry_name in section_html:
+            # Check for entry by data-key attribute first (most reliable)
+            if re.search(entry_pattern, section_html):
                 return self  # Found!
+
+            # Fallback: check for entry name as text, but with word boundaries
+            # to avoid false positives (e.g., "cat" matching "category")
+            escaped_name = re.escape(entry_name)
+            # Match entry name as: quoted value, in tag content, or standalone word
+            text_patterns = [
+                rf">{escaped_name}<",  # In tag content: >entry_name<
+                rf'["\']>{escaped_name}["\']',  # As a value
+                rf"\b{escaped_name}\b",  # As a word (if entry has no special chars)
+            ]
+            for pattern in text_patterns:
+                if re.search(pattern, section_html):
+                    return self  # Found!
 
         raise AssertionError(
             msg or f"Entry '{entry_name}' not found in section '{section_name}'"
@@ -449,12 +462,23 @@ class HTMLValidator:
         return self
 
     def assert_truncation_indicator(self, *, msg: str | None = None) -> HTMLValidator:
-        """Assert truncation is indicated (ellipsis, +N more, etc.)."""
-        has_truncation = (
-            "..." in self.html
-            or "…" in self.html  # Unicode ellipsis
-            or re.search(r"\+\s*\d+", self.html)  # +N pattern
-            or "more" in self.html.lower()
+        """Assert truncation is indicated with specific patterns.
+
+        Checks for actual truncation indicators used by the repr system:
+        - `...+{number}` pattern (e.g., "...+20" for categories)
+        - `... and {number} more` pattern (e.g., "... and 100 more" for rows)
+        - CSS class `adata-truncated`
+        - Escaped ellipsis in category display
+        """
+        truncation_patterns = [
+            r"\.\.\.\+\d+",  # ...+N pattern (categories)
+            r"\.\.\.\s+and\s+[\d,]+\s+more",  # "... and N more" (rows)
+            r"adata-truncated",  # CSS class for truncation
+            r"&hellip;",  # HTML entity for ellipsis
+            r"&#8230;",  # Numeric HTML entity for ellipsis
+        ]
+        has_truncation = any(
+            re.search(pattern, self.html, re.I) for pattern in truncation_patterns
         )
         if not has_truncation:
             raise AssertionError(msg or "No truncation indicator found in HTML")
@@ -520,7 +544,76 @@ class HTMLValidator:
 
         # Check for event handlers in HTML tags (actual attributes, not text)
         # Pattern: <tag ... onclick="..." or onerror="..."
-        event_handlers = ["onclick", "onerror", "onload", "onmouseover", "onfocus"]
+        # Comprehensive list of event handlers that can execute JavaScript
+        event_handlers = [
+            # Mouse events
+            "onclick",
+            "ondblclick",
+            "onmousedown",
+            "onmouseup",
+            "onmouseover",
+            "onmouseout",
+            "onmousemove",
+            "onmouseenter",
+            "onmouseleave",
+            "oncontextmenu",
+            # Keyboard events
+            "onkeydown",
+            "onkeyup",
+            "onkeypress",
+            # Focus events
+            "onfocus",
+            "onblur",
+            "onfocusin",
+            "onfocusout",
+            # Form events
+            "onsubmit",
+            "onreset",
+            "onchange",
+            "oninput",
+            "oninvalid",
+            "onselect",
+            # Load/error events
+            "onload",
+            "onerror",
+            "onabort",
+            "onbeforeunload",
+            "onunload",
+            # Drag events
+            "ondrag",
+            "ondragstart",
+            "ondragend",
+            "ondragover",
+            "ondragenter",
+            "ondragleave",
+            "ondrop",
+            # Clipboard events
+            "oncopy",
+            "oncut",
+            "onpaste",
+            # Media events
+            "onplay",
+            "onpause",
+            "onended",
+            # Animation/transition
+            "onanimationstart",
+            "onanimationend",
+            "ontransitionend",
+            # Touch events
+            "ontouchstart",
+            "ontouchmove",
+            "ontouchend",
+            # Pointer events
+            "onpointerdown",
+            "onpointerup",
+            "onpointermove",
+            # Other
+            "onscroll",
+            "onresize",
+            "onwheel",
+            "onshow",
+            "ontoggle",
+        ]
         for handler in event_handlers:
             # Look for handler in tag attributes (not in text content)
             pattern = rf"<[^>]+\s{handler}\s*="

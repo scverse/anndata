@@ -26,6 +26,7 @@ All tests use the HTMLValidator to ensure proper HTML output and error reporting
 
 from __future__ import annotations
 
+import re
 import threading
 from typing import TYPE_CHECKING
 
@@ -203,6 +204,18 @@ class TestXSSPrevention:
         # Escaped version should be visible
         v.assert_text_visible("&lt;script&gt;")
 
+        # Explicit negative check: raw payload must not appear unescaped
+        # (outside of legitimate script blocks)
+        content_after_style = html.split("</style>")[-1]
+        assert (
+            'alert("XSS")'
+            not in content_after_style
+            .replace("&quot;", '"')
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .split("<script")[0]
+        )
+
     def test_img_onerror_in_uns_key(self, validate_html):
         """Image onerror handlers in uns keys must be escaped."""
         adata = AnnData(np.zeros((3, 3)))
@@ -215,6 +228,12 @@ class TestXSSPrevention:
         v.assert_html_well_formed()
         v.assert_section_exists("uns")
 
+        # Explicit negative check: no raw img tag with onerror handler
+        # Check for actual img tag with onerror attribute (not escaped text)
+        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I), (
+            "Raw img onerror found - XSS!"
+        )
+
     def test_onclick_in_var_column(self, validate_html):
         """Onclick handlers in var column names must be escaped."""
         adata = AnnData(np.zeros((3, 5)))
@@ -226,6 +245,13 @@ class TestXSSPrevention:
         v.assert_no_raw_xss()
         v.assert_html_well_formed()
 
+        # Explicit negative check: no unescaped onclick handler
+        # Check that onclick="evil()" doesn't appear as a real attribute
+        # This pattern matches onclick as an actual HTML attribute
+        assert not re.search(r'<[^>]+\sonclick\s*=\s*["\']?evil', html, re.I), (
+            "Raw onclick handler found - XSS!"
+        )
+
     def test_javascript_url_in_readme(self, validate_html):
         """JavaScript URLs in README must be escaped."""
         adata = AnnData(np.zeros((3, 3)))
@@ -236,6 +262,11 @@ class TestXSSPrevention:
 
         v.assert_no_raw_xss()
         v.assert_element_exists(".adata-readme-icon")
+
+        # Explicit negative check: javascript: URL must not appear as real href
+        assert not re.search(r'href\s*=\s*["\']?\s*javascript:', html, re.I), (
+            "Raw javascript: URL found - XSS!"
+        )
 
     def test_css_breakout_attempt(self, validate_html):
         """CSS breakout attempts must be escaped."""
@@ -249,6 +280,12 @@ class TestXSSPrevention:
         style_count = html.lower().count("</style>")
         assert style_count == 1, f"Found {style_count} </style> tags (expected 1)"
         v.assert_html_well_formed()
+        v.assert_no_raw_xss()
+
+        # Explicit check: the injected script must be escaped, not executable
+        assert "<script>bad()</script>" not in html, "Raw script tag found - XSS!"
+        # The escaped version should appear as visible text
+        assert "&lt;script&gt;" in html or "&#60;script&#62;" in html
 
     def test_html_div_breakout_attempt(self, validate_html):
         """HTML div breakout attempts must be escaped."""
@@ -260,6 +297,9 @@ class TestXSSPrevention:
 
         v.assert_no_raw_xss()
         v.assert_html_well_formed()
+
+        # Explicit negative check: injected script must be escaped
+        assert "<script>pwned</script>" not in html, "Raw script tag found - XSS!"
 
 
 # =============================================================================
@@ -603,6 +643,7 @@ class TestThreadSafety:
         """Concurrent repr generation while modifying should not crash."""
         adata = ad.AnnData(X=np.random.rand(10, 10))
         errors: list[Exception] = []
+        successful_reprs: list[str] = []
         stop_flag = threading.Event()
 
         def modify_adata() -> None:
@@ -617,11 +658,13 @@ class TestThreadSafety:
                     pass  # Expected during concurrent access
 
         def generate_reprs() -> None:
-            try:
-                for _ in range(2):  # Reduced from 5 to 2
-                    generate_repr_html(adata)
-            except Exception as e:  # noqa: BLE001
-                errors.append(e)
+            for _ in range(2):  # Reduced from 5 to 2
+                try:
+                    html = generate_repr_html(adata)
+                    if html:
+                        successful_reprs.append(html)
+                except Exception as e:  # noqa: BLE001
+                    errors.append(e)
 
         modifier = threading.Thread(target=modify_adata)
         generators = [threading.Thread(target=generate_reprs) for _ in range(2)]
@@ -634,12 +677,29 @@ class TestThreadSafety:
         stop_flag.set()
         modifier.join(timeout=2)
 
-        # We accept some errors during concurrent modification, but repr should not crash
-        assert all(
-            not isinstance(e, (SystemError, SegmentationError))
+        # Critical errors that indicate memory corruption or crashes - must never happen
+        critical_errors = [
+            e
             for e in errors
-            if hasattr(e, "__class__")
+            if isinstance(e, (SystemError, SegmentationError, MemoryError))
+        ]
+        assert not critical_errors, (
+            f"Critical errors during concurrent repr: {critical_errors}"
         )
+
+        # At least some reprs should succeed even with concurrent modification
+        assert len(successful_reprs) > 0, (
+            f"No successful reprs generated. Errors: {errors}"
+        )
+
+        # Successful reprs should be valid HTML (not corrupted)
+        for html in successful_reprs:
+            # HTML can start with <style> or <div> depending on structure
+            assert html.startswith("<style") or html.startswith("<div"), (
+                f"Corrupted HTML start: {html[:100]}"
+            )
+            assert "</div>" in html, "HTML missing closing div"
+            assert "anndata-repr" in html, "Missing anndata-repr class"
 
 
 class SegmentationError(Exception):

@@ -283,7 +283,7 @@ class TestSettings:
             html = outer._repr_html_()
             assert "max depth" in html.lower() or "depth" in html
 
-    def test_custom_max_items(self):
+    def test_custom_max_items(self, validate_html):
         """Test custom max items setting."""
         from anndata import settings
 
@@ -292,7 +292,8 @@ class TestSettings:
 
         with settings.override(repr_html_max_items=50):
             html = adata._repr_html_()
-            assert "more" in html.lower() or "..." in html
+            v = validate_html(html)
+            v.assert_truncation_indicator()
 
 
 class TestColumnWidthSettings:
@@ -320,16 +321,27 @@ class TestColumnWidthSettings:
             # Should not exceed max width
             v.assert_css_variable_defined("--anndata-name-col-width")
 
-    def test_repr_html_max_field_width_setting(self):
-        """Test repr_html_max_field_width setting is respected."""
+    def test_repr_html_max_field_width_setting(self, validate_html):
+        """Test repr_html_max_field_width setting caps the field width."""
         from anndata import settings
 
         adata = AnnData(np.zeros((10, 5)))
-        adata.obs["column"] = list(range(10))
+        # Use a very long column name that would exceed 100px
+        adata.obs["this_is_a_very_long_column_name_that_exceeds_100px"] = list(
+            range(10)
+        )
 
+        # With large max, width should be calculated based on content
+        with settings.override(repr_html_max_field_width=500):
+            html_large = adata._repr_html_()
+            v = validate_html(html_large)
+            v.assert_css_variable_defined("--anndata-name-col-width")
+
+        # With small max of 100, width should be capped
         with settings.override(repr_html_max_field_width=100):
-            html = adata._repr_html_()
-            assert html is not None
+            html_small = adata._repr_html_()
+            # Should have width limited to at most 100px
+            assert "--anndata-name-col-width: 100px" in html_small
 
     def test_repr_html_type_width_setting(self):
         """Test repr_html_type_width setting is respected."""
@@ -439,7 +451,7 @@ class TestSettingsEffectOnRendering:
             html = adata._repr_html_()
             # DataFrame should still be shown but without expand
 
-    def test_repr_html_max_items_truncates_entries(self):
+    def test_repr_html_max_items_truncates_entries(self, validate_html):
         """Test max_items setting truncates section entries."""
         from anndata import settings
 
@@ -450,8 +462,9 @@ class TestSettingsEffectOnRendering:
 
         with settings.override(repr_html_max_items=10):
             html = adata._repr_html_()
+            v = validate_html(html)
             # Should show truncation indicator
-            assert "more" in html.lower() or "..." in html
+            v.assert_truncation_indicator()
             # First key should be shown
             assert "key_0" in html
 
