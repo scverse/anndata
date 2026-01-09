@@ -301,6 +301,59 @@ class TestXSSPrevention:
         # Explicit negative check: injected script must be escaped
         assert "<script>pwned</script>" not in html, "Raw script tag found - XSS!"
 
+    def test_xss_via_exception_class_name(self, validate_html):
+        """XSS via malicious exception __name__ in error messages must be escaped."""
+        # This tests a real vulnerability: if an object's property raises an exception
+        # with a malicious __name__, it could be rendered unescaped in error messages
+
+        class XSSException(Exception):
+            pass
+
+        XSSException.__name__ = "<img src=x onerror=alert(1)>"
+
+        class MaliciousObject:
+            @property
+            def shape(self):
+                raise XSSException()
+
+        adata = AnnData(np.zeros((5, 3)))
+        adata.uns["attack"] = MaliciousObject()
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_no_raw_xss()
+        v.assert_html_well_formed()
+
+        # The XSS payload must be escaped
+        assert "<img src=x onerror=alert(1)>" not in html, (
+            "Unescaped XSS via exception name!"
+        )
+        # Escaped version should appear
+        assert "&lt;img" in html, "Exception name should appear escaped"
+
+    def test_xss_via_type_name(self, validate_html):
+        """XSS via malicious type __name__ must be escaped."""
+
+        class MaliciousType:
+            pass
+
+        MaliciousType.__name__ = "<script>alert('type')</script>"
+
+        adata = AnnData(np.zeros((5, 3)))
+        adata.uns["evil_type"] = MaliciousType()
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_no_raw_xss()
+        v.assert_html_well_formed()
+
+        # Raw script tag must not appear
+        assert "<script>alert('type')</script>" not in html, (
+            "Unescaped XSS via type name!"
+        )
+
 
 # =============================================================================
 # Tests for Unicode edge cases

@@ -61,6 +61,7 @@ from .._repr_constants import (
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_UNIQUE_LIMIT,
 )
+from .utils import escape_html
 
 if TYPE_CHECKING:
     from typing import Any
@@ -486,15 +487,17 @@ class FallbackFormatter(TypeFormatter):
             warnings.append(f"Errors accessing attributes: {', '.join(access_errors)}")
 
         # Show errors/warnings visibly in preview
+        # SECURITY: All text must be HTML-escaped to prevent XSS via malicious
+        # __name__ attributes on exception classes or type objects
         preview = None
         preview_html = None
         if access_errors:
             # Make error info visible in RED
-            error_text = ", ".join(access_errors)
+            error_text = escape_html(", ".join(access_errors))
             preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
         elif warnings:
             # Show warnings in ORANGE/YELLOW when there are no errors
-            warning_text = "; ".join(warnings)
+            warning_text = escape_html("; ".join(warnings))
             preview_html = f'<span class="{CSS_TEXT_WARNING}">{warning_text}</span>'
 
         return FormattedOutput(

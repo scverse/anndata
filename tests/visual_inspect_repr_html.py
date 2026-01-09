@@ -2625,6 +2625,28 @@ For more details, see the full documentation.
     adata_evil.uns["exploding_shape"] = ExplodingShape()
     adata_evil.uns["exploding_dtype"] = ExplodingDtype()
 
+    # XSS VIA EXCEPTION CLASS NAME - tests that error messages escape __name__
+    class XSSException(Exception):
+        pass
+
+    XSSException.__name__ = "<img src=x onerror=alert('exception')>"
+
+    class XSSViaException:
+        """Object whose .shape raises exception with XSS payload in __name__."""
+
+        @property
+        def shape(self):
+            raise XSSException("gotcha")
+
+    adata_evil.uns["xss_via_exception"] = XSSViaException()
+
+    # XSS VIA TYPE NAME - tests that type names are escaped
+    class XSSViaTypeName:
+        pass
+
+    XSSViaTypeName.__name__ = "<script>alert('type')</script>"
+    adata_evil.uns["xss_via_type_name"] = XSSViaTypeName()
+
     # UNKNOWN TYPE WARNING (orange text) - object pretending to be from anndata package
     class FakeAnndataType:
         """Unknown type from anndata package triggers warning (not error)."""
@@ -2904,6 +2926,8 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li><code>infinite_len</code> - len() returns 10^18 (suspicious)</li>"
         "<li><code>exploding_shape</code> - .shape property raises TypeError</li>"
         "<li><code>exploding_dtype</code> - .dtype property raises TypeError</li>"
+        "<li><code>xss_via_exception</code> - exception with XSS in __name__ (must be escaped)</li>"
+        "<li><code>xss_via_type_name</code> - type with XSS in __name__ (must be escaped)</li>"
         "<li><code>long_error_object_uns</code> - very long error message (should truncate)</li>"
         "<li><code>unknown_anndata_type</code> - unknown type warning shown in orange</li>"
         "</ul>"
