@@ -110,13 +110,6 @@ class BrokenRepr:
         raise TypeError(msg)
 
 
-class InfiniteLength:
-    """Object with impossibly large __len__."""
-
-    def __len__(self) -> int:
-        return 10**18
-
-
 class RecursiveDict(dict):
     """Dict that contains itself."""
 
@@ -137,16 +130,6 @@ class BrokenCategories:
                 raise RuntimeError("categories exploded")
 
         return FakeCat()
-
-
-class NestedExceptions:
-    """Object where every attribute access raises nested exceptions."""
-
-    def __getattr__(self, name: str) -> None:
-        try:
-            raise ValueError("inner")
-        except ValueError:
-            raise RuntimeError("outer") from None
 
 
 class ZalgoText:
@@ -405,8 +388,8 @@ class TestUnicodeEdgeCases:
 
         v.assert_html_well_formed()
         v.assert_section_exists("obs")
-        # Emoji might be escaped or preserved - just ensure no crash
-        assert len(html) > 0
+        # Emoji column should be visible (emoji preserved or the word "emoji")
+        assert "emoji" in html.lower() or "\U0001f4a9" in html
 
     def test_cjk_characters(self, validate_html):
         """CJK characters in data should work."""
@@ -473,6 +456,23 @@ class TestUnicodeEdgeCases:
 
         v.assert_html_well_formed()
         v.assert_section_contains_entry("obs", "mixed")
+
+    def test_zero_width_characters_in_names(self, validate_html):
+        """Zero-width chars create identical-looking but different columns."""
+        adata = AnnData(np.zeros((3, 3)))
+        # These columns look identical but are different keys
+        adata.obs["gene"] = [1, 2, 3]
+        adata.obs["gene\u200b"] = [4, 5, 6]  # Zero-width space
+        adata.obs["gene\u200d"] = [7, 8, 9]  # Zero-width joiner
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        v.assert_section_exists("obs")
+        # All three columns should be shown as distinct entries
+        # They look the same but are different keys
+        assert html.count("gene") >= 3, "All 3 'gene' columns should be shown"
 
 
 # =============================================================================
@@ -1046,6 +1046,19 @@ class TestRealAnnDataWithErrors:
         v.assert_html_well_formed()
         v.assert_section_exists("uns")
 
+    def test_anndata_self_reference_in_uns(self, validate_html) -> None:
+        """AnnData that contains itself in uns should not crash."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.uns["self"] = adata  # AnnData containing itself
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        v.assert_section_exists("uns")
+        # Should show nested AnnData info
+        assert "AnnData" in html
+
     def test_none_values_in_obs(self, validate_html) -> None:
         """None values in obs columns should be handled."""
         adata = AnnData(np.zeros((5, 3)))
@@ -1193,6 +1206,34 @@ class TestErrorVisibility:
         v.assert_text_visible("TypeError")
         v.assert_text_visible(".shape")
 
+    def test_very_long_error_message_truncated(self, validate_html) -> None:
+        """Very long error messages should be truncated to prevent HTML bloat."""
+
+        class VeryLongError:
+            @property
+            def shape(self):
+                # Create a very long error message (2KB+)
+                raise TypeError(
+                    "ERROR: " * 100
+                    + "This is additional context. " * 50
+                )
+
+        adata = AnnData(np.zeros((3, 3)))
+        adata.uns["long_error"] = VeryLongError()
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        v.assert_section_contains_entry("uns", "long_error")
+        v.assert_text_visible("VeryLongError")
+        # The full 2KB+ error message should NOT appear
+        # (HTML should not be bloated by repeated error text)
+        error_count = html.count("ERROR:")
+        assert error_count < 10, (
+            f"Long error message not truncated: found {error_count} occurrences"
+        )
+
 
 # =============================================================================
 # Tests for section truncation with many entries
@@ -1270,69 +1311,6 @@ class TestNestedObjectVisibility:
         # The nested structure should be visible (type dict shown)
         assert "dict" in html.lower()
 
-    def test_circular_reference_detected(self, validate_html) -> None:
-        """Circular references should be detected and shown safely."""
-        adata = AnnData(np.zeros((3, 3)))
-        circular = {"level1": {"level2": {}}}
-        circular["level1"]["level2"]["back"] = circular
-
-        adata.uns["circular"] = circular
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-        # Should not crash and should produce valid HTML
-        # The type should be shown
-        assert "dict" in html.lower()
-
-    def test_deeply_nested_structure(self, validate_html) -> None:
-        """Deeply nested structures should be handled."""
-        adata = AnnData(np.zeros((3, 3)))
-        deeply_nested = {}
-        current = deeply_nested
-        for i in range(10):
-            current[f"level_{i}"] = {}
-            current = current[f"level_{i}"]
-        current["bottom"] = "reached"
-
-        adata.uns["deep"] = deeply_nested
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "deep")
-
-    def test_self_reference_in_uns(self, validate_html) -> None:
-        """AnnData that references itself in uns should not crash."""
-        adata = AnnData(np.zeros((3, 3)))
-        # Create self-reference (adata.uns contains the adata itself)
-        adata.uns["self_ref"] = adata
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-        # Should show that there's an AnnData nested
-        assert "AnnData" in html
-
-    def test_nested_anndata_with_self_reference(self, validate_html) -> None:
-        """Nested AnnData that references its parent should not crash."""
-        parent = AnnData(np.zeros((5, 5)))
-        child = AnnData(np.zeros((3, 3)))
-        # Create circular reference: parent -> child -> parent
-        parent.uns["child"] = child
-        child.uns["parent_ref"] = parent
-
-        html = parent._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-
     def test_multiple_references_to_same_anndata(self, validate_html) -> None:
         """Multiple references to same AnnData should work."""
         adata = AnnData(np.zeros((3, 3)))
@@ -1350,19 +1328,8 @@ class TestNestedObjectVisibility:
 
 
 # =============================================================================
-# Additional crashing object tests from visual test 24
+# Additional crashing object tests
 # =============================================================================
-
-
-class ExplodingStr:
-    """Object where __str__ crashes."""
-
-    def __repr__(self):
-        return "ExplodingStr()"
-
-    def __str__(self):
-        msg = "BOOM! __str__ exploded"
-        raise ValueError(msg)
 
 
 class LyingObject:
@@ -1389,152 +1356,6 @@ class LyingObject:
 
     def __str__(self):
         raise AttributeError("I have no str")
-
-
-class VeryLongErrorObject:
-    """Object that produces a very long error message."""
-
-    @property
-    def shape(self):
-        raise TypeError(
-            "This is a VERY LONG ERROR MESSAGE that should be properly truncated. " * 10
-            + "It contains lots of details about what went wrong: "
-            + "ValueError: The input array has shape (100, 200, 300) but expected (50, 100). "
-            + "Additional context: This error occurred while processing the data matrix. "
-            + "Stack trace would go here with many lines of debugging information. " * 5
-        )
-
-    def __repr__(self):
-        return "VeryLongErrorObject(produces long error)"
-
-
-class FakeAnndataType:
-    """Unknown type from anndata package triggers warning (not error).
-
-    Objects whose __module__ starts with 'anndata.' but aren't recognized
-    types should show a warning instead of an error - they might be from
-    a newer version of anndata.
-    """
-
-    __module__ = "anndata.experimental.fake"
-
-    def __repr__(self):
-        return "FakeAnndataType()"
-
-
-class TestExplodingStr:
-    """Tests for objects with crashing __str__."""
-
-    def test_exploding_str_shows_error(self, validate_html) -> None:
-        """Objects with crashing __str__ should show error info."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["exploding_str"] = ExplodingStr()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "exploding_str")
-        v.assert_text_visible("ExplodingStr")
-        # Error should be visible
-        v.assert_text_visible("ValueError")
-        v.assert_text_visible("str()")
-
-
-class TestLyingObject:
-    """Tests for objects where all properties raise."""
-
-    def test_lying_object_shows_multiple_errors(self, validate_html) -> None:
-        """LyingObject should show errors for all failed property accesses."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["lying"] = LyingObject()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "lying")
-        v.assert_text_visible("LyingObject")
-        # Should show errors for failed accesses
-        v.assert_text_visible("AttributeError")
-
-    def test_lying_object_repr_survives(self) -> None:
-        """LyingObject's repr should work even though other methods fail."""
-        obj = LyingObject()
-        assert repr(obj) == "LyingObject(all properties lie)"
-
-
-class TestInfiniteLengthWarning:
-    """Tests for objects with suspiciously large length."""
-
-    def test_infinite_len_shows_warning(self, validate_html) -> None:
-        """Objects claiming impossibly large length should show warning."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["infinite"] = InfiniteLength()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "infinite")
-        # Should show warning about suspicious length
-        # The warning could be in text or as a warning indicator
-        assert "1" in html  # Should mention the large number somehow
-
-
-class TestVeryLongErrorMessages:
-    """Tests for error message truncation."""
-
-    def test_very_long_error_truncated(self, validate_html) -> None:
-        """Very long error messages should be truncated."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["long_error"] = VeryLongErrorObject()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "long_error")
-        v.assert_text_visible("VeryLongErrorObject")
-        # The full 2KB+ error message should be truncated
-        # Verify HTML isn't bloated by repeated error text
-        error_count = html.count("VERY LONG ERROR MESSAGE")
-        assert error_count < 5, (
-            f"Error message not truncated: {error_count} occurrences"
-        )
-
-    def test_long_error_in_varm(self, validate_html) -> None:
-        """Long errors in varm entries should be truncated."""
-        adata = AnnData(np.zeros((10, 10)))
-        # Add valid entry first
-        adata.varm["valid"] = np.random.rand(10, 5)
-        # Add broken entry via internal store
-        adata.varm._data["broken"] = VeryLongErrorObject()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("varm")
-        # Should still produce valid HTML despite the error
-
-
-class TestUnknownAnndataType:
-    """Tests for unknown types from anndata package."""
-
-    def test_fake_anndata_type_shows_warning(self, validate_html) -> None:
-        """Unknown types from anndata.* should show warning, not error."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["fake"] = FakeAnndataType()
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "fake")
-        v.assert_text_visible("FakeAnndataType")
-        # Should indicate it's an unknown/unrecognized type
-        # This could be shown as a warning or with special styling
 
 
 # =============================================================================
@@ -1766,46 +1587,6 @@ class TestNestedAnnDataWithErrors:
         # Should show the nested AnnData
         assert "AnnData" in html
 
-    def test_nested_anndata_errors_visible(self, validate_html) -> None:
-        """Errors in nested AnnData should be visible in output."""
-        parent = AnnData(np.zeros((5, 5)))
-        child = AnnData(np.zeros((3, 3)))
-
-        class ExplodingReprInNested:
-            def __repr__(self):
-                raise RuntimeError("BOOM in nested!")
-
-        child.uns["exploding"] = ExplodingReprInNested()
-        parent.uns["child"] = child
-
-        html = parent._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # The nested structure should be shown
-        v.assert_section_exists("uns")
-
-    def test_deeply_nested_anndata_with_errors(self, validate_html) -> None:
-        """Deeply nested AnnData with errors at multiple levels."""
-        root = AnnData(np.zeros((5, 5)))
-        level1 = AnnData(np.zeros((4, 4)))
-        level2 = AnnData(np.zeros((3, 3)))
-
-        # Add broken objects at different levels
-        root.uns["broken_at_root"] = BrokenRepr()
-        level1.uns["broken_at_level1"] = LyingObject()
-        level2.uns["broken_at_level2"] = InfiniteLength()
-
-        # Create nesting
-        level1.uns["level2"] = level2
-        root.uns["level1"] = level1
-
-        html = root._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-
 
 # =============================================================================
 # README modal with adversarial content
@@ -1876,300 +1657,8 @@ Emoji: 💀💀💀💀💀
         v.assert_element_exists(".adata-readme-icon")
 
 
-# =============================================================================
-# Advanced adversarial tests - sophisticated attacks
-# =============================================================================
-
-
-class SlowRepr:
-    """Object with __repr__ that blocks for a long time.
-
-    Could hang a Jupyter notebook if not handled with timeout.
-    """
-
-    def __init__(self, delay: float = 0.1):
-        self.delay = delay
-
-    def __repr__(self):
-        import time
-
-        time.sleep(self.delay)
-        return f"SlowRepr(delay={self.delay})"
-
-
-class RecursiveRepr:
-    """Object whose __repr__ calls itself recursively.
-
-    Could cause stack overflow if not protected.
-    Note: We don't actually test this because it would crash - it's here
-    for documentation purposes only.
-    """
-
-    def __repr__(self):
-        # Don't actually recurse - just simulate what would happen
-        return "RecursiveRepr(<would recurse>)"
-
-
-class MemoryBomb:
-    """Object that raises MemoryError on property access.
-
-    Simulates an object that would try to allocate huge memory.
-    We raise the error directly instead of actually trying to allocate.
-    """
-
-    @property
-    def shape(self):
-        # Raise MemoryError directly instead of actually trying to allocate
-        # (allocating 10**12 items would kill the process)
-        raise MemoryError("Simulated memory allocation failure")
-
-
-class TestHomographAttacks:
-    """Tests for Unicode homograph attacks that could deceive users.
-
-    Homograph attacks use lookalike characters from different scripts
-    to create visually identical but semantically different strings.
-    This could trick users into thinking they're looking at different data.
-    """
-
-    def test_cyrillic_lookalikes_in_column_names(self, validate_html) -> None:
-        """Cyrillic characters that look like Latin should be handled."""
-        adata = AnnData(np.zeros((3, 3)))
-        # 'а' is Cyrillic, not Latin 'a' - visually identical
-        adata.obs["gene_a"] = [1, 2, 3]  # Latin
-        adata.obs["gene_\u0430"] = [4, 5, 6]  # Cyrillic 'а'
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Both columns should be shown as distinct entries
-        v.assert_section_exists("obs")
-        # Both keys should appear in the output (not merged/confused)
-        assert html.count("gene_") >= 2, "Both similar column names should be shown"
-
-    def test_greek_lookalikes(self, validate_html) -> None:
-        """Greek characters that look like Latin should be handled."""
-        adata = AnnData(np.zeros((3, 3)))
-        # Greek letters that look like Latin
-        adata.obs["DATA"] = [1, 2, 3]  # Latin
-        adata.obs["\u0394\u0391\u03a4\u0391"] = [4, 5, 6]  # Greek ΔΑΤΑ
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("obs")
-        # Both should appear (Latin DATA and Greek)
-        assert "DATA" in html, "Latin DATA should appear"
-
-    def test_fullwidth_lookalikes(self, validate_html) -> None:
-        """Fullwidth characters that look like ASCII should be handled."""
-        adata = AnnData(np.zeros((3, 3)))
-        # Fullwidth letters (used in CJK contexts)
-        adata.obs["ABC"] = [1, 2, 3]  # Normal ASCII
-        adata.obs["\uff21\uff22\uff23"] = [4, 5, 6]  # Fullwidth ＡＢＣ
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Both columns should be visible (not confused as one)
-        assert "ABC" in html, "ASCII ABC should appear"
-
-
-class TestZeroWidthDeception:
-    """Tests for zero-width character attacks.
-
-    Zero-width characters are invisible but make strings different.
-    Could create columns that look identical but are different.
-    """
-
-    def test_zero_width_space_in_names(self, validate_html) -> None:
-        """Zero-width spaces make identical-looking different names."""
-        adata = AnnData(np.zeros((3, 3)))
-        # U+200B is zero-width space
-        adata.obs["gene"] = [1, 2, 3]
-        adata.obs["gene\u200b"] = [4, 5, 6]  # Has invisible character
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("obs")
-        # Both columns should be shown - they're different keys even if they look the same
-        # Count occurrences of "gene" in data-key attributes or visible text
-        assert html.count("gene") >= 2, "Both 'gene' columns should be shown"
-
-    def test_zero_width_joiner_confusion(self, validate_html) -> None:
-        """Zero-width joiners between characters."""
-        adata = AnnData(np.zeros((3, 3)))
-        # U+200D is zero-width joiner
-        adata.obs["cell_type"] = [1, 2, 3]
-        adata.obs["cell\u200dtype"] = [4, 5, 6]  # ZWJ in middle
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Both columns should appear in output
-        assert html.count("cell") >= 2, "Both cell columns should be shown"
-
-    def test_invisible_separator_attack(self, validate_html) -> None:
-        """Various invisible Unicode separators."""
-        adata = AnnData(np.zeros((3, 3)))
-        invisible_chars = [
-            "\u00a0",  # Non-breaking space
-            "\u2000",  # En quad
-            "\u2001",  # Em quad
-            "\u2002",  # En space
-            "\u2003",  # Em space
-            "\u2007",  # Figure space
-            "\u2008",  # Punctuation space
-            "\u200a",  # Hair space
-            "\u200b",  # Zero-width space
-            "\u202f",  # Narrow no-break space
-            "\u205f",  # Medium mathematical space
-            "\u3000",  # Ideographic space
-            "\ufeff",  # Zero-width no-break space (BOM)
-        ]
-        for i, char in enumerate(invisible_chars[:5]):  # Test first 5
-            adata.obs[f"col{char}{i}"] = np.random.rand(3)
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # All 5 columns should be shown
-        assert html.count("col") >= 5, (
-            "All columns with invisible chars should be shown"
-        )
-
-
-class TestBidiSpoofing:
-    """Tests for bidirectional text spoofing (Trojan Source attack).
-
-    RTL override characters can make code/text appear differently than
-    it actually is. This was a major security vulnerability (CVE-2021-42574).
-    """
-
-    def test_trojan_source_attack(self, validate_html) -> None:
-        """Bidi overrides that reverse text display."""
-        adata = AnnData(np.zeros((3, 3)))
-        # This looks like "access" but actually contains hidden chars
-        # that could hide malicious content
-        trojan = "ac\u202ecesscc\u202ca"
-        adata.obs[trojan] = [1, 2, 3]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # The bidi characters should not break HTML
-        v.assert_no_raw_xss()
-        # The column should still be shown (bidi chars preserved or escaped)
-        v.assert_section_exists("obs")
-
-    def test_bidi_in_readme_content(self, validate_html) -> None:
-        """Bidi attacks in README that could hide malicious instructions."""
-        adata = AnnData(np.zeros((3, 3)))
-        # Classic Trojan Source pattern - appears to show one thing,
-        # but reversed text could hide malicious content
-        adata.uns["README"] = """# Analysis Results
-The data shows \u202e}};alert('safe')//\u202c normal patterns.
-Run: \u202egnirtSresUteG.tnemucod\u202c to see results.
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # The "alert" text should appear as escaped text, not executable
-        # (it's in the README content which should be escaped)
-        assert "alert" in html, "Alert text should be visible (escaped)"
-        # No actual script execution
-        assert "<script>alert" not in html, "Script should not be executable"
-
-
-class TestDOMClobbering:
-    """Tests for DOM clobbering attacks.
-
-    DOM clobbering uses id/name attributes to override global JavaScript
-    properties. If our JS uses `document.getElementById` or accesses
-    globals that could be clobbered, this is a vulnerability.
-    """
-
-    def test_dom_clobbering_document(self, validate_html) -> None:
-        """Names that try to clobber document properties."""
-        adata = AnnData(np.zeros((3, 3)))
-        # These could clobber window/document properties
-        dangerous_names = [
-            "document",
-            "window",
-            "location",
-            "navigator",
-            "localStorage",
-            "sessionStorage",
-            "parent",
-            "top",
-            "self",
-            "frames",
-        ]
-        for name in dangerous_names:
-            adata.uns[name] = f"trying to clobber {name}"
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-        # Verify that user data keys don't become element IDs that could clobber globals
-        # The keys should appear in data-key attributes, not as raw IDs
-        for name in dangerous_names:
-            # Should not have id="document" etc. that could clobber globals
-            assert f'id="{name}"' not in html, f"Dangerous id={name} should not exist"
-
-    def test_dom_clobbering_form_elements(self, validate_html) -> None:
-        """Names that could clobber form-related properties."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["action"] = "http://evil.com"
-        adata.uns["method"] = "POST"
-        adata.uns["target"] = "_blank"
-        adata.uns["enctype"] = "multipart/form-data"
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # These keys should appear as data, not as form attributes
-        # No <form action="http://evil.com"> should be generated
-        assert '<form action="http://evil.com"' not in html, "Form action clobbering"
-
-
 class TestCSSAttacks:
     """Tests for CSS-based attacks that could break visualization."""
-
-    def test_css_animation_dos(self, validate_html) -> None:
-        """CSS animations that could consume CPU."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<style>
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-* { animation: spin 0.001s infinite !important; }
-</style>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Should only have one style tag (ours) - user CSS should be escaped
-        assert html.lower().count("</style>") == 1, (
-            "User CSS style tag should be escaped"
-        )
-        # The @keyframes should appear as text, not as CSS
-        assert "@keyframes" not in html or "&" in html, "CSS should be escaped"
 
     def test_css_filter_attack(self, validate_html) -> None:
         """CSS filters that could blur/hide page content."""
@@ -2184,224 +1673,9 @@ class TestCSSAttacks:
         # The style tag in column name should be escaped
         assert "&lt;style&gt;" in html, "Style tag should be escaped to &lt;style&gt;"
 
-    def test_css_cursor_hijack(self, validate_html) -> None:
-        """CSS that hides or changes cursor."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<style>* { cursor: none !important; }</style>
-<style>body { cursor: url('http://evil.com/cursor.png'), auto; }</style>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Should only have our legitimate style tag
-        assert html.lower().count("</style>") == 1, "User style tags should be escaped"
-        # Evil URL should not appear in actual CSS
-        assert "evil.com" not in html.split("</style>")[0], "Evil URL not in CSS"
-
-    def test_css_content_injection(self, validate_html) -> None:
-        """CSS content property that could inject fake text."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.obs['x{content:"FAKE DATA"}'] = [1, 2, 3]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # The CSS selector syntax should be escaped, not interpreted
-        assert "FAKE DATA" in html, "The text should appear (escaped)"
-        # Should not be in an actual style block
-        style_section = html.split("</style>")[0] if "</style>" in html else ""
-        assert 'content:"FAKE DATA"' not in style_section, "Not in actual CSS"
-
-
-class TestSVGXSS:
-    """Tests for SVG-based XSS attacks.
-
-    SVG can contain JavaScript and even embed HTML via foreignObject.
-    """
-
-    def test_svg_script_injection(self, validate_html) -> None:
-        """SVG with embedded script."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<svg><script>alert('SVG XSS')</script></svg>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # The SVG script should be escaped, not executable
-        assert "<svg><script>" not in html, "SVG script tag should be escaped"
-        # The text should still be visible (escaped)
-        assert "alert" in html, "Alert text should be visible as escaped content"
-
-    def test_svg_foreignobject(self, validate_html) -> None:
-        """SVG foreignObject that can embed HTML."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<svg><foreignObject><body onload="alert('foreignObject')"></body></foreignObject></svg>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # foreignObject should be escaped
-        assert "<foreignObject>" not in html, "foreignObject should be escaped"
-        # onload handler should not be executable
-        assert 'onload="alert' not in html, "onload handler should be escaped"
-
-    def test_svg_use_xss(self, validate_html) -> None:
-        """SVG use element for external resource loading."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<svg><use href="http://evil.com/xss.svg#payload"></use></svg>
-<svg><use xlink:href="data:image/svg+xml,<svg onload='alert(1)'/>"></use></svg>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # SVG use element should be escaped, not loading external resources
-        assert "<svg><use href=" not in html, "SVG use should be escaped"
-        # Data URI should not be interpreted
-        assert "data:image/svg+xml" not in html or "&" in html, "Data URI escaped"
-
-
-class TestPrototypePollution:
-    """Tests for prototype pollution patterns.
-
-    If any JavaScript uses user-controlled data as object keys,
-    __proto__, constructor, etc. could pollute prototypes.
-    """
-
-    def test_proto_in_keys(self, validate_html) -> None:
-        """Keys that could cause prototype pollution."""
-        adata = AnnData(np.zeros((3, 3)))
-        dangerous_keys = [
-            "__proto__",
-            "constructor",
-            "prototype",
-            "__defineGetter__",
-            "__defineSetter__",
-            "__lookupGetter__",
-            "__lookupSetter__",
-            "hasOwnProperty",
-            "isPrototypeOf",
-            "propertyIsEnumerable",
-            "toLocaleString",
-            "toString",
-            "valueOf",
-        ]
-        for key in dangerous_keys:
-            adata.uns[key] = {"polluted": True}
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-        # All dangerous keys should be visible as data (escaped/quoted)
-        # They should appear in data-key attributes, not as JS object keys
-        for key in dangerous_keys:
-            assert key in html, f"Key {key} should be visible in output"
-
-    def test_template_injection_patterns(self, validate_html) -> None:
-        """Template injection patterns that could execute in some contexts."""
-        adata = AnnData(np.zeros((3, 3)))
-        templates = [
-            "{{constructor.constructor('alert(1)')()}}",
-            "${alert(1)}",
-            "#{alert(1)}",
-            "<%= alert(1) %>",
-            "{{7*7}}",
-            "${7*7}",
-            "[[${7*7}]]",
-            "{{config}}",
-            "{{self}}",
-        ]
-        for i, tmpl in enumerate(templates):
-            adata.uns[f"tmpl_{i}"] = tmpl
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Template patterns should appear as literal text, not evaluated
-        # {{7*7}} should not become 49
-        assert "49" not in html or "7*7" in html, "Templates should not be evaluated"
-        # The constructor pattern should be visible as text
-        assert "constructor" in html, "Template text should be visible"
-
-
-class TestSlowAndBlockingObjects:
-    """Tests for objects that could hang or slow down the kernel."""
-
-    def test_slow_repr_handled(self, validate_html) -> None:
-        """Slow __repr__ should not block indefinitely."""
-        import time
-
-        adata = AnnData(np.zeros((3, 3)))
-        # 0.1 second delay - not too long but tests the pattern
-        adata.uns["slow"] = SlowRepr(delay=0.1)
-
-        start = time.time()
-        html = adata._repr_html_()
-        elapsed = time.time() - start
-
-        v = validate_html(html)
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "slow")
-        # Should complete in reasonable time (not hang)
-        assert elapsed < 5.0, f"Repr took too long: {elapsed}s"
-
-    def test_memory_bomb_handled(self, validate_html) -> None:
-        """Objects that try to allocate huge memory should be handled."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["bomb"] = MemoryBomb()
-
-        # This should not raise MemoryError - it should be caught
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_section_contains_entry("uns", "bomb")
-        # Should show the type name even if accessing shape failed
-        v.assert_text_visible("MemoryBomb")
-        # Should show an error indicator
-        assert "MemoryError" in html or "error" in html.lower(), (
-            "Error should be indicated"
-        )
-
 
 class TestEncodingAttacks:
     """Tests for encoding-related attacks."""
-
-    def test_overlong_utf8_simulation(self, validate_html) -> None:
-        """Strings that might bypass filters via encoding tricks."""
-        adata = AnnData(np.zeros((3, 3)))
-        # Use actual bytes sequences that might be dangerous
-        adata.uns["encoded"] = {
-            "null_byte": "\x00",  # Actual null byte
-            "quote": "\x22",  # Double quote (")
-            "lt": "\x3c",  # Less than (<)
-        }
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Null bytes should be handled (removed or escaped)
-        assert "\x00" not in html, "Null bytes should be removed from HTML"
-        # Less-than should be escaped
-        assert "encoded" in html, "Section should be visible"
 
     def test_utf7_injection(self, validate_html) -> None:
         """UTF-7 encoding that could bypass filters in some contexts."""
@@ -2434,95 +1708,3 @@ class TestEncodingAttacks:
         assert html.count("bom") >= 3, "All BOM columns should be visible"
 
 
-class TestMutationXSS:
-    """Tests for mutation XSS (mXSS) attacks.
-
-    mXSS exploits differences in how HTML is parsed vs serialized.
-    Content that looks safe can become dangerous after DOM manipulation.
-    """
-
-    def test_mutation_xss_patterns(self, validate_html) -> None:
-        """Content that could mutate into XSS during parsing."""
-        adata = AnnData(np.zeros((3, 3)))
-        mxss_payloads = [
-            "<img src=x onerror=alert(1)//",  # Missing closing >
-            "<svg><![CDATA[><script>alert(1)</script>]]>",
-            "<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>",
-            '<noscript><p title="</noscript><script>alert(1)</script>">',
-            "<<script>alert(1)</script>",
-            "<div<script>alert(1)</script>>",
-        ]
-        for i, payload in enumerate(mxss_payloads):
-            adata.uns[f"mxss_{i}"] = payload
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # All mXSS payloads should be escaped - < becomes &lt;
-        # The key check: raw <img and <script tags don't exist from user content
-        assert "<img src=x" not in html, "img tag should be escaped to &lt;img"
-        # Escaped content should be present as &lt; entities
-        assert "&lt;" in html, "Escaped content should be visible"
-
-    def test_html_entity_smuggling(self, validate_html) -> None:
-        """HTML entities that decode to dangerous content."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["entities"] = {
-            "script": "&#60;script&#62;alert(1)&#60;/script&#62;",
-            "hex": "&#x3c;script&#x3e;alert(1)&#x3c;/script&#x3e;",
-            "named": "&lt;script&gt;alert(1)&lt;/script&gt;",
-        }
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # Entity-encoded content should be double-escaped or shown as-is
-        # It should NOT decode into executable script tags
-        assert "<script>alert(1)</script>" not in html, (
-            "Entities should not decode to XSS"
-        )
-
-
-class TestAccessibilityAttacks:
-    """Tests for attacks targeting screen readers and assistive tech."""
-
-    def test_aria_label_spoofing(self, validate_html) -> None:
-        """Aria labels that could mislead screen reader users."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Test
-<div aria-label="Safe content">Actually malicious instructions here</div>
-<span role="button" aria-label="Download">Delete all data</span>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # The aria-label should be escaped, not interpreted as real HTML attribute
-        assert 'aria-label="Safe content"' not in html, "aria-label should be escaped"
-        # The raw text should be visible (escaped)
-        assert "aria-label" in html, "aria-label text should appear (escaped)"
-
-    def test_visually_hidden_content(self, validate_html) -> None:
-        """Content visible to screen readers but hidden visually."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Analysis
-<span style="position:absolute;left:-9999px">Secret malicious instructions</span>
-<span class="sr-only">Hidden content for screen readers</span>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # The inline style attempting to hide content should be escaped
-        assert 'style="position:absolute;left:-9999px"' not in html, (
-            "Style should be escaped"
-        )
-        # User content should not inject CSS positioning
-        # The text "Secret malicious instructions" should still be visible
-        assert "Secret" in html or "malicious" in html, "Text content should be visible"

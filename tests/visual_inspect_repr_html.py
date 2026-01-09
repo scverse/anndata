@@ -2515,7 +2515,7 @@ For more details, see the full documentation.
     # - Huge categoricals (10,000 categories!)
     # - Giant strings (50KB+)
     # - Deeply nested structures (15+ levels)
-    print("  24a. Ultimate Evil AnnData (Adversarial Robustness)")
+    print("  24. Evil AnnData (Adversarial Robustness)")
 
     # === DEFINE CRASHING/EVIL OBJECT CLASSES ===
 
@@ -2895,6 +2895,18 @@ The end. If you see this without any alerts or broken layout, the sanitization w
 
     adata_evil.uns["long_error_object_uns"] = VeryLongErrorObject()
 
+    # SVG XSS - SVG elements with scripts (must be escaped)
+    adata_evil.uns["svg_script"] = "<svg><script>alert(1)</script></svg>"
+    adata_evil.uns["svg_onload"] = '<svg onload="alert(1)">'
+
+    # MUTATION XSS (mXSS) - malformed HTML that could mutate during parsing
+    adata_evil.uns["mxss_unclosed"] = "<img src=x onerror=alert(1)//"
+    adata_evil.uns["mxss_nested"] = "<div<script>alert(1)</script>>"
+
+    # ENCODING ATTACKS
+    adata_evil.uns["utf7_script"] = "+ADw-script+AD4-alert(1)+ADw-/script+AD4-"
+    adata_evil.uns["bom_prefix"] = "\ufeffmalicious_content"
+
     # Add long error object to varm (bypass validation via internal store)
     adata_evil.varm["gene_scores"] = np.random.rand(
         30, 5
@@ -2914,10 +2926,11 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         evil_html = adata_evil._repr_html_()
 
     sections.append((
-        "24a. Evil AnnData - Basic Attacks",
+        "24. Evil AnnData - Adversarial Robustness",
         evil_html,
-        "<b>Basic adversarial scenarios:</b> XSS injection, HTML/CSS breakout, "
-        "Unicode bombs, crashing objects, circular references, and size bombs.<br><br>"
+        "<b>Comprehensive adversarial testing:</b> XSS injection, HTML/CSS breakout, "
+        "Unicode bombs, crashing objects, circular references, size bombs, SVG XSS, "
+        "mutation XSS, and encoding attacks.<br><br>"
         "<b>Crashing objects in uns (errors shown in red in preview column):</b><br>"
         "<ul>"
         "<li><code>exploding_repr</code> - __repr__ raises RuntimeError</li>"
@@ -3002,188 +3015,29 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li><code>nested_adata_with_errors</code> - contains <code>bad_obj_in_nested</code> and <code>another_bad</code></li>"
         "<li>Should show yellow/red row backgrounds in nested content</li>"
         "</ul>"
+        "<b>SVG XSS (must be escaped):</b><br>"
+        "<ul>"
+        "<li><code>svg_script</code> - SVG with embedded script tag</li>"
+        "<li><code>svg_onload</code> - SVG with onload handler</li>"
+        "</ul>"
+        "<b>Mutation XSS (malformed HTML):</b><br>"
+        "<ul>"
+        "<li><code>mxss_unclosed</code> - unclosed img tag with onerror</li>"
+        "<li><code>mxss_nested</code> - malformed nested tag</li>"
+        "</ul>"
+        "<b>Encoding attacks:</b><br>"
+        "<ul>"
+        "<li><code>utf7_script</code> - UTF-7 encoded script tag</li>"
+        "<li><code>bom_prefix</code> - BOM character prefix</li>"
+        "</ul>"
         "<b>Expected behavior:</b><br>"
         "<ul>"
         "<li>Errors shown in <span style='color:red;'>red</span> in preview column</li>"
         "<li>Warnings shown in <span style='color:orange;'>orange</span> in preview column</li>"
         "<li>Warning/error rows have colored backgrounds (yellow/red)</li>"
-        "<li>XSS is escaped (no script execution)</li>"
+        "<li>All XSS attempts are escaped (no script execution)</li>"
         "<li>Large data is truncated</li>"
         "<li>No crashes</li>"
-        "</ul>",
-    ))
-
-    # Test 24b: Advanced Adversarial Attacks
-    # SVG XSS, mutation XSS, prototype pollution, bidi spoofing, template injection
-    print("  24b. Evil AnnData - Advanced Attacks")
-
-    adata_advanced = ad.AnnData(X=np.random.rand(20, 15).astype(np.float32))
-
-    # === UNICODE LOOKALIKES (confusable characters) ===
-    # Not a security issue, but tests correct Unicode display
-    adata_advanced.obs["normal_name"] = np.random.rand(20)
-    adata_advanced.obs["n\u0430me_cyrillic_a"] = np.random.rand(20)
-    adata_advanced.obs["n\u0435w_cyrillic_e"] = np.random.rand(20)
-    # Greek lookalikes - U+03BF looks like o
-    adata_advanced.obs["z\u03bfne_greek_o"] = np.random.rand(20)
-    # Fullwidth lookalikes - U+FF21 looks like A
-    adata_advanced.obs["\uff21\uff22\uff23_fullwidth"] = np.random.rand(20)
-
-    # === ZERO-WIDTH DECEPTION ===
-    # Invisible characters that could hide content
-    adata_advanced.obs["visible\u200bhidden\u200btext"] = np.random.rand(
-        20
-    )  # Zero-width space
-    adata_advanced.obs["join\u200der_test"] = np.random.rand(20)  # Zero-width joiner
-    adata_advanced.obs["word\u2060breaker"] = np.random.rand(20)  # Word joiner
-    # Invisible separator attack
-    adata_advanced.uns["safe\u2063key"] = "invisible separator in key"
-
-    # === BIDI SPOOFING (Trojan Source - CVE-2021-42574) ===
-    # RLI (Right-to-Left Isolate) + PDI (Pop Directional Isolate)
-    adata_advanced.obs["user\u2067admin\u2069_bidi"] = np.random.rand(20)
-    adata_advanced.uns["access\u202edenied\u202c"] = (
-        "RLO attack"  # Right-to-Left Override
-    )
-    # Homoglyph + Bidi combo
-    adata_advanced.uns["file\u2066\u2069.exe"] = "hidden extension"
-
-    # === DOM CLOBBERING ===
-    # Names that could clobber window/document properties
-    adata_advanced.uns["document"] = "clobber attempt"
-    adata_advanced.uns["window"] = "clobber attempt"
-    adata_advanced.uns["location"] = "clobber attempt"
-    adata_advanced.uns["__proto__"] = {"polluted": True}
-    adata_advanced.uns["constructor"] = "pollution attempt"
-    adata_advanced.uns["prototype"] = {"evil": "value"}
-
-    # === CSS ATTACKS ===
-    # These should be escaped, not interpreted
-    adata_advanced.var["@keyframes evil { }"] = np.random.rand(15)
-    adata_advanced.var["filter: blur(100px)"] = np.random.rand(15)
-    adata_advanced.var["cursor: url(evil.cur)"] = np.random.rand(15)
-    adata_advanced.uns["css_animation"] = (
-        "@keyframes spin { from { transform: rotate(0); } }"
-    )
-    adata_advanced.uns["css_content"] = "content: attr(data-secret)"
-
-    # === SVG XSS ===
-    adata_advanced.uns["svg_script"] = "<svg><script>alert(1)</script></svg>"
-    adata_advanced.uns["svg_foreignobject"] = (
-        "<svg><foreignObject><body onload=alert(1)></foreignObject></svg>"
-    )
-    adata_advanced.uns["svg_use"] = (
-        "<svg><use href='data:image/svg+xml,<svg onload=alert(1)>'></use></svg>"
-    )
-    adata_advanced.uns["svg_animate"] = (
-        "<svg><animate onbegin=alert(1)></animate></svg>"
-    )
-
-    # === MUTATION XSS (mXSS) ===
-    # Malformed HTML that could mutate during parsing
-    adata_advanced.uns["mxss_img"] = "<img src=x onerror=alert(1)//"  # Missing >
-    adata_advanced.uns["mxss_cdata"] = "<svg><![CDATA[><script>alert(1)</script>]]>"
-    adata_advanced.uns["mxss_noscript"] = (
-        '<noscript><p title="</noscript><script>alert(1)</script>">'
-    )
-    adata_advanced.uns["mxss_double_lt"] = "<<script>alert(1)</script>"
-    adata_advanced.uns["mxss_nested_tag"] = "<div<script>alert(1)</script>>"
-
-    # === ENCODING ATTACKS ===
-    adata_advanced.uns["null_byte"] = "before\x00after"  # Actual null byte
-    adata_advanced.uns["utf7_script"] = "+ADw-script+AD4-alert(1)+ADw-/script+AD4-"
-    adata_advanced.uns["bom_prefix"] = "\ufeffevil_content"  # Byte Order Mark
-    adata_advanced.uns["overlong_lt"] = "\xc0\xbc"  # Overlong encoding of <
-
-    # === PROTOTYPE POLLUTION PATTERNS ===
-    adata_advanced.uns["__proto__"] = {"isAdmin": True}
-    adata_advanced.uns["constructor.prototype.isAdmin"] = True
-    adata_advanced.uns["__defineGetter__"] = "pollution"
-
-    # === ACCESSIBILITY ATTACKS ===
-    adata_advanced.uns["aria_spoof"] = 'aria-label="Click to win $1000"'
-    adata_advanced.uns["role_spoof"] = 'role="button" aria-pressed="false"'
-    adata_advanced.uns["hidden_content"] = (
-        '<span aria-hidden="false" style="display:none">secret</span>'
-    )
-
-    # === TEMPLATE INJECTION ===
-    adata_advanced.uns["angular_inject"] = "{{constructor.constructor('alert(1)')()}}"
-    adata_advanced.uns["vue_inject"] = "{{_c.constructor('alert(1)')()}}"
-    adata_advanced.uns["jinja_inject"] = "{{ config.items() }}"
-    adata_advanced.uns["ejs_inject"] = (
-        "<%= global.process.mainModule.require('child_process').execSync('id') %>"
-    )
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        advanced_html = adata_advanced._repr_html_()
-
-    sections.append((
-        "24b. Evil AnnData - Advanced Attacks",
-        advanced_html,
-        "<b>Advanced attack vectors</b> beyond basic XSS - tests SVG injection, mutation XSS, "
-        "prototype pollution, bidi spoofing, and template injection patterns.<br><br>"
-        "<b>Unicode Lookalikes (confusable characters):</b><br>"
-        "<ul>"
-        "<li>Cyrillic U+0430 looks like Latin a</li>"
-        "<li>Cyrillic U+0435 looks like Latin e</li>"
-        "<li>Greek U+03BF looks like Latin o</li>"
-        "<li>Fullwidth U+FF21/22/23 looks like ABC</li>"
-        "<li><i>Not a security issue - tests correct Unicode display</i></li>"
-        "</ul>"
-        "<b>Zero-Width Characters (invisible):</b><br>"
-        "<ul>"
-        "<li>Zero-width space (U+200B) - invisible separator</li>"
-        "<li>Zero-width joiner (U+200D) - invisible connector</li>"
-        "<li>Word joiner (U+2060) - invisible non-breaking</li>"
-        "<li>Invisible separator (U+2063) - in uns key</li>"
-        "</ul>"
-        "<b>Bidi Spoofing (Trojan Source CVE-2021-42574):</b><br>"
-        "<ul>"
-        "<li>RLI/PDI (U+2067/U+2069) - reverses text direction</li>"
-        "<li>RLO/PDF (U+202E/U+202C) - right-to-left override</li>"
-        "<li>Can make text appear reversed or reordered</li>"
-        "</ul>"
-        "<b>DOM Clobbering Patterns:</b><br>"
-        "<ul>"
-        "<li>Keys named 'document', 'window', 'location'</li>"
-        "<li>Keys named '__proto__', 'constructor', 'prototype'</li>"
-        "<li><i>Tests these appear as literal text, not interpreted</i></li>"
-        "</ul>"
-        "<b>CSS Injection Patterns:</b><br>"
-        "<ul>"
-        "<li>@keyframes, filter:, cursor: url()</li>"
-        "<li><i>Should appear as escaped text</i></li>"
-        "</ul>"
-        "<b>SVG XSS:</b><br>"
-        "<ul>"
-        "<li>SVG with script tag, foreignObject, use element, animate</li>"
-        "<li><i>All SVG tags should be escaped</i></li>"
-        "</ul>"
-        "<b>Mutation XSS (mXSS):</b><br>"
-        "<ul>"
-        "<li>Malformed HTML that could mutate during parsing</li>"
-        "<li>Missing closing brackets, CDATA breakout, nested tags</li>"
-        "</ul>"
-        "<b>Encoding Attacks:</b><br>"
-        "<ul>"
-        "<li>Null bytes, UTF-7 encoded script, BOM prefix</li>"
-        "</ul>"
-        "<b>Prototype Pollution Patterns:</b><br>"
-        "<ul>"
-        "<li>__proto__, constructor.prototype keys</li>"
-        "</ul>"
-        "<b>Template Injection:</b><br>"
-        "<ul>"
-        "<li>Angular/Vue/Jinja/EJS template syntax</li>"
-        "<li><i>Should appear as literal text</i></li>"
-        "</ul>"
-        "<b>Expected behavior:</b><br>"
-        "<ul>"
-        "<li>All content should be escaped and visible as text</li>"
-        "<li>No script execution, CSS injection, or DOM manipulation</li>"
-        "<li>No crashes or hangs</li>"
         "</ul>",
     ))
 
