@@ -472,7 +472,7 @@ try:
 
         def _build_header(self, container_id: str) -> str:
             """Custom header - shows 'SpatialData' with Zarr badge and file path."""
-            parts = ['<div class="anndata-hdr">']
+            parts = ['<div class="anndata-header">']
             parts.append('<span class="anndata-header__type">SpatialData</span>')
 
             # Zarr badge using render_badge() helper

@@ -31,7 +31,7 @@ container
         const content = section.querySelector(".anndata-section__content");
         if (content) {
             content.style.maxHeight = "0";
-            content.style.overflow = "anndata-entry--hidden";
+            content.style.overflow = "hidden";
         }
     });
 
@@ -44,7 +44,7 @@ function toggleSection(header) {
     const content = section.querySelector(".anndata-section__content");
     if (content) {
         content.style.maxHeight = isCollapsed ? "0" : "";
-        content.style.overflow = isCollapsed ? "anndata-entry--hidden" : "";
+        content.style.overflow = isCollapsed ? "hidden" : "";
         content.setAttribute("aria-hidden", isCollapsed);
     }
 
@@ -269,7 +269,7 @@ function filterEntries(query) {
                 const nestedRepr = xEntry.closest(".anndata-repr");
                 if (nestedRepr) {
                     const hasVisibleEntries = nestedRepr.querySelector(
-                        ".anndata-entry:not(.hidden)",
+                        ".anndata-entry:not(.anndata-entry--hidden)",
                     );
                     xEntry.style.display = hasVisibleEntries ? "" : "none";
                 }
@@ -298,7 +298,7 @@ function filterEntries(query) {
     // Hide sections with no visible entries
     container.querySelectorAll(".anndata-section").forEach((section) => {
         const visibleEntries = section.querySelectorAll(
-            ".anndata-entry:not(.hidden)",
+            ".anndata-entry:not(.anndata-entry--hidden)",
         );
 
         if (query && visibleEntries.length === 0) {
@@ -413,34 +413,32 @@ function isOverflowing(el) {
 }
 
 // Helper to update wrap button visibility based on overflow
-function updateWrapButtonVisibility(btn, list, metaCell) {
+function updateWrapButtonVisibility(btn, list, metaCell, wrappedClass) {
     if (!list || !metaCell) {
         btn.style.display = "none";
         return;
     }
     // Show button only if content is overflowing or currently wrapped
-    const isWrapped = list.classList.contains("anndata-categories--wrapped");
+    const isWrapped = list.classList.contains(wrappedClass);
     const overflows = isOverflowing(metaCell);
     btn.style.display = overflows || isWrapped ? "inline" : "none";
 }
 
 // Factory function to set up wrap button handlers (DRY pattern for cats/cols buttons)
-function setupWrapButtons(buttonSelector, listSelector) {
+function setupWrapButtons(buttonSelector, listSelector, wrappedClass) {
     container.querySelectorAll(buttonSelector).forEach((btn) => {
-        const typeCell = btn.closest(".anndata-entry-type");
+        const typeCell = btn.closest(".anndata-entry__type");
         const metaCell = typeCell ? typeCell.nextElementSibling : null;
         const list = metaCell ? metaCell.querySelector(listSelector) : null;
 
         // Initial visibility check
-        updateWrapButtonVisibility(btn, list, metaCell);
+        updateWrapButtonVisibility(btn, list, metaCell, wrappedClass);
 
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
             if (!list || !metaCell) return;
 
-            const isWrapped = list.classList.toggle(
-                "anndata-categories--wrapped",
-            );
+            const isWrapped = list.classList.toggle(wrappedClass);
             metaCell.classList.toggle("anndata-entry--expanded", isWrapped);
             btn.textContent = isWrapped ? "▲" : "▼";
             btn.title = isWrapped
@@ -453,21 +451,37 @@ function setupWrapButtons(buttonSelector, listSelector) {
 }
 
 // Set up wrap buttons for categories and columns lists
-setupWrapButtons(".anndata-categories__wrap", ".anndata-categories");
-setupWrapButtons(".anndata-columns__wrap", ".anndata-columns");
+setupWrapButtons(
+    ".anndata-categories__wrap",
+    ".anndata-categories",
+    "anndata-categories--wrapped",
+);
+setupWrapButtons(
+    ".anndata-columns__wrap",
+    ".anndata-columns",
+    "anndata-columns--wrapped",
+);
 
 // Update button visibility on container resize (works for JupyterLab panes too)
 // Uses the same selector pairs as setupWrapButtons for consistency
 function updateAllWrapButtons() {
     [
-        [".anndata-categories__wrap", ".anndata-categories"],
-        [".anndata-columns__wrap", ".anndata-columns"],
-    ].forEach(([btnSel, listSel]) => {
+        [
+            ".anndata-categories__wrap",
+            ".anndata-categories",
+            "anndata-categories--wrapped",
+        ],
+        [
+            ".anndata-columns__wrap",
+            ".anndata-columns",
+            "anndata-columns--wrapped",
+        ],
+    ].forEach(([btnSel, listSel, wrappedClass]) => {
         container.querySelectorAll(btnSel).forEach((btn) => {
-            const typeCell = btn.closest(".anndata-entry-type");
+            const typeCell = btn.closest(".anndata-entry__type");
             const metaCell = typeCell ? typeCell.nextElementSibling : null;
             const list = metaCell ? metaCell.querySelector(listSel) : null;
-            updateWrapButtonVisibility(btn, list, metaCell);
+            updateWrapButtonVisibility(btn, list, metaCell, wrappedClass);
         });
     });
 }
