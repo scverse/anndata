@@ -19,6 +19,7 @@ __pycache__/
 # Test results (nunit/junit) and coverage
 /test-data/
 /*coverage*
+tests/repr_html_visual_test.html
 
 # jupyter
 .ipynb_checkpoints
