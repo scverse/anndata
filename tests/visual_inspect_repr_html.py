@@ -205,7 +205,7 @@ try:
                 svg_html = _render_tree_svg(tree)
                 output = FormattedOutput(
                     type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
-                    css_class="dtype-tree",
+                    css_class="anndata-dtype--tree",
                     tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
                     expanded_html=svg_html,
                 )
@@ -244,7 +244,7 @@ try:
                 svg_html = _render_tree_svg(tree)
                 output = FormattedOutput(
                     type_name=f"DiGraph ({n_nodes} nodes, {n_leaves} leaves)",
-                    css_class="dtype-tree",
+                    css_class="anndata-dtype--tree",
                     tooltip=f"Phylogenetic tree with {n_nodes} total nodes",
                     expanded_html=svg_html,
                 )
@@ -339,7 +339,7 @@ try:
                     )
                 output = FormattedOutput(
                     type_name=f"AnnData ({shape_str})",
-                    css_class="dtype-anndata",
+                    css_class="anndata-dtype--anndata",
                     tooltip=f"Modality: {mod_name}",
                     expanded_html=nested_html if can_expand else None,
                     is_serializable=True,
@@ -453,7 +453,7 @@ try:
             parts.append(self._build_coordinate_systems_preview())
 
             # --- STEP 5: Sections using render_section() ---
-            parts.append('<div class="adata-sections">')
+            parts.append('<div class="anndata-repr__sections">')
             parts.append(self._build_images_section())
             parts.append(self._build_labels_section())
             parts.append(self._build_points_section())
@@ -473,15 +473,17 @@ try:
         def _build_header(self, container_id: str) -> str:
             """Custom header - shows 'SpatialData' with Zarr badge and file path."""
             parts = ['<div class="anndata-hdr">']
-            parts.append('<span class="adata-type">SpatialData</span>')
+            parts.append('<span class="anndata-header__type">SpatialData</span>')
 
             # Zarr badge using render_badge() helper
             if self.path:
                 parts.append(
-                    render_badge("Zarr", "adata-badge-backed", "Backed by Zarr storage")
+                    render_badge(
+                        "Zarr", "anndata-badge--backed", "Backed by Zarr storage"
+                    )
                 )
                 parts.append(
-                    f'<span class="adata-file-path" style="font-family:ui-monospace,monospace;'
+                    f'<span class="anndata-file-path" style="font-family:ui-monospace,monospace;'
                     f'font-size:11px;color:var(--anndata-text-secondary, #6c757d);">'
                     f"{escape_html(self.path)}</span>"
                 )
@@ -515,7 +517,7 @@ try:
             elements_str = ", ".join(all_elements) if all_elements else "no elements"
 
             # Build simple inline list
-            parts = ['<div class="adata-index-preview" style="padding:2px 8px;">']
+            parts = ['<div class="anndata-index-preview" style="padding:2px 8px;">']
             parts.append(
                 '<span style="color:var(--anndata-text-secondary, #6c757d);'
                 'font-size:12px;">coordinate_systems: </span>'
@@ -546,14 +548,14 @@ try:
             for name, info in self.images.items():
                 # Build meta content (dimensions info) for the META column
                 dims_str = ", ".join(info.get("dims", ["y", "x"]))
-                meta = f'<span class="adata-meta-info">[{dims_str}]</span>'
+                meta = f'<span class="anndata-meta-info">[{dims_str}]</span>'
 
                 # Create a FormattedEntry with FormattedOutput
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"DataArray {info['shape']} {info['dtype']}",
-                        css_class="dtype-ndarray",
+                        css_class="anndata-dtype--ndarray",
                         preview_html=meta,  # Content in preview column (rightmost)
                     ),
                 )
@@ -573,13 +575,13 @@ try:
             rows = []
             for name, info in self.labels.items():
                 dims_str = ", ".join(info.get("dims", ["y", "x"]))
-                meta = f'<span class="adata-meta-info">[{dims_str}]</span>'
+                meta = f'<span class="anndata-meta-info">[{dims_str}]</span>'
 
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"Labels {info['shape']} {info['dtype']}",
-                        css_class="dtype-ndarray",
+                        css_class="anndata-dtype--ndarray",
                         preview_html=meta,
                     ),
                 )
@@ -596,13 +598,13 @@ try:
             """Build points section."""
             rows = []
             for name, info in self.points.items():
-                meta = f'<span class="adata-meta-info">{info["n_dims"]}D coordinates</span>'
+                meta = f'<span class="anndata-meta-info">{info["n_dims"]}D coordinates</span>'
 
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"dask.DataFrame ({format_number(info['n_points'])} × {info['n_dims']})",
-                        css_class="dtype-dataframe",
+                        css_class="anndata-dtype--dataframe",
                         preview_html=meta,
                     ),
                 )
@@ -619,13 +621,13 @@ try:
             """Build shapes section."""
             rows = []
             for name, info in self.shapes.items():
-                meta = f'<span class="adata-meta-info">{info["geometry_type"]}</span>'
+                meta = f'<span class="anndata-meta-info">{info["geometry_type"]}</span>'
 
                 entry = FormattedEntry(
                     key=name,
                     output=FormattedOutput(
                         type_name=f"GeoDataFrame ({format_number(info['n_shapes'])} shapes)",
-                        css_class="dtype-dataframe",
+                        css_class="anndata-dtype--dataframe",
                         preview_html=meta,
                     ),
                 )
@@ -661,7 +663,7 @@ try:
                     key=name,
                     output=FormattedOutput(
                         type_name=f"AnnData ({adata.n_obs} × {adata.n_vars})",
-                        css_class="dtype-anndata",
+                        css_class="anndata-dtype--anndata",
                         expanded_html=nested_html,  # Makes the nested content collapsible
                     ),
                 )
@@ -729,7 +731,7 @@ try:
         def format(self, obj, context: FormatterContext) -> FormattedOutput:
             return FormattedOutput(
                 type_name=f"DataTree {obj['shape']} {obj['dtype']}",
-                css_class="dtype-ndarray",
+                css_class="anndata-dtype--ndarray",
             )
 
     spatialdata_formatter_registry.register_type_formatter(DataTreeFormatter())

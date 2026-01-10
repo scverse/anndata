@@ -48,7 +48,7 @@ class TestFormatterRegistry:
             def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
                 return FormattedOutput(
                     type_name="CustomType",
-                    css_class="dtype-custom",
+                    css_class="anndata-dtype--custom",
                     is_serializable=False,
                 )
 
@@ -60,7 +60,7 @@ class TestFormatterRegistry:
             context = FormatterContext()
             result = formatter_registry.format_value(obj, context)
             assert result.type_name == "CustomType"
-            assert result.css_class == "dtype-custom"
+            assert result.css_class == "anndata-dtype--custom"
             assert result.is_serializable is False
         finally:
             formatter_registry.unregister_type_formatter(formatter)
@@ -109,7 +109,7 @@ class TestFormatterRegistry:
             def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
                 return FormattedOutput(
                     type_name="UnsSpecificType",
-                    css_class="dtype-uns-specific",
+                    css_class="anndata-dtype--uns-specific",
                 )
 
         formatter = UnsOnlyFormatter()
@@ -375,7 +375,7 @@ class TestFallbackFormatter:
         result = formatter.format(obj, context)
 
         assert result.type_name == "ExtensionType"
-        assert result.css_class == "dtype-extension"
+        assert result.css_class == "anndata-dtype--extension"
         assert len(result.warnings) == 0
 
     def test_fallback_with_shape_and_dtype(self):

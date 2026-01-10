@@ -20,9 +20,9 @@ Usage for extending to new types:
         def format(self, obj, context):
             return FormattedOutput(
                 type_name=f"MyArray {obj.shape}",
-                css_class="dtype-myarray",
+                css_class="anndata-dtype--myarray",
                 # preview_html for rightmost column (data preview, counts, etc.)
-                preview_html=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
+                preview_html=f'<span class="anndata-text--muted">({obj.n_items} items)</span>',
             )
 
     # Format by embedded type hint (e.g., tagged data in uns)
@@ -51,6 +51,8 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
+    CSS_DTYPE_EXTENSION,
+    CSS_DTYPE_UNKNOWN,
     CSS_TEXT_ERROR,
     CSS_TEXT_WARNING,
     DEFAULT_FOLD_THRESHOLD,
@@ -106,20 +108,20 @@ class FormattedOutput:
 
     Available CSS classes
     ---------------------
-    Built-in dtype classes for ``css_class``:
-        - ``dtype-category``: Categorical data (purple)
-        - ``dtype-int``, ``dtype-float``: Numeric types (blue)
-        - ``dtype-bool``: Boolean (red)
-        - ``dtype-string``: String data (dark blue)
-        - ``dtype-sparse``: Sparse matrices (green)
-        - ``dtype-array``, ``dtype-ndarray``: Arrays (blue)
-        - ``dtype-dataframe``: DataFrames (purple)
-        - ``dtype-anndata``: Nested AnnData (red, bold)
-        - ``dtype-dask``: Dask arrays (orange)
-        - ``dtype-gpu``: GPU arrays (lime)
-        - ``dtype-awkward``: Awkward arrays (orange-red)
-        - ``dtype-unknown``: Unknown types (gray, italic)
-        - ``dtype-extension``: Extension types (purple)
+    Built-in dtype classes for ``css_class`` (BEM modifiers on ``anndata-dtype``):
+        - ``anndata-dtype--category``: Categorical data (purple)
+        - ``anndata-dtype--int``, ``anndata-dtype--float``: Numeric types (blue)
+        - ``anndata-dtype--bool``: Boolean (red)
+        - ``anndata-dtype--string``: String data (dark blue)
+        - ``anndata-dtype--sparse``: Sparse matrices (green)
+        - ``anndata-dtype--array``, ``anndata-dtype--ndarray``: Arrays (blue)
+        - ``anndata-dtype--dataframe``: DataFrames (purple)
+        - ``anndata-dtype--anndata``: Nested AnnData (red, bold)
+        - ``anndata-dtype--dask``: Dask arrays (orange)
+        - ``anndata-dtype--gpu``: GPU arrays (lime)
+        - ``anndata-dtype--awkward``: Awkward arrays (orange-red)
+        - ``anndata-dtype--unknown``: Unknown types (gray, italic)
+        - ``anndata-dtype--extension``: Extension types (purple)
     """
 
     type_name: str
@@ -130,7 +132,7 @@ class FormattedOutput:
     """Optional. Raw HTML to render in type column instead of type_name.
     If provided, replaces the visual rendering but type_name still used for data-dtype."""
 
-    css_class: str = "dtype-unknown"
+    css_class: str = CSS_DTYPE_UNKNOWN
     """CSS class for styling the type column."""
 
     tooltip: str = ""
@@ -327,7 +329,7 @@ class SectionFormatter(ABC):
                 for key, value in obj.obst.items():
                     output = FormattedOutput(
                         type_name=f"Tree ({value.n_nodes} nodes)",
-                        css_class="dtype-tree",
+                        css_class="anndata-dtype--tree",
                     )
                     entries.append(FormattedEntry(key=key, output=output))
                 return entries
@@ -502,7 +504,7 @@ class FallbackFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_name,
-            css_class="dtype-unknown" if not is_extension else "dtype-extension",
+            css_class=CSS_DTYPE_UNKNOWN if not is_extension else CSS_DTYPE_EXTENSION,
             tooltip="\n".join(tooltip_parts),
             warnings=warnings,
             preview=preview,

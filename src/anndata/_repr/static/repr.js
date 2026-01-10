@@ -3,63 +3,63 @@
 // The {container_id} placeholder is replaced at runtime.
 
 // Mark container as JS-enabled (shows interactive elements)
-container.classList.add("js-enabled");
+container.classList.add("anndata-repr--js");
 
 // Show interactive elements (hidden by default for no-JS graceful degradation)
-container.querySelectorAll(".adata-fold-icon").forEach((icon) => {
+container.querySelectorAll(".anndata-section__fold").forEach((icon) => {
     icon.style.display = "inline-flex";
 });
-container.querySelectorAll(".adata-copy-btn").forEach((btn) => {
+container.querySelectorAll(".anndata-entry__copy").forEach((btn) => {
     btn.style.display = "inline-flex";
 });
-container.querySelectorAll(".adata-search-box").forEach((box) => {
+container.querySelectorAll(".anndata-search__box").forEach((box) => {
     box.style.display = "inline-flex";
 });
-container.querySelectorAll(".adata-expand-btn").forEach((btn) => {
+container.querySelectorAll(".anndata-entry__expand").forEach((btn) => {
     btn.style.display = "inline-block";
 });
-container.querySelectorAll(".adata-search-toggle").forEach((btn) => {
+container.querySelectorAll(".anndata-search__toggle").forEach((btn) => {
     btn.style.display = "inline-flex";
 });
 // Filter indicator is shown via CSS .active class, no need to set display here
 
 // Apply initial collapse state from data attributes
 container
-    .querySelectorAll('.anndata-sec[data-should-collapse="true"]')
+    .querySelectorAll('.anndata-section[data-should-collapse="true"]')
     .forEach((section) => {
-        section.classList.add("collapsed");
-        const content = section.querySelector(".anndata-seccontent");
+        section.classList.add("anndata-section--collapsed");
+        const content = section.querySelector(".anndata-section__content");
         if (content) {
             content.style.maxHeight = "0";
-            content.style.overflow = "hidden";
+            content.style.overflow = "anndata-entry--hidden";
         }
     });
 
 // Toggle section fold/unfold
 function toggleSection(header) {
-    const section = header.closest(".anndata-sec");
+    const section = header.closest(".anndata-section");
     if (!section) return;
 
-    const isCollapsed = section.classList.toggle("collapsed");
-    const content = section.querySelector(".anndata-seccontent");
+    const isCollapsed = section.classList.toggle("anndata-section--collapsed");
+    const content = section.querySelector(".anndata-section__content");
     if (content) {
         content.style.maxHeight = isCollapsed ? "0" : "";
-        content.style.overflow = isCollapsed ? "hidden" : "";
+        content.style.overflow = isCollapsed ? "anndata-entry--hidden" : "";
         content.setAttribute("aria-hidden", isCollapsed);
     }
 
     // Rotate fold icon
-    const icon = section.querySelector(".adata-fold-icon");
+    const icon = section.querySelector(".anndata-section__fold");
     if (icon) {
         icon.style.transform = isCollapsed ? "rotate(-90deg)" : "";
     }
 }
 
 // Attach click handlers to section headers
-container.querySelectorAll(".anndata-sechdr").forEach((header) => {
+container.querySelectorAll(".anndata-section__header").forEach((header) => {
     header.addEventListener("click", (e) => {
         // Don't toggle if clicking on help link
-        if (e.target.closest(".adata-help-link")) return;
+        if (e.target.closest(".anndata-section__help")) return;
         toggleSection(header);
     });
 
@@ -75,11 +75,11 @@ container.querySelectorAll(".anndata-sechdr").forEach((header) => {
 });
 
 // Search/filter functionality
-const searchBox = container.querySelector(".adata-search-box");
-const searchInput = container.querySelector(".adata-search-input");
-const filterIndicator = container.querySelector(".adata-filter-indicator");
-const caseToggle = container.querySelector(".adata-toggle-case");
-const regexToggle = container.querySelector(".adata-toggle-regex");
+const searchBox = container.querySelector(".anndata-search__box");
+const searchInput = container.querySelector(".anndata-search__input");
+const filterIndicator = container.querySelector(".anndata-search__indicator");
+const caseToggle = container.querySelector(".anndata-search__toggle--case");
+const regexToggle = container.querySelector(".anndata-search__toggle--regex");
 
 // Search state
 let caseSensitive = false;
@@ -110,7 +110,7 @@ if (searchInput) {
         caseToggle.addEventListener("click", (e) => {
             e.stopPropagation();
             caseSensitive = !caseSensitive;
-            caseToggle.classList.toggle("active", caseSensitive);
+            caseToggle.classList.toggle("anndata--active", caseSensitive);
             caseToggle.setAttribute("aria-pressed", caseSensitive);
             triggerFilter();
         });
@@ -120,7 +120,7 @@ if (searchInput) {
         regexToggle.addEventListener("click", (e) => {
             e.stopPropagation();
             useRegex = !useRegex;
-            regexToggle.classList.toggle("active", useRegex);
+            regexToggle.classList.toggle("anndata--active", useRegex);
             regexToggle.setAttribute("aria-pressed", useRegex);
             triggerFilter();
         });
@@ -134,15 +134,17 @@ function matchesQuery(text, query) {
         try {
             const flags = caseSensitive ? "" : "i";
             const regex = new RegExp(query, flags);
-            if (searchBox) searchBox.classList.remove("regex-error");
+            if (searchBox)
+                searchBox.classList.remove("anndata-search__box--error");
             return regex.test(text);
         } catch (e) {
             // Invalid regex - show error state but don't crash
-            if (searchBox) searchBox.classList.add("regex-error");
+            if (searchBox)
+                searchBox.classList.add("anndata-search__box--error");
             return false;
         }
     } else {
-        if (searchBox) searchBox.classList.remove("regex-error");
+        if (searchBox) searchBox.classList.remove("anndata-search__box--error");
         if (caseSensitive) {
             return text.includes(query);
         } else {
@@ -156,7 +158,7 @@ function filterEntries(query) {
     let totalEntries = 0;
 
     // First pass: mark all entries as hidden or not based on direct match
-    const entries = container.querySelectorAll(".adata-entry");
+    const entries = container.querySelectorAll(".anndata-entry");
     const directMatches = new Set();
 
     entries.forEach((entry) => {
@@ -174,25 +176,35 @@ function filterEntries(query) {
 
         if (matches) {
             directMatches.add(entry);
-            entry.classList.remove("hidden");
+            entry.classList.remove("anndata-entry--hidden");
             totalMatches++;
 
             // Expand parent sections to show match
-            const section = entry.closest(".anndata-sec");
-            if (section && section.classList.contains("collapsed")) {
-                section.classList.remove("collapsed");
+            const section = entry.closest(".anndata-section");
+            if (
+                section &&
+                section.classList.contains("anndata-section--collapsed")
+            ) {
+                section.classList.remove("anndata-section--collapsed");
             }
 
             // Expand nested content if match is inside nested area
-            const nestedContent = entry.closest(".adata-nested-content");
+            const nestedContent = entry.closest(
+                ".anndata-entry__nested-content",
+            );
             if (nestedContent) {
-                const nestedRow = nestedContent.closest(".adata-nested-row");
-                if (nestedRow && !nestedRow.classList.contains("expanded")) {
-                    nestedRow.classList.add("expanded");
+                const nestedRow = nestedContent.closest(
+                    ".anndata-entry--nested",
+                );
+                if (
+                    nestedRow &&
+                    !nestedRow.classList.contains("anndata-entry--expanded")
+                ) {
+                    nestedRow.classList.add("anndata-entry--expanded");
                 }
             }
         } else {
-            entry.classList.add("hidden");
+            entry.classList.add("anndata-entry--hidden");
         }
     });
 
@@ -215,23 +227,27 @@ function filterEntries(query) {
                 iterations++;
                 // Check if we're inside a nested content container
                 const nestedContainer = element.closest(
-                    ".adata-nested-content",
+                    ".anndata-entry__nested-content",
                 );
                 if (!nestedContainer) break;
 
                 // Find the parent row that contains this nested content
-                // Structure: tr.adata-entry > tr.adata-nested-row > td.adata-nested-content
-                const nestedRow = nestedContainer.closest(".adata-nested-row");
+                // Structure: tr.anndata-entry > tr.anndata-entry--nested > td.anndata-entry__nested-content
+                const nestedRow = nestedContainer.closest(
+                    ".anndata-entry--nested",
+                );
                 if (!nestedRow) break;
 
                 // The parent entry is the previous sibling row
                 const parentEntry = nestedRow.previousElementSibling;
                 if (
                     parentEntry &&
-                    parentEntry.classList.contains("adata-entry")
+                    parentEntry.classList.contains("anndata-entry")
                 ) {
-                    if (parentEntry.classList.contains("hidden")) {
-                        parentEntry.classList.remove("hidden");
+                    if (
+                        parentEntry.classList.contains("anndata-entry--hidden")
+                    ) {
+                        parentEntry.classList.remove("anndata-entry--hidden");
                         totalMatches++;
                     }
                 }
@@ -241,17 +257,19 @@ function filterEntries(query) {
         });
     }
 
-    // Also filter X entries in nested AnnData (they use adata-x-entry class, not adata-entry)
+    // Also filter X entries in nested AnnData (they use anndata-x__entry class, not anndata-entry)
     // This prevents orphaned X rows from showing when their sibling entries are hidden
     if (query) {
         container
-            .querySelectorAll(".adata-nested-content .adata-x-entry")
+            .querySelectorAll(
+                ".anndata-entry__nested-content .anndata-x__entry",
+            )
             .forEach((xEntry) => {
                 // Check if the nested AnnData has any visible entries
                 const nestedRepr = xEntry.closest(".anndata-repr");
                 if (nestedRepr) {
                     const hasVisibleEntries = nestedRepr.querySelector(
-                        ".adata-entry:not(.hidden)",
+                        ".anndata-entry:not(.hidden)",
                     );
                     xEntry.style.display = hasVisibleEntries ? "" : "none";
                 }
@@ -259,7 +277,9 @@ function filterEntries(query) {
     } else {
         // Reset X entries when no query
         container
-            .querySelectorAll(".adata-nested-content .adata-x-entry")
+            .querySelectorAll(
+                ".anndata-entry__nested-content .anndata-x__entry",
+            )
             .forEach((xEntry) => {
                 xEntry.style.display = "";
             });
@@ -268,17 +288,17 @@ function filterEntries(query) {
     // Update filter indicator
     if (filterIndicator) {
         if (query) {
-            filterIndicator.classList.add("active");
+            filterIndicator.classList.add("anndata--active");
             filterIndicator.textContent = `Showing ${totalMatches} of ${totalEntries}`;
         } else {
-            filterIndicator.classList.remove("active");
+            filterIndicator.classList.remove("anndata--active");
         }
     }
 
     // Hide sections with no visible entries
-    container.querySelectorAll(".anndata-sec").forEach((section) => {
+    container.querySelectorAll(".anndata-section").forEach((section) => {
         const visibleEntries = section.querySelectorAll(
-            ".adata-entry:not(.hidden)",
+            ".anndata-entry:not(.hidden)",
         );
 
         if (query && visibleEntries.length === 0) {
@@ -290,7 +310,7 @@ function filterEntries(query) {
 }
 
 // Copy to clipboard
-container.querySelectorAll(".adata-copy-btn").forEach((btn) => {
+container.querySelectorAll(".anndata-entry__copy").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
         e.stopPropagation();
 
@@ -301,8 +321,11 @@ container.querySelectorAll(".adata-copy-btn").forEach((btn) => {
             await navigator.clipboard.writeText(text);
 
             // Visual feedback (icon turns green via CSS)
-            btn.classList.add("copied");
-            setTimeout(() => btn.classList.remove("copied"), 1500);
+            btn.classList.add("anndata-entry__copy--copied");
+            setTimeout(
+                () => btn.classList.remove("anndata-entry__copy--copied"),
+                1500,
+            );
         } catch (err) {
             // Fallback for older browsers
             const textarea = document.createElement("textarea");
@@ -314,8 +337,11 @@ container.querySelectorAll(".adata-copy-btn").forEach((btn) => {
 
             try {
                 document.execCommand("copy");
-                btn.classList.add("copied");
-                setTimeout(() => btn.classList.remove("copied"), 1500);
+                btn.classList.add("anndata-entry__copy--copied");
+                setTimeout(
+                    () => btn.classList.remove("anndata-entry__copy--copied"),
+                    1500,
+                );
             } catch (e) {
                 console.error("Copy failed:", e);
             }
@@ -326,23 +352,30 @@ container.querySelectorAll(".adata-copy-btn").forEach((btn) => {
 });
 
 // Expand/collapse nested content
-container.querySelectorAll(".adata-expand-btn").forEach((btn) => {
+container.querySelectorAll(".anndata-entry__expand").forEach((btn) => {
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
 
-        const entry = btn.closest(".adata-entry");
+        const entry = btn.closest(".anndata-entry");
         if (!entry) return;
 
-        // The nested content is in a sibling <tr class="adata-nested-row">
-        // which contains <td class="adata-nested-content">
+        // The nested content is in a sibling <tr class="anndata-entry--nested">
+        // which contains <td class="anndata-entry__nested-content">
         const nestedRow = entry.nextElementSibling;
-        if (!nestedRow || !nestedRow.classList.contains("adata-nested-row"))
+        if (
+            !nestedRow ||
+            !nestedRow.classList.contains("anndata-entry--nested")
+        )
             return;
 
-        const nestedContent = nestedRow.querySelector(".adata-nested-content");
+        const nestedContent = nestedRow.querySelector(
+            ".anndata-entry__nested-content",
+        );
         if (!nestedContent) return;
 
-        const isExpanded = nestedRow.classList.toggle("expanded");
+        const isExpanded = nestedRow.classList.toggle(
+            "anndata-entry--expanded",
+        );
 
         btn.textContent = isExpanded ? "Collapse ▲" : "Expand ▼";
         btn.setAttribute("aria-expanded", isExpanded);
@@ -351,15 +384,15 @@ container.querySelectorAll(".adata-expand-btn").forEach((btn) => {
 });
 
 // Expand all / Collapse all (if buttons exist)
-const expandAllBtn = container.querySelector(".adata-expand-all");
-const collapseAllBtn = container.querySelector(".adata-collapse-all");
+const expandAllBtn = container.querySelector(".anndata-expand-all");
+const collapseAllBtn = container.querySelector(".anndata-collapse-all");
 
 if (expandAllBtn) {
     expandAllBtn.addEventListener("click", () => {
         container
             .querySelectorAll(".anndata-sec.collapsed")
             .forEach((section) => {
-                section.classList.remove("collapsed");
+                section.classList.remove("anndata-section--collapsed");
             });
     });
 }
@@ -369,7 +402,7 @@ if (collapseAllBtn) {
         container
             .querySelectorAll(".anndata-sec:not(.collapsed)")
             .forEach((section) => {
-                section.classList.add("collapsed");
+                section.classList.add("anndata-section--collapsed");
             });
     });
 }
@@ -386,7 +419,7 @@ function updateWrapButtonVisibility(btn, list, metaCell) {
         return;
     }
     // Show button only if content is overflowing or currently wrapped
-    const isWrapped = list.classList.contains("wrapped");
+    const isWrapped = list.classList.contains("anndata-categories--wrapped");
     const overflows = isOverflowing(metaCell);
     btn.style.display = overflows || isWrapped ? "inline" : "none";
 }
@@ -394,7 +427,7 @@ function updateWrapButtonVisibility(btn, list, metaCell) {
 // Factory function to set up wrap button handlers (DRY pattern for cats/cols buttons)
 function setupWrapButtons(buttonSelector, listSelector) {
     container.querySelectorAll(buttonSelector).forEach((btn) => {
-        const typeCell = btn.closest(".adata-entry-type");
+        const typeCell = btn.closest(".anndata-entry-type");
         const metaCell = typeCell ? typeCell.nextElementSibling : null;
         const list = metaCell ? metaCell.querySelector(listSelector) : null;
 
@@ -405,8 +438,10 @@ function setupWrapButtons(buttonSelector, listSelector) {
             e.stopPropagation();
             if (!list || !metaCell) return;
 
-            const isWrapped = list.classList.toggle("wrapped");
-            metaCell.classList.toggle("expanded", isWrapped);
+            const isWrapped = list.classList.toggle(
+                "anndata-categories--wrapped",
+            );
+            metaCell.classList.toggle("anndata-entry--expanded", isWrapped);
             btn.textContent = isWrapped ? "▲" : "▼";
             btn.title = isWrapped
                 ? "Collapse to single line"
@@ -418,18 +453,18 @@ function setupWrapButtons(buttonSelector, listSelector) {
 }
 
 // Set up wrap buttons for categories and columns lists
-setupWrapButtons(".adata-cats-wrap-btn", ".adata-cats-list");
-setupWrapButtons(".adata-cols-wrap-btn", ".adata-cols-list");
+setupWrapButtons(".anndata-categories__wrap", ".anndata-categories");
+setupWrapButtons(".anndata-columns__wrap", ".anndata-columns");
 
 // Update button visibility on container resize (works for JupyterLab panes too)
 // Uses the same selector pairs as setupWrapButtons for consistency
 function updateAllWrapButtons() {
     [
-        [".adata-cats-wrap-btn", ".adata-cats-list"],
-        [".adata-cols-wrap-btn", ".adata-cols-list"],
+        [".anndata-categories__wrap", ".anndata-categories"],
+        [".anndata-columns__wrap", ".anndata-columns"],
     ].forEach(([btnSel, listSel]) => {
         container.querySelectorAll(btnSel).forEach((btn) => {
-            const typeCell = btn.closest(".adata-entry-type");
+            const typeCell = btn.closest(".anndata-entry-type");
             const metaCell = typeCell ? typeCell.nextElementSibling : null;
             const list = metaCell ? metaCell.querySelector(listSel) : null;
             updateWrapButtonVisibility(btn, list, metaCell);
@@ -455,7 +490,7 @@ if (typeof ResizeObserver !== "undefined") {
 }
 
 // README modal functionality
-const readmeIcon = container.querySelector(".adata-readme-icon");
+const readmeIcon = container.querySelector(".anndata-readme__icon");
 if (readmeIcon) {
     // Ensure accessibility attributes
     readmeIcon.setAttribute("role", "button");
@@ -469,31 +504,31 @@ if (readmeIcon) {
 
         // Create modal overlay
         const overlay = document.createElement("div");
-        overlay.className = "adata-readme-overlay";
+        overlay.className = "anndata-readme__overlay";
 
         // Create modal with accessibility attributes
         // Use container.id to make IDs unique across multiple cells
         const modalTitleId = container.id + "-readme-modal-title";
         const modal = document.createElement("div");
-        modal.className = "adata-readme-modal";
+        modal.className = "anndata-readme__modal";
         modal.setAttribute("role", "dialog");
         modal.setAttribute("aria-modal", "true");
         modal.setAttribute("aria-labelledby", modalTitleId);
 
         // Header
         const header = document.createElement("div");
-        header.className = "adata-readme-header";
+        header.className = "anndata-readme__header";
         header.innerHTML = '<h3 id="' + modalTitleId + '">README</h3>';
 
         const closeBtn = document.createElement("button");
-        closeBtn.className = "adata-readme-close";
+        closeBtn.className = "anndata-readme__close";
         closeBtn.textContent = "×";
         closeBtn.setAttribute("aria-label", "Close");
         header.appendChild(closeBtn);
 
         // Content
         const content = document.createElement("div");
-        content.className = "adata-readme-content";
+        content.className = "anndata-readme__content";
 
         // Parse markdown to HTML (simple conversion)
         content.innerHTML = parseMarkdown(readmeContent);

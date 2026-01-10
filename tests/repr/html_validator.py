@@ -26,9 +26,9 @@ class HTMLValidator:
 
     Usage:
         validator = HTMLValidator(html)
-        validator.assert_element_exists(".adata-badge-view")
-        validator.assert_text_in_element(".adata-shape", "100")
-        validator.assert_element_has_class("div", "anndata-sec")
+        validator.assert_element_exists(".anndata-badge--view")
+        validator.assert_text_in_element(".anndata-header__shape", "100")
+        validator.assert_element_has_class("div", "anndata-section")
     """
 
     def __init__(self, html: str):
@@ -223,7 +223,7 @@ class HTMLValidator:
         self, badge_type: str, *, msg: str | None = None
     ) -> HTMLValidator:
         """Assert a badge (View, Backed, Lazy) is shown."""
-        pattern = rf'class=["\'][^"\']*adata-badge-{re.escape(badge_type.lower())}[^"\']*["\']'
+        pattern = rf'class=["\'][^"\']*anndata-badge--{re.escape(badge_type.lower())}[^"\']*["\']'
         if not re.search(pattern, self.html, re.I):
             raise AssertionError(msg or f"Badge '{badge_type}' not shown in HTML")
         return self
@@ -232,7 +232,7 @@ class HTMLValidator:
         self, badge_type: str, *, msg: str | None = None
     ) -> HTMLValidator:
         """Assert a badge is NOT shown."""
-        pattern = rf'class=["\'][^"\']*adata-badge-{re.escape(badge_type.lower())}[^"\']*["\']'
+        pattern = rf'class=["\'][^"\']*anndata-badge--{re.escape(badge_type.lower())}[^"\']*["\']'
         if re.search(pattern, self.html, re.I):
             raise AssertionError(
                 msg or f"Badge '{badge_type}' unexpectedly shown in HTML"
@@ -467,13 +467,13 @@ class HTMLValidator:
         Checks for actual truncation indicators used by the repr system:
         - `...+{number}` pattern (e.g., "...+20" for categories)
         - `... and {number} more` pattern (e.g., "... and 100 more" for rows)
-        - CSS class `adata-truncated`
+        - CSS class `anndata-section__truncated`
         - Escaped ellipsis in category display
         """
         truncation_patterns = [
             r"\.\.\.\+\d+",  # ...+N pattern (categories)
             r"\.\.\.\s+and\s+[\d,]+\s+more",  # "... and N more" (rows)
-            r"adata-truncated",  # CSS class for truncation
+            r"anndata-section__truncated",  # CSS class for truncation
             r"&hellip;",  # HTML entity for ellipsis
             r"&#8230;",  # Numeric HTML entity for ellipsis
         ]
@@ -506,8 +506,8 @@ class HTMLValidator:
         has_error = (
             "error:" in self.html.lower()
             or re.search(r"\bError\b", self.html)
-            or "adata-error" in self.html
-            or ("adata-text-muted" in self.html and "error" in self.html.lower())
+            or "anndata-entry--error" in self.html
+            or ("anndata-text--muted" in self.html and "error" in self.html.lower())
         )
         if not has_error:
             raise AssertionError(msg or "No error indicator found in HTML")

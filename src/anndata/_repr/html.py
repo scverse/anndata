@@ -285,10 +285,10 @@ def generate_repr_html(  # noqa: PLR0913
         parts.append(_render_index_preview(adata))
 
     # Sections container
-    parts.append('<div class="adata-sections">')
+    parts.append('<div class="anndata-repr__sections">')
     parts.append(render_x_entry(adata, context))
     parts.extend(_render_all_sections(adata, context))
-    parts.append("</div>")  # adata-sections
+    parts.append("</div>")  # anndata-repr__sections
 
     # Footer with metadata (only at top level)
     if depth == 0:
@@ -496,7 +496,7 @@ def render_formatted_entry(
             key="my_array",
             output=FormattedOutput(
                 type_name="ndarray (100, 50) float32",
-                css_class="dtype-ndarray",
+                css_class="anndata-dtype--ndarray",
                 tooltip="My custom array",
                 warnings=["Some warning"],
             ),
@@ -510,7 +510,7 @@ def render_formatted_entry(
             key="cell_table",
             output=FormattedOutput(
                 type_name="AnnData (150 × 30)",
-                css_class="dtype-anndata",
+                css_class="anndata-dtype--anndata",
                 expanded_html=nested_html,
             ),
         )
@@ -597,15 +597,15 @@ def _render_header(
     adata: AnnData, *, show_search: bool = False, container_id: str = ""
 ) -> str:
     """Render the header with type, shape, badges, and optional search box."""
-    parts = ['<div class="anndata-hdr">']
+    parts = ['<div class="anndata-header">']
 
     # Type name - allow for extension types
     type_name = type(adata).__name__
-    parts.append(f'<span class="adata-type">{escape_html(type_name)}</span>')
+    parts.append(f'<span class="anndata-header__type">{escape_html(type_name)}</span>')
 
     # Shape
     shape_str = f"{format_number(adata.n_obs)} obs × {format_number(adata.n_vars)} vars"
-    parts.append(f'<span class="adata-shape">{shape_str}</span>')
+    parts.append(f'<span class="anndata-header__shape">{shape_str}</span>')
 
     # Badges - use render_badge() helper
     if is_view(adata):
@@ -624,7 +624,7 @@ def _render_header(
                 "color:var(--anndata-text-secondary, #6c757d);"
             )
             parts.append(
-                f'<span class="adata-file-path" style="{path_style}">'
+                f'<span class="anndata-header__filepath" style="{path_style}">'
                 f"{escape_html(filename)}"
                 f"</span>"
             )
@@ -644,7 +644,7 @@ def _render_header(
                 "color:var(--anndata-text-secondary, #6c757d);"
             )
             parts.append(
-                f'<span class="adata-file-path" style="{path_style}">'
+                f'<span class="anndata-header__filepath" style="{path_style}">'
                 f"{escape_html(lazy_filename)}"
                 f"</span>"
             )
@@ -678,7 +678,7 @@ def _render_header(
         escaped_tooltip = escape_html(tooltip_text)
 
         parts.append(
-            f'<span class="adata-readme-icon" '
+            f'<span class="anndata-readme__icon" '
             f'data-readme="{escaped_readme}" '
             f'title="{escaped_tooltip}" '
             f'role="button" tabindex="0" aria-label="View README">'
@@ -697,7 +697,7 @@ def _render_header(
 
 def _render_footer(adata: AnnData) -> str:
     """Render the footer with version and memory info."""
-    parts = ['<div class="anndata-ftr">']
+    parts = ['<div class="anndata-footer">']
 
     # Version
     version = get_anndata_version()
@@ -718,7 +718,7 @@ def _render_footer(adata: AnnData) -> str:
 
 def _render_index_preview(adata: AnnData) -> str:
     """Render preview of obs_names and var_names."""
-    parts = ['<div class="adata-index-preview">']
+    parts = ['<div class="anndata-header__index">']
 
     # obs_names preview
     obs_preview = _format_index_preview(adata.obs_names)
@@ -779,4 +779,4 @@ def _render_max_depth_indicator(adata: AnnData) -> str:
     """Render indicator when max depth is reached."""
     n_obs = getattr(adata, "n_obs", "?")
     n_vars = getattr(adata, "n_vars", "?")
-    return f'<div class="adata-max-depth">AnnData ({format_number(n_obs)} × {format_number(n_vars)}) - max depth reached</div>'
+    return f'<div class="anndata-depth-limit">AnnData ({format_number(n_obs)} × {format_number(n_vars)}) - max depth reached</div>'

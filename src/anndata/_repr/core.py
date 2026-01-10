@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
+    CSS_TEXT_MUTED,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
 )
@@ -83,7 +84,7 @@ def render_section(  # noqa: PLR0913
             entry = FormattedEntry(
                 key=key,
                 output=FormattedOutput(
-                    type_name=info["type"], css_class="dtype-ndarray"
+                    type_name=info["type"], css_class="anndata-dtype--ndarray"
                 ),
             )
             rows.append(render_formatted_entry(entry))
@@ -106,7 +107,7 @@ def render_section(  # noqa: PLR0913
         count_str = f"({n_items} items)"
 
     parts = [
-        f'<div class="anndata-sec" data-section="{escape_html(section_id)}" '
+        f'<div class="anndata-section" data-section="{escape_html(section_id)}" '
         f'data-should-collapse="{str(should_collapse).lower()}">'
     ]
 
@@ -114,8 +115,12 @@ def render_section(  # noqa: PLR0913
     parts.append(_render_section_header(name, count_str, doc_url, tooltip))
 
     # Content
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
-    parts.append(f'<table class="adata-table" style="{STYLE_SECTION_TABLE}">')
+    parts.append(
+        f'<div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">'
+    )
+    parts.append(
+        f'<table class="anndata-section__table" style="{STYLE_SECTION_TABLE}">'
+    )
     parts.append(entries_html)
     parts.append("</table></div></div>")
 
@@ -129,13 +134,15 @@ def _render_section_header(
     tooltip: str,
 ) -> str:
     """Render a section header - colors handled by CSS for dark mode support."""
-    parts = ['<div class="anndata-sechdr">']
+    parts = ['<div class="anndata-section__header">']
     parts.append(render_fold_icon())
-    parts.append(f'<span class="anndata-sec-name">{escape_html(name)}</span>')
-    parts.append(f'<span class="anndata-sec-count">{escape_html(count_str)}</span>')
+    parts.append(f'<span class="anndata-section__name">{escape_html(name)}</span>')
+    parts.append(
+        f'<span class="anndata-section__count">{escape_html(count_str)}</span>'
+    )
     if doc_url:
         parts.append(
-            f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+            f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
         )
     parts.append("</div>")
     return "\n".join(parts)
@@ -150,21 +157,21 @@ def render_empty_section(
     # Build help link if doc_url provided
     help_link = ""
     if doc_url:
-        help_link = f'<a class="adata-help-link"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+        help_link = f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
 
     # Use render_fold_icon() helper for consistency
     fold_icon = render_fold_icon()
 
     return f"""
-<div class="anndata-sec" data-section="{escape_html(name)}" data-should-collapse="true">
-    <div class="anndata-sechdr">
+<div class="anndata-section" data-section="{escape_html(name)}" data-should-collapse="true">
+    <div class="anndata-section__header">
         {fold_icon}
-        <span class="anndata-sec-name">{escape_html(name)}</span>
-        <span class="anndata-sec-count">(empty)</span>
+        <span class="anndata-section__name">{escape_html(name)}</span>
+        <span class="anndata-section__count">(empty)</span>
         {help_link}
     </div>
-    <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
-        <div class="adata-empty">No entries</div>
+    <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
+        <div class="anndata-section__empty">No entries</div>
     </div>
 </div>
 """
@@ -172,7 +179,7 @@ def render_empty_section(
 
 def render_truncation_indicator(remaining: int) -> str:
     """Render a truncation indicator."""
-    return f'<tr><td colspan="3" class="adata-truncated">... and {format_number(remaining)} more</td></tr>'
+    return f'<tr><td colspan="3" class="anndata-section__truncated">... and {format_number(remaining)} more</td></tr>'
 
 
 def get_section_tooltip(section: str) -> str:
@@ -197,7 +204,7 @@ def render_x_entry(obj: Any, context: FormatterContext) -> str:
     Works with AnnData, Raw, and any object with an X attribute.
     Handles missing or broken X attributes gracefully.
     """
-    parts = ['<div class="adata-x-entry">']
+    parts = ['<div class="anndata-x__entry">']
     parts.append("<span>X</span>")
 
     try:
@@ -206,7 +213,7 @@ def render_x_entry(obj: Any, context: FormatterContext) -> str:
         # Handle missing or broken X attribute gracefully
         error_msg = f"error: {type(e).__name__}"
         parts.append(
-            f'<span class="adata-text-muted"><em>({escape_html(error_msg)})</em></span>'
+            f'<span class="{CSS_TEXT_MUTED}"><em>({escape_html(error_msg)})</em></span>'
         )
         parts.append("</div>")
         return "\n".join(parts)
@@ -223,7 +230,7 @@ def render_x_entry(obj: Any, context: FormatterContext) -> str:
         except Exception as e:  # noqa: BLE001
             error_msg = f"error formatting: {type(e).__name__}"
             parts.append(
-                f'<span class="adata-text-muted"><em>({escape_html(error_msg)})</em></span>'
+                f'<span class="{CSS_TEXT_MUTED}"><em>({escape_html(error_msg)})</em></span>'
             )
 
     parts.append("</div>")

@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from .._repr_constants import (
     CSS_ENTRY,
+    CSS_TEXT_MUTED,
     ENTRY_TABLE_COLSPAN,
     NOT_SERIALIZABLE_MSG,
     STYLE_CAT_DOT,
@@ -60,7 +61,7 @@ def render_entry_row_open(
     Example
     -------
     >>> open_tag = render_entry_row_open("gene_name", "category", has_warnings=True)
-    >>> # Returns: '<tr class="adata-entry warning" data-key="gene_name" data-dtype="category">'
+    >>> # Returns: '<tr class="anndata-entry warning" data-key="gene_name" data-dtype="category">'
     """
     # Build CSS class string
     classes = [CSS_ENTRY]
@@ -97,7 +98,7 @@ def render_warning_icon(warnings: list[str], *, is_error: bool = False) -> str:
     if is_error:
         all_warnings.insert(0, NOT_SERIALIZABLE_MSG)
     title = escape_html("; ".join(all_warnings))
-    return f'<span class="adata-warning-icon" title="{title}">(!)</span>'
+    return f'<span class="anndata-entry__warning" title="{title}">(!)</span>'
 
 
 def render_search_box(container_id: str = "") -> str:
@@ -120,26 +121,26 @@ def render_search_box(container_id: str = "") -> str:
     Example
     -------
     >>> container_id = "spatialdata-123"
-    >>> parts = ['<div class="anndata-hdr">']
-    >>> parts.append('<span class="adata-type">SpatialData</span>')
+    >>> parts = ['<div class="anndata-header">']
+    >>> parts.append('<span class="anndata-header__type">SpatialData</span>')
     >>> parts.append('<span style="flex-grow:1;"></span>')  # Spacer
     >>> parts.append(render_search_box(container_id))
     >>> parts.append("</div>")
     """
     search_id = f"{container_id}-search" if container_id else "anndata-search"
     return (
-        f'<span class="adata-search-box" style="{STYLE_HIDDEN}">'
+        f'<span class="anndata-search__box" style="{STYLE_HIDDEN}">'
         f'<input type="text" id="{search_id}" name="{search_id}" '
-        f'class="adata-search-input" '
+        f'class="anndata-search__input" '
         f'placeholder="Search..." aria-label="Search fields">'
-        f'<span class="adata-search-toggles">'
-        f'<button type="button" class="adata-search-toggle adata-toggle-case" '
+        f'<span class="anndata-search__toggles">'
+        f'<button type="button" class="anndata-search__toggle anndata-search__toggle--case" '
         f'title="Match case" aria-label="Match case" aria-pressed="false">Aa</button>'
-        f'<button type="button" class="adata-search-toggle adata-toggle-regex" '
+        f'<button type="button" class="anndata-search__toggle anndata-search__toggle--regex" '
         f'title="Use regular expression" aria-label="Use regular expression" aria-pressed="false">.*</button>'
         f"</span>"
         f"</span>"
-        f'<span class="adata-filter-indicator"></span>'
+        f'<span class="anndata-search__indicator"></span>'
     )
 
 
@@ -156,12 +157,12 @@ def render_fold_icon() -> str:
 
     Example
     -------
-    >>> parts = ['<div class="anndata-sechdr">']
+    >>> parts = ['<div class="anndata-section__header">']
     >>> parts.append(render_fold_icon())
-    >>> parts.append('<span class="anndata-sec-name">images</span>')
+    >>> parts.append('<span class="anndata-section__name">images</span>')
     >>> parts.append("</div>")
     """
-    return f'<span class="adata-fold-icon" style="{STYLE_HIDDEN}">▼</span>'
+    return f'<span class="anndata-section__fold" style="{STYLE_HIDDEN}">▼</span>'
 
 
 def render_copy_button(text: str, tooltip: str = "Copy") -> str:
@@ -190,7 +191,7 @@ def render_copy_button(text: str, tooltip: str = "Copy") -> str:
     escaped_text = escape_html(text)
     escaped_tooltip = escape_html(tooltip)
     return (
-        f'<button class="adata-copy-btn" style="{STYLE_HIDDEN}" '
+        f'<button class="anndata-entry__copy" style="{STYLE_HIDDEN}" '
         f'data-copy="{escaped_text}" title="{escaped_tooltip}" '
         f'aria-label="{escaped_tooltip}"></button>'
     )
@@ -211,7 +212,7 @@ def render_categories_wrap_button() -> str:
     -------
     HTML string for the wrap button (▼ expands, ▲ collapses)
     """
-    return _render_wrap_button("adata-cats-wrap-btn")
+    return _render_wrap_button("anndata-categories__wrap")
 
 
 def render_columns_wrap_button() -> str:
@@ -221,7 +222,7 @@ def render_columns_wrap_button() -> str:
     -------
     HTML string for the wrap button (▼ expands, ▲ collapses)
     """
-    return _render_wrap_button("adata-cols-wrap-btn")
+    return _render_wrap_button("anndata-columns__wrap")
 
 
 def render_muted_span(text: str) -> str:
@@ -236,7 +237,7 @@ def render_muted_span(text: str) -> str:
     -------
     HTML string with muted styling
     """
-    return f'<span class="adata-text-muted">{escape_html(text)}</span>'
+    return f'<span class="{CSS_TEXT_MUTED}">{escape_html(text)}</span>'
 
 
 def render_expand_button() -> str:
@@ -247,7 +248,7 @@ def render_expand_button() -> str:
     HTML string for the expand button (hidden by default, shown by JS)
     """
     return (
-        f'<button class="adata-expand-btn" style="{STYLE_HIDDEN}" '
+        f'<button class="anndata-entry__expand" style="{STYLE_HIDDEN}" '
         f'aria-expanded="false">Expand ▼</button>'
     )
 
@@ -269,9 +270,9 @@ def render_nested_content_cell(
     HTML string for a table row with nested content
     """
     return (
-        f'<tr class="adata-nested-row">'
-        f'<td colspan="{colspan}" class="adata-nested-content">'
-        f'<div class="adata-custom-expanded">{html_content}</div>'
+        f'<tr class="anndata-entry--nested">'
+        f'<td colspan="{colspan}" class="anndata-entry__nested-content">'
+        f'<div class="anndata-entry__expanded">{html_content}</div>'
         f"</td></tr>"
     )
 
@@ -291,11 +292,11 @@ def render_badge(
     variant
         Variant class for styling. Built-in variants:
         - "" (default gray)
-        - "adata-badge-view" (blue, for views)
-        - "adata-badge-backed" (orange, for backed mode)
-        - "adata-badge-sparse" (green, for sparse matrices)
-        - "adata-badge-dask" (purple, for Dask arrays)
-        - "adata-badge-extension" (for extension types)
+        - "anndata-badge--view" (blue, for views)
+        - "anndata-badge--backed" (orange, for backed mode)
+        - "anndata-badge--sparse" (green, for sparse matrices)
+        - "anndata-badge--dask" (purple, for Dask arrays)
+        - "anndata-badge--extension" (for extension types)
     tooltip
         Tooltip text on hover
 
@@ -305,12 +306,12 @@ def render_badge(
 
     Example
     -------
-    >>> badge = render_badge("Zarr", "adata-badge-backed", "Backed by Zarr store")
+    >>> badge = render_badge("Zarr", "anndata-badge--backed", "Backed by Zarr store")
     """
     escaped_text = escape_html(text)
     title_attr = f' title="{escape_html(tooltip)}"' if tooltip else ""
     # Always include base class, optionally add variant
-    css_class = f"adata-badge {variant}".strip() if variant else "adata-badge"
+    css_class = f"anndata-badge {variant}".strip() if variant else "anndata-badge"
     return f'<span class="{css_class}"{title_attr}>{escaped_text}</span>'
 
 
@@ -353,16 +354,18 @@ def render_header_badges(
     parts = []
     if is_view:
         parts.append(
-            render_badge("View", "adata-badge-view", "This is a view of another object")
+            render_badge(
+                "View", "anndata-badge--view", "This is a view of another object"
+            )
         )
     if is_backed:
         tooltip = f"Backed by {backing_path}" if backing_path else "Backed mode"
         label = backing_format or "Backed"
-        parts.append(render_badge(label, "adata-badge-backed", tooltip))
+        parts.append(render_badge(label, "anndata-badge--backed", tooltip))
     if is_lazy:
         parts.append(
             render_badge(
-                "Lazy", "adata-badge-lazy", "Lazy loading (experimental read_lazy)"
+                "Lazy", "anndata-badge--lazy", "Lazy loading (experimental read_lazy)"
             )
         )
     return "".join(parts)
@@ -385,9 +388,9 @@ def render_name_cell(name: str) -> str:
     """
     escaped_name = escape_html(name)
     return (
-        f'<td class="adata-entry-name">'
-        f'<div class="adata-entry-name-inner">'
-        f'<span class="adata-name-text" title="{escaped_name}">{escaped_name}</span>'
+        f'<td class="anndata-entry__name">'
+        f'<div class="anndata-entry__name-inner">'
+        f'<span class="anndata-entry__name-text" title="{escaped_name}">{escaped_name}</span>'
         f"{render_copy_button(name, 'Copy name')}"
         f"</div>"
         f"</td>"
@@ -419,11 +422,11 @@ def render_category_list(
     -------
     HTML string for the category list
     """
-    parts = ['<span class="adata-cats-list">']
+    parts = ['<span class="anndata-categories">']
     for i, cat in enumerate(categories[:max_cats]):
         cat_name = escape_html(str(cat))
         color = colors[i] if colors and i < len(colors) else None
-        parts.append('<span class="adata-cat-item">')
+        parts.append('<span class="anndata-categories__item">')
         if color:
             # Sanitize color to prevent CSS injection
             safe_color = sanitize_css_color(str(color))
@@ -440,7 +443,7 @@ def render_category_list(
     total_hidden = hidden_from_max_cats + n_hidden
 
     if total_hidden > 0:
-        parts.append(f'<span class="adata-text-muted">...+{total_hidden}</span>')
+        parts.append(f'<span class="{CSS_TEXT_MUTED}">...+{total_hidden}</span>')
     parts.append("</span>")
     return "".join(parts)
 
@@ -457,7 +460,7 @@ class TypeCellConfig:
     type_name
         The type name to display (e.g., "ndarray (100, 50) float32")
     css_class
-        CSS class for the type span (e.g., "dtype-ndarray")
+        CSS class for the type span (e.g., "anndata-dtype--ndarray")
     type_html
         Optional custom HTML content for the type cell
     tooltip
@@ -479,7 +482,7 @@ class TypeCellConfig:
     --------
     >>> config = TypeCellConfig(
     ...     type_name="ndarray (100, 50) float32",
-    ...     css_class="dtype-ndarray",
+    ...     css_class="anndata-dtype--ndarray",
     ...     tooltip="Dense array",
     ... )
     >>> html = render_entry_type_cell(config)
@@ -488,7 +491,7 @@ class TypeCellConfig:
 
         >>> config = TypeCellConfig(
         ...     type_name="object",
-        ...     css_class="dtype-object",
+        ...     css_class="anndata-dtype--object",
         ...     warnings=["Not serializable"],
         ...     is_error=True,
         ... )
@@ -518,7 +521,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     The type_html and append_type_html config fields control content rendering:
 
     1. No type_html: Shows type_name in a styled span
-       ``<span class="dtype-X">type_name</span>``
+       ``<span class="anndata-dtype--X">type_name</span>``
 
     2. type_html with append_type_html=False (default): type_html REPLACES type_name
        Used for fully custom type content (e.g., category swatches instead of text)
@@ -540,7 +543,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     --------
     >>> config = TypeCellConfig(
     ...     type_name="ndarray (100, 50) float32",
-    ...     css_class="dtype-ndarray",
+    ...     css_class="anndata-dtype--ndarray",
     ...     tooltip="Dense array",
     ... )
     >>> html = render_entry_type_cell(config)
@@ -556,7 +559,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     has_categories_list = config.has_categories_list
     append_type_html = config.append_type_html
 
-    parts = ['<td class="adata-entry-type">']
+    parts = ['<td class="anndata-entry__type">']
 
     # Type content: handle different cases
     if type_html and not append_type_html:
@@ -586,7 +589,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     # Appended type_html (for custom inline rendering below the type)
     if type_html and append_type_html:
         parts.append(
-            f'<div class="adata-custom-content" style="margin-top:4px;">{type_html}</div>'
+            f'<div class="anndata-entry__custom" style="margin-top:4px;">{type_html}</div>'
         )
 
     parts.append("</td>")
@@ -613,7 +616,7 @@ def render_entry_preview_cell(
     -------
     HTML string for the preview cell
     """
-    parts = ['<td class="adata-entry-preview">']
+    parts = ['<td class="anndata-entry__preview">']
 
     if preview_html:
         parts.append(preview_html)

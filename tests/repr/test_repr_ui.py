@@ -211,7 +211,7 @@ class TestCopyToClipboard:
         html = adata_full._repr_html_()
         v = validate_html(html)
         # Validate copy button elements exist with proper class
-        v.assert_element_exists(".adata-copy-btn")
+        v.assert_element_exists(".anndata-entry__copy")
         # Validate copy buttons have data-copy attribute for the key name
         v.assert_element_exists("[data-copy]")
 
@@ -219,7 +219,7 @@ class TestCopyToClipboard:
         """Test copy buttons have proper accessibility attributes."""
         html = adata_full._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-copy-btn")
+        v.assert_element_exists(".anndata-entry__copy")
         # Should have title and aria-label for accessibility
         assert 'aria-label="Copy name"' in html or 'title="Copy' in html
 
@@ -303,9 +303,9 @@ class TestAdBlockerCompatibility:
         )
         html = adata._repr_html_()
 
-        assert "adata-type" in html or "anndata" in html.lower()
-        assert "adata-entry" in html or "anndata-sec" in html
-        assert "adata-table" in html or "table" in html.lower()
+        assert "anndata-header__type" in html or "anndata" in html.lower()
+        assert "anndata-entry" in html or "anndata-section" in html
+        assert "anndata-section__table" in html or "table" in html.lower()
         assert len(html) > 1000
 
 

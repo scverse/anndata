@@ -27,6 +27,8 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
+    CSS_DTYPE_ANNDATA,
+    CSS_DTYPE_UNKNOWN,
     ERROR_TRUNCATE_LENGTH,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
@@ -392,25 +394,29 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
         '<div class="anndata-sec anndata-sec-unknown" data-section="unknown" '
         'data-should-collapse="true">'
     ]
-    parts.append('<div class="anndata-sechdr">')
+    parts.append('<div class="anndata-section__header">')
     parts.append(render_fold_icon())
-    parts.append('<span class="anndata-sec-name">other</span>')
-    parts.append(f'<span class="anndata-sec-count">({len(unknown_sections)})</span>')
+    parts.append('<span class="anndata-section__name">other</span>')
+    parts.append(
+        f'<span class="anndata-section__count">({len(unknown_sections)})</span>'
+    )
     parts.append("</div>")
 
-    parts.append(f'<div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">')
+    parts.append(
+        f'<div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">'
+    )
     parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
 
     for attr_name, type_desc in unknown_sections:
         parts.append(render_entry_row_open(attr_name, type_desc))
         parts.append(render_name_cell(attr_name))
-        parts.append('<td class="adata-entry-type">')
+        parts.append('<td class="anndata-entry__type">')
         parts.append(
-            f'<span class="dtype-unknown" title="Unrecognized attribute">'
+            f'<span class="{CSS_DTYPE_UNKNOWN}" title="Unrecognized attribute">'
             f"{escape_html(type_desc)}</span>"
         )
         parts.append("</td>")
-        parts.append('<td class="adata-entry-preview"></td>')
+        parts.append('<td class="anndata-entry__preview"></td>')
         parts.append("</tr>")
 
     parts.append("</table>")
@@ -430,13 +436,13 @@ def _render_error_entry(section: str, error: str) -> str:
     error_color = "var(--anndata-error-color, #dc3545)"
     return f"""
 <div class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}">
-    <div class="anndata-sechdr">
+    <div class="anndata-section__header">
         {render_fold_icon()}
-        <span class="anndata-sec-name">{escape_html(section)}</span>
-        <span class="anndata-sec-count adata-error-badge" style="color: {error_color};">(error)</span>
+        <span class="anndata-section__name">{escape_html(section)}</span>
+        <span class="anndata-section__count anndata-badge--error" style="color: {error_color};">(error)</span>
     </div>
-    <div class="anndata-seccontent" style="{STYLE_SECTION_CONTENT}">
-        <div class="adata-error" style="color: {error_color}; padding: 4px 8px; font-size: 12px;">
+    <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
+        <div class="anndata-entry--error" style="color: {error_color}; padding: 4px 8px; font-size: 12px;">
             Failed to render: {error_escaped}
         </div>
     </div>
@@ -540,7 +546,7 @@ def _render_raw_section(
     parts.append(render_name_cell("raw"))
     type_cell_config = TypeCellConfig(
         type_name=type_str,
-        css_class="dtype-anndata",
+        css_class=CSS_DTYPE_ANNDATA,
         has_expandable_content=can_expand,
     )
     parts.append(render_entry_type_cell(type_cell_config))
@@ -550,8 +556,8 @@ def _render_raw_section(
     # Nested content (hidden by default, shown on expand)
     if can_expand:
         nested_html = _generate_raw_repr_html(raw, context.child("raw"))
-        # Wrap in adata-nested-anndata for specific styling
-        wrapped_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
+        # Wrap in anndata-entry__nested-anndata for specific styling
+        wrapped_html = f'<div class="anndata-entry__nested-anndata">{nested_html}</div>'
         parts.append(render_nested_content_cell(wrapped_html))
 
     parts.append("</table>")
@@ -587,10 +593,10 @@ def _generate_raw_repr_html(
     parts.append(f'<div class="anndata-repr" id="{container_id}">')
 
     # Header for Raw - same structure as AnnData header
-    parts.append('<div class="anndata-hdr">')
-    parts.append('<span class="adata-type">Raw</span>')
+    parts.append('<div class="anndata-header">')
+    parts.append('<span class="anndata-header__type">Raw</span>')
     shape_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
-    parts.append(f'<span class="adata-shape">{shape_str}</span>')
+    parts.append(f'<span class="anndata-header__shape">{shape_str}</span>')
     parts.append("</div>")
 
     # X section - show matrix info (with error handling)

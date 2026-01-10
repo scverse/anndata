@@ -68,42 +68,51 @@ DF_COLS_PREVIEW_MAX_LEN = 40  # Max total chars for column list string
 # Table structure
 ENTRY_TABLE_COLSPAN = 3  # Number of columns in entry table (name, type, preview)
 
-# CSS class names for entry rows
-CSS_ENTRY = "adata-entry"
-CSS_ENTRY_NAME = "adata-entry-name"
-CSS_ENTRY_TYPE = "adata-entry-type"
-CSS_ENTRY_PREVIEW = "adata-entry-preview"
-CSS_TEXT_MUTED = "adata-text-muted"
-CSS_TEXT_ERROR = "adata-error-text"
-CSS_TEXT_WARNING = "adata-warning-text"
-CSS_NESTED_ROW = "adata-nested-row"
-CSS_NESTED_CONTENT = "adata-nested-content"
-CSS_NESTED_ANNDATA = "adata-nested-anndata"
+# CSS class names for entry rows (BEM: anndata-entry block)
+CSS_ENTRY = "anndata-entry"
+CSS_ENTRY_NAME = "anndata-entry__name"
+CSS_ENTRY_TYPE = "anndata-entry__type"
+CSS_ENTRY_PREVIEW = "anndata-entry__preview"
+CSS_TEXT_MUTED = "anndata-text--muted"
+CSS_TEXT_ERROR = "anndata-text--error"
+CSS_TEXT_WARNING = "anndata-text--warning"
+CSS_NESTED_ROW = "anndata-entry--nested"
+CSS_NESTED_CONTENT = "anndata-entry__nested-content"
+CSS_NESTED_ANNDATA = "anndata-entry__nested-anndata"
 
-# CSS class names for dtype spans (used in type column)
+# CSS class names for dtype spans (BEM: anndata-dtype block with modifiers)
 # These provide visual differentiation for different data types
-CSS_DTYPE_CATEGORY = "dtype-category"
-CSS_DTYPE_DATAFRAME = "dtype-dataframe"
-CSS_DTYPE_ANNDATA = "dtype-anndata"
-CSS_DTYPE_UNKNOWN = "dtype-unknown"
-CSS_DTYPE_NDARRAY = "dtype-ndarray"
-CSS_DTYPE_SPARSE = "dtype-sparse"
-CSS_DTYPE_DASK = "dtype-dask"
-CSS_DTYPE_STRING = "dtype-string"
-CSS_DTYPE_NUMBER = "dtype-number"
-CSS_DTYPE_BOOL = "dtype-bool"
-CSS_DTYPE_DICT = "dtype-dict"
-CSS_DTYPE_LIST = "dtype-list"
-CSS_DTYPE_COLOR = "dtype-color"
+# Basic types
+CSS_DTYPE_INT = "anndata-dtype--int"
+CSS_DTYPE_FLOAT = "anndata-dtype--float"
+CSS_DTYPE_BOOL = "anndata-dtype--bool"
+CSS_DTYPE_STRING = "anndata-dtype--string"
+CSS_DTYPE_OBJECT = "anndata-dtype--object"
+# Container/structured types
+CSS_DTYPE_CATEGORY = "anndata-dtype--category"
+CSS_DTYPE_DATAFRAME = "anndata-dtype--dataframe"
+CSS_DTYPE_ANNDATA = "anndata-dtype--anndata"
+# Array types
+CSS_DTYPE_NDARRAY = "anndata-dtype--ndarray"
+CSS_DTYPE_ARRAY = "anndata-dtype--array"
+CSS_DTYPE_SPARSE = "anndata-dtype--sparse"
+# Specialized array types
+CSS_DTYPE_DASK = "anndata-dtype--dask"
+CSS_DTYPE_GPU = "anndata-dtype--gpu"
+CSS_DTYPE_AWKWARD = "anndata-dtype--awkward"
+CSS_DTYPE_ARRAY_API = "anndata-dtype--array-api"
+# Extension/unknown
+CSS_DTYPE_EXTENSION = "anndata-dtype--extension"
+CSS_DTYPE_UNKNOWN = "anndata-dtype--unknown"
 
-# CSS class names for badges (header status indicators)
-CSS_BADGE = "adata-badge"
-CSS_BADGE_VIEW = "adata-badge-view"
-CSS_BADGE_BACKED = "adata-badge-backed"
-CSS_BADGE_LAZY = "adata-badge-lazy"
-CSS_BADGE_SPARSE = "adata-badge-sparse"
-CSS_BADGE_DASK = "adata-badge-dask"
-CSS_BADGE_EXTENSION = "adata-badge-extension"
+# CSS class names for badges (BEM: anndata-badge block with modifiers)
+CSS_BADGE = "anndata-badge"
+CSS_BADGE_VIEW = "anndata-badge--view"
+CSS_BADGE_BACKED = "anndata-badge--backed"
+CSS_BADGE_LAZY = "anndata-badge--lazy"
+CSS_BADGE_SPARSE = "anndata-badge--sparse"
+CSS_BADGE_DASK = "anndata-badge--dask"
+CSS_BADGE_EXTENSION = "anndata-badge--extension"
 
 # Section names (canonical strings used for data-section attributes and keys)
 SECTION_X = "X"

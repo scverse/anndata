@@ -717,14 +717,14 @@ class TestReadmeIcon:
         adata.uns["README"] = "This is a description"
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
 
     def test_readme_icon_not_shown_without_readme(self, validate_html):
         """Test no readme icon without uns['README']."""
         adata = AnnData(np.zeros((10, 5)))
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_not_exists(".adata-readme-icon")
+        v.assert_element_not_exists(".anndata-readme__icon")
 
     def test_readme_icon_not_shown_for_empty_string(self, validate_html):
         """Test no readme icon for empty string."""
@@ -732,7 +732,7 @@ class TestReadmeIcon:
         adata.uns["README"] = ""
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_not_exists(".adata-readme-icon")
+        v.assert_element_not_exists(".anndata-readme__icon")
 
     def test_readme_icon_not_shown_for_whitespace_only(self, validate_html):
         """Test no readme icon for whitespace-only string."""
@@ -740,7 +740,7 @@ class TestReadmeIcon:
         adata.uns["README"] = "   \n\t  "
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_not_exists(".adata-readme-icon")
+        v.assert_element_not_exists(".anndata-readme__icon")
 
     def test_readme_icon_not_shown_for_non_string(self, validate_html):
         """Test no readme icon for non-string README."""
@@ -748,7 +748,7 @@ class TestReadmeIcon:
         adata.uns["README"] = 42
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_not_exists(".adata-readme-icon")
+        v.assert_element_not_exists(".anndata-readme__icon")
 
     def test_readme_content_escaped(self, validate_html):
         """Test README content is HTML-escaped."""
@@ -756,7 +756,7 @@ class TestReadmeIcon:
         adata.uns["README"] = "<script>alert('xss')</script>"
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
         # Escaped content should be present, raw script should not
         assert "&lt;script&gt;" in html
         assert "<script>alert" not in html
@@ -767,7 +767,7 @@ class TestReadmeIcon:
         adata.uns["README"] = "x" * 1000
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
         v.assert_text_visible("...")
 
     def test_readme_data_attribute_contains_content(self, validate_html):
@@ -776,8 +776,8 @@ class TestReadmeIcon:
         adata.uns["README"] = "Test content"
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-readme-icon")
-        v.assert_attribute_value(".adata-readme-icon", "data-readme", "Test content")
+        v.assert_element_exists(".anndata-readme__icon")
+        v.assert_attribute_value(".anndata-readme__icon", "data-readme", "Test content")
 
     def test_readme_icon_accessibility(self, validate_html):
         """Test readme icon has accessibility attributes."""
@@ -785,9 +785,9 @@ class TestReadmeIcon:
         adata.uns["README"] = "Description"
         html = adata._repr_html_()
         v = validate_html(html)
-        v.assert_element_exists(".adata-readme-icon")
-        v.assert_attribute_value(".adata-readme-icon", "aria-label", "View README")
-        v.assert_attribute_value(".adata-readme-icon", "tabindex", "0")
+        v.assert_element_exists(".anndata-readme__icon")
+        v.assert_attribute_value(".anndata-readme__icon", "aria-label", "View README")
+        v.assert_attribute_value(".anndata-readme__icon", "tabindex", "0")
 
 
 class TestGenerateReprHtmlDirectly:

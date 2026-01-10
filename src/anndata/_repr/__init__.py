@@ -81,9 +81,9 @@ The system is designed to be extensible via two registry patterns:
             def format(self, obj, context):
                 return FormattedOutput(
                     type_name=f"MyArray {obj.shape}",
-                    css_class="dtype-myarray",
+                    css_class="anndata-dtype--myarray",
                     # preview_html provides HTML for the preview column (rightmost)
-                    preview_html=f'<span class="adata-text-muted">({obj.n_items} items)</span>',
+                    preview_html=f'<span class="anndata-text--muted">({obj.n_items} items)</span>',
                 )
 
     Example - format by embedded type hint (for tagged data in uns)::
@@ -163,11 +163,11 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
             return f'''
                 {get_css()}
                 <div class="anndata-repr" id="{container_id}">
-                    <div class="anndata-hdr">
-                        <span class="adata-type">MyData</span>
-                        <span class="adata-shape">100 items</span>
+                    <div class="anndata-header">
+                        <span class="anndata-header__type">MyData</span>
+                        <span class="anndata-header__shape">100 items</span>
                     </div>
-                    <div class="adata-sections">
+                    <div class="anndata-repr__sections">
                         <!-- sections go here -->
                     </div>
                 </div>
@@ -176,15 +176,31 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
 
 **CSS classes** (stable, can be used directly):
 
-    - ``anndata-repr``: Main container (required for JS and styling)
-    - ``anndata-hdr``: Header row (flexbox, contains type/shape/badges)
-    - ``anndata-ftr``: Footer row (version, memory info)
-    - ``adata-type``: Type name span in header
-    - ``adata-shape``: Shape/dimensions span in header
-    - ``adata-sections``: Container for all sections
-    - ``adata-section``: Individual section wrapper
-    - ``adata-section-header``: Section header (clickable to fold)
-    - ``adata-section-content``: Section content (rows)
+    Classes follow `BEM naming convention <http://getbem.com/>`_:
+    ``anndata-{block}__{element}--{modifier}``
+
+    **Blocks** (top-level components):
+        - ``anndata-repr``: Main container (required for JS and styling)
+        - ``anndata-header``: Header row (flexbox, contains type/shape/badges)
+        - ``anndata-footer``: Footer row (version, memory info)
+        - ``anndata-section``: Individual section wrapper
+        - ``anndata-entry``: Table row for data entries
+        - ``anndata-badge``: Status badges (View, Backed, Lazy)
+        - ``anndata-dtype``: Data type indicators
+
+    **Elements** (parts of blocks, use ``__``):
+        - ``anndata-header__type``: Type name span in header
+        - ``anndata-header__shape``: Shape/dimensions span in header
+        - ``anndata-section__header``: Section header (clickable to fold)
+        - ``anndata-section__content``: Section content (rows)
+        - ``anndata-entry__name``: Entry name cell
+        - ``anndata-entry__type``: Entry type cell
+        - ``anndata-entry__preview``: Entry preview cell
+
+    **Modifiers** (variants, use ``--``):
+        - ``anndata-section--collapsed``: Collapsed section state
+        - ``anndata-badge--view``: View badge variant
+        - ``anndata-dtype--category``: Categorical dtype styling
 
 **CSS variables** (set on ``.anndata-repr`` element):
 
@@ -212,13 +228,13 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
         # Header
         parts.append(f'''
             <div class="anndata-repr" id="{container_id}">
-            <div class="anndata-hdr">
-                <span class="adata-type">MyData</span>
-                {render_badge("Zarr", "adata-badge-backed")}
+            <div class="anndata-header">
+                <span class="anndata-header__type">MyData</span>
+                {render_badge("Zarr", "anndata-badge--backed")}
                 <span style="flex-grow:1;"></span>
                 {render_search_box(container_id)}
             </div>
-            <div class="adata-sections">
+            <div class="anndata-repr__sections">
         ''')
 
         # Build section entries
@@ -228,7 +244,7 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
                 key=key,
                 output=FormattedOutput(
                     type_name=f"array {value.shape}",
-                    css_class="dtype-ndarray",
+                    css_class="anndata-dtype--ndarray",
                 ),
             )
             entries.append(render_formatted_entry(entry))

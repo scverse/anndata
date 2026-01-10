@@ -23,7 +23,25 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .._repr_constants import COLOR_PREVIEW_LIMIT
+from .._repr_constants import (
+    COLOR_PREVIEW_LIMIT,
+    CSS_DTYPE_ANNDATA,
+    CSS_DTYPE_ARRAY_API,
+    CSS_DTYPE_AWKWARD,
+    CSS_DTYPE_BOOL,
+    CSS_DTYPE_CATEGORY,
+    CSS_DTYPE_DASK,
+    CSS_DTYPE_DATAFRAME,
+    CSS_DTYPE_FLOAT,
+    CSS_DTYPE_GPU,
+    CSS_DTYPE_INT,
+    CSS_DTYPE_OBJECT,
+    CSS_DTYPE_SPARSE,
+    CSS_DTYPE_STRING,
+    CSS_DTYPE_UNKNOWN,
+    CSS_NESTED_ANNDATA,
+    CSS_TEXT_MUTED,
+)
 from .components import render_category_list
 from .lazy import get_lazy_categorical_info, is_lazy_column
 from .registry import (
@@ -293,7 +311,7 @@ class SparseMatrixFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_name,
-            css_class="dtype-sparse",
+            css_class=CSS_DTYPE_SPARSE,
             tooltip=f"{nnz_formatted} stored elements",
             is_serializable=True,
         )
@@ -322,7 +340,7 @@ class BackedSparseDatasetFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=f"{format_name}_matrix ({shape_str}) {dtype_str} · on disk",
-            css_class="dtype-sparse",
+            css_class=CSS_DTYPE_SPARSE,
             tooltip="Backed sparse matrix (data stays on disk)",
             is_serializable=True,
         )
@@ -353,11 +371,11 @@ class DataFrameFormatter(TypeFormatter):
         cols = list(df.columns)
 
         # Build preview_html with column list for obsm/varm sections
-        # Uses adata-cols-list class for CSS truncation and JS wrap button
+        # Uses anndata-columns class for CSS truncation and JS wrap button
         preview_html = None
         if n_cols > 0 and context.section in ("obsm", "varm"):
             col_str = ", ".join(escape_html(str(c)) for c in cols)
-            preview_html = f'<span class="adata-cols-list">[{col_str}]</span>'
+            preview_html = f'<span class="anndata-columns">[{col_str}]</span>'
 
         # Check if expandable _repr_html_ is enabled
         expand_dataframes = get_setting("repr_html_dataframe_expand", default=False)
@@ -373,7 +391,7 @@ class DataFrameFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
-            css_class="dtype-dataframe",
+            css_class=CSS_DTYPE_DATAFRAME,
             expanded_html=expanded_html,
             preview_html=preview_html,
             is_serializable=True,
@@ -507,10 +525,10 @@ class CategoricalFormatter(TypeFormatter):
                 if len(categories) == 0:
                     # Metadata-only mode or no categories: show just count
                     if n_total is not None:
-                        preview_html = f'<span class="adata-text-muted">({n_total} categories)</span>'
+                        preview_html = f'<span class="{CSS_TEXT_MUTED}">({n_total} categories)</span>'
                     else:
                         preview_html = (
-                            '<span class="adata-text-muted">(categories)</span>'
+                            f'<span class="{CSS_TEXT_MUTED}">(categories)</span>'
                         )
                 else:
                     # Get colors for categories
@@ -538,7 +556,7 @@ class CategoricalFormatter(TypeFormatter):
             except Exception as e:  # noqa: BLE001
                 # Never let preview generation crash the repr
                 preview_html = (
-                    f'<span class="adata-text-muted">(error: {type(e).__name__})</span>'
+                    f'<span class="{CSS_TEXT_MUTED}">(error: {type(e).__name__})</span>'
                 )
 
         # Check for color mismatch warning
@@ -556,7 +574,7 @@ class CategoricalFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_name,
-            css_class="dtype-category",
+            css_class=CSS_DTYPE_CATEGORY,
             preview_html=preview_html,
             is_serializable=True,
             warnings=warnings,
@@ -599,15 +617,15 @@ class LazyColumnFormatter(TypeFormatter):
 
         # Map common dtypes to CSS classes
         if "int" in dtype_str:
-            css_class = "dtype-int"
+            css_class = CSS_DTYPE_INT
         elif "float" in dtype_str:
-            css_class = "dtype-float"
+            css_class = CSS_DTYPE_FLOAT
         elif "bool" in dtype_str:
-            css_class = "dtype-bool"
+            css_class = CSS_DTYPE_BOOL
         elif "str" in dtype_str or dtype_str == "object":
-            css_class = "dtype-object"
+            css_class = CSS_DTYPE_OBJECT
         else:
-            css_class = "dtype-unknown"
+            css_class = CSS_DTYPE_UNKNOWN
 
         # For lazy non-categorical columns, we can't compute unique count
         # without loading data, so we just indicate it's lazy
@@ -659,7 +677,7 @@ class DaskArrayFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_name,
-            css_class="dtype-dask",
+            css_class=CSS_DTYPE_DASK,
             tooltip=f"{obj.npartitions} partitions",
             preview=preview,
             is_serializable=True,
@@ -690,7 +708,7 @@ class CuPyArrayFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=f"cupy.ndarray ({shape_str}) {dtype_str}",
-            css_class="dtype-gpu",
+            css_class=CSS_DTYPE_GPU,
             tooltip=device_info,
             preview=preview,
             is_serializable=True,
@@ -718,7 +736,7 @@ class AwkwardArrayFormatter(TypeFormatter):
         length_str = str(length) if length is not None else "?"
         return FormattedOutput(
             type_name=f"awkward.Array ({length_str} records)",
-            css_class="dtype-awkward",
+            css_class=CSS_DTYPE_AWKWARD,
             tooltip=f"Type: {type_str}",
             is_serializable=True,
         )
@@ -806,7 +824,7 @@ class ArrayAPIFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=f"{type_name} ({shape_str}) {dtype_str}",
-            css_class="dtype-array-api",
+            css_class=CSS_DTYPE_ARRAY_API,
             tooltip=f"{backend_label} array{device_info}",
             preview=preview,
             is_serializable=True,
@@ -838,11 +856,11 @@ class AnnDataFormatter(TypeFormatter):
                 show_header=True,
                 show_search=False,
             )
-            expanded_html = f'<div class="adata-nested-anndata">{nested_html}</div>'
+            expanded_html = f'<div class="{CSS_NESTED_ANNDATA}">{nested_html}</div>'
 
         return FormattedOutput(
             type_name=f"AnnData ({shape_str})",
-            css_class="dtype-anndata",
+            css_class=CSS_DTYPE_ANNDATA,
             tooltip="Nested AnnData object",
             expanded_html=expanded_html,
             is_serializable=True,
@@ -860,7 +878,7 @@ class NoneFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="NoneType",
-            css_class="dtype-object",
+            css_class=CSS_DTYPE_OBJECT,
             preview="None",
             is_serializable=True,
         )
@@ -877,7 +895,7 @@ class BoolFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="bool",
-            css_class="dtype-bool",
+            css_class=CSS_DTYPE_BOOL,
             preview=preview_number(obj),
             is_serializable=True,
         )
@@ -894,7 +912,7 @@ class IntFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="int",
-            css_class="dtype-int",
+            css_class=CSS_DTYPE_INT,
             preview=preview_number(obj),
             is_serializable=True,
         )
@@ -911,7 +929,7 @@ class FloatFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="float",
-            css_class="dtype-float",
+            css_class=CSS_DTYPE_FLOAT,
             preview=preview_number(obj),
             is_serializable=True,
         )
@@ -928,7 +946,7 @@ class StringFormatter(TypeFormatter):
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="str",
-            css_class="dtype-string",
+            css_class=CSS_DTYPE_STRING,
             preview=preview_string(obj, context.max_string_length),
             is_serializable=True,
         )
@@ -949,7 +967,7 @@ class DictFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name="dict",
-            css_class="dtype-object",
+            css_class=CSS_DTYPE_OBJECT,
             preview=preview_dict(obj),
             is_serializable=is_serial,
             warnings=warnings,
@@ -981,25 +999,25 @@ class ColorListFormatter(TypeFormatter):
             safe_color = sanitize_css_color(str(color))
             if safe_color:
                 swatches.append(
-                    f'<span class="adata-color-swatch" '
+                    f'<span class="anndata-colors__swatch" '
                     f'style="background:{safe_color}" title="{escape_html(str(color))}"></span>'
                 )
             else:
                 # Invalid/unsafe color - show as text only, no style
                 swatches.append(
-                    f'<span class="adata-color-swatch adata-invalid-color" '
+                    f'<span class="anndata-colors__swatch anndata-colors__swatch--invalid" '
                     f'title="{escape_html(str(color))}">?</span>'
                 )
         if n_colors > COLOR_PREVIEW_LIMIT:
             swatches.append(
-                f'<span class="adata-text-muted">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
+                f'<span class="{CSS_TEXT_MUTED}">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
             )
 
-        preview_html = f'<span class="adata-color-swatches">{"".join(swatches)}</span>'
+        preview_html = f'<span class="anndata-colors">{"".join(swatches)}</span>'
 
         return FormattedOutput(
             type_name=f"colors ({n_colors})",
-            css_class="dtype-object",
+            css_class=CSS_DTYPE_OBJECT,
             preview_html=preview_html,
             is_serializable=True,
         )
@@ -1022,7 +1040,7 @@ class ListFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_name,
-            css_class="dtype-object",
+            css_class=CSS_DTYPE_OBJECT,
             preview=preview_sequence(obj),
             is_serializable=is_serial,
             warnings=warnings,
@@ -1034,32 +1052,32 @@ def _get_dtype_css_class(dtype: np.dtype | pd.api.types.CategoricalDtype) -> str
     # Check for pandas CategoricalDtype first (has kind="O" but is special)
     dtype_name = str(dtype)
     if dtype_name == "category":
-        return "dtype-category"
+        return CSS_DTYPE_CATEGORY
 
     # Try numpy dtype.kind (most reliable for standard dtypes)
     kind = getattr(dtype, "kind", None)
     if kind is not None:
         if kind in ("i", "u"):
-            return "dtype-int"
+            return CSS_DTYPE_INT
         if kind == "f":
-            return "dtype-float"
+            return CSS_DTYPE_FLOAT
         if kind == "b":
-            return "dtype-bool"
+            return CSS_DTYPE_BOOL
         if kind in ("U", "S", "O"):
-            return "dtype-string"
+            return CSS_DTYPE_STRING
         if kind == "c":
-            return "dtype-float"  # complex
+            return CSS_DTYPE_FLOAT  # complex
 
     # Fallback to string matching for pandas extension dtypes
     if "int" in dtype_name:
-        return "dtype-int"
+        return CSS_DTYPE_INT
     if "float" in dtype_name:
-        return "dtype-float"
+        return CSS_DTYPE_FLOAT
     if "bool" in dtype_name:
-        return "dtype-bool"
+        return CSS_DTYPE_BOOL
     if "object" in dtype_name or "string" in dtype_name:
-        return "dtype-string"
-    return "dtype-object"
+        return CSS_DTYPE_STRING
+    return CSS_DTYPE_OBJECT
 
 
 def _register_builtin_formatters() -> None:

@@ -244,7 +244,7 @@ class TestXSSPrevention:
         v = validate_html(html)
 
         v.assert_no_raw_xss()
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
 
         # Explicit negative check: javascript: URL must not appear as real href
         assert not re.search(r'href\s*=\s*["\']?\s*javascript:', html, re.I), (
@@ -266,7 +266,7 @@ class TestXSSPrevention:
         v = validate_html(html)
 
         v.assert_html_well_formed()
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
 
         # The README content is stored in data-readme attribute (HTML-escaped)
         # Check that quote injection is escaped in the data attribute
@@ -1166,7 +1166,7 @@ class TestErrorVisibility:
         v.assert_text_visible("RuntimeError")
         v.assert_text_visible("repr()")
         # Should use error text CSS class (red color)
-        v.assert_element_exists(".adata-error-text")
+        v.assert_element_exists(".anndata-text--error")
 
     def test_crashing_len_shows_error_visibly(self, validate_html) -> None:
         """Objects with crashing __len__ should show error info visibly."""
@@ -1466,7 +1466,7 @@ class TestBadColorArrays:
         # Attempt CSS injection through "color" values
         adata.uns["batch_colors"] = [
             "#ff0000",  # Valid color (passes is_color_list check)
-            "blue; } .adata-table { display:none } .x {",  # CSS injection!
+            "blue; } .anndata-section__table { display:none } .x {",  # CSS injection!
             "red; background-image: url(https://evil.com/steal)",  # Data exfil
         ]
 
@@ -1479,7 +1479,9 @@ class TestBadColorArrays:
         style_attrs = re.findall(r'style="([^"]*)"', html)
         for style in style_attrs:
             # These patterns in a style attribute would indicate CSS injection
-            assert ".adata-table" not in style, f"CSS injection in style: {style}"
+            assert ".anndata-section__table" not in style, (
+                f"CSS injection in style: {style}"
+            )
             assert "url(https://evil" not in style, f"URL injection in style: {style}"
             assert "background-image" not in style, (
                 f"background-image in style: {style}"
@@ -1632,7 +1634,7 @@ class TestEvilReadme:
 
         v.assert_html_well_formed()
         v.assert_no_raw_xss()
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
 
     def test_html_injection_in_readme(self, validate_html) -> None:
         """HTML injection attempts in README should be escaped."""
@@ -1658,7 +1660,7 @@ class TestEvilReadme:
         v = validate_html(html)
 
         v.assert_html_well_formed()
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
         # HTML should not be bloated excessively
         # (The 50KB content will be in data attribute but shouldn't break HTML)
 
@@ -1676,7 +1678,7 @@ Emoji: 💀💀💀💀💀
         v = validate_html(html)
 
         v.assert_html_well_formed()
-        v.assert_element_exists(".adata-readme-icon")
+        v.assert_element_exists(".anndata-readme__icon")
 
 
 class TestCSSAttacks:

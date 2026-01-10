@@ -88,7 +88,7 @@ class TestHTMLValidatorBasics:
 
     def test_assert_badge_shown(self):
         """Test asserting badge is displayed."""
-        html = '<span class="adata-badge-view">View</span>'
+        html = '<span class="anndata-badge--view">View</span>'
         v = HTMLValidator(html)
         v.assert_badge_shown("view")
 
@@ -636,8 +636,10 @@ class TestJupyterNotebookCompatibility:
 
         html = adata._repr_html_()
 
-        # Find all CSS variable definitions
-        css_vars = re.findall(r"--([\w-]+)\s*:", html)
+        # Find all CSS variable definitions (not BEM modifiers like --copied)
+        # CSS vars are defined as: --name: value; (note single colon)
+        # BEM modifiers are: .block--modifier (in class names)
+        css_vars = re.findall(r"(?<![.\w])--([\w-]+)\s*:", html)
 
         for var in css_vars:
             # Should use anndata prefix OR be a standard Jupyter variable

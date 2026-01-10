@@ -738,7 +738,7 @@ class TestLazyBackingInfo:
             # File path should appear in visible content
             v.assert_text_visible(str(path))
             # Also verify it's in the file path element
-            v.assert_element_exists(".adata-file-path")
+            v.assert_element_exists(".anndata-header__filepath")
 
     @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
     def test_lazy_file_path_in_html_zarr(self, tmp_path, validate_html):
@@ -758,4 +758,4 @@ class TestLazyBackingInfo:
         # File path should appear in visible content
         v.assert_text_visible(str(path))
         # Also verify it's in the file path element
-        v.assert_element_exists(".adata-file-path")
+        v.assert_element_exists(".anndata-header__filepath")

@@ -302,7 +302,7 @@ class TestPandasFormatters:
 
         result = formatter.format(df, FormatterContext(section="obsm"))
         assert result.preview_html is not None
-        assert "adata-cols-list" in result.preview_html
+        assert "anndata-columns" in result.preview_html
         assert "very_long_column_name_0" in result.preview_html
 
 
@@ -442,7 +442,7 @@ class TestSpecialArrayFormatters:
         assert "cupy" in result.type_name.lower()
         assert "100" in result.type_name
         assert "50" in result.type_name
-        assert result.css_class == "dtype-gpu"
+        assert result.css_class == "anndata-dtype--gpu"
         assert "GPU:0" in result.tooltip
 
     def test_awkward_array_formatter_with_mock(self):
@@ -467,7 +467,7 @@ class TestSpecialArrayFormatters:
 
         assert "awkward" in result.type_name.lower()
         assert "100" in result.type_name
-        assert result.css_class == "dtype-awkward"
+        assert result.css_class == "anndata-dtype--awkward"
         assert "var * int64" in result.tooltip
 
     def test_awkward_array_formatter_exception_handling(self):
@@ -524,7 +524,7 @@ class TestArrayAPIFormatter:
         assert "MockJAXArray" in result.type_name
         assert "100" in result.type_name
         assert "50" in result.type_name
-        assert result.css_class == "dtype-array-api"
+        assert result.css_class == "anndata-dtype--array-api"
         assert "JAX" in result.tooltip
         assert "gpu:0" in result.tooltip
 
@@ -604,7 +604,7 @@ class TestDtypeCSSClassHelpers:
 
         complex_dtype = np.dtype(np.complex128)
         css_class = _get_dtype_css_class(complex_dtype)
-        assert css_class == "dtype-float"
+        assert css_class == "anndata-dtype--float"
 
     def test_get_dtype_css_class_unknown(self):
         """Test CSS class for unknown dtype."""
@@ -612,7 +612,7 @@ class TestDtypeCSSClassHelpers:
 
         datetime_dtype = np.dtype("datetime64[ns]")
         css_class = _get_dtype_css_class(datetime_dtype)
-        assert css_class == "dtype-object"
+        assert css_class == "anndata-dtype--object"
 
     def test_get_dtype_css_class_category(self):
         """Test CSS class for pandas category dtype."""
@@ -620,7 +620,7 @@ class TestDtypeCSSClassHelpers:
 
         cat_dtype = pd.CategoricalDtype(categories=["a", "b", "c"])
         css_class = _get_dtype_css_class(cat_dtype)
-        assert css_class == "dtype-category"
+        assert css_class == "anndata-dtype--category"
 
     def test_get_dtype_css_class_timedelta(self):
         """Test CSS class for timedelta dtype."""
@@ -628,7 +628,7 @@ class TestDtypeCSSClassHelpers:
 
         timedelta_dtype = pd.to_timedelta([1, 2, 3], unit="s").dtype
         css_class = _get_dtype_css_class(timedelta_dtype)
-        assert css_class == "dtype-object"
+        assert css_class == "anndata-dtype--object"
 
 
 class TestAnnDataFormatter:
@@ -665,7 +665,7 @@ class TestFutureCompatibility:
         context = FormatterContext(depth=0)
         result = formatter.format(sparse_matrix, context)
         assert "csr" in result.type_name.lower()
-        assert result.css_class == "dtype-sparse"
+        assert result.css_class == "anndata-dtype--sparse"
         assert "6 stored" in result.type_name
 
     def test_array_api_formatter_with_mock_jax_array(self):
@@ -698,7 +698,7 @@ class TestFutureCompatibility:
         result = formatter.format(mock_array, context)
         assert "100 × 50" in result.type_name
         assert "float32" in result.type_name
-        assert result.css_class == "dtype-array-api"
+        assert result.css_class == "anndata-dtype--array-api"
         assert "jax" in result.tooltip.lower()  # Backend info in tooltip
 
     def test_unknown_array_type_graceful_fallback(self):
@@ -734,8 +734,8 @@ class TestFutureCompatibility:
 
         css = get_css()
 
-        assert "dtype-array-api" in css
-        pattern = r"\.dtype-array-api\s*\{[^}]*color:"
+        assert "anndata-dtype--array-api" in css
+        pattern = r"\.anndata-dtype--array-api\s*\{[^}]*color:"
         assert re.search(pattern, css)
 
 
@@ -765,7 +765,7 @@ class TestCustomHtmlContent:
             def format(self, obj, context):
                 return FormattedOutput(
                     type_name="CustomInline",
-                    css_class="dtype-custom",
+                    css_class="anndata-dtype--custom",
                     preview_html='<span class="test-inline">Inline Preview</span>',
                 )
 
@@ -821,7 +821,7 @@ class TestCustomHtmlContent:
                 """
                 return FormattedOutput(
                     type_name="TreeData (3 nodes)",
-                    css_class="dtype-tree",
+                    css_class="anndata-dtype--tree",
                     expanded_html=tree_html,
                 )
 
