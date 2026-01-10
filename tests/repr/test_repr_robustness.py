@@ -705,10 +705,49 @@ class TestBrokenObjects:
 
 
 class TestThreadSafety:
-    """Test that repr generation is thread-safe."""
+    """Test that repr generation doesn't crash under concurrent access.
 
-    def test_concurrent_repr_generation(self) -> None:
-        """Multiple threads generating reprs should not crash."""
+    Note: This tests crash resistance, not full thread safety with synchronization.
+    Concurrent modification of AnnData while generating repr may raise exceptions,
+    but should never cause memory corruption or segfaults.
+    """
+
+    def test_concurrent_repr_same_object(self) -> None:
+        """Multiple threads generating reprs of the SAME object should work."""
+        adata = ad.AnnData(
+            X=np.random.rand(50, 20),
+            obs=pd.DataFrame({"cat": pd.Categorical(["a", "b"] * 25)}),
+            var=pd.DataFrame({"gene": [f"g{i}" for i in range(20)]}),
+        )
+        adata.obsm["X_pca"] = np.random.rand(50, 10)
+        adata.uns["params"] = {"k": 10}
+
+        errors: list[Exception] = []
+        results: list[str] = []
+
+        def generate_reprs() -> None:
+            try:
+                for _ in range(5):
+                    html = generate_repr_html(adata)
+                    results.append(html)
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+
+        threads = [threading.Thread(target=generate_reprs) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(errors) == 0, f"Errors in concurrent repr: {errors}"
+        # All results should be valid HTML with expected content
+        assert len(results) == 20  # 4 threads × 5 iterations
+        for html in results:
+            assert "anndata-repr" in html
+            assert "50 × 20" in html or "50</span> ×" in html  # shape in header
+
+    def test_concurrent_repr_different_objects(self) -> None:
+        """Multiple threads generating reprs of different objects should work."""
         errors: list[Exception] = []
 
         def generate_reprs() -> None:
