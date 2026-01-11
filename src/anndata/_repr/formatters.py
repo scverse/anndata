@@ -25,6 +25,9 @@ import pandas as pd
 
 from .._repr_constants import (
     COLOR_PREVIEW_LIMIT,
+    CSS_COLORS,
+    CSS_COLORS_SWATCH,
+    CSS_COLORS_SWATCH_INVALID,
     CSS_DTYPE_ANNDATA,
     CSS_DTYPE_ARRAY_API,
     CSS_DTYPE_AWKWARD,
@@ -51,7 +54,9 @@ from .registry import (
 )
 from .utils import (
     check_color_category_mismatch,
+    check_invalid_colors,
     escape_html,
+    format_invalid_colors_warning,
     format_number,
     get_categories_for_display,
     get_matching_column_colors,
@@ -559,18 +564,25 @@ class CategoricalFormatter(TypeFormatter):
                     f'<span class="{CSS_TEXT_MUTED}">(error: {type(e).__name__})</span>'
                 )
 
-        # Check for color mismatch warning
+        # Check for color warnings
         warnings = []
-        if (
-            n_categories > 0
-            and context.adata_ref is not None
-            and context.column_name is not None
-        ):
-            color_warning = check_color_category_mismatch(
-                context.adata_ref, context.column_name, n_categories
+        if context.adata_ref is not None and context.column_name is not None:
+            # Check for color count mismatch
+            if n_categories > 0:
+                color_warning = check_color_category_mismatch(
+                    context.adata_ref, context.column_name, n_categories
+                )
+                if color_warning:
+                    warnings.append(color_warning)
+            # Check for invalid/unsafe colors (limited to previewed categories)
+            invalid_warning = check_invalid_colors(
+                context.adata_ref,
+                context.column_name,
+                limit=context.max_categories,
+                n_total=n_categories,
             )
-            if color_warning:
-                warnings.append(color_warning)
+            if invalid_warning:
+                warnings.append(invalid_warning)
 
         return FormattedOutput(
             type_name=type_name,
@@ -992,34 +1004,45 @@ class ColorListFormatter(TypeFormatter):
         colors = list(obj) if hasattr(obj, "__iter__") else []
         n_colors = len(colors)
 
-        # Build color swatch HTML with sanitized colors
+        # Build color swatch HTML with sanitized colors, counting invalid ones
         swatches = []
+        invalid_count = 0
         for color in colors[:COLOR_PREVIEW_LIMIT]:
             # Sanitize color to prevent CSS injection
             safe_color = sanitize_css_color(str(color))
             if safe_color:
                 swatches.append(
-                    f'<span class="anndata-colors__swatch" '
+                    f'<span class="{CSS_COLORS_SWATCH}" '
                     f'style="background:{safe_color}" title="{escape_html(str(color))}"></span>'
                 )
             else:
                 # Invalid/unsafe color - show as text only, no style
+                invalid_count += 1
                 swatches.append(
-                    f'<span class="anndata-colors__swatch anndata-colors__swatch--invalid" '
-                    f'title="{escape_html(str(color))}">?</span>'
+                    f'<span class="{CSS_COLORS_SWATCH} {CSS_COLORS_SWATCH_INVALID}" '
+                    f"""title="Invalid color: '{escape_html(str(color))}'">?</span>"""
                 )
         if n_colors > COLOR_PREVIEW_LIMIT:
             swatches.append(
                 f'<span class="{CSS_TEXT_MUTED}">+{n_colors - COLOR_PREVIEW_LIMIT}</span>'
             )
 
-        preview_html = f'<span class="anndata-colors">{"".join(swatches)}</span>'
+        preview_html = f'<span class="{CSS_COLORS}">{"".join(swatches)}</span>'
+
+        # Build warnings list (only for colors within preview limit)
+        warnings = []
+        if invalid_count > 0:
+            has_more = n_colors > COLOR_PREVIEW_LIMIT
+            warnings.append(
+                format_invalid_colors_warning(invalid_count, has_more=has_more)
+            )
 
         return FormattedOutput(
             type_name=f"colors ({n_colors})",
             css_class=CSS_DTYPE_OBJECT,
             preview_html=preview_html,
             is_serializable=True,
+            warnings=warnings,
         )
 
 

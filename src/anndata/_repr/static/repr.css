@@ -809,6 +809,17 @@ body.dark-mode .anndata-repr {
     border: 1px solid var(--anndata-border-color);
 }
 
+.anndata-repr .anndata-colors__swatch--invalid {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--anndata-text-muted);
+    background: var(--anndata-bg-tertiary);
+    cursor: help;
+}
+
 /* Category list with wrap toggle */
 /* Default: multi-line for no-JS graceful degradation */
 .anndata-repr .anndata-categories {

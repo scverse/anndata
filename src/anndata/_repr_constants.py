@@ -112,6 +112,11 @@ CSS_BADGE_BACKED = "anndata-badge--backed"
 CSS_BADGE_LAZY = "anndata-badge--lazy"
 CSS_BADGE_EXTENSION = "anndata-badge--extension"
 
+# CSS class names for color swatches (BEM: anndata-colors block)
+CSS_COLORS = "anndata-colors"
+CSS_COLORS_SWATCH = "anndata-colors__swatch"
+CSS_COLORS_SWATCH_INVALID = "anndata-colors__swatch--invalid"
+
 # Section names (canonical strings used for data-section attributes and keys)
 SECTION_X = "X"
 SECTION_OBS = "obs"

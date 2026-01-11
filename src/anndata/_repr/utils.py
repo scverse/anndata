@@ -15,6 +15,9 @@ import html
 import re
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 import numpy as np
 
 from .._repr_constants import (
@@ -389,6 +392,82 @@ def check_color_category_mismatch(
         return f"Color mismatch: {len(colors)} colors for {n_categories} categories"
 
     return None
+
+
+def count_invalid_colors(colors: Sequence) -> int:
+    """
+    Count colors that fail sanitization.
+
+    Parameters
+    ----------
+    colors
+        Sequence of color values to check
+
+    Returns
+    -------
+    Number of colors that fail sanitize_css_color validation
+    """
+    return sum(1 for c in colors if sanitize_css_color(str(c)) is None)
+
+
+def format_invalid_colors_warning(invalid_count: int, *, has_more: bool = False) -> str:
+    """
+    Format a warning message for invalid colors.
+
+    Parameters
+    ----------
+    invalid_count
+        Number of invalid colors found
+    has_more
+        If True, adds "+" suffix to indicate more unchecked colors
+
+    Returns
+    -------
+    Formatted warning message like "2 invalid colors" or "2+ invalid colors"
+    """
+    suffix = "+" if has_more else ""
+    s = "s" if invalid_count > 1 else ""
+    return f"{invalid_count}{suffix} invalid color{s}"
+
+
+def check_invalid_colors(
+    adata: AnnData,
+    column_name: str,
+    limit: int | None = None,
+    n_total: int | None = None,
+) -> str | None:
+    """
+    Check if any colors in the color list are invalid or unsafe.
+
+    Called by CategoricalFormatter for categorical columns that have associated
+    colors in .uns.
+
+    Parameters
+    ----------
+    adata
+        AnnData object (or object with .uns attribute)
+    column_name
+        Name of the column to check
+    limit
+        If provided, only check the first `limit` colors (for lazy loading).
+    n_total
+        Total number of colors expected (e.g., n_categories). Used to determine
+        if there are unchecked colors beyond the limit.
+
+    Returns
+    -------
+    Warning message if invalid colors found, None otherwise
+    """
+    colors = _get_colors_from_uns(adata, column_name, limit=limit)
+    if colors is None:
+        return None
+
+    invalid_count = count_invalid_colors(colors)
+    if invalid_count == 0:
+        return None
+
+    has_more = n_total is not None and limit is not None and n_total > limit
+    return format_invalid_colors_warning(invalid_count, has_more=has_more)
 
 
 def _get_colors_from_uns(

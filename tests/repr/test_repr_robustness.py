@@ -1530,7 +1530,8 @@ class TestBadColorArrays:
         assert "background:#ff0000" in html, "Valid color should be rendered"
 
         # Malicious strings should appear escaped in title attributes (which is safe)
-        assert 'title="blue; }' in html or "title=&quot;blue;" in html
+        # Title format is "Invalid color: '{color}'"
+        assert "Invalid color: &#x27;blue;" in html or "Invalid color: 'blue;" in html
 
     def test_css_injection_via_semicolon_blocked(self, validate_html) -> None:
         """Colors with semicolons (CSS property separator) must be blocked."""
