@@ -22,7 +22,9 @@ if TYPE_CHECKING:
 
 
 def _normalize_indices(
-    index: Index | None, names0: pd.Index, names1: pd.Index
+    index: Index | None | tuple[IndexManager, IndexManager],
+    names0: pd.Index,
+    names1: pd.Index,
 ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
@@ -34,7 +36,7 @@ def _normalize_indices(
 
 
 def _normalize_index(  # noqa: PLR0911, PLR0912
-    indexer: Index1D, index: pd.Index
+    indexer: Index1D | IndexManager, index: pd.Index
 ) -> Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
@@ -43,6 +45,8 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
 
     if isinstance(indexer, pd.Index | pd.Series):
         indexer = indexer.array
+    if isinstance(indexer, IndexManager):
+        indexer = indexer.get_default()
 
     # the following is insanely slow for sequences,
     # we replaced it using pandas below
@@ -214,12 +218,17 @@ class IndexManager:
         """Create an IndexManager from an array-api compatible array."""
         return cls(device=arr.device, arr=arr)
 
-    def __array__(self) -> np.ndarray:
+    def __array__(
+        self,
+        dtype: np.dtype | None = None,
+        copy: bool | None = None,  # noqa: FBT001
+    ) -> np.ndarray:
         """Return numpy array for compatibility with numpy/pandas/sparse operations."""
         if "cpu" not in self:
             arr = self._manager[next(iter(self.keys()))]
             self._manager["cpu"] = np.from_dlpack(arr.to_device("cpu"))
-        return np.from_dlpack(self._manager["cpu"])
+        res = np.from_dlpack(self._manager["cpu"])
+        return res.copy() if copy else res
 
     def __contains__(self, device: str) -> bool:
         """Check if an index array exists for the given device."""
@@ -227,7 +236,7 @@ class IndexManager:
 
     def __len__(self) -> int:
         """Return the length of the index array."""
-        return self._manager[next(iter(self._manager))].shape[0]
+        return self.get_default().shape[0]
 
     def __iter__(self):
         """Iterate over the index values (as numpy for compatibility)."""
@@ -236,6 +245,10 @@ class IndexManager:
     def keys(self):
         """Return the devices for which index arrays are available."""
         return self._manager.keys()
+
+    def get_default(self):
+        """Returns the first key added i.e., a no-copy index, useful for getting an array-api compatible index on some device."""
+        return self._manager[next(iter(self._manager))]
 
     @property
     def dtype(self):

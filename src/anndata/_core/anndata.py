@@ -307,21 +307,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
-        if has_xp(oidx):
-            oidx = IndexManager.from_array(oidx)
-        if has_xp(vidx):
-            vidx = IndexManager.from_array(vidx)
+        for axis, idx in [("o", oidx), ("v", vidx)]:
+            setattr(
+                self,
+                f"_{axis}idx",
+                IndexManager.from_array(idx) if has_xp(idx) else idx,
+            )
 
         # self._adata_ref is never a view
         self._adata_ref = adata_ref
-        self._oidx = oidx
-        self._vidx = vidx
         # the file is the same as of the reference object
         self.file = adata_ref.file
 
         # views on attributes of adata_ref
-        var_sub = adata_ref.var.iloc[self._to_numpy_idx(vidx)]
-        obs_sub = adata_ref.obs.iloc[self._to_numpy_idx(oidx)]
+        var_sub = adata_ref.var.iloc[vidx]
+        obs_sub = adata_ref.obs.iloc[oidx]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
