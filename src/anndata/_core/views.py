@@ -456,7 +456,9 @@ def _resolve_idxs(
 
 
 @singledispatch
-def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
+def _resolve_idx(
+    old: Index1DNorm | IndexManager, new: Index1DNorm, l: Literal[0, 1]
+) -> Index1DNorm | IndexManager:
 
     from ..compat import has_xp
 
@@ -524,39 +526,21 @@ def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
     old: IndexManager, new: Index1DNorm, l: Literal[0, 1]
-) -> IndexManager:
+) -> IndexManager | Index1DNorm:
     """Resolve indices when old is an IndexManager.
 
     If new is an array-api array, use get_for_array to get a matching
     index and resolve with the array-api implementation. Device mismatch
     raises an error.
     """
-    # Handle IndexManager in new by extracting its array
-    if isinstance(new, IndexManager):
-        new = np.asarray(new)
-
-    # Check if new supports array-api (and is not numpy)
-    if has_xp(new) and not isinstance(new, np.ndarray):
-        new_device = new.device
-        # Error if device doesn't match any in the manager
-        if new_device not in old:
-            available = list(old.keys())
-            msg = (
-                f"Cannot resolve indices: new indexer is on device '{new_device}' "
-                f"but IndexManager only has arrays on devices: {available}"
-            )
-            raise ValueError(msg)
-        # Use get_for_array to ensure array-api implementation matches
+    if has_xp(new):
         old_arr = old.get_for_array(new)
-        # Call the default (array-api) implementation directly
-        resolved = _resolve_idx.dispatch(object)(old_arr, new, l)
-        # Wrap result back in IndexManager
-        return IndexManager(device=new_device, arr=resolved)
+        return IndexManager.from_array(_resolve_idx(old_arr, new, l))
 
-    # Fall back to numpy resolution for numpy arrays or slices
     old_np = np.asarray(old)
     resolved = _resolve_idx_ndarray(old_np, new, l)
-    # Wrap the resolved index back in IndexManager
-    if isinstance(resolved, np.ndarray):
-        return IndexManager(device="cpu", arr=resolved)
-    return resolved
+    return (
+        IndexManager.from_array(resolved)
+        if isinstance(resolved, np.ndarray)
+        else resolved
+    )
