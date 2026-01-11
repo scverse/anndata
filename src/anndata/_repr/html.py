@@ -487,6 +487,8 @@ def render_formatted_entry(
     ::
 
         from . import (
+            CSS_DTYPE_ANNDATA,
+            CSS_DTYPE_NDARRAY,
             FormattedEntry,
             FormattedOutput,
             render_formatted_entry,
@@ -496,7 +498,7 @@ def render_formatted_entry(
             key="my_array",
             output=FormattedOutput(
                 type_name="ndarray (100, 50) float32",
-                css_class="anndata-dtype--ndarray",
+                css_class=CSS_DTYPE_NDARRAY,
                 tooltip="My custom array",
                 warnings=["Some warning"],
             ),
@@ -510,7 +512,7 @@ def render_formatted_entry(
             key="cell_table",
             output=FormattedOutput(
                 type_name="AnnData (150 × 30)",
-                css_class="anndata-dtype--anndata",
+                css_class=CSS_DTYPE_ANNDATA,
                 expanded_html=nested_html,
             ),
         )

@@ -210,6 +210,7 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
 **Using render helpers** for consistent section rendering::
 
     from anndata._repr import (
+        CSS_DTYPE_NDARRAY,
         get_css,
         get_javascript,
         render_section,
@@ -244,7 +245,7 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
                 key=key,
                 output=FormattedOutput(
                     type_name=f"array {value.shape}",
-                    css_class="anndata-dtype--ndarray",
+                    css_class=CSS_DTYPE_NDARRAY,
                 ),
             )
             entries.append(render_formatted_entry(entry))
@@ -285,6 +286,8 @@ from __future__ import annotations
 # Note: _repr_constants is outside _repr/ to avoid loading the full _repr
 # package when _settings.py imports constants at anndata import time.
 from .._repr_constants import (
+    CSS_DTYPE_ANNDATA,
+    CSS_DTYPE_NDARRAY,
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
     DEFAULT_MAX_DEPTH,
@@ -296,6 +299,16 @@ from .._repr_constants import (
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
     NOT_SERIALIZABLE_MSG,
+    SECTION_LAYERS,
+    SECTION_OBS,
+    SECTION_OBSM,
+    SECTION_OBSP,
+    SECTION_RAW,
+    SECTION_UNS,
+    SECTION_VAR,
+    SECTION_VARM,
+    SECTION_VARP,
+    SECTION_X,
 )
 
 # Documentation base URL
@@ -303,16 +316,16 @@ DOCS_BASE_URL = "https://anndata.readthedocs.io/en/latest/"
 
 # Section order for display
 SECTION_ORDER = (
-    "X",
-    "obs",
-    "var",
-    "uns",
-    "obsm",
-    "varm",
-    "layers",
-    "obsp",
-    "varp",
-    "raw",
+    SECTION_X,
+    SECTION_OBS,
+    SECTION_VAR,
+    SECTION_UNS,
+    SECTION_OBSM,
+    SECTION_VARM,
+    SECTION_LAYERS,
+    SECTION_OBSP,
+    SECTION_VARP,
+    SECTION_RAW,
 )
 
 # Import main functionality
@@ -375,6 +388,9 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "DOCS_BASE_URL",
     "SECTION_ORDER",
     "NOT_SERIALIZABLE_MSG",
+    # CSS dtype constants for custom formatters
+    "CSS_DTYPE_NDARRAY",
+    "CSS_DTYPE_ANNDATA",
     # Main function
     "generate_repr_html",
     # Registry for extensibility

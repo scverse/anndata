@@ -110,8 +110,6 @@ CSS_BADGE = "anndata-badge"
 CSS_BADGE_VIEW = "anndata-badge--view"
 CSS_BADGE_BACKED = "anndata-badge--backed"
 CSS_BADGE_LAZY = "anndata-badge--lazy"
-CSS_BADGE_SPARSE = "anndata-badge--sparse"
-CSS_BADGE_DASK = "anndata-badge--dask"
 CSS_BADGE_EXTENSION = "anndata-badge--extension"
 
 # Section names (canonical strings used for data-section attributes and keys)
@@ -125,4 +123,3 @@ SECTION_LAYERS = "layers"
 SECTION_OBSP = "obsp"
 SECTION_VARP = "varp"
 SECTION_RAW = "raw"
-SECTION_UNKNOWN = "unknown"

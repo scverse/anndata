@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from .._repr_constants import (
     CSS_TEXT_MUTED,
+    ENTRY_TABLE_COLSPAN,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
 )
@@ -73,6 +74,7 @@ def render_section(  # noqa: PLR0913
     ::
 
         from anndata._repr import (
+            CSS_DTYPE_NDARRAY,
             FormattedEntry,
             FormattedOutput,
             render_formatted_entry,
@@ -84,7 +86,7 @@ def render_section(  # noqa: PLR0913
             entry = FormattedEntry(
                 key=key,
                 output=FormattedOutput(
-                    type_name=info["type"], css_class="anndata-dtype--ndarray"
+                    type_name=info["type"], css_class=CSS_DTYPE_NDARRAY
                 ),
             )
             rows.append(render_formatted_entry(entry))
@@ -179,7 +181,7 @@ def render_empty_section(
 
 def render_truncation_indicator(remaining: int) -> str:
     """Render a truncation indicator."""
-    return f'<tr><td colspan="3" class="anndata-section__truncated">... and {format_number(remaining)} more</td></tr>'
+    return f'<tr><td colspan="{ENTRY_TABLE_COLSPAN}" class="anndata-section__truncated">... and {format_number(remaining)} more</td></tr>'
 
 
 def get_section_tooltip(section: str) -> str:
