@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from functools import singledispatch
+from functools import singledispatch, wraps
 from itertools import repeat
 from typing import TYPE_CHECKING, cast, overload
 
@@ -290,13 +290,26 @@ class IndexManager:
         return self._manager[device]
 
 
-def _ensure_numpy_idx(
+def _index_manager_to_numpy_idx_in_tuple(
     subset_idx: tuple,
 ) -> tuple:
     """Convert IndexManager instances to numpy arrays in a tuple of indices."""
     return tuple(
         np.asarray(idx) if isinstance(idx, IndexManager) else idx for idx in subset_idx
     )
+
+
+def _ensure_numpy_idx(func) -> tuple:
+    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+
+    @wraps(func)
+    def _ensure(a, subset_idx):
+        return func(
+            a,
+            _index_manager_to_numpy_idx_in_tuple(subset_idx),
+        )
+
+    return _ensure
 
 
 def _prepare_array_api_idx(
@@ -353,7 +366,7 @@ def _subset(
         return a[subset_idx]
 
     # For numpy arrays and other types, ensure we have numpy indices
-    subset_idx = _ensure_numpy_idx(subset_idx)
+    subset_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)
 
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
@@ -363,11 +376,10 @@ def _subset(
 
 
 @_subset.register(DaskArray)
+@_ensure_numpy_idx
 def _subset_dask(
     a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
-    # Dask uses numpy-style indexing, convert IndexManager to numpy
-    subset_idx = _ensure_numpy_idx(subset_idx)
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -377,12 +389,11 @@ def _subset_dask(
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
+@_ensure_numpy_idx
 def _subset_sparse(
     a: CSMatrix | CSArray,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
-    # Sparse matrices use numpy indexing, convert IndexManager to numpy
-    subset_idx = _ensure_numpy_idx(subset_idx)
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -394,21 +405,20 @@ def _subset_sparse(
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
+@_ensure_numpy_idx
 def _subset_df(
     df: pd.DataFrame | Dataset2D,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
     # DataFrames use numpy indexing, convert IndexManager to numpy
-    subset_idx = _ensure_numpy_idx(subset_idx)
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
+@_ensure_numpy_idx
 def _subset_awkarray(
     a: AwkArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
-    # Awkward arrays use numpy indexing, convert IndexManager to numpy
-    subset_idx = _ensure_numpy_idx(subset_idx)
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -416,6 +426,7 @@ def _subset_awkarray(
 
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
+@_ensure_numpy_idx
 def _subset_dataset(
     d: h5py.Dataset, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
