@@ -54,10 +54,9 @@ Documentation = "https://anndata.readthedocs.io/"
 Source = "https://github.com/scverse/anndata"
 Home-page = "https://github.com/scverse/anndata"
 
-
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "anndata[dev-doc]",
+    { include-group = "dev-doc" },
 ]
 doc = [
     "sphinx>=8.2.1,<9",                  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/586
@@ -73,10 +72,16 @@ doc = [
     "IPython",                           # For syntax highlighting in notebooks
     "myst_parser",
     "sphinx_design>=0.5.0",
+    "anndata[dask]",
     # for unreleased changes
-    "anndata[dev-doc,dask]",
+    { include-group = "dev-doc" },
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+test = [
+    "fast-array-utils>=1.2.3",
+    "anndata[lazy]",
+    { include-group = "test-min" },
+]
 test-min = [
     "pytest",
     "pytest-cov",           # only for VS Code
@@ -98,19 +103,15 @@ test-min = [
     "pyarrow",
     "anndata[dask]",
 ]
-
-test = [
-    "anndata[test-min,lazy]",
-    "fast-array-utils>=1.2.3",
-]
-
 test-array-api = [
-    "anndata[test-min,test-jax]",
+    { include-group = "test-min" },
+    { include-group = "test-jax" },
 ]
 test-jax = [
     "jax>=0.6.0",
     "jaxlib>=0.6.0",
 ]
+[project.optional-dependencies]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]

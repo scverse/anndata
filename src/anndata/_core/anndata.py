@@ -381,7 +381,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         # init from file
         if filename is not None:
-            self.file = AnnDataFileManager(self, filename, filemode)
+            fileobj, filename = (
+                (filename, None)
+                if isinstance(filename, h5py.File)
+                else (None, filename)
+            )
+            self.file = AnnDataFileManager(self, filename, filemode, fileobj)
         else:
             self.file = AnnDataFileManager(self, None)
 
