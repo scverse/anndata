@@ -1,65 +1,140 @@
 """
-Minimal JavaScript-based markdown parser for README rendering.
+Markdown parsing for README rendering in HTML repr.
 
-This module previously provided an inline markdown parser. The implementation
-has been moved to static/markdown-parser.js for better maintainability.
+Current Implementation
+----------------------
+README markdown is currently parsed client-side using JavaScript
+(see static/markdown-parser.js). This avoids adding Python dependencies
+but has limitations (no nested lists, limited table support, etc.).
 
-Note
-----
-This is a temporary solution to avoid adding markdown parsing dependencies.
-In the future, this could be replaced by a proper markdown library such as:
-- marked.js (client-side): https://marked.js.org/
-- markdown-it (client-side): https://github.com/markdown-it/markdown-it
-- Python's markdown package with pre-rendering (server-side)
+Server-Side Python Alternatives
+-------------------------------
+To replace the JavaScript parser with Python server-side rendering,
+consider these libraries (in order of recommendation):
 
-The current implementation supports:
-- Headers (h1-h4)
-- Bold and italic text
-- Inline code and code blocks
-- Ordered and unordered lists
-- Links (with target="_blank" for security)
-- Auto-linking raw URLs (https://...)
-- Blockquotes
-- Tables (basic, no alignment)
-- Paragraphs
+1. **markdown-it-py** (recommended)
+   - Port of markdown-it, CommonMark compliant, extensible
+   - Install: ``pip install markdown-it-py``
+   - Usage::
 
-Limitations:
-- No nested lists
-- No table column alignment
-- No images
-- No horizontal rules
-- Limited edge case handling
+       from markdown_it import MarkdownIt
 
-To replace this with an external library:
-1. Update static/markdown-parser.js with the library's code
-2. Ensure the parser function is named `parseMarkdown` and accepts a string
-3. Update the CSS in static/repr.css if the library produces different HTML structure
+       md = MarkdownIt("commonmark", {"html": False})  # Disable raw HTML for security
+       html = md.render(readme_text)
+
+   - Pros: Fast, CommonMark compliant, plugin ecosystem
+   - Docs: https://markdown-it-py.readthedocs.io/
+
+2. **mistune**
+   - Fast, pure Python, customizable renderer
+   - Install: ``pip install mistune``
+   - Usage::
+
+       import mistune
+
+       html = mistune.html(readme_text)
+
+   - Pros: Very fast, no dependencies, easy customization
+   - Docs: https://mistune.lepture.com/
+
+3. **markdown** (Python-Markdown)
+   - Original Python markdown library, many extensions
+   - Install: ``pip install markdown``
+   - Usage::
+
+       import markdown
+
+       md = markdown.Markdown(extensions=["tables", "fenced_code"])
+       html = md.convert(readme_text)
+
+   - Pros: Mature, extensive extension library
+   - Docs: https://python-markdown.github.io/
+
+4. **cmarkgfm**
+   - GitHub Flavored Markdown via C bindings (fastest)
+   - Install: ``pip install cmarkgfm``
+   - Usage::
+
+       import cmarkgfm
+
+       html = cmarkgfm.github_flavored_markdown_to_html(readme_text)
+
+   - Pros: Fastest, GitHub-compatible
+   - Cons: Requires C compiler for installation
+   - Docs: https://github.com/theacodes/cmarkgfm
+
+Integration Steps
+-----------------
+To switch to server-side Python parsing:
+
+1. Add the chosen library as an optional dependency in pyproject.toml::
+
+       [project.optional - dependencies]
+       markdown = ["markdown-it-py>=3.0"]
+
+2. Update ``_repr/sections.py`` or ``_repr/html.py`` to:
+   - Parse README content server-side before embedding in HTML
+   - Remove the parseMarkdown() JavaScript call from the README modal
+   - Sanitize output HTML to prevent XSS (use bleach or html-sanitizer)
+
+3. Update ``static/repr.js`` to display pre-rendered HTML directly
+   instead of calling the client-side parser
+
+4. Remove ``static/markdown-parser.js`` once migration is complete
+
+Security Considerations
+-----------------------
+README content often comes from h5ad/zarr files shared by others, making
+proper sanitization essential to prevent XSS attacks.
+
+Required security measures:
+
+1. **HTML sanitization with nh3** (recommended) or bleach::
+
+       import nh3
+
+       # After markdown parsing
+       safe_html = nh3.clean(
+           raw_html,
+           tags={
+               "p",
+               "h1",
+               "h2",
+               "h3",
+               "h4",
+               "a",
+               "code",
+               "pre",
+               "strong",
+               "em",
+               "ul",
+               "ol",
+               "li",
+               "blockquote",
+               "table",
+               "thead",
+               "tbody",
+               "tr",
+               "th",
+               "td",
+           },
+           attributes={"a": {"href", "rel", "target"}},
+           link_rel="noopener noreferrer",
+       )
+
+2. **Disable raw HTML passthrough** in the markdown parser::
+
+       md = MarkdownIt("commonmark", {"html": False})
+
+3. **Sanitize link URLs** to block javascript: and data: protocols::
+
+       url_rel = "noopener noreferrer"  # nh3 handles this
+       # Or manually check: if not url.startswith(("http://", "https://", "/")):
+
+Add nh3 as a dependency in pyproject.toml::
+
+    [project.optional - dependencies]
+    markdown = ["markdown-it-py>=3.0", "nh3>=0.2"]
 """
 
 from __future__ import annotations
-
-from functools import lru_cache
-from importlib.resources import files
-
-
-@lru_cache(maxsize=1)
-def get_markdown_parser_js() -> str:
-    """
-    Get the JavaScript markdown parser function.
-
-    Returns
-    -------
-    str
-        JavaScript code defining the `parseMarkdown(text)` function.
-        The function converts markdown text to HTML.
-
-    Note
-    ----
-    This minimal implementation avoids external dependencies but has limitations.
-    See module docstring for details on replacing with a full-featured library.
-    """
-    return (
-        files("anndata._repr.static")
-        .joinpath("markdown-parser.js")
-        .read_text(encoding="utf-8")
-    )
