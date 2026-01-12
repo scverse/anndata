@@ -146,8 +146,6 @@ class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     _: KW_ONLY
     path_class: type[P]
 
-    __match_args__: ClassVar = ("k",)
-
     @overload
     def __getitem__(self, idx: Idx2D[str], /) -> P: ...
     @overload
@@ -182,8 +180,6 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
     ax: Literal["obs", "var"]
     _: KW_ONLY
     path_class: type[P]
-
-    __match_args__: ClassVar = ("ax",)
 
     @property
     def index(self) -> P:
@@ -228,8 +224,6 @@ class MultiAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    __match_args__: ClassVar = ("ax",)
-
     def __getitem__(self, k: str, /) -> MultiVecAcc[P]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}m key {k!r}"
@@ -248,8 +242,6 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
     k: str
     _: KW_ONLY
     path_class: type[P]
-
-    __match_args__: ClassVar = ("ax", "k")
 
     @staticmethod
     def process_idx[T](i: T | tuple[Sf, T], /) -> T:
@@ -296,8 +288,6 @@ class GraphAcc[P: AdPath]:
     _: KW_ONLY
     path_class: type[P]
 
-    __match_args__: ClassVar = ("ax",)
-
     def __getitem__(self, k: str, /) -> GraphVecAcc[P]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}p key {k!r}"
@@ -316,8 +306,6 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     k: str
     _: KW_ONLY
     path_class: type[P]
-
-    __match_args__: ClassVar = ("ax", "k")
 
     def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
         if not all(isinstance(i, str | slice) for i in idx):
