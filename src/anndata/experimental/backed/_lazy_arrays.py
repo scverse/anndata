@@ -23,18 +23,6 @@ from ...compat import (
 # Number of categories to show at head/tail in LazyCategoricalDtype repr
 _N_CATEGORIES_REPR_SHOW = 3
 
-
-def _same_disk_location(a: ZarrArray | H5Array, b: ZarrArray | H5Array) -> bool:
-    """Check if two arrays reference the same on-disk location."""
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, ZarrArray):
-        return a.store.path == b.store.path and a.path == b.path
-    if isinstance(a, H5Array):
-        return a.file.filename == b.file.filename and a.name == b.name
-    return False
-
-
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
@@ -204,7 +192,7 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         # Show truncated: first n ... last n
         head = list(self.head_categories(_N_CATEGORIES_REPR_SHOW))
         tail = list(self.tail_categories(_N_CATEGORIES_REPR_SHOW))
-        cats_display = head + ["..."] + tail
+        cats_display = [*head, "...", *tail]
         return f"LazyCategoricalDtype(categories={cats_display!r}, n={n_total}{ordered_str})"
 
     def __hash__(self) -> int:
@@ -222,10 +210,8 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
             # Fast path: same Python object
             if self._categories_elem is other._categories_elem:
                 return True
-            # Fast path: same on-disk location (avoids loading categories)
-            if _same_disk_location(
-                self._get_categories_array(), other._get_categories_array()
-            ):
+            # Fast path: zarr/h5py arrays compare equal by location
+            if self._get_categories_array() == other._get_categories_array():
                 return True
         # Defer to pandas base implementation for all other comparisons
         # This handles string comparison ("category"), CategoricalDtype comparisons,
