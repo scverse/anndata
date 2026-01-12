@@ -56,6 +56,8 @@ class AdPath[I: Hashable]:
     acc: VecAcc[Self, I]
     idx: I
 
+    __match_args__: ClassVar = ("acc", "idx")
+
     def __init__(self, acc: VecAcc[Self, I], idx: I) -> None:
         self.acc = acc
         self.idx = idx
@@ -144,6 +146,8 @@ class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     _: KW_ONLY
     path_class: type[P]
 
+    __match_args__: ClassVar = ("k",)
+
     @overload
     def __getitem__(self, idx: Idx2D[str], /) -> P: ...
     @overload
@@ -178,6 +182,8 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
     ax: Literal["obs", "var"]
     _: KW_ONLY
     path_class: type[P]
+
+    __match_args__: ClassVar = ("ax",)
 
     @property
     def index(self) -> P:
@@ -218,28 +224,32 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
 class MultiAcc[P: AdPath]:
     """Accessor for multi-dimensional array containers (obsm/varm)."""
 
-    ax: Literal["obsm", "varm"]
+    ax: Literal["obs", "var"]
     _: KW_ONLY
     path_class: type[P]
 
+    __match_args__: ClassVar = ("ax",)
+
     def __getitem__(self, k: str, /) -> MultiVecAcc[P]:
         if not isinstance(k, str):
-            msg = f"Unsupported {self.ax} key {k!r}"
+            msg = f"Unsupported {self.ax}m key {k!r}"
             raise TypeError(msg)
         return MultiVecAcc(self.ax, k, path_class=self.path_class)
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}"
+        return f"A.{self.ax}m"
 
 
 @dataclass(frozen=True)
 class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
     """Accessor for arrays from multi-dimensional containers (obsm/varm)."""
 
-    ax: Literal["obsm", "varm"]
+    ax: Literal["obs", "var"]
     k: str
     _: KW_ONLY
     path_class: type[P]
+
+    __match_args__: ClassVar = ("ax", "k")
 
     @staticmethod
     def process_idx[T](i: T | tuple[Sf, T], /) -> T:
@@ -266,44 +276,48 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
         return super().__getitem__(i)
 
     def axes(self, i: int, /) -> Axes:
-        return {cast("Literal['obs', 'var']", self.ax[:-1])}
+        return {self.ax}
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}[{self.k!r}]"
+        return f"A.{self.ax}m[{self.k!r}]"
 
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
     def __call__(self, adata: AnnData, i: int, /) -> Vector:
-        return getattr(adata, self.ax)[self.k][:, i]
+        return getattr(adata, f"{self.ax}m")[self.k][:, i]
 
 
 @dataclass(frozen=True)
 class GraphAcc[P: AdPath]:
     """Accessor for graph containers (obsp/varp)."""
 
-    ax: Literal["obsp", "varp"]
+    ax: Literal["obs", "var"]
     _: KW_ONLY
     path_class: type[P]
 
+    __match_args__: ClassVar = ("ax",)
+
     def __getitem__(self, k: str, /) -> GraphVecAcc[P]:
         if not isinstance(k, str):
-            msg = f"Unsupported {self.ax} key {k!r}"
+            msg = f"Unsupported {self.ax}p key {k!r}"
             raise TypeError(msg)
         return GraphVecAcc(self.ax, k, path_class=self.path_class)
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}"
+        return f"A.{self.ax}p"
 
 
 @dataclass(frozen=True)
 class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     """Accessor for arrays from graph containers (obsp/varp)."""
 
-    ax: Literal["obsp", "varp"]
+    ax: Literal["obs", "var"]
     k: str
     _: KW_ONLY
     path_class: type[P]
+
+    __match_args__: ClassVar = ("ax", "k")
 
     def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
         if not all(isinstance(i, str | slice) for i in idx):
@@ -328,19 +342,18 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
 
     def axes(self, idx: Idx2D[str], /) -> Axes:
         n_slices = sum(isinstance(i, slice) for i in idx)
-        ax = cast("Literal['obs', 'var']", self.ax[:-1])
-        return (ax,) * n_slices if n_slices > 1 else {ax}
+        return (self.ax,) * n_slices if n_slices > 1 else {self.ax}
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}[{self.k!r}]"
+        return f"A.{self.ax}p[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
     def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
-        df = cast("pd.DataFrame", getattr(adata, self.ax[:-1]))
+        df = cast("pd.DataFrame", getattr(adata, self.ax))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
-        return getattr(adata, self.ax)[self.k][iloc].toarray()
+        return getattr(adata, f"{self.ax}p")[self.k][iloc].toarray()
 
 
 @dataclass(frozen=True)
@@ -371,10 +384,10 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
         object.__setattr__(self, "layers", LayerAcc(path_class=self.path_class))
         object.__setattr__(self, "obs", MetaVecAcc("obs", path_class=self.path_class))
         object.__setattr__(self, "var", MetaVecAcc("var", path_class=self.path_class))
-        object.__setattr__(self, "obsm", MultiAcc("obsm", path_class=self.path_class))
-        object.__setattr__(self, "varm", MultiAcc("varm", path_class=self.path_class))
-        object.__setattr__(self, "obsp", GraphAcc("obsp", path_class=self.path_class))
-        object.__setattr__(self, "varp", GraphAcc("varp", path_class=self.path_class))
+        object.__setattr__(self, "obsm", MultiAcc("obs", path_class=self.path_class))
+        object.__setattr__(self, "varm", MultiAcc("var", path_class=self.path_class))
+        object.__setattr__(self, "obsp", GraphAcc("obs", path_class=self.path_class))
+        object.__setattr__(self, "varp", GraphAcc("var", path_class=self.path_class))
 
     @overload
     def resolve(self, spec: str, *, strict: Literal[True] = True) -> P: ...

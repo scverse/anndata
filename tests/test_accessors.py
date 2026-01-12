@@ -108,6 +108,36 @@ def test_axes(ad_path: AdPath, axes: Collection[Literal["obs", "var"]]) -> None:
 
 
 @pytest.mark.parametrize(
+    ("obj", "expected"),
+    [
+        pytest.param(A.layers["a"], "a", id="A.layers[]"),
+        *[pytest.param(o, "obs", id=str(o)) for o in [A.obs, A.obsm, A.obsp]],
+        *[pytest.param(v, "var", id=str(v)) for v in [A.var, A.varm, A.varp]],
+        *[pytest.param(o["b"], ("obs", "b"), id=f"{o}[]") for o in [A.obsm, A.obsp]],
+        *[pytest.param(v["c"], ("var", "c"), id=f"{v}[]") for v in [A.varm, A.varp]],
+        pytest.param(A.obs["d"], (A.obs, "d"), id="path"),
+    ],
+)
+def test_match(*, obj: object, expected: object) -> None:
+    from anndata import acc
+
+    match obj:
+        case (
+            acc.LayerVecAcc(arg)
+            | acc.MetaVecAcc(arg)
+            | acc.MultiAcc(arg)
+            | acc.GraphAcc(arg)
+        ):
+            assert len(type(obj).__match_args__) == 1
+            assert arg == expected
+        case acc.MultiVecAcc(a0, a1) | acc.GraphVecAcc(a0, a1) | acc.AdPath(a0, a1):
+            assert len(type(obj).__match_args__) == 2
+            assert (a0, a1) == expected
+        case _:
+            pytest.fail(f"unhandled case: {obj}")
+
+
+@pytest.mark.parametrize(
     "mk_path",
     [
         pytest.param(lambda: A[:3, :], id="x-partslice"),
@@ -171,7 +201,7 @@ def test_invalid(mk_path: Callable[[], AdPath]) -> None:
         ),
     ],
 )
-def test_special(expr: AdPath, expanded: object) -> None:
+def test_special(expr: object, expanded: object) -> None:
     """Some paths have shortcuts for convenience."""
     assert expr == expanded
 
