@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ["A", "AdDim"]
 
 
-def mk_label(p: AdPath, /) -> str | None:
+def mk_label[I](p: AdPath[I], /) -> str | None:
     match p.acc:
         case MultiVecAcc():
             return f"{p.acc.k} {p.idx}"

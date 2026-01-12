@@ -137,7 +137,7 @@ class LayerAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class LayerVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
+class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     """Accessor for layer vectors."""
 
     k: str | None
@@ -172,7 +172,7 @@ class LayerVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
 
 
 @dataclass(frozen=True)
-class MetaVecAcc[P: AdPath](VecAcc[P, str | type[pd.Index]]):
+class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]]):
     """Accessor for metadata (obs/var)."""
 
     ax: Literal["obs", "var"]
@@ -233,7 +233,7 @@ class MultiAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class MultiVecAcc[P: AdPath](VecAcc[P, int]):
+class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
     """Accessor for arrays from multi-dimensional containers (obsm/varm)."""
 
     ax: Literal["obsm", "varm"]
@@ -297,7 +297,7 @@ class GraphAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class GraphVecAcc[P: AdPath](VecAcc[P, "Idx2D[str]"]):
+class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     """Accessor for arrays from graph containers (obsp/varp)."""
 
     ax: Literal["obsp", "varp"]
