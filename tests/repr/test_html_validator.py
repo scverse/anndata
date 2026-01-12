@@ -222,10 +222,13 @@ class TestHTMLValidatorWithAnnData:
         v.assert_warning_indicator()
 
     def test_backed_badge(self, validate_html, tmp_path):
-        """Test backed badge is shown for backed AnnData."""
+        """Test backed badge is shown for backed AnnData with sparse X."""
+        from scipy import sparse
+
         import anndata as ad
 
-        adata = AnnData(np.zeros((10, 5)))
+        # Use sparse matrix to cover BackedSparseDatasetFormatter
+        adata = AnnData(sparse.random(100, 50, density=0.1, format="csr"))
         path = tmp_path / "test.h5ad"
         adata.write_h5ad(path)
 
@@ -234,6 +237,8 @@ class TestHTMLValidatorWithAnnData:
         v = validate_html(html)
 
         v.assert_badge_shown("backed")
+        # Verify sparse matrix is shown with "on disk" indicator
+        v.assert_text_visible("on disk")
         backed.file.close()
 
     def test_raw_section_visible(self, validate_html):
