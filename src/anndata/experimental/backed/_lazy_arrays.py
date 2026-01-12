@@ -20,6 +20,21 @@ from ...compat import (
     ZarrArray,
 )
 
+# Number of categories to show at head/tail in LazyCategoricalDtype repr
+_N_CATEGORIES_REPR_SHOW = 3
+
+
+def _same_disk_location(a: ZarrArray | H5Array, b: ZarrArray | H5Array) -> bool:
+    """Check if two arrays reference the same on-disk location."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, ZarrArray):
+        return a.store.path == b.store.path and a.path == b.path
+    if isinstance(a, H5Array):
+        return a.file.filename == b.file.filename and a.name == b.name
+    return False
+
+
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
@@ -175,10 +190,22 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         return self._get_categories_slice(n, from_end=True)
 
     def __repr__(self) -> str:
-        if "categories" in self.__dict__:
-            # Fully loaded - use standard repr
-            return f"CategoricalDtype(categories={self.categories!r}, ordered={self.ordered})"
-        return f"LazyCategoricalDtype(n_categories={self.n_categories}, ordered={self.ordered})"
+        n_total = self.n_categories
+        ordered_str = ", ordered=True" if self.ordered else ""
+
+        if n_total <= _N_CATEGORIES_REPR_SHOW * 2:
+            # Small enough to show all categories
+            if "categories" in self.__dict__:
+                cats = list(self.categories)
+            else:
+                cats = list(self.head_categories(n_total))
+            return f"LazyCategoricalDtype(categories={cats!r}{ordered_str})"
+
+        # Show truncated: first n ... last n
+        head = list(self.head_categories(_N_CATEGORIES_REPR_SHOW))
+        tail = list(self.tail_categories(_N_CATEGORIES_REPR_SHOW))
+        cats_display = head + ["..."] + tail
+        return f"LazyCategoricalDtype(categories={cats_display!r}, n={n_total}{ordered_str})"
 
     def __hash__(self) -> int:
         """Hash based on identity of underlying array and ordered flag.
@@ -189,22 +216,21 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
         return hash((id(self._categories_elem), self._ordered_flag))
 
     def __eq__(self, other) -> bool:
-        # Handle string comparison (e.g., dtype == "category")
-        if isinstance(other, str):
-            return other == self.name
         if isinstance(other, LazyCategoricalDtype):
-            return (
-                self._categories_elem is other._categories_elem
-                and self._ordered_flag == other._ordered_flag
-            )
-        if not isinstance(other, pd.CategoricalDtype):
-            return False
-        # Compare with regular CategoricalDtype - need to load categories
-        if self.ordered != other.ordered:
-            return False
-        if other.categories is None:
-            return False  # LazyCategoricalDtype always has categories
-        return self.categories.equals(other.categories)
+            if self._ordered_flag != other._ordered_flag:
+                return False
+            # Fast path: same Python object
+            if self._categories_elem is other._categories_elem:
+                return True
+            # Fast path: same on-disk location (avoids loading categories)
+            if _same_disk_location(
+                self._get_categories_array(), other._get_categories_array()
+            ):
+                return True
+        # Defer to pandas base implementation for all other comparisons
+        # This handles string comparison ("category"), CategoricalDtype comparisons,
+        # and all edge cases (None categories, ordered vs unordered, etc.)
+        return super().__eq__(other)
 
 
 class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrapper):

@@ -247,45 +247,80 @@ def test_chunks_df(
             assert arr.chunksize == expected_chunks
 
 
-def _write_categorical_zarr(tmp_path: Path, cat: pd.Categorical) -> zarr.Group:
-    """Helper to write categorical to zarr and return read-only store."""
-    store = zarr.open(tmp_path / "test.zarr", mode="w")
+# Session-scoped fixtures for categorical data (write once, read many)
+@pytest.fixture(scope="session")
+def cat_small_store(tmp_path_factory) -> zarr.Group:
+    """Session-scoped fixture: small categorical ['a', 'b', 'c']."""
+    cat = pd.Categorical(["a", "b", "c"])
+    path = tmp_path_factory.mktemp("cat_small.zarr")
+    store = zarr.open(path, mode="w")
     write_elem(store, "cat", cat)
-    return zarr.open(tmp_path / "test.zarr", mode="r")["cat"]
+    return zarr.open(path, mode="r")["cat"]
 
 
-def test_lazy_categorical_dtype_n_categories(tmp_path: Path):
+@pytest.fixture(scope="session")
+def cat_medium_store(tmp_path_factory) -> zarr.Group:
+    """Session-scoped fixture: medium categorical ['a', 'b', 'c', 'd', 'e']."""
+    cat = pd.Categorical(["a", "b", "c", "d", "e"])
+    path = tmp_path_factory.mktemp("cat_medium.zarr")
+    store = zarr.open(path, mode="w")
+    write_elem(store, "cat", cat)
+    return zarr.open(path, mode="r")["cat"]
+
+
+@pytest.fixture(scope="session")
+def cat_large_store(tmp_path_factory) -> zarr.Group:
+    """Session-scoped fixture: large categorical with 100 categories."""
+    categories = [f"cat_{i}" for i in range(100)]
+    cat = pd.Categorical(categories)
+    path = tmp_path_factory.mktemp("cat_large.zarr")
+    store = zarr.open(path, mode="w")
+    write_elem(store, "cat", cat)
+    return zarr.open(path, mode="r")["cat"]
+
+
+@pytest.fixture(scope="session")
+def cat_ordered_store(tmp_path_factory) -> zarr.Group:
+    """Session-scoped fixture: ordered categorical ['low', 'medium', 'high']."""
+    cat = pd.Categorical(
+        ["low", "medium", "high"] * 3 + ["low"],
+        categories=["low", "medium", "high"],
+        ordered=True,
+    )
+    path = tmp_path_factory.mktemp("cat_ordered.zarr")
+    store = zarr.open(path, mode="w")
+    write_elem(store, "cat", cat)
+    return zarr.open(path, mode="r")["cat"]
+
+
+@pytest.fixture(scope="session")
+def cat_fifty_store(tmp_path_factory) -> zarr.Group:
+    """Session-scoped fixture: 50 categories for head/tail testing."""
+    categories = [f"Type_{i:02d}" for i in range(50)]
+    cat = pd.Categorical(categories)
+    path = tmp_path_factory.mktemp("cat_fifty.zarr")
+    store = zarr.open(path, mode="w")
+    write_elem(store, "cat", cat)
+    return zarr.open(path, mode="r")["cat"]
+
+
+def test_lazy_categorical_dtype_n_categories(cat_large_store: zarr.Group):
     """Test LazyCategoricalDtype.n_categories is cheap (metadata only)."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    n_cats = 100
-    categories = [f"Cat_{i:03d}" for i in range(n_cats)]
-    cat = pd.Categorical(categories)
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    lazy_cat = read_elem_lazy(cat_large_store)
     dtype = lazy_cat.dtype
 
-    # dtype should be LazyCategoricalDtype
     assert isinstance(dtype, LazyCategoricalDtype)
-
-    # n_categories should work without loading all categories
-    assert dtype.n_categories == n_cats
-
-    # ordered should be accessible
+    assert dtype.n_categories == 100
     assert dtype.ordered is False
 
 
-def test_lazy_categorical_dtype_head_tail_categories(tmp_path: Path):
+def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store: zarr.Group):
     """Test LazyCategoricalDtype.head_categories and tail_categories for partial reads."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    n_cats = 50
-    categories = [f"Type_{i:02d}" for i in range(n_cats)]
-    cat = pd.Categorical(categories)
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    lazy_cat = read_elem_lazy(cat_fifty_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -311,23 +346,19 @@ def test_lazy_categorical_dtype_head_tail_categories(tmp_path: Path):
 
     # Test requesting more than available
     all_head = dtype.head_categories(100)
-    assert len(all_head) == n_cats
-    assert list(all_head) == categories
+    assert len(all_head) == 50
+    assert list(all_head) == [f"Type_{i:02d}" for i in range(50)]
 
     all_tail = dtype.tail_categories(100)
-    assert len(all_tail) == n_cats
-    assert list(all_tail) == categories
+    assert len(all_tail) == 50
+    assert list(all_tail) == [f"Type_{i:02d}" for i in range(50)]
 
 
-def test_lazy_categorical_dtype_categories_caching(tmp_path: Path):
+def test_lazy_categorical_dtype_categories_caching(cat_medium_store: zarr.Group):
     """Test that categories are cached after full load."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b", "c", "d", "e"]
-    cat = pd.Categorical(categories)
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    lazy_cat = read_elem_lazy(cat_medium_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -337,7 +368,7 @@ def test_lazy_categorical_dtype_categories_caching(tmp_path: Path):
     # Load categories
     cats = dtype.categories
     assert cats is not None
-    assert list(cats) == categories
+    assert list(cats) == ["a", "b", "c", "d", "e"]
 
     # After loading, should be cached in __dict__ (cached_property pattern)
     assert "categories" in dtype.__dict__
@@ -350,18 +381,11 @@ def test_lazy_categorical_dtype_categories_caching(tmp_path: Path):
     assert list(tail) == ["z", "w", "v"]  # Returns cached values, not disk values
 
 
-def test_lazy_categorical_dtype_ordered(tmp_path: Path):
+def test_lazy_categorical_dtype_ordered(cat_ordered_store: zarr.Group):
     """Test LazyCategoricalDtype with ordered categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    cat = pd.Categorical(
-        ["low", "medium", "high"] * 3 + ["low"],
-        categories=["low", "medium", "high"],
-        ordered=True,
-    )
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    lazy_cat = read_elem_lazy(cat_ordered_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -370,40 +394,41 @@ def test_lazy_categorical_dtype_ordered(tmp_path: Path):
     assert list(dtype.categories) == ["low", "medium", "high"]
 
 
-def test_lazy_categorical_dtype_repr(tmp_path: Path):
-    """Test LazyCategoricalDtype repr before and after loading."""
+def test_lazy_categorical_dtype_repr(
+    cat_large_store: zarr.Group, cat_small_store: zarr.Group
+):
+    """Test LazyCategoricalDtype repr shows truncated categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = [f"cat_{i}" for i in range(100)]
-    cat = pd.Categorical(categories)
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    # Test large number of categories (truncated repr)
+    lazy_cat = read_elem_lazy(cat_large_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
-    # Before loading: lazy repr
-    repr_before = repr(dtype)
-    assert "LazyCategoricalDtype" in repr_before
-    assert "n_categories=100" in repr_before
+    repr_str = repr(dtype)
+    assert "LazyCategoricalDtype" in repr_str
+    assert "n=100" in repr_str
+    assert "..." in repr_str  # Truncation indicator
+    assert "cat_0" in repr_str  # Head category
+    assert "cat_99" in repr_str  # Tail category
 
-    # Load categories
-    _ = dtype.categories
+    # Test small number of categories (full repr)
+    small_lazy_cat = read_elem_lazy(cat_small_store)
+    small_dtype = small_lazy_cat.dtype
 
-    # After loading: standard CategoricalDtype repr
-    repr_after = repr(dtype)
-    assert "CategoricalDtype" in repr_after
+    small_repr = repr(small_dtype)
+    assert "LazyCategoricalDtype" in small_repr
+    assert "..." not in small_repr  # No truncation for small categories
+    assert "'a'" in small_repr
+    assert "'b'" in small_repr
+    assert "'c'" in small_repr
 
 
-def test_lazy_categorical_dtype_equality(tmp_path: Path):
+def test_lazy_categorical_dtype_equality(cat_small_store: zarr.Group):
     """Test LazyCategoricalDtype equality comparisons."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b", "c"]
-    cat = pd.Categorical(categories)
-
-    cat_group = _write_categorical_zarr(tmp_path, cat)
-    lazy_cat = read_elem_lazy(cat_group)
+    lazy_cat = read_elem_lazy(cat_small_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -473,18 +498,11 @@ def test_lazy_categorical_roundtrip_via_anndata(tmp_path: Path):
     assert loaded.obs["ordered_cat"].equals(adata.obs["ordered_cat"])
 
 
-def test_lazy_categorical_dtype_hash(tmp_path: Path):
+def test_lazy_categorical_dtype_hash(cat_small_store: zarr.Group):
     """Test LazyCategoricalDtype is hashable."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b", "c"]
-    cat = pd.Categorical(categories)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="w")
-    write_elem(store, "cat", cat)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="r")
-    lazy_cat = read_elem_lazy(store["cat"])
+    lazy_cat = read_elem_lazy(cat_small_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -497,18 +515,11 @@ def test_lazy_categorical_dtype_hash(tmp_path: Path):
     assert dtype in s
 
 
-def test_lazy_categorical_dtype_n_categories_from_cache(tmp_path: Path):
+def test_lazy_categorical_dtype_n_categories_from_cache(cat_medium_store: zarr.Group):
     """Test n_categories returns from cache when categories already loaded."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b", "c", "d", "e"]
-    cat = pd.Categorical(categories)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="w")
-    write_elem(store, "cat", cat)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="r")
-    lazy_cat = read_elem_lazy(store["cat"])
+    lazy_cat = read_elem_lazy(cat_medium_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -521,18 +532,11 @@ def test_lazy_categorical_dtype_n_categories_from_cache(tmp_path: Path):
     assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
-def test_lazy_categorical_dtype_name(tmp_path: Path):
+def test_lazy_categorical_dtype_name(cat_small_store: zarr.Group):
     """Test LazyCategoricalDtype.name property (inherited from CategoricalDtype)."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b"]
-    cat = pd.Categorical(categories)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="w")
-    write_elem(store, "cat", cat)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="r")
-    lazy_cat = read_elem_lazy(store["cat"])
+    lazy_cat = read_elem_lazy(cat_small_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -540,18 +544,13 @@ def test_lazy_categorical_dtype_name(tmp_path: Path):
     assert dtype.name == "category"
 
 
-def test_lazy_categorical_dtype_inequality_with_none_categories(tmp_path: Path):
+def test_lazy_categorical_dtype_inequality_with_none_categories(
+    cat_small_store: zarr.Group,
+):
     """Test LazyCategoricalDtype is not equal to CategoricalDtype with None categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    categories = ["a", "b"]
-    cat = pd.Categorical(categories)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="w")
-    write_elem(store, "cat", cat)
-
-    store = zarr.open(tmp_path / "test.zarr", mode="r")
-    lazy_cat = read_elem_lazy(store["cat"])
+    lazy_cat = read_elem_lazy(cat_small_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
