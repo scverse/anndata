@@ -537,10 +537,5 @@ def _resolve_idx_index_manager(
         old_arr = old.get_for_array(new)
         return IndexManager.from_array(_resolve_idx(old_arr, new, l))
 
-    old_np = np.asarray(old)
-    resolved = _resolve_idx_ndarray(old_np, new, l)
-    return (
-        IndexManager.from_array(resolved)
-        if isinstance(resolved, np.ndarray)
-        else resolved
-    )
+    resolved = _resolve_idx_ndarray(old.get_default(), new, l)
+    return IndexManager.from_array(resolved) if has_xp(resolved) else resolved

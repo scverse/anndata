@@ -217,7 +217,7 @@ class IndexManager:
     @classmethod
     def from_array(cls, arr: SupportsArrayApi):
         """Create an IndexManager from an array-api compatible array."""
-        return cls(device=arr.device, arr=arr)
+        return cls(device=arr.__dlpack_device__(), arr=arr)
 
     def __array__(
         self,
@@ -225,13 +225,12 @@ class IndexManager:
         copy: bool | None = None,  # noqa: FBT001
     ) -> np.ndarray:
         """Return numpy array for compatibility with numpy/pandas/sparse operations."""
-        if "cpu" not in self:
-            arr = self._manager[next(iter(self.keys()))]
-            if "cpu" in arr.__array_namespace__().__array_namespace_info__().devices():
-                self._manager["cpu"] = np.from_dlpack(arr.to_device("cpu"))
-            else:
-                self._manager["cpu"] = np.asarray(arr)
-        res = np.from_dlpack(self._manager["cpu"])
+        if (1, 0) not in self._manager:
+            # (1, 0) is the default python interpreter key from __dlpack_device__ i.e., where numpy arrays live.
+            # As of 2023 dlpack, it must be possible for a library to export to this, see: https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html#array_api.array.__dlpack__
+            # However, https://github.com/numpy/numpy/issues/20742 means we can't roundtrip jax arrays using dlpack so better to just let numpy do its thing in asarray.
+            self.add_array(np.asarray(self.get_default()))
+        res = np.from_dlpack(self._manager[(1, 0)])
         return res.copy() if copy else res
 
     def __contains__(self, device: str) -> bool:
@@ -249,16 +248,12 @@ class IndexManager:
     @property
     def dtype(self):
         """Return the dtype of the index array."""
-        arr = self._manager[next(iter(self._manager))]
+        arr = self.get_default()
         return arr.dtype
 
     def add_array(self, arr: SupportsArrayApi):
         """Add an index array for a specific device."""
-        self._manager[arr.device] = arr
-
-    def get_array_with_device(self, device: str) -> SupportsArrayApi:
-        """Get the index array for a specific device."""
-        return self._manager[device]
+        self._manager[arr.__dlpack_device__()] = arr
 
     def get_for_array(self, arr: SupportsArrayApi) -> SupportsArrayApi:
         """Get an index array on the same device as the input array.
@@ -269,7 +264,7 @@ class IndexManager:
         be converted to match the input array's array-api if possible.
         Otherwise, the input is cached and returned.
         """
-        device = arr.device
+        device = arr.__dlpack_device__()
         xp = arr.__array_namespace__()
         src_arr = self._manager[next(iter(self._manager))]
 
@@ -278,13 +273,8 @@ class IndexManager:
             existing_xp = existing.__array_namespace__()
             if existing_xp is xp:
                 return existing
-            return xp.from_dlpack(existing, device=device)
-        for v in self._manager.values():
-            # the incoming array's device is present in one of the exisisting devices cached here, so dlpack from that
-            if device in v.__array_namespace__().__array_namespace_info__().devices():
-                self._manager[device] = xp.from_dlpack(src_arr.to_device(device))
-                return self._manager[device]
-        self._manager[device] = xp.asarray(self.get_default(), device=device)
+            return xp.from_dlpack(existing)
+        self.add_array(xp.from_dlpack(src_arr, copy=True))
         return self._manager[device]
 
 
