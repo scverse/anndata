@@ -102,6 +102,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
             if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
+            return indexer_int
         if (
             is_pandas
             and (
@@ -226,21 +227,16 @@ class IndexManager:
         """Return numpy array for compatibility with numpy/pandas/sparse operations."""
         if "cpu" not in self:
             arr = self._manager[next(iter(self.keys()))]
-            self._manager["cpu"] = np.from_dlpack(arr.to_device("cpu"))
+            if "cpu" in arr.__array_namespace__().__array_namespace_info__().devices():
+                self._manager["cpu"] = np.from_dlpack(arr.to_device("cpu"))
+            else:
+                self._manager["cpu"] = np.asarray(arr)
         res = np.from_dlpack(self._manager["cpu"])
         return res.copy() if copy else res
 
     def __contains__(self, device: str) -> bool:
         """Check if an index array exists for the given device."""
         return device in self._manager
-
-    def __len__(self) -> int:
-        """Return the length of the index array."""
-        return self.get_default().shape[0]
-
-    def __iter__(self):
-        """Iterate over the index values (as numpy for compatibility)."""
-        return iter(np.asarray(self))
 
     def keys(self):
         """Return the devices for which index arrays are available."""
@@ -268,25 +264,27 @@ class IndexManager:
         """Get an index array on the same device as the input array.
 
         If an index doesn't exist for the array's device, it will be
-        created by transferring from an existing device. If an index
+        created by transferring from an existing device if possible. If an index
         exists but has a different array-api implementation, it will
-        be converted to match the input array's array-api.
+        be converted to match the input array's array-api if possible.
+        Otherwise, the input is cached and returned.
         """
         device = arr.device
         xp = arr.__array_namespace__()
+        src_arr = self._manager[next(iter(self._manager))]
 
         if device in self._manager:
             existing = self._manager[device]
             existing_xp = existing.__array_namespace__()
-            # Check if array-api implementations match
             if existing_xp is xp:
                 return existing
-            # Convert to matching array-api implementation
             return xp.from_dlpack(existing, device=device)
-
-        # Transfer from an existing device
-        src_arr = self._manager[next(iter(self._manager))]
-        self._manager[device] = xp.from_dlpack(src_arr.to_device(device))
+        for v in self._manager.values():
+            # the incoming array's device is present in one of the exisisting devices cached here, so dlpack from that
+            if device in v.__array_namespace__().__array_namespace_info__().devices():
+                self._manager[device] = xp.from_dlpack(src_arr.to_device(device))
+                return self._manager[device]
+        self._manager[device] = xp.asarray(self.get_default(), device=device)
         return self._manager[device]
 
 
@@ -332,20 +330,7 @@ def _prepare_array_api_idx(
             # Convert numpy/list to array-api array on the target device
             return xp.asarray(idx, device=a.device)
 
-    processed = tuple(get_idx(idx) for idx in subset_idx)
-
-    # Implement np.ix_-like behavior for 2D indexing
-    if len(processed) == 2 and all(not isinstance(x, slice) for x in processed):
-        # For 2D fancy indexing, we need to reshape indices
-        # np.ix_ produces (n,1) and (1,m) shaped arrays for coordinate indexing
-        row_idx, col_idx = processed
-        # Use outer indexing pattern: first index rows, then index columns
-        # This is equivalent to a[row_idx][:, col_idx] but in one operation
-        row_idx = xp.reshape(row_idx, (-1, 1))
-        col_idx = xp.reshape(col_idx, (1, -1))
-        return (row_idx, col_idx)
-
-    return processed
+    return tuple(get_idx(idx) for idx in subset_idx)
 
 
 @singledispatch
@@ -363,7 +348,7 @@ def _subset(
     if has_xp(a) and not isinstance(a, np.ndarray):
         # Use array-api aware indexing
         subset_idx = _prepare_array_api_idx(a, subset_idx)
-        return a[subset_idx]
+        return a[subset_idx[0], :][:, subset_idx[1]]
 
     # For numpy arrays and other types, ensure we have numpy indices
     subset_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)

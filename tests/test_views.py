@@ -1032,14 +1032,3 @@ def test_double_index_jax(*, to_bool: bool):
         v2 = adata[subset1, :][subset2, :]
 
     assert_equal(v1, v2)
-
-
-@pytest.mark.array_api
-def test_array_api_index_err():
-    # Generate AnnData with JAX-backed arrays
-    adata = gen_adata((10, 10), X_type=jnp.array)
-    subset = [0, 1, 3, 4]
-    with pytest.raises(
-        RuntimeError, match=r"Cannot resolve indices when the old indexer"
-    ):
-        adata[jnp.array([0, 1, 2, 3, 4, 5]), :][np.array(subset), :]

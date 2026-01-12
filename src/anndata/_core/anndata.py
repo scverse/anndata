@@ -321,10 +321,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         # views on attributes of adata_ref
         var_sub = adata_ref.var.iloc[
-            np.array(vidx) if isinstance(vidx, IndexManager) else vidx
+            np.array(self._vidx) if isinstance(self._vidx, IndexManager) else self._vidx
         ]
         obs_sub = adata_ref.obs.iloc[
-            np.array(oidx) if isinstance(oidx, IndexManager) else oidx
+            np.array(self._oidx) if isinstance(self._oidx, IndexManager) else self._oidx
         ]
         # fix categories
         uns = copy(adata_ref._uns)
