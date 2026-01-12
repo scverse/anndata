@@ -158,7 +158,7 @@ def test_view_subset_shapes():
     adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
     view = adata[:, ::2]
-    assert view.var.shape == (5, 8)
+    assert view.var.shape == (5, adata.var.shape[1])
     assert {k: v.shape[0] for k, v in view.varm.items()} == dict.fromkeys(view.varm, 5)
 
 
