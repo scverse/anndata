@@ -626,16 +626,17 @@ class LazyColumnFormatter(TypeFormatter):
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         dtype_str = str(obj.dtype)
+        dtype_lower = dtype_str.lower()
 
         # Map common dtypes to CSS classes
-        if "int" in dtype_str:
+        if "int" in dtype_lower:
             css_class = CSS_DTYPE_INT
-        elif "float" in dtype_str:
+        elif "float" in dtype_lower:
             css_class = CSS_DTYPE_FLOAT
-        elif "bool" in dtype_str:
+        elif "bool" in dtype_lower:
             css_class = CSS_DTYPE_BOOL
-        elif "str" in dtype_str or dtype_str == "object":
-            css_class = CSS_DTYPE_OBJECT
+        elif "str" in dtype_lower or dtype_lower == "object":
+            css_class = CSS_DTYPE_STRING
         else:
             css_class = CSS_DTYPE_UNKNOWN
 

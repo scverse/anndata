@@ -384,6 +384,71 @@ class TestLazyCategoryLoading:
             assert "#ff0000" not in html_metadata
             assert "(2 categories)" in html_metadata
 
+    @pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+    def test_lazy_non_categorical_columns_repr(self, tmp_path):
+        """Test that non-categorical lazy columns display correctly in repr.
+
+        This exercises the LazyColumnFormatter which handles int, float, and
+        string columns in lazy AnnData (as opposed to CategoricalFormatter
+        which handles categorical columns).
+        """
+        import h5py
+
+        from anndata._repr_constants import (
+            CSS_DTYPE_BOOL,
+            CSS_DTYPE_CATEGORY,
+            CSS_DTYPE_FLOAT,
+            CSS_DTYPE_INT,
+            CSS_DTYPE_STRING,
+        )
+        from anndata.experimental import read_lazy
+
+        adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+        # Add various non-categorical column types
+        adata.obs["int_col"] = np.arange(50)
+        adata.obs["float_col"] = np.random.randn(50)
+        adata.obs["bool_col"] = np.array([True, False] * 25)
+        adata.obs["str_col"] = [f"cell_{i}" for i in range(50)]
+        # Also add a categorical for comparison
+        adata.obs["cat_col"] = pd.Categorical(["A", "B"] * 25)
+
+        path = tmp_path / "test.h5ad"
+        adata.write_h5ad(path)
+
+        with h5py.File(path, "r") as f:
+            lazy_adata = read_lazy(f)
+            html = lazy_adata._repr_html_()
+
+            # All column names should appear
+            assert "int_col" in html
+            assert "float_col" in html
+            assert "bool_col" in html
+            assert "str_col" in html
+            assert "cat_col" in html
+
+            # Non-categorical columns should show "(lazy)" indicator
+            assert "(lazy)" in html
+
+            # Categorical column should show category info, not "(lazy)"
+            assert "category" in html
+
+            # Check that dtype info is shown for lazy columns
+            assert "int64" in html or "int32" in html
+            assert "float64" in html
+            assert "bool" in html
+
+            # Verify correct CSS classes are applied for each dtype
+            # This catches bugs like case-sensitive dtype matching
+            assert CSS_DTYPE_INT in html, "int column should have int CSS class"
+            assert CSS_DTYPE_FLOAT in html, "float column should have float CSS class"
+            assert CSS_DTYPE_BOOL in html, "bool column should have bool CSS class"
+            assert CSS_DTYPE_STRING in html, (
+                "string column should have string CSS class"
+            )
+            assert CSS_DTYPE_CATEGORY in html, (
+                "categorical column should have category CSS class"
+            )
+
 
 class TestIsLazyColumn:
     """Tests for is_lazy_column detection."""
