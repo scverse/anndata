@@ -249,13 +249,19 @@ def test_chunks_df(
 
 # Session-scoped fixtures for categorical data (write once, read many)
 @pytest.fixture(scope="session")
-def cat_small_store(tmp_path_factory) -> zarr.Group:
-    """Session-scoped fixture: small categorical ['a', 'b', 'c']."""
+def cat_small_path(tmp_path_factory) -> Path:
+    """Session-scoped fixture: path to small categorical ['a', 'b', 'c']."""
     cat = pd.Categorical(["a", "b", "c"])
     path = tmp_path_factory.mktemp("cat_small.zarr")
     store = zarr.open(path, mode="w")
     write_elem(store, "cat", cat)
-    return zarr.open(path, mode="r")["cat"]
+    return path
+
+
+@pytest.fixture(scope="session")
+def cat_small_store(cat_small_path: Path) -> zarr.Group:
+    """Session-scoped fixture: small categorical ['a', 'b', 'c']."""
+    return zarr.open(cat_small_path, mode="r")["cat"]
 
 
 @pytest.fixture(scope="session")
@@ -424,7 +430,9 @@ def test_lazy_categorical_dtype_repr(
     assert "'c'" in small_repr
 
 
-def test_lazy_categorical_dtype_equality(cat_small_store: zarr.Group):
+def test_lazy_categorical_dtype_equality(
+    cat_small_store: zarr.Group, cat_small_path: Path
+):
     """Test LazyCategoricalDtype equality comparisons."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -452,6 +460,20 @@ def test_lazy_categorical_dtype_equality(cat_small_store: zarr.Group):
     assert dtype != np.dtype("int64")
     assert dtype != 123
     assert dtype is not None
+
+    # Test same-location equality (file opened twice, different Python objects)
+    # Use fresh reads to ensure categories aren't cached
+    store_fresh1 = zarr.open(cat_small_path, mode="r")["cat"]
+    store_fresh2 = zarr.open(cat_small_path, mode="r")["cat"]
+    dtype_fresh1 = read_elem_lazy(store_fresh1).dtype
+    dtype_fresh2 = read_elem_lazy(store_fresh2).dtype
+
+    assert dtype_fresh1._categories_elem is not dtype_fresh2._categories_elem
+    assert "categories" not in dtype_fresh1.__dict__  # Not yet loaded
+    assert "categories" not in dtype_fresh2.__dict__
+    assert dtype_fresh1 == dtype_fresh2  # Equal via location check
+    assert "categories" not in dtype_fresh1.__dict__  # Still not loaded
+    assert "categories" not in dtype_fresh2.__dict__
 
 
 def test_lazy_categorical_roundtrip_via_anndata(tmp_path: Path):
