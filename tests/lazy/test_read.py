@@ -250,86 +250,171 @@ def test_chunks_df(
 
 
 # Session-scoped fixtures for categorical data (write once, read many)
-@pytest.fixture(scope="session")
-def cat_small_path_zarr(tmp_path_factory) -> Path:
-    """Session-scoped fixture: path to small categorical ['a', 'b', 'c'] in zarr."""
-    cat = pd.Categorical(["a", "b", "c"])
-    path = tmp_path_factory.mktemp("cat_small.zarr")
+# Each category type has zarr and h5ad path fixtures, plus a parametrized store fixture
+
+
+def _write_categorical_zarr(tmp_path_factory, name: str, cat: pd.Categorical) -> Path:
+    """Helper to write categorical to zarr and return path."""
+    path = tmp_path_factory.mktemp(f"{name}.zarr")
     store = zarr.open(path, mode="w")
     write_elem(store, "cat", cat)
     return path
 
 
-@pytest.fixture(scope="session")
-def cat_small_path_h5ad(tmp_path_factory) -> Path:
-    """Session-scoped fixture: path to small categorical ['a', 'b', 'c'] in h5ad."""
-    cat = pd.Categorical(["a", "b", "c"])
-    path = tmp_path_factory.mktemp("cat_small") / "cat.h5ad"
+def _write_categorical_h5ad(tmp_path_factory, name: str, cat: pd.Categorical) -> Path:
+    """Helper to write categorical to h5ad and return path."""
+    path = tmp_path_factory.mktemp(name) / "cat.h5ad"
     with h5py.File(path, mode="w") as f:
         write_elem(f, "cat", cat)
     return path
 
 
-# Backward compatibility alias
+def _open_categorical_store(path: Path, backend: str):
+    """Helper to open categorical store for either backend."""
+    if backend == "zarr":
+        return zarr.open(path, mode="r")["cat"]
+    else:
+        return h5py.File(path, mode="r")["cat"]
+
+
+# Small categorical ['a', 'b', 'c']
 @pytest.fixture(scope="session")
-def cat_small_path(cat_small_path_zarr: Path) -> Path:
-    """Alias for cat_small_path_zarr for backward compatibility."""
-    return cat_small_path_zarr
-
-
-@pytest.fixture(scope="session")
-def cat_small_store(cat_small_path: Path) -> zarr.Group:
-    """Session-scoped fixture: small categorical ['a', 'b', 'c']."""
-    return zarr.open(cat_small_path, mode="r")["cat"]
-
-
-@pytest.fixture(scope="session")
-def cat_medium_store(tmp_path_factory) -> zarr.Group:
-    """Session-scoped fixture: medium categorical ['a', 'b', 'c', 'd', 'e']."""
-    cat = pd.Categorical(["a", "b", "c", "d", "e"])
-    path = tmp_path_factory.mktemp("cat_medium.zarr")
-    store = zarr.open(path, mode="w")
-    write_elem(store, "cat", cat)
-    return zarr.open(path, mode="r")["cat"]
+def cat_small_path_zarr(tmp_path_factory) -> Path:
+    return _write_categorical_zarr(
+        tmp_path_factory, "cat_small", pd.Categorical(["a", "b", "c"])
+    )
 
 
 @pytest.fixture(scope="session")
-def cat_large_store(tmp_path_factory) -> zarr.Group:
-    """Session-scoped fixture: large categorical with 100 categories."""
+def cat_small_path_h5ad(tmp_path_factory) -> Path:
+    return _write_categorical_h5ad(
+        tmp_path_factory, "cat_small", pd.Categorical(["a", "b", "c"])
+    )
+
+
+@pytest.fixture(params=["zarr", "h5ad"])
+def cat_small_store(request, cat_small_path_zarr: Path, cat_small_path_h5ad: Path):
+    """Parametrized fixture: small categorical ['a', 'b', 'c'] for both backends."""
+    path = cat_small_path_zarr if request.param == "zarr" else cat_small_path_h5ad
+    store = _open_categorical_store(path, request.param)
+    yield store
+    if request.param == "h5ad":
+        store.file.close()
+
+
+# Medium categorical ['a', 'b', 'c', 'd', 'e']
+@pytest.fixture(scope="session")
+def cat_medium_path_zarr(tmp_path_factory) -> Path:
+    return _write_categorical_zarr(
+        tmp_path_factory, "cat_medium", pd.Categorical(["a", "b", "c", "d", "e"])
+    )
+
+
+@pytest.fixture(scope="session")
+def cat_medium_path_h5ad(tmp_path_factory) -> Path:
+    return _write_categorical_h5ad(
+        tmp_path_factory, "cat_medium", pd.Categorical(["a", "b", "c", "d", "e"])
+    )
+
+
+@pytest.fixture(params=["zarr", "h5ad"])
+def cat_medium_store(request, cat_medium_path_zarr: Path, cat_medium_path_h5ad: Path):
+    """Parametrized fixture: medium categorical for both backends."""
+    path = cat_medium_path_zarr if request.param == "zarr" else cat_medium_path_h5ad
+    store = _open_categorical_store(path, request.param)
+    yield store
+    if request.param == "h5ad":
+        store.file.close()
+
+
+# Large categorical with 100 categories
+@pytest.fixture(scope="session")
+def cat_large_path_zarr(tmp_path_factory) -> Path:
     categories = [f"cat_{i}" for i in range(100)]
-    cat = pd.Categorical(categories)
-    path = tmp_path_factory.mktemp("cat_large.zarr")
-    store = zarr.open(path, mode="w")
-    write_elem(store, "cat", cat)
-    return zarr.open(path, mode="r")["cat"]
+    return _write_categorical_zarr(
+        tmp_path_factory, "cat_large", pd.Categorical(categories)
+    )
 
 
 @pytest.fixture(scope="session")
-def cat_ordered_store(tmp_path_factory) -> zarr.Group:
-    """Session-scoped fixture: ordered categorical ['low', 'medium', 'high']."""
+def cat_large_path_h5ad(tmp_path_factory) -> Path:
+    categories = [f"cat_{i}" for i in range(100)]
+    return _write_categorical_h5ad(
+        tmp_path_factory, "cat_large", pd.Categorical(categories)
+    )
+
+
+@pytest.fixture(params=["zarr", "h5ad"])
+def cat_large_store(request, cat_large_path_zarr: Path, cat_large_path_h5ad: Path):
+    """Parametrized fixture: large categorical (100 categories) for both backends."""
+    path = cat_large_path_zarr if request.param == "zarr" else cat_large_path_h5ad
+    store = _open_categorical_store(path, request.param)
+    yield store
+    if request.param == "h5ad":
+        store.file.close()
+
+
+# Ordered categorical ['low', 'medium', 'high']
+@pytest.fixture(scope="session")
+def cat_ordered_path_zarr(tmp_path_factory) -> Path:
     cat = pd.Categorical(
         ["low", "medium", "high"] * 3 + ["low"],
         categories=["low", "medium", "high"],
         ordered=True,
     )
-    path = tmp_path_factory.mktemp("cat_ordered.zarr")
-    store = zarr.open(path, mode="w")
-    write_elem(store, "cat", cat)
-    return zarr.open(path, mode="r")["cat"]
+    return _write_categorical_zarr(tmp_path_factory, "cat_ordered", cat)
 
 
 @pytest.fixture(scope="session")
-def cat_fifty_store(tmp_path_factory) -> zarr.Group:
-    """Session-scoped fixture: 50 categories for head/tail testing."""
+def cat_ordered_path_h5ad(tmp_path_factory) -> Path:
+    cat = pd.Categorical(
+        ["low", "medium", "high"] * 3 + ["low"],
+        categories=["low", "medium", "high"],
+        ordered=True,
+    )
+    return _write_categorical_h5ad(tmp_path_factory, "cat_ordered", cat)
+
+
+@pytest.fixture(params=["zarr", "h5ad"])
+def cat_ordered_store(
+    request, cat_ordered_path_zarr: Path, cat_ordered_path_h5ad: Path
+):
+    """Parametrized fixture: ordered categorical for both backends."""
+    path = cat_ordered_path_zarr if request.param == "zarr" else cat_ordered_path_h5ad
+    store = _open_categorical_store(path, request.param)
+    yield store
+    if request.param == "h5ad":
+        store.file.close()
+
+
+# 50 categories for head/tail testing
+@pytest.fixture(scope="session")
+def cat_fifty_path_zarr(tmp_path_factory) -> Path:
     categories = [f"Type_{i:02d}" for i in range(50)]
-    cat = pd.Categorical(categories)
-    path = tmp_path_factory.mktemp("cat_fifty.zarr")
-    store = zarr.open(path, mode="w")
-    write_elem(store, "cat", cat)
-    return zarr.open(path, mode="r")["cat"]
+    return _write_categorical_zarr(
+        tmp_path_factory, "cat_fifty", pd.Categorical(categories)
+    )
 
 
-def test_lazy_categorical_dtype_n_categories(cat_large_store: zarr.Group):
+@pytest.fixture(scope="session")
+def cat_fifty_path_h5ad(tmp_path_factory) -> Path:
+    categories = [f"Type_{i:02d}" for i in range(50)]
+    return _write_categorical_h5ad(
+        tmp_path_factory, "cat_fifty", pd.Categorical(categories)
+    )
+
+
+@pytest.fixture(params=["zarr", "h5ad"])
+def cat_fifty_store(request, cat_fifty_path_zarr: Path, cat_fifty_path_h5ad: Path):
+    """Parametrized fixture: 50 categories for head/tail testing, both backends."""
+    path = cat_fifty_path_zarr if request.param == "zarr" else cat_fifty_path_h5ad
+    store = _open_categorical_store(path, request.param)
+    yield store
+    if request.param == "h5ad":
+        store.file.close()
+
+
+def test_lazy_categorical_dtype_n_categories(cat_large_store):
     """Test LazyCategoricalDtype.n_categories is cheap (metadata only)."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -341,7 +426,7 @@ def test_lazy_categorical_dtype_n_categories(cat_large_store: zarr.Group):
     assert dtype.ordered is False
 
 
-def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store: zarr.Group):
+def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store):
     """Test LazyCategoricalDtype.head_categories and tail_categories for partial reads."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -379,7 +464,7 @@ def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store: zarr.Group
     assert list(all_tail) == [f"Type_{i:02d}" for i in range(50)]
 
 
-def test_lazy_categorical_dtype_categories_caching(cat_medium_store: zarr.Group):
+def test_lazy_categorical_dtype_categories_caching(cat_medium_store):
     """Test that categories are cached after full load."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -406,7 +491,7 @@ def test_lazy_categorical_dtype_categories_caching(cat_medium_store: zarr.Group)
     assert list(tail) == ["z", "w", "v"]  # Returns cached values, not disk values
 
 
-def test_lazy_categorical_dtype_ordered(cat_ordered_store: zarr.Group):
+def test_lazy_categorical_dtype_ordered(cat_ordered_store):
     """Test LazyCategoricalDtype with ordered categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -419,9 +504,7 @@ def test_lazy_categorical_dtype_ordered(cat_ordered_store: zarr.Group):
     assert list(dtype.categories) == ["low", "medium", "high"]
 
 
-def test_lazy_categorical_dtype_repr(
-    cat_large_store: zarr.Group, cat_small_store: zarr.Group
-):
+def test_lazy_categorical_dtype_repr(cat_large_store, cat_small_store):
     """Test LazyCategoricalDtype repr shows truncated categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -449,7 +532,7 @@ def test_lazy_categorical_dtype_repr(
     assert "'c'" in small_repr
 
 
-def test_lazy_categorical_dtype_equality(cat_small_store: zarr.Group):
+def test_lazy_categorical_dtype_equality(cat_small_store):
     """Test LazyCategoricalDtype equality comparisons."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -586,7 +669,7 @@ def test_lazy_categorical_roundtrip_via_anndata(tmp_path: Path):
     assert loaded.obs["ordered_cat"].equals(adata.obs["ordered_cat"])
 
 
-def test_lazy_categorical_dtype_hash(cat_small_store: zarr.Group):
+def test_lazy_categorical_dtype_hash(cat_small_store):
     """Test LazyCategoricalDtype is hashable."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -603,7 +686,7 @@ def test_lazy_categorical_dtype_hash(cat_small_store: zarr.Group):
     assert dtype in s
 
 
-def test_lazy_categorical_dtype_n_categories_from_cache(cat_medium_store: zarr.Group):
+def test_lazy_categorical_dtype_n_categories_from_cache(cat_medium_store):
     """Test n_categories returns from cache when categories already loaded."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -620,7 +703,7 @@ def test_lazy_categorical_dtype_n_categories_from_cache(cat_medium_store: zarr.G
     assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
-def test_lazy_categorical_dtype_name(cat_small_store: zarr.Group):
+def test_lazy_categorical_dtype_name(cat_small_store):
     """Test LazyCategoricalDtype.name property (inherited from CategoricalDtype)."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -633,7 +716,7 @@ def test_lazy_categorical_dtype_name(cat_small_store: zarr.Group):
 
 
 def test_lazy_categorical_dtype_inequality_with_none_categories(
-    cat_small_store: zarr.Group,
+    cat_small_store,
 ):
     """Test LazyCategoricalDtype is not equal to CategoricalDtype with None categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
