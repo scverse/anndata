@@ -415,44 +415,63 @@ def cat_fifty_store(request, cat_fifty_path_zarr: Path, cat_fifty_path_h5ad: Pat
 
 
 def test_lazy_categorical_dtype_n_categories(cat_large_store):
-    """Test LazyCategoricalDtype.n_categories is cheap (metadata only)."""
+    """Test n_categories is cheap (metadata only) and uses cache when loaded."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     lazy_cat = read_elem_lazy(cat_large_store)
     dtype = lazy_cat.dtype
-
     assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Before loading: n_categories should work without loading categories
+    assert "categories" not in dtype.__dict__
     assert dtype.n_categories == 100
+    assert "categories" not in dtype.__dict__  # Still not loaded - proves metadata-only
     assert dtype.ordered is False
+
+    # After loading: n_categories should use cache
+    _ = dtype.categories  # Force load
+    assert "categories" in dtype.__dict__
+    assert dtype.n_categories == 100  # Uses cache now
+
+    # Verify cache is used by modifying cached value
+    dtype.__dict__["categories"] = pd.Index(["x", "y", "z"])
+    assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
 def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store):
-    """Test LazyCategoricalDtype.head_categories and tail_categories for partial reads."""
+    """Test head_categories and tail_categories perform partial reads without loading all."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     lazy_cat = read_elem_lazy(cat_fifty_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
-    # Test head_categories (first n)
+    # Verify categories not loaded initially
+    assert "categories" not in dtype.__dict__
+
+    # Test head_categories (first n) - should NOT load all categories
     first5 = dtype.head_categories(5)
     assert len(first5) == 5
     assert list(first5) == [f"Type_{i:02d}" for i in range(5)]
+    assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test head_categories default (first 5)
     default_head = dtype.head_categories()
     assert len(default_head) == 5
     assert list(default_head) == [f"Type_{i:02d}" for i in range(5)]
+    assert "categories" not in dtype.__dict__  # Still not fully loaded
 
-    # Test tail_categories (last n)
+    # Test tail_categories (last n) - should NOT load all categories
     last3 = dtype.tail_categories(3)
     assert len(last3) == 3
     assert list(last3) == [f"Type_{i:02d}" for i in range(47, 50)]
+    assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test tail_categories default (last 5)
     default_tail = dtype.tail_categories()
     assert len(default_tail) == 5
     assert list(default_tail) == [f"Type_{i:02d}" for i in range(45, 50)]
+    assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test requesting more than available
     all_head = dtype.head_categories(100)
@@ -533,12 +552,15 @@ def test_lazy_categorical_dtype_repr(cat_large_store, cat_small_store):
 
 
 def test_lazy_categorical_dtype_equality(cat_small_store):
-    """Test LazyCategoricalDtype equality comparisons."""
+    """Test LazyCategoricalDtype equality comparisons and basic properties."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     lazy_cat = read_elem_lazy(cat_small_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
+
+    # Test name property (inherited from CategoricalDtype)
+    assert dtype.name == "category"
 
     # Test string comparison (dtype == "category")
     assert dtype == "category"
@@ -555,6 +577,11 @@ def test_lazy_categorical_dtype_equality(cat_small_store):
     # Test comparison with different ordered flag
     ordered_dtype = pd.CategoricalDtype(categories=["a", "b", "c"], ordered=True)
     assert dtype != ordered_dtype
+
+    # Test comparison with CategoricalDtype with None categories
+    # LazyCategoricalDtype always has categories, so should not equal None-categories dtype
+    dtype_none = pd.CategoricalDtype(categories=None, ordered=False)
+    assert dtype != dtype_none
 
     # Test comparison with non-CategoricalDtype
     assert dtype != np.dtype("int64")
@@ -684,52 +711,6 @@ def test_lazy_categorical_dtype_hash(cat_small_store):
     # Can be used in a set
     s = {dtype}
     assert dtype in s
-
-
-def test_lazy_categorical_dtype_n_categories_from_cache(cat_medium_store):
-    """Test n_categories returns from cache when categories already loaded."""
-    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
-
-    lazy_cat = read_elem_lazy(cat_medium_store)
-    dtype = lazy_cat.dtype
-    assert isinstance(dtype, LazyCategoricalDtype)
-
-    # Load categories first
-    cats = dtype.categories
-    assert cats is not None
-
-    # Verify n_categories uses cache by modifying the cached value
-    dtype.__dict__["categories"] = pd.Index(["x", "y", "z"])
-    assert dtype.n_categories == 3  # Returns cached length, not disk length
-
-
-def test_lazy_categorical_dtype_name(cat_small_store):
-    """Test LazyCategoricalDtype.name property (inherited from CategoricalDtype)."""
-    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
-
-    lazy_cat = read_elem_lazy(cat_small_store)
-    dtype = lazy_cat.dtype
-    assert isinstance(dtype, LazyCategoricalDtype)
-
-    # name should be "category" (inherited from CategoricalDtype)
-    assert dtype.name == "category"
-
-
-def test_lazy_categorical_dtype_inequality_with_none_categories(
-    cat_small_store,
-):
-    """Test LazyCategoricalDtype is not equal to CategoricalDtype with None categories."""
-    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
-
-    lazy_cat = read_elem_lazy(cat_small_store)
-    dtype = lazy_cat.dtype
-    assert isinstance(dtype, LazyCategoricalDtype)
-
-    # Regular CategoricalDtype without categories set
-    dtype_none = pd.CategoricalDtype(categories=None, ordered=False)
-
-    # LazyCategoricalDtype always has categories, so should not equal None-categories dtype
-    assert dtype != dtype_none
 
 
 def test_nullable_string_index_decoding(tmp_path: Path):
