@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
@@ -249,13 +251,30 @@ def test_chunks_df(
 
 # Session-scoped fixtures for categorical data (write once, read many)
 @pytest.fixture(scope="session")
-def cat_small_path(tmp_path_factory) -> Path:
-    """Session-scoped fixture: path to small categorical ['a', 'b', 'c']."""
+def cat_small_path_zarr(tmp_path_factory) -> Path:
+    """Session-scoped fixture: path to small categorical ['a', 'b', 'c'] in zarr."""
     cat = pd.Categorical(["a", "b", "c"])
     path = tmp_path_factory.mktemp("cat_small.zarr")
     store = zarr.open(path, mode="w")
     write_elem(store, "cat", cat)
     return path
+
+
+@pytest.fixture(scope="session")
+def cat_small_path_h5ad(tmp_path_factory) -> Path:
+    """Session-scoped fixture: path to small categorical ['a', 'b', 'c'] in h5ad."""
+    cat = pd.Categorical(["a", "b", "c"])
+    path = tmp_path_factory.mktemp("cat_small") / "cat.h5ad"
+    with h5py.File(path, mode="w") as f:
+        write_elem(f, "cat", cat)
+    return path
+
+
+# Backward compatibility alias
+@pytest.fixture(scope="session")
+def cat_small_path(cat_small_path_zarr: Path) -> Path:
+    """Alias for cat_small_path_zarr for backward compatibility."""
+    return cat_small_path_zarr
 
 
 @pytest.fixture(scope="session")
@@ -430,9 +449,7 @@ def test_lazy_categorical_dtype_repr(
     assert "'c'" in small_repr
 
 
-def test_lazy_categorical_dtype_equality(
-    cat_small_store: zarr.Group, cat_small_path: Path
-):
+def test_lazy_categorical_dtype_equality(cat_small_store: zarr.Group):
     """Test LazyCategoricalDtype equality comparisons."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
@@ -461,19 +478,68 @@ def test_lazy_categorical_dtype_equality(
     assert dtype != 123
     assert dtype is not None
 
-    # Test same-location equality (file opened twice, different Python objects)
-    # Use fresh reads to ensure categories aren't cached
-    store_fresh1 = zarr.open(cat_small_path, mode="r")["cat"]
-    store_fresh2 = zarr.open(cat_small_path, mode="r")["cat"]
-    dtype_fresh1 = read_elem_lazy(store_fresh1).dtype
-    dtype_fresh2 = read_elem_lazy(store_fresh2).dtype
 
-    assert dtype_fresh1._categories_elem is not dtype_fresh2._categories_elem
-    assert "categories" not in dtype_fresh1.__dict__  # Not yet loaded
-    assert "categories" not in dtype_fresh2.__dict__
-    assert dtype_fresh1 == dtype_fresh2  # Equal via location check
-    assert "categories" not in dtype_fresh1.__dict__  # Still not loaded
-    assert "categories" not in dtype_fresh2.__dict__
+@pytest.mark.parametrize("backend", ["zarr", "h5ad"])
+def test_lazy_categorical_dtype_equality_no_load(
+    cat_small_path_zarr: Path, cat_small_path_h5ad: Path, backend: str
+):
+    """Test same-location equality doesn't load category data.
+
+    Both h5py (HDF5 object ID comparison) and zarr 3.x (StorePath comparison) use
+    location-based equality that doesn't read array contents. This test verifies
+    that behavior by patching __getitem__ to raise if called.
+    """
+    from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
+
+    if backend == "zarr":
+        path = cat_small_path_zarr
+
+        def open_store(p):
+            return zarr.open(p, mode="r")["cat"]
+
+    else:
+        path = cat_small_path_h5ad
+        # Keep h5py files open for the duration of the test
+        open_store = lambda p: h5py.File(p, mode="r")["cat"]
+
+    # Open the same file twice to get different Python objects pointing to same location
+    store1 = open_store(path)
+    store2 = open_store(path)
+    dtype1 = read_elem_lazy(store1).dtype
+    dtype2 = read_elem_lazy(store2).dtype
+
+    assert isinstance(dtype1, LazyCategoricalDtype)
+    assert isinstance(dtype2, LazyCategoricalDtype)
+    # Verify these are different Python objects
+    assert dtype1._categories_elem is not dtype2._categories_elem
+
+    # Patch __getitem__ to raise if data is loaded during comparison
+    cat_arr1 = dtype1._get_categories_array()
+    cat_arr2 = dtype2._get_categories_array()
+
+    with (
+        patch.object(
+            cat_arr1,
+            "__getitem__",
+            side_effect=AssertionError("Data was loaded from arr1"),
+        ),
+        patch.object(
+            cat_arr2,
+            "__getitem__",
+            side_effect=AssertionError("Data was loaded from arr2"),
+        ),
+    ):
+        # This should use location-based comparison without triggering __getitem__
+        assert dtype1 == dtype2
+
+    # Also verify our cache wasn't populated
+    assert "categories" not in dtype1.__dict__
+    assert "categories" not in dtype2.__dict__
+
+    # Clean up h5py file handles
+    if backend == "h5ad":
+        store1.file.close()
+        store2.file.close()
 
 
 def test_lazy_categorical_roundtrip_via_anndata(tmp_path: Path):
