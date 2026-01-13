@@ -704,7 +704,7 @@ def test_lazy_categorical_dtype_hash(cat_small_store):
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
-    # Should be hashable (required for pandas internals)
+    # Should be hashable (useful for collecting unique dtypes in sets/dicts)
     h = hash(dtype)
     assert isinstance(h, int)
 
