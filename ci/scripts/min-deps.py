@@ -63,7 +63,7 @@ def extract_min_deps(
     dependencies = deque(dependencies)  # We'll be mutating this
     project_name = pyproject["project"]["name"]
 
-    deps = {}
+    deps: dict[str, Requirement] = {}
     while len(dependencies) > 0:
         req = dependencies.pop()
 
