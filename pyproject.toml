@@ -171,10 +171,12 @@ filterwarnings_when_strict = [
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
-    "anndata",                  # docstrings (module name due to --pyargs)
-    "./tests",                  # unit tests
-    "./ci/scripts",             # CI script tests
-    "./docs/concatenation.rst", # further doctests
+    "anndata",      # docstrings (module name due to --pyargs)
+    "./tests",      # unit tests
+    "./ci/scripts", # CI script tests
+    # further doctests
+    "./docs/accessors.rst",
+    "./docs/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [

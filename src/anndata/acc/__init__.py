@@ -54,7 +54,10 @@ class AdPath[I: Hashable]:
     """A path referencing an array in an AnnData object."""
 
     acc: VecAcc[Self, I]
+    """The vector accessor containing information about this array."""
+
     idx: I
+    """The index specifying the array."""
 
     __match_args__: ClassVar = ("acc", "idx")
 
@@ -97,10 +100,14 @@ class AdPath[I: Hashable]:
 
     def __call__(self, adata: AnnData) -> Vector:
         """Retrieve referenced array from AnnData."""
-        return self.acc(adata, self.idx)
+        return self.acc.get(adata, self.idx)
 
 
+@dataclass(frozen=True)
 class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
+    """Abstract base class for vector accessors."""
+
+    _: KW_ONLY
     path_class: type[P]
 
     def process_idx(self, idx: Any, /) -> I:
@@ -118,7 +125,7 @@ class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
     @abc.abstractmethod
     def idx_repr(self, idx: I, /) -> str: ...
     @abc.abstractmethod
-    def __call__(self, adata: AnnData, idx: I, /) -> Vector: ...
+    def get(self, adata: AnnData, idx: I, /) -> Vector: ...
 
 
 @dataclass(frozen=True)
@@ -143,8 +150,6 @@ class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     """Accessor for layer vectors."""
 
     k: str | None
-    _: KW_ONLY
-    path_class: type[P]
 
     @overload
     def __getitem__(self, idx: Idx2D[str], /) -> P: ...
@@ -164,7 +169,7 @@ class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
         ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
             ver_or_mat = ver_or_mat.toarray()
@@ -178,8 +183,6 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
     """Accessor for metadata (obs/var)."""
 
     ax: Literal["obs", "var"]
-    _: KW_ONLY
-    path_class: type[P]
 
     @property
     def index(self) -> P:
@@ -211,7 +214,7 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
     def idx_repr(self, k: str | type[pd.Index]) -> str:
         return ".index" if k is pd.Index else f"[{k!r}]"
 
-    def __call__(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
+    def get(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         return df.index.values if k is pd.Index else df[k].values
 
@@ -240,8 +243,6 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
 
     ax: Literal["obs", "var"]
     k: str
-    _: KW_ONLY
-    path_class: type[P]
 
     @staticmethod
     def process_idx[T](i: T | tuple[Sf, T], /) -> T:
@@ -276,7 +277,7 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def __call__(self, adata: AnnData, i: int, /) -> Vector:
+    def get(self, adata: AnnData, i: int, /) -> Vector:
         return getattr(adata, f"{self.ax}m")[self.k][:, i]
 
 
@@ -304,8 +305,6 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
 
     ax: Literal["obs", "var"]
     k: str
-    _: KW_ONLY
-    path_class: type[P]
 
     def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
         if not all(isinstance(i, str | slice) for i in idx):
@@ -338,7 +337,7 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def __call__(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
         return getattr(adata, f"{self.ax}p")[self.k][iloc].toarray()
@@ -413,7 +412,8 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
         return "A"
 
 
-A = AdAcc(path_class=AdPath)
+A: AdAcc[AdPath] = AdAcc(path_class=AdPath)
+r"""A global accessor to create :class:`AdPath`\ s."""
 
 
 def _is_idx2d_list[Idx: int | str](
