@@ -175,9 +175,12 @@ qualname_overrides = {
     "pandas.core.dtypes.dtypes.BaseMaskedDtype": "pandas.api.extensions.ExtensionDtype",
 }
 autodoc_type_aliases = dict(
-    K="",  # https://github.com/python/cpython/issues/124089
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
+    S=":class:`anndata.experimental.StorageType`",
+    RWAble=":class:`anndata.typing.RWAble`",
+    # https://github.com/python/cpython/issues/124089
+    K="",
 )
 
 # -- Social cards ---------------------------------------------------------
