@@ -94,6 +94,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas._libs.missing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # No clue what bug causes this one
+    ("py:class", "anndata.acc.GenericAlias"),
 ]
 
 
@@ -181,6 +183,7 @@ qualname_overrides = {
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
+    R="AdRef",
 )
 
 # -- Social cards ---------------------------------------------------------

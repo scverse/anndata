@@ -65,6 +65,7 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
     :toctree: generated/
 
     VecAcc
+    MetaVecAcc
     LayerVecAcc
     MultiVecAcc
     GraphVecAcc
@@ -75,6 +76,7 @@ Finally, these classes are only useful for extending:
     :toctree: generated/
 
     AdAcc
+    LayerAcc
     MultiAcc
     GraphAcc
 
