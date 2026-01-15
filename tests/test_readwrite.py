@@ -35,12 +35,11 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    get_jnp_or_none,
 )
 
-try:
-    import jax.numpy as jnp
-except ImportError:
-    jnp = None
+# jax extension
+jnp = get_jnp_or_none()
 
 
 if TYPE_CHECKING:

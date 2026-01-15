@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager, nullcontext, suppress
+from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
 import h5py
@@ -13,16 +13,12 @@ import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
+from anndata.tests.helpers import get_jnp_or_none
 
-jax = None
-jnp = None
-
-with suppress(ImportError):
-    import jax
-    import jax.numpy as jnp
+jnp = get_jnp_or_none()
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 
@@ -137,8 +133,16 @@ def test_to_writeable_list_fallback():
     assert result is x
 
 
+def get_gpu_devices() -> Iterator:
+    (
+        d
+        for d in jnp.__array_namespace_info__().devices()
+        if d is not None and d.device_kind == "GPU"
+    )
+
+
 skip_if_no_jax_gpu = pytest.mark.skipif(
-    jax is None or not any(d.device_kind == "GPU" for d in jax.devices()),
+    jnp is None or not any(get_gpu_devices()),
     reason="No GPU available",
 )
 
@@ -146,7 +150,7 @@ skip_if_no_jax_gpu = pytest.mark.skipif(
 @skip_if_no_jax_gpu
 @pytest.mark.array_api
 def test_to_writeable_jax_gpu_array():
-    x = jax.device_put(jnp.array([1.0, 2.0]), device=jax.devices("gpu")[0])
+    x = jnp.asarray([1.0, 2.0], device=get_gpu_devices()[0])
     result = to_writeable(x)
     assert isinstance(result, np.ndarray)
     np.testing.assert_array_equal(result, np.array([1.0, 2.0]))

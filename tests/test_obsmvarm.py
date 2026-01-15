@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from functools import partial
 
 import joblib
@@ -11,11 +10,10 @@ from scipy import sparse
 
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import as_cupy, get_multiindex_columns_df
+from anndata.tests.helpers import as_cupy, get_jnp_or_none, get_multiindex_columns_df
 
-jnp = None
-with suppress(ImportError):
-    import jax.numpy as jnp
+jnp = get_jnp_or_none()
+
 
 M, N = (100, 100)
 

@@ -24,17 +24,13 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_awkward,
     gen_random_column,
+    get_jnp_or_none,
     issubdtype,
     report_name,
 )
 from anndata.utils import axis_len
 
-try:
-    import jax
-    import jax.numpy as jnp
-except ImportError:
-    jax = None
-    jnp = None
+jnp = get_jnp_or_none()
 
 
 @pytest.fixture
@@ -96,12 +92,6 @@ def test_report_name():
         report_name(raise_error)(_elem_name=tag)
     assert str(e2.value).startswith(str(e1.value))
     assert tag in str(e2.value)
-
-
-@pytest.fixture
-def enable_jax_float64() -> None:
-    if jax is None:
-        jax.config.update("jax_enable_x64", True)  # noqa: FBT003
 
 
 def test_assert_equal():

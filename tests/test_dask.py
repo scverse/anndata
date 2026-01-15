@@ -336,11 +336,6 @@ def test_dask_to_disk_view(
     diskfmt: Literal["h5ad", "zarr"],
     tmp_path: Path,
 ) -> None:
-    from contextlib import suppress
-
-    jax = None
-    with suppress(ImportError):
-        import jax
 
     random_state = np.random.default_rng()
     arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")
@@ -349,8 +344,6 @@ def test_dask_to_disk_view(
     orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]
     path = tmp_path / f"test.{diskfmt}"
-    if jax is not None and isinstance(orig.X, jax.Array):
-        pytest.xfail("JAX arrays aren’t supported for h5ad or zarr writes yet")
     getattr(orig, f"write_{diskfmt}")(path)
     roundtrip = getattr(ad.io, f"read_{diskfmt}")(path)
     assert_equal(roundtrip, orig)

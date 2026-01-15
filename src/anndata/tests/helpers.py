@@ -45,6 +45,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
+    from types import ModuleType
     from typing import Literal, TypeGuard
 
     from numpy.typing import NDArray
@@ -65,17 +66,22 @@ except ImportError:
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
 
-# jax extension
 
 # Enable DLPack interop for JAX, CuPy, etc., only if installed
-try:
-    import jax
-    import jax.numpy as jnp
+def get_jnp_or_none() -> None | ModuleType:
+    try:
+        import jax
+        import jax.numpy as jnp
 
-    # Enable JAX to use 64-bit floats by default
-    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
-except ImportError:
-    jnp = None
+        # Enable JAX to use 64-bit floats by default
+        jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+        return jnp
+    except ImportError:
+        return None
+
+
+# jax extension
+jnp = get_jnp_or_none()
 
 # handle fast-array-utils presence for dask sparray support
 try:
