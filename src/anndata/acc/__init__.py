@@ -474,8 +474,8 @@ def _idx2axes(idx: Idx2D[str]) -> set[Literal["obs", "var"]]:
 
 def __getattr__(name: Literal["hv"]) -> Any:
     if name == "hv":
-        from . import hv
+        import anndata.acc.hv
 
-        return hv
+        return anndata.acc.hv
 
     raise AttributeError(name)
