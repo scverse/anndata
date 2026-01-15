@@ -44,7 +44,7 @@ For these purposes, they
     >>> A.obsp["connectivities"][:, ["cell0", "cell1"]]
     [A.obsp['connectivities'][:, 'cell0'], A.obsp['connectivities'][:, 'cell1']]
 
-#. extensible (see :`extending accessors`_)
+#.  extensible (see :`extending accessors`_)
 
 API
 ---
@@ -56,7 +56,7 @@ Most importantly, there are
 ..  autosummary::
     :toctree: generated/
 
-    anndata.acc.AdPath
+    AdPath
 
 The following classes are behind :attr:`AdPath.acc`,
 and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
@@ -64,19 +64,19 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 ..  autosummary::
     :toctree: generated/
 
-    anndata.acc.VecAcc
-    anndata.acc.LayerVecAcc
-    anndata.acc.MultiVecAcc
-    anndata.acc.GraphVecAcc
+    VecAcc
+    LayerVecAcc
+    MultiVecAcc
+    GraphVecAcc
 
 Finally, these classes are only useful for extending:
 
 ..  autosummary::
     :toctree: generated/
 
-    anndata.acc.AdAcc
-    anndata.acc.MultiAcc
-    anndata.acc.GraphAcc
+    AdAcc
+    MultiAcc
+    GraphAcc
 
 .. _extending accessors:
 

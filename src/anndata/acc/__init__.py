@@ -32,6 +32,10 @@ if TYPE_CHECKING:
     type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
     type AdPathFunc[I] = Callable[[AnnData, I], Vector]
     type Axes = Collection[Literal["obs", "var"]]
+else:
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type P = AdPath
+    type I = Hashable
 
 
 __all__ = [
