@@ -182,6 +182,7 @@ markers = [
 ]
 
 [tool.uv]
+# https://github.com/executablebooks/sphinx-design/issues/248
 override-dependencies = [ "sphinx>=9.0.1" ]
 
 [tool.ruff]
