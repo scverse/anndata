@@ -16,12 +16,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Literal
 
-    from anndata.acc import AdPath
+    from anndata.acc import AdRef
 
 
-type AdPathExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
+type AdRefExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
 
-PATHS: list[tuple[AdPath, AdPathExpected]] = [
+PATHS: list[tuple[AdRef, AdRefExpected]] = [
     (A[:, :], lambda ad: ad.X),
     (A[:, "gene-3"], lambda ad: ad[:, "gene-3"].X.flatten()),
     (A["cell-5", :], lambda ad: ad["cell-5"].X.flatten()),
@@ -46,17 +46,17 @@ PATHS: list[tuple[AdPath, AdPathExpected]] = [
 @pytest.fixture(scope="session", params=PATHS, ids=[str(p[0]) for p in PATHS])
 def path_and_expected_fn(
     request: pytest.FixtureRequest,
-) -> tuple[AdPath, AdPathExpected]:
+) -> tuple[AdRef, AdRefExpected]:
     return request.param
 
 
 @pytest.fixture(scope="session")
-def ad_path(path_and_expected_fn: tuple[AdPath, AdPathExpected]) -> AdPath:
+def ad_path(path_and_expected_fn: tuple[AdRef, AdRefExpected]) -> AdRef:
     return path_and_expected_fn[0]
 
 
 @pytest.fixture(scope="session")
-def ad_expected(path_and_expected_fn: tuple[AdPath, AdPathExpected]) -> AdPathExpected:
+def ad_expected(path_and_expected_fn: tuple[AdRef, AdRefExpected]) -> AdRefExpected:
     return path_and_expected_fn[1]
 
 
@@ -81,7 +81,7 @@ def adata() -> AnnData:
     return AnnData(x, obs, var, layers=layers, obsm=obsm, varm={}, obsp={}, varp=varp)
 
 
-def test_repr(ad_path: AdPath) -> None:
+def test_repr(ad_path: AdRef) -> None:
     from anndata.acc import A  # for eval
 
     assert repr(ad_path) == str(ad_path)
@@ -103,7 +103,7 @@ def test_repr(ad_path: AdPath) -> None:
         pytest.param(A.varp["d"][:, "c2"], {"var"}, id="varp-col"),
     ],
 )
-def test_axes(ad_path: AdPath, axes: Collection[Literal["obs", "var"]]) -> None:
+def test_axes(ad_path: AdRef, axes: Collection[Literal["obs", "var"]]) -> None:
     assert ad_path.axes == axes
 
 
@@ -130,7 +130,7 @@ def test_match(*, obj: object, expected: object) -> None:
         ):
             assert len(type(obj).__match_args__) == 1
             assert arg == expected
-        case acc.MultiVecAcc(a0, a1) | acc.GraphVecAcc(a0, a1) | acc.AdPath(a0, a1):
+        case acc.MultiVecAcc(a0, a1) | acc.GraphVecAcc(a0, a1) | acc.AdRef(a0, a1):
             assert len(type(obj).__match_args__) == 2
             assert (a0, a1) == expected
         case _:
@@ -157,7 +157,7 @@ def test_match(*, obj: object, expected: object) -> None:
         pytest.param(lambda: A.varp["x"][["a"], ["b"]], id="varp-twolists"),
     ],
 )
-def test_invalid(mk_path: Callable[[], AdPath]) -> None:
+def test_invalid(mk_path: Callable[[], AdRef]) -> None:
     with pytest.raises((ValueError, TypeError)):
         mk_path()
 
@@ -208,7 +208,7 @@ def test_special(expr: object, expanded: object) -> None:
 
 def test_get_values(
     adata: AnnData,
-    ad_path: AdPath,
+    ad_path: AdRef,
     ad_expected: Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series],
 ) -> None:
     vals = ad_path(adata)

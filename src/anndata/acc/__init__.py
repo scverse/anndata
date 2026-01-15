@@ -23,9 +23,12 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
     from . import hv
+
+    # these types can just be expanded
+    Axes = Collection[Literal["obs", "var"]]
 else:
     # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type P = AdPath
+    type R = AdRef
     type I = Hashable
 
 type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
@@ -34,14 +37,13 @@ type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
 type Sf = slice[None, None, None]
 type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
 type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
-type AdPathFunc[I] = Callable[[AnnData, I], Vector]
-type Axes = Collection[Literal["obs", "var"]]
+type AdRefFunc[I] = Callable[[AnnData, I], Vector]
 
 
 __all__ = [
     "A",
     "AdAcc",
-    "AdPath",
+    "AdRef",
     "GraphAcc",
     "GraphVecAcc",
     "LayerAcc",
@@ -54,7 +56,7 @@ __all__ = [
 ]
 
 
-class AdPath[I: Hashable]:
+class AdRef[I: Hashable]:
     """A path referencing an array in an AnnData object."""
 
     acc: VecAcc[Self, I]
@@ -79,13 +81,13 @@ class AdPath[I: Hashable]:
 
     def __eq__(self, value: object) -> bool:
         match value:
-            case AdPath():
+            case AdRef():
                 return self.acc == value.acc and self.idx == value.idx
             case str():
                 # TODO: more elegant: access `A` through `acc`?
                 a = (
                     A
-                    if type(self).__eq__ is AdPath.__eq__
+                    if type(self).__eq__ is AdRef.__eq__
                     else AdAcc(path_class=type(self))
                 )
                 return self == a.resolve(value, strict=False)
@@ -108,17 +110,17 @@ class AdPath[I: Hashable]:
 
 
 @dataclass(frozen=True)
-class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
+class VecAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     """Abstract base class for vector accessors."""
 
     _: KW_ONLY
-    path_class: type[P]
+    path_class: type[R]
 
     def process_idx(self, idx: Any, /) -> I:
         self.axes(idx)
         return idx
 
-    def __getitem__(self, idx: Any, /) -> P:
+    def __getitem__(self, idx: Any, /) -> R:
         idx = self.process_idx(idx)
         return self.path_class(self, idx)  # type: ignore
 
@@ -133,13 +135,13 @@ class VecAcc[P: AdPath[I], I](abc.ABC):  # type: ignore
 
 
 @dataclass(frozen=True)
-class LayerAcc[P: AdPath]:
+class LayerAcc[R: AdRef]:
     """Accessor for layers."""
 
     _: KW_ONLY
-    path_class: type[P]
+    path_class: type[R]
 
-    def __getitem__(self, k: str, /) -> LayerVecAcc[P]:
+    def __getitem__(self, k: str, /) -> LayerVecAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
@@ -150,16 +152,16 @@ class LayerAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
+class LayerVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
     """Accessor for layer vectors."""
 
     k: str | None
 
     @overload
-    def __getitem__(self, idx: Idx2D[str], /) -> P: ...
+    def __getitem__(self, idx: Idx2D[str], /) -> R: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str], /) -> list[P]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> P | list[P]:
+    def __getitem__(self, idx: Idx2DList[str], /) -> list[R]: ...
+    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> R | list[R]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -183,13 +185,13 @@ class LayerVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
 
 
 @dataclass(frozen=True)
-class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]]):
+class MetaVecAcc[R: AdRef[str | type[pd.Index]]](VecAcc[R, str | type[pd.Index]]):
     """Accessor for metadata (obs/var)."""
 
     ax: Literal["obs", "var"]
 
     @property
-    def index(self) -> P:
+    def index(self) -> R:
         """Index accessor."""
         return self[pd.Index]
 
@@ -200,10 +202,10 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
         return k
 
     @overload
-    def __getitem__[K: str | type[pd.Index]](self, k: K, /) -> P: ...
+    def __getitem__[K: str | type[pd.Index]](self, k: K, /) -> R: ...
     @overload
-    def __getitem__[K: str | type[pd.Index]](self, k: list[K], /) -> list[P]: ...
-    def __getitem__[K: str | type[pd.Index]](self, k: K | list[K], /) -> P | list[P]:
+    def __getitem__[K: str | type[pd.Index]](self, k: list[K], /) -> list[R]: ...
+    def __getitem__[K: str | type[pd.Index]](self, k: K | list[K], /) -> R | list[R]:
         if isinstance(k, list):
             return [self[i] for i in k]
 
@@ -224,14 +226,14 @@ class MetaVecAcc[P: AdPath[str | type[pd.Index]]](VecAcc[P, str | type[pd.Index]
 
 
 @dataclass(frozen=True)
-class MultiAcc[P: AdPath]:
+class MultiAcc[R: AdRef]:
     """Accessor for multi-dimensional array containers (obsm/varm)."""
 
     ax: Literal["obs", "var"]
     _: KW_ONLY
-    path_class: type[P]
+    path_class: type[R]
 
-    def __getitem__(self, k: str, /) -> MultiVecAcc[P]:
+    def __getitem__(self, k: str, /) -> MultiVecAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}m key {k!r}"
             raise TypeError(msg)
@@ -242,7 +244,7 @@ class MultiAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
+class MultiVecAcc[R: AdRef[int]](VecAcc[R, int]):
     """Accessor for arrays from multi-dimensional containers (obsm/varm)."""
 
     ax: Literal["obs", "var"]
@@ -261,12 +263,12 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
         return i
 
     @overload
-    def __getitem__(self, i: int | tuple[Sf, int], /) -> P: ...
+    def __getitem__(self, i: int | tuple[Sf, int], /) -> R: ...
     @overload
-    def __getitem__(self, i: list[int] | tuple[Sf, list[int]], /) -> list[P]: ...
+    def __getitem__(self, i: list[int] | tuple[Sf, list[int]], /) -> list[R]: ...
     def __getitem__(
         self, i: int | list[int] | tuple[Sf, int | list[int]], /
-    ) -> P | list[P]:
+    ) -> R | list[R]:
         i = self.process_idx(i)
         if isinstance(i, list):
             return [self[j] for j in i]
@@ -286,14 +288,14 @@ class MultiVecAcc[P: AdPath[int]](VecAcc[P, int]):
 
 
 @dataclass(frozen=True)
-class GraphAcc[P: AdPath]:
+class GraphAcc[R: AdRef]:
     """Accessor for graph containers (obsp/varp)."""
 
     ax: Literal["obs", "var"]
     _: KW_ONLY
-    path_class: type[P]
+    path_class: type[R]
 
-    def __getitem__(self, k: str, /) -> GraphVecAcc[P]:
+    def __getitem__(self, k: str, /) -> GraphVecAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}p key {k!r}"
             raise TypeError(msg)
@@ -304,7 +306,7 @@ class GraphAcc[P: AdPath]:
 
 
 @dataclass(frozen=True)
-class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
+class GraphVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
     """Accessor for arrays from graph containers (obsp/varp)."""
 
     ax: Literal["obs", "var"]
@@ -323,10 +325,10 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
         return idx
 
     @overload
-    def __getitem__(self, idx: Idx2D[str], /) -> P: ...
+    def __getitem__(self, idx: Idx2D[str], /) -> R: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str], /) -> list[P]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> P | list[P]:
+    def __getitem__(self, idx: Idx2DList[str], /) -> list[R]: ...
+    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> R | list[R]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -348,18 +350,18 @@ class GraphVecAcc[P: AdPath[Idx2D[str]]](VecAcc[P, "Idx2D[str]"]):
 
 
 @dataclass(frozen=True)
-class AdAcc[P: AdPath](LayerVecAcc[P]):
-    r"""Accessor to create :class:`AdPath`\ s."""
+class AdAcc[R: AdRef](LayerVecAcc[R]):
+    r"""Accessor to create :class:`AdRef`\ s."""
 
     k: None = field(init=False, default=None)
 
-    layers: LayerAcc[P] = field(init=False)
-    obs: MetaVecAcc[P] = field(init=False)
-    var: MetaVecAcc[P] = field(init=False)
-    obsm: MultiAcc[P] = field(init=False)
-    varm: MultiAcc[P] = field(init=False)
-    obsp: GraphAcc[P] = field(init=False)
-    varp: GraphAcc[P] = field(init=False)
+    layers: LayerAcc[R] = field(init=False)
+    obs: MetaVecAcc[R] = field(init=False)
+    var: MetaVecAcc[R] = field(init=False)
+    obsm: MultiAcc[R] = field(init=False)
+    varm: MultiAcc[R] = field(init=False)
+    obsp: GraphAcc[R] = field(init=False)
+    varp: GraphAcc[R] = field(init=False)
 
     ATTRS: ClassVar = frozenset({
         "layers",
@@ -381,10 +383,10 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
         object.__setattr__(self, "varp", GraphAcc("var", path_class=self.path_class))
 
     @overload
-    def resolve(self, spec: str, *, strict: Literal[True] = True) -> P: ...
+    def resolve(self, spec: str, *, strict: Literal[True] = True) -> R: ...
     @overload
-    def resolve(self, spec: str, *, strict: Literal[False]) -> P | None: ...
-    def resolve(self, spec: str, *, strict: bool = True) -> P | None:
+    def resolve(self, spec: str, *, strict: Literal[False]) -> R | None: ...
+    def resolve(self, spec: str, *, strict: bool = True) -> R | None:
         """Create accessor from string.
 
         Examples
@@ -416,8 +418,8 @@ class AdAcc[P: AdPath](LayerVecAcc[P]):
         return "A"
 
 
-A: AdAcc[AdPath] = AdAcc(path_class=AdPath)
-r"""A global accessor to create :class:`AdPath`\ s."""
+A: AdAcc[AdRef] = AdAcc(path_class=AdRef)
+r"""A global accessor to create :class:`AdRef`\ s."""
 
 
 def _is_idx2d_list[Idx: int | str](

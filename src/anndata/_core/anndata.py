@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..acc import AdPath
+    from ..acc import AdRef
     from ..compat import Index1D, Index1DNorm, XDataset
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1838,7 +1838,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: AdPath) -> bool:
+    def __contains__(self, key: AdRef) -> bool:
         """Check if array is in AnnData."""
         try:
             key(self)

@@ -12,18 +12,18 @@ For these purposes, they
 #.  are easy to create:
 
     The central :attr:`A` object allows you to create
-    :class:`AdPath` objects that reference arrays
+    :class:`AdRef` objects that reference arrays
     along one or two axes of an :class:`anndata.AnnData` object:
 
     >>> from anndata.acc import A
     >>> A[:, "gene-3"]
     A[:, 'gene-3']
     >>> type(A[:, "gene-3"])
-    <class 'anndata.acc.AdPath'>
+    <class 'anndata.acc.AdRef'>
 
 #.  introspectible
 
-    :class:`AdPath`\ s have the :attr:`AdPath.axes`, :attr:`AdPath.idx`, and :attr:`AdPath.acc` attributes,
+    :class:`AdRef`\ s have the :attr:`AdRef.axes`, :attr:`AdRef.idx`, and :attr:`AdRef.acc` attributes,
     allowing you to inspect all relevant properties.
 
     >>> A.var["symbol"].axes
@@ -56,9 +56,9 @@ Most importantly, there are
 ..  autosummary::
     :toctree: generated/
 
-    AdPath
+    AdRef
 
-The following classes are behind :attr:`AdPath.acc`,
+The following classes are behind :attr:`AdRef.acc`,
 and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
 ..  autosummary::

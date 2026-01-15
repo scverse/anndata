@@ -9,14 +9,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Literal
 
-    from . import AdAcc, AdPath, GraphVecAcc, Idx2D, LayerVecAcc
+    from . import AdAcc, AdRef, GraphVecAcc, Idx2D, LayerVecAcc
 
 
 @overload
-def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: Literal[True] = True) -> P: ...
+def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: Literal[True] = True) -> P: ...
 @overload
-def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: Literal[False]) -> P | None: ...
-def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
+def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: Literal[False]) -> P | None: ...
+def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
     """Create accessor from string."""
     if not strict:
         try:
@@ -40,14 +40,14 @@ def parse[P: AdPath](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None
         case None:  # pragma: no cover
             msg = (
                 f"Unknown accessor {spec!r}. "
-                f"We support '{a.ATTRS}.*' and `AdPath` instances."
+                f"We support '{a.ATTRS}.*' and `AdRef` instances."
             )
             raise ValueError(msg)
     msg = f"Unhandled accessor {spec!r}. This is a bug!"  # pragma: no cover
     raise AssertionError(msg)  # pragma: no cover
 
 
-def _parse_path_2d[P: AdPath](
+def _parse_path_2d[P: AdRef](
     get_vec_acc: Callable[[str], LayerVecAcc[P] | GraphVecAcc[P]], spec: str
 ) -> P:
     if not (
@@ -60,7 +60,7 @@ def _parse_path_2d[P: AdPath](
     return vec_acc[_parse_idx_2d(i, j, str)]
 
 
-def _parse_path_multi[P: AdPath](multi: MultiAcc[P], spec: str) -> P:
+def _parse_path_multi[P: AdRef](multi: MultiAcc[P], spec: str) -> P:
     if not (m := re.fullmatch(r"([^.]+)\.([\d_]+)", spec)):  # pragma: no cover
         msg = f"Cannot parse multi accessor {spec!r}: should be `name.i`"
         raise ValueError(msg)

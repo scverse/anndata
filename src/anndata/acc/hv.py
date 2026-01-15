@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, overload
 import pandas as pd
 from holoviews.core.dimension import Dimension
 
-from . import AdAcc, AdPath, GraphVecAcc, LayerVecAcc, MetaVecAcc, MultiVecAcc
+from . import AdAcc, AdRef, GraphVecAcc, LayerVecAcc, MetaVecAcc, MultiVecAcc
 
 if TYPE_CHECKING:
     from typing import Any, Literal, Self
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ["A", "AdDim"]
 
 
-def mk_label[I](p: AdPath[I], /) -> str | None:
+def mk_label[I](p: AdRef[I], /) -> str | None:
     match p.acc:
         case MultiVecAcc():
             return f"{p.acc.k} {p.idx}"
@@ -38,9 +38,9 @@ def mk_label[I](p: AdPath[I], /) -> str | None:
             raise AssertionError(msg)
 
 
-class AdDim[I](AdPath[I], Dimension):
+class AdDim[I](AdRef[I], Dimension):
     def __init__(self, acc: VecAcc[Self, I], idx: I, /, **params: object) -> None:
-        AdPath.__init__(self, acc, idx)  # type: ignore
+        AdRef.__init__(self, acc, idx)  # type: ignore
         spec = params.pop("spec", repr(self))
         label = params.pop("label", mk_label(self))
         Dimension.__init__(self, spec, label=label, **params)
@@ -125,12 +125,12 @@ class AdDim[I](AdPath[I], Dimension):
             return False
         # if dim is a non-matching dimension (e.g. from a string), convert
         if isinstance(dim, Dimension):
-            if not isinstance(dim, AdPath):
+            if not isinstance(dim, AdRef):
                 if dim.name == self.name:
                     return True
                 if (dim := type(self).from_dimension(dim, strict=False)) is None:
                     return False
-            # dim is an AdPath, check equality
+            # dim is an AdRef, check equality
             return hash(self) == hash(dim)
         # some unknown type
         return False
