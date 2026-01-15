@@ -1132,7 +1132,9 @@ BASE_MATRIX_PARAMS = [
 ]
 
 if jnp is not None:
-    BASE_MATRIX_PARAMS.append(pytest.param(as_dense_jax_array, id="jax_array"))
+    BASE_MATRIX_PARAMS.append(
+        pytest.param(as_dense_jax_array, id="jax_array", marks=pytest.mark.array_api)
+    )
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
