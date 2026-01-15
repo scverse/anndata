@@ -30,7 +30,7 @@ For these purposes, they
     {'var'}
     >>> pc0 = A.obsm["pca"][:, 0]
     >>> pc0.idx
-    (slice(None, None, None), 0)
+    0
     >>> pc0.acc
     A.obsm['pca']
     >>> pc0.acc.k
