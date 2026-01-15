@@ -23,19 +23,19 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
     from . import hv
-
-    type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
-
-    # full slices: e.g. a[:, 5], a[18, :], or a[:, :]
-    type Sf = slice[None, None, None]
-    type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
-    type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
-    type AdPathFunc[I] = Callable[[AnnData, I], Vector]
-    type Axes = Collection[Literal["obs", "var"]]
 else:
     # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
     type P = AdPath
     type I = Hashable
+
+type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
+
+# full slices: e.g. a[:, 5], a[18, :], or a[:, :]
+type Sf = slice[None, None, None]
+type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
+type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
+type AdPathFunc[I] = Callable[[AnnData, I], Vector]
+type Axes = Collection[Literal["obs", "var"]]
 
 
 __all__ = [
