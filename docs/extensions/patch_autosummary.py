@@ -9,16 +9,17 @@ import sys
 from traceback import walk_stack
 from typing import TYPE_CHECKING
 
+if sys.version_info >= (3, 13):
+    from typing import get_protocol_members, is_protocol
+else:
+    from typing_extensions import get_protocol_members, is_protocol
+
+
 if TYPE_CHECKING:
     from typing import Literal
 
     from sphinx.application import Sphinx
     from sphinx.ext.autodoc import Options
-
-if sys.version_info >= (3, 13):
-    from typing import get_protocol_members, is_protocol
-else:
-    from typing_extensions import get_protocol_members, is_protocol
 
 
 def skip_member(  # noqa: PLR0917
