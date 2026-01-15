@@ -13,7 +13,10 @@ from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
 from anndata.utils import asarray
 
-jnp = pytest.importorskip("jax.numpy")
+try:
+    import jax.numpy as jnp
+except ImportError:
+    jnp = None
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
@@ -21,8 +24,13 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
-    pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
-]
+] + (
+    [
+        pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
+    ]
+    if jnp is not None
+    else []
+)
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
@@ -62,9 +70,8 @@ def test_setter_view(orig_array_type, new_array_type):
         # https://github.com/scverse/anndata/issues/500
         pytest.xfail("Cannot set a dense array with a sparse array")
 
-    if isinstance(orig_X, jnp.ndarray):
+    if jnp is not None and isinstance(orig_X, jnp.ndarray):
         view = adata[:9, :9]
-        print(f"orig_X: {type(orig_X)}, to_assign: {type(to_assign)}")
         with pytest.raises(TypeError, match=r"immutable|in-place"):
             view.X = to_assign
         return
