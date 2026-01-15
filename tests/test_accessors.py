@@ -64,7 +64,7 @@ def ad_expected(path_and_expected_fn: tuple[AdPath, AdPathExpected]) -> AdPathEx
 def adata() -> AnnData:
     gen = np.random.default_rng()
     x = gen.random((100, 50), dtype=np.float32)
-    layers = dict(a=sp.random(100, 50, rng=gen, format="csr"))
+    layers = dict(a=sp.random(100, 50, format="csr"))
     obs = pd.DataFrame(
         dict(type=gen.integers(0, 3, size=100)),
         index="cell-" + pd.array(range(100)).astype(str),
@@ -77,7 +77,7 @@ def adata() -> AnnData:
         index="gene-" + pd.array(range(50)).astype(str),
     )
     obsm = dict(umap=gen.random((100, 2)))
-    varp = dict(cons=sp.csr_array(sp.random(50, 50, rng=gen)))
+    varp = dict(cons=sp.csr_array(sp.random(50, 50)))
     return AnnData(x, obs, var, layers=layers, obsm=obsm, varm={}, obsp={}, varp=varp)
 
 
