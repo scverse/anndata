@@ -60,7 +60,6 @@ extensions = [
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
-    "sphinx_toolbox.more_autodoc.autoprotocol",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
@@ -174,11 +173,9 @@ qualname_overrides = {
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
     "pandas.core.dtypes.dtypes.BaseMaskedDtype": "pandas.api.extensions.ExtensionDtype",
-    # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
-    "types.EllipsisType": ("py:data", "types.EllipsisType"),
-    "pathlib._local.Path": "pathlib.Path",
 }
 autodoc_type_aliases = dict(
+    K="",  # https://github.com/python/cpython/issues/124089
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
 )

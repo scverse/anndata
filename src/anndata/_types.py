@@ -11,7 +11,7 @@ from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any
+    from typing import Any, TypeAlias
 
     from anndata._core.xarray import Dataset2D
 
@@ -33,13 +33,11 @@ __all__ = [
     "_WriteInternal",
 ]
 
-type ArrayStorageType = ZarrArray | H5Array
-type GroupStorageType = ZarrGroup | H5Group
-type StorageType = ArrayStorageType | GroupStorageType
+# These two are not exported, so we don’t make them `type`s
+ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
+GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type S = StorageType
-type RWAble = typing.RWAble
+type StorageType = ArrayStorageType | GroupStorageType
 
 
 class Dataset2DIlocIndexer(Protocol):
