@@ -446,14 +446,14 @@ class FallbackFormatter(TypeFormatter):
         """
         # === Type name (with fallback) ===
         type_name = "unknown"
-        try:
+        try:  # noqa: SIM105
             type_name = type(obj).__name__
         except Exception:  # noqa: BLE001
             pass
 
         # === Module (with fallback) ===
         module = None
-        try:
+        try:  # noqa: SIM105
             module = type(obj).__module__
         except Exception:  # noqa: BLE001
             pass
@@ -471,7 +471,7 @@ class FallbackFormatter(TypeFormatter):
         access_errors: list[str] = []
 
         # Type info for tooltip
-        try:
+        try:  # noqa: SIM105
             tooltip_parts.append(f"Type: {full_name}")
         except Exception:  # noqa: BLE001
             pass
@@ -542,10 +542,24 @@ class FallbackFormatter(TypeFormatter):
 
         error = "; ".join(all_errors) if all_errors else None
 
+        # === Check serializability ===
+        is_serial = True
+        serial_reason = ""
+        try:
+            from .utils import is_serializable
+
+            is_serial, serial_reason = is_serializable(obj)
+        except Exception:  # noqa: BLE001
+            pass
+
         # === Build preview_html for errors ===
         # SECURITY: All text must be HTML-escaped to prevent XSS
         preview_html = None
         warnings: list[str] = []
+
+        # Add serialization reason to warnings if not serializable
+        if not is_serial and serial_reason:
+            warnings.append(serial_reason)
 
         if all_errors:
             try:
@@ -557,18 +571,23 @@ class FallbackFormatter(TypeFormatter):
             # No errors - check if unknown type warning needed
             try:
                 is_extension = module and not module.startswith((
-                    "anndata", "numpy", "pandas", "scipy",
+                    "anndata",
+                    "numpy",
+                    "pandas",
+                    "scipy",
                 ))
                 if not is_extension:
                     warnings.append(f"Unknown type: {full_name}")
                     warning_text = escape_html(f"Unknown type: {full_name}")
-                    preview_html = f'<span class="{CSS_TEXT_WARNING}">{warning_text}</span>'
+                    preview_html = (
+                        f'<span class="{CSS_TEXT_WARNING}">{warning_text}</span>'
+                    )
             except Exception:  # noqa: BLE001
                 pass
 
         # === Build tooltip safely ===
         tooltip = ""
-        try:
+        try:  # noqa: SIM105
             tooltip = "\n".join(tooltip_parts)
         except Exception:  # noqa: BLE001
             pass
@@ -577,7 +596,10 @@ class FallbackFormatter(TypeFormatter):
         css_class = CSS_DTYPE_UNKNOWN
         try:
             is_extension = module and not module.startswith((
-                "anndata", "numpy", "pandas", "scipy",
+                "anndata",
+                "numpy",
+                "pandas",
+                "scipy",
             ))
             if is_extension:
                 css_class = CSS_DTYPE_EXTENSION
@@ -590,7 +612,7 @@ class FallbackFormatter(TypeFormatter):
             tooltip=tooltip,
             warnings=warnings,
             preview_html=preview_html,
-            is_serializable=False,
+            is_serializable=is_serial,
             error=error,
         )
 
@@ -634,7 +656,9 @@ class FormatterRegistry:
         except ValueError:
             return False
 
-    def format_value(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format_value(  # noqa: PLR0912
+        self, obj: Any, context: FormatterContext
+    ) -> FormattedOutput:
         """
         Format a value using the appropriate formatter.
 

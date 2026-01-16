@@ -91,22 +91,23 @@ def _validate_key_and_collect_warnings(
 
     Returns
     -------
-    tuple of (key_warnings, key_error)
-        key_warnings: List of key-specific warning messages (soft issues)
-        key_error: Error message if key has a hard error, else None
+    tuple of (key_warnings, is_key_not_serializable)
+        key_warnings: List of key-specific warning messages
+        is_key_not_serializable: True if key prevents serialization
     """
     key_valid, key_reason, is_hard_error = check_column_name(key)
 
     key_warnings: list[str] = []
-    key_error: str | None = None
+    is_key_not_serializable = False
 
     if not key_valid:
+        # All key issues are warnings (shown in tooltip)
+        # Hard errors (non-string) also mark as not serializable
+        key_warnings.append(key_reason)
         if is_hard_error:
-            key_error = key_reason
-        else:
-            key_warnings.append(key_reason)
+            is_key_not_serializable = True
 
-    return key_warnings, key_error
+    return key_warnings, is_key_not_serializable
 
 
 def _render_entry_row(
@@ -142,16 +143,14 @@ def _render_entry_row(
     from .html import render_formatted_entry
     from .registry import FormattedEntry
 
-    # Validate key and collect warnings/errors
-    extra_warnings, key_error = _validate_key_and_collect_warnings(key, output)
+    # Validate key and collect warnings
+    extra_warnings, is_key_not_serializable = _validate_key_and_collect_warnings(
+        key, output
+    )
 
-    # If key has a hard error, merge it into output.error
-    if key_error:
-        if output.error:
-            combined_error = f"{key_error}; {output.error}"
-        else:
-            combined_error = key_error
-        output = replace(output, error=combined_error)
+    # If key has serialization issues, mark output as not serializable
+    if is_key_not_serializable and output.is_serializable:
+        output = replace(output, is_serializable=False)
 
     entry = FormattedEntry(key=key, output=output)
     return render_formatted_entry(

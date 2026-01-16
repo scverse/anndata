@@ -231,7 +231,7 @@ class TestFormatterRegistry:
 
         try:
             # Two warnings: one for the failure, one summarizing failures before success
-            with pytest.warns(UserWarning) as warnings:
+            with pytest.warns(UserWarning, match=r"Formatter") as warnings:
                 result = registry.format_value("test", FormatterContext())
             # BackupFormatter succeeds
             assert result.type_name == "Backup"
@@ -367,8 +367,8 @@ class TestSectionFormatter:
 class TestFallbackFormatter:
     """Tests for FallbackFormatter edge cases."""
 
-    def test_fallback_extension_type_no_warning(self):
-        """Test fallback formatter for extension types doesn't add warning."""
+    def test_fallback_extension_type_no_unknown_warning(self):
+        """Test fallback formatter for extension types doesn't add 'Unknown type' warning."""
         from anndata._repr.registry import FallbackFormatter, FormatterContext
 
         class ExtensionType:
@@ -384,7 +384,10 @@ class TestFallbackFormatter:
 
         assert result.type_name == "ExtensionType"
         assert result.css_class == "anndata-dtype--extension"
-        assert len(result.warnings) == 0
+        # Extension types don't get "Unknown type" warning, but do get serialization warning
+        assert not any("Unknown type" in w for w in result.warnings)
+        # Serialization reason is included
+        assert any("no registered writer" in w for w in result.warnings)
 
     def test_fallback_with_shape_and_dtype(self):
         """Test fallback formatter extracts shape and dtype."""

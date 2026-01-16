@@ -328,7 +328,8 @@ class TestColumnNameValidation:
 
         html = adata._repr_html_()
         assert "Non-string" in html
-        assert "Not serializable" in html
+        # Key error shown with warning icon
+        assert "(!)" in html
 
 
 class TestErrorHandling:

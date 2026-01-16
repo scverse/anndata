@@ -78,26 +78,39 @@ def render_entry_row_open(
     return f'<tr class="{css_class}" data-key="{escaped_key}" data-dtype="{escaped_dtype}">'
 
 
-def render_warning_icon(warnings: list[str], *, is_error: bool = False) -> str:
-    """Render warning icon with tooltip if there are warnings or errors.
+def render_warning_icon(
+    warnings: list[str], *, is_not_serializable: bool = False
+) -> str:
+    """Render warning icon with tooltip if there are warnings or serialization issues.
 
     Parameters
     ----------
     warnings
         List of warning messages to show in tooltip.
-    is_error
+    is_not_serializable
         If True, prepends "Not serializable to H5AD/Zarr" to warnings.
 
     Returns
     -------
-    HTML string for warning icon, or empty string if no warnings/error.
+    HTML string for warning icon, or empty string if no warnings.
     """
-    if not warnings and not is_error:
+    if not warnings and not is_not_serializable:
         return ""
-    all_warnings = list(warnings)
-    if is_error:
-        all_warnings.insert(0, NOT_SERIALIZABLE_MSG)
-    title = escape_html("; ".join(all_warnings))
+
+    # Build the tooltip message
+    if is_not_serializable:
+        if warnings:
+            # "Not serializable: reason1; reason2"
+            reasons = "; ".join(warnings)
+            title = f"{NOT_SERIALIZABLE_MSG}: {reasons}"
+        else:
+            # Just "Not serializable to H5AD/Zarr"
+            title = NOT_SERIALIZABLE_MSG
+    else:
+        # Independent warnings joined with ";"
+        title = "; ".join(warnings)
+
+    title = escape_html(title)
     return f'<span class="anndata-entry__warning" title="{title}">(!)</span>'
 
 
@@ -467,8 +480,8 @@ class TypeCellConfig:
         Optional tooltip for the type label
     warnings
         List of warning messages
-    is_error
-        Whether this is an error (not serializable, invalid key)
+    is_not_serializable
+        Whether the data cannot be serialized to H5AD/Zarr
     has_expandable_content
         Whether to show expand button
     has_columns_list
@@ -492,8 +505,8 @@ class TypeCellConfig:
         >>> config = TypeCellConfig(
         ...     type_name="object",
         ...     css_class="anndata-dtype--object",
-        ...     warnings=["Not serializable"],
-        ...     is_error=True,
+        ...     warnings=["Custom warning"],
+        ...     is_not_serializable=True,
         ... )
     """
 
@@ -502,7 +515,7 @@ class TypeCellConfig:
     type_html: str | None = None
     tooltip: str = ""
     warnings: list[str] = field(default_factory=list)
-    is_error: bool = False
+    is_not_serializable: bool = False
     has_expandable_content: bool = False
     has_columns_list: bool = False
     has_categories_list: bool = False
@@ -553,7 +566,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     type_html = config.type_html
     tooltip = config.tooltip
     warnings = config.warnings
-    is_error = config.is_error
+    is_not_serializable = config.is_not_serializable
     has_expandable_content = config.has_expandable_content
     has_columns_list = config.has_columns_list
     has_categories_list = config.has_categories_list
@@ -574,7 +587,9 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
         parts.append(f'<span class="{css_class}">{escape_html(type_name)}</span>')
 
     # Warning icon
-    parts.append(render_warning_icon(warnings or [], is_error=is_error))
+    parts.append(
+        render_warning_icon(warnings or [], is_not_serializable=is_not_serializable)
+    )
 
     # Expand button for expandable content
     if has_expandable_content:

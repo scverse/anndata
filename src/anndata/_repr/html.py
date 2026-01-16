@@ -21,6 +21,7 @@ from .._repr_constants import (
     CSS_BADGE_VIEW,
     CSS_DTYPE_CATEGORY,
     CSS_DTYPE_DATAFRAME,
+    CSS_TEXT_ERROR,
     DEFAULT_MAX_README_SIZE,
     SECTION_OBS,
     SECTION_VAR,
@@ -539,8 +540,9 @@ def render_formatted_entry(
     extra_warnings = extra_warnings or []
 
     # Compute entry CSS classes
+    # Both hard errors and serialization issues get red background
     all_warnings = extra_warnings + list(output.warnings)
-    has_error = not output.is_serializable or output.error is not None
+    has_error = output.error is not None or not output.is_serializable
 
     has_expandable_content = output.expanded_html is not None
     # Detect wrap button needs from output css_class
@@ -571,7 +573,7 @@ def render_formatted_entry(
         type_html=output.type_html if append_type_html else None,
         tooltip=output.tooltip,
         warnings=all_warnings,
-        is_error=has_error,
+        is_not_serializable=not output.is_serializable,
         has_expandable_content=has_expandable_content,
         has_columns_list=has_columns_list,
         has_categories_list=has_categories,
@@ -586,9 +588,6 @@ def render_formatted_entry(
 
     if output.error and not preview_html:
         # Generate error preview if error is set but no preview_html provided
-        from .utils import escape_html
-        from .._repr_constants import CSS_TEXT_ERROR
-
         error_text = escape_html(output.error)
         preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
 
