@@ -41,7 +41,7 @@ from ..compat import (
     _read_attr,
     is_zarr_v2,
 )
-from .index import _fix_slice_bounds, _subset, unpack_index
+from .index import _ensure_numpy_idx, _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -749,6 +749,7 @@ def sparse_dataset(
 
 
 @_subset.register(BaseCompressedSparseDataset)
+@_ensure_numpy_idx
 def subset_sparsedataset(
     d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
 ):
