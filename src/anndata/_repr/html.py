@@ -451,7 +451,6 @@ def render_formatted_entry(
     section: str = "",
     *,
     extra_warnings: list[str] | None = None,
-    is_hard_error: bool = False,
     append_type_html: bool = False,
     preview_note: str | None = None,
 ) -> str:
@@ -469,9 +468,6 @@ def render_formatted_entry(
         Optional section name (used for meta column rendering)
     extra_warnings
         Additional warnings to display (e.g., key validation warnings)
-    is_hard_error
-        Whether there's a hard error (e.g., invalid key name) in addition
-        to serializability issues
     append_type_html
         If True, append type_html below type_name instead of replacing it.
         Used for mapping entries (obsm, varm, etc.) to show extra content.
@@ -527,13 +523,24 @@ def render_formatted_entry(
         html = render_formatted_entry(
             entry, extra_warnings=["Contains '/' (deprecated)"]
         )
+
+    With explicit error::
+
+        entry = FormattedEntry(
+            key="broken_data",
+            output=FormattedOutput(
+                type_name="MyType",
+                error="Failed to load: file not found",
+            ),
+        )
+        html = render_formatted_entry(entry)
     """
     output = entry.output
     extra_warnings = extra_warnings or []
 
     # Compute entry CSS classes
     all_warnings = extra_warnings + list(output.warnings)
-    has_error = not output.is_serializable or is_hard_error
+    has_error = not output.is_serializable or output.error is not None
 
     has_expandable_content = output.expanded_html is not None
     # Detect wrap button needs from output css_class
@@ -573,7 +580,18 @@ def render_formatted_entry(
     parts.append(render_entry_type_cell(type_cell_config))
 
     # Preview cell
+    # Error takes precedence over preview/preview_html
+    preview_html = output.preview_html
     preview_text = output.preview
+
+    if output.error and not preview_html:
+        # Generate error preview if error is set but no preview_html provided
+        from .utils import escape_html
+        from .._repr_constants import CSS_TEXT_ERROR
+
+        error_text = escape_html(output.error)
+        preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
+
     if preview_note and preview_text:
         preview_text = f"{preview_note} {preview_text}"
     elif preview_note:
@@ -581,7 +599,7 @@ def render_formatted_entry(
 
     parts.append(
         render_entry_preview_cell(
-            preview_html=output.preview_html,
+            preview_html=preview_html,
             preview_text=preview_text,
         )
     )

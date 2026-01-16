@@ -333,7 +333,7 @@ class TestXSSPrevention:
         adata = AnnData(np.zeros((5, 3)))
         adata.uns["attack"] = MaliciousObject()
 
-        with pytest.warns(UserWarning, match="Formatter.*failed"):
+        with pytest.warns(UserWarning, match="Formatter.*:"):
             html = adata._repr_html_()
         v = validate_html(html)
 
@@ -636,7 +636,9 @@ class TestBrokenObjects:
                 raise MemoryError("len exploded")
 
         output = formatter_registry.format_value(LenRaises(), context)
-        assert any("len()" in w for w in output.warnings)
+        # Errors are now in output.error, not output.warnings
+        assert output.error is not None
+        assert "len()" in output.error
 
     def test_fallback_formatter_shape_raises(self, context) -> None:
         """FallbackFormatter should handle .shape raising."""
@@ -648,7 +650,9 @@ class TestBrokenObjects:
 
         with pytest.warns(UserWarning, match="shape exploded"):
             output = formatter_registry.format_value(ShapeRaises(), context)
-        assert any(".shape" in w for w in output.warnings)
+        # Errors are now in output.error, not output.warnings
+        assert output.error is not None
+        assert ".shape" in output.error
 
     def test_fallback_formatter_dtype_raises(self, context) -> None:
         """FallbackFormatter should handle .dtype raising."""
@@ -662,7 +666,9 @@ class TestBrokenObjects:
 
         with pytest.warns(UserWarning, match="dtype exploded"):
             output = formatter_registry.format_value(DtypeRaises(), context)
-        assert any(".dtype" in w for w in output.warnings)
+        # Errors are now in output.error, not output.warnings
+        assert output.error is not None
+        assert ".dtype" in output.error
 
     def test_fallback_formatter_broken_repr(self, context) -> None:
         """FallbackFormatter should handle broken __repr__."""

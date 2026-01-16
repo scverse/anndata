@@ -76,8 +76,8 @@ if TYPE_CHECKING:
 def _validate_key_and_collect_warnings(
     key: str,
     output: FormattedOutput,
-) -> tuple[list[str], bool]:
-    """Validate key name and return key-specific warnings.
+) -> tuple[list[str], str | None]:
+    """Validate key name and return key-specific warnings and errors.
 
     Checks key validity (issue #321) and returns warnings specific to the key.
     The output.warnings are handled separately by render_formatted_entry.
@@ -91,17 +91,22 @@ def _validate_key_and_collect_warnings(
 
     Returns
     -------
-    tuple of (key_warnings, is_hard_error)
-        key_warnings: List of key-specific warning messages
-        is_hard_error: True if key has a hard error (write fails NOW, not just deprecated)
+    tuple of (key_warnings, key_error)
+        key_warnings: List of key-specific warning messages (soft issues)
+        key_error: Error message if key has a hard error, else None
     """
-    key_valid, key_reason, key_hard_error = check_column_name(key)
+    key_valid, key_reason, is_hard_error = check_column_name(key)
 
     key_warnings: list[str] = []
-    if not key_valid:
-        key_warnings.append(key_reason)
+    key_error: str | None = None
 
-    return key_warnings, key_hard_error
+    if not key_valid:
+        if is_hard_error:
+            key_error = key_reason
+        else:
+            key_warnings.append(key_reason)
+
+    return key_warnings, key_error
 
 
 def _render_entry_row(
@@ -132,17 +137,26 @@ def _render_entry_row(
     -------
     HTML string for the entry row (and optional expandable content row)
     """
+    from dataclasses import replace
+
     from .html import render_formatted_entry
     from .registry import FormattedEntry
 
-    # Validate key and collect warnings
-    extra_warnings, is_hard_error = _validate_key_and_collect_warnings(key, output)
+    # Validate key and collect warnings/errors
+    extra_warnings, key_error = _validate_key_and_collect_warnings(key, output)
+
+    # If key has a hard error, merge it into output.error
+    if key_error:
+        if output.error:
+            combined_error = f"{key_error}; {output.error}"
+        else:
+            combined_error = key_error
+        output = replace(output, error=combined_error)
 
     entry = FormattedEntry(key=key, output=output)
     return render_formatted_entry(
         entry,
         extra_warnings=extra_warnings if extra_warnings else None,
-        is_hard_error=is_hard_error,
         append_type_html=append_type_html,
         preview_note=preview_note,
     )

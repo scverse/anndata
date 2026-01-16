@@ -368,7 +368,7 @@ class TestErrorHandling:
             adata = AnnData(np.zeros((5, 3)))
             adata.uns["failing"] = FailingType()
 
-            with pytest.warns(UserWarning, match="Formatter.*failed"):
+            with pytest.warns(UserWarning, match="Formatter FailingFormatter"):
                 html = adata._repr_html_()
 
             assert html is not None

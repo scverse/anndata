@@ -922,7 +922,7 @@ class TestErrorRepresentation:
         adata = AnnData(np.zeros((5, 3)))
         adata.uns["failing_prop"] = FailingProperty()
         # Formatter will warn when it fails to handle the object
-        with pytest.warns(UserWarning, match="Formatter.*failed"):
+        with pytest.warns(UserWarning, match="Formatter.*:"):
             html = adata._repr_html_()
         v = validate_html(html)
         # Should not crash and should render the container
@@ -993,7 +993,7 @@ class TestErrorRepresentation:
         # Put in uns since obsm validates types
         adata.uns["failing_dtype"] = FailingDtype()
         # Multiple formatters may warn when they fail to handle the object
-        with pytest.warns(UserWarning, match="Formatter.*failed"):
+        with pytest.warns(UserWarning, match="Formatter.*:"):
             html = adata._repr_html_()
         v = validate_html(html)
         # Should not crash and should render the container

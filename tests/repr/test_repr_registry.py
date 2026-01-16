@@ -195,7 +195,7 @@ class TestFormatterRegistry:
         assert "inner_adata" in html
         assert "AnnData" in html
 
-    def test_registry_formatter_exception_continues(self):
+    def test_registry_formatter_exception_continues_to_next(self):
         """Test registry continues to next formatter on exception."""
         from anndata._repr.registry import (
             FormattedOutput,
@@ -230,9 +230,17 @@ class TestFormatterRegistry:
         registry.register_type_formatter(backup)
 
         try:
-            with pytest.warns(UserWarning, match="Formatter.*failed"):
+            # Two warnings: one for the failure, one summarizing failures before success
+            with pytest.warns(UserWarning) as warnings:
                 result = registry.format_value("test", FormatterContext())
+            # BackupFormatter succeeds
             assert result.type_name == "Backup"
+            # No error in result (backup succeeded)
+            assert result.error is None
+            # Warnings were emitted about the failure
+            warning_messages = [str(w.message) for w in warnings]
+            assert any("FailingFormatter" in msg for msg in warning_messages)
+            assert any("Intentional failure" in msg for msg in warning_messages)
         finally:
             registry.unregister_type_formatter(failing)
             registry.unregister_type_formatter(backup)
@@ -598,7 +606,7 @@ class TestUnsRendererRegistry:
                 "data": "test",
             }
 
-            with pytest.warns(UserWarning, match="Formatter.*failed"):
+            with pytest.warns(UserWarning, match="Formatter.*:"):
                 html = adata._repr_html_()
 
             assert html is not None

@@ -86,6 +86,19 @@ The system is designed to be extensible via two registry patterns:
                     preview_html=f'<span class="anndata-text--muted">({obj.n_items} items)</span>',
                 )
 
+    **Error handling**: Formatters can signal errors in two ways:
+
+    1. **Raise an exception** - The registry catches it, emits a warning with the
+       full error message (for debugging), and continues to try other formatters.
+       If all formatters fail, the fallback formatter is used with the accumulated
+       errors (showing only exception types in HTML to avoid long messages).
+
+    2. **Set ``error`` field explicitly** - For expected errors, set
+       ``FormattedOutput(error="reason")`` directly. The row will be highlighted
+       red and the error shown in the preview column.
+
+    When ``error`` is set, it takes precedence over ``preview`` and ``preview_html``.
+
     Example - format by embedded type hint (for tagged data in uns)::
 
         from anndata._repr import register_formatter, TypeFormatter, FormattedOutput
