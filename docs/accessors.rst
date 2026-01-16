@@ -16,7 +16,7 @@ For these purposes, they
     along one or two axes of an :class:`anndata.AnnData` object:
 
     >>> from anndata.acc import A
-    >>> A[:, "gene-3"]
+    >>> A[:, "gene-3"]  # reference to `adata[:, 3].X` as 1D vector
     A[:, 'gene-3']
     >>> type(A[:, "gene-3"])
     <class 'anndata.acc.AdRef'>
@@ -26,13 +26,15 @@ For these purposes, they
     :class:`AdRef`\ s have the :attr:`AdRef.axes`, :attr:`AdRef.idx`, and :attr:`AdRef.acc` attributes,
     allowing you to inspect all relevant properties.
 
-    >>> A.var["symbol"].axes
-    {'var'}
     >>> pc0 = A.obsm["pca"][:, 0]
+    >>> pc0  # reference to the 0th column of `adata.obsm['pca']`
+    A.obsm['pca'][:, 0]
     >>> pc0.idx
     0
     >>> pc0.acc
     A.obsm['pca']
+    >>> A.var["symbol"].axes
+    {'var'}
     >>> pc0.acc.k
     'pca'
 
