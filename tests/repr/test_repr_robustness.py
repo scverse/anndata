@@ -347,6 +347,44 @@ class TestXSSPrevention:
         # Escaped version should appear
         assert "&lt;img" in html, "Exception name should appear escaped"
 
+    def test_xss_via_categorical_error(self, validate_html):
+        """XSS via exception in categorical preview generation must be escaped."""
+        # This tests the CategoricalFormatter error path specifically
+        # (different from FallbackFormatter which handles uns objects)
+
+        class XSSCatException(Exception):
+            pass
+
+        XSSCatException.__name__ = "<script>alert('cat')</script>"
+
+        # Create a fake categorical-like object that raises during preview
+        # Must have CategoricalDtype to trigger CategoricalFormatter
+        class FakeCategorical:
+            dtype = pd.CategoricalDtype(categories=["a", "b"])
+            shape = (5,)
+
+            @property
+            def categories(self):
+                raise XSSCatException("boom")
+
+            def __len__(self):
+                return 5
+
+        adata = AnnData(np.zeros((5, 3)))
+        # Put it in uns since it accepts arbitrary objects
+        adata.uns["fake_cat"] = FakeCategorical()
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_no_raw_xss()
+        v.assert_html_well_formed()
+
+        # Raw script tag must not appear
+        assert "<script>alert('cat')</script>" not in html, (
+            "Unescaped XSS via categorical error!"
+        )
+
     def test_xss_via_type_name(self, validate_html):
         """XSS via malicious type __name__ must be escaped."""
 

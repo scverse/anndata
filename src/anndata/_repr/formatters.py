@@ -520,6 +520,7 @@ class CategoricalFormatter(TypeFormatter):
 
         # Build preview_html with category list and colors
         preview_html = None
+        error = None
         if context.section in ("obs", "var") and context.column_name is not None:
             try:
                 # Get categories (respecting lazy loading limits)
@@ -560,9 +561,8 @@ class CategoricalFormatter(TypeFormatter):
                     )
             except Exception as e:  # noqa: BLE001
                 # Never let preview generation crash the repr
-                preview_html = (
-                    f'<span class="{CSS_TEXT_MUTED}">(error: {type(e).__name__})</span>'
-                )
+                # Set error field - renderer will escape and display it
+                error = f"error: {type(e).__name__}"
 
         # Check for color warnings
         warnings = []
@@ -590,6 +590,7 @@ class CategoricalFormatter(TypeFormatter):
             preview_html=preview_html,
             is_serializable=True,
             warnings=warnings,
+            error=error,
         )
 
 
