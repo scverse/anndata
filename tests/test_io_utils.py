@@ -134,7 +134,7 @@ def test_to_writeable_list_fallback():
 
 
 def get_gpu_devices() -> Iterator:
-    (
+    return (
         d
         for d in jnp.__array_namespace_info__().devices()
         if d is not None and d.device_kind == "GPU"
