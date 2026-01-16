@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from inspect import get_annotations
 from traceback import walk_stack
 from typing import TYPE_CHECKING
 
@@ -42,7 +43,7 @@ def skip_inherited(  # noqa: PLR0917
     # return if it’s a member of the parent class
     typ = parent
     while typ is not type:
-        if name in typ.__dict__:
+        if name in typ.__dict__ or name in get_annotations(typ):
             return None
         typ = type(typ)
 
