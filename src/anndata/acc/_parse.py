@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, overload
 
-from . import GraphAcc, LayerAcc, MetaVecAcc, MultiAcc
+from . import GraphMapAcc, LayerMapAcc, MetaAcc, MultiMapAcc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Literal
 
-    from . import AdAcc, AdRef, GraphVecAcc, Idx2D, LayerVecAcc
+    from . import AdAcc, AdRef, GraphAcc, Idx2D, LayerAcc
 
 
 @overload
@@ -31,11 +31,11 @@ def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
         raise ValueError(msg)
     acc_name, rest = spec.split(".", 1)
     match getattr(a, acc_name, None):
-        case LayerAcc() | GraphAcc() as acc:
+        case LayerMapAcc() | GraphMapAcc() as acc:
             return _parse_path_2d(acc.__getitem__, rest)
-        case MetaVecAcc() as meta:
+        case MetaAcc() as meta:
             return meta[rest]
-        case MultiAcc() as multi:
+        case MultiMapAcc() as multi:
             return _parse_path_multi(multi, rest)
         case None:  # pragma: no cover
             msg = (
@@ -48,7 +48,7 @@ def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
 
 
 def _parse_path_2d[P: AdRef](
-    get_vec_acc: Callable[[str], LayerVecAcc[P] | GraphVecAcc[P]], spec: str
+    get_vec_acc: Callable[[str], LayerAcc[P] | GraphAcc[P]], spec: str
 ) -> P:
     if not (
         m := re.fullmatch(r"([^\[]+)\[([^,]+),\s?([^\]]+)\]", spec)
@@ -60,7 +60,7 @@ def _parse_path_2d[P: AdRef](
     return vec_acc[_parse_idx_2d(i, j, str)]
 
 
-def _parse_path_multi[P: AdRef](multi: MultiAcc[P], spec: str) -> P:
+def _parse_path_multi[P: AdRef](multi: MultiMapAcc[P], spec: str) -> P:
     if not (m := re.fullmatch(r"([^.]+)\.([\d_]+)", spec)):  # pragma: no cover
         msg = f"Cannot parse multi accessor {spec!r}: should be `name.i`"
         raise ValueError(msg)

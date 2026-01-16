@@ -123,14 +123,14 @@ def test_match(*, obj: object, expected: object) -> None:
 
     match obj:
         case (
-            acc.LayerVecAcc(arg)
-            | acc.MetaVecAcc(arg)
-            | acc.MultiAcc(arg)
-            | acc.GraphAcc(arg)
+            acc.LayerAcc(arg)
+            | acc.MetaAcc(arg)
+            | acc.MultiMapAcc(arg)
+            | acc.GraphMapAcc(arg)
         ):
             assert len(type(obj).__match_args__) == 1
             assert arg == expected
-        case acc.MultiVecAcc(a0, a1) | acc.GraphVecAcc(a0, a1) | acc.AdRef(a0, a1):
+        case acc.MultiAcc(a0, a1) | acc.GraphAcc(a0, a1) | acc.AdRef(a0, a1):
             assert len(type(obj).__match_args__) == 2
             assert (a0, a1) == expected
         case _:

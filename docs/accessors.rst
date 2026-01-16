@@ -44,41 +44,67 @@ For these purposes, they
     >>> A.obsp["connectivities"][:, ["cell0", "cell1"]]
     [A.obsp['connectivities'][:, 'cell0'], A.obsp['connectivities'][:, 'cell1']]
 
-#.  extensible (see :`extending accessors`_)
+#.  extensible (see `extending accessors`_)
 
 API
 ---
 
-Most importantly, there are
+The central starting point is :data:`!A`:
 
 .. autodata:: A
 
+See :class:`!AdAcc` for examples of how to use it:
+
 ..  autosummary::
     :toctree: generated/
+    :template: minimal-class
 
+    AdAcc
     AdRef
 
 The following classes are behind :attr:`AdRef.acc`,
 and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
+.. _reference-accessors:
+
 ..  autosummary::
     :toctree: generated/
+    :template: minimal-class
 
-    VecAcc
-    MetaVecAcc
-    LayerVecAcc
-    MultiVecAcc
-    GraphVecAcc
+    RefAcc
+
+- :class:`MetaAcc` with :attr:`MetaAcc.ax`
+- :class:`LayerAcc` with :attr:`LayerAcc.k`
+- :class:`MultiAcc` with :attr:`MultiAcc.ax` and :attr:`MultiAcc.k`
+- :class:`GraphAcc` with :attr:`GraphAcc.ax` and :attr:`GraphAcc.k`
+
+..  hidden
+    ..  autosummary::
+        :toctree: generated/
+        :template: minimal-class
+
+        MetaAcc
+        LayerAcc
+        MultiAcc
+        GraphAcc
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.acc.MetaAcc
+   generated/anndata.acc.LayerAcc
+   generated/anndata.acc.MultiAcc
+   generated/anndata.acc.GraphAcc
 
 Finally, these classes are only useful for extending:
 
 ..  autosummary::
     :toctree: generated/
+    :template: minimal-class
 
-    AdAcc
-    LayerAcc
-    MultiAcc
-    GraphAcc
+    LayerMapAcc
+    MultiMapAcc
+    GraphMapAcc
 
 .. _extending accessors:
 

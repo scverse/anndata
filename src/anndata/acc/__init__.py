@@ -31,13 +31,13 @@ else:
     type R = AdRef
     type I = Hashable
 
-type Vector = pd.api.extensions.ExtensionArray | NDArray[Any]
+type Array = pd.api.extensions.ExtensionArray | NDArray[Any]
 
 # full slices: e.g. a[:, 5], a[18, :], or a[:, :]
 type Sf = slice[None, None, None]
 type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
 type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
-type AdRefFunc[I] = Callable[[AnnData, I], Vector]
+type AdRefFunc[I] = Callable[[AnnData, I], Array]
 
 
 __all__ = [
@@ -45,29 +45,49 @@ __all__ = [
     "AdAcc",
     "AdRef",
     "GraphAcc",
-    "GraphVecAcc",
+    "GraphMapAcc",
     "LayerAcc",
-    "LayerVecAcc",
-    "MetaVecAcc",
+    "LayerMapAcc",
+    "MetaAcc",
     "MultiAcc",
-    "MultiVecAcc",
-    "VecAcc",
+    "MultiMapAcc",
+    "RefAcc",
     "hv",
 ]
 
 
 class AdRef[I: Hashable]:
-    """A path referencing an array in an AnnData object."""
+    """A reference to a 1D or 2D array along the axes of an AnnData object.
 
-    acc: VecAcc[Self, I]
-    """The vector accessor containing information about this array."""
+    Examples
+    --------
+    Use :data:`A` in the same way you would an :class:`~anndata.AnnData` object if you wanted to access a 1D or 2D array along the whole axes.
+    You can then introspect the reference:
+
+    >>> from anndata.acc import A
+    >>> A.obs.index.axes
+    {'obs'}
+    >>> A.obs["x"].idx
+    'x'
+    >>> type(A.var["y"].acc)
+    <class 'anndata.acc.MetaAcc'>
+
+    See :mod:`anndata.acc` and :class:`AdAcc` for more examples.
+
+    """
+
+    acc: RefAcc[Self, I]
+    """The accessor containing information about this array.
+
+    See :ref:`here <reference-accessors>` for all possible types this can assume.
+    """
 
     idx: I
     """The index specifying the array."""
 
     __match_args__: ClassVar = ("acc", "idx")
 
-    def __init__(self, acc: VecAcc[Self, I], idx: I) -> None:
+    def __init__(self, acc: RefAcc[Self, I], idx: I) -> None:
         self.acc = acc
         self.idx = idx
 
@@ -88,7 +108,7 @@ class AdRef[I: Hashable]:
                 a = (
                     A
                     if type(self).__eq__ is AdRef.__eq__
-                    else AdAcc(path_class=type(self))
+                    else AdAcc(ref_class=type(self))
                 )
                 return self == a.resolve(value, strict=False)
         return False
@@ -104,17 +124,20 @@ class AdRef[I: Hashable]:
     def __repr__(self) -> str:
         return self.__repr
 
-    def __call__(self, adata: AnnData) -> Vector:
+    def __call__(self, adata: AnnData) -> Array:
         """Retrieve referenced array from AnnData."""
         return self.acc.get(adata, self.idx)
 
 
 @dataclass(frozen=True)
-class VecAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
-    """Abstract base class for vector accessors."""
+class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
+    """Abstract base class for reference accessors.
+
+    See :ref:`here <reference-accessors>` for all existing subclasses.
+    """
 
     _: KW_ONLY
-    path_class: type[R]
+    ref_class: type[R]
 
     def process_idx(self, idx: Any, /) -> I:
         self.axes(idx)
@@ -122,7 +145,7 @@ class VecAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
 
     def __getitem__(self, idx: Any, /) -> R:
         idx = self.process_idx(idx)
-        return self.path_class(self, idx)  # type: ignore
+        return self.ref_class(self, idx)  # type: ignore
 
     @abc.abstractmethod
     def axes(self, idx: I, /) -> Axes: ...
@@ -131,31 +154,32 @@ class VecAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     @abc.abstractmethod
     def idx_repr(self, idx: I, /) -> str: ...
     @abc.abstractmethod
-    def get(self, adata: AnnData, idx: I, /) -> Vector: ...
+    def get(self, adata: AnnData, idx: I, /) -> Array: ...
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef]:
-    """Accessor for layers."""
+class LayerMapAcc[R: AdRef]:
+    r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     _: KW_ONLY
-    path_class: type[R]
+    ref_class: type[R]
 
-    def __getitem__(self, k: str, /) -> LayerVecAcc[R]:
+    def __getitem__(self, k: str, /) -> LayerAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
-        return LayerVecAcc(k, path_class=self.path_class)
+        return LayerAcc(k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
         return "A.layers"
 
 
 @dataclass(frozen=True)
-class LayerVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
-    """Accessor for layer vectors."""
+class LayerAcc[R: AdRef[Idx2D[str]]](RefAcc[R, "Idx2D[str]"]):
+    r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     k: str | None
+    """Key this accessor refers to, e.g. `A.layers['counts'].k == 'counts'`."""
 
     @overload
     def __getitem__(self, idx: Idx2D[str], /) -> R: ...
@@ -175,7 +199,7 @@ class LayerVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Array:
         ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
             ver_or_mat = ver_or_mat.toarray()
@@ -185,14 +209,28 @@ class LayerVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
 
 
 @dataclass(frozen=True)
-class MetaVecAcc[R: AdRef[str | type[pd.Index]]](VecAcc[R, str | type[pd.Index]]):
-    """Accessor for metadata (obs/var)."""
+class MetaAcc[R: AdRef[str | type[pd.Index]]](RefAcc[R, str | type[pd.Index]]):
+    r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
+
+    Examples
+    --------
+    You can refer to columns or the index in the way you would access them
+    in a :class:`~pandas.DataFrame`:
+
+    >>> from anndata.acc import A
+    >>> A.obs["foo"]
+    A.obs['foo']
+    >>> A.var.index
+    A.var.index
+
+    """
 
     ax: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obs.ax == 'obs'`."""
 
     @property
     def index(self) -> R:
-        """Index accessor."""
+        """Index :class:`AdRef`, i.e. `A.obs.index` or `A.var.index`."""
         return self[pd.Index]
 
     def process_idx(self, k: object, /) -> str | type[pd.Index]:
@@ -220,35 +258,40 @@ class MetaVecAcc[R: AdRef[str | type[pd.Index]]](VecAcc[R, str | type[pd.Index]]
     def idx_repr(self, k: str | type[pd.Index]) -> str:
         return ".index" if k is pd.Index else f"[{k!r}]"
 
-    def get(self, adata: AnnData, k: str | type[pd.Index], /) -> Vector:
+    def get(self, adata: AnnData, k: str | type[pd.Index], /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         return df.index.values if k is pd.Index else df[k].values
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef]:
-    """Accessor for multi-dimensional array containers (obsm/varm)."""
+class MultiMapAcc[R: AdRef]:
+    r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     ax: Literal["obs", "var"]
-    _: KW_ONLY
-    path_class: type[R]
+    """Axis this accessor refers to, e.g. `A.obsm.ax == 'obs'`."""
 
-    def __getitem__(self, k: str, /) -> MultiVecAcc[R]:
+    _: KW_ONLY
+    ref_class: type[R]
+
+    def __getitem__(self, k: str, /) -> MultiAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}m key {k!r}"
             raise TypeError(msg)
-        return MultiVecAcc(self.ax, k, path_class=self.path_class)
+        return MultiAcc(self.ax, k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
         return f"A.{self.ax}m"
 
 
 @dataclass(frozen=True)
-class MultiVecAcc[R: AdRef[int]](VecAcc[R, int]):
-    """Accessor for arrays from multi-dimensional containers (obsm/varm)."""
+class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
+    r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     ax: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obsm[k].ax == 'obs'`."""
+
     k: str
+    """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
     def process_idx[T](i: T | tuple[Sf, T], /) -> T:
@@ -283,34 +326,39 @@ class MultiVecAcc[R: AdRef[int]](VecAcc[R, int]):
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def get(self, adata: AnnData, i: int, /) -> Vector:
+    def get(self, adata: AnnData, i: int, /) -> Array:
         return getattr(adata, f"{self.ax}m")[self.k][:, i]
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef]:
-    """Accessor for graph containers (obsp/varp)."""
+class GraphMapAcc[R: AdRef]:
+    r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     ax: Literal["obs", "var"]
-    _: KW_ONLY
-    path_class: type[R]
+    """Axis this accessor refers to, e.g. `A.obsp.ax == 'obs'`."""
 
-    def __getitem__(self, k: str, /) -> GraphVecAcc[R]:
+    _: KW_ONLY
+    ref_class: type[R]
+
+    def __getitem__(self, k: str, /) -> GraphAcc[R]:
         if not isinstance(k, str):
             msg = f"Unsupported {self.ax}p key {k!r}"
             raise TypeError(msg)
-        return GraphVecAcc(self.ax, k, path_class=self.path_class)
+        return GraphAcc(self.ax, k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
         return f"A.{self.ax}p"
 
 
 @dataclass(frozen=True)
-class GraphVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
-    """Accessor for arrays from graph containers (obsp/varp)."""
+class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, "Idx2D[str]"]):
+    r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     ax: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.varp[k].axis == "var"`."""
+
     k: str
+    """Key this accessor refers to, e.g. `A.obsp['x'].k == 'x'`."""
 
     def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
         if not all(isinstance(i, str | slice) for i in idx):
@@ -343,44 +391,93 @@ class GraphVecAcc[R: AdRef[Idx2D[str]]](VecAcc[R, "Idx2D[str]"]):
     def idx_repr(self, idx: Idx2D[str]) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Vector:
+    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
         return getattr(adata, f"{self.ax}p")[self.k][iloc].toarray()
 
 
 @dataclass(frozen=True)
-class AdAcc[R: AdRef](LayerVecAcc[R]):
-    r"""Accessor to create :class:`AdRef`\ s."""
+class AdAcc[R: AdRef](LayerAcc[R]):
+    r"""Accessor to create :class:`AdRef`\ s (:data:`A`).
+
+    See examples below and in :mod:`anndata.acc`.
+    """
 
     k: None = field(init=False, default=None)
+    """: `A[:, :]` is equivalent to `A.layers[None][:, :]`."""  # weird “:” is load-bearing 🤷
 
-    layers: LayerAcc[R] = field(init=False)
-    obs: MetaVecAcc[R] = field(init=False)
-    var: MetaVecAcc[R] = field(init=False)
-    obsm: MultiAcc[R] = field(init=False)
-    varm: MultiAcc[R] = field(init=False)
-    obsp: GraphAcc[R] = field(init=False)
-    varp: GraphAcc[R] = field(init=False)
+    layers: LayerMapAcc[R] = field(init=False)
+    """Access complete layers or 1D vectors across observations or variables.
+
+    >>> A.layers["counts"][:, :]
+    >>> A.layers["counts"]["cell-1", :]
+    >>> A.layers["counts"][:, "gene-5"]
+    """
+
+    obs: MetaAcc[R] = field(init=False)
+    """Access 1D arrays along observations.
+
+    >>> A.obs["cell-type"]
+    >>> A.obs.index
+    """
+
+    var: MetaAcc[R] = field(init=False)
+    """Access 1D arrays along variables.
+
+    >>> A.var["symbols"]
+    >>> A.obs.index
+    """
+
+    obsm: MultiMapAcc[R] = field(init=False)
+    """Access 1D vectors along observations.
+
+    >>> A.obsm["pca"][:, 0].idx
+    0
+    """
+
+    varm: MultiMapAcc[R] = field(init=False)
+    """Access 1D vectors along variables.
+
+    >>> A.varm["loadings"][:, 0].idx
+    0
+    """
+
+    obsp: GraphMapAcc[R] = field(init=False)
+    """Access 1D or 2D vectors along observations.
+
+    >>> A.layers["x"][:, :].axes
+    ('obs', 'obs')
+    >>> A.layers["x"]["cell-1", :].axes
+    {'obs'}
+    >>> A.layers["x"][:, "cell-1"].axes
+    {'obs'}
+    """
+
+    varp: GraphMapAcc[R] = field(init=False)
+    """Access 1D or 2D vectors along variables.
+
+    >>> A.layers["x"][:, :].axes
+    ('var', 'var')
+    >>> A.layers["x"]["gene-1", :].axes
+    {'var'}
+    >>> A.layers["x"][:, "gene-1"].axes
+    {'var'}
+    """
 
     ATTRS: ClassVar = frozenset({
-        "layers",
-        "obs",
-        "var",
-        "obsm",
-        "varm",
-        "obsp",
-        "varp",
+        *("layers", "obs", "var"),
+        *("obsm", "varm", "obsp", "varp"),
     })
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "layers", LayerAcc(path_class=self.path_class))
-        object.__setattr__(self, "obs", MetaVecAcc("obs", path_class=self.path_class))
-        object.__setattr__(self, "var", MetaVecAcc("var", path_class=self.path_class))
-        object.__setattr__(self, "obsm", MultiAcc("obs", path_class=self.path_class))
-        object.__setattr__(self, "varm", MultiAcc("var", path_class=self.path_class))
-        object.__setattr__(self, "obsp", GraphAcc("obs", path_class=self.path_class))
-        object.__setattr__(self, "varp", GraphAcc("var", path_class=self.path_class))
+        object.__setattr__(self, "layers", LayerMapAcc(ref_class=self.ref_class))
+        object.__setattr__(self, "obs", MetaAcc("obs", ref_class=self.ref_class))
+        object.__setattr__(self, "var", MetaAcc("var", ref_class=self.ref_class))
+        object.__setattr__(self, "obsm", MultiMapAcc("obs", ref_class=self.ref_class))
+        object.__setattr__(self, "varm", MultiMapAcc("var", ref_class=self.ref_class))
+        object.__setattr__(self, "obsp", GraphMapAcc("obs", ref_class=self.ref_class))
+        object.__setattr__(self, "varp", GraphMapAcc("var", ref_class=self.ref_class))
 
     @overload
     def resolve(self, spec: str, *, strict: Literal[True] = True) -> R: ...
@@ -418,7 +515,7 @@ class AdAcc[R: AdRef](LayerVecAcc[R]):
         return "A"
 
 
-A: AdAcc[AdRef] = AdAcc(path_class=AdRef)
+A: AdAcc[AdRef] = AdAcc(ref_class=AdRef)
 r"""A global accessor to create :class:`AdRef`\ s."""
 
 
@@ -450,7 +547,7 @@ def _expand_idx2d_list[Idx: int | str](
 
 
 def _idx2axes(idx: Idx2D[str]) -> set[Literal["obs", "var"]]:
-    """Get along which axes the referenced vector is and validate the index."""
+    """Get along which axes the referenced array is and validate the index."""
     for ax_idx in idx:
         if isinstance(ax_idx, str):
             continue
@@ -473,6 +570,8 @@ def _idx2axes(idx: Idx2D[str]) -> set[Literal["obs", "var"]]:
 
 
 def __getattr__(name: Literal["hv"]) -> Any:
+    __tracebackhide__ = True
+
     if name == "hv":
         import anndata.acc.hv
 

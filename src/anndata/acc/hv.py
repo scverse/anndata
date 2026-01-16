@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, overload
 import pandas as pd
 from holoviews.core.dimension import Dimension
 
-from . import AdAcc, AdRef, GraphVecAcc, LayerVecAcc, MetaVecAcc, MultiVecAcc
+from . import AdAcc, AdRef, GraphAcc, LayerAcc, MetaAcc, MultiAcc
 
 if TYPE_CHECKING:
     from typing import Any, Literal, Self
 
-    from . import VecAcc
+    from . import RefAcc
 
 
 __all__ = ["A", "AdDim"]
@@ -18,11 +18,11 @@ __all__ = ["A", "AdDim"]
 
 def mk_label[I](p: AdRef[I], /) -> str | None:
     match p.acc:
-        case MultiVecAcc():
+        case MultiAcc():
             return f"{p.acc.k} {p.idx}"
-        case GraphVecAcc():
+        case GraphAcc():
             return next((f"{p.acc.k} {i}" for i in p.idx if isinstance(i, str)), None)
-        case LayerVecAcc():
+        case LayerAcc():
             return next(
                 (
                     f"{p.acc.k} {i}" if p.acc.k else i
@@ -31,7 +31,7 @@ def mk_label[I](p: AdRef[I], /) -> str | None:
                 ),
                 None,
             )
-        case MetaVecAcc():
+        case MetaAcc():
             return f"{p.acc.ax} index" if p.idx is pd.Index else p.idx
         case _:  # pragma: no cover
             msg = f"Unsupported vector accessor {p.acc!r}"
@@ -39,7 +39,7 @@ def mk_label[I](p: AdRef[I], /) -> str | None:
 
 
 class AdDim[I](AdRef[I], Dimension):
-    def __init__(self, acc: VecAcc[Self, I], idx: I, /, **params: object) -> None:
+    def __init__(self, acc: RefAcc[Self, I], idx: I, /, **params: object) -> None:
         AdRef.__init__(self, acc, idx)  # type: ignore
         spec = params.pop("spec", repr(self))
         label = params.pop("label", mk_label(self))
@@ -136,4 +136,4 @@ class AdDim[I](AdRef[I], Dimension):
         return False
 
 
-A = AdAcc(path_class=AdDim)
+A = AdAcc(ref_class=AdDim)
