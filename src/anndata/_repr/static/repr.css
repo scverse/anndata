@@ -905,7 +905,7 @@ body.dark-mode .anndata-repr {
     font-size: 10px;
     font-weight: 600;
     color: var(--anndata-warning-color);
-    cursor: help;
+    cursor: pointer;
     margin-left: 2px;
 }
 
