@@ -487,7 +487,7 @@ def concat_on_disk(  # noqa: PLR0913
     out_file: PathLike[str] | str | H5Group | ZarrGroup,
     *,
     max_loaded_elems: int = 100_000_000,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
     axis: Literal["obs", 0, "var", 1] = 0,
     join: Join_T = "inner",
     merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
@@ -534,7 +534,7 @@ def concat_on_disk(  # noqa: PLR0913
         sparse arrays. Note that this number also includes the empty entries.
         Set to 100m by default meaning roughly 400mb will be loaded
         to memory simultaneously.
-    virtual_concat
+    use_virtual_concat
         Whether to use virtual concatenation for sparse arrays.
         This will create soft links to the source files instead of copying the whole content.
         Be aware that this will make the output file dependent on the source files.
@@ -686,7 +686,7 @@ def concat_on_disk(  # noqa: PLR0913
             label=label,
             index_unique=index_unique,
             fill_value=fill_value,
-            virtual_concat=virtual_concat,
+            use_virtual_concat=use_virtual_concat,
             merge=merge,
         )
 
