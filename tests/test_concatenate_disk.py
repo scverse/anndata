@@ -99,7 +99,8 @@ def assert_eq_concat_on_disk(
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
     *args,
-    virtual_concat: bool = False,
+    merge_strategy: merge.StrategiesLiteral | None = None,
+    use_virtual_concat: bool = False,
     max_loaded_elems: int | None = None,
     **kwargs,
 ):
@@ -114,7 +115,7 @@ def assert_eq_concat_on_disk(
         paths,
         out_name,
         *args,
-        virtual_concat=virtual_concat,
+        use_virtual_concat=use_virtual_concat,
         merge=merge_strategy,
         **kwargs,
     )
