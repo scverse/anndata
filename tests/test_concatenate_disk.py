@@ -71,6 +71,50 @@ def max_loaded_elems(request) -> int:
     return request.param
 
 
+def make_concat_adatas(
+    array_type: Literal["array", "sparse", "sparse_array"] = "sparse",
+    axis: Literal[0, 1] = 0,
+    reindex: bool = True,
+    gen_adata_kwargs: dict | None = None,
+):
+    """Generate adatas for concat tests.
+
+    Parameters
+    ----------
+    array_type
+        Type of array for X matrix ("array" for dense, "sparse" for sparse)
+    axis
+        Concatenation axis
+    reindex
+        Whether to randomize both axes (True) or only the concat axis (False)
+    gen_adata_kwargs
+        Optional kwargs to pass to gen_adata (e.g., obsm_types, varm_types, layers_types)
+    """
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1} if reindex else {axis}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = gen_adata_kwargs if gen_adata_kwargs is not None else GEN_ADATA_OOC_CONCAT_ARGS
+
+    adatas = []
+    for i in range(3):
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
+        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names[1::2] = f"{i}-" + off_names[1::2]
+        setattr(a, f"{off_axis_name}_names", off_names)
+        adatas.append(a)
+
+    return adatas
+
+
 def _adatas_to_paths(adatas, tmp_path, file_format):
     """
     Gets list of adatas, writes them and returns their paths as zarr
@@ -148,11 +192,8 @@ def test_anndatas(
     reindex: bool,
     merge_strategy: merge.StrategiesLiteral,
 ):
-    _, off_axis_name = _resolve_axis(1 - axis)
-    random_axes = {0, 1} if reindex else {axis}
-    sparse_fmt = "csr" if axis == 0 else "csc"
-    kw = (
-        GEN_ADATA_OOC_CONCAT_ARGS
+    gen_adata_kwargs = (
+        None
         if not reindex
         else dict(
             obsm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
@@ -160,23 +201,12 @@ def test_anndatas(
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
     )
-
-    adatas = []
-    for i in range(3):
-        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
-            var_dtypes=[pd.CategoricalDtype(ordered=False)],
-            **kw,
-        )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
-        adatas.append(a)
+    adatas = make_concat_adatas(
+        array_type=array_type,
+        axis=axis,
+        reindex=reindex,
+        gen_adata_kwargs=gen_adata_kwargs,
+    )
 
     assert_eq_concat_on_disk(
         adatas,
@@ -190,51 +220,21 @@ def test_anndatas(
     )
 
 
-def test_anndatas_virtual_concat_missing_file(
-    *,
-    tmp_path: Path,
-):
-    axis = 0
-    max_loaded_elems = 1_000_000
-    file_format = "h5ad"
-    array_type = "sparse"
-    join_type = "inner"
-    _, off_axis_name = _resolve_axis(1 - axis)
-    random_axes = {0, 1}
-    sparse_fmt = "csr" if axis == 0 else "csc"
-    kw = GEN_ADATA_OOC_CONCAT_ARGS
+def test_anndatas_virtual_concat_missing_file(tmp_path: Path):
+    """Test that reading a virtual concat file fails gracefully when a source file is missing."""
+    import shutil
 
-    adatas = []
-    for i in range(3):
-        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
-            var_dtypes=[pd.CategoricalDtype(ordered=False)],
-            **kw,
-        )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
-        adatas.append(a)
-
+    adatas = make_concat_adatas(array_type="sparse", axis=0)
     assert_eq_concat_on_disk(
         adatas,
         tmp_path,
-        file_format,
+        "h5ad",
         use_virtual_concat=True,
-        max_loaded_elems=max_loaded_elems,
-        axis=axis,
-        join=join_type,
+        max_loaded_elems=1_000_000,
+        axis=0,
+        join="inner",
     )
-    # remove one of the files
-    # overwrite the file
-    # copy out.h5ad to out2.h5ad
-    import shutil
-
+    # copy out.h5ad to out2.h5ad and corrupt source file
     shutil.copy(tmp_path / "out.h5ad", tmp_path / "out2.h5ad")
     with tmp_path.joinpath("0.h5ad").open("w") as f:
         f.write("0")
@@ -245,45 +245,22 @@ def test_anndatas_virtual_concat_missing_file(
         ad.read_h5ad(tmp_path / "out2.h5ad")
 
 
+@pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
 def test_anndatas_virtual_concat(
-    *,
     tmp_path: Path,
+    array_type: Literal["sparse", "array"],
+    axis: Literal[0, 1],
 ):
-    axis = 0
-    max_loaded_elems = 1_000_000
-    file_format = "h5ad"
-    array_type = "sparse"
-    join_type = "inner"
-    _, off_axis_name = _resolve_axis(1 - axis)
-    random_axes = {0, 1}
-    sparse_fmt = "csr" if axis == 0 else "csc"
-    kw = GEN_ADATA_OOC_CONCAT_ARGS
-
-    adatas = []
-    for i in range(3):
-        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
-            var_dtypes=[pd.CategoricalDtype(ordered=False)],
-            **kw,
-        )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
-        adatas.append(a)
-
+    """Test virtual concatenation for both sparse and dense arrays."""
+    adatas = make_concat_adatas(array_type=array_type, axis=axis)
     assert_eq_concat_on_disk(
         adatas,
         tmp_path,
-        file_format,
+        "h5ad",
         use_virtual_concat=True,
-        max_loaded_elems=max_loaded_elems,
+        max_loaded_elems=1_000_000,
         axis=axis,
-        join=join_type,
+        join="inner",
     )
 
 

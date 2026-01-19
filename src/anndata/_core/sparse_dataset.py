@@ -732,8 +732,6 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             layout_data[off : off + block_nnz] = vs_data
             layout_idx[off : off + block_nnz] = vs_idx
 
-        # === CREATE VIRTUAL DATASETS ===
-        # note: you can call create_virtual_dataset on the group itself in h5py ≥3.0
         out_grp.create_virtual_dataset(
             "data",
             layout_data,
