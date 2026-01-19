@@ -72,6 +72,7 @@ def max_loaded_elems(request) -> int:
 
 
 def make_concat_adatas(
+    *,
     array_type: Literal["array", "sparse", "sparse_array"] = "sparse",
     axis: Literal[0, 1] = 0,
     reindex: bool = True,
