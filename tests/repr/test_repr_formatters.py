@@ -878,3 +878,187 @@ class TestReadmeIcon:
         html = adata._repr_html_()
         # The readme text should be somewhere in the HTML
         assert readme_text in html or "README" in html
+
+
+class TestObsmVarmPreviewConsistency:
+    """Tests for consistent column preview in obsm/varm sections across array formatters.
+
+    Array formatters should show "(N columns)" preview for 2D arrays in obsm/varm.
+    This test class ensures all array-like formatters implement this consistently.
+    """
+
+    def test_numpy_array_obsm_preview(self):
+        """Test NumpyArrayFormatter shows column count in obsm."""
+        from anndata._repr.formatters import NumpyArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyArrayFormatter()
+        arr = np.zeros((100, 25), dtype=np.float32)
+
+        # No preview outside obsm/varm
+        result = formatter.format(arr, FormatterContext(section="uns"))
+        assert result.preview is None
+
+        # Shows columns in obsm
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        assert result.preview == "(25 columns)"
+
+        # Shows columns in varm
+        result = formatter.format(arr, FormatterContext(section="varm"))
+        assert result.preview == "(25 columns)"
+
+    def test_numpy_masked_array_obsm_preview(self):
+        """Test NumpyMaskedArrayFormatter shows column count in obsm."""
+        from anndata._repr.formatters import NumpyMaskedArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyMaskedArrayFormatter()
+        arr = np.ma.array(np.zeros((100, 25)), mask=False)
+
+        # No preview outside obsm/varm
+        result = formatter.format(arr, FormatterContext(section="uns"))
+        assert result.preview is None
+
+        # Shows columns in obsm
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        assert result.preview == "(25 columns)"
+
+        # Shows columns in varm
+        result = formatter.format(arr, FormatterContext(section="varm"))
+        assert result.preview == "(25 columns)"
+
+    def test_cupy_array_obsm_preview(self):
+        """Test CuPyArrayFormatter shows column count in obsm."""
+        from anndata._repr.formatters import CuPyArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Mock CuPy array
+        class MockCuPyArray:
+            def __init__(self):
+                self.shape = (100, 30)
+                self.dtype = np.float32
+
+        MockCuPyArray.__module__ = "cupy._core.core"
+
+        formatter = CuPyArrayFormatter()
+        arr = MockCuPyArray()
+
+        # No preview outside obsm/varm
+        result = formatter.format(arr, FormatterContext(section="uns"))
+        assert result.preview is None
+
+        # Shows columns in obsm
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        assert result.preview == "(30 columns)"
+
+        # Shows columns in varm
+        result = formatter.format(arr, FormatterContext(section="varm"))
+        assert result.preview == "(30 columns)"
+
+    @pytest.mark.skipif(not HAS_DASK, reason="dask not installed")
+    def test_dask_array_obsm_preview(self):
+        """Test DaskArrayFormatter shows column count in obsm."""
+        import dask.array as da
+
+        from anndata._repr.formatters import DaskArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DaskArrayFormatter()
+        arr = da.zeros((100, 20), chunks=(50, 10))
+
+        # No preview outside obsm/varm
+        result = formatter.format(arr, FormatterContext(section="uns"))
+        assert result.preview is None
+
+        # Shows columns in obsm
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        assert result.preview == "(20 columns)"
+
+        # Shows columns in varm
+        result = formatter.format(arr, FormatterContext(section="varm"))
+        assert result.preview == "(20 columns)"
+
+    def test_array_api_formatter_obsm_preview(self):
+        """Test ArrayAPIFormatter shows column count in obsm."""
+        from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
+
+        # Mock JAX-like array
+        class MockJAXArray:
+            def __init__(self):
+                self.shape = (100, 15)
+                self.dtype = np.float32
+                self.ndim = 2
+
+        MockJAXArray.__module__ = "jax.numpy"
+
+        formatter = ArrayAPIFormatter()
+        arr = MockJAXArray()
+
+        # No preview outside obsm/varm
+        result = formatter.format(arr, FormatterContext(section="uns"))
+        assert result.preview is None
+
+        # Shows columns in obsm
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        assert result.preview == "(15 columns)"
+
+        # Shows columns in varm
+        result = formatter.format(arr, FormatterContext(section="varm"))
+        assert result.preview == "(15 columns)"
+
+    def test_dataframe_obsm_preview_html(self):
+        """Test DataFrameFormatter shows column list in obsm preview_html."""
+        from anndata._repr.formatters import DataFrameFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = DataFrameFormatter()
+        df = pd.DataFrame({"col_a": [1, 2, 3], "col_b": [4, 5, 6], "col_c": [7, 8, 9]})
+
+        # No preview_html outside obsm/varm
+        result = formatter.format(df, FormatterContext(section="uns"))
+        assert result.preview_html is None
+
+        # Shows column names in obsm
+        result = formatter.format(df, FormatterContext(section="obsm"))
+        assert result.preview_html is not None
+        assert "col_a" in result.preview_html
+        assert "col_b" in result.preview_html
+        assert "col_c" in result.preview_html
+
+        # Shows column names in varm
+        result = formatter.format(df, FormatterContext(section="varm"))
+        assert result.preview_html is not None
+        assert "col_a" in result.preview_html
+
+    def test_1d_arrays_no_preview(self):
+        """Test that 1D arrays don't show column preview in obsm/varm."""
+        from anndata._repr.formatters import (
+            NumpyArrayFormatter,
+            NumpyMaskedArrayFormatter,
+        )
+        from anndata._repr.registry import FormatterContext
+
+        # 1D numpy array
+        np_formatter = NumpyArrayFormatter()
+        arr_1d = np.zeros((100,), dtype=np.float32)
+        result = np_formatter.format(arr_1d, FormatterContext(section="obsm"))
+        assert result.preview is None
+
+        # 1D masked array
+        ma_formatter = NumpyMaskedArrayFormatter()
+        ma_1d = np.ma.array(np.zeros((100,)))
+        result = ma_formatter.format(ma_1d, FormatterContext(section="obsm"))
+        assert result.preview is None
+
+    def test_large_column_count_formatting(self):
+        """Test that large column counts are formatted with thousands separators."""
+        from anndata._repr.formatters import NumpyArrayFormatter
+        from anndata._repr.registry import FormatterContext
+
+        formatter = NumpyArrayFormatter()
+        arr = np.zeros((100, 12345), dtype=np.float32)
+
+        result = formatter.format(arr, FormatterContext(section="obsm"))
+        # format_number adds thousands separators
+        assert "12,345" in result.preview or "12345" in result.preview

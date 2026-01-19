@@ -219,10 +219,17 @@ class NumpyMaskedArrayFormatter(TypeFormatter):
         dtype_str = str(arr.dtype)
         n_masked = int(np.sum(arr.mask)) if arr.mask is not np.ma.nomask else 0
 
+        # For obsm/varm sections, show number of columns in preview
+        preview = None
+        if context.section in ("obsm", "varm") and arr.ndim == 2:
+            n_cols = arr.shape[1]
+            preview = f"({format_number(n_cols)} columns)"
+
         return FormattedOutput(
             type_name=f"MaskedArray ({shape_str}) {dtype_str}",
             css_class=_get_dtype_css_class(arr.dtype),
             tooltip=f"{n_masked} masked values" if n_masked > 0 else "",
+            preview=preview,
             is_serializable=True,
         )
 
