@@ -327,6 +327,25 @@ from .._repr_constants import (
 # Documentation base URL
 DOCS_BASE_URL = "https://anndata.readthedocs.io/en/latest/"
 
+
+def get_section_doc_url(section: str) -> str:
+    """Get documentation URL for a section.
+
+    Centralizes URL generation so the pattern can be changed in one place.
+    Uses /en/latest/ for discoverability (users can navigate to their version).
+
+    Parameters
+    ----------
+    section
+        Section name (e.g., "obs", "var", "uns", "obsm")
+
+    Returns
+    -------
+    URL to the section's documentation page
+    """
+    return f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
+
+
 # Section order for display
 SECTION_ORDER = (
     SECTION_X,
@@ -399,6 +418,7 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "DEFAULT_MAX_FIELD_WIDTH",
     "DEFAULT_TYPE_WIDTH",
     "DOCS_BASE_URL",
+    "get_section_doc_url",
     "SECTION_ORDER",
     "NOT_SERIALIZABLE_MSG",
     # CSS dtype constants for custom formatters

@@ -34,8 +34,8 @@ from .._repr_constants import (
     STYLE_SECTION_TABLE,
 )
 from . import (
-    DOCS_BASE_URL,
     SECTION_ORDER,
+    get_section_doc_url,
 )
 from .components import (
     TypeCellConfig,
@@ -54,6 +54,7 @@ from .core import (
     render_x_entry,
 )
 from .registry import (
+    FormattedEntry,
     extract_uns_type_hint,
     formatter_registry,
 )
@@ -138,10 +139,8 @@ def _render_entry_row(
     -------
     HTML string for the entry row (and optional expandable content row)
     """
-    from dataclasses import replace
-
+    # Import here to avoid circular import (html.py imports sections.py)
     from .html import render_formatted_entry
-    from .registry import FormattedEntry
 
     # Validate key and collect warnings
     extra_warnings, is_key_not_serializable = _validate_key_and_collect_warnings(
@@ -176,7 +175,7 @@ def _render_dataframe_section(
     n_cols = len(df.columns)
 
     # Doc URL and tooltip for this section
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
+    doc_url = get_section_doc_url(section)
     tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
 
     if n_cols == 0:
@@ -226,7 +225,7 @@ def _render_mapping_section(
     n_items = len(mapping)
 
     # Doc URL and tooltip for this section
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
+    doc_url = get_section_doc_url(section)
     tooltip = get_section_tooltip(section)
 
     if n_items == 0:
@@ -270,7 +269,7 @@ def _render_uns_section(
     n_items = len(uns)
 
     # Doc URL and tooltip
-    doc_url = f"{DOCS_BASE_URL}generated/anndata.AnnData.uns.html"
+    doc_url = get_section_doc_url("uns")
     tooltip = "Unstructured annotation"
 
     if n_items == 0:
