@@ -176,18 +176,77 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
+def virtual_concat_dense_hdf5(
+    arrays: Sequence[H5Array],
+    output_group: H5Group,
+    output_path: str,
+    *,
+    axis: Literal[0, 1] = 0,
+) -> None:
+    """\
+    Concatenate multiple dense HDF5 arrays into a single virtual dataset.
+
+    Parameters
+    ----------
+    arrays
+        Sequence of HDF5 arrays to concatenate.
+    output_group
+        HDF5 group to write the concatenated dataset to.
+    output_path
+        Name of the concatenated dataset.
+    axis
+        Axis along which to concatenate (0 for obs, 1 for var).
+    """
+    import h5py
+
+    # Compute output shape
+    shapes = [np.array(a.shape) for a in arrays]
+    out_shape = list(shapes[0])
+    out_shape[axis] = sum(s[axis] for s in shapes)
+
+    # Create virtual layout
+    layout = h5py.VirtualLayout(shape=tuple(out_shape), dtype=arrays[0].dtype)
+
+    # Map each source array to its position in the layout
+    offset = 0
+    for arr in arrays:
+        size = arr.shape[axis]
+        if axis == 0:
+            layout[offset : offset + size, :] = h5py.VirtualSource(arr)
+        else:
+            layout[:, offset : offset + size] = h5py.VirtualSource(arr)
+        offset += size
+
+    # Create virtual dataset
+    output_group.create_virtual_dataset(output_path, layout)
+    output_group[output_path].attrs.update({
+        "encoding-type": "array",
+        "encoding-version": "0.2.0",
+    })
+
+
 def write_concat_dense(  # noqa: PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     *,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
 ):
     """
-    Writes the concatenation of given dense arrays to disk using dask.
+    Writes the concatenation of given dense arrays to disk.
+
+    Uses virtual concat for HDF5 when possible, simple numpy concat when no
+    reindexing is needed, and dask for the general case with reindexing.
     """
+    use_reindexing = not all(ri.no_change for ri in reindexers)
+
+    if not use_reindexing and use_virtual_concat and isinstance(output_group, H5Group):
+        virtual_concat_dense_hdf5(arrays, output_group, output_path, axis=axis)
+        return
+    
     import dask.array as da
 
     darrays = (
@@ -356,6 +415,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
             arrays,
             output_group,
             output_path,
+            use_virtual_concat=use_virtual_concat,
             axis=axis,
             reindexers=reindexers,
             fill_value=fill_value,
