@@ -580,9 +580,8 @@ def concat_on_disk(  # noqa: PLR0913
     see the Dask documentation, as the Dask concatenation function is used
     to concatenate dense arrays in this function.
 
-    For sparse arrays, if the backend is hdf5 and there is no reindexing and
-    `virtual_concat` is True,
-    virtual concatenation is used via docs.h5py.org/en/stable/vds.html.
+    If the backend is hdf5 and there is no reindexing and `virtual_concat`
+    is True, virtual concatenation is used via :doc:`h5py:vds`.
 
     Params
     ------

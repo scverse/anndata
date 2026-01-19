@@ -76,6 +76,7 @@ def make_concat_adatas(
     array_type: Literal["array", "sparse", "sparse_array"] = "sparse",
     axis: Literal[0, 1] = 0,
     reindex: bool = True,
+    same_off_axis_names: bool = False,
     gen_adata_kwargs: dict | None = None,
 ):
     """Generate adatas for concat tests.
@@ -88,6 +89,8 @@ def make_concat_adatas(
         Concatenation axis
     reindex
         Whether to randomize both axes (True) or only the concat axis (False)
+    same_off_axis_names
+        If True, keep identical off-axis names across all adatas (required for VDS)
     gen_adata_kwargs
         Optional kwargs to pass to gen_adata (e.g., obsm_types, varm_types, layers_types)
     """
@@ -107,10 +110,11 @@ def make_concat_adatas(
             var_dtypes=[pd.CategoricalDtype(ordered=False)],
             **kw,
         )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
+        # Modify off-axis names unless same_off_axis_names is True
+        if not same_off_axis_names:
+            off_names = getattr(a, f"{off_axis_name}_names").array
+            off_names[1::2] = f"{i}-" + off_names[1::2]
+            setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
 
     return adatas
@@ -165,6 +169,16 @@ def assert_eq_concat_on_disk(
         **kwargs,
     )
     with as_group(out_name, mode="r") as rg:
+        # Verify virtual datasets are created when expected
+        if use_virtual_concat and file_format == "h5ad":
+            x_elem = rg["X"]
+            if isinstance(x_elem, h5py.Dataset):
+                # Dense array - X is a dataset
+                assert x_elem.is_virtual, "Expected virtual dataset for dense X"
+            else:
+                # Sparse array - X is a group with data/indices datasets
+                assert x_elem["data"].is_virtual, "Expected virtual dataset for sparse X/data"
+                assert x_elem["indices"].is_virtual, "Expected virtual dataset for sparse X/indices"
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
 
@@ -235,6 +249,23 @@ def test_anndatas_virtual_concat(
         "h5ad",
         use_virtual_concat=True,
         max_loaded_elems=1_000_000,
+        axis=axis,
+        join="inner",
+    )
+
+
+@pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
+def test_virtual_concat_creates_vds(tmp_path, array_type, axis):
+    """Verify virtual concat actually creates HDF5 virtual datasets when indices match."""
+    # Use same_off_axis_names=True so indices match and VDS can be used
+    adatas = make_concat_adatas(
+        array_type=array_type, axis=axis, reindex=False, same_off_axis_names=True
+    )
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        "h5ad",
+        use_virtual_concat=True,
         axis=axis,
         join="inner",
     )
