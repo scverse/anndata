@@ -177,8 +177,12 @@ def assert_eq_concat_on_disk(
                 assert x_elem.is_virtual, "Expected virtual dataset for dense X"
             else:
                 # Sparse array - X is a group with data/indices datasets
-                assert x_elem["data"].is_virtual, "Expected virtual dataset for sparse X/data"
-                assert x_elem["indices"].is_virtual, "Expected virtual dataset for sparse X/indices"
+                assert x_elem["data"].is_virtual, (
+                    "Expected virtual dataset for sparse X/data"
+                )
+                assert x_elem["indices"].is_virtual, (
+                    "Expected virtual dataset for sparse X/indices"
+                )
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
 
