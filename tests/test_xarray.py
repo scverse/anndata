@@ -106,7 +106,7 @@ def test_index(dataset2d):
 
     dataset2d.index = new_idx
     assert np.all(dataset2d.index == new_idx)
-    assert dataset2d.true_index_dim == dataset2d.index_dim == new_idx.name
+    assert dataset2d.index_dim == new_idx.name
     assert list(dataset2d.ds.coords.keys()) == [new_idx.name]
 
 

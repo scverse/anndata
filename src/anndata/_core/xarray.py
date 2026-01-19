@@ -154,12 +154,21 @@ class Dataset2D:
     @index.setter
     def index(self, val) -> None:
         index_dim = self.index_dim
-        self.ds.coords[index_dim] = (index_dim, val)
-        if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
-            self.ds.update(self.ds.rename({self.index_dim: val.name}))
-            del self.ds.coords[index_dim]
+        if (
+            isinstance(val, pd.Index | XDataArray)
+            and val.name is not None
+            and val.name != index_dim
+        ):
+            self._ds = self.ds.swap_dims({index_dim: val.name}).drop_vars(index_dim)
+            if val.name not in self.ds.coords:
+                self.ds.coords[val.name] = val
+            self._validate_shape_invariants(self._ds)
+        else:
+            self.ds.coords[index_dim] = (index_dim, val)
         # without `indexing_key` explicitly set on `self.ds.attrs`, `self.true_index_dim` will use the `self.index_dim`
-        if "indexing_key" in self.ds.attrs:
+        if "indexing_key" in self.ds.attrs and (
+            hasattr(val, "name") and val.name == self.ds.attrs["indexing_key"]
+        ):
             del self.ds.attrs["indexing_key"]
 
     @property
@@ -170,7 +179,9 @@ class Dataset2D:
     @property
     def true_index(self) -> pd.Index:
         """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`"""
-        return self.true_xr_index.to_index()
+        idx = self.true_xr_index.to_index()
+        idx.name = self.true_xr_index.name
+        return idx
 
     @property
     def shape(self) -> tuple[int, int]:
