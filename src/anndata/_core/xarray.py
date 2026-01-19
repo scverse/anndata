@@ -159,10 +159,12 @@ class Dataset2D:
             and val.name is not None
             and val.name != index_dim
         ):
-            # swap the names of the dimensions out and drop the old index variable
+            # swap the names of the dimensions out and drop the old index variable, setting `coords` in the process if `val` came from this dataset.
             self._ds = self.ds.swap_dims({index_dim: val.name}).drop_vars(index_dim)
-            # swapping dims only changes the name, but not the underlying value i.e., the coordinate
-            self.ds.coords[val.name] = val
+            # swapping dims only changes the name, but not the underlying value i.e., the coordinate, if the underlying value was not present in the dataset.
+            # If we were to `__setitem__` on `.coords` without checking, `val` could have the old `index_dim` as its `name` because it was present in the dataset.
+            if val.name not in self.ds.coords:
+                self.ds.coords[val.name] = val
             self._validate_shape_invariants(self._ds)
         else:
             self.ds.coords[index_dim] = (index_dim, val)
