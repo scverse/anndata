@@ -246,7 +246,7 @@ def write_concat_dense(  # noqa: PLR0917
     if not use_reindexing and use_virtual_concat and isinstance(output_group, H5Group):
         virtual_concat_dense_hdf5(arrays, output_group, output_path, axis=axis)
         return
-    
+
     import dask.array as da
 
     darrays = (
