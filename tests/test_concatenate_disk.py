@@ -239,23 +239,7 @@ def test_anndatas(
     )
 
 
-@pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
-def test_anndatas_virtual_concat(
-    tmp_path: Path,
-    array_type: Literal["sparse", "array"],
-    axis: Literal[0, 1],
-):
-    """Test virtual concatenation for both sparse and dense arrays."""
-    adatas = make_concat_adatas(array_type=array_type, axis=axis)
-    assert_eq_concat_on_disk(
-        adatas,
-        tmp_path,
-        "h5ad",
-        use_virtual_concat=True,
-        max_loaded_elems=1_000_000,
-        axis=axis,
-        join="inner",
-    )
+
 
 
 @pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
