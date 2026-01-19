@@ -159,9 +159,10 @@ class Dataset2D:
             and val.name is not None
             and val.name != index_dim
         ):
+            # swap the names of the dimensions out and drop the old index variable
             self._ds = self.ds.swap_dims({index_dim: val.name}).drop_vars(index_dim)
-            if val.name not in self.ds.coords:
-                self.ds.coords[val.name] = val
+            # swapping dims only changes the name, but not the underlying value i.e., the coordinate
+            self.ds.coords[val.name] = val
             self._validate_shape_invariants(self._ds)
         else:
             self.ds.coords[index_dim] = (index_dim, val)
