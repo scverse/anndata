@@ -232,15 +232,15 @@ def test_anndatas(
         tmp_path,
         file_format,
         max_loaded_elems=max_loaded_elems,
-        use_virtual_concat=False,
         axis=axis,
         join=join_type,
         merge_strategy=merge_strategy,
     )
 
 
+
 @pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
-def test_virtual_concat_creates_vds(tmp_path, array_type, axis):
+def test_virtual_concat(tmp_path, array_type, axis):
     """Verify virtual concat actually creates HDF5 virtual datasets when indices match."""
     # Use same_off_axis_names=True so indices match and VDS can be used
     adatas = make_concat_adatas(
@@ -277,7 +277,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format, use_virtual_concat=False)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format)
 
 
 @pytest.fixture
