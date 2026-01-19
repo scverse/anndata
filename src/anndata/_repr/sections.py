@@ -49,6 +49,7 @@ from .components import (
 from .core import (
     get_section_tooltip,
     render_empty_section,
+    render_formatted_entry,
     render_section,
     render_truncation_indicator,
     render_x_entry,
@@ -139,9 +140,6 @@ def _render_entry_row(
     -------
     HTML string for the entry row (and optional expandable content row)
     """
-    # Import here to avoid circular import (html.py imports sections.py)
-    from .html import render_formatted_entry
-
     # Validate key and collect warnings
     extra_warnings, is_key_not_serializable = _validate_key_and_collect_warnings(
         key, output
