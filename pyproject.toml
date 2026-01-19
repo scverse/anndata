@@ -70,7 +70,7 @@ doc = [
     "awkward>=2.6.3",
     "IPython",                           # For syntax highlighting in notebooks
     "myst-parser",
-    "sphinx-design>=0.5.0",
+    "sphinx-design",
     "anndata[dask]",
     # for unreleased changes
     { include-group = "dev-doc" },
@@ -180,10 +180,6 @@ markers = [
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
 ]
-
-[tool.uv]
-# https://github.com/executablebooks/sphinx-design/issues/248
-override-dependencies = [ "sphinx>=9.0.1" ]
 
 [tool.ruff]
 src = [ "src" ]
