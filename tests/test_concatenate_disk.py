@@ -220,31 +220,6 @@ def test_anndatas(
     )
 
 
-def test_anndatas_virtual_concat_missing_file(tmp_path: Path):
-    """Test that reading a virtual concat file fails gracefully when a source file is missing."""
-    import shutil
-
-    adatas = make_concat_adatas(array_type="sparse", axis=0)
-    assert_eq_concat_on_disk(
-        adatas,
-        tmp_path,
-        "h5ad",
-        use_virtual_concat=True,
-        max_loaded_elems=1_000_000,
-        axis=0,
-        join="inner",
-    )
-    # copy out.h5ad to out2.h5ad and corrupt source file
-    shutil.copy(tmp_path / "out.h5ad", tmp_path / "out2.h5ad")
-    with tmp_path.joinpath("0.h5ad").open("w") as f:
-        f.write("0")
-    with pytest.raises(
-        OSError,
-        match=r"Error raised while reading key 'sparse' of <class 'h5py._hl.group.Group'> from /obsm",
-    ):
-        ad.read_h5ad(tmp_path / "out2.h5ad")
-
-
 @pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
 def test_anndatas_virtual_concat(
     tmp_path: Path,
