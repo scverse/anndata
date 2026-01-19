@@ -239,9 +239,6 @@ def test_anndatas(
     )
 
 
-
-
-
 @pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
 def test_virtual_concat_creates_vds(tmp_path, array_type, axis):
     """Verify virtual concat actually creates HDF5 virtual datasets when indices match."""
