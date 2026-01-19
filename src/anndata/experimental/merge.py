@@ -214,7 +214,7 @@ def write_concat_sparse(  # noqa: PLR0913, PLR0917
     output_path: ZarrGroup | H5Group,
     *,
     max_loaded_elems: int,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
@@ -237,7 +237,7 @@ def write_concat_sparse(  # noqa: PLR0913, PLR0917
         A reindexer object that defines the reindexing operation to be applied.
     fill_value
         The fill value to use for missing elements. Defaults to None.
-    virtual_concat
+    use_virtual_concat
         Whether to use virtual concatenation for sparse arrays.
 
     """
@@ -250,7 +250,7 @@ def write_concat_sparse(  # noqa: PLR0913, PLR0917
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    if datasets[0].backend == "hdf5" and not use_reindexing and virtual_concat:
+    if datasets[0].backend == "hdf5" and not use_reindexing and use_virtual_concat:
         BaseCompressedSparseDataset.virtual_concat_hdf5(
             datasets, output_group, output_path
         )
@@ -283,7 +283,7 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     index: pd.Index = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
@@ -304,7 +304,7 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
             reindexers=reindexers,
             fill_value=fill_value,
             max_loaded_elems=max_loaded_elems,
-            virtual_concat=virtual_concat,
+            use_virtual_concat=use_virtual_concat,
         )
 
 
@@ -313,7 +313,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     output_group: ZarrGroup | H5Group,
     output_path: str | Path,
     max_loaded_elems: int,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
@@ -340,7 +340,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
                 output_group,
                 output_path,
                 max_loaded_elems=max_loaded_elems,
-                virtual_concat=virtual_concat,
+                use_virtual_concat=use_virtual_concat,
                 axis=axis,
                 reindexers=reindexers,
                 fill_value=fill_value,
@@ -353,7 +353,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
             arrays,
             output_group,
             output_path,
-            virtual_concat=virtual_concat,
+            use_virtual_concat=use_virtual_concat,
             axis=axis,
             reindexers=reindexers,
             fill_value=fill_value,
@@ -369,7 +369,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     index: pd.Index | None = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
     join: Join_T = "inner",
 ):
     """
@@ -405,7 +405,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
             output_group,
             output_path,
             max_loaded_elems=max_loaded_elems,
-            virtual_concat=virtual_concat,
+            use_virtual_concat=use_virtual_concat,
             axis=axis,
             reindexers=reindexers,
             fill_value=fill_value,
@@ -704,7 +704,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     label: str | None,
     index_unique: str | None,
     fill_value: Any | None,
-    virtual_concat: bool = False,
+    use_virtual_concat: bool = False,
     merge: Callable[[Collection[Mapping]], Mapping],
 ) -> None:
     """Internal helper to minimize the amount of indented code within the context manager"""
@@ -778,7 +778,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         reindexers=reindexers,
         fill_value=fill_value,
         max_loaded_elems=max_loaded_elems,
-        virtual_concat=virtual_concat,
+        use_virtual_concat=use_virtual_concat,
     )
 
     # Write Layers and {axis_name}m
@@ -799,7 +799,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             intersect_keys(maps),
             m,
             max_loaded_elems=max_loaded_elems,
-            virtual_concat=virtual_concat,
+            use_virtual_concat=use_virtual_concat,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,

@@ -182,7 +182,7 @@ def test_anndatas(
         tmp_path,
         file_format,
         max_loaded_elems=max_loaded_elems,
-        virtual_concat=False,
+        use_virtual_concat=False,
         axis=axis,
         join=join_type,
         merge_strategy=merge_strategy,
@@ -224,7 +224,7 @@ def test_anndatas_virtual_concat_missing_file(
         adatas,
         tmp_path,
         file_format,
-        virtual_concat=True,
+        use_virtual_concat=True,
         max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
@@ -279,7 +279,7 @@ def test_anndatas_virtual_concat(
         adatas,
         tmp_path,
         file_format,
-        virtual_concat=True,
+        use_virtual_concat=True,
         max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
@@ -307,7 +307,7 @@ def test_concat_ordered_categoricals_retained(tmp_path, file_format):
     )
 
     adatas = [a, b]
-    assert_eq_concat_on_disk(adatas, tmp_path, file_format, virtual_concat=False)
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, use_virtual_concat=False)
 
 
 @pytest.fixture
@@ -369,7 +369,7 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
         tmp_path,
         file_format,
         join=join_type,
-        virtual_concat=False,
+        use_virtual_concat=False,
     )
 
 
