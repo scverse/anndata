@@ -128,3 +128,48 @@ SECTION_LAYERS = "layers"
 SECTION_OBSP = "obsp"
 SECTION_VARP = "varp"
 SECTION_RAW = "raw"
+
+# Internal AnnData attributes to skip when detecting unknown sections.
+#
+# Why explicit list instead of introspection?
+# -------------------------------------------
+# We intentionally maintain this list manually rather than using introspection
+# (e.g., inspect.getmembers(AnnData, property)) because:
+#
+# 1. NEW data slots added to AnnData should appear in "unknown sections" until
+#    a proper renderer is implemented. Introspection would hide them.
+#
+# 2. This list contains only internal/meta attributes that are NOT data slots:
+#    - Shape/size metadata (shape, n_obs, n_vars)
+#    - Index accessors (obs_names, var_names)
+#    - File/backing info (filename, file, isbacked)
+#    - View status (is_view, isview)
+#    - Transpose accessor (T)
+#
+# What else is skipped (not in this list)?
+# ----------------------------------------
+# - Data sections (obs, var, uns, obsm, etc.) via SECTION_ORDER
+# - Custom sections registered via SectionFormatter (e.g., obst, vart from TreeData)
+# - Methods are filtered by `not callable()` at runtime
+#
+# When to update this list:
+# - Add entries when AnnData gains new internal/meta properties (not data slots)
+# - Do NOT add new data slots here - they should appear in "unknown" until rendered
+INTERNAL_ANNDATA_ATTRS = frozenset({
+    # Shape/size metadata
+    "shape",
+    "n_obs",
+    "n_vars",
+    # Index accessors
+    "obs_names",
+    "var_names",
+    # File/backing info
+    "filename",
+    "file",
+    "isbacked",
+    # View status
+    "is_view",
+    "isview",  # Deprecated alias, triggers warning if accessed
+    # Transpose accessor
+    "T",
+})

@@ -30,11 +30,11 @@ from .._repr_constants import (
     CSS_DTYPE_ANNDATA,
     CSS_DTYPE_UNKNOWN,
     ERROR_TRUNCATE_LENGTH,
+    INTERNAL_ANNDATA_ATTRS,
     STYLE_SECTION_CONTENT,
     STYLE_SECTION_TABLE,
 )
 from . import (
-    SECTION_ORDER,
     get_section_doc_url,
 )
 from .components import (
@@ -345,27 +345,11 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
     """
     from collections.abc import Mapping
 
-    # Known sections and internal attributes to skip
-    known = set(SECTION_ORDER) | {
-        # Internal/meta attributes
-        "shape",
-        "n_obs",
-        "n_vars",
-        "obs_names",
-        "var_names",
-        "filename",
-        "file",
-        "is_view",
-        "isbacked",
-        "isview",
-        "T",
-        # Methods (not data)
-        "obs_keys",
-        "var_keys",
-        "uns_keys",
-        "obsm_keys",
-        "varm_keys",
-    }
+    from . import SECTION_ORDER
+
+    # Skip sections we render + internal/meta attributes (not data slots)
+    # See INTERNAL_ANNDATA_ATTRS docstring for why this is explicit, not introspected
+    known = set(SECTION_ORDER) | INTERNAL_ANNDATA_ATTRS
 
     # Also exclude sections that have registered custom formatters
     # (including those with should_show=False that suppress display)
