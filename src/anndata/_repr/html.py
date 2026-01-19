@@ -23,9 +23,6 @@ from .._repr_constants import (
     CSS_DTYPE_DATAFRAME,
     CSS_TEXT_ERROR,
     DEFAULT_MAX_README_SIZE,
-    SECTION_OBS,
-    SECTION_VAR,
-    SECTION_X,
     TOOLTIP_TRUNCATE_LENGTH,
 )
 from . import (
@@ -39,7 +36,11 @@ from . import (
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
+    SECTION_OBS,
     SECTION_ORDER,
+    SECTION_RAW,
+    SECTION_VAR,
+    SECTION_X,
 )
 from .components import (
     TypeCellConfig,
@@ -62,6 +63,15 @@ from .lazy import get_lazy_backing_info, is_lazy_adata
 from .registry import (
     FormatterContext,
     formatter_registry,
+)
+from .sections import (
+    _detect_unknown_sections,
+    _render_dataframe_section,
+    _render_error_entry,
+    _render_mapping_section,
+    _render_raw_section,
+    _render_unknown_sections,
+    _render_uns_section,
 )
 from .utils import (
     escape_html,
@@ -93,38 +103,64 @@ from .._repr_constants import (
 from . import formatters as _formatters  # noqa: F401
 
 
+def _collect_all_field_names(adata: AnnData) -> list[str]:
+    """
+    Collect all field names from standard and custom sections.
+
+    Returns field names from obs/var columns and keys from mapping sections
+    (uns, obsm, varm, layers, obsp, varp) plus any registered custom sections.
+    """
+    all_names: list[str] = []
+    skip_sections = {SECTION_X, SECTION_RAW}  # Single items, not collections
+
+    # Standard sections from SECTION_ORDER
+    for section in SECTION_ORDER:
+        if section in skip_sections:
+            continue
+        try:
+            attr = getattr(adata, section, None)
+            if attr is None:
+                continue
+            # obs/var are DataFrames - use column names
+            if section in (SECTION_OBS, SECTION_VAR):
+                if hasattr(attr, "columns"):
+                    all_names.extend(attr.columns.tolist())
+            # Other sections are mappings - use keys
+            elif hasattr(attr, "keys"):
+                all_names.extend(attr.keys())
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Registered custom sections (e.g., TreeData's obst/vart)
+    for section_name in formatter_registry.get_registered_sections():
+        if section_name in SECTION_ORDER:
+            continue  # Already handled
+        try:
+            attr = getattr(adata, section_name, None)
+            if attr is not None and hasattr(attr, "keys"):
+                all_names.extend(attr.keys())
+        except Exception:  # noqa: BLE001
+            pass
+
+    return all_names
+
+
 def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
     """
     Calculate the optimal field name column width based on longest field name.
 
-    Collects field names from obs, var, uns, obsm, varm, layers, obsp, varp
-    and returns a pixel width that fits the longest name (up to max_width).
+    Uses _collect_all_field_names() to gather names from all sections,
+    then converts the longest name to a pixel width (up to max_width).
 
     Uses constants from _repr_constants.py tuned for the default 13px monospace font.
     """
-    all_names: list[str] = []
-
-    # obs/var column names
-    if hasattr(adata, "obs") and adata.obs is not None:
-        all_names.extend(adata.obs.columns.tolist())
-    if hasattr(adata, "var") and adata.var is not None:
-        all_names.extend(adata.var.columns.tolist())
-
-    # Mapping sections (uns, obsm, varm, layers, obsp, varp)
-    for attr in ("uns", "obsm", "varm", "layers", "obsp", "varp"):
-        try:
-            mapping = getattr(adata, attr, None)
-            if mapping is not None:
-                all_names.extend(mapping.keys())
-        except Exception:  # noqa: BLE001
-            # Skip sections that fail to access (will show error during rendering)
-            pass
+    all_names = _collect_all_field_names(adata)
 
     if not all_names:
         return DEFAULT_FIELD_WIDTH_PX
 
     # Find longest name and convert to pixels
-    max_len = max(len(name) for name in all_names)
+    max_len = max(len(str(name)) for name in all_names)
     width_px = (max_len * CHAR_WIDTH_PX) + COPY_BUTTON_PADDING_PX
 
     # Clamp to reasonable range
@@ -287,7 +323,6 @@ def generate_repr_html(  # noqa: PLR0913
 
     # Sections container
     parts.append('<div class="anndata-repr__sections">')
-    parts.append(render_x_entry(adata, context))
     parts.extend(_render_all_sections(adata, context))
     parts.append("</div>")  # anndata-repr__sections
 
@@ -313,14 +348,6 @@ def _render_all_sections(
     custom_sections_after = _get_custom_sections_by_position(adata)
 
     for section in SECTION_ORDER:
-        if section == SECTION_X:
-            # X is already rendered, but check for custom sections after X
-            if SECTION_X in custom_sections_after:
-                parts.extend(
-                    _render_custom_section(adata, section_formatter, context)
-                    for section_formatter in custom_sections_after[SECTION_X]
-                )
-            continue
         parts.append(_render_section(adata, section, context))
 
         # Render custom sections after this section
@@ -780,18 +807,6 @@ def _format_index_preview(index: pd.Index) -> str:
         items = [*first, "...", *last]
 
     return ", ".join(items)
-
-
-# Section renderers are imported from sections.py
-from .sections import (  # noqa: E402
-    _detect_unknown_sections,
-    _render_dataframe_section,
-    _render_error_entry,
-    _render_mapping_section,
-    _render_raw_section,
-    _render_unknown_sections,
-    _render_uns_section,
-)
 
 
 def _render_max_depth_indicator(adata: AnnData) -> str:
