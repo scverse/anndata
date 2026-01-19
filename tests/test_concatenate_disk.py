@@ -239,7 +239,7 @@ def test_anndatas_virtual_concat_missing_file(
         f.write("0")
     with pytest.raises(
         OSError,
-        match="Error raised while reading key 'sparse' of <class 'h5py._hl.group.Group'> from /obsm",
+        match=r"Error raised while reading key 'sparse' of <class 'h5py._hl.group.Group'> from /obsm",
     ):
         ad.read_h5ad(tmp_path / "out2.h5ad")
 
