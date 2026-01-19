@@ -519,7 +519,7 @@ def concat_on_disk(  # noqa: PLR0913
 
     For sparse arrays, if the backend is hdf5 and there is no reindexing and
     `virtual_concat` is True,
-    the virtual concatenation is used using the `h5py` virtual dataset support.
+    virtual concatenation is used via docs.h5py.org/en/stable/vds.html.
 
     Params
     ------
