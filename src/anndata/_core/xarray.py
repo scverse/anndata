@@ -114,7 +114,8 @@ class Dataset2D:
 
     @property
     def true_index_dim(self) -> str:
-        """
+        """Key of the “true” index.
+
         Because xarray loads its coordinates/indexes in memory,
         we allow for signaling that a given variable, which is not a coordinate, is the "true" index.
 
@@ -127,7 +128,7 @@ class Dataset2D:
         return self.ds.attrs.get("indexing_key", self.index_dim)
 
     @true_index_dim.setter
-    def true_index_dim(self, val: str):
+    def true_index_dim(self, val: str | None) -> None:
         if val is None or (val == self.index_dim and "indexing_key" in self.ds.attrs):
             del self.ds.attrs["indexing_key"]
         elif val not in self.ds.dims:
@@ -143,8 +144,10 @@ class Dataset2D:
 
     @property
     def index(self) -> pd.Index:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
-        A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`
+        """A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`.
+
+        :attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability.
+
         Returns
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
@@ -181,14 +184,14 @@ class Dataset2D:
 
     @property
     def true_index(self) -> pd.Index:
-        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`"""
+        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`."""
         idx = self.true_xr_index.to_index()
         idx.name = self.true_xr_index.name
         return idx
 
     @property
     def shape(self) -> tuple[int, int]:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability.
 
         Returns
         -------
@@ -198,7 +201,7 @@ class Dataset2D:
 
     @property
     def iloc(self) -> Dataset2DIlocIndexer:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability.
 
         Returns
         -------
