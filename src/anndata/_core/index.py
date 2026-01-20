@@ -232,15 +232,27 @@ def _ensure_numpy_idx(func: Callable) -> Callable:
     return _ensure
 
 
+def array_api_ix(*args: SupportsArrayApi):
+    """Vendored version of numpy's _ix for the array-api"""
+    out = []
+    n_dims = len(args)
+    for k, new in enumerate(args):
+        xp = new.__array_namespace__()
+        if new.ndim != 1:
+            msg = "Cross index must be 1 dimensional"
+            raise ValueError(msg)
+        if xp.isdtype(new.dtype, "bool"):
+            (new,) = new.nonzero()
+        new = new.reshape((1,) * k + (new.size,) + (1,) * (n_dims - k - 1))
+        out.append(new)
+    return tuple(out)
+
+
 def _prepare_array_api_idx(
     a: SupportsArrayApi,
     subset_idx: tuple,
 ) -> tuple:
-    """Prepare indices for array-api subsetting, implementing np.ix_-like behavior.
-
-    For array-api arrays, this returns indices on the same device as `a` and
-    implements coordinate-based indexing similar to np.ix_.
-    """
+    """Prepare indices for array-api compatible subsetting."""
     xp = a.__array_namespace__()
 
     def get_idx(idx):
@@ -252,7 +264,11 @@ def _prepare_array_api_idx(
             # Convert numpy/list to array-api array on the target device
             return xp.asarray(idx, device=a.device)
 
-    return tuple(get_idx(idx) for idx in subset_idx)
+    maybe_array_api_idxs = tuple(get_idx(idx) for idx in subset_idx)
+    if all(isinstance(x, type(a)) for x in maybe_array_api_idxs):
+        return array_api_ix(*maybe_array_api_idxs)
+
+    return maybe_array_api_idxs
 
 
 @singledispatch
@@ -270,7 +286,7 @@ def _subset(
     if has_xp(a) and not isinstance(a, np.ndarray):
         # Use array-api aware indexing
         subset_idx = _prepare_array_api_idx(a, subset_idx)
-        return a[subset_idx[0], :][:, subset_idx[1]]
+        return a[subset_idx]
 
     # For numpy arrays and other types, ensure we have numpy indices
     subset_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)

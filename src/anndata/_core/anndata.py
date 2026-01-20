@@ -48,7 +48,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, array_api_ix, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -631,19 +631,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
         # This can occur if there are successive views
-        # Handle IndexManager by extracting numpy arrays
-
-        oidx_np = self._to_numpy_idx(self._oidx)
-        vidx_np = self._to_numpy_idx(self._vidx)
-
+        # Handle IndexManager by extracting array_api compat if possible
+        # Otherwise fall back to numpy
+        oidx, vidx = (
+            idx.get_for_array(self._adata_ref._X)
+            if (is_mgr := isinstance(idx, IndexManager)) and has_xp(self._adata_ref._X)
+            else (np.array(idx) if is_mgr else idx)
+            for idx in (self._oidx, self._vidx)
+        )
         if (
             self.is_view
-            and isinstance(oidx_np, np.ndarray)
-            and isinstance(vidx_np, np.ndarray)
+            and isinstance(self._oidx, IndexManager)
+            and isinstance(self._vidx, IndexManager)
         ):
-            oidx, vidx = np.ix_(oidx_np, vidx_np)
-        else:
-            oidx, vidx = oidx_np, vidx_np
+            oidx, vidx = array_api_ix(oidx, vidx)
         if (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
