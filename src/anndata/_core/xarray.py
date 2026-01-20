@@ -158,7 +158,7 @@ class Dataset2D:
         return self.ds.indexes[self.index_dim]
 
     @index.setter
-    def index(self, val: Any) -> None:
+    def index(self, val: object | pd.Index | XDataArray) -> None:
         index_dim = self.index_dim
         if (
             isinstance(val, pd.Index | XDataArray)
