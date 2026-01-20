@@ -240,14 +240,10 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         major_index, minor_index = (row, col) if self.format == "csr" else (col, row)
         return self._get(major_index, minor_index)
 
-    def _gen_index[Ma, Mi](
-        self, major_index: Ma, minor_index: Mi
+    def _gen_maj_min_tuple[Ma, Mi](
+        self, major: Ma, minor: Mi
     ) -> tuple[Ma, Mi] | tuple[Mi, Ma]:
-        return (
-            (major_index, minor_index)
-            if self.format == "csr"
-            else (minor_index, major_index)
-        )
+        return (major, minor) if self.format == "csr" else (minor, major)
 
     @singledispatchmethod
     def _get(self, major_index: Any, minor_index: slice) -> SparseMatrixType:
@@ -258,16 +254,14 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
                 self.indptr[...],
             ),
             shape=self.shape,
-        )[self._gen_index(major_index, minor_index)]
+        )[self._gen_maj_min_tuple(major_index, minor_index)]
 
     @_get.register
     def _get_intXslice(self, major_index: int, minor_index: slice) -> SparseMatrixType:
         return self.memory_format(
             self.get_compressed_vector(major_index),
-            shape=(1, self.minor_axis_size)
-            if self.format == "csr"
-            else (self.minor_axis_size, 1),
-        )[self._gen_index(slice(None), minor_index)]
+            shape=self._gen_maj_min_tuple(1, self.minor_axis_size),
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     @_get.register
     def _get_sliceXslice(
@@ -277,14 +271,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         minor_index = _fix_slice_bounds(minor_index, self.shape[self.minor_axis])
 
         major_index_size = slice_len(major_index, self.shape[self.major_axis])
-        minor_index_size = slice_len(minor_index, self.shape[self.minor_axis])
-
-        out_shape = (
-            (major_index_size, minor_index_size)
-            if self.format == "csr"
-            else (minor_index_size, major_index_size)
-        )
-        if out_shape[self.major_axis] == 1:
+        if major_index_size == 1:
             return self._get(
                 slice_as_int(major_index, self.shape[self.major_axis]), minor_index
             )
@@ -296,10 +283,8 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         compressed_vectors = self._get_contiguous_compressed_slice(major_index)
         return self.memory_format(
             compressed_vectors,
-            shape=(out_shape[self.major_axis], self.minor_axis_size)
-            if self.format == "csr"
-            else (self.minor_axis_size, out_shape[self.major_axis]),
-        )[self._gen_index(slice(None), minor_index)]
+            shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     @_get.register
     def _get_arrayXslice(
@@ -313,14 +298,10 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
             )
         if major_index.dtype == bool:
             major_index = np.where(major_index)
-        out_shape = (
-            (len(major_index), self.minor_axis_size)
-            if self.format == "csr"
-            else (self.minor_axis_size, len(major_index))
-        )
+        out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
         return self.memory_format(
             self.get_compressed_vectors(major_index), shape=out_shape
-        )[self._gen_index(slice(None), minor_index)]
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
