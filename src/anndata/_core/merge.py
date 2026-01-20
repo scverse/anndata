@@ -518,9 +518,6 @@ def resolve_merge_strategy(
 
 
 class Reindexer:
-    # class builds mappings to reorder/reindex an array to align with new tows or columns
-    # supports numpy, pandas, cupy, awkward, dask, sparse arrays
-    # missing values are filled with fill_value
     """
     Indexing to be applied to axis of 2d array orthogonal to the axis being concatenated.
 
@@ -652,8 +649,6 @@ class Reindexer:
         shape = [1] * taken.ndim
         shape[axis] = missing_mask.shape[0]
         mask = missing_mask.reshape(shape)
-        # if mask.shape[1] == taken.shape[0]:
-        #     return taken
         if not xp.any(missing_mask):
             return taken
         fv = xp.asarray(fill_value)
@@ -758,7 +753,6 @@ class Reindexer:
 
 
 def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
-    # either union or intersection of indices
     if join == "inner":
         return reduce(lambda x, y: x.intersection(y), inds)
     elif join == "outer":
@@ -814,9 +808,6 @@ def np_bool_to_pd_bool_array(df: pd.DataFrame):
 def concat_arrays(  # noqa: PLR0911, PLR0912
     arrays, reindexers, axis=0, index=None, fill_value=None, *, force_lazy: bool = False
 ):
-    # figuring out what kind of arrays are in the input
-    # converts compatible types using helper functions
-    # uses appropriate stacking methods
     from anndata.experimental.backed._compat import Dataset2D
 
     arrays = list(arrays)
@@ -940,7 +931,6 @@ def inner_concat_aligned_mapping(
     concat_axis=None,
     force_lazy: bool = False,
 ):
-    # concatenate elements across objects that share intersecting keys
     if concat_axis is None:
         concat_axis = axis
     result = {}

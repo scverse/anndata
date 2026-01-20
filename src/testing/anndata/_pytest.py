@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
     from ._doctest import WarningFilter
 
-
 # Use a marker present in the environment so VS Code’s tests behave identical
 IS_PRE = Version(version("zarr")).is_prerelease
 

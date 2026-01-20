@@ -303,12 +303,9 @@ def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
-    # controlling column types for obs and var
-    # numpy + pandas only construct
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
-    # numpy + pandas only construct
     var_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
@@ -317,7 +314,6 @@ def gen_adata(  # noqa: PLR0913
     obsm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     varm_types: Collection[type] = (*DEFAULT_KEY_TYPES, AwkArray, XDataset),
     layers_types: Collection[type] = DEFAULT_KEY_TYPES,
-    # numpy specific
     random_state: np.random.Generator | None = None,
     sparse_fmt: Literal["csr", "csc"] = "csr",
 ) -> AnnData:
