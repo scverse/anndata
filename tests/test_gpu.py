@@ -82,5 +82,5 @@ def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
     assert isinstance(adata.X[index], sparse.csr_matrix)
     with zarr.config.enable_gpu():
         assert isinstance(adata.X[index], CupyCSRMatrix)
-        assert_equal(expected.X[index].get(), adata.X[index])
+        assert_equal(expected.X[index], adata.X[index].get())
     assert isinstance(adata.X[index], sparse.csr_matrix)
