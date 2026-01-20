@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import string
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -73,40 +74,67 @@ def test_true_index_dim_column_subset(dataset2d, df):
     pd.testing.assert_frame_equal(df_expected, df[cols])
 
 
-def test_index_dim(dataset2d):
-    assert dataset2d.index_dim == "index"
-    assert dataset2d.true_index_dim == dataset2d.index_dim
+def true_index_set_from_existing_col(dataset2D: Dataset2D) -> None:
+    col = cast("str", next(iter(dataset2D.keys())))
+    dataset2D.true_index_dim = col
+    assert dataset2D.index_dim == "index"
+    assert dataset2D.true_index_dim == col
 
-    col = next(iter(dataset2d.keys()))
+
+def true_index_set_from_unknown_col(dataset2D: Dataset2D) -> None:
+    with (
+        pytest.raises(ValueError, match=r"Unknown variable `test`\."),
+    ):
+        dataset2D.true_index_dim = "test"
+
+
+def true_index_set_unset(dataset2D: Dataset2D) -> None:
+    dataset2D.true_index_dim = None
+    assert dataset2D.true_index_dim == dataset2D.index_dim
+
+
+def test_index_setting_from_existing_column(dataset2d: Dataset2D) -> None:
+    col = cast("str", next(iter(dataset2d.keys())))
+    old_index_dim = dataset2d.index_dim
+
+    dataset2d.index = dataset2d[col]
+
+    assert dataset2d.index_dim == col
+    assert old_index_dim not in (
+        *dataset2d.columns,
+        dataset2d.index_dim,
+        dataset2d.index.name,
+    )
+
+
+def test_index_setting_from_different_true_index_overrides_index(
+    dataset2d: Dataset2D,
+) -> None:
+    col = cast("str", next(iter(dataset2d.keys())))
     dataset2d.true_index_dim = col
-    assert dataset2d.index_dim == "index"
-    assert dataset2d.true_index_dim == col
-
-    with pytest.raises(ValueError, match=r"Unknown variable `test`\."):
-        dataset2d.true_index_dim = "test"
-
-    dataset2d.true_index_dim = None
-    assert dataset2d.true_index_dim == dataset2d.index_dim
-
-
-def test_index(dataset2d):
-    alphabet = np.asarray(
-        list(string.ascii_letters + string.digits + string.punctuation)
+    old_index_dim = dataset2d.index_dim
+    dataset2d.index = dataset2d[dataset2d.true_index_dim]
+    assert dataset2d.index_dim == dataset2d.true_index_dim
+    assert old_index_dim not in (
+        *dataset2d.columns,
+        dataset2d.index_dim,
+        dataset2d.index.name,
     )
-    new_idx = pd.Index(
-        [
-            "".join(np.random.choice(alphabet, size=10))
-            for _ in range(dataset2d.shape[0])
-        ],
-        name="test_index",
-    )
+
+
+def test_set_index_from_outside_dataset(dataset2d: Dataset2D) -> None:
+    alphabet = np.asarray([*string.ascii_letters, *string.digits, *string.punctuation])
+    new_idx = set()
+    while len(new_idx) < dataset2d.shape[0]:  # if we get duplicates, we just try again
+        new_idx.add("".join(np.random.choice(alphabet, size=10)))
+    new_idx = pd.Index(new_idx, name="test_index")
 
     col = next(iter(dataset2d.keys()))
     dataset2d.true_index_dim = col
 
     dataset2d.index = new_idx
     assert np.all(dataset2d.index == new_idx)
-    assert dataset2d.true_index_dim == dataset2d.index_dim == new_idx.name
+    assert dataset2d.index_dim == new_idx.name
     assert list(dataset2d.ds.coords.keys()) == [new_idx.name]
 
 
