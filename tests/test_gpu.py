@@ -11,6 +11,7 @@ import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.compat import CupyCSRMatrix
+from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -77,7 +78,9 @@ def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
     ad.io.write_zarr(zarr_path, adata, compressor=None)
     g = zarr.open_group(zarr_path, mode="r")
     adata = AnnData(X=sparse_dataset(g["X"]))
+    expected = AnnData(X=ad.io.read_elem(g["X"]))
     assert isinstance(adata.X[index], sparse.csr_matrix)
     with zarr.config.enable_gpu():
         assert isinstance(adata.X[index], CupyCSRMatrix)
+        assert_equal(expected.X[index].get(), adata.X[index])
     assert isinstance(adata.X[index], sparse.csr_matrix)
