@@ -1025,16 +1025,24 @@ def test_index_jax_both_axes():
     [True, False],
     ids=["bool", "int"],
 )
-def test_double_index_jax(*, to_bool: bool):
+@pytest.mark.parametrize(
+    "mixed",
+    [True, False],
+    ids=["with_numpy", "pure_jax"],
+)
+def test_double_index_jax(*, to_bool: bool, mixed: bool):
     adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]
     subset1 = jnp.array([0, 1, 2, 3, 4, 5])
-    subset2 = jnp.array(subset)
+    subset2 = (np_mod := (np if mixed else jnp)).array(subset)
     if to_bool:
-        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][
-            jnp.zeros(6).astype("bool").at[subset2].set(True), :
-        ]
+        bool_mask = np_mod.zeros(6).astype("bool")
+        if mixed:
+            bool_mask[subset2] = True
+        else:
+            bool_mask = bool_mask.at[subset2].set(True)
+        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][bool_mask, :]
     else:
         v2 = adata[subset1, :][subset2, :]
 
