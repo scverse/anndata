@@ -171,11 +171,9 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
     )
     # jax immutability case
-    if jnp is not None and isinstance(getattr(adata, mapping_name)["m"], jnp.ndarray):
-        msg = (
-            "JAX arrays are immutable; view-modification warning will not be triggered"
-        )
-        pytest.xfail(msg)
+    is_jax = jnp is not None and isinstance(
+        getattr(adata, mapping_name)["m"], jnp.ndarray
+    )
 
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
@@ -189,9 +187,16 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     subset = adata[:5, :][:, :5]
     assert subset.is_view
     m = getattr(subset, mapping_name)["m"]
-    with pytest.warns(ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"):
+    with (
+        pytest.raises(TypeError, match=r"immutable")
+        if is_jax
+        else pytest.warns(
+            ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"
+        )
+    ):
         m[0, 0] = 100
-    assert not subset.is_view
+    if not is_jax:
+        assert not subset.is_view
     # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626 becomes minimum version i.e., scipy 1.17.
 
     is_dask_with_broken_view_setting = (
@@ -202,13 +207,17 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         not is_dask_with_broken_view_setting
         and "sparse_dask_array" in request.node.callspec.id
     )
-    with (
-        pytest.raises(ValueError, match=r"shape mismatch")
-        if Version(version("scipy")) < Version("1.17.0rc0")
-        and (is_sparse_array_in_lower_dask_version or is_dask_with_broken_view_setting)
-        else nullcontext()
-    ):
-        assert getattr(subset, mapping_name)["m"][0, 0] == 100
+    if not is_jax:
+        with (
+            pytest.raises(ValueError, match=r"shape mismatch")
+            if Version(version("scipy")) < Version("1.17.0rc0")
+            and (
+                is_sparse_array_in_lower_dask_version
+                or is_dask_with_broken_view_setting
+            )
+            else nullcontext()
+        ):
+            assert getattr(subset, mapping_name)["m"][0, 0] == 100
 
     assert init_hash == hash_func(adata)
 
@@ -343,9 +352,7 @@ def test_set_varm(adata):
 def test_not_set_subset_X(matrix_type_base, subset_func):
     adata = ad.AnnData(matrix_type_base(asarray(sparse.random(20, 20))))
 
-    if jnp is not None and isinstance(adata.X, jnp.ndarray):
-        msg = "JAX arrays do not support in-place mutation."
-        pytest.xfail(msg)
+    is_jax = jnp is not None and isinstance(adata.X, jnp.ndarray)
 
     init_hash = joblib.hash(adata)
     orig_X_val = adata.X.copy()
@@ -361,10 +368,15 @@ def test_not_set_subset_X(matrix_type_base, subset_func):
         subset_func(np.arange(subset.X.shape[1])), subset.var_names
     )
     assert subset.is_view
-    with pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*"):
+    with (
+        pytest.raises(TypeError, match=r"immutable")
+        if is_jax
+        else pytest.warns(ad.ImplicitModificationWarning, match=r".*X.*")
+    ):
         subset.X[:, internal_idx] = 1
-    assert not subset.is_view
-    assert not np.any(asarray(orig_X_val != adata.X))
+    assert not subset.is_view or is_jax
+    if not is_jax:
+        assert not np.any(asarray(orig_X_val != adata.X))
 
     assert init_hash == joblib.hash(adata)
     assert isinstance(subset.X, type(adata.X))
