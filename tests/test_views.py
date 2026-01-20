@@ -1010,7 +1010,6 @@ def test_normalize_index_jax_flatten_2d():
 
 @pytest.mark.array_api
 def test_index_jax_both_axes():
-    # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), X_type=jnp.array)
     obs_subset = jnp.array([0, 2, 4, 6])
     var_subset = jnp.array([1, 3, 5, 7])
@@ -1027,18 +1026,15 @@ def test_index_jax_both_axes():
     ids=["bool", "int"],
 )
 def test_double_index_jax(*, to_bool: bool):
-    # Generate AnnData with JAX-backed arrays
     adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]
     subset1 = jnp.array([0, 1, 2, 3, 4, 5])
     subset2 = jnp.array(subset)
     if to_bool:
-        mask1 = jnp.zeros(10).astype("bool")
-        mask1 = mask1.at[subset1].set(True)
-        mask2 = jnp.zeros(6).astype("bool")
-        mask2 = mask2.at[subset2].set(True)
-        v2 = adata[mask1, :][mask2, :]
+        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][
+            jnp.zeros(6).astype("bool").at[subset2].set(True), :
+        ]
     else:
         v2 = adata[subset1, :][subset2, :]
 

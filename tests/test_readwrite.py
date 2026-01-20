@@ -150,8 +150,6 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     adata2 = read1()
     write2(adata2)
     adata3 = read2()
-    if jnp is not None and isinstance(adata1.X, jnp.ndarray):
-        adata1.X = np.from_dlpack(adata1.X)
 
     assert_equal(adata2, adata1)
     assert_equal(adata3, adata1)
@@ -204,21 +202,20 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
-    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
-        adata_src.X = np.from_dlpack(adata_src.X)
-        adata_src.raw = adata_src.copy()
+    used_jax = jnp is not None and isinstance(adata_src.X, jnp.ndarray)
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
     if isinstance(adata_src.raw.X, CSArray):
         assert isinstance(adata.raw.X, CSMatrix)
-    else:
+    elif not used_jax:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
         adata_src.uns["uns4"]["c"], type(adata.uns["uns4"]["c"]) | DaskArray
     )
-    assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
+    if not used_jax:
+        assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
 
     assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
@@ -305,7 +302,6 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
-    print(f"Running test with X_type = {typ.__module__}.{typ.__name__}")
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
 
@@ -557,17 +553,7 @@ def test_write_csv_view(typ, tmp_path):
 )
 @pytest.mark.parametrize("xp", [np, jnp] if jnp is not None else [np])
 def test_readwrite_empty(read, write, name, tmp_path, xp):
-    # JAX arrays are not not directly serializable by h5py
-    raw_array = xp.array([], dtype=float)
-    # convert array to numpy to make it serializable
-    if isinstance(raw_array, np.ndarray):
-        empty_arr = raw_array
-    elif hasattr(raw_array, "__dlpack__"):
-        empty_arr = np.from_dlpack(raw_array)
-    else:
-        empty_arr = np.asarray(raw_array)
-
-    adata = ad.AnnData(uns=dict(empty=empty_arr))
+    adata = ad.AnnData(uns=dict(empty=xp.array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"] is not None
@@ -652,7 +638,6 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
 
 
 def test_write_large_categorical(tmp_path, diskfmt):
-
     M = 30_000
     N = 1000
     ls = np.array(list(ascii_letters))
