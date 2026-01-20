@@ -74,10 +74,7 @@ def _alloc_cache():
 # if we put a 2 factor on 2**19
 # the results seems more accurate with the experimental results
 # For example from dask.random we allocate 1mb
-# Memory usage varies ~14% between runs due to allocator fragmentation,
-# lazy allocation, and Python/dask internal caching. This is expected
-# behavior per pytest-memray docs. Use 3.0 MB to accommodate variance
-# while still catching catastrophic regressions (e.g., loading full arrays).
+# See https://github.com/scverse/anndata/issues/2301 for why this limit is 3.0 MB
 @pytest.mark.usefixtures("_alloc_cache")
 @pytest.mark.limit_memory("3.0 MB")
 def test_size_of_view(mapping_name, give_chunks):
