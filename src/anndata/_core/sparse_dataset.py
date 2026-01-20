@@ -110,7 +110,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     shape: tuple[int, int]
 
     @property
-    def memory_format(self) -> SparseMatrixType:
+    def memory_format(self) -> type[SparseMatrixType]:
         is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
         if self.format == "csr":
             if is_gpu:
@@ -125,19 +125,19 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         return get_np_module()
 
     @property
-    def major_axis(self):
-        return self.format == "csc"
+    def major_axis(self) -> Literal[0, 1]:
+        return int(self.format == "csc")
 
     @property
-    def minor_axis(self):
-        return self.format == "csr"
+    def minor_axis(self) -> Literal[0, 1]:
+        return int(self.format == "csr")
 
     @property
-    def major_axis_size(self):
+    def major_axis_size(self) -> int:
         return self.shape[self.major_axis]
 
     @property
-    def minor_axis_size(self):
+    def minor_axis_size(self) -> int:
         return self.shape[self.minor_axis]
 
     def copy(self) -> SparseMatrixType:
