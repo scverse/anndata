@@ -67,7 +67,6 @@ except ImportError:
     )
 
 
-# Enable DLPack interop for JAX, CuPy, etc., only if installed
 def get_jnp_or_none() -> None | ModuleType:
     try:
         import jax

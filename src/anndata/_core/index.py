@@ -333,7 +333,6 @@ def _subset_df(
     df: pd.DataFrame | Dataset2D,
     subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
 ):
-    # DataFrames use numpy indexing, convert IndexManager to numpy
     return df.iloc[subset_idx]
 
 

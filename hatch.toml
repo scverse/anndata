@@ -46,7 +46,3 @@ overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--stri
 
 [[envs.hatch-test.matrix]]
 deps = [ "stable", "pre", "min", "array_api" ]
-
-# [envs.hatch-test.array_api]
-# features = [ "test-array-api" ]
-# installer = "uv"

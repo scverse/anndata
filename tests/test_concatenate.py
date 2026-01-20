@@ -555,7 +555,6 @@ def test_concatenate_layers_misaligned(array_type, join_type):
 @mark_legacy_concatenate
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
-
     a = AnnData(
         X=np.ones((10, 20)),
         layers={"a": array_type(sparse.random(10, 20, format="csr"))},
@@ -973,7 +972,6 @@ def test_pairwise_concat(axis_name, array_type):
 
 
 def test_nan_merge(axis_name, join_type, array_type):
-
     axis, _ = merge._resolve_axis(axis_name)
     alt_axis, alt_axis_name = merge._resolve_axis(1 - axis)
     mapping_attr = f"{alt_axis_name}m"
@@ -1625,7 +1623,6 @@ def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
         var_xdataset=use_xdataset,
         **GEN_ADATA_DASK_ARGS,
     )
-
     del getattr(b, f"{axis}m")[elem]
 
     concated = concat(
@@ -1808,6 +1805,7 @@ def test_concat_duplicated_columns(join_type):
 
 
 @pytest.mark.gpu
+@pytest.mark.array_api
 def test_error_on_mixed_device():
     """https://github.com/scverse/anndata/issues/1083"""
     import cupy
@@ -1850,7 +1848,6 @@ def test_error_on_mixed_device():
 
 def test_concat_on_var_outer_join(array_type):
     # https://github.com/scverse/anndata/issues/1286
-
     a = AnnData(
         obs=pd.DataFrame(index=[f"cell_{i:02d}" for i in range(10)]),
         var=pd.DataFrame(index=[f"gene_{i:02d}" for i in range(10)]),
@@ -1891,18 +1888,3 @@ def test_1d_concat():
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)
-
-
-# def test_concatenate_dtype():
-#     X1 = np.array([[1, 2, 3], [4, 5, 6]], dtype=int)
-#     X2 = np.array([[3, 2, 1], [6, 5, 4]], dtype=int)
-#     X3 = np.array([[3, 2], [6, 5]], dtype=int)
-#     adata1 = AnnData(X1, dict(obs_names=["s1", "s2"]), dict(var_names=["a", "b", "c"]))
-#     adata2 = AnnData(X2, dict(obs_names=["s3", "s4"]), dict(var_names=["a", "b", "c"]))
-#     adata3 = AnnData(X3, dict(obs_names=["s5", "s6"]), dict(var_names=["b", "c"]))
-#     adata_inner = concat([adata1, adata2, adata3], join="inner")
-#     assert adata_inner.X.dtype == np.int64, (
-#         "dtype should be int unexpectedly in inner join"
-#     )
-#     adata_outer = adata1.concatenate(adata2, adata3, join="outer")
-#     assert adata_outer.X.dtype == np.float64, "dtype should be float after outer join"

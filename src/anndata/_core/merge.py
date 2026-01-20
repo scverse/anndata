@@ -54,7 +54,6 @@ if TYPE_CHECKING:
 
 # Pretty much just for maintaining order of keys
 class OrderedSet(MutableSet):
-    # custom set that maintains insertion order. Used when merging keys of dicts
     def __init__(self, vals=()):
         self.dict = OrderedDict(zip(vals, repeat(None)))
 
@@ -88,19 +87,15 @@ class OrderedSet(MutableSet):
 
 
 def union_keys(ds: Collection) -> OrderedSet:
-    # return union of all keys in a collection of dict-like objects
     return reduce(or_, ds, OrderedSet())
 
 
 def intersect_keys(ds: Collection) -> OrderedSet:
-    # return intersection of all keys in a collection of dict-like objects
     return reduce(and_, map(OrderedSet, ds))
 
 
 class MissingVal:
     """Represents a missing value."""
-
-    # used in merging to represent missing values
 
 
 def is_missing(v) -> bool:
@@ -120,8 +115,6 @@ def not_missing(v) -> bool:
 # TODO: Hopefully this will stop being an issue in the future and this code can be removed.
 @singledispatch
 def equal(a, b) -> bool:
-    # compares arrays, dataframes, series, sparse arrays, awkward arrays, dask arrays
-    # even if they are of different types
     a = asarray(a)
     b = asarray(b)
     if a.ndim == b.ndim == 0:
@@ -222,7 +215,6 @@ def equal_awkward(a, b) -> bool:
 
 
 def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
-    # makes sure array is scipy sparse array, converting from other types if needed
     if not isinstance(x, CSMatrix | CSArray):
         in_memory_array_class = (
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
@@ -238,7 +230,6 @@ def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
 
 
 def as_cp_sparse(x) -> CupySparseMatrix:
-    # makes sure array is cupy sparse array, converting from other types/dense if needed
     import cupyx.scipy.sparse as cpsparse
 
     if isinstance(x, cpsparse.spmatrix):
@@ -256,7 +247,6 @@ def unify_dtypes(
 
     For catching cases where pandas would convert to object dtype.
     """
-    # Basically tries to unify column dtypes across dataframes, if possible.
     dfs = list(dfs)
     # Get shared categorical columns
     df_dtypes = [
@@ -367,7 +357,6 @@ def _cp_block_diag(mats, format=None, dtype=None):
     """
     Modified version of scipy.sparse.block_diag for cupy sparse.
     """
-    # used for stacking pairwise matrices
     import cupy as cp
     from cupyx.scipy import sparse as cpsparse
 
@@ -401,7 +390,6 @@ def _cp_block_diag(mats, format=None, dtype=None):
 
 
 def _dask_block_diag(mats):
-    # same as _cp_block_diag but for dask arrays
     from itertools import permutations
 
     import dask.array as da
@@ -461,7 +449,6 @@ def only[T](vals: Collection[T]) -> T | MissingVal:
 
 
 def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Callable):
-    # generic recursive merge for nested dicts
     out = {}
     for k in keys_join(ds):
         v = _merge_nested(ds, k, keys_join, value_join)
@@ -520,7 +507,6 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 def resolve_merge_strategy(
     strategy: str | Callable | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
-    # turning user input into an actual callable merge function
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
     return strategy
@@ -1009,7 +995,6 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
 
 
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
-    # reindexers for outer join
     if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
         reindexers = [
             (lambda x: x)
