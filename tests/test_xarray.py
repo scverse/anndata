@@ -74,22 +74,23 @@ def test_true_index_dim_column_subset(dataset2d, df):
     pd.testing.assert_frame_equal(df_expected, df[cols])
 
 
-def test_true_index_dim(subtests: pytest.Subtests, dataset2d: Dataset2D) -> None:
-    with subtests.test("set"):
-        col = cast("str", next(iter(dataset2d.keys())))
-        dataset2d.true_index_dim = col
-        assert dataset2d.index_dim == "index"
-        assert dataset2d.true_index_dim == col
+def true_index_set_from_existing_col(dataset2D: Dataset2D) -> None:
+    col = cast("str", next(iter(dataset2D.keys())))
+    dataset2D.true_index_dim = col
+    assert dataset2D.index_dim == "index"
+    assert dataset2D.true_index_dim == col
 
+
+def true_index_set_from_unknown_col(dataset2D: Dataset2D) -> None:
     with (
-        subtests.test("error"),
         pytest.raises(ValueError, match=r"Unknown variable `test`\."),
     ):
-        dataset2d.true_index_dim = "test"
+        dataset2D.true_index_dim = "test"
 
-    with subtests.test("unset"):
-        dataset2d.true_index_dim = None
-        assert dataset2d.true_index_dim == dataset2d.index_dim
+
+def true_index_set_unset(dataset2D: Dataset2D) -> None:
+    dataset2D.true_index_dim = None
+    assert dataset2D.true_index_dim == dataset2D.index_dim
 
 
 def test_index_setting_from_existing_column(dataset2d: Dataset2D) -> None:
