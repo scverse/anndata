@@ -65,10 +65,6 @@ class IndexManager:
         res = np.from_dlpack(self._manager[(1, 0)])
         return res.copy() if copy else res
 
-    def __contains__(self, device: str) -> bool:
-        """Check if an index array exists for the given device."""
-        return device in self._manager
-
     def keys(self):
         """Return the devices for which index arrays are available."""
         return self._manager.keys()
@@ -76,12 +72,6 @@ class IndexManager:
     def get_default(self):
         """Returns the first key added i.e., a no-copy index, useful for getting an array-api compatible index on some device."""
         return self._manager[next(iter(self._manager))]
-
-    @property
-    def dtype(self):
-        """Return the dtype of the index array."""
-        arr = self.get_default()
-        return arr.dtype
 
     def add_array(self, arr: SupportsArrayApi):
         """Add an index array for a specific device."""

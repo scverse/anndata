@@ -208,12 +208,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     _oidx: _Index1DNorm | None
     _vidx: _Index1DNorm | None
 
-    @staticmethod
-    def _to_numpy_idx(idx):
-        if isinstance(idx, IndexManager):
-            return np.asarray(idx)
-        return idx
-
     @old_positionals(
         "obsm",
         "varm",

@@ -238,7 +238,7 @@ def array_api_ix(*args: SupportsArrayApi):
     n_dims = len(args)
     for k, new in enumerate(args):
         xp = new.__array_namespace__()
-        if new.ndim != 1:
+        if new.ndim != 1:  # pragma: no cover
             msg = "Cross index must be 1 dimensional"
             raise ValueError(msg)
         if xp.isdtype(new.dtype, "bool"):
@@ -260,8 +260,9 @@ def _prepare_array_api_idx(
             return idx.get_for_array(a)
         elif isinstance(idx, slice) or has_xp(idx):
             return idx
-        else:
+        else:  # pragma: no cover
             # Convert numpy/list to array-api array on the target device
+            # In theory should be unreachable so this is a last resort since xp.asarray is pretty undefined.
             return xp.asarray(idx, device=a.device)
 
     maybe_array_api_idxs = tuple(get_idx(idx) for idx in subset_idx)

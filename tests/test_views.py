@@ -932,8 +932,9 @@ def test_index_float_sequence_raises_error(index):
 
 
 @pytest.mark.array_api
-def test_jax_indexer():
-    index = np.array([0, 3, 6])
+@pytest.mark.parametrize("dtype", [np.int32, np.float32])
+def test_jax_indexer(dtype: np.dtype):
+    index = np.array([0, 3, 6], dtype=dtype)
     index_jax = jnp.array(index)
     adata = gen_adata((10, 10))
     assert_equal(adata[index], adata[index_jax])
