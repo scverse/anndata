@@ -114,7 +114,8 @@ class Dataset2D:
 
     @property
     def true_index_dim(self) -> str:
-        """
+        """Key of the “true” index.
+
         Because xarray loads its coordinates/indexes in memory,
         we allow for signaling that a given variable, which is not a coordinate, is the "true" index.
 
@@ -127,7 +128,7 @@ class Dataset2D:
         return self.ds.attrs.get("indexing_key", self.index_dim)
 
     @true_index_dim.setter
-    def true_index_dim(self, val: str):
+    def true_index_dim(self, val: str | None) -> None:
         if val is None or (val == self.index_dim and "indexing_key" in self.ds.attrs):
             del self.ds.attrs["indexing_key"]
         elif val not in self.ds.dims:
@@ -143,8 +144,10 @@ class Dataset2D:
 
     @property
     def index(self) -> pd.Index:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
-        A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`
+        """A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`.
+
+        :attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability.
+
         Returns
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
@@ -152,14 +155,26 @@ class Dataset2D:
         return self.ds.indexes[self.index_dim]
 
     @index.setter
-    def index(self, val) -> None:
+    def index(self, val: object | pd.Index | XDataArray) -> None:
         index_dim = self.index_dim
-        self.ds.coords[index_dim] = (index_dim, val)
-        if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
-            self.ds.update(self.ds.rename({self.index_dim: val.name}))
-            del self.ds.coords[index_dim]
+        if (
+            isinstance(val, pd.Index | XDataArray)
+            and val.name is not None
+            and val.name != index_dim
+        ):
+            # swap the names of the dimensions out and drop the old index variable, setting `coords` in the process if `val` came from this dataset.
+            self._ds = self.ds.swap_dims({index_dim: val.name}).drop_vars(index_dim)
+            # swapping dims only changes the name, but not the underlying value i.e., the coordinate, if the underlying value was not present in the dataset.
+            # If we were to `__setitem__` on `.coords` without checking, `val` could have the old `index_dim` as its `name` because it was present in the dataset.
+            if val.name not in self.ds.coords:
+                self.ds.coords[val.name] = val
+            self._validate_shape_invariants(self._ds)
+        else:
+            self.ds.coords[index_dim] = (index_dim, val)
         # without `indexing_key` explicitly set on `self.ds.attrs`, `self.true_index_dim` will use the `self.index_dim`
-        if "indexing_key" in self.ds.attrs:
+        if "indexing_key" in self.ds.attrs and (
+            hasattr(val, "name") and val.name == self.ds.attrs["indexing_key"]
+        ):
             del self.ds.attrs["indexing_key"]
 
     @property
@@ -169,12 +184,14 @@ class Dataset2D:
 
     @property
     def true_index(self) -> pd.Index:
-        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`"""
-        return self.true_xr_index.to_index()
+        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`."""
+        idx = self.true_xr_index.to_index()
+        idx.name = self.true_xr_index.name
+        return idx
 
     @property
     def shape(self) -> tuple[int, int]:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability.
 
         Returns
         -------
@@ -184,7 +201,7 @@ class Dataset2D:
 
     @property
     def iloc(self) -> Dataset2DIlocIndexer:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability.
 
         Returns
         -------

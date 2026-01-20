@@ -26,7 +26,12 @@ def attr_name(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
+@pytest.fixture(
+    params=[
+        pytest.param(True, id="give_chunks"),
+        pytest.param(False, id="no_give_chunks"),
+    ]
+)
 def give_chunks(request):
     return request.param
 
