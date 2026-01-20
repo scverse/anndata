@@ -28,6 +28,7 @@ from .._settings import settings
 from ..compat import (
     CSArray,
     DaskArray,
+    IndexManager,
     ZarrArray,
     _move_adj_mtx,
     has_xp,
@@ -47,7 +48,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import IndexManager, _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -61,10 +62,9 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import Index1D, Index1DNorm, XDataset
+    from ..compat import Index, Index1D, Index1DNorm, XDataset, _Index, _Index1DNorm
     from ..typing import XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import Index
 
 
 class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
@@ -205,8 +205,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     # view attributes
     _adata_ref: AnnData | None
-    _oidx: Index1DNorm | IndexManager | None
-    _vidx: Index1DNorm | IndexManager | None
+    _oidx: _Index1DNorm | None
+    _vidx: _Index1DNorm | None
 
     @staticmethod
     def _to_numpy_idx(idx):
@@ -1084,8 +1084,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: Index | None
-    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
+        self, index: _Index | None
+    ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...

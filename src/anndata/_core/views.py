@@ -19,12 +19,12 @@ from ..compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    IndexManager,
     ZappyArray,
     has_xp,
 )
 from ..utils import warn
 from .access import ElementRef
-from .index import IndexManager
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
