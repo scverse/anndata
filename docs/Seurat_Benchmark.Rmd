@@ -1,0 +1,79 @@
+---
+title: "SeuratObject Benchmark Notebook"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+Libraries needed for Seurat Object
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(bench)
+```
+
+Load the PBMC dataset. The data consists in 3k PBMCs from a Healthy Donor and is freely available from 10x Genomics.
+
+```{r}
+# Load the PBMC dataset
+pbmc.data <- Read10X(data.dir = "./data/pbmc3k/filtered_gene_bc_matrices/hg19/")
+
+# Initialize the Seurat object with the raw (non-normalized data)
+pbmc <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+```
+
+The PBMC Seurat Object
+```{r}
+pbmc
+```
+
+Normalize the data with "LogNormalize" method (default)
+```{r}
+pbmc <- NormalizeData(pbmc)
+```
+
+
+```{r}
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000)
+```
+
+Scale the data
+```{r}
+pbmc <- ScaleData(pbmc)
+```
+
+Perform PCA (Linear Dimensionality Reduction)
+```{r}
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+```
+
+```{r, time_it = TRUE}
+head(pbmc)
+```
+
+Memory allocation for the subset expression where nCount_RNA is greater than 1000
+```{r}
+bnch <- bench::mark(
+        subset(x = pbmc, subset = nCount_RNA > 1000)
+        )
+bnch
+```
+
+Cluster the cells
+```{r}
+pbmc <- FindNeighbors(pbmc, dims = 1:10)
+pbmc <- FindClusters(pbmc, resolution = 0.5)
+```
+
+Memory allocation for the same subset after Clustering
+
+```{r}
+bnch_cluster <- bench::mark(
+        subset(x = pbmc, subset = nCount_RNA > 1000)
+        )
+bnch_cluster
+```
+
+
