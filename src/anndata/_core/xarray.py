@@ -286,15 +286,13 @@ class Dataset2D:
 
     @columns.setter
     def columns(self, val) -> None:
+        if len(self.columns.symmetric_difference(val)) > 0:
+            msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
+            raise ValueError(msg)
         warn(
             "Setting columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
             UserWarning,
         )
-        if len(self.columns.symmetric_difference(val)) > 0:
-            msg = (
-                "Trying to rename the keys of the mapping - please use a different API"
-            )
-            raise IndexError(msg)
 
     def __setitem__(
         self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
