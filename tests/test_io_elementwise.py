@@ -836,7 +836,7 @@ def test_write_auto_cannot_set_v2_format_after_sharding():
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
     X = sparse.random(
-        100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
+        100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
         ad.io.write_elem(z, "X_default", X)
