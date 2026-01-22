@@ -235,6 +235,62 @@ class TestXSSPrevention:
             "Raw onclick handler found - XSS!"
         )
 
+    def test_xss_in_category_values(self, validate_html):
+        """XSS attempts in categorical values must be escaped in preview."""
+        adata = AnnData(np.zeros((6, 3)))
+        # Category VALUES (not column names) with XSS payloads
+        adata.obs["evil_cats"] = pd.Categorical([
+            '<script>alert("cat_xss")</script>',
+            "<img onerror=alert(1)>",
+            '<svg onload="evil()">',
+            "normal_value",
+            "javascript:alert(1)",
+            "<div onclick=bad()>click</div>",
+        ])
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_no_raw_xss()
+        v.assert_html_well_formed()
+        v.assert_section_contains_entry("obs", "evil_cats")
+
+        # Escaped versions should appear as text (in category preview)
+        assert "&lt;script&gt;" in html, "Script tag should be escaped"
+
+        # Raw payloads must NOT appear unescaped
+        assert '<script>alert("cat_xss")</script>' not in html
+        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I)
+        assert not re.search(r"<svg[^>]+onload\s*=", html, re.I)
+
+    def test_xss_in_dataframe_column_names(self, validate_html):
+        """XSS in DataFrame column names (obsm preview) must be escaped."""
+        adata = AnnData(np.zeros((5, 3)))
+        # DataFrame with XSS payloads in column names (shown in obsm preview)
+        evil_df = pd.DataFrame(
+            {
+                '<script>alert("df_col")</script>': np.random.rand(5),
+                "<img onerror=alert(1)>": np.random.rand(5),
+                "normal_col": np.random.rand(5),
+            },
+            index=adata.obs_names,
+        )
+        adata.obsm["X_evil"] = evil_df
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_no_raw_xss()
+        v.assert_html_well_formed()
+        v.assert_section_contains_entry("obsm", "X_evil")
+
+        # Escaped versions should appear in column preview
+        assert "&lt;script&gt;" in html, "Script tag in column name should be escaped"
+
+        # Raw payloads must NOT appear
+        assert '<script>alert("df_col")</script>' not in html
+        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I)
+
     def test_javascript_url_in_readme(self, validate_html):
         """JavaScript URLs in README must be escaped."""
         adata = AnnData(np.zeros((3, 3)))

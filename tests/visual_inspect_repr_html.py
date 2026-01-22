@@ -2612,6 +2612,20 @@ For more details, see the full documentation.
     adata_evil.obs["rtl_\u202eEVIL\u202c_override"] = np.random.rand(50)
     adata_evil.obs["null\x00byte\x00col"] = np.random.rand(50)
 
+    # XSS in CATEGORY VALUES (not just column names)
+    # Tests that category preview properly escapes malicious category names
+    xss_categories = [
+        '<script>alert("cat")</script>',
+        "<img onerror=alert(1)>",
+        '<svg onload="evil()">',
+        "normal_category",
+        "<div onclick=bad()>",
+        "javascript:void(0)",
+    ]
+    adata_evil.obs["xss_category_values"] = pd.Categorical(
+        np.random.choice(xss_categories, size=50), categories=xss_categories
+    )
+
     # HTML/CSS breakout
     adata_evil.var["gene_normal"] = [f"gene_{i}" for i in range(30)]
     adata_evil.var["</style><script>bad()</script>"] = np.random.rand(30)
@@ -2915,6 +2929,17 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     )  # Need at least one valid entry
     adata_evil.varm._data["long_error_object"] = VeryLongErrorObject()
 
+    # XSS in DataFrame COLUMN NAMES (shown in obsm preview)
+    evil_df = pd.DataFrame(
+        {
+            '<script>alert("col")</script>': np.random.rand(50),
+            "<img onerror=alert(1)>": np.random.rand(50),
+            "normal_col": np.random.rand(50),
+        },
+        index=adata_evil.obs_names,
+    )
+    adata_evil.obsm["X_evil_df_cols"] = evil_df
+
     # Standard sections to show they still work
     adata_evil.obsm["X_pca"] = np.random.rand(50, 10)
     adata_evil.obsm["X_umap"] = np.random.rand(50, 2)
@@ -2979,6 +3004,16 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "</ul>"
         "<b>XSS in uns keys:</b><br>"
         "<ul><li><code>&lt;script&gt;evil()&lt;/script&gt;</code></li></ul>"
+        "<b>XSS in category VALUES (not just column names):</b><br>"
+        "<ul>"
+        "<li><code>xss_category_values</code> - category names contain XSS payloads</li>"
+        "<li>Tests that category preview escapes: script, img onerror, svg onload, onclick</li>"
+        "</ul>"
+        "<b>XSS in DataFrame COLUMN NAMES (obsm preview):</b><br>"
+        "<ul>"
+        "<li><code>X_evil_df_cols</code> - DataFrame column names contain XSS payloads</li>"
+        "<li>Tests that obsm DataFrame column preview escapes malicious column names</li>"
+        "</ul>"
         "<b>HTML/CSS breakout in var:</b><br>"
         "<ul>"
         "<li><code>&lt;/style&gt;&lt;script&gt;bad()&lt;/script&gt;</code></li>"
