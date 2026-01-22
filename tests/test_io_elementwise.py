@@ -22,7 +22,7 @@ import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -465,7 +465,7 @@ def test_write_anndata_to_root(store):
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(store, ZarrGroup):
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
@@ -641,7 +641,7 @@ def test_write_to_root(store: GroupStorageType, value):
         value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup) and not is_zarr_v2():
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     result = read_elem(store)
 
@@ -807,25 +807,15 @@ def test_h5_unchunked(
 
 @pytest.mark.zarr_io
 def test_write_auto_sharded(tmp_path: Path):
-    if is_zarr_v2():
-        with (
-            pytest.raises(
-                ValueError, match=r"Cannot use sharding with `zarr-python<3`."
-            ),
-            ad.settings.override(auto_shard_zarr_v3=True),
-        ):
-            pass
-    else:
-        path = tmp_path / "check.zarr"
-        adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-        with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-            adata.write_zarr(path)
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+        adata.write_zarr(path)
 
-        check_all_sharded(zarr.open(path))
+    check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_against_v2_format():
     with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
         with ad.settings.override(zarr_write_format=2):
@@ -834,7 +824,6 @@ def test_write_auto_sharded_against_v2_format():
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_cannot_set_v2_format_after_sharding():
     with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
         with ad.settings.override(zarr_write_format=3):
@@ -844,7 +833,6 @@ def test_write_auto_cannot_set_v2_format_after_sharding():
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
     X = sparse.random(

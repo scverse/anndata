@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import DaskArray, ZarrGroup, _read_attr
 
 from ...utils import warn
 
@@ -363,16 +363,14 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (is_zarr_group and is_zarr_v2()) or (
-            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
-        ):
+        if isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)
         is_consolidated = is_group_consolidated(store) if is_zarr_group else False
         if is_consolidated:
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
         if k == "/":
-            if isinstance(store, ZarrGroup) and not is_zarr_v2():
+            if isinstance(store, ZarrGroup):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())

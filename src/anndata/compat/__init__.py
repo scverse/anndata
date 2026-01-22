@@ -3,7 +3,7 @@ from __future__ import annotations
 from codecs import decode
 from collections.abc import Mapping, Sequence
 from enum import Enum, auto
-from functools import cache, partial, singledispatch
+from functools import partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
 from types import EllipsisType
@@ -94,14 +94,6 @@ else:
 #############################
 # Optional deps
 #############################
-@cache
-def is_zarr_v2() -> bool:
-    return Version(version("zarr")) < Version("3.0.0")
-
-
-if is_zarr_v2():
-    msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning)
 
 
 if find_spec("awkward") or TYPE_CHECKING:

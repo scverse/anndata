@@ -32,15 +32,7 @@ from testing.anndata._doctest import doctest_filterwarnings
 from .. import abc
 from .._settings import settings
 from .._warnings import warn
-from ..compat import (
-    CSArray,
-    CSMatrix,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
-    _read_attr,
-    is_zarr_v2,
-)
+from ..compat import CSArray, CSMatrix, H5Group, ZarrArray, ZarrGroup, _read_attr
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
@@ -82,21 +74,14 @@ class BackedSparseMatrix(_cs_matrix):
         if isinstance(self.data, ZarrArray):
             import zarr
 
-            if is_zarr_v2():
-                sparse_group = zarr.open(
-                    store=self.data.store,
-                    mode="r",
-                    chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
-                )[Path(self.data.path).parent]
-            else:
-                anndata_group = zarr.open_group(store=self.data.store, mode="r")
-                sparse_group = anndata_group[
-                    str(
-                        Path(str(self.data.store_path))
-                        .relative_to(str(anndata_group.store_path))
-                        .parent
-                    )
-                ]
+            anndata_group = zarr.open_group(store=self.data.store, mode="r")
+            sparse_group = anndata_group[
+                str(
+                    Path(str(self.data.store_path))
+                    .relative_to(str(anndata_group.store_path))
+                    .parent
+                )
+            ]
             return sparse_dataset(sparse_group).to_memory()
         return super().copy()
 
@@ -600,7 +585,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         # see https://github.com/zarr-developers/zarr-python/discussions/2712 for why we need to read first
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+        if isinstance(sparse_matrix.data, ZarrArray):
             data[orig_data_size:] = append_data[...]
         else:
             data[orig_data_size:] = append_data
@@ -613,7 +598,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         )
 
         # indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+        if isinstance(sparse_matrix.data, ZarrArray):
             append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]

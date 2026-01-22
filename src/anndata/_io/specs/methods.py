@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import copy
 from functools import partial
-from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -11,7 +10,6 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
-from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
@@ -40,7 +38,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE, is_zarr_v2
+from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE
 from ...utils import warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
@@ -107,7 +105,7 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
     -------
         The kwarg dict with "compressor" moved to "compressors" if zarr v3 is in use.
     """
-    if not is_zarr_v2() and "compressor" in dataset_kwargs:
+    if "compressor" in dataset_kwargs:
         dataset_kwargs["compressors"] = dataset_kwargs.pop("compressor")
     return dataset_kwargs
 
@@ -361,15 +359,9 @@ def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     # zarr has no first-class null dataset
-    if is_zarr_v2():
-        import zarr
-
-        # zarr has no first-class null dataset
-        f.create_dataset(k, data=zarr.empty(()), **dataset_kwargs)
-    else:
-        # TODO: why is this not actually storing the empty info with a f.empty call?
-        # It fails complaining that k doesn't exist when updating the attributes.
-        f.create_array(k, shape=(), dtype="bool")
+    # TODO: why is this not actually storing the empty info with a f.empty call?
+    # It fails complaining that k doesn't exist when updating the attributes.
+    f.create_array(k, shape=(), dtype="bool")
 
 
 ############
@@ -438,7 +430,7 @@ def write_basic(
     """Write methods which underlying library handles natively."""
     dataset_kwargs = dataset_kwargs.copy()
     dtype = dataset_kwargs.pop("dtype", elem.dtype)
-    if isinstance(f, H5Group) or is_zarr_v2():
+    if isinstance(f, H5Group):
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
@@ -523,7 +515,7 @@ def write_basic_dask_dask_dense(
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-    if is_zarr_v2() or is_h5:
+    if is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
@@ -600,44 +592,25 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    if is_zarr_v2():
-        import numcodecs
+    from numcodecs import VLenUTF8
+    from zarr.core.dtype import VariableLengthUTF8
 
-        if Version(version("numcodecs")) < Version("0.13"):
-            msg = "Old numcodecs version detected. Please update for improved performance and stability."
-            warn(msg, UserWarning)
-            # Workaround for https://github.com/zarr-developers/numcodecs/issues/514
-            if hasattr(elem, "flags") and not elem.flags.writeable:
-                elem = elem.copy()
-
-        f.create_dataset(
-            k,
-            shape=elem.shape,
-            dtype=object,
-            object_codec=numcodecs.VLenUTF8(),
-            **dataset_kwargs,
-        )
-        f[k][:] = elem
-    else:
-        from numcodecs import VLenUTF8
-        from zarr.core.dtype import VariableLengthUTF8
-
-        dataset_kwargs = dataset_kwargs.copy()
-        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        dtype = VariableLengthUTF8()
-        filters, fill_value = None, None
-        if f.metadata.zarr_format == 2:
-            filters, fill_value = [VLenUTF8()], ""
-        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-        f.create_array(
-            k,
-            shape=elem.shape,
-            dtype=dtype,
-            filters=filters,
-            fill_value=fill_value,
-            **dataset_kwargs,
-        )
-        f[k][:] = elem
+    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+    dtype = VariableLengthUTF8()
+    filters, fill_value = None, None
+    if f.metadata.zarr_format == 2:
+        filters, fill_value = [VLenUTF8()], ""
+    dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+    f.create_array(
+        k,
+        shape=elem.shape,
+        dtype=dtype,
+        filters=filters,
+        fill_value=fill_value,
+        **dataset_kwargs,
+    )
+    f[k][:] = elem
 
 
 ###############
@@ -692,16 +665,13 @@ def write_recarray_zarr(
     from anndata.compat import _to_fixed_length_strings
 
     elem = _to_fixed_length_strings(elem)
-    if is_zarr_v2():
-        f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
-    else:
-        dataset_kwargs = dataset_kwargs.copy()
-        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        # https://github.com/zarr-developers/zarr-python/issues/3546
-        # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
-        #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
-        f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-        f[k][...] = elem
+    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+    # https://github.com/zarr-developers/zarr-python/issues/3546
+    # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
+    #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
+    f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    f[k][...] = elem
 
 
 #################
@@ -731,7 +701,7 @@ def write_sparse_compressed(
     for attr_name in ["data", "indices", "indptr"]:
         attr = getattr(value, attr_name)
         dtype = indptr_dtype if attr_name == "indptr" else attr.dtype
-        if isinstance(f, H5Group) or is_zarr_v2():
+        if isinstance(f, H5Group):
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
@@ -1308,28 +1278,25 @@ def write_scalar_zarr(
     # these args are ignored in v2: https://zarr.readthedocs.io/en/v2.18.4/api/hierarchy.html#zarr.hierarchy.Group.create_dataset
     # and error out in v3
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
-    if is_zarr_v2():
-        return f.create_dataset(key, data=np.array(value), shape=(), **dataset_kwargs)
-    else:
-        from numcodecs import VLenUTF8
-        from zarr.core.dtype import VariableLengthUTF8
+    from numcodecs import VLenUTF8
+    from zarr.core.dtype import VariableLengthUTF8
 
-        match f.metadata.zarr_format, value:
-            case 2, str():
-                filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
-            case 3, str():
-                filters, dtype, fill_value = None, VariableLengthUTF8(), None
-            case _, _:
-                filters, dtype, fill_value = None, np.array(value).dtype, None
-        a = f.create_array(
-            key,
-            shape=(),
-            dtype=dtype,
-            filters=filters,
-            fill_value=fill_value,
-            **dataset_kwargs,
-        )
-        a[...] = np.array(value)
+    match f.metadata.zarr_format, value:
+        case 2, str():
+            filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
+        case 3, str():
+            filters, dtype, fill_value = None, VariableLengthUTF8(), None
+        case _, _:
+            filters, dtype, fill_value = None, np.array(value).dtype, None
+    a = f.create_array(
+        key,
+        shape=(),
+        dtype=dtype,
+        filters=filters,
+        fill_value=fill_value,
+        **dataset_kwargs,
+    )
+    a[...] = np.array(value)
 
 
 def write_hdf5_scalar(
