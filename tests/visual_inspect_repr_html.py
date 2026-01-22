@@ -1815,7 +1815,7 @@ def main():  # noqa: PLR0915, PLR0912
 
         priority = 100  # High priority to check before fallback
 
-        def can_format(self, obj):
+        def can_format(self, obj, context):
             hint, _ = extract_uns_type_hint(obj)
             return hint == "example.history"
 

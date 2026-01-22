@@ -14,7 +14,7 @@ Usage for extending to new types:
     # Format by Python type (e.g., custom array in obsm)
     @register_formatter
     class MyArrayFormatter(TypeFormatter):
-        def can_format(self, obj):
+        def can_format(self, obj, context):
             return isinstance(obj, MyArrayType)
 
         def format(self, obj, context):
@@ -32,7 +32,7 @@ Usage for extending to new types:
     class MyConfigFormatter(TypeFormatter):
         priority = 100  # Higher priority to check before fallback
 
-        def can_format(self, obj):
+        def can_format(self, obj, context):
             hint, _ = extract_uns_type_hint(obj)
             return hint == "mypackage.config"
 
@@ -322,8 +322,15 @@ class TypeFormatter(ABC):
         obj
             The object to check.
         context
-            Formatter context with section info, adata reference, column name, etc.
-            Use this for context-aware decisions (e.g., looking up metadata in uns).
+            Formatter context (see :class:`FormatterContext`). Key attributes:
+
+            - ``section``: Current section ("obs", "var", "uns", etc.)
+            - ``column_name``: Column name for obs/var entries
+            - ``adata_ref``: Reference to root AnnData (for uns lookups)
+
+            Use these for context-aware decisions, e.g., looking up metadata
+            in ``context.adata_ref.uns`` based on ``context.column_name``.
+            See the "Formatter that uses context" example in the class docstring.
         """
         ...
 
@@ -917,7 +924,7 @@ def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
             priority = 100  # Check before fallback formatters
             sections = ("uns",)  # Only apply to uns section
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 hint, _ = extract_uns_type_hint(obj)
                 return hint == "mypackage.mytype"
 
