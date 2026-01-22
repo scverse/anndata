@@ -138,11 +138,11 @@ The system is designed to be extensible via two registry patterns:
     :class:`FormatterContext` with useful attributes:
 
         - ``context.section``: Current section ("obs", "var", "uns", etc.)
-        - ``context.column_name``: Column name for obs/var entries
+        - ``context.key``: Current entry key (column name for obs/var, dict key for uns, etc.)
         - ``context.adata_ref``: Reference to root AnnData (for uns lookups)
 
     This enables context-aware formatting, e.g., looking up metadata in
-    ``context.adata_ref.uns`` based on ``context.column_name``. See
+    ``context.adata_ref.uns`` based on ``context.key``. See
     :class:`FormatterContext` for all available attributes.
 
 **SectionFormatter** (for adding new sections):

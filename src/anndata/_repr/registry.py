@@ -221,8 +221,8 @@ class FormatterContext:
     section: str = ""
     """Current section being formatted (obs, var, uns, etc.)"""
 
-    column_name: str | None = None
-    """Column name for obs/var entries (for color lookups in uns)"""
+    key: str | None = None
+    """Key/name of the current entry being formatted (column name, uns key, etc.)"""
 
     def child(self, key: str) -> FormatterContext:
         """Create a child context for nested formatting."""
@@ -300,10 +300,10 @@ class TypeFormatter(ABC):
                 # Check if column has metadata in uns
                 if not (isinstance(obj, pd.Series) and hasattr(obj, "cat")):
                     return False
-                if context.adata_ref is None or context.column_name is None:
+                if context.adata_ref is None or context.key is None:
                     return False
                 annotations = context.adata_ref.uns.get("__annotations__", {})
-                return context.column_name in annotations.get(context.section, {})
+                return context.key in annotations.get(context.section, {})
 
             def format(self, obj, context):
                 # Use metadata to render enhanced output
@@ -325,11 +325,11 @@ class TypeFormatter(ABC):
             Formatter context (see :class:`FormatterContext`). Key attributes:
 
             - ``section``: Current section ("obs", "var", "uns", etc.)
-            - ``column_name``: Column name for obs/var entries
+            - ``key``: Current entry key (column name for obs/var, dict key for uns, etc.)
             - ``adata_ref``: Reference to root AnnData (for uns lookups)
 
             Use these for context-aware decisions, e.g., looking up metadata
-            in ``context.adata_ref.uns`` based on ``context.column_name``.
+            in ``context.adata_ref.uns`` based on ``context.key``.
             See the "Formatter that uses context" example in the class docstring.
         """
         ...

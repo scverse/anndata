@@ -189,7 +189,7 @@ def _render_dataframe_section(
             rows.append(render_truncation_indicator(n_cols - context.max_items))
             break
         col = df[col_name]
-        col_context = replace(section_context, column_name=col_name)
+        col_context = replace(section_context, key=col_name)
         output = formatter_registry.format_value(col, col_context)
         rows.append(_render_entry_row(col_name, output))
 
@@ -305,8 +305,8 @@ def _render_uns_entry(
     2. Unhandled type hint (show import suggestion)
     3. Default formatter
     """
-    # Pass key to formatter via column_name for key-based detection (e.g., color lists)
-    key_context = replace(context, column_name=key)
+    # Pass key to context for key-based detection (e.g., color lists)
+    key_context = replace(context, key=key)
 
     # 1. Try formatter first - handles type hints, color lists, AnnData
     output = formatter_registry.format_value(value, key_context)

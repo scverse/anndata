@@ -528,7 +528,7 @@ class CategoricalFormatter(TypeFormatter):
         # Build preview_html with category list and colors
         preview_html = None
         error = None
-        if context.section in ("obs", "var") and context.column_name is not None:
+        if context.section in ("obs", "var") and context.key is not None:
             try:
                 # Get categories (respecting lazy loading limits)
                 categories, was_truncated, n_total = get_categories_for_display(
@@ -554,7 +554,7 @@ class CategoricalFormatter(TypeFormatter):
                             n_cats_to_show if (is_lazy and was_truncated) else None
                         )
                         colors = get_matching_column_colors(
-                            context.adata_ref, context.column_name, limit=color_limit
+                            context.adata_ref, context.key, limit=color_limit
                         )
 
                     # Render category list with colors
@@ -573,18 +573,18 @@ class CategoricalFormatter(TypeFormatter):
 
         # Check for color warnings
         warnings = []
-        if context.adata_ref is not None and context.column_name is not None:
+        if context.adata_ref is not None and context.key is not None:
             # Check for color count mismatch
             if n_categories > 0:
                 color_warning = check_color_category_mismatch(
-                    context.adata_ref, context.column_name, n_categories
+                    context.adata_ref, context.key, n_categories
                 )
                 if color_warning:
                     warnings.append(color_warning)
             # Check for invalid/unsafe colors (limited to previewed categories)
             invalid_warning = check_invalid_colors(
                 context.adata_ref,
-                context.column_name,
+                context.key,
                 limit=context.max_categories,
                 n_total=n_categories,
             )
@@ -1002,7 +1002,7 @@ class ColorListFormatter(TypeFormatter):
 
     def can_format(self, obj: Any, context: FormatterContext) -> bool:
         """Check if this is a color list based on key name and value."""
-        key = context.column_name
+        key = context.key
         return key is not None and is_color_list(key, obj)
 
     def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:

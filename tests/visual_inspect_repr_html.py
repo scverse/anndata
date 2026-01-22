@@ -3095,7 +3095,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # can customize how data in obs/var columns is rendered by:
     # 1. Storing semantic metadata in uns
     # 2. Registering a TypeFormatter with sections=("obs", "var") and higher priority
-    # 3. Using FormatterContext.adata_ref and column_name to look up metadata
+    # 3. Using FormatterContext.adata_ref and key to look up metadata
     #
     # See also: LAMINDB_COMPARISON_REPORT.md for detailed analysis of this pattern
     print("  25. Ecosystem Package Extensibility (Customizing obs/var columns)")
@@ -3121,7 +3121,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         To use this pattern in your package:
         1. Define a metadata convention (e.g., uns["__mypackage_annotations__"])
         2. Create a TypeFormatter with sections=("obs", "var")
-        3. Use context.adata_ref and context.column_name to look up metadata
+        3. Use context.adata_ref and context.key to look up metadata
 
         See: src/anndata/_repr/registry.py for TypeFormatter API
         """
@@ -3135,7 +3135,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
 
             The context parameter provides access to:
             - context.adata_ref: reference to root AnnData for uns lookups
-            - context.column_name: current column being formatted
+            - context.key: current entry key being formatted
             - context.section: current section ("obs", "var", etc.)
             """
             # Basic type check - is this a categorical?
@@ -3143,13 +3143,13 @@ The end. If you see this without any alerts or broken layout, the sanitization w
                 return False
 
             # Context check - do we have the info needed to look up metadata?
-            if context.adata_ref is None or context.column_name is None:
+            if context.adata_ref is None or context.key is None:
                 return False
 
             # Check if this column has ontology annotation
             annotations = context.adata_ref.uns.get(ONTOLOGY_METADATA_KEY, {})
             section_annotations = annotations.get(context.section, {})
-            return context.column_name in section_annotations
+            return context.key in section_annotations
 
         def format(self, obj, context):
             """
@@ -3163,7 +3163,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
             """
             # Get ontology metadata for this column
             annotations = context.adata_ref.uns[ONTOLOGY_METADATA_KEY]
-            col_info = annotations[context.section][context.column_name]
+            col_info = annotations[context.section][context.key]
 
             registry = col_info.get("registry", "unknown")
             ontology_id = col_info.get("ontology_id", "")
@@ -3302,8 +3302,8 @@ The end. If you see this without any alerts or broken layout, the sanitization w
             contains registry info per column</li>
         <li><b>Register TypeFormatter:</b> with <code>sections=("obs", "var")</code>
             and <code>priority=115</code> (higher than default CategoricalFormatter at 110)</li>
-        <li><b>Use can_format(obj, context):</b> to check if the column has metadata
-            via <code>context.adata_ref</code> and <code>context.column_name</code></li>
+        <li><b>Use can_format(obj, context):</b> to check if the entry has metadata
+            via <code>context.adata_ref</code> and <code>context.key</code></li>
         <li><b>Render enhanced output:</b> type shows registry, preview shows validation status</li>
         </ol>
 
@@ -3328,7 +3328,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         <li><code>TypeFormatter.priority</code>: higher priority overrides default formatters</li>
         <li><code>can_format(obj, context)</code>: receives full context for metadata lookups</li>
         <li><code>context.adata_ref</code>: reference to root AnnData for uns lookups</li>
-        <li><code>context.column_name</code>: current column being formatted</li>
+        <li><code>context.key</code>: current entry key being formatted</li>
         <li><code>context.section</code>: current section ("obs", "var", etc.)</li>
         </ul>
 
