@@ -63,7 +63,7 @@ from .._repr_constants import (
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_UNIQUE_LIMIT,
 )
-from .utils import escape_html
+from .utils import escape_html, validate_key
 
 if TYPE_CHECKING:
     from typing import Any
@@ -653,6 +653,40 @@ class FallbackFormatter(TypeFormatter):
         )
 
 
+def _apply_key_validation(
+    result: FormattedOutput, context: FormatterContext
+) -> FormattedOutput:
+    """Apply key validation to a formatted result.
+
+    Checks if context.key is valid for HDF5/Zarr serialization and adds
+    warnings to the result if not. This centralizes key validation so
+    all formatters benefit automatically.
+
+    Parameters
+    ----------
+    result
+        The FormattedOutput from a formatter
+    context
+        The formatter context (uses context.key)
+
+    Returns
+    -------
+    FormattedOutput, possibly with added warnings and updated is_serializable
+    """
+    if context.key is None:
+        return result
+
+    key_valid, key_reason, is_hard_error = validate_key(context.key)
+    if key_valid:
+        return result
+
+    # Key has issues - add warning and possibly mark as not serializable
+    new_warnings = [*result.warnings, key_reason]
+    new_serializable = result.is_serializable and not is_hard_error
+
+    return replace(result, warnings=new_warnings, is_serializable=new_serializable)
+
+
 class FormatterRegistry:
     """
     Registry for type and section formatters.
@@ -734,7 +768,7 @@ class FormatterRegistry:
                             f"{'; '.join(warn_msgs)}",
                             UserWarning,
                         )
-                    return result
+                    return _apply_key_validation(result, context)
             except Exception as e:  # noqa: BLE001
                 # Formatter failed - record and continue to next
                 # Build both messages defensively
@@ -767,7 +801,8 @@ class FormatterRegistry:
         else:
             outer_error = None
 
-        return self._fallback.format(obj, context, outer_error=outer_error)
+        result = self._fallback.format(obj, context, outer_error=outer_error)
+        return _apply_key_validation(result, context)
 
     def get_section_formatter(self, section: str) -> SectionFormatter | None:
         """Get the formatter for a section, or None if not registered."""

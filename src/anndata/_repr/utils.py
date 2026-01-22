@@ -766,16 +766,16 @@ def get_setting(name: str, *, default: Any) -> Any:
         return default
 
 
-def check_column_name(name: str) -> tuple[bool, str, bool]:
-    """Check if a column name is valid for HDF5/Zarr serialization.
+def validate_key(key: str) -> tuple[bool, str, bool]:
+    """Check if a key name is valid for HDF5/Zarr serialization.
 
-    Column/key names are validated because certain characters cause issues
-    with the underlying storage formats (HDF5 and Zarr).
+    Key names (column names, uns keys, etc.) are validated because certain
+    characters cause issues with the underlying storage formats (HDF5 and Zarr).
 
     Parameters
     ----------
-    name
-        Column or key name to validate
+    key
+        Key name to validate
 
     Returns
     -------
@@ -784,9 +784,9 @@ def check_column_name(name: str) -> tuple[bool, str, bool]:
         reason: Description of the issue
         is_hard_error: True means write fails NOW, False means deprecation warning
     """
-    if not isinstance(name, str):
-        return False, f"Non-string name ({type(name).__name__})", True
+    if not isinstance(key, str):
+        return False, f"Non-string key ({type(key).__name__})", True
     # Slashes will be disallowed in h5 stores (FutureWarning)
-    if "/" in name:
+    if "/" in key:
         return False, "Contains '/' (deprecated)", False
     return True, "", False

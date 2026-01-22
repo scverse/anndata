@@ -298,32 +298,32 @@ class TestBackingInfo:
         assert info["format"] == "Unknown"
 
 
-class TestColumnNameValidation:
-    """Tests for column name validation."""
+class TestKeyValidation:
+    """Tests for key name validation."""
 
-    def test_check_column_name_valid(self):
-        """Test that valid column names pass."""
-        from anndata._repr.utils import check_column_name
+    def test_validate_key_valid(self):
+        """Test that valid key names pass."""
+        from anndata._repr.utils import validate_key
 
-        valid, _, _ = check_column_name("gene_name")
+        valid, _, _ = validate_key("gene_name")
         assert valid
-        valid, _, _ = check_column_name("gène_名前")
+        valid, _, _ = validate_key("gène_名前")
         assert valid
 
-    def test_check_column_name_slash(self):
+    def test_validate_key_slash(self):
         """Test slashes are flagged as warning."""
-        from anndata._repr.utils import check_column_name
+        from anndata._repr.utils import validate_key
 
-        valid, reason, is_hard_error = check_column_name("path/to/gene")
+        valid, reason, is_hard_error = validate_key("path/to/gene")
         assert not valid
         assert "/" in reason
         assert not is_hard_error
 
-    def test_check_column_name_non_string(self):
+    def test_validate_key_non_string(self):
         """Test non-string names are flagged as hard error."""
-        from anndata._repr.utils import check_column_name
+        from anndata._repr.utils import validate_key
 
-        valid, reason, is_hard_error = check_column_name(("a", "b"))
+        valid, reason, is_hard_error = validate_key(("a", "b"))
         assert not valid
         assert "Non-string" in reason
         assert is_hard_error

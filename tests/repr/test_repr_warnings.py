@@ -173,7 +173,7 @@ class TestSeriesNonSerializable:
             adata.write_h5ad(tmp_path / "test.h5ad")
             pytest.fail(
                 "Non-string column name serialization now works! "
-                "Update check_column_name() in formatters.py."
+                "Update validate_key() in utils.py."
             )
         except (TypeError, Exception):  # noqa: BLE001
             pass
@@ -300,7 +300,7 @@ class TestColumnNameValidation:
                 serializes = False
                 pytest.fail(
                     "Slash in column names now fails! "
-                    "Update check_column_name() in formatters.py: "
+                    "Update validate_key() in utils.py: "
                     "set is_hard_error=True for slashes."
                 )
 

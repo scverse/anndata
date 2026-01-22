@@ -410,10 +410,10 @@ from .registry import (  # noqa: E402
 
 # HTML rendering helpers for building custom sections
 from .utils import (  # noqa: E402
-    check_column_name,
     escape_html,
     format_memory_size,
     format_number,
+    validate_key,
 )
 
 __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
@@ -467,5 +467,5 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "render_warning_icon",
     "TypeCellConfig",
     # Validation helpers
-    "check_column_name",
+    "validate_key",
 ]

@@ -60,7 +60,6 @@ from .registry import (
     formatter_registry,
 )
 from .utils import (
-    check_column_name,
     escape_html,
     format_number,
 )
@@ -75,43 +74,6 @@ if TYPE_CHECKING:
     from .registry import FormattedOutput, FormatterContext
 
 
-def _validate_key_and_collect_warnings(
-    key: str,
-    output: FormattedOutput,
-) -> tuple[list[str], str | None]:
-    """Validate key name and return key-specific warnings and errors.
-
-    Checks key validity (issue #321) and returns warnings specific to the key.
-    The output.warnings are handled separately by render_formatted_entry.
-
-    Parameters
-    ----------
-    key
-        The entry key to validate
-    output
-        FormattedOutput (unused, kept for API compatibility)
-
-    Returns
-    -------
-    tuple of (key_warnings, is_key_not_serializable)
-        key_warnings: List of key-specific warning messages
-        is_key_not_serializable: True if key prevents serialization
-    """
-    key_valid, key_reason, is_hard_error = check_column_name(key)
-
-    key_warnings: list[str] = []
-    is_key_not_serializable = False
-
-    if not key_valid:
-        # All key issues are warnings (shown in tooltip)
-        # Hard errors (non-string) also mark as not serializable
-        key_warnings.append(key_reason)
-        if is_hard_error:
-            is_key_not_serializable = True
-
-    return key_warnings, is_key_not_serializable
-
-
 def _render_entry_row(
     key: str,
     output: FormattedOutput,
@@ -121,16 +83,15 @@ def _render_entry_row(
 ) -> str:
     """Render an entry row for DataFrame, mapping, or uns sections.
 
-    This is a thin wrapper around render_formatted_entry that handles
-    key validation. The renderer only sees FormattedOutput, never the
-    original data object.
+    Key validation is handled by FormatterRegistry.format_value() via context.key,
+    so output already contains any key-related warnings and serialization flags.
 
     Parameters
     ----------
     key
         Entry key/name to display
     output
-        FormattedOutput from a TypeFormatter
+        FormattedOutput from a TypeFormatter (already includes key validation)
     append_type_html
         If True, append type_html below type_name (for mapping entries)
     preview_note
@@ -140,19 +101,9 @@ def _render_entry_row(
     -------
     HTML string for the entry row (and optional expandable content row)
     """
-    # Validate key and collect warnings
-    extra_warnings, is_key_not_serializable = _validate_key_and_collect_warnings(
-        key, output
-    )
-
-    # If key has serialization issues, mark output as not serializable
-    if is_key_not_serializable and output.is_serializable:
-        output = replace(output, is_serializable=False)
-
     entry = FormattedEntry(key=key, output=output)
     return render_formatted_entry(
         entry,
-        extra_warnings=extra_warnings if extra_warnings else None,
         append_type_html=append_type_html,
         preview_note=preview_note,
     )
@@ -239,7 +190,8 @@ def _render_mapping_section(
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = mapping[key]
-        output = formatter_registry.format_value(value, section_context)
+        key_context = replace(section_context, key=key)
+        output = formatter_registry.format_value(value, key_context)
         rows.append(_render_entry_row(key, output, append_type_html=True))
 
     return render_section(
