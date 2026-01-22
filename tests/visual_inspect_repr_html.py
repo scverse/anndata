@@ -8,6 +8,17 @@ Usage:
     python tests/visual_inspect_repr_html.py
 
 Then open tests/repr_html_visual_test.html in your browser.
+
+Key extensibility examples:
+- Test 12: Uns type hints (TypeFormatter for tagged data in uns)
+- Test 14: TreeData custom sections (SectionFormatter for new sections)
+- Test 19: MuData (SectionFormatter for .mod section)
+- Test 20: SpatialData (custom _repr_html_ using building blocks)
+- Test 25: Ecosystem package extensibility (TypeFormatter for obs/var columns)
+
+See also:
+- src/anndata/_repr/registry.py: TypeFormatter and SectionFormatter APIs
+- Reviewer's Guide gist for architecture overview
 """
 
 # ruff: noqa: EM101
@@ -38,6 +49,7 @@ from anndata import AnnData  # noqa: E402
 from anndata._repr import (  # noqa: E402
     FormattedOutput,
     TypeFormatter,
+    escape_html,
     extract_uns_type_hint,
     register_formatter,
 )
@@ -3076,6 +3088,259 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li>Large data is truncated</li>"
         "<li>No crashes</li>"
         "</ul>",
+    ))
+
+    # Test 25: Ecosystem Package Extensibility - Modifying Known Sections
+    # This demonstrates how external packages (bionty, lamindb, cellxgene, etc.)
+    # can customize how data in obs/var columns is rendered by:
+    # 1. Storing semantic metadata in uns
+    # 2. Registering a TypeFormatter with sections=("obs", "var") and higher priority
+    # 3. Using FormatterContext.adata_ref and column_name to look up metadata
+    #
+    # See also: LAMINDB_COMPARISON_REPORT.md for detailed analysis of this pattern
+    print("  25. Ecosystem Package Extensibility (Customizing obs/var columns)")
+
+    # === STEP 1: Define a convention for storing semantic metadata in uns ===
+    # This is what a package like bionty or lamindb would store when annotating data
+    ONTOLOGY_METADATA_KEY = "__ontology_annotations__"
+
+    # === STEP 2: Create a TypeFormatter that reads this metadata ===
+    # This would be in the ecosystem package (e.g., bionty/_repr.py)
+
+    @register_formatter
+    class OntologyAnnotatedCategoricalFormatter(TypeFormatter):
+        """
+        Example TypeFormatter for columns annotated with ontology metadata.
+
+        This demonstrates how ecosystem packages can enhance the HTML repr for
+        categorical columns in obs/var by:
+        1. Checking if the column has ontology metadata in uns
+        2. Rendering enhanced type info (registry name, validation status)
+        3. Adding tooltips with ontology IDs
+
+        To use this pattern in your package:
+        1. Define a metadata convention (e.g., uns["__mypackage_annotations__"])
+        2. Create a TypeFormatter with sections=("obs", "var")
+        3. Use can_format_with_context() to check for metadata
+        4. Use context.adata_ref and context.column_name to look up metadata
+
+        See: src/anndata/_repr/registry.py for TypeFormatter API
+        """
+
+        priority = 115  # Higher than CategoricalFormatter (110)
+        sections = ("obs", "var")  # Only apply to obs/var columns
+
+        def can_format(self, obj) -> bool:
+            """Basic type check - is this a categorical?"""
+            return isinstance(obj, pd.Series) and hasattr(obj, "cat")
+
+        def can_format_with_context(self, obj, context) -> bool:
+            """
+            Context-aware check - does this column have ontology metadata?
+
+            This method is called by the FormatterRegistry when available.
+            It receives the full FormatterContext, allowing us to:
+            - Access adata_ref (the root AnnData object)
+            - Access column_name (the current column being formatted)
+            - Look up metadata in uns based on column_name
+            """
+            if not self.can_format(obj):
+                return False
+            if context.adata_ref is None or context.column_name is None:
+                return False
+
+            # Check if this column has ontology annotation
+            annotations = context.adata_ref.uns.get(ONTOLOGY_METADATA_KEY, {})
+            section_annotations = annotations.get(context.section, {})
+            return context.column_name in section_annotations
+
+        def format(self, obj, context):
+            """
+            Render the categorical with ontology information.
+
+            This produces a FormattedOutput with:
+            - type_name: "category[registry] (n)" instead of just "category (n)"
+            - preview_html: Category values with validation indicators
+            - tooltip: Shows ontology ID and validation status
+            - warnings: If unmapped values exist
+            """
+            # Get ontology metadata for this column
+            annotations = context.adata_ref.uns[ONTOLOGY_METADATA_KEY]
+            col_info = annotations[context.section][context.column_name]
+
+            registry = col_info.get("registry", "unknown")
+            ontology_id = col_info.get("ontology_id", "")
+            validated = col_info.get("validated", True)
+            unmapped_count = col_info.get("unmapped_count", 0)
+
+            # Build enhanced type name with registry
+            n_cats = len(obj.cat.categories)
+            type_name = f"category[{registry}] ({n_cats})"
+
+            # Build preview with validation status
+            categories = list(obj.cat.categories[:5])
+            if validated:
+                # All values mapped - show green checkmark
+                cat_html = ", ".join(
+                    f'<span style="color: var(--anndata-category-color, #666);">{escape_html(str(c))}</span>'
+                    for c in categories
+                )
+                if n_cats > 5:
+                    cat_html += f' <span style="color: #888;">...+{n_cats - 5}</span>'
+                cat_html += ' <span style="color: #28a745;" title="All values validated">✓</span>'
+            else:
+                # Some unmapped values - show warning
+                cat_html = ", ".join(
+                    f'<span style="color: var(--anndata-category-color, #666);">{escape_html(str(c))}</span>'
+                    for c in categories
+                )
+                if n_cats > 5:
+                    cat_html += f' <span style="color: #888;">...+{n_cats - 5}</span>'
+                cat_html += f' <span style="color: #fd7e14;" title="{unmapped_count} unmapped values">⚠ {unmapped_count} unmapped</span>'
+
+            # Build tooltip with full metadata
+            tooltip_parts = [f"Registry: {registry}"]
+            if ontology_id:
+                tooltip_parts.append(f"Ontology: {ontology_id}")
+            tooltip_parts.append(f"Validated: {'Yes' if validated else 'No'}")
+            if not validated:
+                tooltip_parts.append(f"Unmapped: {unmapped_count} values")
+
+            return FormattedOutput(
+                type_name=type_name,
+                css_class="anndata-dtype--category",
+                tooltip="\n".join(tooltip_parts),
+                preview_html=cat_html,
+                warnings=[] if validated else [f"{unmapped_count} values not mapped to ontology"],
+            )
+
+    # === STEP 3: Create test AnnData with ontology-annotated columns ===
+    adata_ontology = AnnData(
+        np.random.randn(100, 50).astype(np.float32),
+        obs=pd.DataFrame({
+            # Fully validated cell types
+            "cell_type": pd.Categorical(
+                np.random.choice(["T cell", "B cell", "NK cell", "Monocyte"], 100)
+            ),
+            # Partially validated tissue types (some unmapped)
+            "tissue": pd.Categorical(
+                np.random.choice(["blood", "spleen", "lymph_node", "bone_marrow"], 100)
+            ),
+            # Assay with ontology
+            "assay": pd.Categorical(
+                np.random.choice(["10x 3' v3", "Smart-seq2"], 100)
+            ),
+            # Regular categorical (no ontology annotation)
+            "batch": pd.Categorical(
+                np.random.choice(["batch_1", "batch_2", "batch_3"], 100)
+            ),
+            # Non-categorical column
+            "n_counts": np.random.randint(1000, 10000, 100),
+        }),
+        var=pd.DataFrame({
+            # Gene annotations with Ensembl
+            "gene_symbol": pd.Categorical(
+                [f"GENE{i}" for i in range(50)]
+            ),
+            # Regular numeric column
+            "mean_expression": np.random.randn(50).astype(np.float32),
+        }),
+    )
+
+    # Add ontology metadata to uns (this is what bionty/lamindb would do)
+    adata_ontology.uns[ONTOLOGY_METADATA_KEY] = {
+        "obs": {
+            "cell_type": {
+                "registry": "bionty.CellType",
+                "ontology_id": "cl",
+                "validated": True,
+                "unmapped_count": 0,
+            },
+            "tissue": {
+                "registry": "bionty.Tissue",
+                "ontology_id": "uberon",
+                "validated": False,  # Some values not in ontology
+                "unmapped_count": 2,
+            },
+            "assay": {
+                "registry": "bionty.ExperimentalFactor",
+                "ontology_id": "efo",
+                "validated": True,
+                "unmapped_count": 0,
+            },
+            # Note: "batch" is NOT in this dict, so it uses default formatting
+        },
+        "var": {
+            "gene_symbol": {
+                "registry": "bionty.Gene",
+                "ontology_id": "ensembl",
+                "validated": True,
+                "unmapped_count": 0,
+            },
+        },
+    }
+
+    # Add some standard sections to show they still work
+    adata_ontology.obsm["X_pca"] = np.random.randn(100, 10).astype(np.float32)
+    adata_ontology.obsm["X_umap"] = np.random.randn(100, 2).astype(np.float32)
+    adata_ontology.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3"]
+
+    sections.append((
+        "25. Ecosystem Package Extensibility (obs/var customization)",
+        adata_ontology._repr_html_(),
+        """<p style='margin: 5px 0;'><b>Demonstrates how external packages can customize
+        rendering of data in known sections (obs, var)</b></p>
+
+        <p style='margin: 5px 0;'>This example shows the pattern used by ecosystem packages
+        like <a href='https://lamin.ai/docs/bionty' target='_blank'>bionty</a> or
+        <a href='https://docs.lamin.ai/' target='_blank'>lamindb</a> to add semantic
+        annotations to AnnData columns.</p>
+
+        <p style='margin: 5px 0;'><b>How it works:</b></p>
+        <ol style='margin: 5px 0; padding-left: 20px;'>
+        <li><b>Store metadata in uns:</b> <code>uns["__ontology_annotations__"]</code>
+            contains registry info per column</li>
+        <li><b>Register TypeFormatter:</b> with <code>sections=("obs", "var")</code>
+            and <code>priority=115</code> (higher than default CategoricalFormatter at 110)</li>
+        <li><b>Use can_format_with_context():</b> to check if the column has metadata
+            via <code>context.adata_ref</code> and <code>context.column_name</code></li>
+        <li><b>Render enhanced output:</b> type shows registry, preview shows validation status</li>
+        </ol>
+
+        <p style='margin: 5px 0;'><b>Columns with ontology annotations:</b></p>
+        <ul style='margin: 5px 0; padding-left: 20px;'>
+        <li><code>cell_type</code>: <code>category[bionty.CellType]</code> - fully validated ✓</li>
+        <li><code>tissue</code>: <code>category[bionty.Tissue]</code> - 2 unmapped values ⚠</li>
+        <li><code>assay</code>: <code>category[bionty.ExperimentalFactor]</code> - validated ✓</li>
+        <li><code>gene_symbol</code> (var): <code>category[bionty.Gene]</code> - validated ✓</li>
+        </ul>
+
+        <p style='margin: 5px 0;'><b>Columns without annotations (default rendering):</b></p>
+        <ul style='margin: 5px 0; padding-left: 20px;'>
+        <li><code>batch</code>: regular <code>category (3)</code> - no metadata in uns</li>
+        <li><code>n_counts</code>: regular <code>int64</code> - not categorical</li>
+        <li><code>mean_expression</code> (var): regular <code>float32</code></li>
+        </ul>
+
+        <p style='margin: 5px 0;'><b>Key API points:</b></p>
+        <ul style='margin: 5px 0; padding-left: 20px;'>
+        <li><code>TypeFormatter.sections</code>: restrict to specific sections</li>
+        <li><code>TypeFormatter.priority</code>: higher priority overrides default formatters</li>
+        <li><code>can_format_with_context(obj, context)</code>: access full context</li>
+        <li><code>context.adata_ref</code>: reference to root AnnData for uns lookups</li>
+        <li><code>context.column_name</code>: current column being formatted</li>
+        <li><code>context.section</code>: current section ("obs", "var", etc.)</li>
+        </ul>
+
+        <p style='margin: 5px 0;'><b>See also:</b></p>
+        <ul style='margin: 5px 0; padding-left: 20px;'>
+        <li><code>src/anndata/_repr/registry.py</code>: TypeFormatter API and FormatterContext</li>
+        <li>Test 12: Uns type hints (similar pattern for uns entries)</li>
+        <li>Test 14: TreeData custom sections (SectionFormatter pattern)</li>
+        </ul>
+
+        <p style='margin: 5px 0;'><i>Hover over annotated columns to see the tooltip with full metadata.</i></p>
+        """,
     ))
 
     # Generate HTML file
