@@ -165,7 +165,9 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         msg = f"Unsupported array types {type(self.data)}"
         raise ValueError(msg)
 
-    def _get_contiguous_compressed_slice(self, s: slice) -> CompressedVectors:
+    def _get_contiguous_compressed_slice(
+        self, s: slice[int, int, Literal[1] | None]
+    ) -> CompressedVectors:
         new_indptr: DenseType = self.indptr[s.start : s.stop + 1].copy()
 
         start = new_indptr[0].item()
@@ -232,11 +234,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def __getitem__(self, key) -> SparseMatrixType:
-        if isinstance(key, tuple):
-            row, col = key
-        else:
-            row = key
-            col = slice(None)
+        row, col = key if isinstance(key, tuple) else (key, slice(None))
         major_index, minor_index = (row, col) if self.format == "csr" else (col, row)
         return self._get(major_index, minor_index)
 
@@ -248,11 +246,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     @singledispatchmethod
     def _get(self, major_index: Any, minor_index: slice) -> SparseMatrixType:
         return self.memory_format(
-            (
-                self.data[...],
-                self.indices[...],
-                self.indptr[...],
-            ),
+            (self.data[...], self.indices[...], self.indptr[...]),
             shape=self.shape,
         )[self._gen_maj_min_tuple(major_index, minor_index)]
 
@@ -308,7 +302,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
     ) -> CompressedVectors:
         slices = np.ma.extras._ezclump(mask)
 
-        def mean_slice_length(slices):
+        def mean_slice_length(slices) -> int:
             return floor(sum(s.stop - s.start for s in slices) / len(slices))
 
         # heuristic for whether slicing should be optimized
