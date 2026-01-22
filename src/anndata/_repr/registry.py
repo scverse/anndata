@@ -271,7 +271,7 @@ class TypeFormatter(ABC):
         class MyUnsFormatter(TypeFormatter):
             sections = ("uns",)
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, MySpecialType)
 
             def format(self, obj, context):
@@ -283,19 +283,48 @@ class TypeFormatter(ABC):
         class MyMatrixFormatter(TypeFormatter):
             sections = ("obsm", "varm")
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, MyMatrixType)
 
             def format(self, obj, context):
                 return FormattedOutput(type_name=f"MyMatrix {obj.shape}")
+
+    Formatter that uses context for metadata lookup::
+
+        @register_formatter
+        class AnnotatedCategoricalFormatter(TypeFormatter):
+            priority = 115  # Higher than default CategoricalFormatter
+            sections = ("obs", "var")
+
+            def can_format(self, obj, context):
+                # Check if column has metadata in uns
+                if not (isinstance(obj, pd.Series) and hasattr(obj, "cat")):
+                    return False
+                if context.adata_ref is None or context.column_name is None:
+                    return False
+                annotations = context.adata_ref.uns.get("__annotations__", {})
+                return context.column_name in annotations.get(context.section, {})
+
+            def format(self, obj, context):
+                # Use metadata to render enhanced output
+                return FormattedOutput(type_name="category[annotated]")
     """
 
     priority: int = 0
     sections: tuple[str, ...] | None = None
 
     @abstractmethod
-    def can_format(self, obj: Any) -> bool:
-        """Return True if this formatter can handle the given object."""
+    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+        """Return True if this formatter can handle the given object.
+
+        Parameters
+        ----------
+        obj
+            The object to check.
+        context
+            Formatter context with section info, adata reference, column name, etc.
+            Use this for context-aware decisions (e.g., looking up metadata in uns).
+        """
         ...
 
     @abstractmethod
@@ -656,9 +685,7 @@ class FormatterRegistry:
         except ValueError:
             return False
 
-    def format_value(  # noqa: PLR0912
-        self, obj: Any, context: FormatterContext
-    ) -> FormattedOutput:
+    def format_value(self, obj: Any, context: FormatterContext) -> FormattedOutput:
         """
         Format a value using the appropriate formatter.
 
@@ -686,13 +713,7 @@ class FormatterRegistry:
                 continue
 
             try:
-                # Check with context if formatter supports it, else use basic check
-                if hasattr(formatter, "can_format_with_context"):
-                    can_fmt = formatter.can_format_with_context(obj, context)
-                else:
-                    can_fmt = formatter.can_format(obj)
-
-                if can_fmt:
+                if formatter.can_format(obj, context):
                     result = formatter.format(obj, context)
                     # Success! Warn about any earlier failures
                     if failed_formatters:
@@ -793,12 +814,7 @@ class FormatterRegistry:
                 continue
 
             try:
-                if hasattr(formatter, "can_format_with_context"):
-                    can_fmt = formatter.can_format_with_context(obj, context)
-                else:
-                    can_fmt = formatter.can_format(obj)
-
-                if can_fmt:
+                if formatter.can_format(obj, context):
                     sections_str = (
                         f", sections={formatter.sections}" if formatter.sections else ""
                     )

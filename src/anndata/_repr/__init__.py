@@ -75,7 +75,7 @@ The system is designed to be extensible via two registry patterns:
         class MyArrayFormatter(TypeFormatter):
             sections = ("obsm", "varm")  # Only apply to obsm/varm
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, MyArrayType)
 
             def format(self, obj, context):
@@ -110,7 +110,7 @@ The system is designed to be extensible via two registry patterns:
             priority = 100  # Check before fallback
             sections = ("uns",)  # Only apply to uns
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 hint, _ = extract_uns_type_hint(obj)
                 return hint == "mypackage.config"
 

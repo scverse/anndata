@@ -737,7 +737,7 @@ try:
 
         priority = 100
 
-        def can_format(self, obj) -> bool:
+        def can_format(self, obj, context) -> bool:
             return isinstance(obj, dict) and "shape" in obj and "dtype" in obj
 
         def format(self, obj, context: FormatterContext) -> FormattedOutput:
@@ -3121,8 +3121,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         To use this pattern in your package:
         1. Define a metadata convention (e.g., uns["__mypackage_annotations__"])
         2. Create a TypeFormatter with sections=("obs", "var")
-        3. Use can_format_with_context() to check for metadata
-        4. Use context.adata_ref and context.column_name to look up metadata
+        3. Use context.adata_ref and context.column_name to look up metadata
 
         See: src/anndata/_repr/registry.py for TypeFormatter API
         """
@@ -3130,22 +3129,20 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         priority = 115  # Higher than CategoricalFormatter (110)
         sections = ("obs", "var")  # Only apply to obs/var columns
 
-        def can_format(self, obj) -> bool:
-            """Basic type check - is this a categorical?"""
-            return isinstance(obj, pd.Series) and hasattr(obj, "cat")
-
-        def can_format_with_context(self, obj, context) -> bool:
+        def can_format(self, obj, context) -> bool:
             """
-            Context-aware check - does this column have ontology metadata?
+            Check if this column has ontology metadata.
 
-            This method is called by the FormatterRegistry when available.
-            It receives the full FormatterContext, allowing us to:
-            - Access adata_ref (the root AnnData object)
-            - Access column_name (the current column being formatted)
-            - Look up metadata in uns based on column_name
+            The context parameter provides access to:
+            - context.adata_ref: reference to root AnnData for uns lookups
+            - context.column_name: current column being formatted
+            - context.section: current section ("obs", "var", etc.)
             """
-            if not self.can_format(obj):
+            # Basic type check - is this a categorical?
+            if not (isinstance(obj, pd.Series) and hasattr(obj, "cat")):
                 return False
+
+            # Context check - do we have the info needed to look up metadata?
             if context.adata_ref is None or context.column_name is None:
                 return False
 
@@ -3211,7 +3208,9 @@ The end. If you see this without any alerts or broken layout, the sanitization w
                 css_class="anndata-dtype--category",
                 tooltip="\n".join(tooltip_parts),
                 preview_html=cat_html,
-                warnings=[] if validated else [f"{unmapped_count} values not mapped to ontology"],
+                warnings=[]
+                if validated
+                else [f"{unmapped_count} values not mapped to ontology"],
             )
 
     # === STEP 3: Create test AnnData with ontology-annotated columns ===
@@ -3227,9 +3226,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
                 np.random.choice(["blood", "spleen", "lymph_node", "bone_marrow"], 100)
             ),
             # Assay with ontology
-            "assay": pd.Categorical(
-                np.random.choice(["10x 3' v3", "Smart-seq2"], 100)
-            ),
+            "assay": pd.Categorical(np.random.choice(["10x 3' v3", "Smart-seq2"], 100)),
             # Regular categorical (no ontology annotation)
             "batch": pd.Categorical(
                 np.random.choice(["batch_1", "batch_2", "batch_3"], 100)
@@ -3239,9 +3236,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         }),
         var=pd.DataFrame({
             # Gene annotations with Ensembl
-            "gene_symbol": pd.Categorical(
-                [f"GENE{i}" for i in range(50)]
-            ),
+            "gene_symbol": pd.Categorical([f"GENE{i}" for i in range(50)]),
             # Regular numeric column
             "mean_expression": np.random.randn(50).astype(np.float32),
         }),
@@ -3283,7 +3278,12 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     # Add some standard sections to show they still work
     adata_ontology.obsm["X_pca"] = np.random.randn(100, 10).astype(np.float32)
     adata_ontology.obsm["X_umap"] = np.random.randn(100, 2).astype(np.float32)
-    adata_ontology.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3"]
+    adata_ontology.uns["cell_type_colors"] = [
+        "#e41a1c",
+        "#377eb8",
+        "#4daf4a",
+        "#984ea3",
+    ]
 
     sections.append((
         "25. Ecosystem Package Extensibility (obs/var customization)",
@@ -3302,7 +3302,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
             contains registry info per column</li>
         <li><b>Register TypeFormatter:</b> with <code>sections=("obs", "var")</code>
             and <code>priority=115</code> (higher than default CategoricalFormatter at 110)</li>
-        <li><b>Use can_format_with_context():</b> to check if the column has metadata
+        <li><b>Use can_format(obj, context):</b> to check if the column has metadata
             via <code>context.adata_ref</code> and <code>context.column_name</code></li>
         <li><b>Render enhanced output:</b> type shows registry, preview shows validation status</li>
         </ol>
@@ -3326,7 +3326,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         <ul style='margin: 5px 0; padding-left: 20px;'>
         <li><code>TypeFormatter.sections</code>: restrict to specific sections</li>
         <li><code>TypeFormatter.priority</code>: higher priority overrides default formatters</li>
-        <li><code>can_format_with_context(obj, context)</code>: access full context</li>
+        <li><code>can_format(obj, context)</code>: receives full context for metadata lookups</li>
         <li><code>context.adata_ref</code>: reference to root AnnData for uns lookups</li>
         <li><code>context.column_name</code>: current column being formatted</li>
         <li><code>context.section</code>: current section ("obs", "var", etc.)</li>

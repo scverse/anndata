@@ -42,7 +42,7 @@ class TestFormatterRegistry:
         class CustomTypeFormatter(TypeFormatter):
             priority = 500
 
-            def can_format(self, obj: Any) -> bool:
+            def can_format(self, obj: Any, context) -> bool:
                 return isinstance(obj, CustomType)
 
             def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
@@ -103,7 +103,7 @@ class TestFormatterRegistry:
             priority = 600
             sections = ("uns",)
 
-            def can_format(self, obj: Any) -> bool:
+            def can_format(self, obj: Any, context) -> bool:
                 return isinstance(obj, SectionSpecificType)
 
             def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
@@ -145,7 +145,7 @@ class TestFormatterRegistry:
             priority = 600
             sections = None
 
-            def can_format(self, obj: Any) -> bool:
+            def can_format(self, obj: Any, context) -> bool:
                 return isinstance(obj, UniversalType)
 
             def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
@@ -207,7 +207,7 @@ class TestFormatterRegistry:
         class FailingFormatter(TypeFormatter):
             priority = 1000
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return True
 
             def format(self, obj, context):
@@ -217,7 +217,7 @@ class TestFormatterRegistry:
         class BackupFormatter(TypeFormatter):
             priority = 500
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return True
 
             def format(self, obj, context):
@@ -258,7 +258,7 @@ class TestFormatterRegistry:
         class DecoratorTestFormatter(TypeFormatter):
             priority = 999
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return (
                     isinstance(obj, tuple)
                     and len(obj) == 3
@@ -537,7 +537,7 @@ class TestUnsRendererRegistry:
         class TestConfigFormatter(TypeFormatter):
             priority = 100
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 hint, _ = extract_uns_type_hint(obj)
                 return hint == "test.config_format"
 
@@ -591,7 +591,7 @@ class TestUnsRendererRegistry:
         class FailingFormatter(TypeFormatter):
             priority = 100
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 hint, _ = extract_uns_type_hint(obj)
                 return hint == "test.failing_format"
 

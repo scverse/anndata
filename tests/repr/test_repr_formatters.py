@@ -31,7 +31,7 @@ class TestNumpyFormatters:
         formatter = NumpyArrayFormatter()
         arr = np.zeros((100, 50), dtype=np.float32)
 
-        assert formatter.can_format(arr)
+        assert formatter.can_format(arr, FormatterContext())
         result = formatter.format(arr, FormatterContext())
 
         assert "100" in result.type_name
@@ -57,7 +57,7 @@ class TestNumpyFormatters:
         formatter = NumpyMaskedArrayFormatter()
         arr = np.ma.array([1, 2, 3, 4, 5], mask=[0, 0, 1, 0, 1])
 
-        assert formatter.can_format(arr)
+        assert formatter.can_format(arr, FormatterContext())
         result = formatter.format(arr, FormatterContext())
 
         assert "MaskedArray" in result.type_name
@@ -86,7 +86,7 @@ class TestSparseFormatters:
         formatter = SparseMatrixFormatter()
         mat = sp.random(1000, 500, density=0.1, format="csr")
 
-        assert formatter.can_format(mat)
+        assert formatter.can_format(mat, FormatterContext())
         result = formatter.format(mat, FormatterContext())
 
         assert "csr" in result.type_name.lower()
@@ -125,7 +125,7 @@ class TestSparseFormatters:
         mat[0, 0] = 1
         mat[5, 5] = 2
 
-        assert formatter.can_format(mat)
+        assert formatter.can_format(mat, FormatterContext())
         result = formatter.format(mat, FormatterContext())
         assert "lil" in result.type_name.lower()
 
@@ -139,7 +139,7 @@ class TestSparseFormatters:
         mat[0, 0] = 1
         mat[5, 5] = 2
 
-        assert formatter.can_format(mat)
+        assert formatter.can_format(mat, FormatterContext())
         result = formatter.format(mat, FormatterContext())
         assert "dok" in result.type_name.lower()
 
@@ -153,7 +153,7 @@ class TestSparseFormatters:
         offsets = np.array([0, 1])
         mat = sp.dia_matrix((data, offsets), shape=(4, 4))
 
-        assert formatter.can_format(mat)
+        assert formatter.can_format(mat, FormatterContext())
         result = formatter.format(mat, FormatterContext())
         assert "dia" in result.type_name.lower()
 
@@ -167,7 +167,7 @@ class TestSparseFormatters:
             np.array([[1, 0, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [4, 0, 0, 0]])
         )
 
-        assert formatter.can_format(mat)
+        assert formatter.can_format(mat, FormatterContext())
         result = formatter.format(mat, FormatterContext())
         assert "bsr" in result.type_name.lower()
 
@@ -203,7 +203,7 @@ class TestSparseFormatters:
         formatter = SparseMatrixFormatter()
         mock_sparse = MockSparseArray()
 
-        assert formatter.can_format(mock_sparse)
+        assert formatter.can_format(mock_sparse, FormatterContext())
         result = formatter.format(mock_sparse, FormatterContext())
         assert "MockSparseArray" in result.type_name
 
@@ -219,7 +219,7 @@ class TestPandasFormatters:
         formatter = CategoricalFormatter()
         cat_series = pd.Series(pd.Categorical(["A", "B", "C"] * 10))
 
-        assert formatter.can_format(cat_series)
+        assert formatter.can_format(cat_series, FormatterContext())
         result = formatter.format(cat_series, FormatterContext())
 
         assert "category" in result.type_name.lower()
@@ -233,7 +233,7 @@ class TestPandasFormatters:
         formatter = CategoricalFormatter()
         cat = pd.Categorical(["A", "B", "A", "C"])
 
-        assert formatter.can_format(cat)
+        assert formatter.can_format(cat, FormatterContext())
         result = formatter.format(cat, FormatterContext())
         assert "category" in result.type_name.lower()
         assert "(3)" in result.type_name
@@ -246,7 +246,7 @@ class TestPandasFormatters:
         formatter = SeriesFormatter()
         series = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
 
-        assert formatter.can_format(series)
+        assert formatter.can_format(series, FormatterContext())
         result = formatter.format(series, FormatterContext())
         assert "float64" in result.type_name
 
@@ -258,7 +258,7 @@ class TestPandasFormatters:
         formatter = DataFrameFormatter()
         df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
-        assert formatter.can_format(df)
+        assert formatter.can_format(df, FormatterContext())
         result = formatter.format(df, FormatterContext())
         assert "3 × 2" in result.type_name
 
@@ -317,7 +317,7 @@ class TestBuiltinFormatters:
         formatter = ListFormatter()
         obj = [1, 2, 3, 4, 5]
 
-        assert formatter.can_format(obj)
+        assert formatter.can_format(obj, FormatterContext())
         result = formatter.format(obj, FormatterContext())
         assert "list" in result.type_name.lower()
         assert result.preview is not None
@@ -330,7 +330,7 @@ class TestBuiltinFormatters:
         formatter = DictFormatter()
         obj = {"a": 1, "b": 2, "c": 3}
 
-        assert formatter.can_format(obj)
+        assert formatter.can_format(obj, FormatterContext())
         result = formatter.format(obj, FormatterContext())
         assert "dict" in result.type_name.lower()
         assert result.preview is not None
@@ -344,7 +344,7 @@ class TestBuiltinFormatters:
         formatter = StringFormatter()
         obj = "hello world"
 
-        assert formatter.can_format(obj)
+        assert formatter.can_format(obj, FormatterContext())
         result = formatter.format(obj, FormatterContext())
         assert "str" in result.type_name.lower()
 
@@ -355,7 +355,7 @@ class TestBuiltinFormatters:
 
         formatter = NoneFormatter()
 
-        assert formatter.can_format(None)
+        assert formatter.can_format(None, FormatterContext())
         result = formatter.format(None, FormatterContext())
         assert "None" in result.type_name
 
@@ -366,8 +366,8 @@ class TestBuiltinFormatters:
 
         formatter = BoolFormatter()
 
-        assert formatter.can_format(True)  # noqa: FBT003
-        assert formatter.can_format(False)  # noqa: FBT003
+        assert formatter.can_format(True, FormatterContext())  # noqa: FBT003
+        assert formatter.can_format(False, FormatterContext())  # noqa: FBT003
         result = formatter.format(True, FormatterContext())  # noqa: FBT003
         assert "bool" in result.type_name.lower()
 
@@ -378,7 +378,7 @@ class TestBuiltinFormatters:
 
         formatter = IntFormatter()
 
-        assert formatter.can_format(42)
+        assert formatter.can_format(42, FormatterContext())
         result = formatter.format(42, FormatterContext())
         assert "int" in result.type_name.lower()
 
@@ -389,7 +389,7 @@ class TestBuiltinFormatters:
 
         formatter = FloatFormatter()
 
-        assert formatter.can_format(3.14)
+        assert formatter.can_format(3.14, FormatterContext())
         result = formatter.format(3.14, FormatterContext())
         assert "float" in result.type_name.lower()
 
@@ -436,7 +436,7 @@ class TestSpecialArrayFormatters:
         formatter = CuPyArrayFormatter()
         mock_arr = MockCuPyArray()
 
-        assert formatter.can_format(mock_arr)
+        assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "cupy" in result.type_name.lower()
@@ -462,7 +462,7 @@ class TestSpecialArrayFormatters:
         formatter = AwkwardArrayFormatter()
         mock_arr = MockAwkwardArray()
 
-        assert formatter.can_format(mock_arr)
+        assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "awkward" in result.type_name.lower()
@@ -490,7 +490,7 @@ class TestSpecialArrayFormatters:
         formatter = AwkwardArrayFormatter()
         mock_arr = BrokenAwkwardArray()
 
-        assert formatter.can_format(mock_arr)
+        assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "awkward" in result.type_name.lower()
@@ -518,7 +518,7 @@ class TestArrayAPIFormatter:
         formatter = ArrayAPIFormatter()
         mock_arr = MockJAXArray()
 
-        assert formatter.can_format(mock_arr)
+        assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "MockJAXArray" in result.type_name
@@ -545,7 +545,7 @@ class TestArrayAPIFormatter:
         formatter = ArrayAPIFormatter()
         mock_tensor = MockTorchTensor()
 
-        assert formatter.can_format(mock_tensor)
+        assert formatter.can_format(mock_tensor, FormatterContext())
         result = formatter.format(mock_tensor, FormatterContext())
 
         assert "MockTorchTensor" in result.type_name
@@ -572,7 +572,7 @@ class TestArrayAPIFormatter:
         formatter = ArrayAPIFormatter()
         mock_arr = MockJAXArrayWithBuffer()
 
-        assert formatter.can_format(mock_arr)
+        assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "JAX" in result.tooltip
@@ -581,18 +581,22 @@ class TestArrayAPIFormatter:
     def test_array_api_formatter_excludes_numpy(self):
         """Test Array-API formatter excludes numpy arrays."""
         from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
 
         formatter = ArrayAPIFormatter()
         arr = np.zeros((10, 5))
-        assert not formatter.can_format(arr)
+        assert not formatter.can_format(arr, FormatterContext())
 
     def test_array_api_formatter_excludes_pandas(self):
         """Test Array-API formatter excludes pandas objects."""
         from anndata._repr.formatters import ArrayAPIFormatter
+        from anndata._repr.registry import FormatterContext
 
         formatter = ArrayAPIFormatter()
-        assert not formatter.can_format(pd.DataFrame({"a": [1, 2, 3]}))
-        assert not formatter.can_format(pd.Series([1, 2, 3]))
+        assert not formatter.can_format(
+            pd.DataFrame({"a": [1, 2, 3]}), FormatterContext()
+        )
+        assert not formatter.can_format(pd.Series([1, 2, 3]), FormatterContext())
 
 
 class TestDtypeCSSClassHelpers:
@@ -660,7 +664,7 @@ class TestFutureCompatibility:
         sparse_matrix = sp.csr_matrix([[1, 0, 2], [0, 0, 3], [4, 5, 6]])
 
         formatter = SparseMatrixFormatter()
-        assert formatter.can_format(sparse_matrix)
+        assert formatter.can_format(sparse_matrix, FormatterContext())
 
         context = FormatterContext(depth=0)
         result = formatter.format(sparse_matrix, context)
@@ -691,7 +695,7 @@ class TestFutureCompatibility:
         type(mock_array).__name__ = "DeviceArray"
 
         formatter = ArrayAPIFormatter()
-        can_format = formatter.can_format(mock_array)
+        can_format = formatter.can_format(mock_array, FormatterContext())
         assert can_format
 
         context = FormatterContext(depth=0)
@@ -757,7 +761,7 @@ class TestCustomHtmlContent:
         class InlineHtmlFormatter(TypeFormatter):
             priority = 2000  # High priority to be checked first
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, np.ndarray) and getattr(
                     obj, "_test_inline_html", False
                 )
@@ -801,7 +805,7 @@ class TestCustomHtmlContent:
         class ExpandableHtmlFormatter(TypeFormatter):
             priority = 2000
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, np.ndarray) and getattr(
                     obj, "_test_expandable_html", False
                 )

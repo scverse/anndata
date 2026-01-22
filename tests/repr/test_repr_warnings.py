@@ -355,7 +355,7 @@ class TestErrorHandling:
         class FailingFormatter(TypeFormatter):
             priority = 1000
 
-            def can_format(self, obj):
+            def can_format(self, obj, context):
                 return isinstance(obj, FailingType)
 
             def format(self, obj, context):
