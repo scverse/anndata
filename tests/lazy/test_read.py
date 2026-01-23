@@ -198,6 +198,18 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
+@pytest.mark.zarr_io
+def test_empty_df_warns(tmp_path: Path):
+    adata = AnnData(X=np.ones((10, 10)))
+    zarr_path = tmp_path / "orig.zarr"
+    adata.write_zarr(zarr_path)
+    with pytest.warns(
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
+    ):
+        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
+
+
 def test_h5_file_obj(tmp_path: Path):
     adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "adata.h5ad"
