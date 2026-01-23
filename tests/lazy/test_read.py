@@ -204,7 +204,8 @@ def test_empty_df_warns(tmp_path: Path):
     zarr_path = tmp_path / "orig.zarr"
     adata.write_zarr(zarr_path)
     with pytest.warns(
-        UserWarning, match=r"Setting columns on `Dataset2D` has no effect"
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
     ):
         adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
 

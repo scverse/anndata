@@ -290,7 +290,7 @@ class Dataset2D:
             msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
             raise ValueError(msg)
         warn(
-            "Setting columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
+            "Renaming or reordering columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
             UserWarning,
         )
 

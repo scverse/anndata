@@ -36,7 +36,9 @@ def test_columns(df, dataset2d):
 def test_columns_setter(df, dataset2d: Dataset2D, *, same_columns: bool):
     dataset2d_orig = dataset2d.copy()
     with (
-        pytest.warns(UserWarning, match=r"Setting columns on `Dataset2D`")
+        pytest.warns(
+            UserWarning, match=r"Renaming or reordering columns on `Dataset2D`"
+        )
         if same_columns
         else pytest.raises(ValueError, match=r"Trying to rename the keys")
     ):
