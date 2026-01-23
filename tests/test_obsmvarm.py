@@ -10,7 +10,10 @@ from scipy import sparse
 
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import as_cupy, get_multiindex_columns_df
+from anndata.tests.helpers import as_cupy, get_jnp_or_none, get_multiindex_columns_df
+
+jnp = get_jnp_or_none()
+
 
 M, N = (100, 100)
 
@@ -142,6 +145,12 @@ def test_setting_daskarray(adata: AnnData):
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
+
+
+@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+def test_setting_jax(adata: AnnData):
+    adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
+    assert isinstance(adata.obsm["jax"], jnp.ndarray)
 
 
 def test_shape_error(adata: AnnData):

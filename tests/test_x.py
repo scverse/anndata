@@ -10,8 +10,16 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    get_jnp_or_none,
+)
 from anndata.utils import asarray
+
+jnp = get_jnp_or_none()
+
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
@@ -19,7 +27,13 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
-]
+] + (
+    [
+        pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
+    ]
+    if jnp is not None
+    else []
+)
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
@@ -41,6 +55,7 @@ def test_repeat_indices_view():
     adata = gen_adata((10, 10), X_type=np.asarray)
     subset = adata[[0, 0, 1, 1], :]
     mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
+
     with pytest.warns(
         FutureWarning,
         match=r"You are attempting to set `X` to a matrix on a view which has non-unique indices",
@@ -57,6 +72,12 @@ def test_setter_view(orig_array_type, new_array_type):
     if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
         # https://github.com/scverse/anndata/issues/500
         pytest.xfail("Cannot set a dense array with a sparse array")
+
+    if jnp is not None and isinstance(orig_X, jnp.ndarray):
+        view = adata[:9, :9]
+        with pytest.raises(TypeError, match=r"immutable|in-place"):
+            view.X = to_assign
+        return
     view = adata[:9, :9]
     view.X = to_assign
     np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))

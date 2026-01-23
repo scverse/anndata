@@ -24,35 +24,13 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_awkward,
     gen_random_column,
+    get_jnp_or_none,
     issubdtype,
     report_name,
 )
 from anndata.utils import axis_len
 
-# Testing to see if all error types can have the key name appended.
-# Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
-#
-# @singledispatch
-# def iswarning(x):
-#     return iswarning(type(x))
-
-# @iswarning.register(type)
-# def _notwarning(x):
-#     return False
-
-# @iswarning.register(Warning)
-# def _iswarning(x):
-#     return True
-
-# @pytest.mark.parametrize("exception", list(filter(lambda t: not iswarning(t), Exception.__subclasses__())))
-# def test_report_name_types(exception):
-#     def throw(e):
-#         raise e()
-#     tag = "".join(np.random.permutation(list(ascii_letters)))
-
-#     with pytest.raises(exception) as err:
-#         report_name(throw)(exception, _elem_name=tag)
-#     assert tag in str(err.value)
+jnp = get_jnp_or_none()
 
 
 @pytest.fixture
@@ -307,6 +285,8 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     rng = np.random.default_rng(42)
     X_source = rng.poisson(size=SHAPE).astype(np.float32)
     X_input = input_type(X_source)
+    if jnp is not None and isinstance(X_input, jnp.ndarray):
+        pytest.xfail("Jax inside of dask is not supported")
     X_output = as_dask_type(X_input)
     X_computed = X_output.compute()
 
@@ -331,3 +311,36 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
+
+
+@pytest.mark.array_api
+def test_gen_adata_jax_backend():
+    adata = gen_adata(
+        (5, 5),
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    assert isinstance(adata.X, jnp.ndarray | type(jnp.ones(1)))  # jax.Array
+    assert adata.X.shape == (5, 5)
+    assert adata.X.dtype == jnp.float32
+
+
+@pytest.mark.array_api
+def test_gen_adata_jax_subfields():
+    adata = gen_adata(
+        (5, 5),
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    adata.obsm["pca"] = jnp.asarray(adata.X[:, :2], dtype=jnp.float32)
+    adata.varm["gene_scores"] = jnp.asarray(adata.X.T[:3].T, dtype=jnp.float32)
+    adata.layers["counts"] = jnp.asarray(adata.X, dtype=jnp.float32)
+
+    assert isinstance(adata.obsm["pca"], jnp.ndarray)
+    assert adata.obsm["pca"].shape == (5, 2)
+
+    assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
+    assert adata.varm["gene_scores"].shape == (5, 3)
+
+    assert isinstance(adata.layers["counts"], jnp.ndarray)
+    assert adata.layers["counts"].shape == adata.X.shape
