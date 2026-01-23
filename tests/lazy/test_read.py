@@ -249,176 +249,73 @@ def test_chunks_df(
             assert arr.chunksize == expected_chunks
 
 
-# Session-scoped fixtures for categorical data (write once, read many)
-# Each category type has zarr and h5ad path fixtures, plus a parametrized store fixture
+# Session-scoped categorical fixtures parametrized by (n_categories, ordered)
+# Data is written once per session; stores are opened per-test with backend parametrization
+
+# Configuration: (name, n_categories, ordered, category_names)
+_CAT_CONFIGS: list[tuple[str, int, bool, list[str] | None]] = [
+    ("n3", 3, False, ["a", "b", "c"]),  # basic tests, equality, hashing
+    ("n100", 100, False, None),  # truncation, n_categories, head/tail
+    ("ordered", 3, True, ["low", "medium", "high"]),  # ordered categories
+]
 
 
-def _write_categorical_zarr(tmp_path_factory, name: str, cat: pd.Categorical) -> Path:
-    """Helper to write categorical to zarr and return path."""
-    path = tmp_path_factory.mktemp(f"{name}.zarr")
-    store = zarr.open(path, mode="w")
-    write_elem(store, "cat", cat)
-    return path
+@pytest.fixture(scope="session")
+def cat_data_paths(tmp_path_factory) -> dict[tuple[str, str], Path]:
+    """Create all categorical test data once per session, return paths dict."""
+    base = tmp_path_factory.mktemp("categorical_data")
+    paths: dict[tuple[str, str], Path] = {}
+
+    for name, n_cat, ordered, cat_names in _CAT_CONFIGS:
+        categories = cat_names or [f"cat_{i:02d}" for i in range(n_cat)]
+        cat = pd.Categorical(categories, categories=categories, ordered=ordered)
+
+        # Write zarr
+        zarr_path = base / f"{name}.zarr"
+        store = zarr.open(zarr_path, mode="w")
+        write_elem(store, "cat", cat)
+        paths[(name, "zarr")] = zarr_path
+
+        # Write h5ad
+        h5_path = base / f"{name}.h5ad"
+        with h5py.File(h5_path, mode="w") as f:
+            write_elem(f, "cat", cat)
+        paths[(name, "h5ad")] = h5_path
+
+    return paths
 
 
-def _write_categorical_h5ad(tmp_path_factory, name: str, cat: pd.Categorical) -> Path:
-    """Helper to write categorical to h5ad and return path."""
-    path = tmp_path_factory.mktemp(name) / "cat.h5ad"
-    with h5py.File(path, mode="w") as f:
-        write_elem(f, "cat", cat)
-    return path
-
-
-def _open_categorical_store(path: Path, backend: str):
-    """Helper to open categorical store for either backend."""
+def _open_cat_store(path: Path, backend: str):
+    """Open categorical store for either backend."""
     if backend == "zarr":
         return zarr.open(path, mode="r")["cat"]
-    else:
-        return h5py.File(path, mode="r")["cat"]
+    return h5py.File(path, mode="r")["cat"]
 
 
-# Small categorical ['a', 'b', 'c']
-@pytest.fixture(scope="session")
-def cat_small_path_zarr(tmp_path_factory) -> Path:
-    return _write_categorical_zarr(
-        tmp_path_factory, "cat_small", pd.Categorical(["a", "b", "c"])
-    )
+def _make_cat_fixture(config_name: str):
+    """Factory to create categorical store fixtures with zarr/h5ad parametrization."""
+
+    @pytest.fixture(params=["zarr", "h5ad"])
+    def _fixture(request, cat_data_paths):
+        path = cat_data_paths[(config_name, request.param)]
+        store = _open_cat_store(path, request.param)
+        yield store
+        if request.param == "h5ad":
+            store.file.close()
+
+    return _fixture
 
 
-@pytest.fixture(scope="session")
-def cat_small_path_h5ad(tmp_path_factory) -> Path:
-    return _write_categorical_h5ad(
-        tmp_path_factory, "cat_small", pd.Categorical(["a", "b", "c"])
-    )
+cat_n3_store = _make_cat_fixture("n3")
+cat_n100_store = _make_cat_fixture("n100")
+cat_ordered_store = _make_cat_fixture("ordered")
 
 
-@pytest.fixture(params=["zarr", "h5ad"])
-def cat_small_store(request, cat_small_path_zarr: Path, cat_small_path_h5ad: Path):
-    """Parametrized fixture: small categorical ['a', 'b', 'c'] for both backends."""
-    path = cat_small_path_zarr if request.param == "zarr" else cat_small_path_h5ad
-    store = _open_categorical_store(path, request.param)
-    yield store
-    if request.param == "h5ad":
-        store.file.close()
-
-
-# Medium categorical ['a', 'b', 'c', 'd', 'e']
-@pytest.fixture(scope="session")
-def cat_medium_path_zarr(tmp_path_factory) -> Path:
-    return _write_categorical_zarr(
-        tmp_path_factory, "cat_medium", pd.Categorical(["a", "b", "c", "d", "e"])
-    )
-
-
-@pytest.fixture(scope="session")
-def cat_medium_path_h5ad(tmp_path_factory) -> Path:
-    return _write_categorical_h5ad(
-        tmp_path_factory, "cat_medium", pd.Categorical(["a", "b", "c", "d", "e"])
-    )
-
-
-@pytest.fixture(params=["zarr", "h5ad"])
-def cat_medium_store(request, cat_medium_path_zarr: Path, cat_medium_path_h5ad: Path):
-    """Parametrized fixture: medium categorical for both backends."""
-    path = cat_medium_path_zarr if request.param == "zarr" else cat_medium_path_h5ad
-    store = _open_categorical_store(path, request.param)
-    yield store
-    if request.param == "h5ad":
-        store.file.close()
-
-
-# Large categorical with 100 categories
-@pytest.fixture(scope="session")
-def cat_large_path_zarr(tmp_path_factory) -> Path:
-    categories = [f"cat_{i}" for i in range(100)]
-    return _write_categorical_zarr(
-        tmp_path_factory, "cat_large", pd.Categorical(categories)
-    )
-
-
-@pytest.fixture(scope="session")
-def cat_large_path_h5ad(tmp_path_factory) -> Path:
-    categories = [f"cat_{i}" for i in range(100)]
-    return _write_categorical_h5ad(
-        tmp_path_factory, "cat_large", pd.Categorical(categories)
-    )
-
-
-@pytest.fixture(params=["zarr", "h5ad"])
-def cat_large_store(request, cat_large_path_zarr: Path, cat_large_path_h5ad: Path):
-    """Parametrized fixture: large categorical (100 categories) for both backends."""
-    path = cat_large_path_zarr if request.param == "zarr" else cat_large_path_h5ad
-    store = _open_categorical_store(path, request.param)
-    yield store
-    if request.param == "h5ad":
-        store.file.close()
-
-
-# Ordered categorical ['low', 'medium', 'high']
-@pytest.fixture(scope="session")
-def cat_ordered_path_zarr(tmp_path_factory) -> Path:
-    cat = pd.Categorical(
-        ["low", "medium", "high"] * 3 + ["low"],
-        categories=["low", "medium", "high"],
-        ordered=True,
-    )
-    return _write_categorical_zarr(tmp_path_factory, "cat_ordered", cat)
-
-
-@pytest.fixture(scope="session")
-def cat_ordered_path_h5ad(tmp_path_factory) -> Path:
-    cat = pd.Categorical(
-        ["low", "medium", "high"] * 3 + ["low"],
-        categories=["low", "medium", "high"],
-        ordered=True,
-    )
-    return _write_categorical_h5ad(tmp_path_factory, "cat_ordered", cat)
-
-
-@pytest.fixture(params=["zarr", "h5ad"])
-def cat_ordered_store(
-    request, cat_ordered_path_zarr: Path, cat_ordered_path_h5ad: Path
-):
-    """Parametrized fixture: ordered categorical for both backends."""
-    path = cat_ordered_path_zarr if request.param == "zarr" else cat_ordered_path_h5ad
-    store = _open_categorical_store(path, request.param)
-    yield store
-    if request.param == "h5ad":
-        store.file.close()
-
-
-# 50 categories for head/tail testing
-@pytest.fixture(scope="session")
-def cat_fifty_path_zarr(tmp_path_factory) -> Path:
-    categories = [f"Type_{i:02d}" for i in range(50)]
-    return _write_categorical_zarr(
-        tmp_path_factory, "cat_fifty", pd.Categorical(categories)
-    )
-
-
-@pytest.fixture(scope="session")
-def cat_fifty_path_h5ad(tmp_path_factory) -> Path:
-    categories = [f"Type_{i:02d}" for i in range(50)]
-    return _write_categorical_h5ad(
-        tmp_path_factory, "cat_fifty", pd.Categorical(categories)
-    )
-
-
-@pytest.fixture(params=["zarr", "h5ad"])
-def cat_fifty_store(request, cat_fifty_path_zarr: Path, cat_fifty_path_h5ad: Path):
-    """Parametrized fixture: 50 categories for head/tail testing, both backends."""
-    path = cat_fifty_path_zarr if request.param == "zarr" else cat_fifty_path_h5ad
-    store = _open_categorical_store(path, request.param)
-    yield store
-    if request.param == "h5ad":
-        store.file.close()
-
-
-def test_lazy_categorical_dtype_n_categories(cat_large_store):
+def test_lazy_categorical_dtype_n_categories(cat_n100_store):
     """Test n_categories is cheap (metadata only) and uses cache when loaded."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    lazy_cat = read_elem_lazy(cat_large_store)
+    lazy_cat = read_elem_lazy(cat_n100_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -438,11 +335,11 @@ def test_lazy_categorical_dtype_n_categories(cat_large_store):
     assert dtype.n_categories == 3  # Returns cached length, not disk length
 
 
-def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store):
+def test_lazy_categorical_dtype_head_tail_categories(cat_n100_store):
     """Test head_categories and tail_categories perform partial reads without loading all."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    lazy_cat = read_elem_lazy(cat_fifty_store)
+    lazy_cat = read_elem_lazy(cat_n100_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -452,42 +349,42 @@ def test_lazy_categorical_dtype_head_tail_categories(cat_fifty_store):
     # Test head_categories (first n) - should NOT load all categories
     first5 = dtype.head_categories(5)
     assert len(first5) == 5
-    assert list(first5) == [f"Type_{i:02d}" for i in range(5)]
+    assert list(first5) == [f"cat_{i:02d}" for i in range(5)]
     assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test head_categories default (first 5)
     default_head = dtype.head_categories()
     assert len(default_head) == 5
-    assert list(default_head) == [f"Type_{i:02d}" for i in range(5)]
+    assert list(default_head) == [f"cat_{i:02d}" for i in range(5)]
     assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test tail_categories (last n) - should NOT load all categories
     last3 = dtype.tail_categories(3)
     assert len(last3) == 3
-    assert list(last3) == [f"Type_{i:02d}" for i in range(47, 50)]
+    assert list(last3) == [f"cat_{i:02d}" for i in range(97, 100)]
     assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test tail_categories default (last 5)
     default_tail = dtype.tail_categories()
     assert len(default_tail) == 5
-    assert list(default_tail) == [f"Type_{i:02d}" for i in range(45, 50)]
+    assert list(default_tail) == [f"cat_{i:02d}" for i in range(95, 100)]
     assert "categories" not in dtype.__dict__  # Still not fully loaded
 
     # Test requesting more than available
-    all_head = dtype.head_categories(100)
-    assert len(all_head) == 50
-    assert list(all_head) == [f"Type_{i:02d}" for i in range(50)]
+    all_head = dtype.head_categories(200)
+    assert len(all_head) == 100
+    assert list(all_head) == [f"cat_{i:02d}" for i in range(100)]
 
-    all_tail = dtype.tail_categories(100)
-    assert len(all_tail) == 50
-    assert list(all_tail) == [f"Type_{i:02d}" for i in range(50)]
+    all_tail = dtype.tail_categories(200)
+    assert len(all_tail) == 100
+    assert list(all_tail) == [f"cat_{i:02d}" for i in range(100)]
 
 
-def test_lazy_categorical_dtype_categories_caching(cat_medium_store):
+def test_lazy_categorical_dtype_categories_caching(cat_n3_store):
     """Test that categories are cached after full load."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    lazy_cat = read_elem_lazy(cat_medium_store)
+    lazy_cat = read_elem_lazy(cat_n3_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -497,7 +394,7 @@ def test_lazy_categorical_dtype_categories_caching(cat_medium_store):
     # Load categories
     cats = dtype.categories
     assert cats is not None
-    assert list(cats) == ["a", "b", "c", "d", "e"]
+    assert list(cats) == ["a", "b", "c"]
 
     # After loading, should be cached in __dict__ (cached_property pattern)
     assert "categories" in dtype.__dict__
@@ -523,12 +420,12 @@ def test_lazy_categorical_dtype_ordered(cat_ordered_store):
     assert list(dtype.categories) == ["low", "medium", "high"]
 
 
-def test_lazy_categorical_dtype_repr(cat_large_store, cat_small_store):
+def test_lazy_categorical_dtype_repr(cat_n100_store, cat_n3_store):
     """Test LazyCategoricalDtype repr shows truncated categories."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     # Test large number of categories (truncated repr)
-    lazy_cat = read_elem_lazy(cat_large_store)
+    lazy_cat = read_elem_lazy(cat_n100_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -536,11 +433,11 @@ def test_lazy_categorical_dtype_repr(cat_large_store, cat_small_store):
     assert "LazyCategoricalDtype" in repr_str
     assert "n=100" in repr_str
     assert "..." in repr_str  # Truncation indicator
-    assert "cat_0" in repr_str  # Head category
+    assert "cat_00" in repr_str  # Head category
     assert "cat_99" in repr_str  # Tail category
 
     # Test small number of categories (full repr)
-    small_lazy_cat = read_elem_lazy(cat_small_store)
+    small_lazy_cat = read_elem_lazy(cat_n3_store)
     small_dtype = small_lazy_cat.dtype
 
     small_repr = repr(small_dtype)
@@ -551,11 +448,11 @@ def test_lazy_categorical_dtype_repr(cat_large_store, cat_small_store):
     assert "'c'" in small_repr
 
 
-def test_lazy_categorical_dtype_equality(cat_small_store):
+def test_lazy_categorical_dtype_equality(cat_n3_store):
     """Test LazyCategoricalDtype equality comparisons and basic properties."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    lazy_cat = read_elem_lazy(cat_small_store)
+    lazy_cat = read_elem_lazy(cat_n3_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
@@ -591,7 +488,7 @@ def test_lazy_categorical_dtype_equality(cat_small_store):
 
 @pytest.mark.parametrize("backend", ["zarr", "h5ad"])
 def test_lazy_categorical_dtype_equality_no_load(
-    cat_small_path_zarr: Path, cat_small_path_h5ad: Path, backend: str
+    cat_data_paths: dict[tuple[str, str], Path], backend: str
 ):
     """Test same-location equality doesn't load category data.
 
@@ -601,14 +498,14 @@ def test_lazy_categorical_dtype_equality_no_load(
     """
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
+    path = cat_data_paths[("n3", backend)]
+
     if backend == "zarr":
-        path = cat_small_path_zarr
 
         def open_store(p):
             return zarr.open(p, mode="r")["cat"]
 
     else:
-        path = cat_small_path_h5ad
         # Keep h5py files open for the duration of the test
         open_store = lambda p: h5py.File(p, mode="r")["cat"]
 
@@ -696,11 +593,11 @@ def test_lazy_categorical_roundtrip_via_anndata(tmp_path: Path):
     assert loaded.obs["ordered_cat"].equals(adata.obs["ordered_cat"])
 
 
-def test_lazy_categorical_dtype_hash(cat_small_store):
+def test_lazy_categorical_dtype_hash(cat_n3_store):
     """Test LazyCategoricalDtype is hashable."""
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
-    lazy_cat = read_elem_lazy(cat_small_store)
+    lazy_cat = read_elem_lazy(cat_n3_store)
     dtype = lazy_cat.dtype
     assert isinstance(dtype, LazyCategoricalDtype)
 
