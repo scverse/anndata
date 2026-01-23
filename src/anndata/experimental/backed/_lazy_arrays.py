@@ -21,7 +21,7 @@ from ...compat import (
 )
 
 # Number of categories to show at head/tail in LazyCategoricalDtype repr
-_N_CATEGORIES_REPR_SHOW = 3
+_N_CATEGORIES_REPR_SHOW = 10
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -205,9 +205,11 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
     def __eq__(self, other) -> bool:
         if isinstance(other, LazyCategoricalDtype):
-           has_same_ordering = self._ordered_flag == other._ordered_flag
-           are_arrays_equal = (self._categories_elem is other._categories_elem) or (self._get_categories_array() == other._get_categories_array())
-           return has_same_ordering and are_arrays_equal
+            has_same_ordering = self._ordered_flag == other._ordered_flag
+            are_arrays_equal = (self._categories_elem is other._categories_elem) or (
+                self._get_categories_array() == other._get_categories_array()
+            )
+            return has_same_ordering and are_arrays_equal
         # Defer to pandas base implementation for all other comparisons
         # This handles string comparison ("category"), CategoricalDtype comparisons,
         # and all edge cases (None categories, ordered vs unordered, etc.)
