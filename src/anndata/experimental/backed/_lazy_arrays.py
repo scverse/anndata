@@ -205,14 +205,9 @@ class LazyCategoricalDtype(pd.CategoricalDtype):
 
     def __eq__(self, other) -> bool:
         if isinstance(other, LazyCategoricalDtype):
-            if self._ordered_flag != other._ordered_flag:
-                return False
-            # Fast path: same Python object
-            if self._categories_elem is other._categories_elem:
-                return True
-            # Fast path: zarr/h5py arrays compare equal by location
-            if self._get_categories_array() == other._get_categories_array():
-                return True
+           has_same_ordering = self._ordered_flag == other._ordered_flag
+           are_arrays_equal = (self._categories_elem is other._categories_elem) or (self._get_categories_array() == other._get_categories_array())
+           return has_same_ordering and are_arrays_equal
         # Defer to pandas base implementation for all other comparisons
         # This handles string comparison ("category"), CategoricalDtype comparisons,
         # and all edge cases (None categories, ordered vs unordered, etc.)
