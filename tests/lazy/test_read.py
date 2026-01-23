@@ -492,24 +492,21 @@ def test_lazy_categorical_dtype_equality_no_load(
 ):
     """Test same-location equality doesn't load category data.
 
-    Both h5py (HDF5 object ID comparison) and zarr 3.x (StorePath comparison) use
-    location-based equality that doesn't read array contents. This test verifies
-    that behavior by patching __getitem__ to raise if called.
+    LazyCategoricalDtype uses location-based comparison to avoid loading categories:
+    - zarr: StorePath comparison
+    - h5py: HDF5 object ID comparison
+
+    We patch read_elem to verify no data is loaded during comparison.
     """
     from anndata.experimental.backed._lazy_arrays import LazyCategoricalDtype
 
     path = cat_data_paths[("n3", backend)]
 
     if backend == "zarr":
-
-        def open_store(p):
-            return zarr.open(p, mode="r")["cat"]
-
+        open_store = lambda p: zarr.open(p, mode="r")["cat"]
     else:
-        # Keep h5py files open for the duration of the test
         open_store = lambda p: h5py.File(p, mode="r")["cat"]
 
-    # Open the same file twice to get different Python objects pointing to same location
     store1 = open_store(path)
     store2 = open_store(path)
     dtype1 = read_elem_lazy(store1).dtype
@@ -517,33 +514,19 @@ def test_lazy_categorical_dtype_equality_no_load(
 
     assert isinstance(dtype1, LazyCategoricalDtype)
     assert isinstance(dtype2, LazyCategoricalDtype)
-    # Verify these are different Python objects
     assert dtype1._categories_elem is not dtype2._categories_elem
 
-    # Patch __getitem__ to raise if data is loaded during comparison
-    cat_arr1 = dtype1._get_categories_array()
-    cat_arr2 = dtype2._get_categories_array()
-
-    with (
-        patch.object(
-            cat_arr1,
-            "__getitem__",
-            side_effect=AssertionError("Data was loaded from arr1"),
-        ),
-        patch.object(
-            cat_arr2,
-            "__getitem__",
-            side_effect=AssertionError("Data was loaded from arr2"),
-        ),
-    ):
-        # This should use location-based comparison without triggering __getitem__
+    # Same-location comparison should NOT call read_elem
+    with patch("anndata.io.read_elem", side_effect=AssertionError("read_elem called")):
         assert dtype1 == dtype2
 
-    # Also verify our cache wasn't populated
-    assert "categories" not in dtype1.__dict__
-    assert "categories" not in dtype2.__dict__
+    # Positive control: comparison with regular CategoricalDtype DOES call read_elem
+    with (
+        pytest.raises(AssertionError, match="read_elem called"),
+        patch("anndata.io.read_elem", side_effect=AssertionError("read_elem called")),
+    ):
+        dtype1 == pd.CategoricalDtype(categories=["a", "b", "c"])  # noqa: B015
 
-    # Clean up h5py file handles
     if backend == "h5ad":
         store1.file.close()
         store2.file.close()
