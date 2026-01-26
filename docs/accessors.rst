@@ -59,7 +59,7 @@ See :class:`!AdAcc` for examples of how to use it:
 
 ..  autosummary::
     :toctree: generated/
-    :template: minimal-class
+    :template: class-minimal
 
     AdAcc
     AdRef
@@ -71,7 +71,7 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
 ..  autosummary::
     :toctree: generated/
-    :template: minimal-class
+    :template: class-minimal
 
     RefAcc
 
@@ -83,7 +83,7 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 ..  hidden
     ..  autosummary::
         :toctree: generated/
-        :template: minimal-class
+        :template: class-minimal
 
         MetaAcc
         LayerAcc
@@ -102,7 +102,7 @@ Finally, these classes are only useful for extending:
 
 ..  autosummary::
     :toctree: generated/
-    :template: minimal-class
+    :template: class-minimal
 
     LayerMapAcc
     MultiMapAcc

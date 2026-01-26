@@ -3,24 +3,22 @@
 .. currentmodule:: {{ module }}
 
 ..  autoclass:: {{ objname }}
+    :show-inheritance:
 
     {% block attributes %}
-    {% if attributes %}
+    {%- for item in attributes %}
+    {%- if loop.first %}
     .. rubric:: Attributes
-
-    {% for item in attributes %}
+    {% endif %}
     .. autoattribute:: {{ item }}
     {%- endfor %}
-    {% endif %}
     {% endblock %}
 
     {% block methods %}
-    {% set shown_methods = methods | reject("==", "__init__") | reject("in", inherited_members) | list %}
-    {% if shown_methods %}
+    {%- for item in methods if item != "__init__" and item not in inherited_members %}
+    {%- if loop.first %}
     .. rubric:: Methods
-
-    {% for item in shown_methods %}
+    {% endif %}
     .. automethod:: {{ item }}
     {%- endfor %}
-    {% endif %}
     {% endblock %}
