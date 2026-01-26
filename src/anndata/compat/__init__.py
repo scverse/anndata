@@ -60,7 +60,7 @@ Index1D = (
     | CSArray  # bool
 )
 IndexRest = Index1D | EllipsisType
-Index = (
+type Index = (
     IndexRest
     | tuple[Index1D, IndexRest]
     | tuple[IndexRest, Index1D]

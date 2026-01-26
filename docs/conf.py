@@ -143,6 +143,7 @@ intersphinx_mapping = dict(
 )
 
 qualname_overrides = {
+    "types.EllipsisType": ("py:data", "Ellipsis"),
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
@@ -156,6 +157,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.StorageType": "anndata.experimental.StorageType",
     "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
@@ -167,6 +169,7 @@ qualname_overrides = {
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
     "anndata.compat.XDataArray": "xarray.DataArray",
     "anndata.compat.XDataset": "xarray.Dataset",
+    "anndata.compat.Index": "anndata.typing.Index",
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
