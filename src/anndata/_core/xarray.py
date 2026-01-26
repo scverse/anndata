@@ -4,7 +4,7 @@ import warnings
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Self, overload
 
 import numpy as np
 import pandas as pd
@@ -33,7 +33,7 @@ def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
+class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     r"""
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
