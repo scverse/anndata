@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
+from anndata.types import SupportsArrayApi
+
 from ..compat import (
     AwkArray,
     CSArray,
@@ -25,8 +27,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from numpy.typing import NDArray
-
-    from anndata.types import SupportsArrayApi
 
     from ..compat import Index1DNorm, _Index, _Index1D, _Index1DNorm
 
@@ -45,9 +45,149 @@ def _normalize_indices(
     return ax0, ax1
 
 
-def _normalize_index(  # noqa: PLR0911, PLR0912
+xarray_dtype_to_kind = {
+    "real floating": "f",
+    "signed integer": "i",
+    "unsigned integer": "u",
+    "bool": "b",
+}
+
+xarray_dtype_to_numpy_type = {
+    "real floating": np.floating,
+    "signed integer": np.signedinteger,
+    "unsigned integer": np.unsignedinteger,
+    "bool": np.bool,
+}
+
+
+def _is_numeric_type(
+    indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray, xp_type_str: str
+) -> bool:
+    return (
+        has_xp(indexer)
+        and indexer.__array_namespace__().isdtype(indexer.dtype, xp_type_str)
+    ) or (
+        isinstance(indexer, pd.api.extensions.ExtensionArray)
+        and (
+            issubclass(indexer.dtype.type, xarray_dtype_to_numpy_type[xp_type_str])
+            or indexer.dtype.kind == xarray_dtype_to_kind[xp_type_str]
+        )
+    )
+
+
+@singledispatch
+def _gen_anndata_index(
     indexer: _Index1D, index: pd.Index
-) -> _Index1DNorm | int | np.integer:
+) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
+    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
+    raise IndexError(msg)
+
+
+@_gen_anndata_index.register(slice)
+def _from_slice(indexer: slice, index: pd.Index) -> slice:
+    def name_idx(i):
+        if isinstance(i, str):
+            i = index.get_loc(i)
+        return i
+
+    start = name_idx(indexer.start)
+    stop = name_idx(indexer.stop)
+    # string slices can only be inclusive, so +1 in that case
+    if isinstance(indexer.stop, str):
+        stop = None if stop is None else stop + 1
+    step = indexer.step
+    return slice(start, stop, step)
+
+
+@_gen_anndata_index.register(np.integer | int)
+def _from_int(indexer: np.integer | int, index: pd.Index) -> np.integer | int:
+    return indexer
+
+
+@_gen_anndata_index.register(str)
+def _from_str(indexer: str, index: pd.Index) -> int:
+    return index.get_loc(indexer)
+
+
+@_gen_anndata_index.register(XDataArray)
+def _from_xarray(indexer: XDataArray, index: pd.Index) -> np.ndarray:
+    if isinstance(indexer.data, DaskArray):
+        return indexer.data.compute()
+    return indexer.data
+
+
+@_gen_anndata_index.register(CSMatrix | CSArray)
+def _from_sparse(
+    indexer: CSMatrix | CSArray,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    indexer = indexer.toarray()
+    return _gen_anndata_index(indexer, index)
+
+
+@_gen_anndata_index.register(Sequence)
+def _from_sequence_like(
+    indexer: Sequence,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    indexer: np.ndarray = np.array(indexer)
+    if len(indexer) == 0:
+        indexer = indexer.astype(int)
+    return _gen_anndata_index(indexer, index)
+
+
+@_gen_anndata_index.register(
+    SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix
+)
+def _from_array(
+    indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    # convert to the 1D if it's accidentally 2D column/row vector
+    # convert sparse into dense arrays if needed
+    use_xp = has_xp(indexer)
+    is_pandas = isinstance(indexer, pd.api.extensions.ExtensionArray)
+    xp = indexer.__array_namespace__() if use_xp else np
+    if indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0]):
+        indexer = xp.ravel(indexer)
+    # https://github.com/numpy/numpy/issues/27545
+    is_numpy_string = indexer.dtype == np.dtypes.StringDType()
+    if not is_numpy_string or is_pandas:
+        # if it is a float array or something along those lines, convert it to integers
+        if _is_numeric_type(indexer, "real floating"):
+            indexer_int = xp.astype(indexer, xp.int64)
+            if xp.all((indexer - indexer_int) != 0):
+                msg = f"Indexer {indexer!r} has floating point values."
+                raise IndexError(msg)
+            return indexer_int
+        if _is_numeric_type(indexer, "signed integer") or _is_numeric_type(
+            indexer, "unsigned integer"
+        ):
+            # Might not work for range indexes
+            return np.asarray(indexer) if is_pandas else indexer
+        if _is_numeric_type(indexer, "bool"):
+            if indexer.shape != index.shape:
+                msg = (
+                    f"Boolean index does not match AnnData’s shape along this "
+                    f"dimension. Boolean index has shape {indexer.shape} while "
+                    f"AnnData index has shape {index.shape}."
+                )
+                raise IndexError(msg)
+            return np.asarray(indexer) if is_pandas else indexer
+    positions = index.get_indexer(indexer)
+    if xp.any(positions < 0):
+        not_found = indexer[positions < 0]
+        msg = (
+            f"Values {list(not_found)}, from {list(indexer)}, "
+            "are not valid obs/ var names or indices."
+        )
+        raise KeyError(msg)
+    return positions  # np.ndarray[int]
+
+
+def _normalize_index(
+    indexer: _Index1D, index: pd.Index
+) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
@@ -58,108 +198,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
     if isinstance(indexer, IndexManager):
         indexer = indexer.get_default()
 
-    # the following is insanely slow for sequences,
-    # we replaced it using pandas below
-    def name_idx(i):
-        if isinstance(i, str):
-            i = index.get_loc(i)
-        return i
-
-    if isinstance(indexer, slice):
-        start = name_idx(indexer.start)
-        stop = name_idx(indexer.stop)
-        # string slices can only be inclusive, so +1 in that case
-        if isinstance(indexer.stop, str):
-            stop = None if stop is None else stop + 1
-        step = indexer.step
-        return slice(start, stop, step)
-    elif isinstance(indexer, np.integer | int):
-        return indexer
-    elif isinstance(indexer, str):
-        return index.get_loc(indexer)  # int
-    elif (use_xp := has_xp(indexer)) or isinstance(
-        indexer,
-        Sequence | pd.api.extensions.ExtensionArray | CSMatrix | np.matrix | CSArray,
-    ):
-        # convert to the 1D if it's accidentally 2D column/row vector
-        # convert sparse into dense arrays if needed
-        xp = indexer.__array_namespace__() if use_xp else np
-        if hasattr(indexer, "shape") and (
-            (indexer.shape == (index.shape[0], 1))
-            or (indexer.shape == (1, index.shape[0]))
-        ):
-            if isinstance(indexer, CSMatrix | CSArray):
-                indexer = indexer.toarray()
-            indexer = xp.ravel(indexer)
-        # if it is something else, convert it to numpy
-        if (
-            not (is_pandas := isinstance(indexer, pd.api.extensions.ExtensionArray))
-            and not use_xp
-        ):
-            indexer = np.array(indexer)
-            use_xp = True
-            if len(indexer) == 0:
-                indexer = indexer.astype(int)
-        # https://github.com/numpy/numpy/issues/27545
-        is_numpy_string = indexer.dtype == np.dtypes.StringDType()
-        # if it is a float array or something along those lines, convert it to integers
-        if (
-            use_xp
-            and not is_numpy_string
-            and xp.isdtype(indexer.dtype, "real floating")
-        ):
-            indexer_int = xp.astype(indexer, xp.int64)
-            if xp.all((indexer - indexer_int) != 0):
-                msg = f"Indexer {indexer!r} has floating point values."
-                raise IndexError(msg)
-            return indexer_int
-        if (
-            is_pandas
-            and (
-                issubclass(indexer.dtype.type, np.integer | np.floating)
-                or indexer.dtype.kind in "iuf"
-            )
-        ) or (
-            not is_pandas
-            and not is_numpy_string
-            and xp.isdtype(
-                indexer.dtype, ("signed integer", "unsigned integer", "real floating")
-            )
-        ):
-            return (
-                np.asarray(indexer) if is_pandas else indexer
-            )  # Might not work for range indexes
-        elif (
-            is_pandas
-            and (issubclass(indexer.dtype.type, np.bool_) or indexer.dtype.kind == "b")
-        ) or (
-            not is_pandas and not is_numpy_string and xp.isdtype(indexer.dtype, "bool")
-        ):
-            if indexer.shape != index.shape:
-                msg = (
-                    f"Boolean index does not match AnnData’s shape along this "
-                    f"dimension. Boolean index has shape {indexer.shape} while "
-                    f"AnnData index has shape {index.shape}."
-                )
-                raise IndexError(msg)
-            return np.asarray(indexer) if is_pandas else indexer
-        else:
-            positions = index.get_indexer(indexer)
-            if xp.any(positions < 0):
-                not_found = indexer[positions < 0]
-                msg = (
-                    f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or indices."
-                )
-                raise KeyError(msg)
-            return positions  # np.ndarray[int]
-    elif isinstance(indexer, XDataArray):
-        if isinstance(indexer.data, DaskArray):
-            return indexer.data.compute()
-        return indexer.data
-
-    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError(msg)
+    return _gen_anndata_index(indexer, index)
 
 
 def _fix_slice_bounds(s: slice, length: int) -> slice:
