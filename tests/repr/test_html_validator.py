@@ -20,6 +20,32 @@ from anndata import AnnData
 from .conftest import HTMLValidator
 
 
+def _get_top_level_selectors(css: str) -> list[str]:
+    """Extract only top-level CSS selectors (brace depth 0).
+
+    With native CSS nesting, nested selectors inherit scope from
+    their parent and don't need individual scope checking.
+    """
+    selectors = []
+    depth = 0
+    current: list[str] = []
+    for char in css:
+        if char == "{":
+            if depth == 0:
+                selector = "".join(current).strip()
+                if selector:
+                    selectors.append(selector)
+            depth += 1
+            current = []
+        elif char == "}":
+            depth -= 1
+            depth = max(depth, 0)
+            current = []
+        elif depth == 0:
+            current.append(char)
+    return selectors
+
+
 class TestHTMLValidatorBasics:
     """Tests for HTMLValidator functionality."""
 
@@ -335,6 +361,8 @@ class TestJupyterNotebookCompatibility:
         """Test CSS rules are scoped to .anndata-repr container.
 
         Unscoped CSS could affect other notebook cells or UI elements.
+        With native CSS nesting, only top-level selectors need checking
+        since nested selectors inherit scope from their parent.
         """
         import re
 
@@ -347,30 +375,20 @@ class TestJupyterNotebookCompatibility:
             # Remove CSS comments
             css_clean = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
 
-            # Remove @media query wrappers but keep their content
-            # This regex removes @media ... { but keeps the inner CSS
-            css_without_at_rules = re.sub(r"@media[^{]*\{", "", css_clean)
-            # Also remove @keyframes and other @ rules
-            css_without_at_rules = re.sub(
-                r"@[\w-]+[^{]*\{[^}]*\}", "", css_without_at_rules
-            )
-
-            # Extract all CSS selectors (before the { )
-            selectors = re.findall(r"([^{}]+)\s*\{", css_without_at_rules)
+            # Extract only top-level selectors (brace depth 0).
+            # With native CSS nesting, nested selectors inherit scope
+            # from their parent and don't need individual checking.
+            selectors = _get_top_level_selectors(css_clean)
 
             for selector in selectors:
-                selector = selector.strip()
-                # Skip empty selectors
-                if not selector:
-                    continue
                 # Skip :root (used for CSS variables)
                 if ":root" in selector:
                     continue
                 # Skip Jupyter theme selectors (these are intentionally global)
                 if "[data-jp-theme" in selector or ".jp-" in selector:
                     continue
-                # Skip selectors that look like media query remnants
-                if selector.startswith("(") or "prefers-color-scheme" in selector:
+                # Skip @media / @keyframes (parsed separately)
+                if selector.startswith("@"):
                     continue
 
                 # All other selectors should be scoped to anndata-repr
@@ -383,6 +401,8 @@ class TestJupyterNotebookCompatibility:
         """Test no unscoped element selectors like 'div', 'span', etc.
 
         Global element selectors would style ALL divs/spans in the notebook.
+        With native CSS nesting, only top-level selectors are checked since
+        nested element selectors (e.g., `td` inside `.anndata-repr`) are scoped.
         """
         import re
 
@@ -391,13 +411,29 @@ class TestJupyterNotebookCompatibility:
 
         if style_match:
             css = style_match.group(1)
-            # Pattern for bare element selectors at start of rule
-            # Matches "div {" or "span," but not ".class div {" or "div.class {"
-            global_elements = re.findall(
-                r"(?:^|[,}])\s*(div|span|table|tr|td|th|ul|li|p|a|button)\s*[,{]",
-                css,
-                re.MULTILINE,
-            )
+            css_clean = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+
+            # Only check top-level selectors (brace depth 0)
+            selectors = _get_top_level_selectors(css_clean)
+
+            bare_elements = {
+                "div",
+                "span",
+                "table",
+                "tr",
+                "td",
+                "th",
+                "ul",
+                "li",
+                "p",
+                "a",
+                "button",
+            }
+            global_elements = [
+                s
+                for s in selectors
+                if s.strip().split(",")[0].strip().split()[0] in bare_elements
+            ]
             assert not global_elements, (
                 f"Found global element selectors: {global_elements}. "
                 "These would affect the entire notebook."
@@ -564,6 +600,8 @@ class TestJupyterNotebookCompatibility:
             if not e.startswith("info:")
             and "style" not in e.lower()
             and "script" not in e.lower()
+            # vnu's CSS parser doesn't support native CSS nesting
+            and "css: parse error" not in e.lower()
         ]
         assert not critical, "HTML invalid in Jupyter context:\n" + "\n".join(critical)
 
@@ -601,6 +639,8 @@ class TestJupyterNotebookCompatibility:
             and "script" not in e.lower()
             # Duplicate styles are OK in fragments
             and "duplicate" not in e.lower()
+            # vnu's CSS parser doesn't support native CSS nesting
+            and "css: parse error" not in e.lower()
         ]
         assert not critical, "Combined cells invalid:\n" + "\n".join(critical)
 

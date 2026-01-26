@@ -84,6 +84,8 @@ class TestHTMLValidation:
             # <style> in body is valid for Jupyter HTML fragments
             and "style" not in e.lower()
             and "script" not in e.lower()
+            # vnu's CSS parser doesn't support native CSS nesting
+            and "css: parse error" not in e.lower()
         ]
         assert not critical, "HTML5 validation errors:\n" + "\n".join(critical)
 
