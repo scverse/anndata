@@ -66,9 +66,9 @@ doc = [
     "sphinx-copybutton",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.16.2",
+    "scanpydoc[theme,typehints] >=0.17",
     "awkward>=2.6.3",
-    "IPython",                             # For syntax highlighting in notebooks
+    "IPython",                           # For syntax highlighting in notebooks
     "myst-parser",
     "sphinx-design",
     "anndata[dask]",
