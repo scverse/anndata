@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, TypeVar, overload
 import numpy as np
 import pandas as pd
 
-from anndata._warnings import warn
-
 from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
@@ -292,9 +290,10 @@ class Dataset2D:
         if len(self.columns.symmetric_difference(val)) > 0:
             msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
             raise ValueError(msg)
-        warn(
+        warnings.warn(
             "Renaming or reordering columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
             UserWarning,
+            stacklevel=2,
         )
 
     def __setitem__(
