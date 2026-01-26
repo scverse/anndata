@@ -8,9 +8,8 @@
     {%- for item in attributes %}
     {%- if loop.first %}
     .. rubric:: Attributes
-
-    .. autoattribute:: {{ item }}
     {% endif %}
+    .. autoattribute:: {{ item }}
     {%- endfor %}
     {% endblock %}
 
