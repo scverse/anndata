@@ -927,8 +927,19 @@ def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: 
     ],
 )
 def test_index_float_sequence_raises_error(index):
+    adata = gen_adata((10, 10))
     with pytest.raises(IndexError, match=r"has floating point values"):
-        gen_adata((10, 10))[index]
+        adata[index]
+
+
+@pytest.mark.array_api
+def test_unsupported_jax_dtype():
+    index_jax = jnp.array([1 + 2j, 3 + 4j])
+    adata = gen_adata((10, 10))
+    with pytest.raises(
+        ValueError, match=r"array-api compatible but has unsupported dtype"
+    ):
+        adata[index_jax]
 
 
 @pytest.mark.array_api

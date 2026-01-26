@@ -174,6 +174,9 @@ def _from_array(
                 )
                 raise IndexError(msg)
             return np.asarray(indexer) if is_pandas else indexer
+        if has_xp(indexer):
+            msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
+            raise ValueError(msg)
     positions = index.get_indexer(indexer)
     if xp.any(positions < 0):
         not_found = indexer[positions < 0]
