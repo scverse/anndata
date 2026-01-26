@@ -183,8 +183,10 @@ qualname_overrides = {
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
-    # https://github.com/python/cpython/issues/124089
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    # The following are TypeVars in `anndata._types`, and aren’t actually exported,
+    # yet this bug causes them to create issues:
+    # - https://github.com/python/cpython/issues/124089
+    # - https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
     K=":class:`zarr.Array` | :class:`h5py.Dataset`",
     S=":class:`anndata.experimental.StorageType`",
     RWAble=":class:`anndata.typing.RWAble`",
