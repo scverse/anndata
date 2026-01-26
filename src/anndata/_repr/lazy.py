@@ -25,12 +25,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from .registry import FormatterContext
 
 
-def _get_categorical_array(col: Any):
+def _get_categorical_array(col: object) -> object | None:
     """
     Get the underlying CategoricalArray from a lazy xarray DataArray.
 
@@ -62,7 +60,7 @@ def _get_categorical_array(col: Any):
     return None
 
 
-def is_lazy_adata(obj: Any) -> bool:
+def is_lazy_adata(obj: object) -> bool:
     """Check if an AnnData uses lazy loading (experimental read_lazy).
 
     Lazy AnnData has Dataset2D (xarray-backed) obs/var instead of regular DataFrames.
@@ -92,7 +90,7 @@ def is_lazy_adata(obj: Any) -> bool:
         return False
 
 
-def _extract_path_from_lazy_array(arr: Any) -> dict[str, Any] | None:
+def _extract_path_from_lazy_array(arr: object) -> dict[str, str] | None:
     """Extract file path and format from a lazy array (CategoricalArray/MaskedArray)."""
     from pathlib import Path
 
@@ -115,7 +113,7 @@ def _extract_path_from_lazy_array(arr: Any) -> dict[str, Any] | None:
     return None
 
 
-def get_lazy_backing_info(obj: Any) -> dict[str, Any]:
+def get_lazy_backing_info(obj: object) -> dict[str, str]:
     """Get backing file information from a lazy AnnData.
 
     Extracts the file path and format from the underlying lazy arrays
@@ -132,7 +130,7 @@ def get_lazy_backing_info(obj: Any) -> dict[str, Any]:
         - 'filename': str - path to the backing file (empty if not found)
         - 'format': str - 'H5AD' or 'Zarr' (empty if not found)
     """
-    empty_result: dict[str, Any] = {"filename": "", "format": ""}
+    empty_result: dict[str, str] = {"filename": "", "format": ""}
 
     if not is_lazy_adata(obj):
         return empty_result
@@ -178,7 +176,7 @@ def get_lazy_backing_info(obj: Any) -> dict[str, Any]:
     return empty_result
 
 
-def is_lazy_column(series: Any) -> bool:
+def is_lazy_column(series: object) -> bool:
     """
     Check if a Series-like object is lazy (backed by remote/lazy storage).
 
@@ -205,7 +203,7 @@ def is_lazy_column(series: Any) -> bool:
     return hasattr(series, "_variable")
 
 
-def get_lazy_category_count(col: Any) -> int | None:
+def get_lazy_category_count(col: object) -> int | None:
     """
     Get the number of categories for a lazy categorical without loading them.
 
@@ -240,7 +238,7 @@ def get_lazy_category_count(col: Any) -> int | None:
     return None
 
 
-def get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
+def get_lazy_categorical_info(obj: object) -> tuple[int | None, bool]:
     """
     Get category count and ordered flag from a lazy categorical without loading data.
 
@@ -281,7 +279,7 @@ def get_lazy_categorical_info(obj: Any) -> tuple[int | None, bool]:
 
 
 def get_lazy_categories(
-    col: Any, context: FormatterContext
+    col: object, context: FormatterContext
 ) -> tuple[list, bool, int | None]:
     """
     Get categories for a lazy categorical column, respecting limits.

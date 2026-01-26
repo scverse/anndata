@@ -65,8 +65,6 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any
-
     import pandas as pd
 
     from anndata import AnnData
@@ -247,7 +245,7 @@ def _render_uns_section(
 def _render_uns_entry(
     adata: AnnData,
     key: str,
-    value: Any,
+    value: object,
     context: FormatterContext,
 ) -> str:
     """Render a single uns entry with special type handling.
@@ -401,7 +399,7 @@ def _render_error_entry(section: str, error: str) -> str:
 # -----------------------------------------------------------------------------
 
 
-def _safe_get_attr(obj: Any, attr: str, default: Any = "?") -> Any:
+def _safe_get_attr(obj: object, attr: str, default: object = "?") -> object:
     """Safely get an attribute with fallback.
 
     Parameters
@@ -424,7 +422,7 @@ def _safe_get_attr(obj: Any, attr: str, default: Any = "?") -> Any:
         return default
 
 
-def _get_raw_meta_parts(raw: Any) -> list[str]:
+def _get_raw_meta_parts(raw: object) -> list[str]:
     """Build meta info parts for raw section.
 
     Parameters

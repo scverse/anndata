@@ -72,12 +72,10 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from .registry import FormatterContext
 
 
-def _check_array_has_writer(array: Any) -> bool:
+def _check_array_has_writer(array: object) -> bool:
     """Check if an array type has a registered IO writer.
 
     This uses the actual IO registry, making it future-proof: if a writer
@@ -173,10 +171,10 @@ class NumpyArrayFormatter(TypeFormatter):
 
     priority = 100
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, np.ndarray)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         arr: np.ndarray = obj
         shape_str = " × ".join(format_number(s) for s in arr.shape)
         dtype_str = str(arr.dtype)
@@ -210,10 +208,10 @@ class NumpyMaskedArrayFormatter(TypeFormatter):
 
     priority = 110
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, np.ma.MaskedArray)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         arr: np.ma.MaskedArray = obj
         shape_str = " × ".join(format_number(s) for s in arr.shape)
         dtype_str = str(arr.dtype)
@@ -246,7 +244,7 @@ class SparseMatrixFormatter(TypeFormatter):
 
     priority = 100
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # First try scipy.sparse.issparse() if available (backward compatibility)
         try:
             import scipy.sparse as sp
@@ -270,7 +268,7 @@ class SparseMatrixFormatter(TypeFormatter):
 
         return is_sparse_module and has_sparse_attrs
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
@@ -338,14 +336,14 @@ class BackedSparseDatasetFormatter(TypeFormatter):
 
     priority = 110  # Higher than SparseMatrixFormatter to check first
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # Check for anndata's backed sparse dataset classes
         module = type(obj).__module__
         return module.startswith("anndata._core.sparse_dataset") and hasattr(
             obj, "format"
         )
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
         format_name = getattr(obj, "format", "sparse")
@@ -374,10 +372,10 @@ class DataFrameFormatter(TypeFormatter):
 
     priority = 100
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, pd.DataFrame)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         df: pd.DataFrame = obj
         n_rows, n_cols = len(df), len(df.columns)
         cols = list(df.columns)
@@ -415,12 +413,12 @@ class SeriesFormatter(TypeFormatter):
 
     priority = 100
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, pd.Series) and not isinstance(
             obj.dtype, pd.CategoricalDtype
         )
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         series: pd.Series = obj
         dtype_str = str(series.dtype)
         css_class = _get_dtype_css_class(series.dtype)
@@ -472,7 +470,7 @@ class CategoricalFormatter(TypeFormatter):
 
     priority = 110
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # pandas Categorical
         if isinstance(obj, pd.Categorical):
             return True
@@ -499,7 +497,7 @@ class CategoricalFormatter(TypeFormatter):
             and not isinstance(obj, pd.Series | pd.Categorical)
         )
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
         # Determine if this is a lazy (xarray DataArray) categorical
         is_lazy = is_lazy_column(obj)
         n_categories = 0
@@ -617,7 +615,7 @@ class LazyColumnFormatter(TypeFormatter):
     )
     sections = ("obs", "var")  # Only apply to obs/var sections
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # xarray DataArray (categoricals already handled by higher-priority CategoricalFormatter)
         if not (
             hasattr(obj, "dtype") and hasattr(obj, "shape") and hasattr(obj, "ndim")
@@ -632,7 +630,7 @@ class LazyColumnFormatter(TypeFormatter):
         # This is a good heuristic for lazy obs/var columns
         return hasattr(obj, "data")
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         dtype_str = str(obj.dtype)
         dtype_lower = dtype_str.lower()
 
@@ -667,7 +665,7 @@ class DaskArrayFormatter(TypeFormatter):
 
     priority = 120
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         try:
             import dask.array as da
 
@@ -675,7 +673,7 @@ class DaskArrayFormatter(TypeFormatter):
         except ImportError:
             return False
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         dtype_str = str(obj.dtype)
 
         # Get chunk info
@@ -710,10 +708,10 @@ class CuPyArrayFormatter(TypeFormatter):
 
     priority = 120
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return type(obj).__module__.startswith("cupy")
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
@@ -741,10 +739,10 @@ class AwkwardArrayFormatter(TypeFormatter):
 
     priority = 120
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return type(obj).__module__.startswith("awkward")
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         length: int | None = None
         try:
             length = len(obj)
@@ -779,7 +777,7 @@ class ArrayAPIFormatter(TypeFormatter):
 
     priority = 50  # Lower than specific formatters (numpy=110, cupy=120) but higher than builtins
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # Duck typing: Check for array-like attributes
         # Must have shape, dtype, and ndim (array-api standard)
         has_array_attrs = (
@@ -806,7 +804,7 @@ class ArrayAPIFormatter(TypeFormatter):
 
         return not already_handled
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         # Extract module and type information
         module_name = type(obj).__module__.split(".")[0]  # e.g., "jax" from "jax.numpy"
         type_name = type(obj).__name__
@@ -857,11 +855,11 @@ class AnnDataFormatter(TypeFormatter):
 
     priority = 150
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         # Check by class name to avoid circular imports
         return type(obj).__name__ == "AnnData" and hasattr(obj, "n_obs")
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         shape_str = f"{format_number(obj.n_obs)} × {format_number(obj.n_vars)}"
 
         # Generate expanded HTML if within depth limit
@@ -893,10 +891,10 @@ class NoneFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return obj is None
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="NoneType",
             css_class=CSS_DTYPE_OBJECT,
@@ -910,10 +908,10 @@ class BoolFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, bool)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="bool",
             css_class=CSS_DTYPE_BOOL,
@@ -927,10 +925,10 @@ class IntFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, (int, np.integer)) and not isinstance(obj, bool)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="int",
             css_class=CSS_DTYPE_INT,
@@ -944,10 +942,10 @@ class FloatFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, (float, np.floating))
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="float",
             css_class=CSS_DTYPE_FLOAT,
@@ -961,10 +959,10 @@ class StringFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, str)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         return FormattedOutput(
             type_name="str",
             css_class=CSS_DTYPE_STRING,
@@ -978,10 +976,10 @@ class DictFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, dict)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         # Check serializability of contents
         is_serial, reason = is_serializable(obj)
         warnings = [] if is_serial else [reason]
@@ -1000,12 +998,12 @@ class ColorListFormatter(TypeFormatter):
 
     priority = 60  # Higher than ListFormatter to check first
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         """Check if this is a color list based on key name and value."""
         key = context.key
         return key is not None and is_color_list(key, obj)
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         colors = list(obj) if hasattr(obj, "__iter__") else []
         n_colors = len(colors)
 
@@ -1056,10 +1054,10 @@ class ListFormatter(TypeFormatter):
 
     priority = 50
 
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         return isinstance(obj, (list, tuple))
 
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         type_name = "list" if isinstance(obj, list) else "tuple"
 
         # Check serializability

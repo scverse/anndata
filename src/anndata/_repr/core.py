@@ -35,8 +35,6 @@ from .registry import formatter_registry
 from .utils import escape_html, format_number
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from .registry import FormattedEntry, FormatterContext
 
 
@@ -211,7 +209,7 @@ def get_section_tooltip(section: str) -> str:
     return tooltips.get(section, "")
 
 
-def render_x_entry(obj: Any, context: FormatterContext) -> str:
+def render_x_entry(obj: object, context: FormatterContext) -> str:
     """Render X as a single compact entry row.
 
     Works with AnnData, Raw, and any object with an X attribute.

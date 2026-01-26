@@ -48,7 +48,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
 
 from .._repr_constants import (
     CSS_DTYPE_EXTENSION,
@@ -64,9 +63,6 @@ from .._repr_constants import (
     DEFAULT_UNIQUE_LIMIT,
 )
 from .utils import escape_html, validate_key
-
-if TYPE_CHECKING:
-    from typing import Any
 
 
 @dataclass
@@ -215,7 +211,7 @@ class FormatterContext:
     parent_keys: tuple[str, ...] = ()
     """Keys of parent objects (for building access paths)"""
 
-    adata_ref: Any = None
+    adata_ref: object = None
     """Reference to the root AnnData object (for color lookups etc.)"""
 
     section: str = ""
@@ -314,7 +310,7 @@ class TypeFormatter(ABC):
     sections: tuple[str, ...] | None = None
 
     @abstractmethod
-    def can_format(self, obj: Any, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
         """Return True if this formatter can handle the given object.
 
         Parameters
@@ -335,7 +331,7 @@ class TypeFormatter(ABC):
         ...
 
     @abstractmethod
-    def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         """Format the object and return FormattedOutput."""
         ...
 
@@ -439,11 +435,13 @@ class SectionFormatter(ABC):
         return ""
 
     @abstractmethod
-    def get_entries(self, obj: Any, context: FormatterContext) -> list[FormattedEntry]:
+    def get_entries(
+        self, obj: object, context: FormatterContext
+    ) -> list[FormattedEntry]:
         """Get all entries for this section."""
         ...
 
-    def should_show(self, obj: Any) -> bool:
+    def should_show(self, obj: object) -> bool:
         """Return True if this section should be displayed."""
         return True
 
@@ -459,12 +457,12 @@ class FallbackFormatter(TypeFormatter):
 
     priority: int = -1000  # Lowest priority, always checked last
 
-    def can_format(self, obj: Any) -> bool:
+    def can_format(self, obj: object) -> bool:
         return True  # Can format anything
 
     def format(  # noqa: PLR0912, PLR0915
         self,
-        obj: Any,
+        obj: object,
         context: FormatterContext,
         *,
         outer_error: str | None = None,
@@ -726,7 +724,7 @@ class FormatterRegistry:
         except ValueError:
             return False
 
-    def format_value(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+    def format_value(self, obj: object, context: FormatterContext) -> FormattedOutput:
         """
         Format a value using the appropriate formatter.
 
@@ -813,7 +811,7 @@ class FormatterRegistry:
         return list(self._section_formatters.keys())
 
     def get_formatter_for(
-        self, obj: Any, context: FormatterContext | None = None
+        self, obj: object, context: FormatterContext | None = None
     ) -> tuple[TypeFormatter | None, str]:
         """
         Debug helper: find which formatter would handle an object.
@@ -872,7 +870,7 @@ class FormatterRegistry:
 
         return (self._fallback, "No formatter matched, using fallback")
 
-    def list_formatters(self) -> list[dict[str, Any]]:
+    def list_formatters(self) -> list[dict[str, str | int | tuple[str, ...] | None]]:
         """
         List all registered type formatters with their properties.
 
@@ -913,7 +911,7 @@ formatter_registry = FormatterRegistry()
 UNS_TYPE_HINT_KEY = "__anndata_repr__"
 
 
-def extract_uns_type_hint(value: Any) -> tuple[str | None, Any]:
+def extract_uns_type_hint(value: object) -> tuple[str | None, object]:
     """
     Extract type hint from data if present.
 

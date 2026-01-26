@@ -28,8 +28,6 @@ from .._repr_constants import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any
-
     import pandas as pd
 
     from anndata import AnnData
@@ -37,7 +35,7 @@ if TYPE_CHECKING:
     from .registry import FormatterContext
 
 
-def _check_serializable_single(obj: Any) -> tuple[bool, str]:
+def _check_serializable_single(obj: object) -> tuple[bool, str]:
     """Check if a single (non-container) object is serializable."""
     # Handle None
     if obj is None:
@@ -67,7 +65,7 @@ def _check_serializable_single(obj: Any) -> tuple[bool, str]:
 
 
 def is_serializable(
-    obj: Any,
+    obj: object,
     *,
     _depth: int = 0,
     _max_depth: int = 10,
@@ -229,7 +227,7 @@ def sanitize_css_color(color: str) -> str | None:  # noqa: PLR0911
     return None
 
 
-def is_color_list(key: str, value: Any) -> bool:
+def is_color_list(key: str, value: object) -> bool:
     """
     Check if a value is a color list following the *_colors convention.
 
@@ -256,7 +254,7 @@ def is_color_list(key: str, value: Any) -> bool:
     return isinstance(first, str) and _is_color_string(first)
 
 
-def _get_categories_from_column(col: Any) -> list:
+def _get_categories_from_column(col: object) -> list:
     """
     Get categories from a categorical column.
 
@@ -283,7 +281,7 @@ def _get_categories_from_column(col: Any) -> list:
 
 
 def get_categories_for_display(
-    col: Any,
+    col: object,
     context: FormatterContext,
     *,
     is_lazy: bool,
@@ -317,7 +315,7 @@ def get_categories_for_display(
     return categories, False, len(categories) if categories else None
 
 
-def _compute_if_dask(obj: Any) -> Any:
+def _compute_if_dask(obj: object) -> object:
     """
     Compute a dask array/object if it is one, otherwise return as-is.
 
@@ -474,7 +472,7 @@ def _get_colors_from_uns(
     adata: AnnData,
     column_name: str,
     limit: int | None = None,
-) -> Any | None:
+) -> object | None:
     """Get colors from uns for a column, handling lazy loading.
 
     Parameters
@@ -571,7 +569,7 @@ def get_anndata_version() -> str:
         return "unknown"
 
 
-def is_view(obj: Any) -> bool:
+def is_view(obj: object) -> bool:
     """Check if an object is a view (for AnnData-like objects)."""
     try:
         return getattr(obj, "is_view", False)
@@ -579,7 +577,7 @@ def is_view(obj: Any) -> bool:
         return False
 
 
-def is_backed(obj: Any) -> bool:
+def is_backed(obj: object) -> bool:
     """Check if an object is backed (for AnnData-like objects)."""
     try:
         return getattr(obj, "isbacked", False)
@@ -587,14 +585,14 @@ def is_backed(obj: Any) -> bool:
         return False
 
 
-def get_backing_info(obj: Any) -> dict[str, Any]:
+def get_backing_info(obj: object) -> dict[str, bool | str | None]:
     """Get information about backing for an AnnData-like object."""
     try:
         if not is_backed(obj):
             return {"backed": False}
 
         filename = str(getattr(obj, "filename", None) or "")
-        info: dict[str, Any] = {
+        info: dict[str, bool | str | None] = {
             "backed": True,
             "filename": filename,
         }
@@ -709,7 +707,7 @@ def preview_sequence(value: list | tuple) -> str:
     return f"({n_items} items)"
 
 
-def preview_item(value: Any) -> str:
+def preview_item(value: object) -> str:
     """Generate a short preview for a single item (for list/tuple previews)."""
     if isinstance(value, str):
         if len(value) <= STRING_INLINE_LIMIT:
@@ -725,7 +723,7 @@ def preview_item(value: Any) -> str:
     return ""  # Empty string means skip
 
 
-def generate_value_preview(value: Any, max_len: int = 100) -> str:
+def generate_value_preview(value: object, max_len: int = 100) -> str:
     """Generate a human-readable preview of a value.
 
     Returns empty string if no meaningful preview can be generated.
@@ -744,7 +742,7 @@ def generate_value_preview(value: Any, max_len: int = 100) -> str:
     return ""
 
 
-def get_setting(name: str, *, default: Any) -> Any:
+def get_setting(name: str, *, default: object) -> object:
     """Get a setting value from anndata.settings, falling back to default.
 
     Parameters

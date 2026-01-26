@@ -77,8 +77,6 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any
-
     import pandas as pd
 
     from anndata import AnnData
@@ -387,7 +385,9 @@ def _render_section(
         return _render_error_entry(section, str(e))
 
 
-def _get_custom_sections_by_position(adata: Any) -> dict[str | None, list]:
+def _get_custom_sections_by_position(
+    adata: object,
+) -> dict[str | None, list[SectionFormatter]]:
     """
     Get registered custom section formatters grouped by their position.
 
@@ -614,7 +614,7 @@ def _format_index_preview(index: pd.Index) -> str:
     if n == 0:
         return "<em>empty</em>"
 
-    def format_value(x: Any) -> str:
+    def format_value(x: object) -> str:
         """Format a single index value, decoding bytes if needed."""
         if isinstance(x, bytes):
             try:
