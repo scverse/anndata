@@ -26,6 +26,9 @@ def no_skip_abc_members(  # noqa: PLR0917
     skip: bool,  # noqa: FBT001
     options: Options,
 ) -> bool | None:
+    if what in {"module", "class", "exception", "decorator"}:
+        return None  # speed up by not getting parent of non-class members
+
     # Find parent class
     for frame, _ in walk_stack(None):
         if frame.f_code.co_name == "_get_members" and frame.f_code.co_filename.endswith(
