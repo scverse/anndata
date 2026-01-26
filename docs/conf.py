@@ -172,6 +172,9 @@ qualname_overrides = {
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
+    "pandas.core.series.Series": "pandas.Series",
+    "pandas.core.arrays.categorical.Categorical": "pandas.Categorical",
+    "pandas.core.arrays.base.ExtensionArray": "pandas.api.extensions.ExtensionArray",
     "pandas.core.dtypes.dtypes.BaseMaskedDtype": "pandas.api.extensions.ExtensionDtype",
 }
 autodoc_type_aliases = dict(
