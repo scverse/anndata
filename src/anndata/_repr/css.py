@@ -21,7 +21,7 @@ from importlib.resources import files
 # Using a CSS comment as placeholder keeps the CSS valid for linters/formatters.
 # The same values are used in:
 # 1. @media (prefers-color-scheme: dark) - OS-level dark mode
-# 2. Theme detection selectors - Jupyter, VS Code, manual class
+# 2. Theme detection selectors - Jupyter, VS Code, Sphinx (Furo/sphinx-book-theme), manual class
 _DARK_MODE_VARS = """--anndata-bg-primary: #1e1e1e;
     --anndata-bg-secondary: #252526;
     --anndata-bg-tertiary: #2d2d2d;
