@@ -237,6 +237,7 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
 
    abc.CSRDataset
    abc.CSCDataset
