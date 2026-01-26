@@ -40,7 +40,8 @@ class Dataset2D:
                 if writing_string_array_on_disk := (
                     isinstance(v, np.ndarray) and df["a"].dtype == "string"
                 ):
-                    df["a"] = df["a"].to_numpy()
+                    with pd.option_context("future.infer_string", False):  # noqa: FBT003
+                        df["a"] = df["a"].to_numpy()
                 with ad.settings.override(allow_write_nullable_strings=True):
                     ad.io.write_elem(store, "df", df)
                 if writing_string_array_on_disk:

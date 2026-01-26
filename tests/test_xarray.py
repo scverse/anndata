@@ -32,6 +32,22 @@ def test_columns(df, dataset2d):
     assert np.all(dataset2d.columns.sort_values() == df.columns.sort_values())
 
 
+@pytest.mark.parametrize("same_columns", [True, False], ids=["same", "different"])
+def test_columns_setter(df, dataset2d: Dataset2D, *, same_columns: bool):
+    dataset2d_orig = dataset2d.copy()
+    with (
+        pytest.warns(
+            UserWarning, match=r"Renaming or reordering columns on `Dataset2D`"
+        )
+        if same_columns
+        else pytest.raises(ValueError, match=r"Trying to rename the keys")
+    ):
+        dataset2d.columns = (
+            dataset2d.columns if same_columns else pd.Index(["not", "a", "column"])
+        )
+    assert dataset2d.equals(dataset2d_orig)
+
+
 def test_to_memory(df, dataset2d):
     memory_df = dataset2d.to_memory()
     assert np.all(df == memory_df)

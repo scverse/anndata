@@ -285,6 +285,17 @@ class Dataset2D:
             columns.discard(index_key)
         return pd.Index(columns)
 
+    @columns.setter
+    def columns(self, val) -> None:
+        if len(self.columns.symmetric_difference(val)) > 0:
+            msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
+            raise ValueError(msg)
+        warnings.warn(
+            "Renaming or reordering columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
+            UserWarning,
+            stacklevel=2,
+        )
+
     def __setitem__(
         self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
     ) -> None:
