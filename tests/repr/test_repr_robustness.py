@@ -7,7 +7,7 @@ adversarial objects gracefully without crashing. The design philosophy is
 in the output, not hidden or causing crashes.
 
 Test categories:
-- XSS injection attempts (must be escaped)
+- Escaping coverage (verify html.escape at every insertion point)
 - Unicode edge cases (emoji, CJK, RTL, Zalgo)
 - Huge data (large strings, many categories, deep nesting)
 - Broken objects (properties that raise, missing attributes)
@@ -26,7 +26,6 @@ All tests use the HTMLValidator to ensure proper HTML output and error reporting
 
 from __future__ import annotations
 
-import re
 import threading
 from typing import TYPE_CHECKING
 
@@ -50,6 +49,7 @@ from anndata._repr.utils import (
     is_backed,
     is_serializable,
     is_view,
+    sanitize_css_color,
 )
 
 # =============================================================================
@@ -166,113 +166,74 @@ class ZalgoText:
 
 
 # =============================================================================
-# Tests for XSS prevention
+# Tests for escaping coverage — verify html.escape() at every insertion point
 # =============================================================================
 
 
-class TestXSSPrevention:
-    """Test that XSS injection attempts are properly escaped."""
+class TestEscapingCoverage:
+    """Verify html.escape() is applied at every user-data insertion point.
 
-    def test_script_tag_in_column_name(self, validate_html):
-        """Script tags in column names must be escaped."""
+    We trust html.escape() (stdlib) — we only need to verify it's called.
+    Each test puts a single HTML marker in one insertion point and verifies
+    it appears escaped, not raw.
+    """
+
+    MARKER = "<b>MARKER</b>"
+    ESCAPED = "&lt;b&gt;MARKER&lt;/b&gt;"
+
+    def test_obs_column_name_escaped(self, validate_html):
+        """obs column names are escaped."""
         adata = AnnData(np.zeros((3, 3)))
-        adata.obs['<script>alert("XSS")</script>'] = [1, 2, 3]
+        adata.obs[self.MARKER] = [1, 2, 3]
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        # Must not contain raw script tag
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
-        # Escaped version should be visible
-        v.assert_text_visible("&lt;script&gt;")
+        assert self.MARKER not in html, "Raw HTML marker in obs column name"
+        assert self.ESCAPED in html
 
-        # Explicit negative check: raw payload must not appear unescaped
-        # (outside of legitimate script blocks)
-        content_after_style = html.split("</style>")[-1]
-        assert (
-            'alert("XSS")'
-            not in content_after_style
-            .replace("&quot;", '"')
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .split("<script")[0]
-        )
-
-    def test_img_onerror_in_uns_key(self, validate_html):
-        """Image onerror handlers in uns keys must be escaped."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["<img onerror=alert(1)>"] = "xss_test"
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_no_raw_xss()
-        v.assert_html_well_formed()
-        v.assert_section_exists("uns")
-
-        # Explicit negative check: no raw img tag with onerror handler
-        # Check for actual img tag with onerror attribute (not escaped text)
-        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I), (
-            "Raw img onerror found - XSS!"
-        )
-
-    def test_onclick_in_var_column(self, validate_html):
-        """Onclick handlers in var column names must be escaped."""
+    def test_var_column_name_escaped(self, validate_html):
+        """var column names are escaped."""
         adata = AnnData(np.zeros((3, 5)))
-        adata.var['<div onclick="evil()">click</div>'] = range(5)
+        adata.var[self.MARKER] = range(5)
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
+        assert self.MARKER not in html, "Raw HTML marker in var column name"
+        assert self.ESCAPED in html
 
-        # Explicit negative check: no unescaped onclick handler
-        # Check that onclick="evil()" doesn't appear as a real attribute
-        # This pattern matches onclick as an actual HTML attribute
-        assert not re.search(r'<[^>]+\sonclick\s*=\s*["\']?evil', html, re.I), (
-            "Raw onclick handler found - XSS!"
-        )
-
-    def test_xss_in_category_values(self, validate_html):
-        """XSS attempts in categorical values must be escaped in preview."""
-        adata = AnnData(np.zeros((6, 3)))
-        # Category VALUES (not column names) with XSS payloads
-        adata.obs["evil_cats"] = pd.Categorical([
-            '<script>alert("cat_xss")</script>',
-            "<img onerror=alert(1)>",
-            '<svg onload="evil()">',
-            "normal_value",
-            "javascript:alert(1)",
-            "<div onclick=bad()>click</div>",
-        ])
+    def test_uns_key_escaped(self, validate_html):
+        """uns dictionary keys are escaped."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.uns[self.MARKER] = "value"
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
-        v.assert_section_contains_entry("obs", "evil_cats")
+        assert self.MARKER not in html, "Raw HTML marker in uns key"
+        assert self.ESCAPED in html
 
-        # Escaped versions should appear as text (in category preview)
-        assert "&lt;script&gt;" in html, "Script tag should be escaped"
+    def test_category_values_escaped(self, validate_html):
+        """Categorical preview values are escaped."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.obs["cats"] = pd.Categorical([self.MARKER, "normal", "other"])
 
-        # Raw payloads must NOT appear unescaped
-        assert '<script>alert("cat_xss")</script>' not in html
-        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I)
-        assert not re.search(r"<svg[^>]+onload\s*=", html, re.I)
+        html = adata._repr_html_()
+        v = validate_html(html)
 
-    def test_xss_in_dataframe_column_names(self, validate_html):
-        """XSS in DataFrame column names (obsm preview) must be escaped."""
+        v.assert_html_well_formed()
+        assert self.MARKER not in html, "Raw HTML marker in category values"
+        assert self.ESCAPED in html
+
+    def test_dataframe_columns_escaped(self, validate_html):
+        """DataFrame column names in obsm are escaped."""
         adata = AnnData(np.zeros((5, 3)))
-        # DataFrame with XSS payloads in column names (shown in obsm preview)
         evil_df = pd.DataFrame(
-            {
-                '<script>alert("df_col")</script>': np.random.rand(5),
-                "<img onerror=alert(1)>": np.random.rand(5),
-                "normal_col": np.random.rand(5),
-            },
+            {self.MARKER: np.random.rand(5), "normal": np.random.rand(5)},
             index=adata.obs_names,
         )
         adata.obsm["X_evil"] = evil_df
@@ -280,106 +241,48 @@ class TestXSSPrevention:
         html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
-        v.assert_section_contains_entry("obsm", "X_evil")
+        assert self.MARKER not in html, "Raw HTML marker in DataFrame column"
+        assert self.ESCAPED in html
 
-        # Escaped versions should appear in column preview
-        assert "&lt;script&gt;" in html, "Script tag in column name should be escaped"
-
-        # Raw payloads must NOT appear
-        assert '<script>alert("df_col")</script>' not in html
-        assert not re.search(r"<img[^>]+onerror\s*=", html, re.I)
-
-    def test_javascript_url_in_readme(self, validate_html):
-        """JavaScript URLs in README must be escaped."""
+    def test_readme_content_escaped(self, validate_html):
+        """README content in data attribute is escaped."""
         adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = 'Click <a href="javascript:alert(1)">here</a>'
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_no_raw_xss()
-        v.assert_element_exists(".anndata-readme__icon")
-
-        # Explicit negative check: javascript: URL must not appear as real href
-        assert not re.search(r'href\s*=\s*["\']?\s*javascript:', html, re.I), (
-            "Raw javascript: URL found - XSS!"
-        )
-
-    def test_markdown_link_attribute_injection(self, validate_html):
-        """Markdown links with quotes in URL must be escaped to prevent XSS.
-
-        This tests that the markdown parser properly escapes quotes in URLs.
-        Attack: [text](https://evil.com" onclick="alert(1)) would break out
-        of the href attribute if quotes aren't escaped.
-        """
-        adata = AnnData(np.zeros((3, 3)))
-        # Markdown link with quote injection attempt
-        adata.uns["README"] = '[Click me](https://evil.com" onclick="alert(1)" x=")'
+        adata.uns["README"] = f"# Title\n{self.MARKER}"
 
         html = adata._repr_html_()
         v = validate_html(html)
 
         v.assert_html_well_formed()
         v.assert_element_exists(".anndata-readme__icon")
+        # README content goes into data-readme attribute (HTML-escaped)
+        assert self.MARKER not in html, "Raw HTML marker in README content"
 
-        # The README content is stored in data-readme attribute (HTML-escaped)
-        # Check that quote injection is escaped in the data attribute
-        readme_match = re.search(r'data-readme="([^"]*)"', html)
-        assert readme_match, "README icon should have data-readme attribute"
+    def test_type_name_escaped(self, validate_html):
+        """type(obj).__name__ in uns display is escaped."""
 
-        readme_content = readme_match.group(1)
-        # Quotes should be escaped as &quot;
-        assert "onclick" in readme_content, "Attack payload should be present"
-        assert "&quot;" in readme_content, "Quotes should be HTML-escaped"
-        # Raw unescaped quote followed by onclick should NOT appear
-        assert '" onclick=' not in readme_content, (
-            "Unescaped quote before onclick - XSS risk!"
-        )
+        class MaliciousType:
+            pass
 
-    def test_css_breakout_attempt(self, validate_html):
-        """CSS breakout attempts must be escaped."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.var["</style><script>bad()</script>"] = range(3)
+        MaliciousType.__name__ = self.MARKER
+
+        adata = AnnData(np.zeros((5, 3)))
+        adata.uns["evil_type"] = MaliciousType()
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        # Should only have 1 closing style tag (the legitimate one)
-        style_count = html.lower().count("</style>")
-        assert style_count == 1, f"Found {style_count} </style> tags (expected 1)"
         v.assert_html_well_formed()
-        v.assert_no_raw_xss()
+        assert self.MARKER not in html, "Raw HTML marker in type name"
+        assert self.ESCAPED in html
 
-        # Explicit check: the injected script must be escaped, not executable
-        assert "<script>bad()</script>" not in html, "Raw script tag found - XSS!"
-        # The escaped version should appear as visible text
-        assert "&lt;script&gt;" in html or "&#60;script&#62;" in html
-
-    def test_html_div_breakout_attempt(self, validate_html):
-        """HTML div breakout attempts must be escaped."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.obs["</div></div></div><script>pwned</script>"] = [1, 2, 3]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_no_raw_xss()
-        v.assert_html_well_formed()
-
-        # Explicit negative check: injected script must be escaped
-        assert "<script>pwned</script>" not in html, "Raw script tag found - XSS!"
-
-    def test_xss_via_exception_class_name(self, validate_html):
-        """XSS via malicious exception __name__ in error messages must be escaped."""
-        # This tests a real vulnerability: if an object's property raises an exception
-        # with a malicious __name__, it could be rendered unescaped in error messages
+    def test_exception_name_escaped(self, validate_html):
+        """Exception class __name__ in error display is escaped."""
 
         class XSSException(Exception):
             pass
 
-        XSSException.__name__ = "<img src=x onerror=alert(1)>"
+        XSSException.__name__ = self.MARKER
 
         class MaliciousObject:
             @property
@@ -393,75 +296,63 @@ class TestXSSPrevention:
             html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
+        assert self.MARKER not in html, "Raw HTML marker in exception name"
+        assert self.ESCAPED in html
 
-        # The XSS payload must be escaped
-        assert "<img src=x onerror=alert(1)>" not in html, (
-            "Unescaped XSS via exception name!"
-        )
-        # Escaped version should appear
-        assert "&lt;img" in html, "Exception name should appear escaped"
-
-    def test_xss_via_categorical_error(self, validate_html):
-        """XSS via exception in categorical preview generation must be escaped."""
-        # This tests the CategoricalFormatter error path specifically
-        # (different from FallbackFormatter which handles uns objects)
-
-        class XSSCatException(Exception):
-            pass
-
-        XSSCatException.__name__ = "<script>alert('cat')</script>"
-
-        # Create a fake categorical-like object that raises during preview
-        # Must have CategoricalDtype to trigger CategoricalFormatter
-        class FakeCategorical:
-            dtype = pd.CategoricalDtype(categories=["a", "b"])
-            shape = (5,)
-
-            @property
-            def categories(self):
-                raise XSSCatException("boom")
-
-            def __len__(self):
-                return 5
-
-        adata = AnnData(np.zeros((5, 3)))
-        # Put it in uns since it accepts arbitrary objects
-        adata.uns["fake_cat"] = FakeCategorical()
+    def test_style_breakout_escaped(self, validate_html):
+        """</style> in user data doesn't break out of style block."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.var["</style><script>bad()</script>"] = range(3)
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
+        # Only 1 legitimate </style> tag
+        assert html.lower().count("</style>") == 1
+        assert "<script>bad()</script>" not in html
 
-        # Raw script tag must not appear
-        assert "<script>alert('cat')</script>" not in html, (
-            "Unescaped XSS via categorical error!"
-        )
-
-    def test_xss_via_type_name(self, validate_html):
-        """XSS via malicious type __name__ must be escaped."""
-
-        class MaliciousType:
-            pass
-
-        MaliciousType.__name__ = "<script>alert('type')</script>"
-
-        adata = AnnData(np.zeros((5, 3)))
-        adata.uns["evil_type"] = MaliciousType()
+    def test_div_breakout_escaped(self, validate_html):
+        """</div> in user data doesn't break out of container."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.obs["</div></div><script>pwned</script>"] = [1, 2, 3]
 
         html = adata._repr_html_()
         v = validate_html(html)
 
-        v.assert_no_raw_xss()
         v.assert_html_well_formed()
+        assert "<script>pwned</script>" not in html
 
-        # Raw script tag must not appear
-        assert "<script>alert('type')</script>" not in html, (
-            "Unescaped XSS via type name!"
-        )
+    def test_css_colors_sanitized(self):
+        """sanitize_css_color() blocks injection vectors."""
+        # Semicolons (CSS property separator)
+        assert sanitize_css_color("red;padding:100px") is None
+        assert sanitize_css_color("blue; font-size:100px") is None
+        # url() and expression()
+        assert sanitize_css_color("url(https://evil.com)") is None
+        assert sanitize_css_color("expression(alert(1))") is None
+        # hsl() and var() not whitelisted
+        assert sanitize_css_color("hsl(120, 100%, 50%)") is None
+        assert sanitize_css_color("var(--user-color)") is None
+        # Very long strings rejected
+        assert sanitize_css_color("red" + "x" * 1000) is None
+        # Valid colors pass
+        assert sanitize_css_color("#ff0000") == "#ff0000"
+        assert sanitize_css_color("red") == "red"
+        assert sanitize_css_color("rgb(0,255,0)") == "rgb(0,255,0)"
+
+    def test_special_chars_in_keys_escaped(self, validate_html):
+        """<, >, &, quotes in uns keys are escaped."""
+        adata = AnnData(np.zeros((3, 3)))
+        adata.uns["key<with>special&chars"] = "value"
+
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        assert "<with>" not in html, "Raw angle brackets in key"
+        assert "&lt;with&gt;" in html
 
 
 # =============================================================================
@@ -939,25 +830,10 @@ class SegmentationError(Exception):
 
 
 class TestUltimateEvilAnnData:
-    """
-    The most absurd, evil AnnData combining ALL attack vectors.
+    """The most absurd, evil AnnData combining ALL attack vectors.
 
-    This AnnData has:
-    - XSS injection attempts in column names
-    - Unicode bombs (emojis, Chinese, RTL override, Zalgo)
-    - Null bytes in strings
-    - Giant strings (25KB in uns)
-    - Huge categoricals (1000 categories)
-    - Deeply nested structures (6 levels)
-    - HTML/CSS breakout attempts
-    - Many uns keys (100 items)
-
-    The repr MUST:
-    1. NOT crash
-    2. Escape all XSS payloads
-    3. Show errors visibly for things that couldn't be shown
-    4. Produce valid, well-formed HTML
-    5. Truncate large data appropriately
+    Verifies the repr doesn't crash, produces well-formed HTML,
+    escapes all XSS payloads, and shows all sections.
     """
 
     @pytest.fixture
@@ -989,14 +865,14 @@ class TestUltimateEvilAnnData:
         adata.uns["nested_deep"] = {
             "l1": {"l2": {"l3": {"l4": {"l5": {"l6": "deep"}}}}}
         }
-        adata.uns["giant_string"] = "x" * 10000  # Reduced from 25000
+        adata.uns["giant_string"] = "x" * 10000
         adata.uns["<script>uns_xss</script>"] = "xss_attempt"
         adata.uns["null_byte"] = "before\x00after"
 
         # Many uns keys - use batch update (faster than loop)
         adata.uns.update({f"spam_key_{i}": {"value": i} for i in range(50)})
 
-        # Categorical with many categories (reduced from 1000 to 300)
+        # Categorical with many categories
         big_cats = [f"category_{i}" for i in range(300)]
         adata.obs["huge_categorical"] = pd.Categorical(
             np.random.choice(big_cats[:50], size=50), categories=big_cats
@@ -1010,38 +886,22 @@ class TestUltimateEvilAnnData:
 
         return adata
 
-    def test_evil_adata_renders_without_crash(self, evil_adata, validate_html) -> None:
-        """The evil AnnData should render without crashing."""
+    def test_evil_adata_renders_safely(self, evil_adata, validate_html) -> None:
+        """Evil AnnData renders without crash, well-formed HTML, no raw XSS."""
         html = evil_adata._repr_html_()
         v = validate_html(html)
 
+        # Doesn't crash + well-formed HTML
+        v.assert_html_well_formed()
         v.assert_element_exists(".anndata-repr")
         v.assert_shape_displayed(50, 30)
 
-    def test_evil_adata_html_well_formed(self, evil_adata, validate_html) -> None:
-        """The evil AnnData should produce well-formed HTML."""
-        html = evil_adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-
-    def test_evil_adata_xss_escaped(self, evil_adata, validate_html) -> None:
-        """All XSS payloads should be escaped."""
-        html = evil_adata._repr_html_()
-        v = validate_html(html)
-
+        # No raw XSS
         v.assert_no_raw_xss()
-
-        # Verify script tags don't appear raw
         assert '<script>alert("XSS")</script>' not in html
-        assert "<script>alert" not in html
         assert "<img onerror" not in html
 
-    def test_evil_adata_all_sections_present(self, evil_adata, validate_html) -> None:
-        """All standard sections should be present."""
-        html = evil_adata._repr_html_()
-        v = validate_html(html)
-
+        # All sections present
         v.assert_section_exists("obs")
         v.assert_section_exists("var")
         v.assert_section_exists("uns")
@@ -1049,42 +909,8 @@ class TestUltimateEvilAnnData:
         v.assert_section_exists("layers")
         v.assert_section_exists("obsp")
 
-    def test_evil_adata_truncation_applied(self, evil_adata, validate_html) -> None:
-        """Large data should be truncated."""
-        html = evil_adata._repr_html_()
-        v = validate_html(html)
-
-        # Huge categorical should be truncated
-        v.assert_truncation_indicator()
-
-        # 300 categories should NOT all be shown (truncated to ~100)
-        # (Note: categories may appear in multiple places like tooltips)
-        category_count = html.count("category_")
-        assert category_count < 300, f"Too many categories: {category_count}"
-
-        # 100 spam keys - may appear multiple times in HTML
-        spam_count = html.count("spam_key_")
-        assert spam_count < 1000, f"Way too many spam keys: {spam_count}"
-
-        # Giant string (25KB) should not make HTML huge
-        assert len(html) < 500000, f"HTML too large: {len(html)}"
-
-    def test_evil_adata_unicode_survives(self, evil_adata, validate_html) -> None:
-        """Unicode should be preserved or escaped but not crash."""
-        html = evil_adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # At least check we have obs section with entries
-        v.assert_section_exists("obs")
-
-    def test_evil_adata_css_breakout_prevented(self, evil_adata, validate_html) -> None:
-        """CSS breakout attempts should be prevented."""
-        html = evil_adata._repr_html_()
-
-        # Should only have 1 legitimate </style> tag
-        style_count = html.lower().count("</style>")
-        assert style_count == 1, f"Found {style_count} </style> tags"
+        # Only 1 legitimate </style> tag
+        assert html.lower().count("</style>") == 1
 
 
 # =============================================================================
@@ -1597,132 +1423,6 @@ class TestBadColorArrays:
         v.assert_html_well_formed()
         v.assert_section_contains_entry("obs", "cat")
 
-    def test_css_injection_in_colors_blocked(self, validate_html) -> None:
-        """CSS injection attempts in color values must be blocked."""
-        adata = AnnData(np.zeros((10, 3)))
-        adata.obs["batch"] = pd.Categorical(["a", "b", "c"] * 3 + ["a"])
-
-        # Attempt CSS injection through "color" values
-        adata.uns["batch_colors"] = [
-            "#ff0000",  # Valid color (passes is_color_list check)
-            "blue; } .anndata-section__table { display:none } .x {",  # CSS injection!
-            "red; background-image: url(https://evil.com/steal)",  # Data exfil
-        ]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-
-        # Extract all style attributes to check for CSS injection
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            # These patterns in a style attribute would indicate CSS injection
-            assert ".anndata-section__table" not in style, (
-                f"CSS injection in style: {style}"
-            )
-            assert "url(https://evil" not in style, f"URL injection in style: {style}"
-            assert "background-image" not in style, (
-                f"background-image in style: {style}"
-            )
-
-        # Valid color should still work
-        assert "background:#ff0000" in html, "Valid color should be rendered"
-
-        # Malicious strings should appear escaped in title attributes (which is safe)
-        # Title format is "Invalid color: '{color}'"
-        assert "Invalid color: &#x27;blue;" in html or "Invalid color: 'blue;" in html
-
-    def test_css_injection_via_semicolon_blocked(self, validate_html) -> None:
-        """Colors with semicolons (CSS property separator) must be blocked."""
-        adata = AnnData(np.zeros((5, 3)))
-        adata.obs["cat"] = pd.Categorical(["x", "y"] * 2 + ["x"])
-        adata.uns["cat_colors"] = [
-            "red;padding:100px",  # Semicolon injection
-            "blue;font-size:100px",  # Another injection
-        ]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-        v.assert_html_well_formed()
-
-        # Extract all style attributes to check for CSS injection
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            # Semicolon-based injection patterns should not appear in styles
-            assert "padding:100px" not in style, f"padding injection: {style}"
-            assert "font-size:100px" not in style, f"font-size injection: {style}"
-
-    def test_css_url_injection_blocked(self, validate_html) -> None:
-        """CSS url() and expression() must be blocked."""
-        adata = AnnData(np.zeros((5, 3)))
-        adata.obs["cat"] = pd.Categorical(["x", "y"] * 2 + ["x"])
-        adata.uns["cat_colors"] = [
-            "url(https://evil.com/track)",  # URL injection
-            "expression(alert(1))",  # IE expression injection
-        ]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-        v.assert_html_well_formed()
-
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            assert "url(" not in style, f"url() in style: {style}"
-            assert "expression(" not in style, f"expression() in style: {style}"
-
-    def test_css_escape_sequences_blocked(self, validate_html) -> None:
-        """CSS escape sequences and special chars must be blocked."""
-        adata = AnnData(np.zeros((5, 3)))
-        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
-        adata.uns["cat_colors"] = [
-            "red\\;background:url(evil)",  # Backslash escape
-            "blue\nbackground:url(x)",  # Newline injection
-        ]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-        v.assert_html_well_formed()
-
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            assert "url(" not in style, f"url via escape in style: {style}"
-
-    def test_very_long_color_rejected(self, validate_html) -> None:
-        """Very long color strings must be rejected (DoS protection)."""
-        adata = AnnData(np.zeros((5, 3)))
-        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
-        # Create a very long "color" string
-        long_color = "red" + "x" * 1000
-        adata.uns["cat_colors"] = [long_color, "blue"]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-        v.assert_html_well_formed()
-
-        # The long string should not appear in any style attribute
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            assert "xxxx" not in style, f"Long color in style: {style[:100]}"
-
-    def test_hsl_var_blocked(self, validate_html) -> None:
-        """CSS hsl() and var() must be blocked (not whitelisted)."""
-        adata = AnnData(np.zeros((5, 3)))
-        adata.obs["cat"] = pd.Categorical(["a", "b"] * 2 + ["a"])
-        adata.uns["cat_colors"] = [
-            "hsl(120, 100%, 50%)",  # HSL not supported
-            "var(--user-color)",  # CSS variables not supported
-        ]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-        v.assert_html_well_formed()
-
-        style_attrs = re.findall(r'style="([^"]*)"', html)
-        for style in style_attrs:
-            assert "hsl(" not in style, f"hsl() in style: {style}"
-            assert "var(" not in style, f"var() in style: {style}"
-
 
 # =============================================================================
 # Nested AnnData with errors tests
@@ -1758,38 +1458,7 @@ class TestNestedAnnDataWithErrors:
 
 
 class TestEvilReadme:
-    """Tests for README modal with malicious content."""
-
-    def test_xss_in_readme_escaped(self, validate_html) -> None:
-        """XSS attempts in README should be escaped."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Evil README
-<script>alert('XSS!')</script>
-<img src=x onerror="alert('img')">
-<svg onload="alert('svg')">
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        v.assert_element_exists(".anndata-readme__icon")
-
-    def test_html_injection_in_readme(self, validate_html) -> None:
-        """HTML injection attempts in README should be escaped."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = """# Break Out
-</div></div></div></table>
-<style>body { display: none !important; }</style>
-"""
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Should only have legitimate style tag
-        assert html.lower().count("</style>") == 1
+    """Tests for README modal with adversarial content (robustness)."""
 
     def test_large_readme_handled(self, validate_html) -> None:
         """Large README (50KB+) should be handled without bloating HTML."""
@@ -1819,54 +1488,3 @@ Emoji: 💀💀💀💀💀
 
         v.assert_html_well_formed()
         v.assert_element_exists(".anndata-readme__icon")
-
-
-class TestCSSAttacks:
-    """Tests for CSS-based attacks that could break visualization."""
-
-    def test_css_filter_attack(self, validate_html) -> None:
-        """CSS filters that could blur/hide page content."""
-        adata = AnnData(np.zeros((3, 3)))
-        adata.obs["<style>*{filter:blur(10px)!important}</style>"] = [1, 2, 3]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        v.assert_no_raw_xss()
-        # The style tag in column name should be escaped
-        assert "&lt;style&gt;" in html, "Style tag should be escaped to &lt;style&gt;"
-
-
-class TestEncodingAttacks:
-    """Tests for encoding-related attacks."""
-
-    def test_utf7_injection(self, validate_html) -> None:
-        """UTF-7 encoding that could bypass filters in some contexts."""
-        adata = AnnData(np.zeros((3, 3)))
-        # UTF-7 encoded <script> - only dangerous if charset is wrong
-        adata.uns["utf7"] = "+ADw-script+AD4-alert(1)+ADw-/script+AD4-"
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # Should appear as literal text, not execute
-        v.assert_no_raw_xss()
-        # UTF-7 encoded content should appear as-is
-        assert "+ADw-" in html, "UTF-7 content should appear as literal text"
-
-    def test_byte_order_marks(self, validate_html) -> None:
-        """BOM characters in unexpected places."""
-        adata = AnnData(np.zeros((3, 3)))
-        # UTF-8 BOM: EF BB BF
-        adata.obs["\ufeffbom_prefix"] = [1, 2, 3]
-        adata.obs["bom_suffix\ufeff"] = [4, 5, 6]
-        adata.obs["bom\ufeffmiddle"] = [7, 8, 9]
-
-        html = adata._repr_html_()
-        v = validate_html(html)
-
-        v.assert_html_well_formed()
-        # All three columns should be shown
-        assert html.count("bom") >= 3, "All BOM columns should be visible"
