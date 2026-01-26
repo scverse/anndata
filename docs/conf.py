@@ -91,7 +91,7 @@ nitpicky = True  # Report broken links
 nitpick_ignore = [  # APIs without an intersphinx entry
     # These APIs aren’t actually documented
     ("py:class", "anndata._core.raw.Raw"),
-    ("py:class", "pandas._libs.missing.NAType"),
+    ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
 ]
