@@ -60,7 +60,6 @@ extensions = [
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
-    "sphinx_toolbox.more_autodoc.autoprotocol",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
@@ -144,6 +143,7 @@ intersphinx_mapping = dict(
 )
 
 qualname_overrides = {
+    "types.EllipsisType": ("py:data", "Ellipsis"),
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
     "h5py._hl.dataset.Dataset": "h5py.Dataset",
@@ -157,6 +157,7 @@ qualname_overrides = {
     "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
     "anndata._types.Read": "anndata.experimental.Read",
     "anndata._types.Write": "anndata.experimental.Write",
+    "anndata._types.StorageType": "anndata.experimental.StorageType",
     "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
     "zarr.core.array.Array": "zarr.Array",
     "zarr.core.group.Group": "zarr.Group",
@@ -168,23 +169,25 @@ qualname_overrides = {
     "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
     "anndata.compat.XDataArray": "xarray.DataArray",
     "anndata.compat.XDataset": "xarray.Dataset",
+    "anndata.compat.Index": "anndata.typing.Index",
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
+    "pandas.core.series.Series": "pandas.Series",
+    "pandas.core.arrays.categorical.Categorical": "pandas.Categorical",
+    "pandas.core.arrays.base.ExtensionArray": "pandas.api.extensions.ExtensionArray",
     "pandas.core.dtypes.dtypes.BaseMaskedDtype": "pandas.api.extensions.ExtensionDtype",
-    # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
-    "types.EllipsisType": ("py:data", "types.EllipsisType"),
-    "pathlib._local.Path": "pathlib.Path",
+    **{
+        f"anndata._types.{var}{v}": ("py:data", f"anndata.{typ}")
+        for v in ["", "_co", "_contra"]
+        for var, typ in [("RWAble", "typing.RWAble"), ("S", "experimental.StorageType")]
+    },
 }
 autodoc_type_aliases = dict(
     NDArray=":data:`~numpy.typing.NDArray`",
     AxisStorable=":data:`~anndata.typing.AxisStorable`",
-    **{
-        f"{v}variantRWAble": ":data:`~anndata.typing.RWAble`"
-        for v in ["In", "Co", "Contra"]
-    },
 )
 
 # -- Social cards ---------------------------------------------------------
