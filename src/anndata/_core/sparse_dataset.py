@@ -58,9 +58,12 @@ type DenseType = np.ndarray | CupyArray
 type SparseMatrixType = CupyCSMatrix | CSMatrix | CSArray
 
 
+def is_gpu() -> bool:
+    return "gpu" in getattr(zarr, "config", {"ndbuffer": "cpu"}).get("ndbuffer")
+
+
 def get_np_module() -> ModuleType:
-    is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
-    if is_gpu:
+    if is_gpu():
         import cupy as cp
 
         return cp
@@ -111,12 +114,12 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        is_gpu = hasattr(zarr, "config") and "gpu" in zarr.config.get("ndbuffer")
+        # zarr v2 has no config
         if self.format == "csr":
-            if is_gpu:
+            if is_gpu():
                 return CupyCSRMatrix
             return ss.csr_array if settings.use_sparse_array_on_read else ss.csr_matrix
-        if is_gpu:
+        if is_gpu():
             return CupyCSCMatrix
         return ss.csc_array if settings.use_sparse_array_on_read else ss.csc_matrix
 
