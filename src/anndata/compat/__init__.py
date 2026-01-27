@@ -183,6 +183,8 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
+CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+
 old_positionals = partial(legacy_api, category=FutureWarning)
 
 

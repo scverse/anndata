@@ -254,7 +254,7 @@ max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,GroupT"
 
 [tool.towncrier]
 package = "anndata"
