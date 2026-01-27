@@ -376,6 +376,16 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
+def test_write_zarr_v2_warns(tmp_path: Path):
+    with (
+        ad.settings.override(zarr_write_format=2),
+        pytest.warns(
+            UserWarning, match=r"Writing zarr v2 data will no longer be the default"
+        ),
+    ):
+        ad.AnnData(X=np.ones((5, 10))).write_zarr(tmp_path / "foo.zarr")
+
+
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
 @pytest.mark.parametrize(
     "use_compression", [True, False], ids=["compressed", "uncompressed"]
