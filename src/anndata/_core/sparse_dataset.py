@@ -13,9 +13,9 @@ See the copyright and license note in this directory source code.
 from __future__ import annotations
 
 from abc import ABC
-from collections.abc import Iterable
-from functools import cached_property
-from importlib.metadata import version
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from functools import cached_property, singledispatchmethod
 from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
@@ -24,226 +24,64 @@ from typing import TYPE_CHECKING, NamedTuple
 import h5py
 import numpy as np
 import scipy.sparse as ss
-from packaging.version import Version
-from scipy.sparse import _sparsetools
+import zarr
 
 from testing.anndata._doctest import doctest_filterwarnings
 
 from .. import abc
 from .._settings import settings
-from .._warnings import warn
-from ..compat import CSArray, CSMatrix, H5Group, ZarrArray, ZarrGroup, _read_attr
+from ..compat import (
+    CSArray,
+    CSMatrix,
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSMatrix,
+    CupyCSRMatrix,
+    H5Group,
+    ZarrArray,
+    ZarrGroup,
+    _read_attr,
+)
 from .index import _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-    from typing import Literal
+    from types import ModuleType
+    from typing import Any, Literal
 
-    from scipy.sparse._compressed import _cs_matrix
-
-    from .._types import GroupStorageType
-    from ..compat import H5Array, Index, Index1D, Index1DNorm
-else:
-    from scipy.sparse import spmatrix as _cs_matrix
+    from .._types import ArrayStorageType, GroupStorageType
+    from ..compat import Index1DNorm
+    from .index import Index, Index1D
 
 
-SCIPY_1_15 = Version(version("scipy")) >= Version("1.15rc0")
+type DenseType = np.ndarray | CupyArray
+type SparseMatrixType = CupyCSMatrix | CSMatrix | CSArray
 
 
-class BackedFormat(NamedTuple):
-    format: Literal["csr", "csc"]
-    backed_type: type[BackedSparseMatrix]
-    memory_type: type[_cs_matrix]
+def is_gpu() -> bool:
+    return "gpu" in getattr(zarr, "config", {"ndbuffer": "cpu"}).get("ndbuffer")
 
 
-class BackedSparseMatrix(_cs_matrix):
-    """\
-    Mixin class for backed sparse matrices.
+def get_np_module() -> ModuleType:
+    if is_gpu():
+        import cupy as cp
 
-    Largely needed for the case `backed_sparse_csr(...)[:]`,
-    since that calls copy on `.data`, `.indices`, and `.indptr`.
-    """
-
-    data: GroupStorageType
-    indices: GroupStorageType
-    indptr: np.ndarray
-
-    def copy(self) -> CSMatrix:
-        if isinstance(self.data, h5py.Dataset):
-            return sparse_dataset(self.data.parent).to_memory()
-        if isinstance(self.data, ZarrArray):
-            import zarr
-
-            anndata_group = zarr.open_group(store=self.data.store, mode="r")
-            sparse_group = anndata_group[
-                str(
-                    Path(str(self.data.store_path))
-                    .relative_to(str(anndata_group.store_path))
-                    .parent
-                )
-            ]
-            return sparse_dataset(sparse_group).to_memory()
-        return super().copy()
-
-    def _set_many(self, i: Iterable[int], j: Iterable[int], x):
-        """\
-        Sets value at each (i, j) to x
-
-        Here (i,j) index major and minor respectively,
-        and must not contain duplicate entries.
-        """
-        # Scipy 1.3+ compat
-        n_samples = 1 if np.isscalar(x) else len(x)
-        offsets = self._offsets(i, j, n_samples)
-
-        if -1 not in offsets:
-            # make a list for interaction with h5py
-            offsets = list(offsets)
-            # only affects existing non-zero cells
-            self.data[offsets] = x
-            return
-
-        else:
-            msg = "You cannot change the sparsity structure of a SparseDataset."
-            raise ValueError(msg)
-            # replace where possible
-            # mask = offsets > -1
-            # # offsets[mask]
-            # bool_data_mask = np.zeros(len(self.data), dtype=bool)
-            # bool_data_mask[offsets[mask]] = True
-            # self.data[bool_data_mask] = x[mask]
-            # # self.data[offsets[mask]] = x[mask]
-            # # only insertions remain
-            # mask = ~mask
-            # i = i[mask]
-            # i[i < 0] += M
-            # j = j[mask]
-            # j[j < 0] += N
-            # self._insert_many(i, j, x[mask])
-
-    def _zero_many(self, i: Sequence[int], j: Sequence[int]):
-        """\
-        Sets value at each (i, j) to zero, preserving sparsity structure.
-
-        Here (i,j) index major and minor respectively.
-        """
-        offsets = self._offsets(i, j, len(i))
-
-        # only assign zeros to the existing sparsity structure
-        self.data[list(offsets[offsets > -1])] = 0
-
-    def _offsets(
-        self, i: Iterable[int], j: Iterable[int], n_samples: int
-    ) -> np.ndarray:
-        i, j, M, N = self._prepare_indices(i, j)
-        offsets = np.empty(n_samples, dtype=self.indices.dtype)
-        ret = _sparsetools.csr_sample_offsets(
-            M, N, self.indptr, self.indices, n_samples, i, j, offsets
-        )
-        if ret == 1:
-            # rinse and repeat
-            self.sum_duplicates()
-            _sparsetools.csr_sample_offsets(
-                M, N, self.indptr, self.indices, n_samples, i, j, offsets
-            )
-        return offsets
-
-    def _get_contiguous_compressed_slice(
-        self, s: slice
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        new_indptr = self.indptr[s.start : s.stop + 1]
-        # If indptr is cached, we need to make a copy of the subset
-        # so as not to alter the underlying cached data.
-        if isinstance(self.indptr, np.ndarray):
-            new_indptr = new_indptr.copy()
-
-        start = new_indptr[0]
-        stop = new_indptr[-1]
-
-        new_indptr -= start
-
-        new_data = self.data[start:stop]
-        new_indices = self.indices[start:stop]
-
-        return new_data, new_indices, new_indptr
+        return cp
+    return np
 
 
-class backed_csr_matrix(BackedSparseMatrix, ss.csr_matrix):
-    def _get_intXslice(self, row: int, col: slice) -> ss.csr_matrix:
-        return ss.csr_matrix(
-            get_compressed_vector(self, row), shape=(1, self.shape[1])
-        )[:, col]
+class CompressedVectors[DenseT: DenseType](NamedTuple):
+    data: DenseT
+    indices: DenseT
+    indptr: DenseT
 
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csr_matrix:
-        row = _fix_slice_bounds(row, self.shape[0])
-        col = _fix_slice_bounds(col, self.shape[1])
-
-        out_shape = (
-            slice_len(row, self.shape[0]),
-            slice_len(col, self.shape[1]),
-        )
-        if out_shape[0] == 1:
-            return self._get_intXslice(slice_as_int(row, self.shape[0]), col)
-        if row.step != 1:
-            return self._get_arrayXslice(np.arange(*row.indices(self.shape[0])), col)
-        res = ss.csr_matrix(
-            self._get_contiguous_compressed_slice(row),
-            shape=(out_shape[0], self.shape[1]),
-        )
-        return res if out_shape[1] == self.shape[1] else res[:, col]
-
-    def _get_arrayXslice(self, row: Sequence[int], col: slice) -> ss.csr_matrix:
-        idxs = np.asarray(row)
-        if len(idxs) == 0:
-            return ss.csr_matrix((0, self.shape[1]))
-        if idxs.dtype == bool:
-            idxs = np.where(idxs)
-        return ss.csr_matrix(
-            get_compressed_vectors(self, idxs), shape=(len(idxs), self.shape[1])
-        )[:, col]
-
-
-class backed_csc_matrix(BackedSparseMatrix, ss.csc_matrix):
-    def _get_sliceXint(self, row: slice, col: int) -> ss.csc_matrix:
-        return ss.csc_matrix(
-            get_compressed_vector(self, col), shape=(self.shape[0], 1)
-        )[row, :]
-
-    def _get_sliceXslice(self, row: slice, col: slice) -> ss.csc_matrix:
-        row = _fix_slice_bounds(row, self.shape[0])
-        col = _fix_slice_bounds(col, self.shape[1])
-
-        out_shape = (
-            slice_len(row, self.shape[0]),
-            slice_len(col, self.shape[1]),
-        )
-        if out_shape[1] == 1:
-            return self._get_sliceXint(row, slice_as_int(col, self.shape[1]))
-        if col.step != 1:
-            return self._get_sliceXarray(row, np.arange(*col.indices(self.shape[1])))
-        res = ss.csc_matrix(
-            self._get_contiguous_compressed_slice(col),
-            shape=(self.shape[0], out_shape[1]),
-        )
-        return res if out_shape[0] == self.shape[0] else res[row, :]
-
-    def _get_sliceXarray(self, row: slice, col: Sequence[int]) -> ss.csc_matrix:
-        idxs = np.asarray(col)
-        if len(idxs) == 0:
-            return ss.csc_matrix((self.shape[0], 0))
-        if idxs.dtype == bool:
-            idxs = np.where(idxs)
-        return ss.csc_matrix(
-            get_compressed_vectors(self, idxs), shape=(self.shape[0], len(idxs))
-        )[row, :]
-
-
-FORMATS = [
-    BackedFormat("csr", backed_csr_matrix, ss.csr_matrix),
-    BackedFormat("csc", backed_csc_matrix, ss.csc_matrix),
-    BackedFormat("csr", backed_csr_matrix, ss.csr_array),
-    BackedFormat("csc", backed_csc_matrix, ss.csc_array),
-]
+    @classmethod
+    def from_buffers(
+        cls,
+        data: DenseT,
+        indices: DenseT,
+        indptr: DenseType,
+    ) -> CompressedVectors[DenseT]:
+        return cls(data, indices, get_np_module().array(indptr))
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -258,101 +96,218 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
-def get_compressed_vectors(
-    x: BackedSparseMatrix, row_idxs: Iterable[int]
-) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_slices = [slice(*(x.indptr[i : i + 2])) for i in row_idxs]
-    # HDF5 cannot handle out-of-order integer indexing
-    if isinstance(x.data, ZarrArray):
-        as_np_indptr = np.concatenate([
-            np.arange(s.start, s.stop) for s in indptr_slices
-        ])
-        data = x.data[as_np_indptr]
-        indices = x.indices[as_np_indptr]
-    else:
-        data = np.concatenate([x.data[s] for s in indptr_slices])
-        indices = np.concatenate([x.indices[s] for s in indptr_slices])
-    indptr = list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
-    return data, indices, indptr
+@dataclass
+class BackedSparseMatrix[ArrayT: ArrayStorageType]:
+    """\
+    Mixin class for backed sparse matrices.
 
+    Largely needed for the case `backed_sparse_csr(...)[:]`,
+    since that calls copy on `.data`, `.indices`, and `.indptr`.
+    """
 
-def get_compressed_vectors_for_slices(
-    x: BackedSparseMatrix, slices: Iterable[slice]
-) -> tuple[Sequence, Sequence, Sequence]:
-    indptr_indices = [x.indptr[slice(s.start, s.stop + 1)] for s in slices]
-    indptr_limits = [slice(i[0], i[-1]) for i in indptr_indices]
-    # HDF5 cannot handle out-of-order integer indexing
-    if isinstance(x.data, ZarrArray):
-        indptr_int = np.concatenate([np.arange(s.start, s.stop) for s in indptr_limits])
-        data = x.data[indptr_int]
-        indices = x.indices[indptr_int]
-    else:
-        data = np.concatenate([x.data[s] for s in indptr_limits])
-        indices = np.concatenate([x.indices[s] for s in indptr_limits])
-    # Need to track the size of the gaps in the slices to each indptr subselection
-    gaps = (s1.start - s0.stop for s0, s1 in pairwise(indptr_limits))
-    offsets = accumulate(chain([indptr_limits[0].start], gaps))
-    start_indptr = indptr_indices[0] - next(offsets)
-    if len(slices) < 2:  # there is only one slice so no need to concatenate
-        return data, indices, start_indptr
-    end_indptr = np.concatenate([
-        s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=True)
-    ])
-    indptr = np.concatenate([start_indptr, end_indptr])
-    return data, indices, indptr
+    data: ArrayT
+    indices: ArrayT
+    indptr: DenseType | ArrayT
+    format: Literal["csr", "csc"]
+    shape: tuple[int, int]
 
+    @property
+    def memory_format(self) -> type[SparseMatrixType]:
+        if is_gpu():
+            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
+        if settings.use_sparse_array_on_read:
+            return ss.csr_array if self.format == "csr" else ss.csc_array
+        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
 
-def get_compressed_vector(
-    x: BackedSparseMatrix, idx: int
-) -> tuple[Sequence, Sequence, Sequence]:
-    s = slice(*(x.indptr[idx : idx + 2]))
-    data = x.data[s]
-    indices = x.indices[s]
-    indptr = [0, len(data)]
-    return data, indices, indptr
+    @property
+    def np_module(self) -> ModuleType:
+        return get_np_module()
 
+    @property
+    def major_axis(self) -> Literal[0, 1]:
+        return int(self.format == "csc")
 
-def subset_by_major_axis_mask(
-    mtx: _cs_matrix, mask: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    slices = np.ma.extras._ezclump(mask)
+    @property
+    def minor_axis(self) -> Literal[0, 1]:
+        return int(self.format == "csr")
 
-    def mean_slice_length(slices):
-        return floor(sum(s.stop - s.start for s in slices) / len(slices))
+    @property
+    def major_axis_size(self) -> int:
+        return self.shape[self.major_axis]
 
-    # heuristic for whether slicing should be optimized
-    if len(slices) > 0:
-        if mean_slice_length(slices) <= 7:
-            return get_compressed_vectors(mtx, np.where(mask)[0])
+    @property
+    def minor_axis_size(self) -> int:
+        return self.shape[self.minor_axis]
+
+    def copy(self) -> SparseMatrixType:
+        if isinstance(self.data, h5py.Dataset):
+            return sparse_dataset(self.data.parent).to_memory()
+        if isinstance(self.data, ZarrArray):
+            import zarr
+
+            anndata_group = zarr.open_group(store=self.data.store, mode="r")
+            sparse_group = anndata_group[
+                str(
+                    Path(str(self.data.store_path))
+                    .relative_to(str(anndata_group.store_path))
+                    .parent
+                )
+            ]
+            return sparse_dataset(sparse_group).to_memory()
+        msg = f"Unsupported array types {type(self.data)}"
+        raise ValueError(msg)
+
+    def _get_contiguous_compressed_slice(
+        self, s: slice[int, int, Literal[1] | None]
+    ) -> CompressedVectors:
+        new_indptr: DenseType = self.indptr[s.start : s.stop + 1].copy()
+
+        start = new_indptr[0].item()
+        stop = new_indptr[-1].item()
+
+        new_indptr -= start
+
+        new_data: DenseType = self.data[start:stop]
+        new_indices: DenseType = self.indices[start:stop]
+
+        return CompressedVectors.from_buffers(new_data, new_indices, new_indptr)
+
+    def get_compressed_vectors(self, row_idxs: Iterable[int]) -> CompressedVectors:
+        indptr_slices = [slice(*(self.indptr[i : i + 2])) for i in row_idxs]
+        # HDF5 cannot handle out-of-order integer indexing
+        if isinstance(self.data, ZarrArray):
+            as_np_indptr = self.np_module.concatenate([
+                self.np_module.arange(s.start, s.stop) for s in indptr_slices
+            ])
+            data: DenseType = self.data[as_np_indptr]
+            indices: DenseType = self.indices[as_np_indptr]
         else:
-            return get_compressed_vectors_for_slices(mtx, slices)
-    return [], [], [0]
+            data: np.ndarray = np.concatenate([self.data[s] for s in indptr_slices])
+            indices: np.ndarray = np.concatenate([
+                self.indices[s] for s in indptr_slices
+            ])
+        indptr = self.np_module.array(
+            list(accumulate(chain((0,), (s.stop - s.start for s in indptr_slices))))
+        )
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
+    def get_compressed_vectors_for_slices(
+        self, slices: Iterable[slice]
+    ) -> CompressedVectors:
+        indptr_indices = [self.indptr[slice(s.start, s.stop + 1)] for s in slices]
+        indptr_limits = [slice(i[0].item(), i[-1].item()) for i in indptr_indices]
+        # HDF5 cannot handle out-of-order integer indexing
+        if isinstance(self.data, ZarrArray):
+            indptr_int = self.np_module.concatenate([
+                self.np_module.arange(s.start, s.stop) for s in indptr_limits
+            ])
+            data: DenseType = self.data[indptr_int]
+            indices: DenseType = self.indices[indptr_int]
+        else:
+            data = np.concatenate([self.data[s] for s in indptr_limits])
+            indices = np.concatenate([self.indices[s] for s in indptr_limits])
+        # Need to track the size of the gaps in the slices to each indptr subselection
+        gaps = (s1.start - s0.stop for s0, s1 in pairwise(indptr_limits))
+        offsets = accumulate(chain([indptr_limits[0].start], gaps))
+        start_indptr = indptr_indices[0] - next(offsets)
+        if len(slices) < 2:  # there is only one slice so no need to concatenate
+            return CompressedVectors.from_buffers(data, indices, start_indptr)
+        end_indptr = self.np_module.concatenate([
+            s[1:] - o for s, o in zip(indptr_indices[1:], offsets, strict=False)
+        ])
+        indptr = self.np_module.concatenate([start_indptr, end_indptr])
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
-def get_memory_class(
-    format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
-) -> type[_cs_matrix]:
-    for fmt, _, memory_class in FORMATS:
-        if format == fmt and (
-            (use_sparray_in_io and issubclass(memory_class, CSArray))
-            or (not use_sparray_in_io and issubclass(memory_class, CSMatrix))
-        ):
-            return memory_class
-    msg = f"Format string {format} is not supported."
-    raise ValueError(msg)
+    def get_compressed_vector(self, idx: int) -> CompressedVectors:
+        s = slice(*(self.indptr[idx : idx + 2]))
+        data: DenseType = self.data[s]
+        indices: DenseType = self.indices[s]
+        indptr: DenseType = [0, len(data)]
+        return CompressedVectors.from_buffers(data, indices, indptr)
 
+    def __getitem__(self, key) -> SparseMatrixType:
+        row, col = key if isinstance(key, tuple) else (key, slice(None))
+        major_index, minor_index = (row, col) if self.format == "csr" else (col, row)
+        return self._get(major_index, minor_index)
 
-def get_backed_class(
-    format: Literal["csr", "csc"], *, use_sparray_in_io: bool = False
-) -> type[BackedSparseMatrix]:
-    for fmt, backed_class, _ in FORMATS:
-        if format == fmt and (
-            (use_sparray_in_io and issubclass(backed_class, CSArray))
-            or (not use_sparray_in_io and issubclass(backed_class, CSMatrix))
-        ):
-            return backed_class
-    msg = f"Format string {format} is not supported."
-    raise ValueError(msg)
+    def _gen_maj_min_tuple[Ma, Mi](
+        self, major: Ma, minor: Mi
+    ) -> tuple[Ma, Mi] | tuple[Mi, Ma]:
+        return (major, minor) if self.format == "csr" else (minor, major)
+
+    @singledispatchmethod
+    def _get(self, major_index: Any, minor_index: slice) -> SparseMatrixType:
+        return self.memory_format(
+            (self.data[...], self.indices[...], self.indptr[...]),
+            shape=self.shape,
+        )[self._gen_maj_min_tuple(major_index, minor_index)]
+
+    @_get.register
+    def _get_intXslice(self, major_index: int, minor_index: slice) -> SparseMatrixType:
+        return self.memory_format(
+            self.get_compressed_vector(major_index),
+            shape=self._gen_maj_min_tuple(1, self.minor_axis_size),
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+
+    @_get.register
+    def _get_sliceXslice(
+        self, major_index: slice, minor_index: slice
+    ) -> SparseMatrixType:
+        major_index = _fix_slice_bounds(major_index, self.shape[self.major_axis])
+        minor_index = _fix_slice_bounds(minor_index, self.shape[self.minor_axis])
+
+        major_index_size = slice_len(major_index, self.shape[self.major_axis])
+        if major_index_size == 1:
+            return self._get(
+                slice_as_int(major_index, self.shape[self.major_axis]), minor_index
+            )
+        if major_index.step != 1:
+            return self._get(
+                np.arange(*major_index.indices(self.shape[self.major_axis])),
+                minor_index,
+            )
+        compressed_vectors = self._get_contiguous_compressed_slice(major_index)
+        return self.memory_format(
+            compressed_vectors,
+            shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+
+    @_get.register
+    def _get_arrayXslice(
+        self, major_index: Sequence | np.ndarray, minor_index: slice
+    ) -> SparseMatrixType:
+        if len(major_index) == 0:
+            return self.memory_format(
+                (0, self.minor_axis_size)
+                if self.format == "csr"
+                else (self.minor_axis_size, 0)
+            )
+        if major_index.dtype == bool:
+            major_index = np.where(major_index)
+        out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
+        return self.memory_format(
+            self.get_compressed_vectors(major_index), shape=out_shape
+        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+
+    def subset_by_major_axis_mask(
+        self: BackedSparseMatrix, mask: np.ndarray
+    ) -> CompressedVectors:
+        slices = np.ma.extras._ezclump(mask)
+
+        def mean_slice_length(slices) -> int:
+            return floor(sum(s.stop - s.start for s in slices) / len(slices))
+
+        # heuristic for whether slicing should be optimized
+        if len(slices) > 0:
+            if mean_slice_length(slices) <= 7:
+                return self.get_compressed_vectors(np.where(mask)[0])
+            else:
+                return self.get_compressed_vectors_for_slices(slices)
+        return CompressedVectors.from_buffers(
+            self.np_module.array([]),
+            self.np_module.array([]),
+            self.np_module.array([0]),
+        )
 
 
 def _get_group_format(group: GroupStorageType) -> str:
@@ -368,7 +323,7 @@ def _get_group_format(group: GroupStorageType) -> str:
 # Check for the overridden few methods above in our BackedSparseMatrix subclasses
 def is_sparse_indexing_overridden(
     format: Literal["csr", "csc"], row: Index1D, col: Index1D
-):
+) -> bool:
     major_indexer, minor_indexer = (row, col) if format == "csr" else (col, row)
     return isinstance(minor_indexer, slice) and (
         isinstance(major_indexer, int | np.integer | slice)
@@ -376,33 +331,19 @@ def is_sparse_indexing_overridden(
     )
 
 
-def validate_indices(
-    mtx: BackedSparseMatrix, indices: tuple[Index1D, Index1D]
-) -> tuple[Index1D, Index1D]:
-    if hasattr(mtx, "_validate_indices"):
-        res = mtx._validate_indices(indices)
-        return res[0] if SCIPY_1_15 else res
-    # https://github.com/scipy/scipy/pull/23267
-    elif Version(version("scipy")) >= Version("1.17.0rc0"):
-        from scipy.sparse._index import _validate_indices  # type: ignore
-
-        return _validate_indices(indices, mtx.shape, mtx.format)[0]
-    else:  # pragma: no cover
-        msg = "Cannot validate indices"
-        raise RuntimeError(msg)
-
-
-class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
-    _group: GroupStorageType
+class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorageType](
+    abc._AbstractCSDataset, ABC
+):
+    _group: GroupT
     _should_cache_indptr: bool
 
-    def __init__(self, group: GroupStorageType, *, should_cache_indptr: bool = True):
+    def __init__(self, group: GroupT, *, should_cache_indptr: bool = True):
         type(self)._check_group_format(group)
         self._group = group
         self._should_cache_indptr = should_cache_indptr
 
     @property
-    def group(self) -> GroupStorageType:
+    def group(self) -> GroupT:
         """The group underlying the backed matrix."""
         return self._group
 
@@ -450,37 +391,30 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         name = type(self).__name__.removeprefix("_")
         return f"{name}: backend {self.backend}, shape {self.shape}, data_dtype {self.dtype}"
 
-    def __getitem__(self, index: Index | tuple[()]) -> float | CSMatrix | CSArray:
+    def __getitem__(self, index: Index | tuple[()]) -> float | SparseMatrixType:
         indices = self._normalize_index(index)
         row, col = indices
         mtx = self._to_backed()
-        row_sp_matrix_validated, col_sp_matrix_validated = validate_indices(
-            mtx, indices
-        )
 
         # Handle masked indexing along major axis
         if self.format == "csr" and np.array(row).dtype == bool:
             sub = ss.csr_matrix(
-                subset_by_major_axis_mask(mtx, row), shape=(row.sum(), mtx.shape[1])
+                mtx.subset_by_major_axis_mask(row), shape=(row.sum(), mtx.shape[1])
             )[:, col]
         elif self.format == "csc" and np.array(col).dtype == bool:
             sub = ss.csc_matrix(
-                subset_by_major_axis_mask(mtx, col), shape=(mtx.shape[0], col.sum())
+                mtx.subset_by_major_axis_mask(col), shape=(mtx.shape[0], col.sum())
             )[row, :]
         # read into memory data if we do not override access methods
-        elif not is_sparse_indexing_overridden(
-            self.format, row_sp_matrix_validated, col_sp_matrix_validated
-        ):
-            sub = self.to_memory()[row_sp_matrix_validated, col_sp_matrix_validated]
+        elif not is_sparse_indexing_overridden(self.format, row, col):
+            sub = self.to_memory()[row, col]
         else:
             sub = mtx[row, col]
 
         # If indexing is array x array it returns a backed_sparse_matrix
         # Not sure what the performance is on that operation
         # Also need to check if memory format is not matrix
-        mtx_fmt = get_memory_class(
-            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
-        )
+        mtx_fmt = mtx.memory_format
         must_convert_to_array = issubclass(mtx_fmt, CSArray) and not isinstance(
             sub, CSArray
         )
@@ -498,15 +432,6 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         if all(isinstance(x, Iterable) for x in (row, col)):
             row, col = np.ix_(row, col)
         return row, col
-
-    def __setitem__(self, index: Index | tuple[()], value) -> None:
-        msg = (
-            "__setitem__ for backed sparse will be removed in the next anndata release."
-        )
-        warn(msg, FutureWarning)
-        row, col = self._normalize_index(index)
-        mock_matrix = self._to_backed()
-        mock_matrix[row, col] = value
 
     # TODO: split to other classes?
     def append(self, sparse_matrix: CSMatrix | CSArray) -> None:  # noqa: PLR0912, PLR0915
@@ -534,10 +459,12 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
             sparse_matrix = sparse_matrix._to_backed()
 
         # Check input
-        if not ss.issparse(sparse_matrix):
+        if not (
+            ss.issparse(sparse_matrix) or isinstance(sparse_matrix, BackedSparseMatrix)
+        ):
             msg = (
                 "Currently, only sparse matrices of equivalent format can be "
-                "appended to a SparseDataset."
+                f"appended to a SparseDataset, not {sparse_matrix}."
             )
             raise NotImplementedError(msg)
         if self.format not in {"csr", "csc"}:
@@ -611,7 +538,7 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
                 delattr(self, attr)
 
     @cached_property
-    def _indptr(self) -> np.ndarray:
+    def _indptr(self) -> DenseType | ArrayT:
         """\
         Other than `data` and `indices`, this is only as long as the major axis
 
@@ -622,32 +549,38 @@ class BaseCompressedSparseDataset(abc._AbstractCSDataset, ABC):
         return self.group["indptr"]
 
     @cached_property
-    def _indices(self) -> H5Array | ZarrArray:
+    def _indices(self) -> ArrayT:
         """\
         Cache access to the indices to prevent unnecessary reads of the zarray
         """
         return self.group["indices"]
 
     @cached_property
-    def _data(self) -> H5Array | ZarrArray:
+    def _data(self) -> ArrayT:
         """\
         Cache access to the data to prevent unnecessary reads of the zarray
         """
         return self.group["data"]
 
     def _to_backed(self) -> BackedSparseMatrix:
-        format_class = get_backed_class(self.format)
-        mtx = format_class(self.shape, dtype=self.dtype)
-        mtx.data = self._data
-        mtx.indices = self._indices
-        mtx.indptr = self._indptr
+        mtx = BackedSparseMatrix(
+            format=self.format,
+            data=self._data,
+            indices=self._indices,
+            indptr=self._indptr,
+            shape=self.shape,
+        )
         return mtx
 
-    def to_memory(self) -> CSMatrix | CSArray:
-        format_class = get_memory_class(
-            self.format, use_sparray_in_io=settings.use_sparse_array_on_read
+    def to_memory(self) -> SparseMatrixType:
+        backed_class = BackedSparseMatrix(
+            format=self.format,
+            data=self._data,
+            indices=self._indices,
+            indptr=self._indptr,
+            shape=self.shape,
         )
-        mtx = format_class(self.shape, dtype=self.dtype)
+        mtx = backed_class.memory_format(self.shape, dtype=self.dtype)
         mtx.data = self._data[...]
         mtx.indices = self._indices[...]
         mtx.indptr = self._indptr
