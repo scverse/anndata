@@ -25,18 +25,18 @@ if TYPE_CHECKING:
     if TYPE_CHECKING:  # for sphinx
         from . import hv
 
-    # these types can just be expanded
     type Axes = Collection[Literal["obs", "var"]]
 
 
 type Array = pd.api.extensions.ExtensionArray | NDArray[Any]
 
-# full slices: e.g. a[:, 5], a[18, :], or a[:, :]
-type Sf = slice[None, None, None]
-type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
-"""Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array."""
+type Idx2D[Idx: int | str] = tuple[Idx | slice, slice] | tuple[slice, Idx | slice]
+"""Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array.
 
-type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
+E.g. `a[:, 5]`, `a[18, :]`, or `a[:, :]`
+"""
+
+type Idx2DList[Idx: int | str] = tuple[list[Idx], slice] | tuple[slice, list[Idx]]
 type AdRefFunc[I] = Callable[[AnnData, I], Array]
 
 
@@ -295,7 +295,7 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
-    def process_idx[T](i: T | tuple[Sf, T], /) -> T:
+    def process_idx[T](i: T | tuple[slice, T], /) -> T:
         if isinstance(i, tuple):
             if len(i) != 2 or i[0] != slice(None):
                 msg = f"Unsupported slice {i!r}"
@@ -307,11 +307,11 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
         return i
 
     @overload
-    def __getitem__(self, i: int | tuple[Sf, int], /) -> R: ...
+    def __getitem__(self, i: int | tuple[slice, int], /) -> R: ...
     @overload
-    def __getitem__(self, i: list[int] | tuple[Sf, list[int]], /) -> list[R]: ...
+    def __getitem__(self, i: list[int] | tuple[slice, list[int]], /) -> list[R]: ...
     def __getitem__(
-        self, i: int | list[int] | tuple[Sf, int | list[int]], /
+        self, i: int | list[int] | tuple[slice, int | list[int]], /
     ) -> R | list[R]:
         i = self.process_idx(i)
         if isinstance(i, list):
@@ -579,3 +579,8 @@ def __getattr__(name: Literal["hv"]) -> Any:
         return anndata.acc.hv
 
     raise AttributeError(name)
+
+
+if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    R = AdRef[Hashable]
+    I = Hashable
