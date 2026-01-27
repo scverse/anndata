@@ -145,6 +145,7 @@ qualname_overrides = {
         for kind in ["", "View"]
     },
     # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
+    "anndata.compat.Index": "anndata.typing.Index",
     "anndata._types.StorageType": "anndata.experimental.StorageType",
     #### h5py
     "h5py._hl.group.Group": "h5py.Group",
