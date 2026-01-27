@@ -114,14 +114,11 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        # zarr v2 has no config
-        if self.format == "csr":
-            if is_gpu():
-                return CupyCSRMatrix
-            return ss.csr_array if settings.use_sparse_array_on_read else ss.csr_matrix
         if is_gpu():
-            return CupyCSCMatrix
-        return ss.csc_array if settings.use_sparse_array_on_read else ss.csc_matrix
+            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
+        if settings.use_sparse_array_on_read:
+            return ss.csr_array if self.format == "csr" else ss.csc_array
+        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
 
     @property
     def np_module(self) -> ModuleType:
