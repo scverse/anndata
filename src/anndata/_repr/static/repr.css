@@ -513,7 +513,7 @@
         }
     }
 
-    .anndata-section__header {
+    .anndata-section > summary {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -546,7 +546,7 @@
         }
     }
 
-    details:not([open]) > .anndata-section__header::before {
+    .anndata-section:not([open]) > summary::before {
         transform: rotate(-90deg);
     }
 

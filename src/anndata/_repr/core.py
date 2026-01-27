@@ -144,7 +144,7 @@ def _render_section_header(
     tooltip: str,
 ) -> str:
     """Render a section header as <summary> - native disclosure triangle replaces fold icon."""
-    parts = ['<summary class="anndata-section__header">']
+    parts = ["<summary>"]
     parts.append(f'<span class="anndata-section__name">{escape_html(name)}</span>')
     parts.append(
         f'<span class="anndata-section__count">{escape_html(count_str)}</span>'
@@ -170,7 +170,7 @@ def render_empty_section(
 
     return f"""
 <details class="anndata-section" data-section="{escape_html(name)}">
-    <summary class="anndata-section__header">
+    <summary>
         <span class="anndata-section__name">{escape_html(name)}</span>
         <span class="anndata-section__count">(empty)</span>
         {help_link}

@@ -333,8 +333,10 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
 
 def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     """Render a section showing unknown/unrecognized attributes."""
-    parts = ['<details class="anndata-sec anndata-sec-unknown" data-section="unknown">']
-    parts.append('<summary class="anndata-section__header">')
+    parts = [
+        '<details class="anndata-section anndata-sec-unknown" data-section="unknown">'
+    ]
+    parts.append("<summary>")
     parts.append('<span class="anndata-section__name">other</span>')
     parts.append(
         f'<span class="anndata-section__count">({len(unknown_sections)})</span>'
@@ -374,8 +376,8 @@ def _render_error_entry(section: str, error: str) -> str:
     # Use --anndata-error-color CSS variable (defined in css.py) with fallback
     error_color = "var(--anndata-error-color, #dc3545)"
     return f"""
-<details class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}" open>
-    <summary class="anndata-section__header">
+<details class="anndata-section anndata-sec-error" data-section="{escape_html(section)}" open>
+    <summary>
         <span class="anndata-section__name">{escape_html(section)}</span>
         <span class="anndata-section__count anndata-badge--error" style="color: {error_color};">(error)</span>
     </summary>

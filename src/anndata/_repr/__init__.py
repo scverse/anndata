@@ -215,7 +215,6 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
     **Elements** (parts of blocks, use ``__``):
         - ``anndata-header__type``: Type name span in header
         - ``anndata-header__shape``: Shape/dimensions span in header
-        - ``anndata-section__header``: Section header (clickable to fold)
         - ``anndata-section__content``: Section content (rows)
         - ``anndata-entry__name``: Entry name cell
         - ``anndata-entry__type``: Entry type cell
