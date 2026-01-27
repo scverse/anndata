@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 from anndata import AnnData
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeIs
 
     from numpy.typing import NDArray
@@ -165,8 +165,8 @@ class LayerMapAcc[R: AdRef]:
     _: KW_ONLY
     ref_class: type[R]
 
-    def __getitem__(self, k: str, /) -> LayerAcc[R]:
-        if not isinstance(k, str):
+    def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
+        if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
         return LayerAcc(k, ref_class=self.ref_class)
@@ -480,12 +480,28 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         object.__setattr__(self, "obsp", GraphMapAcc("obs", ref_class=self.ref_class))
         object.__setattr__(self, "varp", GraphMapAcc("var", ref_class=self.ref_class))
 
+    def from_json(self, data: Sequence[str | int | None]) -> R:
+        """Create :class:`AdRef` from JSON.
+
+        Raises
+        ------
+        ValueError
+            If parsing fails.
+        """
+        from ._parse_json import parse_json
+
+        try:
+            return parse_json(self, data)
+        except Exception as e:
+            msg = f"Failed to parse {data!r}"
+            raise ValueError(msg) from e
+
     @overload
     def resolve(self, spec: str, *, strict: Literal[True] = True) -> R: ...
     @overload
     def resolve(self, spec: str, *, strict: Literal[False]) -> R | None: ...
     def resolve(self, spec: str, *, strict: bool = True) -> R | None:
-        """Create accessor from string.
+        """Create :class:`AdRef` from a simplified string.
 
         Examples
         --------
@@ -508,7 +524,7 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         >>> A.resolve("obsp.g[:,c2]")
         A.obsp['g'][:, 'c2']
         """
-        from ._parse import parse
+        from ._parse_str import parse
 
         return parse(self, spec, strict=strict)
 
