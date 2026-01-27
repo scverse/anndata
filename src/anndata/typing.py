@@ -49,18 +49,15 @@ XDataType: TypeAlias = (  # noqa: UP040
 )
 ArrayDataStructureTypes: TypeAlias = XDataType | AwkArray | XDataArray  # noqa: UP040
 
-
-# TODO: use `type` syntax for all the below once https://github.com/sphinx-doc/sphinx/pull/13508 is released
+# this type is not exported, so we don’t make it a `type`
 InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
     pd.DataFrame | np.number | str | ArrayDataStructureTypes
 )
 
-AxisStorable: TypeAlias = (  # noqa: UP040
+type AxisStorable = (
     InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]
 )
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-RWAble: TypeAlias = (  # noqa: UP040
-    AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
-)
+type RWAble = AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
 """A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
