@@ -60,7 +60,7 @@ Index1D = (
     | CSArray  # bool
 )
 IndexRest = Index1D | EllipsisType
-Index = (
+type Index = (
     IndexRest
     | tuple[Index1D, IndexRest]
     | tuple[IndexRest, Index1D]
@@ -94,6 +94,8 @@ else:
 #############################
 # Optional deps
 #############################
+
+
 @cache
 def is_zarr_v2() -> bool:
     return Version(version("zarr")) < Version("3.0.0")
@@ -131,11 +133,7 @@ if TYPE_CHECKING:
 elif find_spec("dask"):
     from dask.array import Array as DaskArray
 else:
-
-    class DaskArray:
-        @staticmethod
-        def __repr__():
-            return "mock dask.array.core.Array"
+    DaskArray = type("Array", (), dict(__module__="dask.array"))
 
 
 if find_spec("xarray") or TYPE_CHECKING:
@@ -147,26 +145,13 @@ if find_spec("xarray") or TYPE_CHECKING:
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 else:
     xarray = None
-
-    class XDataArray:
-        def __repr__(self) -> str:
-            return "mock DataArray"
-
-    class XDataset:
-        def __repr__(self) -> str:
-            return "mock Dataset"
-
-    class XVariable:
-        def __repr__(self) -> str:
-            return "mock Variable"
-
-    class XZarrArrayWrapper:
-        def __repr__(self) -> str:
-            return "mock ZarrArrayWrapper"
-
-    class XBackendArray:
-        def __repr__(self) -> str:
-            return "mock BackendArray"
+    XDataArray = type("DataArray", (), dict(__module__="xarray"))
+    XDataset = type("Dataset", (), dict(__module__="xarray"))
+    XVariable = type("Variable", (), dict(__module__="xarray"))
+    XBackendArray = type("BackendArray", (), dict(__module__="xarray.backends"))
+    XZarrArrayWrapper = type(
+        "ZarrArrayWrapper", (), dict(__module__="xarray.backends.zarr")
+    )
 
 
 # https://github.com/scverse/anndata/issues/1749
@@ -192,27 +177,13 @@ if is_cupy_importable() or TYPE_CHECKING:
         da.register_chunk_type(CupyCSRMatrix)
         da.register_chunk_type(CupyCSCMatrix)
 else:
+    CupyArray = type("ndarray", (), dict(__module__="cupy"))
+    CupySparseMatrix = type("spmatrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSRMatrix = type("csr_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
-    class CupySparseMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.spmatrix"
 
-    class CupyCSRMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csr_matrix"
-
-    class CupyCSCMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csc_matrix"
-
-    class CupyArray:
-        @staticmethod
-        def __repr__():
-            return "mock cupy.ndarray"
-
+CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
 
 old_positionals = partial(legacy_api, category=FutureWarning)
 

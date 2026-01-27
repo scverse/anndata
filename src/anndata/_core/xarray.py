@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Self, overload
 
 import numpy as np
 import pandas as pd
@@ -13,14 +14,7 @@ from anndata._warnings import warn
 from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Callable,
-        Collection,
-        Hashable,
-        Iterable,
-        Iterator,
-        Mapping,
-    )
+    from collections.abc import Callable, Collection, Iterable, Iterator
     from typing import Any, Literal
 
     from .._types import Dataset2DIlocIndexer
@@ -39,10 +33,8 @@ def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-class Dataset2D:
+class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     r"""
-    Bases :class:`~collections.abc.Mapping`\ [:class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D`\ ]
-
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
     are respected, namely that there is only one 1d dim and coord with the same name i.e.,
