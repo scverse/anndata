@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from . import typing
 from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
+from .utils import set_module
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type S = StorageType
+    type RWAble = typing.RWAble
 
 
 __all__ = [
@@ -40,6 +44,7 @@ GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 type StorageType = ArrayStorageType | GroupStorageType
 
 
+@set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
     def __getitem__(self, idx: Any) -> Dataset2D: ...
 
@@ -58,6 +63,7 @@ class _ReadLazyInternal[S: StorageType](Protocol):
     ) -> LazyDataStructures: ...
 
 
+@set_module("anndata.experimental")
 class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(self, elem: S) -> RWAble:
         """Low-level reading function for an element.
@@ -104,6 +110,7 @@ class _WriteInternal[RWAble: typing.RWAble](Protocol):
     ) -> None: ...
 
 
+@set_module("anndata.experimental")
 class Write[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
@@ -129,6 +136,7 @@ class Write[RWAble: typing.RWAble](Protocol):
         ...
 
 
+@set_module("anndata.experimental")
 class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
@@ -160,6 +168,7 @@ class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
         ...
 
 
+@set_module("anndata.experimental")
 class WriteCallback[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,

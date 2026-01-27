@@ -72,6 +72,7 @@ doc = [
     "myst-parser",
     "sphinx-design",
     "anndata[dask]",
+    "pandas>=3",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
@@ -249,7 +250,7 @@ max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,GroupT"
 
 [tool.towncrier]
 package = "anndata"
