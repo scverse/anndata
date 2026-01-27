@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Generic, get_origin
 
+from sphinx.util.typing import ExtensionMetadata
+
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
 
@@ -18,5 +20,6 @@ def skip_private_bases(
     ]
 
 
-def setup(app: Sphinx) -> None:
+def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("autodoc-process-bases", skip_private_bases)
+    return ExtensionMetadata(parallel_read_safe=True)
