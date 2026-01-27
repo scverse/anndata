@@ -30,13 +30,13 @@ if TYPE_CHECKING:
 
 type Array = pd.api.extensions.ExtensionArray | NDArray[Any]
 
-type Idx2D[Idx: int | str] = tuple[Idx | slice, slice] | tuple[slice, Idx | slice]
+type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 """Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array.
 
 E.g. `a[:, 5]`, `a[18, :]`, or `a[:, :]`
 """
 
-type Idx2DList[Idx: int | str] = tuple[list[Idx], slice] | tuple[slice, list[Idx]]
+type Idx2DList = tuple[list[str], slice] | tuple[slice, list[str]]
 type AdRefFunc[I] = Callable[[AnnData, I], Array]
 
 
@@ -176,31 +176,31 @@ class LayerMapAcc[R: AdRef]:
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
+class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     k: str | None
     """Key this accessor refers to, e.g. `A.layers['counts'].k == 'counts'`."""
 
     @overload
-    def __getitem__(self, idx: Idx2D[str], /) -> R: ...
+    def __getitem__(self, idx: Idx2D, /) -> R: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str], /) -> list[R]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> R | list[R]:
+    def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
+    def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def axes(self, idx: Idx2D[str], /) -> Axes:
+    def axes(self, idx: Idx2D, /) -> Axes:
         return _idx2axes(idx)
 
     def __repr__(self) -> str:
         return f"A.layers[{self.k!r}]"
 
-    def idx_repr(self, idx: Idx2D[str]) -> str:
+    def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Array:
+    def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
         ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
             ver_or_mat = ver_or_mat.toarray()
@@ -352,7 +352,7 @@ class GraphMapAcc[R: AdRef]:
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
+class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     ax: Literal["obs", "var"]
@@ -361,7 +361,7 @@ class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
     k: str
     """Key this accessor refers to, e.g. `A.obsp['x'].k == 'x'`."""
 
-    def process_idx(self, idx: Idx2D[str], /) -> Idx2D[str]:
+    def process_idx(self, idx: Idx2D, /) -> Idx2D:
         if not all(isinstance(i, str | slice) for i in idx):
             msg = f"Unsupported index {idx!r}"
             raise TypeError(msg)
@@ -374,25 +374,25 @@ class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
         return idx
 
     @overload
-    def __getitem__(self, idx: Idx2D[str], /) -> R: ...
+    def __getitem__(self, idx: Idx2D, /) -> R: ...
     @overload
-    def __getitem__(self, idx: Idx2DList[str], /) -> list[R]: ...
-    def __getitem__(self, idx: Idx2D[str] | Idx2DList[str], /) -> R | list[R]:
+    def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
+    def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def axes(self, idx: Idx2D[str], /) -> Axes:
+    def axes(self, idx: Idx2D, /) -> Axes:
         n_slices = sum(isinstance(i, slice) for i in idx)
         return (self.ax,) * n_slices if n_slices > 1 else {self.ax}
 
     def __repr__(self) -> str:
         return f"A.{self.ax}p[{self.k!r}]"
 
-    def idx_repr(self, idx: Idx2D[str]) -> str:
+    def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def get(self, adata: AnnData, idx: Idx2D[str], /) -> Array:
+    def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
         return getattr(adata, f"{self.ax}p")[self.k][iloc].toarray()
@@ -536,16 +536,12 @@ A: AdAcc[AdRef] = AdAcc(ref_class=AdRef)
 r"""A global accessor to create :class:`AdRef`\ s."""
 
 
-def _is_idx2d_list[Idx: int | str](
-    idx: Idx2D[Idx] | Idx2DList[Idx],
-) -> TypeIs[Idx2DList[Idx]]:
+def _is_idx2d_list(idx: Idx2D | Idx2DList) -> TypeIs[Idx2DList]:
     """Check if a 2D index contains a list in one of its dimensions."""
     return any(isinstance(i, list) for i in idx)
 
 
-def _expand_idx2d_list[Idx: int | str](
-    idx: Idx2D[Idx] | Idx2DList[Idx],
-) -> list[Idx2D[Idx]]:
+def _expand_idx2d_list(idx: Idx2D | Idx2DList) -> list[Idx2D]:
     """Expand a 2D index containing a list in one of its dimensions.
 
     Also validates that the 2D index contains at most one list.
@@ -563,7 +559,7 @@ def _expand_idx2d_list[Idx: int | str](
             raise AssertionError(msg)
 
 
-def _idx2axes(idx: Idx2D[str]) -> set[Literal["obs", "var"]]:
+def _idx2axes(idx: Idx2D) -> set[Literal["obs", "var"]]:
     """Get along which axes the referenced array is and validate the index."""
     for ax_idx in idx:
         if isinstance(ax_idx, str):

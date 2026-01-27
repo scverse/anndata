@@ -68,7 +68,7 @@ def _parse_path_multi[P: AdRef](multi: MultiMapAcc[P], spec: str) -> P:
     return multi[key][int(i)]
 
 
-def _parse_idx_2d[Idx: int | str](i: str, j: str, cls: type[Idx]) -> Idx2D[Idx]:
+def _parse_idx_2d(i: str, j: str, cls: type) -> Idx2D:
     match i, j:
         case ":", ":":
             return slice(None), slice(None)
