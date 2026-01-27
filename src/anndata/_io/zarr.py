@@ -153,7 +153,7 @@ def open_write_group(
     if "zarr_format" not in kwargs:
         if settings.zarr_write_format == 2 or is_zarr_v2():
             msg = "Writing zarr v2 data will no longer be the default in the next minor release. v3 data will be written by default. If you are explicitly setting this configuration, consider migrating to the zarr v3 file format."
-            warn(msg, UserWarning)
+            warn(msg, UserWarning, stacklevel=2)
         if not is_zarr_v2():
             kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)
