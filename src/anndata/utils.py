@@ -4,6 +4,7 @@ import re
 import sys
 import warnings
 from functools import partial, singledispatch
+from types import FunctionType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -19,7 +20,7 @@ from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
     from typing import Any, Literal, LiteralString
 
 logger = get_logger(__name__)
@@ -406,6 +407,14 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_hidden(getattr(cls, item, None))
         ]
+
+
+def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
+    def decorator(f: C) -> C:
+        f.__module__ = name
+        return f
+
+    return decorator
 
 
 def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
