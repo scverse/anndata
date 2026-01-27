@@ -73,6 +73,7 @@ def write_h5ad(
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
