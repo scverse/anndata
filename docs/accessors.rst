@@ -90,6 +90,11 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
         MultiAcc
         GraphAcc
 
+    ..  autosummary::
+        :toctree: generated/
+
+        Idx2D
+
 .. toctree::
    :hidden:
 
@@ -97,6 +102,7 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
    generated/anndata.acc.LayerAcc
    generated/anndata.acc.MultiAcc
    generated/anndata.acc.GraphAcc
+   generated/anndata.acc.Idx2D
 
 Finally, these classes are only useful for extending:
 

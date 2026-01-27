@@ -73,6 +73,7 @@ doc = [
     "sphinx-design",
     "holoviews",
     "anndata[dask]",
+    "pandas>=3",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]

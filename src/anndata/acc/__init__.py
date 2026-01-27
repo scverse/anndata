@@ -22,20 +22,20 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from . import hv
+    if TYPE_CHECKING:  # for sphinx
+        from . import hv
 
     # these types can just be expanded
-    Axes = Collection[Literal["obs", "var"]]
-else:
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type R = AdRef
-    type I = Hashable
+    type Axes = Collection[Literal["obs", "var"]]
+
 
 type Array = pd.api.extensions.ExtensionArray | NDArray[Any]
 
 # full slices: e.g. a[:, 5], a[18, :], or a[:, :]
 type Sf = slice[None, None, None]
 type Idx2D[Idx: int | str] = tuple[Idx | Sf, Sf] | tuple[Sf, Idx | Sf]
+"""Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array."""
+
 type Idx2DList[Idx: int | str] = tuple[list[Idx], Sf] | tuple[Sf, list[Idx]]
 type AdRefFunc[I] = Callable[[AnnData, I], Array]
 
@@ -46,6 +46,7 @@ __all__ = [
     "AdRef",
     "GraphAcc",
     "GraphMapAcc",
+    "Idx2D",
     "LayerAcc",
     "LayerMapAcc",
     "MetaAcc",
@@ -175,7 +176,7 @@ class LayerMapAcc[R: AdRef]:
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D[str]]](RefAcc[R, "Idx2D[str]"]):
+class LayerAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     k: str | None
@@ -351,7 +352,7 @@ class GraphMapAcc[R: AdRef]:
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, "Idx2D[str]"]):
+class GraphAcc[R: AdRef[Idx2D[str]]](RefAcc[R, Idx2D[str]]):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     ax: Literal["obs", "var"]
