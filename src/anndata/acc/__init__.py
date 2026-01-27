@@ -8,9 +8,9 @@ from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
 
-import pandas as pd
 import scipy.sparse as sp
 from numpy.typing import NDArray
+from pandas.api.extensions import ExtensionArray
 
 from anndata import AnnData
 
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeIs
 
+    import pandas as pd
     from numpy.typing import NDArray
 
     from anndata import AnnData
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     type Axes = Collection[Literal["obs", "var"]]
 
 
-type Array = pd.api.extensions.ExtensionArray | NDArray[Any]
+type Array = ExtensionArray | NDArray[Any]
 
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 """Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array.
@@ -165,8 +166,8 @@ class LayerMapAcc[R: AdRef]:
     _: KW_ONLY
     ref_class: type[R]
 
-    def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
-        if not isinstance(k, str | None):
+    def __getitem__(self, k: str, /) -> LayerAcc[R]:
+        if not isinstance(k, str):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
         return LayerAcc(k, ref_class=self.ref_class)
@@ -210,7 +211,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
 
 @dataclass(frozen=True)
-class MetaAcc[R: AdRef[str | type[pd.Index]]](RefAcc[R, str | type[pd.Index]]):
+class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
 
     Examples
@@ -232,19 +233,19 @@ class MetaAcc[R: AdRef[str | type[pd.Index]]](RefAcc[R, str | type[pd.Index]]):
     @property
     def index(self) -> R:
         """Index :class:`AdRef`, i.e. `A.obs.index` or `A.var.index`."""
-        return self[pd.Index]
+        return self[None]
 
-    def process_idx(self, k: object, /) -> str | type[pd.Index]:
-        if k is not pd.Index and not isinstance(k, str):
+    def process_idx(self, k: object, /) -> str | None:
+        if k is not None and not isinstance(k, str):
             msg = f"Unsupported {self.ax} column {k!r}"
             raise TypeError(msg)
         return k
 
     @overload
-    def __getitem__[K: str | type[pd.Index]](self, k: K, /) -> R: ...
+    def __getitem__[K: str | None](self, k: K, /) -> R: ...
     @overload
-    def __getitem__[K: str | type[pd.Index]](self, k: list[K], /) -> list[R]: ...
-    def __getitem__[K: str | type[pd.Index]](self, k: K | list[K], /) -> R | list[R]:
+    def __getitem__[K: str | None](self, k: list[K], /) -> list[R]: ...
+    def __getitem__[K: str | None](self, k: K | list[K], /) -> R | list[R]:
         if isinstance(k, list):
             return [self[i] for i in k]
 
@@ -256,12 +257,12 @@ class MetaAcc[R: AdRef[str | type[pd.Index]]](RefAcc[R, str | type[pd.Index]]):
     def __repr__(self) -> str:
         return f"A.{self.ax}"
 
-    def idx_repr(self, k: str | type[pd.Index]) -> str:
-        return ".index" if k is pd.Index else f"[{k!r}]"
+    def idx_repr(self, k: str | None) -> str:
+        return ".index" if k is None else f"[{k!r}]"
 
-    def get(self, adata: AnnData, k: str | type[pd.Index], /) -> Array:
+    def get(self, adata: AnnData, k: str | None, /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
-        return df.index.values if k is pd.Index else df[k].values
+        return df.index.values if k is None else df[k].values
 
 
 @dataclass(frozen=True)
@@ -480,8 +481,14 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         object.__setattr__(self, "obsp", GraphMapAcc("obs", ref_class=self.ref_class))
         object.__setattr__(self, "varp", GraphMapAcc("var", ref_class=self.ref_class))
 
+    def to_json(self, ref: R) -> list[str | int | None]:
+        """Serialize :class:`AdRef` to a JSON-compatible list."""
+        from ._parse_json import to_json
+
+        return to_json(ref)
+
     def from_json(self, data: Sequence[str | int | None]) -> R:
-        """Create :class:`AdRef` from JSON.
+        """Create :class:`AdRef` from a JSON sequence.
 
         Raises
         ------

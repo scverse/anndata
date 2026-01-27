@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from string import ascii_lowercase
 from typing import TYPE_CHECKING
 
@@ -20,44 +20,76 @@ if TYPE_CHECKING:
 
 
 type AdRefExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
+type AdRefSer = Sequence[str | int | None]
 
-PATHS: list[tuple[AdRef, AdRefExpected]] = [
-    (A[:, :], lambda ad: ad.X),
-    (A[:, "gene-3"], lambda ad: ad[:, "gene-3"].X.flatten()),
-    (A["cell-5", :], lambda ad: ad["cell-5"].X.flatten()),
-    (A.obs["type"], lambda ad: ad.obs["type"]),
-    (A.obs.index, lambda ad: ad.obs.index.values),
-    (A.layers["a"][:, :], lambda ad: ad.layers["a"].copy().toarray()),
+PATHS: list[tuple[AdRef, AdRefSer, AdRefExpected]] = [
+    (A[:, :], ["layers", None, None, None], lambda ad: ad.X),
+    (
+        A[:, "gene-3"],
+        ["layers", None, None, "gene-3"],
+        lambda ad: ad[:, "gene-3"].X.flatten(),
+    ),
+    (
+        A["cell-5", :],
+        ["layers", None, "cell-5", None],
+        lambda ad: ad["cell-5"].X.flatten(),
+    ),
+    (A.obs["type"], ["obs", "type"], lambda ad: ad.obs["type"]),
+    (A.obs.index, ["obs", None], lambda ad: ad.obs.index.values),
+    (
+        A.layers["a"][:, :],
+        ["layers", "a", None, None],
+        lambda ad: ad.layers["a"].copy().toarray(),
+    ),
     (
         A.layers["a"][:, "gene-18"],
+        ["layers", "a", None, "gene-18"],
         lambda ad: ad[:, "gene-18"].layers["a"].copy().toarray().flatten(),
     ),
     (
         A.layers["a"]["cell-77", :],
+        ["layers", "a", "cell-77", None],
         lambda ad: ad["cell-77"].layers["a"].copy().toarray().flatten(),
     ),
-    (A.obsm["umap"][0], lambda ad: ad.obsm["umap"][:, 0]),
-    (A.obsm["umap"][1], lambda ad: ad.obsm["umap"][:, 1]),
-    (A.varp["cons"]["gene-46", :], lambda ad: ad.varp["cons"][46, :].toarray()),
-    (A.varp["cons"][:, "gene-46"], lambda ad: ad.varp["cons"][:, 46].toarray()),
+    (A.obsm["umap"][0], ["obsm", "umap", 0], lambda ad: ad.obsm["umap"][:, 0]),
+    (A.obsm["umap"][1], ["obsm", "umap", 1], lambda ad: ad.obsm["umap"][:, 1]),
+    (
+        A.varp["cons"]["gene-46", :],
+        ["varp", "cons", "gene-46", None],
+        lambda ad: ad.varp["cons"][46, :].toarray(),
+    ),
+    (
+        A.varp["cons"][:, "gene-46"],
+        ["varp", "cons", None, "gene-46"],
+        lambda ad: ad.varp["cons"][:, 46].toarray(),
+    ),
 ]
 
 
 @pytest.fixture(scope="session", params=PATHS, ids=[str(p[0]) for p in PATHS])
 def path_and_expected_fn(
     request: pytest.FixtureRequest,
-) -> tuple[AdRef, AdRefExpected]:
+) -> tuple[AdRef, AdRefSer, AdRefExpected]:
     return request.param
 
 
 @pytest.fixture(scope="session")
-def ad_path(path_and_expected_fn: tuple[AdRef, AdRefExpected]) -> AdRef:
+def ad_path(path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected]) -> AdRef:
     return path_and_expected_fn[0]
 
 
 @pytest.fixture(scope="session")
-def ad_expected(path_and_expected_fn: tuple[AdRef, AdRefExpected]) -> AdRefExpected:
+def ad_serialized(
+    path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected],
+) -> AdRefSer:
     return path_and_expected_fn[1]
+
+
+@pytest.fixture(scope="session")
+def ad_expected(
+    path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected],
+) -> AdRefExpected:
+    return path_and_expected_fn[2]
 
 
 @pytest.fixture
@@ -88,6 +120,16 @@ def test_repr(ad_path: AdRef) -> None:
     assert repr(ad_path)[:2] in {"A.", "A["}
     assert eval(repr(ad_path)) == ad_path
     del A
+
+
+@pytest.mark.parametrize("compare", ["json", "obj"])
+def test_serialization(
+    ad_path: AdRef, ad_serialized: AdRefSer, compare: Literal["json", "obj"]
+) -> None:
+    if compare == "obj":
+        assert A.from_json(ad_serialized) == ad_path
+    else:
+        assert A.to_json(ad_path) == ad_serialized
 
 
 @pytest.mark.parametrize(
