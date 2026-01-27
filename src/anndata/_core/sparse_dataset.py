@@ -41,7 +41,6 @@ from ..compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from .index import _fix_slice_bounds, _subset, unpack_index
 
