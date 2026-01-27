@@ -40,6 +40,7 @@ from ..utils import (
     deprecation_msg,
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
+    set_module,
     warn,
 )
 from .access import ElementRef
@@ -66,6 +67,7 @@ if TYPE_CHECKING:
     from .index import Index
 
 
+@set_module("anndata")
 class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     """\
     An annotated data matrix.

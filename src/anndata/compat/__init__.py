@@ -94,6 +94,8 @@ else:
 #############################
 # Optional deps
 #############################
+
+
 @cache
 def is_zarr_v2() -> bool:
     return Version(version("zarr")) < Version("3.0.0")
@@ -131,11 +133,7 @@ if TYPE_CHECKING:
 elif find_spec("dask"):
     from dask.array import Array as DaskArray
 else:
-
-    class DaskArray:
-        @staticmethod
-        def __repr__():
-            return "mock dask.array.core.Array"
+    DaskArray = type("Array", (), dict(__module__="dask.array"))
 
 
 if find_spec("xarray") or TYPE_CHECKING:
@@ -179,26 +177,10 @@ if is_cupy_importable() or TYPE_CHECKING:
         da.register_chunk_type(CupyCSRMatrix)
         da.register_chunk_type(CupyCSCMatrix)
 else:
-
-    class CupySparseMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.spmatrix"
-
-    class CupyCSRMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csr_matrix"
-
-    class CupyCSCMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csc_matrix"
-
-    class CupyArray:
-        @staticmethod
-        def __repr__():
-            return "mock cupy.ndarray"
+    CupyArray = type("ndarray", (), dict(__module__="cupy"))
+    CupySparseMatrix = type("spmatrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSRMatrix = type("csr_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
 old_positionals = partial(legacy_api, category=FutureWarning)
