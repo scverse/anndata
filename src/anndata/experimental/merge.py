@@ -176,17 +176,77 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
+def virtual_concat_dense_hdf5(
+    arrays: Sequence[H5Array],
+    output_group: H5Group,
+    output_path: str,
+    *,
+    axis: Literal[0, 1] = 0,
+) -> None:
+    """\
+    Concatenate multiple dense HDF5 arrays into a single virtual dataset.
+
+    Parameters
+    ----------
+    arrays
+        Sequence of HDF5 arrays to concatenate.
+    output_group
+        HDF5 group to write the concatenated dataset to.
+    output_path
+        Name of the concatenated dataset.
+    axis
+        Axis along which to concatenate (0 for obs, 1 for var).
+    """
+    import h5py
+
+    # Compute output shape
+    shapes = [np.array(a.shape) for a in arrays]
+    out_shape = list(shapes[0])
+    out_shape[axis] = sum(s[axis] for s in shapes)
+
+    # Create virtual layout
+    layout = h5py.VirtualLayout(shape=tuple(out_shape), dtype=arrays[0].dtype)
+
+    # Map each source array to its position in the layout
+    offset = 0
+    for arr in arrays:
+        size = arr.shape[axis]
+        if axis == 0:
+            layout[offset : offset + size, :] = h5py.VirtualSource(arr)
+        else:
+            layout[:, offset : offset + size] = h5py.VirtualSource(arr)
+        offset += size
+
+    # Create virtual dataset
+    output_group.create_virtual_dataset(output_path, layout)
+    output_group[output_path].attrs.update({
+        "encoding-type": "array",
+        "encoding-version": "0.2.0",
+    })
+
+
 def write_concat_dense(  # noqa: PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
+    *,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
 ):
     """
-    Writes the concatenation of given dense arrays to disk using dask.
+    Writes the concatenation of given dense arrays to disk.
+
+    Uses virtual concat for HDF5 when possible, simple numpy concat when no
+    reindexing is needed, and dask for the general case with reindexing.
     """
+    use_reindexing = not all(ri.no_change for ri in reindexers)
+
+    if not use_reindexing and use_virtual_concat and isinstance(output_group, H5Group):
+        virtual_concat_dense_hdf5(arrays, output_group, output_path, axis=axis)
+        return
+
     import dask.array as da
 
     darrays = (
@@ -208,11 +268,13 @@ def write_concat_dense(  # noqa: PLR0917
     })
 
 
-def write_concat_sparse(  # noqa: PLR0917
+def write_concat_sparse(  # noqa: PLR0913, PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
+    *,
     max_loaded_elems: int,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
@@ -235,28 +297,40 @@ def write_concat_sparse(  # noqa: PLR0917
         A reindexer object that defines the reindexing operation to be applied.
     fill_value
         The fill value to use for missing elements. Defaults to None.
+    use_virtual_concat
+        Whether to use virtual concatenation for sparse arrays.
+
     """
     elems = None
+    use_reindexing = True
     if all(ri.no_change for ri in reindexers):
         elems = iter(datasets)
+        use_reindexing = False
     else:
         elems = _gen_slice_to_append(
             datasets, reindexers, max_loaded_elems, axis, fill_value
         )
-    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
-    init_elem = next(elems)
-    indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
-    write_elem(
-        output_group,
-        output_path,
-        init_elem,
-        dataset_kwargs=dict(indptr_dtype=indptr_dtype),
-    )
-    del init_elem
-    out_dataset: BaseCompressedSparseDataset = read_as_backed(output_group[output_path])
-    for temp_elem in elems:
-        out_dataset.append(temp_elem)
-        del temp_elem
+    if datasets[0].backend == "hdf5" and not use_reindexing and use_virtual_concat:
+        BaseCompressedSparseDataset.virtual_concat_hdf5(
+            datasets, output_group, output_path
+        )
+    else:
+        init_elem = next(elems)
+        number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
+        indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
+        write_elem(
+            output_group,
+            output_path,
+            init_elem,  # TODO: user should be able to specify dataset kwargs
+            dataset_kwargs=dict(indptr_dtype=indptr_dtype),
+        )
+        del init_elem
+        out_dataset: BaseCompressedSparseDataset = read_as_backed(
+            output_group[output_path]
+        )
+        for temp_elem in elems:
+            out_dataset.append(temp_elem)
+            del temp_elem
 
 
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
@@ -264,11 +338,13 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     output_group: ZarrGroup | H5Group,
     keys: Collection[str],
     output_path: str | Path,
+    *,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     index: pd.Index = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
+    use_virtual_concat: bool = False,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
@@ -289,6 +365,7 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
             reindexers=reindexers,
             fill_value=fill_value,
             max_loaded_elems=max_loaded_elems,
+            use_virtual_concat=use_virtual_concat,
         )
 
 
@@ -296,7 +373,9 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: str | Path,
+    *,
     max_loaded_elems: int,
+    use_virtual_concat: bool = False,
     axis: Literal[0, 1] = 0,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
@@ -322,17 +401,24 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
                 arrays,
                 output_group,
                 output_path,
-                max_loaded_elems,
-                axis,
-                reindexers,
-                fill_value,
+                max_loaded_elems=max_loaded_elems,
+                use_virtual_concat=use_virtual_concat,
+                axis=axis,
+                reindexers=reindexers,
+                fill_value=fill_value,
             )
         else:
             msg = f"Concat of following not supported: {[a.format for a in arrays]}"
             raise NotImplementedError(msg)
     else:
         write_concat_dense(
-            arrays, output_group, output_path, axis, reindexers, fill_value
+            arrays,
+            output_group,
+            output_path,
+            use_virtual_concat=use_virtual_concat,
+            axis=axis,
+            reindexers=reindexers,
+            fill_value=fill_value,
         )
 
 
@@ -340,11 +426,13 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
     output_group: ZarrGroup | H5Group,
     output_path: str | Path,
+    *,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     index: pd.Index | None = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
+    use_virtual_concat: bool = False,
     join: Join_T = "inner",
 ):
     """
@@ -379,11 +467,12 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
             arrays,
             output_group,
             output_path,
-            max_loaded_elems,
-            axis,
-            reindexers,
-            fill_value,
-            join,
+            max_loaded_elems=max_loaded_elems,
+            use_virtual_concat=use_virtual_concat,
+            axis=axis,
+            reindexers=reindexers,
+            fill_value=fill_value,
+            join=join,
         )
     else:
         msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
@@ -461,6 +550,7 @@ def concat_on_disk(  # noqa: PLR0913
     out_file: PathLike[str] | str | H5Group | ZarrGroup,
     *,
     max_loaded_elems: int = 100_000_000,
+    use_virtual_concat: bool = False,
     axis: Literal["obs", 0, "var", 1] = 0,
     join: Join_T = "inner",
     merge: StrategiesLiteral | Callable[[Collection[Mapping]], Mapping] | None = None,
@@ -488,7 +578,10 @@ def concat_on_disk(  # noqa: PLR0913
     To adjust the maximum amount of data loaded in memory; for sparse
     arrays use the max_loaded_elems argument; for dense arrays
     see the Dask documentation, as the Dask concatenation function is used
-    to concatenate dense arrays in this function
+    to concatenate dense arrays in this function.
+
+    If the backend is hdf5 and there is no reindexing and `virtual_concat`
+    is True, virtual concatenation is used via :doc:`h5py:vds`.
 
     Params
     ------
@@ -503,6 +596,11 @@ def concat_on_disk(  # noqa: PLR0913
         sparse arrays. Note that this number also includes the empty entries.
         Set to 100m by default meaning roughly 400mb will be loaded
         to memory simultaneously.
+    use_virtual_concat
+        Whether to use virtual concatenation for sparse arrays.
+        This will create soft links to the source files instead of copying the whole content.
+        Be aware that this will make the output file dependent on the source files.
+        This is False by default.
     axis
         Which axis to concatenate along.
     join
@@ -650,6 +748,7 @@ def concat_on_disk(  # noqa: PLR0913
             label=label,
             index_unique=index_unique,
             fill_value=fill_value,
+            use_virtual_concat=use_virtual_concat,
             merge=merge,
         )
 
@@ -667,6 +766,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     label: str | None,
     index_unique: str | None,
     fill_value: Any | None,
+    use_virtual_concat: bool = False,
     merge: Callable[[Collection[Mapping]], Mapping],
 ) -> None:
     """Internal helper to minimize the amount of indented code within the context manager"""
@@ -740,6 +840,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         reindexers=reindexers,
         fill_value=fill_value,
         max_loaded_elems=max_loaded_elems,
+        use_virtual_concat=use_virtual_concat,
     )
 
     # Write Layers and {axis_name}m
@@ -760,6 +861,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             intersect_keys(maps),
             m,
             max_loaded_elems=max_loaded_elems,
+            use_virtual_concat=use_virtual_concat,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,
