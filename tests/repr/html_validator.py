@@ -28,7 +28,7 @@ class HTMLValidator:
         validator = HTMLValidator(html)
         validator.assert_element_exists(".anndata-badge--view")
         validator.assert_text_in_element(".anndata-header__shape", "100")
-        validator.assert_element_has_class("div", "anndata-section")
+        validator.assert_element_has_class("details", "anndata-section")
     """
 
     def __init__(self, html: str):
@@ -378,46 +378,58 @@ class HTMLValidator:
     def assert_collapse_functionality_present(
         self, *, msg: str | None = None
     ) -> HTMLValidator:
-        """Assert collapse/expand functionality is present in HTML."""
-        has_css = ".collapsed" in self.html or "collapsed" in self.html
-        has_js = "classList.toggle" in self.html or "classList.add" in self.html
+        """Assert collapse/expand functionality is present in HTML.
 
-        if not (has_css and has_js):
+        Section collapse uses native <details>/<summary> elements.
+        Entry-level expand uses JS classList.toggle.
+        """
+        has_details = "<details" in self.html and "<summary" in self.html
+        has_entry_expand = "classList.toggle" in self.html
+
+        if not (has_details and has_entry_expand):
             raise AssertionError(
-                msg or "Collapse functionality (CSS/JS) not found in HTML"
+                msg
+                or "Collapse functionality (<details> or entry JS) not found in HTML"
             )
         return self
 
     def assert_section_initially_collapsed(
         self, section_name: str, *, msg: str | None = None
     ) -> HTMLValidator:
-        """Assert a section is marked to start in collapsed state."""
-        pattern = (
-            rf'data-section="{re.escape(section_name)}"[^>]*data-should-collapse="true"'
-        )
-        alt_pattern = (
-            rf'data-should-collapse="true"[^>]*data-section="{re.escape(section_name)}"'
-        )
-        if not (re.search(pattern, self.html) or re.search(alt_pattern, self.html)):
+        """Assert a section starts collapsed (<details> without open attribute)."""
+        # Match <details ... data-section="name" ...> without an open attribute
+        pattern = rf'<details\b[^>]*data-section="{re.escape(section_name)}"[^>]*>'
+        match = re.search(pattern, self.html)
+        if not match:
             raise AssertionError(
-                msg or f"Section '{section_name}' not marked for collapse"
+                msg or f"Section '{section_name}' not found as <details> element"
+            )
+        tag = match.group(0)
+        # The section should NOT have the open attribute
+        if re.search(r"\bopen\b", tag):
+            raise AssertionError(
+                msg
+                or f"Section '{section_name}' has 'open' attribute (expected collapsed)"
             )
         return self
 
     def assert_section_not_initially_collapsed(
         self, section_name: str, *, msg: str | None = None
     ) -> HTMLValidator:
-        """Assert a section is NOT marked to start in collapsed state."""
+        """Assert a section starts expanded (<details> with open attribute)."""
         self.assert_section_exists(section_name)
-        pattern = (
-            rf'data-section="{re.escape(section_name)}"[^>]*data-should-collapse="true"'
-        )
-        alt_pattern = (
-            rf'data-should-collapse="true"[^>]*data-section="{re.escape(section_name)}"'
-        )
-        if re.search(pattern, self.html) or re.search(alt_pattern, self.html):
+        # Match <details ... data-section="name" ...> with an open attribute
+        pattern = rf'<details\b[^>]*data-section="{re.escape(section_name)}"[^>]*>'
+        match = re.search(pattern, self.html)
+        if not match:
             raise AssertionError(
-                msg or f"Section '{section_name}' unexpectedly marked for collapse"
+                msg or f"Section '{section_name}' not found as <details> element"
+            )
+        tag = match.group(0)
+        if not re.search(r"\bopen\b", tag):
+            raise AssertionError(
+                msg
+                or f"Section '{section_name}' missing 'open' attribute (expected expanded)"
             )
         return self
 

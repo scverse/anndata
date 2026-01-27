@@ -42,7 +42,6 @@ from .components import (
     render_entry_preview_cell,
     render_entry_row_open,
     render_entry_type_cell,
-    render_fold_icon,
     render_name_cell,
     render_nested_content_cell,
 )
@@ -334,17 +333,13 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
 
 def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     """Render a section showing unknown/unrecognized attributes."""
-    parts = [
-        '<div class="anndata-sec anndata-sec-unknown" data-section="unknown" '
-        'data-should-collapse="true">'
-    ]
-    parts.append('<div class="anndata-section__header">')
-    parts.append(render_fold_icon())
+    parts = ['<details class="anndata-sec anndata-sec-unknown" data-section="unknown">']
+    parts.append('<summary class="anndata-section__header">')
     parts.append('<span class="anndata-section__name">other</span>')
     parts.append(
         f'<span class="anndata-section__count">({len(unknown_sections)})</span>'
     )
-    parts.append("</div>")
+    parts.append("</summary>")
 
     parts.append(
         f'<div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">'
@@ -365,7 +360,7 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
 
     parts.append("</table>")
     parts.append("</div>")
-    parts.append("</div>")
+    parts.append("</details>")
 
     return "\n".join(parts)
 
@@ -379,18 +374,17 @@ def _render_error_entry(section: str, error: str) -> str:
     # Use --anndata-error-color CSS variable (defined in css.py) with fallback
     error_color = "var(--anndata-error-color, #dc3545)"
     return f"""
-<div class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}">
-    <div class="anndata-section__header">
-        {render_fold_icon()}
+<details class="anndata-sec anndata-sec-error" data-section="{escape_html(section)}" open>
+    <summary class="anndata-section__header">
         <span class="anndata-section__name">{escape_html(section)}</span>
         <span class="anndata-section__count anndata-badge--error" style="color: {error_color};">(error)</span>
-    </div>
+    </summary>
     <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
         <div class="anndata-entry--error" style="color: {error_color}; padding: 4px 8px; font-size: 12px;">
             Failed to render: {error_escaped}
         </div>
     </div>
-</div>
+</details>
 """
 
 

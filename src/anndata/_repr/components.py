@@ -157,27 +157,6 @@ def render_search_box(container_id: str = "") -> str:
     )
 
 
-def render_fold_icon() -> str:
-    """
-    Render a fold/expand icon for section headers.
-
-    The icon is hidden by default and shown when JavaScript is enabled.
-    It rotates when the section is collapsed.
-
-    Returns
-    -------
-    HTML string for the fold icon
-
-    Example
-    -------
-    >>> parts = ['<div class="anndata-section__header">']
-    >>> parts.append(render_fold_icon())
-    >>> parts.append('<span class="anndata-section__name">images</span>')
-    >>> parts.append("</div>")
-    """
-    return f'<span class="anndata-section__fold" style="{STYLE_HIDDEN}">▼</span>'
-
-
 def render_copy_button(text: str, tooltip: str = "Copy") -> str:
     """
     Render a copy-to-clipboard button.

@@ -27,7 +27,6 @@ from .components import (
     render_entry_preview_cell,
     render_entry_row_open,
     render_entry_type_cell,
-    render_fold_icon,
     render_name_cell,
     render_nested_content_cell,
 )
@@ -117,9 +116,9 @@ def render_section(  # noqa: PLR0913
     if count_str is None:
         count_str = f"({n_items} items)"
 
+    open_attr = " open" if not should_collapse else ""
     parts = [
-        f'<div class="anndata-section" data-section="{escape_html(section_id)}" '
-        f'data-should-collapse="{str(should_collapse).lower()}">'
+        f'<details class="anndata-section" data-section="{escape_html(section_id)}"{open_attr}>'
     ]
 
     # Header
@@ -133,7 +132,7 @@ def render_section(  # noqa: PLR0913
         f'<table class="anndata-section__table" style="{STYLE_SECTION_TABLE}">'
     )
     parts.append(entries_html)
-    parts.append("</table></div></div>")
+    parts.append("</table></div></details>")
 
     return "\n".join(parts)
 
@@ -144,9 +143,8 @@ def _render_section_header(
     doc_url: str | None,
     tooltip: str,
 ) -> str:
-    """Render a section header - colors handled by CSS for dark mode support."""
-    parts = ['<div class="anndata-section__header">']
-    parts.append(render_fold_icon())
+    """Render a section header as <summary> - native disclosure triangle replaces fold icon."""
+    parts = ['<summary class="anndata-section__header">']
     parts.append(f'<span class="anndata-section__name">{escape_html(name)}</span>')
     parts.append(
         f'<span class="anndata-section__count">{escape_html(count_str)}</span>'
@@ -155,7 +153,7 @@ def _render_section_header(
         parts.append(
             f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
         )
-    parts.append("</div>")
+    parts.append("</summary>")
     return "\n".join(parts)
 
 
@@ -170,21 +168,17 @@ def render_empty_section(
     if doc_url:
         help_link = f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
 
-    # Use render_fold_icon() helper for consistency
-    fold_icon = render_fold_icon()
-
     return f"""
-<div class="anndata-section" data-section="{escape_html(name)}" data-should-collapse="true">
-    <div class="anndata-section__header">
-        {fold_icon}
+<details class="anndata-section" data-section="{escape_html(name)}">
+    <summary class="anndata-section__header">
         <span class="anndata-section__name">{escape_html(name)}</span>
         <span class="anndata-section__count">(empty)</span>
         {help_link}
-    </div>
+    </summary>
     <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
         <div class="anndata-section__empty">No entries</div>
     </div>
-</div>
+</details>
 """
 
 

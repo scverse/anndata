@@ -381,7 +381,6 @@ from .components import (  # noqa: E402
     TypeCellConfig,
     render_badge,
     render_copy_button,
-    render_fold_icon,
     render_header_badges,
     render_search_box,
     render_warning_icon,
@@ -460,7 +459,6 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "STYLE_HIDDEN",
     # UI component helpers
     "render_search_box",
-    "render_fold_icon",
     "render_copy_button",
     "render_badge",
     "render_header_badges",

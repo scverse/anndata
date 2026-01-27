@@ -853,7 +853,6 @@ class TestPublicAPIExports:
         from anndata._repr import (
             render_badge,
             render_copy_button,
-            render_fold_icon,
             render_header_badges,
             render_search_box,
             render_warning_icon,
@@ -861,7 +860,6 @@ class TestPublicAPIExports:
 
         assert callable(render_badge)
         assert callable(render_copy_button)
-        assert callable(render_fold_icon)
         assert callable(render_header_badges)
         assert callable(render_search_box)
         assert callable(render_warning_icon)

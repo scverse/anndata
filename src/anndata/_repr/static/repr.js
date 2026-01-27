@@ -6,9 +6,6 @@
 container.classList.add("anndata-repr--js");
 
 // Show interactive elements (hidden by default for no-JS graceful degradation)
-container.querySelectorAll(".anndata-section__fold").forEach((icon) => {
-    icon.style.display = "inline-flex";
-});
 container.querySelectorAll(".anndata-entry__copy").forEach((btn) => {
     btn.style.display = "inline-flex";
 });
@@ -23,56 +20,8 @@ container.querySelectorAll(".anndata-search__toggle").forEach((btn) => {
 });
 // Filter indicator is shown via CSS .active class, no need to set display here
 
-// Apply initial collapse state from data attributes
-container
-    .querySelectorAll('.anndata-section[data-should-collapse="true"]')
-    .forEach((section) => {
-        section.classList.add("anndata-section--collapsed");
-        const content = section.querySelector(".anndata-section__content");
-        if (content) {
-            content.style.maxHeight = "0";
-            content.style.overflow = "hidden";
-        }
-    });
-
-// Toggle section fold/unfold
-function toggleSection(header) {
-    const section = header.closest(".anndata-section");
-    if (!section) return;
-
-    const isCollapsed = section.classList.toggle("anndata-section--collapsed");
-    const content = section.querySelector(".anndata-section__content");
-    if (content) {
-        content.style.maxHeight = isCollapsed ? "0" : "";
-        content.style.overflow = isCollapsed ? "hidden" : "";
-        content.setAttribute("aria-hidden", isCollapsed);
-    }
-
-    // Rotate fold icon
-    const icon = section.querySelector(".anndata-section__fold");
-    if (icon) {
-        icon.style.transform = isCollapsed ? "rotate(-90deg)" : "";
-    }
-}
-
-// Attach click handlers to section headers
-container.querySelectorAll(".anndata-section__header").forEach((header) => {
-    header.addEventListener("click", (e) => {
-        // Don't toggle if clicking on help link
-        if (e.target.closest(".anndata-section__help")) return;
-        toggleSection(header);
-    });
-
-    // Keyboard accessibility
-    header.setAttribute("tabindex", "0");
-    header.setAttribute("role", "button");
-    header.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggleSection(header);
-        }
-    });
-});
+// Section collapse is handled natively by <details>/<summary> elements.
+// No JS needed for section toggle — the browser handles open/close state.
 
 // Search/filter functionality
 const searchBox = container.querySelector(".anndata-search__box");
@@ -181,11 +130,8 @@ function filterEntries(query) {
 
             // Expand parent sections to show match
             const section = entry.closest(".anndata-section");
-            if (
-                section &&
-                section.classList.contains("anndata-section--collapsed")
-            ) {
-                section.classList.remove("anndata-section--collapsed");
+            if (section && !section.open) {
+                section.open = true;
             }
 
             // Expand nested content if match is inside nested area
@@ -382,30 +328,6 @@ container.querySelectorAll(".anndata-entry__expand").forEach((btn) => {
         nestedRow.setAttribute("aria-hidden", !isExpanded);
     });
 });
-
-// Expand all / Collapse all (if buttons exist)
-const expandAllBtn = container.querySelector(".anndata-expand-all");
-const collapseAllBtn = container.querySelector(".anndata-collapse-all");
-
-if (expandAllBtn) {
-    expandAllBtn.addEventListener("click", () => {
-        container
-            .querySelectorAll(".anndata-sec.collapsed")
-            .forEach((section) => {
-                section.classList.remove("anndata-section--collapsed");
-            });
-    });
-}
-
-if (collapseAllBtn) {
-    collapseAllBtn.addEventListener("click", () => {
-        container
-            .querySelectorAll(".anndata-sec:not(.collapsed)")
-            .forEach((section) => {
-                section.classList.add("anndata-section--collapsed");
-            });
-    });
-}
 
 // Helper to check if element is overflowing
 function isOverflowing(el) {
