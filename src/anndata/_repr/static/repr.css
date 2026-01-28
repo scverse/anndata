@@ -1142,14 +1142,10 @@
     }
 }
 
-/* Dark mode variables - OS-level dark mode preference */
-@media (prefers-color-scheme: dark) {
-    .anndata-repr {
-        /* __DARK_MODE_VARS__ */
-    }
-}
-
-/* Dark mode - Jupyter/VS Code/Sphinx theme detection + manual dark mode class */
+/* Dark mode - Jupyter/VS Code/Sphinx theme detection + manual dark mode class.
+   We intentionally don't use @media (prefers-color-scheme: dark) because it
+   reflects the OS preference, which can contradict the app theme (e.g., OS dark
+   + Furo light toggle). The attribute selectors below match the actual app state. */
 [data-jp-theme-light="false"] .anndata-repr,
 .jp-Theme-Dark .anndata-repr,
 body.vscode-dark .anndata-repr,

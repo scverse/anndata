@@ -16,12 +16,10 @@ from __future__ import annotations
 from functools import lru_cache
 from importlib.resources import files
 
-# Dark mode CSS variables (shared by media query and theme detection selectors)
+# Dark mode CSS variables (shared by theme detection selectors)
 # These values are substituted into the CSS template at the /* __DARK_MODE_VARS__ */ placeholder.
 # Using a CSS comment as placeholder keeps the CSS valid for linters/formatters.
-# The same values are used in:
-# 1. @media (prefers-color-scheme: dark) - OS-level dark mode
-# 2. Theme detection selectors - Jupyter, VS Code, Sphinx (Furo/sphinx-book-theme), manual class
+# Used by theme detection selectors: Jupyter, VS Code, Sphinx (Furo/sphinx-book-theme), manual class
 _DARK_MODE_VARS = """--anndata-bg-primary: #1e1e1e;
     --anndata-bg-secondary: #252526;
     --anndata-bg-tertiary: #2d2d2d;
