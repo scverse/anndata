@@ -15,7 +15,7 @@ from testing.anndata._doctest import doctest_needs
 from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
-from ...compat import ZarrGroup, is_zarr_v2
+from ...compat import ZarrGroup
 from ...utils import warn
 from .. import read_dispatched
 
@@ -107,11 +107,9 @@ def read_lazy(
         import zarr
 
         if not isinstance(store, ZarrGroup):
-            # v3 returns a ValueError for consolidated metadata not found
-            err_cls = KeyError if is_zarr_v2() else ValueError
             try:
                 f = zarr.open_consolidated(store, mode="r")
-            except err_cls:
+            except ValueError:
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
                 warn(msg, UserWarning)
                 has_keys = False

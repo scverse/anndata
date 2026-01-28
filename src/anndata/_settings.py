@@ -13,7 +13,7 @@ from types import GenericAlias, NoneType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
 from ._warnings import warn
-from .compat import is_zarr_v2, old_positionals
+from .compat import old_positionals
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -455,9 +455,6 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
-    if format == 3 and is_zarr_v2():
-        msg = "Cannot write v3 format against v2 package"
-        raise ValueError(msg)
     if format == 2 and getattr(settings, "auto_shard_zarr_v3", False):
         msg = "Cannot set `zarr_write_format` to 2 with autosharding on.  Please set to `False` `anndata.settings.auto_shard_zarr_v3`"
         raise ValueError(msg)
@@ -465,13 +462,9 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
 
 def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
     validate_bool(auto_shard, settings)
-    if auto_shard:
-        if is_zarr_v2():
-            msg = "Cannot use sharding with `zarr-python<3`. Please upgrade package and set `anndata.settings.zarr_write_format` to 3."
-            raise ValueError(msg)
-        if settings.zarr_write_format == 2:
-            msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
-            raise ValueError(msg)
+    if auto_shard and settings.zarr_write_format == 2:
+        msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
+        raise ValueError(msg)
 
 
 settings.register(

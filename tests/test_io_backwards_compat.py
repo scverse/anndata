@@ -13,7 +13,6 @@ import zarr.storage
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ def read_archive(
         return ad.read_h5ad(path), path
     if format == "zarr":
         path = archive_dir / "adata.zarr.zip"
-        store = path if is_zarr_v2() else zarr.storage.ZipStore(path)
+        store = zarr.storage.ZipStore(path)
         return ad.read_zarr(store), path
     pytest.fail(f"Unknown format: {format}")
 

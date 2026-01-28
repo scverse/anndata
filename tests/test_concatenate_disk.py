@@ -14,7 +14,6 @@ import anndata as ad
 from anndata import AnnData, concat, settings
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
-from anndata.compat import is_zarr_v2
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
@@ -262,7 +261,6 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
     import zarr
 
@@ -270,10 +268,6 @@ def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
         assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
     g = zarr.open(tmp_path)
     assert g.metadata.zarr_format == 3
-
-    def visit(key: str, arr: zarr.Array | zarr.Group):
-        if isinstance(arr, zarr.Array) and arr.shape != ():
-            assert arr.shards is not None
 
     check_all_sharded(g)
 
