@@ -989,15 +989,16 @@ def test_jax_indexer(dtype: np.dtype):
 )
 @pytest.mark.array_api
 def test_index_into_jax(index):
-    adata = ad.AnnData(X=np.ones((10, 10)))
-    adata_as_jax = ad.AnnData(X=jnp.ones((10, 10)))
+    X = np.random.default_rng().random((10, 10))
+    adata = ad.AnnData(X=X)
+    adata_as_jax = ad.AnnData(X=jnp.array(X))
     assert_equal(adata[index], adata_as_jax[index])
 
 
 @pytest.mark.array_api
 def test_normalize_index_jax_boolean():
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
-    mask = jnp.array([True, False, True, False, True, False, True, False, True, False])
+    mask = jnp.array([True, False] * 5)
     out = _normalize_index(mask, index)
     assert out.shape == (10,)
     assert out.dtype == jnp.bool_
