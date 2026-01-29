@@ -8,6 +8,7 @@ from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
 
+import pandas as pd
 import scipy.sparse as sp
 from numpy.typing import NDArray
 from pandas.api.extensions import ExtensionArray
@@ -16,9 +17,8 @@ from anndata import AnnData
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
-    from typing import Any, Literal, Self, TypeIs
+    from typing import Any, Literal, Self, TypeGuard
 
-    import pandas as pd
     from numpy.typing import NDArray
 
     from anndata import AnnData
@@ -26,9 +26,8 @@ if TYPE_CHECKING:
     if TYPE_CHECKING:  # for sphinx
         from . import hv
 
-    type Axes = Collection[Literal["obs", "var"]]
 
-
+type Axes = Collection[Literal["obs", "var"]]
 type Array = ExtensionArray | NDArray[Any]
 
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
@@ -37,7 +36,10 @@ type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 E.g. `a[:, 5]`, `a[18, :]`, or `a[:, :]`
 """
 
-type Idx2DList = tuple[list[str], slice] | tuple[slice, list[str]]
+type Idx2DList = (
+    tuple[list[str] | pd.Index[str], slice] | tuple[slice, list[str] | pd.Index[str]]
+)
+type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
 type AdRefFunc[I] = Callable[[AnnData, I], Array]
 
 
@@ -254,9 +256,12 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     @overload
     def __getitem__[K: str | None](self, k: K, /) -> R: ...
     @overload
-    def __getitem__[K: str | None](self, k: list[K], /) -> list[R]: ...
-    def __getitem__[K: str | None](self, k: K | list[K], /) -> R | list[R]:
-        if isinstance(k, list):
+    def __getitem__[K: str | None](self, k: list[K] | pd.Index[str], /) -> list[R]: ...
+    def __getitem__[K: str | None](
+        self, k: K | list[K] | pd.Index[str], /
+    ) -> R | list[R]:
+        # _is_t_list doesn’t allow None, so be more liberal when checking for lists
+        if isinstance(k, list) or _is_t_list(k, str):
             return [self[i] for i in k]
 
         return super().__getitem__(k)
@@ -315,13 +320,13 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
-    def process_idx[T](i: T | tuple[slice, T], /) -> T:
+    def process_idx(i: object, /) -> int | list[int] | pd.Index[int]:
         if isinstance(i, tuple):
             if len(i) != 2 or i[0] != slice(None):
                 msg = f"Unsupported slice {i!r}"
                 raise ValueError(msg)
-            i = cast("T", i[1])
-        if not isinstance(i, list | int):
+            i = i[1]
+        if not isinstance(i, int) and not _is_t_list(i, int):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
@@ -329,12 +334,10 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     @overload
     def __getitem__(self, i: int | tuple[slice, int], /) -> R: ...
     @overload
-    def __getitem__(self, i: list[int] | tuple[slice, list[int]], /) -> list[R]: ...
-    def __getitem__(
-        self, i: int | list[int] | tuple[slice, int | list[int]], /
-    ) -> R | list[R]:
+    def __getitem__(self, i: IdxMultiList, /) -> list[R]: ...
+    def __getitem__(self, i: int | tuple[slice, int] | IdxMultiList, /) -> R | list[R]:
         i = self.process_idx(i)
-        if isinstance(i, list):
+        if isinstance(i, list | pd.Index):
             return [self[j] for j in i]
         return super().__getitem__(i)
 
@@ -571,23 +574,37 @@ A: AdAcc[AdRef] = AdAcc(ref_class=AdRef)
 r"""A global accessor to create :class:`AdRef`\ s."""
 
 
-def _is_idx2d_list(idx: Idx2D | Idx2DList) -> TypeIs[Idx2DList]:
+_checks: dict[type[int | str], Callable[..., bool]] = {
+    str: pd.api.types.is_string_dtype,
+    int: pd.api.types.is_integer_dtype,
+}
+
+
+def _is_t_list[T: (int, str)](
+    idx: object, cls: type[T], /
+) -> TypeGuard[list[T] | pd.Index[T]]:
+    if isinstance(idx, pd.Index) and _checks[cls](idx.dtype):
+        return True
+    return isinstance(idx, list | pd.Index) and all(isinstance(j, cls) for j in idx)
+
+
+def _is_idx2d_list(idx: Idx2D | Idx2DList) -> TypeGuard[Idx2DList]:
     """Check if a 2D index contains a list in one of its dimensions."""
-    return any(isinstance(i, list) for i in idx)
+    return any(_is_t_list(i, str) for i in idx)
 
 
-def _expand_idx2d_list(idx: Idx2D | Idx2DList) -> list[Idx2D]:
-    """Expand a 2D index containing a list in one of its dimensions.
+def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
+    """Expand a 2D index containing a string list or pandas index in one of its dimensions.
 
     Also validates that the 2D index contains at most one list.
     """
     match idx:
-        case list(), list():
-            msg = "2D index can have at most one list: …[:, [...]] or …[[...], :]"
+        case list() | pd.Index(), list() | pd.Index():
+            msg = "2D index can have at most one list/index: …[:, [...]] or …[[...], :]"
             raise TypeError(msg)
-        case list() as ixs, iy:
+        case list() | pd.Index() as ixs, iy:
             return [(ix, iy) for ix in ixs]
-        case ix, list() as iys:
+        case ix, list() | pd.Index() as iys:
             return [(ix, iy) for iy in iys]
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."

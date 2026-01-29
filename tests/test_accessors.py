@@ -205,46 +205,57 @@ def test_invalid(mk_path: Callable[[], AdRef]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("expr", "expanded"),
+    ("mk_expr", "expanded"),
     [
-        pytest.param(A.obs[["a", "b"]], [A.obs["a"], A.obs["b"]], id="obs"),
-        pytest.param(A.var[["x", "y"]], [A.var["x"], A.var["y"]], id="var"),
-        pytest.param(A[["a", "b"], :], [A["a", :], A["b", :]], id="x-obs"),
-        pytest.param(A[:, ["x", "y"]], [A[:, "x"], A[:, "y"]], id="x-var"),
+        pytest.param(lambda l: A.obs[l("a", "b")], [A.obs["a"], A.obs["b"]], id="obs"),
+        pytest.param(lambda l: A.var[l("x", "y")], [A.var["x"], A.var["y"]], id="var"),
+        pytest.param(lambda l: A[l("a", "b"), :], [A["a", :], A["b", :]], id="x-obs"),
+        pytest.param(lambda l: A[:, l("x", "y")], [A[:, "x"], A[:, "y"]], id="x-var"),
         pytest.param(
-            A.layers["l"][["a", "b"], :],
+            lambda l: A.layers["l"][l("a", "b"), :],
             [A.layers["l"]["a", :], A.layers["l"]["b", :]],
             id="layer-obs",
         ),
         pytest.param(
-            A.layers["l"][:, ["x", "y"]],
+            lambda l: A.layers["l"][:, l("x", "y")],
             [A.layers["l"][:, "x"], A.layers["l"][:, "y"]],
             id="layer-var",
         ),
         pytest.param(
-            A.varm["p"][[0, 1]],
+            lambda l: A.varm["p"][l(0, 1)],
             [A.varm["p"][:, 0], A.varm["p"][:, 1]],
             id="varm-int",
         ),
         pytest.param(
-            A.varm["p"][:, [3, 4]],
+            lambda l: A.varm["p"][:, l(3, 4)],
             [A.varm["p"][:, 3], A.varm["p"][:, 4]],
             id="varm-tuple",
         ),
         pytest.param(
-            A.obsp["p"][["a", "b"], :],
+            lambda l: A.obsp["p"][l("a", "b"), :],
             [A.obsp["p"]["a", :], A.obsp["p"]["b", :]],
             id="obsp-0",
         ),
         pytest.param(
-            A.obsp["p"][:, ["a", "b"]],
+            lambda l: A.obsp["p"][:, l("a", "b")],
             [A.obsp["p"][:, "a"], A.obsp["p"][:, "b"]],
             id="obsp-1",
         ),
     ],
 )
-def test_special(expr: object, expanded: object) -> None:
+@pytest.mark.parametrize(
+    "mk_list",
+    [
+        lambda *e: [*e],
+        lambda *e: pd.Index([*e], dtype=type(e[0])),
+    ],
+    ids=["list", "index"],
+)
+def test_special[C](
+    mk_expr: Callable[[C], list[AdRef]], mk_list: C, expanded: list[AdRef]
+) -> None:
     """Some paths have shortcuts for convenience."""
+    expr = mk_expr(mk_list)
     assert expr == expanded
 
 
