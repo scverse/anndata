@@ -11,6 +11,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
+from anndata.types import SupportsArrayApi
 
 from .._settings import settings
 from ..compat import (
@@ -455,14 +456,18 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(
-    old: Index1DNorm | IndexManager, new: Index1DNorm, l: Literal[0, 1]
+    old: Index1DNorm | IndexManager,
+    new: Index1DNorm,
+    l: Literal[0, 1],
 ) -> Index1DNorm | IndexManager:
+    msg = f"Unrecognized indexer of type {type(old)}"
+    raise TypeError(msg)
 
-    from ..compat import has_xp
 
-    if not has_xp(old):  # pragma: no cover
-        msg = f"Expected array-API–compatible array, got {type(old)}"
-        raise TypeError(msg)
+@_resolve_idx.register(SupportsArrayApi)
+def _resolve_idx_array_api(
+    old: SupportsArrayApi, new: Index1DNorm, l: Literal[0, 1]
+) -> SupportsArrayApi:
     xp = old.__array_namespace__()
 
     # handle slice indexing by converting to array indices

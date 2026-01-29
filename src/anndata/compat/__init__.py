@@ -19,12 +19,12 @@ from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
+from anndata.types import SupportsArrayApi
+
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    from typing import Any
-
-    from anndata.types import SupportsArrayApi
+    from typing import Any, TypeGuard
 
 
 #############################
@@ -108,8 +108,10 @@ class Empty(Enum):
     TOKEN = auto()
 
 
-Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
-_Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer] | IndexManager
+Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApi
+type _Index1DNorm = (  # noqa: PYI047
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApi | IndexManager
+)
 
 # TODO: pd.Index[???]
 Index1D = (
@@ -552,5 +554,5 @@ def _safe_transpose(x):
         return x.T
 
 
-def has_xp(x):
-    return hasattr(x, "__array_namespace__")
+def has_xp(x) -> TypeGuard[SupportsArrayApi]:
+    return isinstance(x, SupportsArrayApi)
