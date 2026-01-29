@@ -1004,7 +1004,7 @@ def test_normalize_index_jax_boolean():
 
 
 @pytest.mark.parametrize(
-    ("arg", "expected_dispatch"),
+    ("typ", "expected_dispatch"),
     [
         pytest.param(np.ndarray, _from_array, id="numpy"),
         pytest.param(list, _from_sequence, id="sequence"),
