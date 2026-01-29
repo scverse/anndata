@@ -178,7 +178,16 @@ class LayerMapAcc[R: AdRef]:
 
 @dataclass(frozen=True)
 class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
-    r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`)."""
+    r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`).
+
+    Examples
+    --------
+    >>> from anndata.acc import A, LayerAcc
+    >>> assert isinstance(A.layers["counts"], LayerAcc)
+    >>> A.layers["counts"]["cell-1", :]
+    A.layers['counts']['cell-1', :]
+
+    """
 
     k: str | None
     """Key this accessor refers to, e.g. `A.layers['counts'].k == 'counts'`."""
@@ -219,9 +228,10 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     You can refer to columns or the index in the way you would access them
     in a :class:`~pandas.DataFrame`:
 
-    >>> from anndata.acc import A
-    >>> A.obs["foo"]
-    A.obs['foo']
+    >>> from anndata.acc import A, MetaAcc
+    >>> assert isinstance(A.obs, MetaAcc)
+    >>> A.obs["type"]
+    A.obs['type']
     >>> A.var.index
     A.var.index
 
@@ -287,7 +297,16 @@ class MultiMapAcc[R: AdRef]:
 
 @dataclass(frozen=True)
 class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
-    r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
+    r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
+
+    Examples
+    --------
+    >>> from anndata.acc import A, MultiAcc
+    >>> assert isinstance(A.obsm["pca"], MultiAcc)
+    >>> A.obsm["pca"][:, 0]
+    A.obsm['pca'][:, 0]
+
+    """
 
     ax: Literal["obs", "var"]
     """Axis this accessor refers to, e.g. `A.obsm[k].ax == 'obs'`."""
@@ -354,7 +373,16 @@ class GraphMapAcc[R: AdRef]:
 
 @dataclass(frozen=True)
 class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
-    r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
+    r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
+
+    Examples
+    --------
+    >>> from anndata.acc import A, GraphAcc
+    >>> assert isinstance(A.obsp["distances"], GraphAcc)
+    >>> A.obsp["distances"][:, "cell-1"]
+    A.obsp['distances'][:, 'cell-1']
+
+    """
 
     ax: Literal["obs", "var"]
     """Axis this accessor refers to, e.g. `A.varp[k].axis == "var"`."""
