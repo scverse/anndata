@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial
 from importlib.metadata import version
+from importlib.util import find_spec
 from operator import mul
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,17 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
-from anndata._core.index import _normalize_index
+from anndata._core.index import (
+    _from_array,
+    _from_int,
+    _from_sequence,
+    _from_slice,
+    _from_sparse,
+    _from_str,
+    _from_xarray,
+    _gen_anndata_index,
+    _normalize_index,
+)
 from anndata._core.views import (
     ArrayView,
     SparseCSCArrayView,
@@ -24,7 +35,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CupyCSCMatrix, DaskArray
+from anndata.compat import CupyCSCMatrix, DaskArray, XDataArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -990,6 +1001,37 @@ def test_normalize_index_jax_boolean():
     out = _normalize_index(mask, index)
     assert out.shape == (10,)
     assert out.dtype == jnp.bool_
+
+
+@pytest.mark.parametrize(
+    ("arg", "expected_dispatch"),
+    [
+        pytest.param(np.ndarray, _from_array, id="numpy"),
+        pytest.param(list, _from_sequence, id="sequence"),
+        pytest.param(sparse.csc_matrix, _from_sparse, id="cs_matrix"),
+        pytest.param(sparse.csr_array, _from_sparse, id="cs_array"),
+        pytest.param(slice, _from_slice, id="slice"),
+        pytest.param(int, _from_int, id="int"),
+        pytest.param(np.int32, _from_int, id="np_int"),
+        pytest.param(str, _from_str, id="str"),
+        *(
+            [
+                pytest.param(
+                    jnp.ndarray, _from_array, id="jax", marks=pytest.mark.array_api
+                )
+            ]
+            if jnp is not None
+            else []
+        ),
+        *(
+            [pytest.param(XDataArray, _from_xarray, id="xarray")]
+            if find_spec("xarray") is not None
+            else []
+        ),
+    ],
+)
+def test_normalize_index_dispatch(typ, expected_dispatch):
+    assert _gen_anndata_index.dispatch(typ) is expected_dispatch
 
 
 @pytest.mark.array_api

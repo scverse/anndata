@@ -129,7 +129,7 @@ def _from_sparse(
 
 
 @_gen_anndata_index.register(Sequence)
-def _from_sequence_like(
+def _from_sequence(
     indexer: Sequence,
     index: pd.Index,
 ) -> SupportsArrayApi:
