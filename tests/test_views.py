@@ -1017,7 +1017,11 @@ def test_normalize_index_jax_boolean():
         *(
             [
                 pytest.param(
-                    jnp.ndarray, _from_array, id="jax", marks=pytest.mark.array_api
+                    # TODO: jax.Array (aliased to jnp.ndarray) actually is not the "implementation" since `type(jnp.array(np.array([1])))` gives `jaxlib._jax.ArrayImpl`
+                    type(jnp.array(np.array([1]))),
+                    _from_array,
+                    id="jax",
+                    marks=pytest.mark.array_api,
                 )
             ]
             if jnp is not None
