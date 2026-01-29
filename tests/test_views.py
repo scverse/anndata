@@ -965,26 +965,26 @@ def test_jax_indexer(dtype: np.dtype):
 @pytest.mark.parametrize(
     "index",
     [
-        np.array([0, 3, 6]),
-        slice(3),
-        Ellipsis,
-        (np.array([0, 3, 6]), np.array([1, 4, 7])),
-        (
-            np.array([([True] * 5) + ([False] * 5)]),
-            np.array([([True] * 5) + ([False] * 5)]),
+        pytest.param(np.array([0, 3, 6]), id="integer-array"),
+        pytest.param(slice(3), id="slice"),
+        pytest.param(Ellipsis, id="ellipsis"),
+        pytest.param(
+            (np.array([0, 3, 6]), np.array([1, 4, 7])), id="two-axis-integer-arrays"
         ),
-        (
-            np.array([0, 3, 6]),
-            np.array([([True] * 5) + ([False] * 5)]),
+        pytest.param(
+            (
+                np.array([([True] * 5) + ([False] * 5)]),
+                np.array([([True] * 5) + ([False] * 5)]),
+            ),
+            id="two-axis-boolean-arrays",
         ),
-    ],
-    ids=[
-        "integer-array",
-        "slice",
-        "ellipsis",
-        "two-axis-integer-arrays",
-        "two-axis-boolean-arrays",
-        "mixed-array-type",
+        pytest.param(
+            (
+                np.array([0, 3, 6]),
+                np.array([([True] * 5) + ([False] * 5)]),
+            ),
+            id="mixed-array-type",
+        ),
     ],
 )
 @pytest.mark.array_api

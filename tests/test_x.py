@@ -27,13 +27,14 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
-] + (
-    [
-        pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
-    ]
-    if jnp is not None
-    else []
-)
+    *(
+        [
+            pytest.param(jnp.asarray, id="jax", marks=pytest.mark.array_api),
+        ]
+        if jnp is not None
+        else []
+    ),
+]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
 ]
