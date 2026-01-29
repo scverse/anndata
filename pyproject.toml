@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
     "pandas >=2.2.2",
     "numpy>=2",
-    "scipy >=1.13",
+    "scipy >=1.13,!=1.17.0",
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
