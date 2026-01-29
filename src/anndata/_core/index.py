@@ -65,7 +65,7 @@ class _XrDtV(NamedTuple):
         ) or (
             isinstance(indexer, pd.api.extensions.ExtensionArray)
             and (
-                issubclass(indexer.dtype.type, XArrayDtype == self.type)
+                issubclass(indexer.dtype.type, self.type)
                 or indexer.dtype.kind == self.kind
             )
         )
