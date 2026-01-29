@@ -198,6 +198,18 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     store.assert_access_count("obs/.zgroup", 1)
 
 
+@pytest.mark.zarr_io
+def test_empty_df_warns(tmp_path: Path):
+    adata = AnnData(X=np.ones((10, 10)))
+    zarr_path = tmp_path / "orig.zarr"
+    adata.write_zarr(zarr_path)
+    with pytest.warns(
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
+    ):
+        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
+
+
 def test_h5_file_obj(tmp_path: Path):
     adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "adata.h5ad"
@@ -232,3 +244,32 @@ def test_chunks_df(
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks
+
+
+def test_nullable_string_index_decoding(tmp_path: Path):
+    """Test that nullable string indices are properly decoded from bytes.
+
+    HDF5 stores strings as bytes. When reading nullable-string-array indices,
+    they should be decoded to proper strings, not converted using str() which
+    would produce "b'...'" representations.
+
+    Regression test for https://github.com/scverse/anndata/issues/2271
+    """
+    expected_obs = ["cell_A", "cell_B", "cell_C", "cell_D", "cell_E"]
+    expected_var = ["gene_X", "gene_Y", "gene_Z"]
+
+    adata = AnnData(
+        np.zeros((len(expected_obs), len(expected_var))),
+        obs=dict(obs_names=expected_obs),
+        var=dict(var_names=expected_var),
+    )
+
+    path = tmp_path / "test.h5ad"
+    adata.write_h5ad(path)
+
+    lazy = read_lazy(path)
+    obs_names = list(lazy.obs_names)
+    var_names = list(lazy.var_names)
+
+    assert obs_names == expected_obs
+    assert var_names == expected_var

@@ -42,6 +42,7 @@ from ..utils import (
     deprecation_msg,
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
+    set_module,
     warn,
 )
 from .access import ElementRef
@@ -67,6 +68,7 @@ if TYPE_CHECKING:
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
+@set_module("anndata")
 class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     """\
     An annotated data matrix.
@@ -666,7 +668,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
+                        msg = "Cannot write to views of sparse backed files"
+                        raise NotImplementedError(msg)
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)

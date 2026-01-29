@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
     "pandas >=2.2.2",
     "numpy>=2",
-    "scipy >=1.13",
+    "scipy >=1.13,!=1.17.0",
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
@@ -59,20 +59,20 @@ dev = [
     { include-group = "dev-doc" },
 ]
 doc = [
-    "sphinx>=8.2.1,<9",                  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/586
+    "sphinx>=9.1.0",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=2.2.0",
+    "sphinx-autodoc-typehints>=3.6.2",
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
-    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.16",
+    "scanpydoc[theme,typehints] >=0.17.1",
     "awkward>=2.6.3",
-    "IPython",                           # For syntax highlighting in notebooks
-    "myst_parser",
-    "sphinx_design>=0.5.0",
+    "IPython",                             # For syntax highlighting in notebooks
+    "myst-parser",
+    "sphinx-design",
     "anndata[dask]",
+    "pandas>=3",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
@@ -96,11 +96,10 @@ test-min = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
-    "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.6.3",
     "pyarrow",
+    "pooch",
     "anndata[dask]",
 ]
 test-array-api = [
@@ -169,12 +168,11 @@ filterwarnings_when_strict = [
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
     "default:anndata will no longer support zarr v2:DeprecationWarning",
-    "default:The codec `vlen-utf8:UserWarning",
-    "default:The dtype `StringDType():UserWarning",
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
+    "default:Writing zarr v2:UserWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
@@ -260,7 +258,7 @@ max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,GroupT"
 
 [tool.towncrier]
 package = "anndata"

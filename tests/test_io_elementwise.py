@@ -448,6 +448,113 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.mark.parametrize(
+    ("num_minor_axis", "expected_dtype"),
+    [
+        pytest.param(1, np.dtype("uint8"), id="one_col-expected_uint8_on_disk"),
+        pytest.param(
+            np.iinfo(np.uint8).max,
+            np.dtype("uint8"),
+            id="max_np.uint8-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int8).max,
+            np.dtype("uint8"),
+            id="max_np.int8-uint8_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint16).max,
+            np.dtype("uint16"),
+            id="max_np.uint16-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int16).max,
+            np.dtype("uint16"),
+            id="max_np.int16-uint16_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint32).max,
+            np.dtype("uint32"),
+            id="max_np.uint32-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int32).max,
+            np.dtype("uint32"),
+            id="max_np.int32-uint32_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint8).max + 1,
+            np.dtype("uint16"),
+            id="max_np.uint8_plus_one_cols-expected_uint16_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint16).max + 1,
+            np.dtype("uint32"),
+            id="max_np.uint16_plus_one_cols-expected_uint32_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint32).max + 1,
+            np.dtype("uint64"),
+            id="max_np.uint32_plus_one_cols-expected_uint64_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int64).max + 1,
+            np.dtype("uint64"),
+            id="max_np.int64_plus_one_cols-expected_uint64_on_disk",
+            marks=pytest.mark.xfail(
+                reason="scipy sparse does not support bigger than max(int64) values in indices and there is no uint128."
+            ),
+        ),
+        pytest.param(
+            np.iinfo(np.uint64).max + 1,
+            np.dtype("uint64"),
+            id="max_np.uint64_plus_one_cols-expected_uint64_on_disk",
+            marks=pytest.mark.xfail(
+                reason="scipy sparse does not support bigger than max(int64) values in indices and there is no uint128."
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_write_indices_min(
+    store: H5Group | ZarrGroup,
+    num_minor_axis: int,
+    expected_dtype: np.dtype,
+    format: Literal["csr", "csc"],
+):
+    minor_axis_index = np.array([num_minor_axis - 1])
+    major_axis_index = np.array([10])
+    row_cols = (
+        (minor_axis_index, major_axis_index)
+        if format == "csc"
+        else (major_axis_index, minor_axis_index)
+    )
+    shape = (num_minor_axis, 20) if format == "csc" else (20, num_minor_axis)
+    X = getattr(sparse, f"{format}_array")(
+        (np.array([10]), row_cols),
+        shape=shape,
+    )
+    assert X.nnz == 1
+    with ad.settings.override(write_csr_csc_indices_with_min_possible_dtype=True):
+        write_elem(store, "X", X)
+
+    assert store["X/indices"].dtype == expected_dtype
+    with ad.settings.override(use_sparse_array_on_read=True):
+        result = read_elem(store["X"])
+    assert_equal(result.data, X.data)
+    assert_equal(result.indices, X.indices)
+    assert_equal(result.indptr, X.indptr)
+    assert X.format == result.format
+    assert result.shape == X.shape
+    # != comparison converts to csr, which allocates a lot of memory or errors out with:
+    # ValueError: array is too big; `arr.size * arr.dtype.itemsize` is larger than the maximum possible size.
+    # Because the old, very large, minor axis is now the major axis and so either it fails to create or the indptr is very big.
+    # The above tests should be enough to capture the desired equality checks so this is mostly for being extra sure.
+    # See https://github.com/scipy/scipy/issues/23826
+    if not (format == "csc" and num_minor_axis > np.iinfo(np.uint16).max + 1):
+        assert (result != X).nnz == 0
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()

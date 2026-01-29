@@ -204,7 +204,9 @@ def _normalize_index(
     return _gen_anndata_index(indexer, index)
 
 
-def _fix_slice_bounds(s: slice, length: int) -> slice:
+def _fix_slice_bounds[A: int, Z: int, S: int](
+    s: slice[A | None, Z | None, S | None], length: int
+) -> slice[A, Z, S]:
     """The slice will be clipped to length, and the step won't be None.
 
     E.g. infer None valued attributes.
@@ -219,6 +221,9 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
         # Reverse
         start = s.start if s.start is not None else length
         stop = s.stop if s.stop is not None else 0
+    else:
+        msg = "step must be non-zero"
+        raise AssertionError(msg)
 
     return slice(start, stop, step)
 

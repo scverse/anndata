@@ -60,7 +60,6 @@ extensions = [
     "scanpydoc",  # needs to be before linkcode
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
-    "sphinx_toolbox.more_autodoc.autoprotocol",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
@@ -87,14 +86,6 @@ napoleon_custom_sections = [("Params", "Parameters")]
 typehints_defaults = "braces"
 always_use_bars_union = True  # use `|`, not `Union` in types even when on Python ≤3.14
 todo_include_todos = False
-nitpicky = True  # Report broken links
-nitpick_ignore = [  # APIs without an intersphinx entry
-    # These APIs aren’t actually documented
-    ("py:class", "anndata._core.raw.Raw"),
-    ("py:class", "pandas._libs.missing.NAType"),
-    # TODO: remove zappy support; the zappy repo is archived
-    ("py:class", "anndata.compat.ZappyArray"),
-]
 
 
 def setup(app: Sphinx):
@@ -143,44 +134,45 @@ intersphinx_mapping = dict(
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
 )
 
+# Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
 qualname_overrides = {
-    "h5py._hl.group.Group": "h5py.Group",
-    "h5py._hl.files.File": "h5py.File",
-    "h5py._hl.dataset.Dataset": "h5py.Dataset",
-    "anndata._core.anndata.AnnData": "anndata.AnnData",
+    #### stdlib
+    "types.EllipsisType": ("py:data", "Ellipsis"),
+    #### anndata
     **{
         f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
         for cls in ["Layers", "AxisArrays", "PairwiseArrays"]
         for kind in ["", "View"]
     },
-    "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
-    "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
-    "anndata._types.Read": "anndata.experimental.Read",
-    "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
-    "zarr.core.array.Array": "zarr.Array",
-    "zarr.core.group.Group": "zarr.Group",
-    # Buffer is not yet exported, so the buffer class registry is the closest thing
-    "zarr.core.buffer.core.Buffer": "zarr.registry.Registry",
-    "zarr.storage._common.StorePath": "zarr.storage.StorePath",
-    "anndata.compat.DaskArray": "dask.array.Array",
-    "anndata.compat.CupyArray": "cupy.ndarray",
-    "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
-    "anndata.compat.XDataArray": "xarray.DataArray",
-    "anndata.compat.XDataset": "xarray.Dataset",
+    # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
+    "anndata.compat.Index": "anndata.typing.Index",
+    "anndata._types.StorageType": "anndata.experimental.StorageType",
+    # https://github.com/theislab/scanpydoc/issues/254
+    "anndata.typing.RWAble": "anndata.typing.RWAble",
+    "anndata.typing.AxisStorable": "anndata.typing.AxisStorable",
+    #### h5py
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
+    "h5py._hl.dataset.Dataset": "h5py.Dataset",
+    #### arrays
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
-    # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
-    "types.EllipsisType": ("py:data", "types.EllipsisType"),
-    "pathlib._local.Path": "pathlib.Path",
 }
-autodoc_type_aliases = dict(
-    NDArray=":data:`~numpy.typing.NDArray`",
-    AxisStorable=":data:`~anndata.typing.AxisStorable`",
-)
+# Sphinx consults this {alias → name} mapping when rendering types
+# sphinx-autodoc-typehints uses when importing types to resolve them
+autodoc_type_aliases = dict()
+# if nothing else helps, modify `nitpick_ignore`
+nitpicky = True  # Report broken links, this stays on
+nitpick_ignore = [  # APIs without an intersphinx entry
+    # These APIs aren’t actually documented
+    ("py:class", "anndata._core.raw.Raw"),
+    ("py:class", "pandas.api.typing.NAType"),
+    # TODO: remove zappy support; the zappy repo is archived
+    ("py:class", "anndata.compat.ZappyArray"),
+]
 
 # -- Social cards ---------------------------------------------------------
 

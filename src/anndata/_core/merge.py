@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
     from anndata._types import Join_T
 
-    from ..compat import XDataArray, XDataset
+    from ..compat import XDataArray
 
 
 ###################
@@ -1276,7 +1276,7 @@ def make_dask_col_from_extension_dtype(
 
 def make_xarray_extension_dtypes_dask(
     annotations: Iterable[Dataset2D], *, use_only_object_dtype: bool = False
-) -> Generator[XDataset, None, None]:
+) -> Generator[Dataset2D, None, None]:
     """
     Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
 
@@ -1718,6 +1718,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
                 alt_annotations, use_only_object_dtype=True
             )
         )
+        for a in annotations_with_only_dask:
+            if a.true_index_dim != a.index_dim:
+                a.index = a.true_index
         annotations_with_only_dask = [
             a.ds.rename({a.true_index_dim: "merge_index"})
             for a in annotations_with_only_dask
@@ -1725,7 +1728,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         alt_annot = Dataset2D(
             xr.merge(annotations_with_only_dask, join=join, compat="override")
         )
-        alt_annot.true_index_dim = "merge_index"
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
