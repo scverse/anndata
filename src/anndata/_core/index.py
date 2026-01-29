@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from enum import Enum
 from functools import singledispatch, wraps
 from itertools import repeat
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
 
 import h5py
 import numpy as np
@@ -45,34 +46,36 @@ def _normalize_indices(
     return ax0, ax1
 
 
-xarray_dtype_to_kind = {
-    "real floating": "f",
-    "signed integer": "i",
-    "unsigned integer": "u",
-    "bool": "b",
-}
-
-xarray_dtype_to_numpy_type = {
-    "real floating": np.floating,
-    "signed integer": np.signedinteger,
-    "unsigned integer": np.unsignedinteger,
-    "bool": np.bool,
-}
+ArrayApiDtype = Literal["real floating", "signed integer", "unsigned integer", "bool"]
+DtypeKind = Literal["f", "i", "u", "b"]
 
 
-def _is_numeric_type(
-    indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray, xp_type_str: str
-) -> bool:
-    return (
-        has_xp(indexer)
-        and indexer.__array_namespace__().isdtype(indexer.dtype, xp_type_str)
-    ) or (
-        isinstance(indexer, pd.api.extensions.ExtensionArray)
-        and (
-            issubclass(indexer.dtype.type, xarray_dtype_to_numpy_type[xp_type_str])
-            or indexer.dtype.kind == xarray_dtype_to_kind[xp_type_str]
+class _XrDtV(NamedTuple):
+    type: type[np.generic]
+    array_api_str: ArrayApiDtype
+    kind: DtypeKind
+
+    def is_numeric_type(
+        self,
+        indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+    ) -> bool:
+        return (
+            has_xp(indexer)
+            and indexer.__array_namespace__().isdtype(indexer.dtype, self.array_api_str)
+        ) or (
+            isinstance(indexer, pd.api.extensions.ExtensionArray)
+            and (
+                issubclass(indexer.dtype.type, XArrayDtype == self.type)
+                or indexer.dtype.kind == self.kind
+            )
         )
-    )
+
+
+class XArrayDtype(_XrDtV, Enum):
+    Float = _XrDtV(np.floating, "real floating", "f")
+    SignedInt = _XrDtV(np.signedinteger, "signed integer", "i")
+    UnsignedInt = _XrDtV(np.unsignedinteger, "unsigned integer", "u")
+    Bool = _XrDtV(np.bool, "bool", "b")
 
 
 @singledispatch
@@ -154,18 +157,18 @@ def _from_array(
     is_numpy_string = indexer.dtype == np.dtypes.StringDType()
     if not is_numpy_string or is_pandas:
         # if it is a float array or something along those lines, convert it to integers
-        if _is_numeric_type(indexer, "real floating"):
+        if XArrayDtype.Float.is_numeric_type(indexer):
             indexer_int = xp.astype(indexer, xp.int64)
             if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
             return indexer_int
-        if _is_numeric_type(indexer, "signed integer") or _is_numeric_type(
-            indexer, "unsigned integer"
-        ):
+        if XArrayDtype.SignedInt.is_numeric_type(
+            indexer
+        ) or XArrayDtype.UnsignedInt.is_numeric_type(indexer):
             # Might not work for range indexes
             return np.asarray(indexer) if is_pandas else indexer
-        if _is_numeric_type(indexer, "bool"):
+        if XArrayDtype.Bool.is_numeric_type(indexer):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -174,9 +177,6 @@ def _from_array(
                 )
                 raise IndexError(msg)
             return np.asarray(indexer) if is_pandas else indexer
-        if has_xp(indexer):
-            msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
-            raise ValueError(msg)
     positions = index.get_indexer(indexer)
     if xp.any(positions < 0):
         not_found = indexer[positions < 0]
