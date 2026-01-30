@@ -49,8 +49,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._types import ArrayStorageType, GroupStorageType
-    from ..compat import Index1DNorm
-    from .index import Index, Index1D
+    from ..typing import Index, Index1D, _Index1DNorm
 
 
 type DenseType = np.ndarray | CupyArray
@@ -668,6 +667,6 @@ def sparse_dataset(
 
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(
-    d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return d[subset_idx]

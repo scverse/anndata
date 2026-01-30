@@ -8,7 +8,8 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from .compat import CSArray, CSMatrix, Index
+    from .compat import CSArray, CSMatrix
+    from .typing import Index
 
 
 __all__ = ["CSCDataset", "CSRDataset"]

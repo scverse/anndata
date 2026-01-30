@@ -24,7 +24,8 @@ __pycache__/
 .ipynb_checkpoints
 
 # docs
-/docs/generated/
+/docs/generated/*
+!/docs/generated/anndata.typing.Index.rst
 /docs/_build/
 
 # IDEs

@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
     from anndata._types import ArrayStorageType, GroupStorageType
     from anndata.compat import CSArray, CSMatrix
-    from anndata.typing import AxisStorable, InMemoryArrayOrScalarType
+    from anndata.typing import AxisStorable, _InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
 
@@ -152,7 +152,7 @@ def _to_cpu_mem_wrapper(write_func):
 @_REGISTRY.register_read(H5Array, IOSpec("", ""))
 def read_basic(
     elem: H5File | H5Group | H5Array, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
+) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import h5ad
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
@@ -171,7 +171,7 @@ def read_basic(
 @_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
 def read_basic_zarr(
     elem: ZarrGroup | ZarrArray, *, _reader: Reader
-) -> dict[str, InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
+) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io import zarr
 
     msg = f"Element '{elem.name}' was written without encoding metadata."

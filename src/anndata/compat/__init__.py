@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from enum import Enum, auto
 from functools import partial, singledispatch
 from importlib.metadata import version
 from importlib.util import find_spec
-from types import EllipsisType
 from typing import TYPE_CHECKING, overload
 
 import h5py
@@ -14,7 +13,6 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 from legacy_api_wrap import legacy_api  # noqa: TID251
-from numpy.typing import NDArray
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
@@ -38,38 +36,6 @@ class Empty(Enum):
     TOKEN = auto()
 
 
-Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
-# TODO: pd.Index[???]
-Index1D = (
-    # 0D index
-    int
-    | str
-    | np.int64
-    # normalized 1D idex
-    | Index1DNorm
-    # different containers for mask, obs/varnames, or numerical index
-    | Sequence[int]
-    | Sequence[str]
-    | Sequence[bool]
-    | pd.Series  # bool, int, str
-    | pd.Index
-    | pd.api.extensions.ExtensionArray  # bool | int | str
-    | NDArray[np.str_]
-    | np.matrix  # bool
-    | CSMatrix  # bool
-    | CSArray  # bool
-)
-IndexRest = Index1D | EllipsisType
-type Index = (
-    IndexRest
-    | tuple[Index1D, IndexRest]
-    | tuple[IndexRest, Index1D]
-    | tuple[Index1D, Index1D, EllipsisType]
-    | tuple[EllipsisType, Index1D, Index1D]
-    | tuple[Index1D, EllipsisType, Index1D]
-    | CSMatrix
-    | CSArray
-)
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
