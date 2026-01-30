@@ -493,9 +493,7 @@ def _render_header(
         # Inline file path (full path, no truncation)
         if filename:
             parts.append(
-                f'<span class="anndata-header__filepath">'
-                f"{escape_html(filename)}"
-                f"</span>"
+                f'<span class="anndata-header__filepath">{escape_html(filename)}</span>'
             )
 
     if is_lazy_adata(adata):

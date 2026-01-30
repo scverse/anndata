@@ -123,12 +123,8 @@ def render_section(  # noqa: PLR0913
     parts.append(_render_section_header(name, count_str, doc_url, tooltip))
 
     # Content
-    parts.append(
-        '<div class="anndata-section__content">'
-    )
-    parts.append(
-        '<table class="anndata-section__table">'
-    )
+    parts.append('<div class="anndata-section__content">')
+    parts.append('<table class="anndata-section__table">')
     parts.append(entries_html)
     parts.append("</table></div></details>")
 

@@ -341,9 +341,7 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     )
     parts.append("</summary>")
 
-    parts.append(
-        '<div class="anndata-section__content">'
-    )
+    parts.append('<div class="anndata-section__content">')
     parts.append('<table class="anndata-section__table">')
 
     for attr_name, type_desc in unknown_sections:

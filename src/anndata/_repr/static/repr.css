@@ -1095,7 +1095,6 @@
         color: var(--anndata-error-color);
         font-weight: 500;
     }
-
 }
 
 /* Dark mode - Jupyter/VS Code/Sphinx theme detection + manual dark mode class.

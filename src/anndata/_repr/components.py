@@ -581,9 +581,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
 
     # Appended type_html (for custom inline rendering below the type)
     if type_html and append_type_html:
-        parts.append(
-            f'<div class="anndata-entry__custom">{type_html}</div>'
-        )
+        parts.append(f'<div class="anndata-entry__custom">{type_html}</div>')
 
     parts.append("</td>")
     return "".join(parts)
