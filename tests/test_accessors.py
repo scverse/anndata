@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import importlib
+import importlib.resources
+import json
 from collections.abc import Callable, Sequence
 from string import ascii_lowercase
 from typing import TYPE_CHECKING
 
+import jsonschema
 import numpy as np
 import pandas as pd
 import pytest
@@ -21,6 +25,9 @@ if TYPE_CHECKING:
 
 type AdRefExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
 type AdRefSer = Sequence[str | int | None]
+
+with importlib.resources.open_text("anndata.acc", "schema.json") as f:
+    SCHEMA = json.load(f)
 
 PATHS: list[tuple[AdRef, AdRefSer, AdRefExpected]] = [
     (A[:, :], ["layers", None, None, None], lambda ad: ad.X),
@@ -130,6 +137,10 @@ def test_serialization(
         assert A.from_json(ad_serialized) == ad_path
     else:
         assert A.to_json(ad_path) == ad_serialized
+
+
+def test_serialization_schema(ad_serialized: AdRefSer) -> None:
+    jsonschema.validate(ad_serialized, SCHEMA)
 
 
 @pytest.mark.parametrize(

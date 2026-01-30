@@ -92,6 +92,7 @@ test-min = [
     "pytest-mock",
     "pytest-xdist[psutil]",
     "filelock",
+    "jsonschema",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
