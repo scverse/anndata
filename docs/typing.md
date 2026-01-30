@@ -1,7 +1,7 @@
 # anndata.typing
 
 ```{eval-rst}
-.. currentmodule:: anndata.typing
+.. module:: anndata.typing
 
 .. autotype:: Index1D
 .. autotype:: Index
