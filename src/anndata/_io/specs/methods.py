@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
+from numcodecs import VLenUTF8
 from scipy import sparse
+from zarr.core.dtype import VariableLengthUTF8
 
 import anndata as ad
 from anndata import AnnData, Raw
@@ -592,9 +594,6 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    from numcodecs import VLenUTF8
-    from zarr.core.dtype import VariableLengthUTF8
-
     dataset_kwargs = dataset_kwargs.copy()
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     dtype = VariableLengthUTF8()
@@ -1296,8 +1295,6 @@ def write_scalar_zarr(
     # these args are ignored in v2: https://zarr.readthedocs.io/en/v2.18.4/api/hierarchy.html#zarr.hierarchy.Group.create_dataset
     # and error out in v3
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
-    from numcodecs import VLenUTF8
-    from zarr.core.dtype import VariableLengthUTF8
 
     match f.metadata.zarr_format, value:
         case 2, str():
