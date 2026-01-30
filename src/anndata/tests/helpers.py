@@ -50,8 +50,8 @@ if TYPE_CHECKING:
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
-    from .._types import ArrayStorageType
-    from ..compat import Index1D
+    from .._types import _ArrayStorageType
+    from ..typing import Index1D
 
     type _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
@@ -658,7 +658,11 @@ def assert_equal_cupy_sparse(
 @assert_equal.register(h5py.Dataset)
 @assert_equal.register(ZarrArray)
 def assert_equal_h5py_dataset(
-    a: ArrayStorageType, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: _ArrayStorageType,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)

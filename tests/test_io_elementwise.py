@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-    from anndata._types import GroupStorageType
+    from anndata._types import _GroupStorageType
     from anndata.compat import H5Group
 
 
@@ -220,7 +220,7 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
         # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
-def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
+def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     if callable(value):
         value = value()
 
@@ -652,7 +652,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
 @pytest.mark.parametrize("missing", [True, False], ids=["missing", "no_missing"])
 def test_write_nullable_string(
     *,
-    store: GroupStorageType,
+    store: _GroupStorageType,
     ad_setting: bool | None,
     pd_setting: bool,
     expected_missing: tuple[type[Exception], str] | str,
@@ -740,7 +740,7 @@ def test_override_specification():
         ),
     ],
 )
-def test_write_to_root(store: GroupStorageType, value):
+def test_write_to_root(store: _GroupStorageType, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
@@ -818,7 +818,7 @@ def test_dataframe_column_uniqueness(store):
     ],
 )
 def test_io_pd_cow(
-    *, exit_stack: ExitStack, store: GroupStorageType, copy_on_write: bool
+    *, exit_stack: ExitStack, store: _GroupStorageType, copy_on_write: bool
 ) -> None:
     """See <https://github.com/zarr-developers/numcodecs/issues/514>."""
     if not PANDAS_3:  # Setting copy_on_write always warns in pandas 3, and does nothing

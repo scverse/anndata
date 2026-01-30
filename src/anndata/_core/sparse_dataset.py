@@ -48,9 +48,8 @@ if TYPE_CHECKING:
     from types import ModuleType
     from typing import Any, Literal
 
-    from .._types import ArrayStorageType, GroupStorageType
-    from ..compat import Index1DNorm
-    from .index import Index, Index1D
+    from .._types import _ArrayStorageType, _GroupStorageType
+    from ..typing import Index, Index1D, _Index1DNorm
 
 
 type DenseType = np.ndarray | CupyArray
@@ -97,7 +96,7 @@ def slice_as_int(s: slice, l: int) -> int:
 
 
 @dataclass
-class BackedSparseMatrix[ArrayT: ArrayStorageType]:
+class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
     Mixin class for backed sparse matrices.
 
@@ -310,7 +309,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         )
 
 
-def _get_group_format(group: GroupStorageType) -> str:
+def _get_group_format(group: _GroupStorageType) -> str:
     if "h5sparse_format" in group.attrs:
         # TODO: Warn about an old format
         # If this is only just going to be public, I could insist it's not like this
@@ -331,7 +330,7 @@ def is_sparse_indexing_overridden(
     )
 
 
-class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorageType](
+class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStorageType](
     abc._AbstractCSDataset, ABC
 ):
     _group: GroupT
@@ -597,7 +596,7 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 def sparse_dataset(
-    group: GroupStorageType,
+    group: _GroupStorageType,
     *,
     should_cache_indptr: bool = True,
 ) -> abc.CSRDataset | abc.CSCDataset:
@@ -668,6 +667,6 @@ def sparse_dataset(
 
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(
-    d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return d[subset_idx]

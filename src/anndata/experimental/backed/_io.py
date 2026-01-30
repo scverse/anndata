@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,7 +15,7 @@ from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
 from ...compat import ZarrGroup
-from ...utils import warn
+from ...utils import get_literal_members, warn
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from anndata._types import Read, StorageType
 
 
-ANNDATA_ELEMS: tuple[AnnDataElem, ...] = typing.get_args(AnnDataElem.__value__)
+ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 
 @doctest_needs("xarray")

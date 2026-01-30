@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from itertools import product
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 import h5py
 import numpy as np
@@ -19,6 +19,7 @@ from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
+from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from anndata.abc import CSCDataset, CSRDataset
 
-    Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
+    type Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
 
 subset_func2 = subset_func
@@ -442,7 +443,7 @@ def width_idx_kinds(
 ) -> Generator[ParameterSet, None, None]:
     """Convert major (first) index into various identical kinds of indexing."""
     for (idx_maj_raw, idx_min, exp), maj_kind in product(
-        idxs, get_args(Kind.__value__)
+        idxs, get_literal_members(Kind)
     ):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
