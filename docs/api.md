@@ -263,12 +263,17 @@ Types used by the former:
    abc.CSCDataset
 ```
 
-.. these are types, not classes
+<!-- these are types, not classes, so don’t use the above template -->
 
 ```{eval-rst}
-.. autosummary::
-   :toctree: generated/
+.. toctree::
+   :hidden:
 
+   typing
+
+.. autosummary::
+
+   typing.Index1D
    typing.Index
    typing.AxisStorable
    typing.RWAble

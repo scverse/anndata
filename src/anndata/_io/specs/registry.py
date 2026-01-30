@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import DaskArray, ZarrGroup, _read_attr
 
 from ...utils import warn
 
@@ -19,11 +19,11 @@ if TYPE_CHECKING:
     from typing import Any
 
     from anndata._types import (
-        GroupStorageType,
         ReadCallback,
         StorageType,
         Write,
         WriteCallback,
+        _GroupStorageType,
         _WriteInternal,
     )
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -72,7 +72,7 @@ class IORegistryError(Exception):
 def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs) -> None:
+        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs) -> None:
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -334,7 +334,7 @@ class Writer:
     @report_write_key_on_error
     def write_elem(
         self,
-        store: GroupStorageType,
+        store: _GroupStorageType,
         k: str,
         elem: RWAble,
         *,
@@ -363,16 +363,14 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (is_zarr_group and is_zarr_v2()) or (
-            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
-        ):
+        if isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)
         is_consolidated = is_group_consolidated(store) if is_zarr_group else False
         if is_consolidated:
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
         if k == "/":
-            if isinstance(store, ZarrGroup) and not is_zarr_v2():
+            if isinstance(store, ZarrGroup):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())
@@ -490,7 +488,7 @@ def read_elem_lazy(
 
 
 def write_elem(
-    store: GroupStorageType,
+    store: _GroupStorageType,
     k: str,
     elem: RWAble,
     *,

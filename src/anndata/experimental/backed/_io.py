@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,8 +14,8 @@ from testing.anndata._doctest import doctest_needs
 from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
-from ...compat import ZarrGroup, is_zarr_v2
-from ...utils import warn
+from ...compat import ZarrGroup
+from ...utils import get_literal_members, warn
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from anndata._types import Read, StorageType
 
 
-ANNDATA_ELEMS: tuple[AnnDataElem, ...] = typing.get_args(AnnDataElem.__value__)
+ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 
 @doctest_needs("xarray")
@@ -107,11 +106,9 @@ def read_lazy(
         import zarr
 
         if not isinstance(store, ZarrGroup):
-            # v3 returns a ValueError for consolidated metadata not found
-            err_cls = KeyError if is_zarr_v2() else ValueError
             try:
                 f = zarr.open_consolidated(store, mode="r")
-            except err_cls:
+            except ValueError:
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
                 warn(msg, UserWarning)
                 has_keys = False

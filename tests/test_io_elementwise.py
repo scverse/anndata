@@ -22,7 +22,7 @@ import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-    from anndata._types import GroupStorageType
+    from anndata._types import _GroupStorageType
     from anndata.compat import H5Group
 
 
@@ -220,7 +220,7 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
         # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
-def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
+def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     if callable(value):
         value = value()
 
@@ -572,7 +572,7 @@ def test_write_anndata_to_root(store):
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(store, ZarrGroup):
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
@@ -652,7 +652,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
 @pytest.mark.parametrize("missing", [True, False], ids=["missing", "no_missing"])
 def test_write_nullable_string(
     *,
-    store: GroupStorageType,
+    store: _GroupStorageType,
     ad_setting: bool | None,
     pd_setting: bool,
     expected_missing: tuple[type[Exception], str] | str,
@@ -740,7 +740,7 @@ def test_override_specification():
         ),
     ],
 )
-def test_write_to_root(store: GroupStorageType, value):
+def test_write_to_root(store: _GroupStorageType, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
@@ -748,7 +748,7 @@ def test_write_to_root(store: GroupStorageType, value):
         value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup) and not is_zarr_v2():
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     result = read_elem(store)
 
@@ -818,7 +818,7 @@ def test_dataframe_column_uniqueness(store):
     ],
 )
 def test_io_pd_cow(
-    *, exit_stack: ExitStack, store: GroupStorageType, copy_on_write: bool
+    *, exit_stack: ExitStack, store: _GroupStorageType, copy_on_write: bool
 ) -> None:
     """See <https://github.com/zarr-developers/numcodecs/issues/514>."""
     if not PANDAS_3:  # Setting copy_on_write always warns in pandas 3, and does nothing
@@ -914,25 +914,15 @@ def test_h5_unchunked(
 
 @pytest.mark.zarr_io
 def test_write_auto_sharded(tmp_path: Path):
-    if is_zarr_v2():
-        with (
-            pytest.raises(
-                ValueError, match=r"Cannot use sharding with `zarr-python<3`."
-            ),
-            ad.settings.override(auto_shard_zarr_v3=True),
-        ):
-            pass
-    else:
-        path = tmp_path / "check.zarr"
-        adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-        with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-            adata.write_zarr(path)
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+        adata.write_zarr(path)
 
-        check_all_sharded(zarr.open(path))
+    check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_against_v2_format():
     with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
         with ad.settings.override(zarr_write_format=2):
@@ -941,7 +931,6 @@ def test_write_auto_sharded_against_v2_format():
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_cannot_set_v2_format_after_sharding():
     with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
         with ad.settings.override(zarr_write_format=3):
@@ -951,11 +940,10 @@ def test_write_auto_cannot_set_v2_format_after_sharding():
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
     X = sparse.random(
-        100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
+        100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
         ad.io.write_elem(z, "X_default", X)

@@ -198,7 +198,7 @@ def stores_for_concat(
     adatas_paths_var_indices_for_concatenation,
 ) -> list[AccessTrackingStore]:
     _, paths, _ = adatas_paths_var_indices_for_concatenation
-    return [AccessTrackingStore(path) for path in paths]
+    return [AccessTrackingStore(path, read_only=True) for path in paths]
 
 
 @pytest.fixture
@@ -215,7 +215,9 @@ def lazy_adatas_for_concat(
 def adata_remote_with_store_tall_skinny(
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> tuple[AnnData, AccessTrackingStore]:
-    store = AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+    store = AccessTrackingStore(
+        adata_remote_with_store_tall_skinny_path, read_only=True
+    )
     remote = read_lazy(store)
     return remote, store
 
@@ -224,7 +226,7 @@ def adata_remote_with_store_tall_skinny(
 def remote_store_tall_skinny(
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> AccessTrackingStore:
-    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path, read_only=True)
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from itertools import product
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 import h5py
 import numpy as np
@@ -15,10 +15,11 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
+from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from anndata.abc import CSCDataset, CSRDataset
 
-    Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
+    type Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
 
 subset_func2 = subset_func
@@ -385,7 +386,7 @@ def test_lazy_array_cache(
     a = sparse_format(sparse.random(10, 10))
     f = open_write_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
-    store = AccessTrackingStore(path)
+    store = AccessTrackingStore(path, read_only=True)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
     f = zarr.open_group(store, mode="r")
@@ -394,18 +395,11 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    # One hit for .zarray in zarr v2 and three for metadata in zarr v3:
+    # Three hits for metadata in zarr v3:
     # see https://github.com/zarr-developers/zarr-python/discussions/2760 for more info on the difference.
     # Then there is actual data access, 1 more when cached, 4 more otherwise.
-    match should_cache_indptr, is_zarr_v2():
-        case True, True:
-            assert store.get_access_count("X/indptr") == 2
-        case False, True:
-            assert store.get_access_count("X/indptr") == 5
-        case True, False:
-            assert store.get_access_count("X/indptr") == 4
-        case False, False:
-            assert store.get_access_count("X/indptr") == 7
+    c_expected = 4 if should_cache_indptr else 7
+    assert store.get_access_count("X/indptr") == c_expected
     for elem_not_indptr in elems - {"indptr"}:
         assert (
             sum(
@@ -449,7 +443,7 @@ def width_idx_kinds(
 ) -> Generator[ParameterSet, None, None]:
     """Convert major (first) index into various identical kinds of indexing."""
     for (idx_maj_raw, idx_min, exp), maj_kind in product(
-        idxs, get_args(Kind.__value__)
+        idxs, get_literal_members(Kind)
     ):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
@@ -515,16 +509,13 @@ def test_data_access(
     data = f["X/data"][...]
     del f["X/data"]
     # chunk one at a time to count properly
-    kwargs = {}
-    if not is_zarr_v2():
-        kwargs["zarr_format"] = f.metadata.zarr_format
     zarr.array(
         data,
         store=path / "X" / "data",
         chunks=(1,),
-        **kwargs,
+        zarr_format=f.metadata.zarr_format,
     )
-    store = AccessTrackingStore(path)
+    store = AccessTrackingStore(path, read_only=True)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store, mode="r")
     a_disk = AnnData(X=open_func(f["X"]))
@@ -533,7 +524,7 @@ def test_data_access(
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
-    if ad.settings.zarr_write_format == 2 and not is_zarr_v2():
+    if ad.settings.zarr_write_format == 2:
         exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
@@ -599,7 +590,7 @@ def test_wrong_formats(tmp_path: Path):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
-    if isinstance(f, ZarrGroup) and not is_zarr_v2():
+    if isinstance(f, ZarrGroup):
         data = np.random.random((100, 100))
         disk_dense = f.create_array("dense", shape=(100, 100), dtype=data.dtype)
         disk_dense[...] = data

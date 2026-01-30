@@ -41,7 +41,6 @@ from ..compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from .index import _fix_slice_bounds, _subset, unpack_index
 
@@ -49,9 +48,8 @@ if TYPE_CHECKING:
     from types import ModuleType
     from typing import Any, Literal
 
-    from .._types import ArrayStorageType, GroupStorageType
-    from ..compat import Index1DNorm
-    from .index import Index, Index1D
+    from .._types import _ArrayStorageType, _GroupStorageType
+    from ..typing import Index, Index1D, _Index1DNorm
 
 
 type DenseType = np.ndarray | CupyArray
@@ -98,7 +96,7 @@ def slice_as_int(s: slice, l: int) -> int:
 
 
 @dataclass
-class BackedSparseMatrix[ArrayT: ArrayStorageType]:
+class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
     Mixin class for backed sparse matrices.
 
@@ -146,21 +144,14 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         if isinstance(self.data, ZarrArray):
             import zarr
 
-            if is_zarr_v2():
-                sparse_group = zarr.open(
-                    store=self.data.store,
-                    mode="r",
-                    chunk_store=self.data.chunk_store,  # chunk_store is needed, not clear why
-                )[Path(self.data.path).parent]
-            else:
-                anndata_group = zarr.open_group(store=self.data.store, mode="r")
-                sparse_group = anndata_group[
-                    str(
-                        Path(str(self.data.store_path))
-                        .relative_to(str(anndata_group.store_path))
-                        .parent
-                    )
-                ]
+            anndata_group = zarr.open_group(store=self.data.store, mode="r")
+            sparse_group = anndata_group[
+                str(
+                    Path(str(self.data.store_path))
+                    .relative_to(str(anndata_group.store_path))
+                    .parent
+                )
+            ]
             return sparse_dataset(sparse_group).to_memory()
         msg = f"Unsupported array types {type(self.data)}"
         raise ValueError(msg)
@@ -318,7 +309,7 @@ class BackedSparseMatrix[ArrayT: ArrayStorageType]:
         )
 
 
-def _get_group_format(group: GroupStorageType) -> str:
+def _get_group_format(group: _GroupStorageType) -> str:
     if "h5sparse_format" in group.attrs:
         # TODO: Warn about an old format
         # If this is only just going to be public, I could insist it's not like this
@@ -339,7 +330,7 @@ def is_sparse_indexing_overridden(
     )
 
 
-class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorageType](
+class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStorageType](
     abc._AbstractCSDataset, ABC
 ):
     _group: GroupT
@@ -520,7 +511,7 @@ class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorage
         # see https://github.com/zarr-developers/zarr-python/discussions/2712 for why we need to read first
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+        if isinstance(sparse_matrix.data, ZarrArray):
             data[orig_data_size:] = append_data[...]
         else:
             data[orig_data_size:] = append_data
@@ -533,7 +524,7 @@ class BaseCompressedSparseDataset[GroupT: GroupStorageType, ArrayT: ArrayStorage
         )
 
         # indices
-        if isinstance(sparse_matrix.data, ZarrArray) and not is_zarr_v2():
+        if isinstance(sparse_matrix.data, ZarrArray):
             append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]
@@ -605,7 +596,7 @@ class _CSCDataset(BaseCompressedSparseDataset, abc.CSCDataset):
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
 def sparse_dataset(
-    group: GroupStorageType,
+    group: _GroupStorageType,
     *,
     should_cache_indptr: bool = True,
 ) -> abc.CSRDataset | abc.CSCDataset:
@@ -676,6 +667,6 @@ def sparse_dataset(
 
 @_subset.register(BaseCompressedSparseDataset)
 def subset_sparsedataset(
-    d, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return d[subset_idx]

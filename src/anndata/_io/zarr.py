@@ -10,7 +10,7 @@ from scipy import sparse
 from .._core.anndata import AnnData
 from .._settings import settings
 from .._warnings import OldFormatWarning
-from ..compat import _clean_uns, _from_fixed_length_strings, is_zarr_v2
+from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from ..utils import warn
 from .specs import read_elem
@@ -55,10 +55,7 @@ def write_zarr(
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-    if is_zarr_v2():
-        zarr.convenience.consolidate_metadata(f.store)
-    else:
-        zarr.consolidate_metadata(f.store)
+    zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
@@ -149,11 +146,7 @@ def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
     if "zarr_format" not in kwargs:
-        if settings.zarr_write_format == 2 or is_zarr_v2():
-            msg = "Writing zarr v2 data will no longer be the default in the next minor release. v3 data will be written by default. If you are explicitly setting this configuration, consider migrating to the zarr v3 file format."
-            warn(msg, UserWarning)
-        if not is_zarr_v2():
-            kwargs["zarr_format"] = settings.zarr_write_format
+        kwargs["zarr_format"] = settings.zarr_write_format
     return zarr.open_group(store, mode=mode, **kwargs)
 
 
@@ -161,8 +154,4 @@ def is_group_consolidated(group: zarr.Group) -> bool:
     if not isinstance(group, zarr.Group):
         msg = f"Expected zarr.Group, got {type(group)}"
         raise TypeError(msg)
-    if is_zarr_v2():
-        from zarr.storage import ConsolidatedMetadataStore
-
-        return isinstance(group.store, ConsolidatedMetadataStore)
     return group.metadata.consolidated_metadata is not None
