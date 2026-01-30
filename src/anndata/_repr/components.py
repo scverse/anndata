@@ -22,7 +22,6 @@ from .._repr_constants import (
     CSS_TEXT_MUTED,
     ENTRY_TABLE_COLSPAN,
     NOT_SERIALIZABLE_MSG,
-    STYLE_CAT_DOT,
     STYLE_HIDDEN,
 )
 from .utils import escape_html, sanitize_css_color
@@ -136,7 +135,7 @@ def render_search_box(container_id: str = "") -> str:
     >>> container_id = "spatialdata-123"
     >>> parts = ['<div class="anndata-header">']
     >>> parts.append('<span class="anndata-header__type">SpatialData</span>')
-    >>> parts.append('<span style="flex-grow:1;"></span>')  # Spacer
+    >>> parts.append('<span class="anndata-spacer"></span>')  # Spacer
     >>> parts.append(render_search_box(container_id))
     >>> parts.append("</div>")
     """
@@ -424,7 +423,7 @@ def render_category_list(
             safe_color = sanitize_css_color(str(color))
             if safe_color:
                 parts.append(
-                    f'<span style="{STYLE_CAT_DOT}background:{safe_color};"></span>'
+                    f'<span class="anndata-categories__dot" style="background:{safe_color};"></span>'
                 )
             # Skip color dot if color is invalid/unsafe
         parts.append(f"<span>{cat_name}</span>")
@@ -583,7 +582,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     # Appended type_html (for custom inline rendering below the type)
     if type_html and append_type_html:
         parts.append(
-            f'<div class="anndata-entry__custom" style="margin-top:4px;">{type_html}</div>'
+            f'<div class="anndata-entry__custom">{type_html}</div>'
         )
 
     parts.append("</td>")

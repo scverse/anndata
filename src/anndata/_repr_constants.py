@@ -36,11 +36,9 @@ COPY_BUTTON_PADDING_PX = 30  # Extra space for copy button and cell padding
 MIN_FIELD_WIDTH_PX = 80  # Minimum column width to avoid cramped display
 DEFAULT_FIELD_WIDTH_PX = 100  # Default when no field names exist
 
-# Inline styles for graceful degradation (hidden until JS enables)
+# Inline style for graceful degradation (hidden until JS enables).
+# JS sets different display values per element, so this must stay inline.
 STYLE_HIDDEN = "display:none;"
-STYLE_SECTION_CONTENT = "padding:0;"
-STYLE_SECTION_TABLE = "width:100%;border-collapse:collapse;"
-STYLE_CAT_DOT = "width:8px;height:8px;border-radius:50%;display:inline-block;"
 
 # Warning messages
 NOT_SERIALIZABLE_MSG = "Not serializable to H5AD/Zarr"

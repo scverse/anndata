@@ -492,12 +492,8 @@ def _render_header(
         parts.append(render_badge(f"{format_str} ({status})", CSS_BADGE_BACKED))
         # Inline file path (full path, no truncation)
         if filename:
-            path_style = (
-                "font-family:ui-monospace,monospace;font-size:11px;"
-                "color:var(--anndata-text-secondary, #6c757d);"
-            )
             parts.append(
-                f'<span class="anndata-header__filepath" style="{path_style}">'
+                f'<span class="anndata-header__filepath">'
                 f"{escape_html(filename)}"
                 f"</span>"
             )
@@ -561,7 +557,7 @@ def _render_header(
 
     # Search box on the right (spacer pushes it right) - use render_search_box() helper
     if show_search:
-        parts.append('<span style="flex-grow:1;"></span>')
+        parts.append('<span class="anndata-spacer"></span>')
         parts.append(render_search_box(container_id))
 
     parts.append("</div>")

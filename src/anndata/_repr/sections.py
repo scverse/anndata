@@ -31,8 +31,6 @@ from .._repr_constants import (
     CSS_DTYPE_UNKNOWN,
     ERROR_TRUNCATE_LENGTH,
     INTERNAL_ANNDATA_ATTRS,
-    STYLE_SECTION_CONTENT,
-    STYLE_SECTION_TABLE,
 )
 from . import (
     get_section_doc_url,
@@ -344,9 +342,9 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     parts.append("</summary>")
 
     parts.append(
-        f'<div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">'
+        '<div class="anndata-section__content">'
     )
-    parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
+    parts.append('<table class="anndata-section__table">')
 
     for attr_name, type_desc in unknown_sections:
         parts.append(render_entry_row_open(attr_name, type_desc))
@@ -373,16 +371,14 @@ def _render_error_entry(section: str, error: str) -> str:
     if len(error_str) > ERROR_TRUNCATE_LENGTH:
         error_str = error_str[:ERROR_TRUNCATE_LENGTH] + "..."
     error_escaped = escape_html(error_str)
-    # Use --anndata-error-color CSS variable (defined in css.py) with fallback
-    error_color = "var(--anndata-error-color, #dc3545)"
     return f"""
 <details class="anndata-section anndata-sec-error" data-section="{escape_html(section)}" open>
     <summary>
         <span class="anndata-section__name">{escape_html(section)}</span>
-        <span class="anndata-section__count anndata-badge--error" style="color: {error_color};">(error)</span>
+        <span class="anndata-section__count anndata-badge--error">(error)</span>
     </summary>
-    <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
-        <div class="anndata-entry--error" style="color: {error_color}; padding: 4px 8px; font-size: 12px;">
+    <div class="anndata-section__content">
+        <div class="anndata-entry--error">
             Failed to render: {error_escaped}
         </div>
     </div>
@@ -478,7 +474,7 @@ def _render_raw_section(
 
     # Single row container (like a minimal section with just one entry)
     parts = ['<div class="anndata-sec anndata-sec-raw" data-section="raw">']
-    parts.append(f'<table style="{STYLE_SECTION_TABLE}">')
+    parts.append('<table class="anndata-section__table">')
 
     # Single row with raw info and expand button
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"

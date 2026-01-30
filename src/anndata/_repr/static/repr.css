@@ -14,7 +14,6 @@
     --anndata-border-color: #dee2e6;
     --anndata-border-light: #e9ecef;
     --anndata-accent-color: #0d6efd;
-    --anndata-accent-hover: #0b5ed7;
     --anndata-warning-color: #ffc107;
     --anndata-warning-bg: #fff3cd;
     --anndata-error-color: #dc3545;
@@ -23,7 +22,6 @@
     --anndata-info-color: #0dcaf0;
     --anndata-link-color: #0d6efd;
     --anndata-code-bg: #f8f9fa;
-    --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     --anndata-radius: 4px;
     --anndata-font-mono:
         ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -389,12 +387,6 @@
 
     /* --- Search box --- */
 
-    .anndata-search {
-        padding: 8px 12px;
-        background: var(--anndata-bg-primary);
-        border-bottom: 1px solid var(--anndata-border-light);
-    }
-
     .anndata-search__box {
         display: inline-flex;
         align-items: center;
@@ -482,28 +474,7 @@
         }
     }
 
-    /* --- Metadata footer bar --- */
-
-    .anndata-footer__meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 6px 12px;
-        font-size: 11px;
-        color: var(--anndata-text-secondary);
-        background: var(--anndata-bg-tertiary);
-        border-bottom: 1px solid var(--anndata-border-light);
-
-        span {
-            white-space: nowrap;
-        }
-    }
-
     /* --- Sections --- */
-
-    .anndata-sections {
-        padding: 0;
-    }
 
     .anndata-section {
         border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
@@ -700,11 +671,6 @@
         white-space: normal;
         word-break: break-word;
         /* Takes remaining space */
-
-        &.anndata-entry__preview--expanded {
-            white-space: normal;
-            overflow: visible;
-        }
     }
 
     /* Copy button */
@@ -1054,30 +1020,6 @@
         }
     }
 
-    .anndata-x {
-        padding: 8px 12px;
-        background: var(--anndata-bg-secondary);
-        border-bottom: 1px solid var(--anndata-border-light);
-    }
-
-    .anndata-x__info {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 4px 12px;
-        font-size: 12px;
-
-        dt {
-            color: var(--anndata-text-secondary);
-            font-weight: 500;
-        }
-
-        dd {
-            margin: 0;
-            font-family: var(--anndata-font-mono);
-            color: var(--anndata-text-primary);
-        }
-    }
-
     /* --- Depth limit --- */
 
     .anndata-depth-limit {
@@ -1087,6 +1029,47 @@
         background: var(--anndata-bg-tertiary);
         border-radius: var(--anndata-radius);
         text-align: center;
+    }
+
+    /* --- Header filepath --- */
+
+    .anndata-header__filepath {
+        font-family: var(--anndata-font-mono);
+        font-size: 11px;
+        color: var(--anndata-text-secondary, #6c757d);
+    }
+
+    /* --- Spacer (flex-grow pushes siblings apart) --- */
+
+    .anndata-spacer {
+        flex-grow: 1;
+    }
+
+    /* --- Category dot (color indicator) --- */
+
+    .anndata-categories__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    /* --- Custom type content --- */
+
+    .anndata-entry__custom {
+        margin-top: 4px;
+    }
+
+    /* --- Error entry --- */
+
+    .anndata-entry--error {
+        color: var(--anndata-error-color, #dc3545);
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+
+    .anndata-badge--error {
+        color: var(--anndata-error-color, #dc3545);
     }
 
     /* --- Footer --- */
@@ -1113,33 +1096,6 @@
         font-weight: 500;
     }
 
-    .anndata-text--warning {
-        color: var(--anndata-warning-color);
-        font-weight: 500;
-    }
-
-    /* --- Tooltip --- */
-
-    [data-tooltip] {
-        position: relative;
-
-        &:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 4px 8px;
-            font-size: 11px;
-            font-weight: normal;
-            color: white;
-            background: #333;
-            border-radius: var(--anndata-radius);
-            white-space: nowrap;
-            z-index: 1000;
-            pointer-events: none;
-        }
-    }
 }
 
 /* Dark mode - Jupyter/VS Code/Sphinx theme detection + manual dark mode class.
@@ -1163,7 +1119,6 @@ body.dark-mode .anndata-repr {
     --anndata-border-color: #404040;
     --anndata-border-light: #333333;
     --anndata-accent-color: #58a6ff;
-    --anndata-accent-hover: #79b8ff;
     --anndata-warning-color: #d29922;
     --anndata-warning-bg: #3d3200;
     --anndata-error-color: #f85149;
@@ -1172,7 +1127,6 @@ body.dark-mode .anndata-repr {
     --anndata-info-color: #58a6ff;
     --anndata-link-color: #58a6ff;
     --anndata-code-bg: #2d2d2d;
-    --anndata-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     /* Dtype colors - Dark mode */
     --anndata-dtype-category: #d2a8ff;
     --anndata-dtype-int: #79c0ff;

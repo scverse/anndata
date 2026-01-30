@@ -19,8 +19,6 @@ from .._repr_constants import (
     CSS_TEXT_ERROR,
     CSS_TEXT_MUTED,
     ENTRY_TABLE_COLSPAN,
-    STYLE_SECTION_CONTENT,
-    STYLE_SECTION_TABLE,
 )
 from .components import (
     TypeCellConfig,
@@ -126,10 +124,10 @@ def render_section(  # noqa: PLR0913
 
     # Content
     parts.append(
-        f'<div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">'
+        '<div class="anndata-section__content">'
     )
     parts.append(
-        f'<table class="anndata-section__table" style="{STYLE_SECTION_TABLE}">'
+        '<table class="anndata-section__table">'
     )
     parts.append(entries_html)
     parts.append("</table></div></details>")
@@ -175,7 +173,7 @@ def render_empty_section(
         <span class="anndata-section__count">(empty)</span>
         {help_link}
     </summary>
-    <div class="anndata-section__content" style="{STYLE_SECTION_CONTENT}">
+    <div class="anndata-section__content">
         <div class="anndata-section__empty">No entries</div>
     </div>
 </details>
