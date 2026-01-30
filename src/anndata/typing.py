@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from types import EllipsisType
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -23,10 +24,14 @@ from .compat import (
     ZarrArray,
 )
 
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
+
 __all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
 
 
-_Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
+_Index1DNorm: TypeAlias = slice | NDArray[np.bool_] | NDArray[np.integer]  # noqa: UP040
 # TODO: pd.Index[???]
 type Index1D = (
     # 0D index
@@ -61,7 +66,7 @@ type Index = (
 )
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
 
-_XDataType = (
+_XDataType: TypeAlias = (  # noqa: UP040
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
@@ -75,8 +80,10 @@ _XDataType = (
     | CupyArray
     | CupySparseMatrix
 )
-_ArrayDataStructureTypes = _XDataType | AwkArray | XDataArray
-_InMemoryArrayOrScalarType = pd.DataFrame | np.number | str | _ArrayDataStructureTypes
+_ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
+_InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
+    pd.DataFrame | np.number | str | _ArrayDataStructureTypes
+)
 type AxisStorable = (
     _InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]
 )

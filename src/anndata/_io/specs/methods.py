@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from numpy import typing as npt
     from numpy.typing import NDArray
 
-    from anndata._types import ArrayStorageType, GroupStorageType
+    from anndata._types import _ArrayStorageType, _GroupStorageType
     from anndata.compat import CSArray, CSMatrix
     from anndata.typing import AxisStorable, _InMemoryArrayOrScalarType
 
@@ -278,7 +278,7 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
 def write_anndata(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     adata: AnnData,
     *,
@@ -305,7 +305,7 @@ def write_anndata(
 @_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
-def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> AnnData:
+def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnData:
     d = {}
     for k in [
         "X",
@@ -327,7 +327,7 @@ def read_anndata(elem: GroupStorageType | H5File, *, _reader: Reader) -> AnnData
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
 def write_raw(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     raw: Raw,
     *,
@@ -373,14 +373,16 @@ def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(elem: GroupStorageType, *, _reader: Reader) -> dict[str, AxisStorable]:
+def read_mapping(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> dict[str, AxisStorable]:
     return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
 def write_mapping(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     v: dict[str, AxisStorable],
     *,
@@ -400,7 +402,7 @@ def write_mapping(
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
 def write_list(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     elem: list[AxisStorable],
     *,
@@ -422,7 +424,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
 @zero_dim_array_as_scalar
 def write_basic(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | ZarrArray,
     *,
@@ -446,7 +448,7 @@ def write_basic(
 
 
 def _iter_chunks_for_copy(
-    elem: ArrayStorageType, dest: ArrayStorageType
+    elem: _ArrayStorageType, dest: _ArrayStorageType
 ) -> Iterator[slice | tuple[list[slice]]]:
     """
     Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
@@ -471,7 +473,7 @@ def _iter_chunks_for_copy(
 def write_chunked_dense_array_to_group(
     f: H5Group,
     k: str,
-    elem: ArrayStorageType,
+    elem: _ArrayStorageType,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -527,7 +529,7 @@ def write_basic_dask_dask_dense(
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-def read_array(elem: ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
+def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
     return elem[()]
 
 
@@ -630,7 +632,9 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 
 @_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
-def read_recarray(d: ArrayStorageType, *, _reader: Reader) -> np.recarray | npt.NDArray:
+def read_recarray(
+    d: _ArrayStorageType, *, _reader: Reader
+) -> np.recarray | npt.NDArray:
     value = d[()]
     value = _decode_structured_array(
         _from_fixed_length_strings(value), dtype=value.dtype
@@ -679,7 +683,7 @@ def write_recarray_zarr(
 
 
 def write_sparse_compressed(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     key: str,
     value: CSMatrix | CSArray,
     *,
@@ -770,7 +774,7 @@ for store_type, (cls, spec, func) in product(
 @_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
 def write_sparse_dataset(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     elem: _CSCDataset | _CSRDataset,
     *,
@@ -797,7 +801,7 @@ def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
 
 
 def write_dask_sparse(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     elem: DaskArray,
     *,
@@ -870,7 +874,7 @@ for array_type, group_type in product(
 @_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse(elem: GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
+def read_sparse(elem: _GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
     return sparse_dataset(elem).to_memory()
 
 
@@ -896,7 +900,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
     ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
 def write_awkward(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     v: views.AwkwardArrayView | AwkArray,
     *,
@@ -919,7 +923,7 @@ def write_awkward(
 
 @_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
-def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
+def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
     from anndata.compat import awkward as ak
 
     form = _read_attr(elem.attrs, "form")
@@ -939,7 +943,7 @@ def read_awkward(elem: GroupStorageType, *, _reader: Reader) -> AwkArray:
 @_REGISTRY.register_write(ZarrGroup, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
 def write_dataframe(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     key: str,
     df: views.DataFrameView | pd.DataFrame,
     *,
@@ -989,7 +993,7 @@ def write_dataframe(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-def read_dataframe(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
+def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -1030,7 +1034,7 @@ def read_dataframe_partial(
 
 @_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
-def read_dataframe_0_1_0(elem: GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
+def read_dataframe_0_1_0(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     columns = _read_attr(elem.attrs, "column-order")
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
@@ -1080,7 +1084,7 @@ def read_partial_dataframe_0_1_0(
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
 def write_categorical(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     v: pd.Categorical,
     *,
@@ -1101,7 +1105,7 @@ def write_categorical(
 
 @_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
-def read_categorical(elem: GroupStorageType, *, _reader: Reader) -> pd.Categorical:
+def read_categorical(elem: _GroupStorageType, *, _reader: Reader) -> pd.Categorical:
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
         categories=_reader.read_elem(elem["categories"]),
@@ -1137,7 +1141,7 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 def write_nullable(
-    f: GroupStorageType,
+    f: _GroupStorageType,
     k: str,
     v: pd.arrays.IntegerArray
     | pd.arrays.BooleanArray
@@ -1201,7 +1205,7 @@ for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_
 
 
 def _read_nullable(
-    elem: GroupStorageType,
+    elem: _GroupStorageType,
     *,
     _reader: Reader,
     # BaseMaskedArray
@@ -1233,7 +1237,7 @@ _REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
 @_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
 @_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
 def _read_nullable_string(
-    elem: GroupStorageType, *, _reader: Reader
+    elem: _GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
@@ -1262,7 +1266,7 @@ def _read_nullable_string(
 
 @_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
-def read_scalar(elem: ArrayStorageType, *, _reader: Reader) -> np.number:
+def read_scalar(elem: _ArrayStorageType, *, _reader: Reader) -> np.number:
     # TODO: `item` ensures the return is in fact a scalar (needed after zarr v3 which now returns a 1 elem array)
     # https://github.com/zarr-developers/zarr-python/issues/2713
     return elem[()].item()

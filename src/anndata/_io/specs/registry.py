@@ -19,11 +19,11 @@ if TYPE_CHECKING:
     from typing import Any
 
     from anndata._types import (
-        GroupStorageType,
         ReadCallback,
         StorageType,
         Write,
         WriteCallback,
+        _GroupStorageType,
         _WriteInternal,
     )
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -72,7 +72,7 @@ class IORegistryError(Exception):
 def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs) -> None:
+        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs) -> None:
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -334,7 +334,7 @@ class Writer:
     @report_write_key_on_error
     def write_elem(
         self,
-        store: GroupStorageType,
+        store: _GroupStorageType,
         k: str,
         elem: RWAble,
         *,
@@ -488,7 +488,7 @@ def read_elem_lazy(
 
 
 def write_elem(
-    store: GroupStorageType,
+    store: _GroupStorageType,
     k: str,
     elem: RWAble,
     *,
