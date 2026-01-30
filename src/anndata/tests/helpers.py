@@ -19,6 +19,7 @@ import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
+from zarr.storage import LocalStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -38,7 +39,6 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
-    is_zarr_v2,
 )
 from anndata.utils import asarray
 
@@ -1120,28 +1120,31 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if is_zarr_v2():
-    from zarr.storage import DirectoryStore as LocalStore
-else:
-    from zarr.storage import LocalStore
 
-
-class AccessTrackingStoreBase(LocalStore):
+class AccessTrackingStore(LocalStore):
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        # Needed for zarr v3 to prevent a read-only copy being made
-        # https://github.com/zarr-developers/zarr-python/pull/3156
-        if not is_zarr_v2() and "read_only" not in kwargs:
-            kwargs["read_only"] = True
+        import traceback
+
+        traceback.print_stack()
+        print(kwargs)
         super().__init__(*args, **kwargs)
+        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-        self._read_only = True
+    async def get(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> object:
+        self._check_and_track_key(key)
+        return await super().get(key, prototype=prototype, byte_range=byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1186,29 +1189,6 @@ class AccessTrackingStoreBase(LocalStore):
         assert self.get_access_count(key) == count, (
             f"Found {access_count} accesses at {keys_accessed}"
         )
-
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs, read_only=True)
-
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
