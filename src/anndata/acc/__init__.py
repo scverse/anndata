@@ -513,13 +513,18 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         object.__setattr__(self, "varp", GraphMapAcc("var", ref_class=self.ref_class))
 
     def to_json(self, ref: R) -> list[str | int | None]:
-        """Serialize :class:`AdRef` to a JSON-compatible list."""
+        """Serialize :class:`AdRef` to a JSON-compatible list.
+
+        Schema: `acc-schema.json <../acc-schema.json>`_
+        """
         from ._parse_json import to_json
 
         return to_json(ref)
 
     def from_json(self, data: Sequence[str | int | None]) -> R:
         """Create :class:`AdRef` from a JSON sequence.
+
+        Schema: `acc-schema.json <../acc-schema.json>`_
 
         Raises
         ------
