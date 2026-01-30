@@ -1127,16 +1127,15 @@ class AccessTrackingStore(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        # Needed for to prevent a read-only copy being made
-        # https://github.com/zarr-developers/zarr-python/pull/3156
-        if "read_only" not in kwargs:
-            kwargs["read_only"] = True
+        import traceback
+
+        traceback.print_stack()
+        print(kwargs)
         super().__init__(*args, **kwargs)
+        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
-
-        self._read_only = True
 
     async def get(
         self,

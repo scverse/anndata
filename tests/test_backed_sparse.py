@@ -385,7 +385,7 @@ def test_lazy_array_cache(
     a = sparse_format(sparse.random(10, 10))
     f = open_write_group(path, mode="a")
     ad.io.write_elem(f, "X", a)
-    store = AccessTrackingStore(path)
+    store = AccessTrackingStore(path, read_only=True)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
     f = zarr.open_group(store, mode="r")
@@ -514,7 +514,7 @@ def test_data_access(
         chunks=(1,),
         zarr_format=f.metadata.zarr_format,
     )
-    store = AccessTrackingStore(path)
+    store = AccessTrackingStore(path, read_only=True)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store, mode="r")
     a_disk = AnnData(X=open_func(f["X"]))
