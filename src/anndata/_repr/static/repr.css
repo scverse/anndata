@@ -899,7 +899,8 @@
     .anndata-dtype--sparse {
         color: var(--anndata-dtype-sparse);
     }
-    .anndata-dtype--array {
+    .anndata-dtype--array,
+    .anndata-dtype--ndarray {
         color: var(--anndata-dtype-array);
     }
     .anndata-dtype--dataframe {
@@ -1094,6 +1095,10 @@
     .anndata-text--error {
         color: var(--anndata-error-color);
         font-weight: 500;
+    }
+
+    .anndata-text--warning {
+        color: var(--anndata-warning-color);
     }
 }
 
