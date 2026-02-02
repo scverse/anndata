@@ -41,6 +41,7 @@ from anndata.compat import (
     ZarrGroup,
     has_xp,
 )
+from anndata.types import SupportsArrayApi
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -601,9 +602,25 @@ def report_name(func):
 
 
 @report_name
-def _assert_equal(a, b, exact):
+def _assert_equal(
+    a: object, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     """Allows reporting elem name for simple assertion."""
-    if has_xp(a) and not np.isscalar(a):
+    assert a == b
+
+
+@singledispatch
+def assert_equal(
+    a: object, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    _assert_equal(a, b, exact=exact, _elem_name=elem_name)
+
+
+@assert_equal.register(SupportsArrayApi)
+def assert_equal_array_api(
+    a: SupportsArrayApi, b: object, *, exact: bool = False, elem_name: str | None = None
+):
+    if not np.isscalar(a):
         xp = a.__array_namespace__()
         # really force it on b
         b = xp.array(asarray(b))
@@ -614,13 +631,6 @@ def _assert_equal(a, b, exact):
             assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
     else:
         assert a == b
-
-
-@singledispatch
-def assert_equal(
-    a: object, b: object, *, exact: bool = False, elem_name: str | None = None
-):
-    _assert_equal(a, b, exact, _elem_name=elem_name)
 
 
 @assert_equal.register(CupyArray)
