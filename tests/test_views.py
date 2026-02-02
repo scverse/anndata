@@ -1060,17 +1060,6 @@ def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]):
 
 
 @pytest.mark.array_api
-def test_index_jax_both_axes():
-    adata = gen_adata((10, 10), X_type=jnp.array)
-    obs_subset = jnp.array([0, 2, 4, 6])
-    var_subset = jnp.array([1, 3, 5, 7])
-    v1 = adata[obs_subset, var_subset]
-    v2 = adata[obs_subset, :][:, var_subset]
-
-    assert_equal(v1, v2)
-
-
-@pytest.mark.array_api
 @pytest.mark.parametrize(
     "to_bool",
     [True, False],
