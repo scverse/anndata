@@ -22,7 +22,6 @@ from anndata.types import SupportsArrayApi
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    from collections.abc import KeysView
     from typing import Any, TypeGuard
 
 
@@ -63,10 +62,6 @@ class IndexManager:
             self.add_array(np.asarray(self.get_default()))
         res = np.from_dlpack(self._manager[(1, 0)])
         return res.copy() if copy else res
-
-    def keys(self) -> KeysView[tuple[int, int]]:
-        """Return the devices for which index arrays are available."""
-        return self._manager.keys()
 
     def get_default(self):
         """Returns the first key added i.e., a no-copy index, useful for getting an array-api compatible index on some device."""
