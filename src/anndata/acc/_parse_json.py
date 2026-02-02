@@ -30,13 +30,13 @@ def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
         case ["layers", str() | None as l, *idx] if idx := _as_idx_2d(idx):
             layer = a if l is None else a.layers[l]
             return layer[idx]
-        case ["obs" | "var" as ax, str() | None as col]:
-            acc = a.obs if ax == "obs" else a.var
+        case ["obs" | "var" as dim, str() | None as col]:
+            acc = a.obs if dim == "obs" else a.var
             return acc.index if col is None else acc[col]
-        case ["obsm" | "varm" as ax, str(col), int(i)]:
-            return (a.obsm if ax == "obsm" else a.varm)[col][i]
-        case ["obsp" | "varp" as ax, str(k), *idx] if idx := _as_idx_2d(idx):
-            return (a.obsp if ax == "obsp" else a.varp)[k][idx]
+        case ["obsm" | "varm" as dim, str(col), int(i)]:
+            return (a.obsm if dim == "obsm" else a.varm)[col][i]
+        case ["obsp" | "varp" as dim, str(k), *idx] if idx := _as_idx_2d(idx):
+            return (a.obsp if dim == "obsp" else a.varp)[k][idx]
         case _:
             msg = f"Cannot parse {data!r}"
             raise ValueError(msg)
@@ -50,12 +50,12 @@ def to_json(ref: AdRef) -> list[str | int | None]:
     match ref.acc:
         case LayerAcc(k):
             return ["layers", k, *_idx_2d_ser(ref.idx)]
-        case MetaAcc(ax):
-            return [ax, ref.idx]
-        case MultiAcc(ax, k):
-            return [f"{ax}m", k, ref.idx]
-        case GraphAcc(ax, k):
-            return [f"{ax}p", k, *_idx_2d_ser(ref.idx)]
+        case MetaAcc(dim):
+            return [dim, ref.idx]
+        case MultiAcc(dim, k):
+            return [f"{dim}m", k, ref.idx]
+        case GraphAcc(dim, k):
+            return [f"{dim}p", k, *_idx_2d_ser(ref.idx)]
         case _:
             msg = f"Unsupported vector accessor {ref.acc!r}"
             raise AssertionError(msg)

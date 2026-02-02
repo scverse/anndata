@@ -13,7 +13,7 @@ For these purposes, they
 
     The central :attr:`A` object allows you to create
     :class:`AdRef` objects that reference arrays
-    along one or two axes of an :class:`anndata.AnnData` object:
+    along one or two dimensions of an :class:`anndata.AnnData` object:
 
     >>> from anndata.acc import A
     >>> A[:, "gene-3"]  # reference to `adata[:, 3].X` as 1D vector
@@ -23,7 +23,7 @@ For these purposes, they
 
 #.  introspectible
 
-    :class:`AdRef`\ s have the :attr:`AdRef.axes`, :attr:`AdRef.idx`, and :attr:`AdRef.acc` attributes,
+    :class:`AdRef`\ s have the :attr:`AdRef.dims`, :attr:`AdRef.idx`, and :attr:`AdRef.acc` attributes,
     allowing you to inspect all relevant properties.
 
     >>> pc0 = A.obsm["pca"][:, 0]
@@ -33,7 +33,7 @@ For these purposes, they
     0
     >>> pc0.acc
     A.obsm['pca']
-    >>> A.var["symbol"].axes
+    >>> A.var["symbol"].dims
     {'var'}
     >>> pc0.acc.k
     'pca'
@@ -75,10 +75,10 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
     RefAcc
 
-- :class:`MetaAcc` with :attr:`MetaAcc.ax`
+- :class:`MetaAcc` with :attr:`MetaAcc.dim`
 - :class:`LayerAcc` with :attr:`LayerAcc.k`
-- :class:`MultiAcc` with :attr:`MultiAcc.ax` and :attr:`MultiAcc.k`
-- :class:`GraphAcc` with :attr:`GraphAcc.ax` and :attr:`GraphAcc.k`
+- :class:`MultiAcc` with :attr:`MultiAcc.dim` and :attr:`MultiAcc.k`
+- :class:`GraphAcc` with :attr:`GraphAcc.dim` and :attr:`GraphAcc.k`
 
 ..  hidden
     ..  autosummary::

@@ -32,7 +32,7 @@ type Axes = Collection[Literal["obs", "var"]]
 type Array = ExtensionArray | NDArray[Any]
 
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
-"""Index along the full length of one or both AnnData axes, resulting in a 1D or 2D array.
+"""Index along the full length of one or both AnnData dimensions, resulting in a 1D or 2D array.
 
 E.g. `a[:, 5]`, `a[18, :]`, or `a[:, :]`
 """
@@ -62,15 +62,15 @@ __all__ = [
 
 
 class AdRef[I: Hashable]:
-    """A reference to a 1D or 2D array along the axes of an AnnData object.
+    """A reference to a 1D or 2D array along one or two dimensions of an AnnData object.
 
     Examples
     --------
-    Use :data:`A` in the same way you would an :class:`~anndata.AnnData` object if you wanted to access a 1D or 2D array along the whole axes.
+    Use :data:`A` in the same way you would an :class:`~anndata.AnnData` object if you wanted to access a 1D or 2D array along the whole dimension.
     You can then introspect the reference:
 
     >>> from anndata.acc import A
-    >>> A.obs.index.axes
+    >>> A.obs.index.dims
     {'obs'}
     >>> A.obs["x"].idx
     'x'
@@ -97,9 +97,9 @@ class AdRef[I: Hashable]:
         self.idx = idx
 
     @cached_property
-    def axes(self) -> Axes:
-        """Which axes are spanned by the array?"""
-        return self.acc.axes(self.idx)
+    def dims(self) -> Axes:
+        """Which dimensions are spanned by the array?"""
+        return self.acc.dims(self.idx)
 
     def __hash__(self) -> int:
         return hash((self.acc, self.idx))
@@ -153,7 +153,7 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     ref_class: type[R]
 
     def process_idx(self, idx: Any, /) -> I:
-        self.axes(idx)
+        self.dims(idx)
         return idx
 
     def __getitem__(self, idx: Any, /) -> R:
@@ -161,8 +161,8 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
         return self.ref_class(self, idx)  # type: ignore
 
     @abc.abstractmethod
-    def axes(self, idx: I, /) -> Axes:
-        """Get along which axes the referenced array is."""
+    def dims(self, idx: I, /) -> Axes:
+        """Get along which dimensions the referenced array is."""
 
     @abc.abstractmethod
     def __repr__(self, /) -> str:
@@ -223,13 +223,13 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def axes(self, idx: Idx2D, /) -> set[Literal["obs", "var"]]:
-        for ax_idx in idx:
-            if isinstance(ax_idx, str):
+    def dims(self, idx: Idx2D, /) -> set[Literal["obs", "var"]]:
+        for dim_idx in idx:
+            if isinstance(dim_idx, str):
                 continue
-            if isinstance(ax_idx, slice) and ax_idx == slice(None):
+            if isinstance(dim_idx, slice) and dim_idx == slice(None):
                 continue
-            msg = f"Unsupported axis index {ax_idx!r} in index {idx!r} (not `:` or a string)"
+            msg = f"Unsupported dimension index {dim_idx!r} in index {idx!r} (not `:` or a string)"
             raise ValueError(msg)
         match idx:
             case slice(), str():
@@ -251,9 +251,9 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
         if adata.X is None if self.k is None else self.k not in adata.layers:
             return False
-        for i, ax in zip(idx or (), ("obs", "var"), strict=False):
+        for i, dim in zip(idx or (), ("obs", "var"), strict=False):
             if isinstance(i, str):  # at most one str
-                return i in getattr(adata, ax).index
+                return i in getattr(adata, dim).index
         return True  # idx is None or [:, :]
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
@@ -261,8 +261,8 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
         if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
             ver_or_mat = ver_or_mat.toarray()
         # TODO: pandas
-        axes = self.axes(idx)
-        return ver_or_mat.flatten() if len(axes) == 1 else ver_or_mat
+        dims = self.dims(idx)
+        return ver_or_mat.flatten() if len(dims) == 1 else ver_or_mat
 
 
 @dataclass(frozen=True)
@@ -283,8 +283,8 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
 
     """
 
-    ax: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obs.ax == 'obs'`."""
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obs.dim == 'obs'`."""
 
     @property
     def index(self) -> R:
@@ -293,7 +293,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
 
     def process_idx(self, k: object, /) -> str | None:
         if k is not None and not isinstance(k, str):
-            msg = f"Unsupported {self.ax} column {k!r}"
+            msg = f"Unsupported {self.dim} column {k!r}"
             raise TypeError(msg)
         return k
 
@@ -310,11 +310,11 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
 
         return super().__getitem__(k)
 
-    def axes(self, k: str, /) -> Axes:
-        return {self.ax}
+    def dims(self, k: str, /) -> Axes:
+        return {self.dim}
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}"
+        return f"A.{self.dim}"
 
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
@@ -322,11 +322,11 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     def isin(self, adata: AnnData, idx: str | None = None) -> bool:
         if idx is None:
             return True  # obs and var index always exist
-        attr: pd.DataFrame | Dataset2D = getattr(adata, self.ax)
+        attr: pd.DataFrame | Dataset2D = getattr(adata, self.dim)
         return idx in attr
 
     def get(self, adata: AnnData, k: str | None, /) -> Array:
-        df = cast("pd.DataFrame", getattr(adata, self.ax))
+        df = cast("pd.DataFrame", getattr(adata, self.dim))
         return df.index.values if k is None else df[k].values
 
 
@@ -334,20 +334,20 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
 class MultiMapAcc[R: AdRef](MapAcc):
     r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
-    ax: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsm.ax == 'obs'`."""
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obsm.dim == 'obs'`."""
 
     _: KW_ONLY
     ref_class: type[R]
 
     def __getitem__(self, k: str, /) -> MultiAcc[R]:
         if not isinstance(k, str):
-            msg = f"Unsupported {self.ax}m key {k!r}"
+            msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
-        return MultiAcc(self.ax, k, ref_class=self.ref_class)
+        return MultiAcc(self.dim, k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}m"
+        return f"A.{self.dim}m"
 
 
 @dataclass(frozen=True)
@@ -363,8 +363,8 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
 
     """
 
-    ax: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsm[k].ax == 'obs'`."""
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obsm[k].dim == 'obs'`."""
 
     k: str
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
@@ -391,43 +391,43 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
             return [self[j] for j in i]
         return super().__getitem__(i)
 
-    def axes(self, i: int, /) -> Axes:
-        return {self.ax}
+    def dims(self, i: int, /) -> Axes:
+        return {self.dim}
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}m[{self.k!r}]"
+        return f"A.{self.dim}m[{self.k!r}]"
 
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
     def isin(self, adata: AnnData, idx: int | None = None) -> bool:
-        m: AxisArrays = getattr(adata, f"{self.ax}m")
+        m: AxisArrays = getattr(adata, f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
         return idx is None or idx in range(arr.shape[1])
 
     def get(self, adata: AnnData, i: int, /) -> Array:
-        return getattr(adata, f"{self.ax}m")[self.k][:, i]
+        return getattr(adata, f"{self.dim}m")[self.k][:, i]
 
 
 @dataclass(frozen=True)
 class GraphMapAcc[R: AdRef](MapAcc):
     r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
-    ax: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsp.ax == 'obs'`."""
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obsp.dim == 'obs'`."""
 
     _: KW_ONLY
     ref_class: type[R]
 
     def __getitem__(self, k: str, /) -> GraphAcc[R]:
         if not isinstance(k, str):
-            msg = f"Unsupported {self.ax}p key {k!r}"
+            msg = f"Unsupported {self.dim}p key {k!r}"
             raise TypeError(msg)
-        return GraphAcc(self.ax, k, ref_class=self.ref_class)
+        return GraphAcc(self.dim, k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}p"
+        return f"A.{self.dim}p"
 
 
 @dataclass(frozen=True)
@@ -443,8 +443,8 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
     """
 
-    ax: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.varp[k].axis == "var"`."""
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.varp[k].dim == "var"`."""
 
     k: str
     """Key this accessor refers to, e.g. `A.obsp['x'].k == 'x'`."""
@@ -470,28 +470,28 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def axes(self, idx: Idx2D, /) -> Axes:
+    def dims(self, idx: Idx2D, /) -> Axes:
         n_slices = sum(isinstance(i, slice) for i in idx)
-        return (self.ax,) * n_slices if n_slices > 1 else {self.ax}
+        return (self.dim,) * n_slices if n_slices > 1 else {self.dim}
 
     def __repr__(self) -> str:
-        return f"A.{self.ax}p[{self.k!r}]"
+        return f"A.{self.dim}p[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
     def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
-        if self.k not in getattr(adata, f"{self.ax}p"):
+        if self.k not in getattr(adata, f"{self.dim}p"):
             return False
         if idx is None:
             return True
         [i] = (i for i in idx if isinstance(i, str))
-        return i in getattr(adata, self.ax).index
+        return i in getattr(adata, self.dim).index
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
-        df = cast("pd.DataFrame", getattr(adata, self.ax))
+        df = cast("pd.DataFrame", getattr(adata, self.dim))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
-        return getattr(adata, f"{self.ax}p")[self.k][iloc].toarray()
+        return getattr(adata, f"{self.dim}p")[self.k][iloc].toarray()
 
 
 @dataclass(frozen=True)
@@ -543,22 +543,22 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     obsp: GraphMapAcc[R] = field(init=False)
     """Access 1D or 2D vectors along observations.
 
-    >>> A.layers["x"][:, :].axes
+    >>> A.layers["x"][:, :].dims
     ('obs', 'obs')
-    >>> A.layers["x"]["cell-1", :].axes
+    >>> A.layers["x"]["cell-1", :].dims
     {'obs'}
-    >>> A.layers["x"][:, "cell-1"].axes
+    >>> A.layers["x"][:, "cell-1"].dims
     {'obs'}
     """
 
     varp: GraphMapAcc[R] = field(init=False)
     """Access 1D or 2D vectors along variables.
 
-    >>> A.layers["x"][:, :].axes
+    >>> A.layers["x"][:, :].dims
     ('var', 'var')
-    >>> A.layers["x"]["gene-1", :].axes
+    >>> A.layers["x"]["gene-1", :].dims
     {'var'}
-    >>> A.layers["x"][:, "gene-1"].axes
+    >>> A.layers["x"][:, "gene-1"].dims
     {'var'}
     """
 

@@ -157,7 +157,7 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
     ],
 )
 def test_axes(ad_path: AdRef, axes: Collection[Literal["obs", "var"]]) -> None:
-    assert ad_path.axes == axes
+    assert ad_path.dims == axes
 
 
 @pytest.mark.parametrize(

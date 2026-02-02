@@ -32,7 +32,7 @@ def mk_label[I](p: AdRef[I], /) -> str | None:
                 None,
             )
         case MetaAcc():
-            return f"{p.acc.ax} index" if p.idx is pd.Index else p.idx
+            return f"{p.acc.dim} index" if p.idx is pd.Index else p.idx
         case _:  # pragma: no cover
             msg = f"Unsupported vector accessor {p.acc!r}"
             raise AssertionError(msg)
