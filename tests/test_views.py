@@ -56,6 +56,7 @@ jnp = get_jnp_or_none()
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType, FunctionType
+    from typing import Literal
 
     from anndata.typing import Index
 
@@ -1042,28 +1043,20 @@ def test_normalize_index_dispatch(typ, expected_dispatch):
 @pytest.mark.array_api
 def test_normalize_index_jax_float_valid():
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
-    idx = jnp.array([0, 2, 4])
+    idx = jnp.array([0, 2, 4], dtype="float32")
     out = _normalize_index(idx, index)
     assert out.tolist() == [0, 2, 4]
 
 
 @pytest.mark.array_api
-def test_normalize_index_jax_flatten_2d():
+@pytest.mark.parametrize("expanded_dim", [0, 1], ids=["row", "col"])
+def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]):
     index = pd.Index([f"cell_{i}" for i in range(5)])
-
-    # column vector (5,1)
-    idx_col = jnp.array([[0], [1], [2], [3], [4]])
+    idx_col = jnp.arange(5).reshape((5, 1) if expanded_dim == 1 else (1, 5))
     out_col = _normalize_index(idx_col, index)
     assert out_col.shape == (5,)
     assert isinstance(out_col, jnp.ndarray)
     assert (out_col == jnp.array([0, 1, 2, 3, 4])).all()
-
-    # row vector (1,5)
-    idx_row = jnp.array([[0, 1, 2, 3, 4]])
-    out_row = _normalize_index(idx_row, index)
-    assert out_row.shape == (5,)
-    assert isinstance(out_row, jnp.ndarray)
-    assert (out_row == jnp.array([0, 1, 2, 3, 4])).all()
 
 
 @pytest.mark.array_api
