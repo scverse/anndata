@@ -1044,7 +1044,7 @@ def test_normalize_index_jax_float_valid():
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     idx = jnp.array([0, 2, 4])
     out = _normalize_index(idx, index)
-    assert (out == jnp.array([0, 2, 4])).all()
+    assert out.tolist() == [0, 2, 4]
 
 
 @pytest.mark.array_api
