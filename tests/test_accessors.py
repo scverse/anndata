@@ -144,11 +144,11 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
 
 
 @pytest.mark.parametrize(
-    ("ad_path", "axes"),
+    ("ad_path", "dims"),
     [
         pytest.param(A[:, :], {"obs", "var"}, id="x"),
         pytest.param(A.layers["y"][:, :], {"obs", "var"}, id="layer"),
-        # selecting one obs gives a vector along the var axis:
+        # selecting one obs gives a vector along the var dimension:
         pytest.param(A.layers["y"]["c", :], {"var"}, id="layer-obs"),
         pytest.param(A.var["a"], {"var"}, id="var"),
         pytest.param(A.obsm["c"][:, 0], {"obs"}, id="obsm"),
@@ -156,8 +156,8 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
         pytest.param(A.varp["d"][:, "c2"], {"var"}, id="varp-col"),
     ],
 )
-def test_axes(ad_path: AdRef, axes: Collection[Literal["obs", "var"]]) -> None:
-    assert ad_path.dims == axes
+def test_dims(ad_path: AdRef, dims: Collection[Literal["obs", "var"]]) -> None:
+    assert ad_path.dims == dims
 
 
 @pytest.mark.parametrize(

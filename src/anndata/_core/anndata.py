@@ -1843,11 +1843,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
         """Check if array is in AnnData."""
-        from ..acc import AdRef, MapAcc
+        from ..acc import AdRef, MapAcc, RefAcc
 
-        if isinstance(key, MapAcc):
-            return True  # .layers and .{obs,var}{m,p} always exist, they might just be empty
-        return key.acc.isin(self, key.idx) if isinstance(key, AdRef) else key.isin(self)
+        match key:
+            case MapAcc():
+                return True  # .layers and .{obs,var}{m,p} always exist, they might just be empty
+            case RefAcc():
+                return key.isin(self)
+            case AdRef():
+                return key.acc.isin(self, key.idx)
+            case _:
+                msg = f"Unexpected key {key!r} is not a valid reference (`anndata.acc.*`)."
+                raise TypeError(msg)
 
     def _check_dimensions(self, key=None):
         key = {"obsm", "varm"} if key is None else {key}
