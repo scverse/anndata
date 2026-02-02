@@ -33,9 +33,12 @@ if TYPE_CHECKING:
 
 __all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
 
-_M = TypeVar("_M", IndexManager, Never, default=Never)
+if TYPE_CHECKING:
+    _M = TypeVar("_M", IndexManager, Never, default=Never)
+else:
+    _M = TypeVar("_M", IndexManager, Never)
 
-_Index1DNorm: TypeAlias = (
+_Index1DNorm: TypeAlias = (  # noqa: UP040
     slice
     | NDArray[np.bool_]
     | NDArray[np.integer]
