@@ -141,7 +141,7 @@ def test_access_counts_obsm_df(tmp_path: Path):
         index=adata.obs_names,
     )
     adata.write_zarr(tmp_path)
-    store = AccessTrackingStore(tmp_path)
+    store = AccessTrackingStore(tmp_path, read_only=True)
     store.initialize_key_trackers(["obsm/df"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obsm/df", 0)
@@ -189,7 +189,7 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
-    store = AccessTrackingStore(orig_pth)
+    store = AccessTrackingStore(orig_pth, read_only=True)
     store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)

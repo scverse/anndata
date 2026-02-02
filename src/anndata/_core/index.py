@@ -29,13 +29,13 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from ..compat import Index1DNorm, _Index, _Index1D, _Index1DNorm
+    from anndata.typing import Index1D
+
+    from ..typing import Index, _Index1DNorm
 
 
 def _normalize_indices(
-    index: _Index | None,
-    names0: pd.Index,
-    names1: pd.Index,
+    index: Index | None, names0: pd.Index, names1: pd.Index
 ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
@@ -80,7 +80,7 @@ class XArrayDtype(_XrDtV, Enum):
 
 @singledispatch
 def _gen_anndata_index(
-    indexer: _Index1D, index: pd.Index
+    indexer: Index1D, index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
@@ -192,7 +192,7 @@ def _from_array(
 
 
 def _normalize_index(
-    indexer: _Index1D, index: pd.Index
+    indexer: Index1D, index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
@@ -231,7 +231,7 @@ def _fix_slice_bounds[A: int, Z: int, S: int](
     return slice(start, stop, step)
 
 
-def unpack_index(index: _Index) -> tuple[_Index1D, _Index1D]:
+def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     if not isinstance(index, tuple):
         if index is Ellipsis:
             index = slice(None)
@@ -352,7 +352,7 @@ def _subset(
 @_subset.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(
-    a: DaskArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    a: DaskArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
@@ -366,7 +366,7 @@ def _subset_dask(
 @_ensure_numpy_idx
 def _subset_sparse(
     a: CSMatrix | CSArray,
-    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ):
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
@@ -382,7 +382,7 @@ def _subset_sparse(
 @_ensure_numpy_idx
 def _subset_df(
     df: pd.DataFrame | Dataset2D,
-    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ):
     return df.iloc[subset_idx]
 
@@ -390,7 +390,7 @@ def _subset_df(
 @_subset.register(AwkArray)
 @_ensure_numpy_idx
 def _subset_awkarray(
-    a: AwkArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    a: AwkArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
@@ -401,7 +401,7 @@ def _subset_awkarray(
 @_subset.register(h5py.Dataset)
 @_ensure_numpy_idx
 def _subset_dataset(
-    d: h5py.Dataset, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    d: h5py.Dataset, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     order: tuple[NDArray[np.integer] | slice, ...]
     inv_order: tuple[NDArray[np.integer] | slice, ...]
@@ -425,8 +425,8 @@ def _index_order_and_inverse(
 @overload
 def _index_order_and_inverse(axis_idx: slice) -> tuple[slice, slice]: ...
 def _index_order_and_inverse(
-    axis_idx: Index1DNorm,
-) -> tuple[Index1DNorm, NDArray[np.integer] | slice]:
+    axis_idx: _Index1DNorm,
+) -> tuple[_Index1DNorm, NDArray[np.integer] | slice]:
     """Order and get inverse index array."""
     if not isinstance(axis_idx, np.ndarray):
         return axis_idx, slice(None)
@@ -443,8 +443,8 @@ def _process_index_for_h5py(
 @overload
 def _process_index_for_h5py(idx: slice) -> tuple[slice, None]: ...
 def _process_index_for_h5py(
-    idx: Index1DNorm,
-) -> tuple[Index1DNorm, NDArray[np.integer] | None]:
+    idx: _Index1DNorm,
+) -> tuple[_Index1DNorm, NDArray[np.integer] | None]:
     """Process a single index for h5py compatibility, handling sorting and duplicates."""
     if not isinstance(idx, np.ndarray):
         # Not an array (slice, integer, list) - no special processing needed
@@ -467,7 +467,7 @@ def _process_index_for_h5py(
 
 def _safe_fancy_index_h5py(
     dataset: h5py.Dataset,
-    subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm],
+    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing
@@ -504,7 +504,7 @@ def _safe_fancy_index_h5py(
     return result
 
 
-def _get_index_size(idx: Index1DNorm, dim_size: int) -> int:
+def _get_index_size(idx: _Index1DNorm, dim_size: int) -> int:
     """Get size for any index type."""
     if isinstance(idx, slice):
         return len(range(*idx.indices(dim_size)))

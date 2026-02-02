@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType, FunctionType
 
-    from anndata.compat import Index
+    from anndata.typing import Index
 
 
 IGNORE_SPARSE_EFFICIENCY_WARNING = pytest.mark.filterwarnings(

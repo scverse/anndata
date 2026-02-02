@@ -27,7 +27,6 @@ from anndata.compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -337,7 +336,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        if isinstance(store, ZarrGroup):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
@@ -406,16 +405,6 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-def test_write_zarr_v2_warns(tmp_path: Path):
-    with (
-        ad.settings.override(zarr_write_format=2),
-        pytest.warns(
-            UserWarning, match=r"Writing zarr v2 data will no longer be the default"
-        ),
-    ):
-        ad.AnnData(X=np.ones((5, 10))).write_zarr(tmp_path / "foo.zarr")
-
-
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
 @pytest.mark.parametrize(
     "use_compression", [True, False], ids=["compressed", "uncompressed"]
@@ -423,14 +412,12 @@ def test_write_zarr_v2_warns(tmp_path: Path):
 def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
-    if zarr_write_format == 3 and is_zarr_v2():
-        pytest.xfail("Cannot write zarr v3 format with v2 package")
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if not use_compression:
         compressor = None
-    elif zarr_write_format == 2 or is_zarr_v2():
+    elif zarr_write_format == 2:
         from numcodecs import Blosc
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -458,13 +445,9 @@ def test_zarr_compression(
         ):
             wrongly_compressed.append(key)
 
-    if is_zarr_v2():
-        with zarr.open(pth, "r") as f:
-            f.visititems(check_compressed)
-    else:
-        f = zarr.open(pth, mode="r")
-        for key, value in f.members(max_depth=None):
-            check_compressed(value, key)
+    f = zarr.open(pth, mode="r")
+    for key, value in f.members(max_depth=None):
+        check_compressed(value, key)
     assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
     expected = ad.read_zarr(pth)
@@ -956,11 +939,7 @@ def test_read_lazy_import_error(func, tmp_path):
 @pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = (
-        zarr.convenience.open_consolidated(tmp_path)
-        if is_zarr_v2()
-        else zarr.open(tmp_path)
-    )
+    g = zarr.open(tmp_path)
     with pytest.raises(
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
@@ -968,7 +947,6 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
 def test_write_elem_version_mismatch(tmp_path: Path):
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))

@@ -4,8 +4,8 @@ import re
 import sys
 import warnings
 from functools import partial, singledispatch
-from types import FunctionType
-from typing import TYPE_CHECKING
+from types import FunctionType, UnionType
+from typing import TYPE_CHECKING, Literal, TypeAliasType, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -21,7 +21,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
-    from typing import Any, Literal, LiteralString
+    from typing import Any, LiteralString
 
 logger = get_logger(__name__)
 
@@ -415,6 +415,26 @@ def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
         return f
 
     return decorator
+
+
+def get_union_members[T](
+    typ: TypeAliasType | UnionType | T,
+    can_get_args: Callable[[object], bool] = lambda _: False,
+) -> tuple[T, ...]:
+    """Get args of a nested union of types."""
+    while isinstance(typ, TypeAliasType):
+        typ = typ.__value__
+    if not isinstance(typ, UnionType) and not can_get_args(typ):
+        return (typ,)
+    return tuple(
+        t for sub in get_args(typ) for t in get_union_members(sub, can_get_args)
+    )
+
+
+get_literal_members = partial(
+    get_union_members, can_get_args=lambda x: get_origin(x) is Literal
+)
+"""Get args of a nested union of Literal types."""
 
 
 def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):

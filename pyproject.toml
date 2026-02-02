@@ -44,7 +44,7 @@ dependencies = [
     "packaging>=24.2",
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
-    "zarr >=2.18.7, !=3.0.*",
+    "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
 ]
 dynamic = [ "version" ]

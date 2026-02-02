@@ -29,19 +29,19 @@ else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
 
 
 __all__ = [
-    "ArrayStorageType",
-    "GroupStorageType",
     "StorageType",
+    "_ArrayStorageType",
+    "_GroupStorageType",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
-# These two are not exported, so we don’t make them `type`s
-ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
-GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
+# These two are not public, so we don’t make them `type`s
+_ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
+_GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 
-type StorageType = ArrayStorageType | GroupStorageType
+type StorageType = _ArrayStorageType | _GroupStorageType
 
 
 @set_module("anndata.experimental")

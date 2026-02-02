@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from ..compat import Index1DNorm
+    from ..typing import _Index1DNorm
 
 
 @contextmanager
@@ -446,27 +446,27 @@ except ImportError:
 
 
 def _resolve_idxs(
-    old: tuple[Index1DNorm, Index1DNorm],
-    new: tuple[Index1DNorm, Index1DNorm],
+    old: tuple[_Index1DNorm, _Index1DNorm],
+    new: tuple[_Index1DNorm, _Index1DNorm],
     adata: AnnData,
-) -> tuple[Index1DNorm, Index1DNorm]:
+) -> tuple[_Index1DNorm, _Index1DNorm]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
     return o, v
 
 
 @singledispatch
 def _resolve_idx(
-    old: Index1DNorm | IndexManager,
-    new: Index1DNorm,
+    old: _Index1DNorm | IndexManager,
+    new: _Index1DNorm,
     l: Literal[0, 1],
-) -> Index1DNorm | IndexManager:
+) -> _Index1DNorm | IndexManager:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
 
 
 @_resolve_idx.register(SupportsArrayApi)
 def _resolve_idx_array_api(
-    old: SupportsArrayApi, new: Index1DNorm, l: Literal[0, 1]
+    old: SupportsArrayApi, new: _Index1DNorm, l: Literal[0, 1]
 ) -> SupportsArrayApi:
     xp = old.__array_namespace__()
 
@@ -494,7 +494,7 @@ def _resolve_idx_array_api(
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: Index1DNorm, l: Literal[0, 1]
+    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: Literal[0, 1]
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
     if is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
@@ -507,7 +507,7 @@ def _resolve_idx_ndarray(
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: Index1DNorm, l: Literal[0, 1]
+    old: slice, new: _Index1DNorm, l: Literal[0, 1]
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
@@ -528,8 +528,8 @@ def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
 
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
-    old: IndexManager, new: Index1DNorm, l: Literal[0, 1]
-) -> IndexManager | Index1DNorm:
+    old: IndexManager, new: _Index1DNorm, l: Literal[0, 1]
+) -> IndexManager | _Index1DNorm:
     """Resolve indices when old is an IndexManager.
 
     If new is an array-api array, use get_for_array to get a matching

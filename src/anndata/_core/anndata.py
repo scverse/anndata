@@ -63,8 +63,8 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import Index, Index1D, Index1DNorm, XDataset, _Index, _Index1DNorm
-    from ..typing import XDataType
+    from ..compat import XDataset
+    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -223,14 +223,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     )
     def __init__(  # noqa: PLR0913
         self,
-        X: XDataType | pd.DataFrame | None = None,
+        X: _XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, XDataType] | None = None,
+        layers: Mapping[str, _XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
@@ -239,8 +239,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         asview: bool = False,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1DNorm | int | np.integer | None = None,
-        vidx: Index1DNorm | int | np.integer | None = None,
+        oidx: _Index1DNorm | int | np.integer | None = None,
+        vidx: _Index1DNorm | int | np.integer | None = None,
     ):
         # check for any multi-indices that aren’t later checked in coerce_array
         for attr, key in [(obs, "obs"), (var, "var"), (X, "X")]:
@@ -274,8 +274,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _init_as_view(
         self,
         adata_ref: AnnData,
-        oidx: Index1DNorm | int | np.integer,
-        vidx: Index1DNorm | int | np.integer,
+        oidx: _Index1DNorm | int | np.integer,
+        vidx: _Index1DNorm | int | np.integer,
     ):
         if adata_ref.isbacked and adata_ref.is_view:
             msg = (
@@ -582,7 +582,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> XDataType | None:
+    def X(self) -> _XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -613,7 +613,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         #     return X
 
     @X.setter
-    def X(self, value: XDataType | None):  # noqa: PLR0912
+    def X(self, value: _XDataType | None):  # noqa: PLR0912
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -1082,7 +1082,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: _Index | None
+        self, index: Index | None
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
@@ -1261,7 +1261,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | XDataType):
+    def __setitem__(self, index: Index, val: float | _XDataType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
