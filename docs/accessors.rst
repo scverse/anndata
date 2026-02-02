@@ -110,6 +110,7 @@ Finally, these classes are only useful for extending:
     :toctree: generated/
     :template: class-minimal
 
+    MapAcc
     LayerMapAcc
     MultiMapAcc
     GraphMapAcc

@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..acc import AdRef
+    from ..acc import AdRef, MapAcc, RefAcc
     from ..compat import XDataset
     from ..typing import Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1841,13 +1841,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: AdRef) -> bool:
+    def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
         """Check if array is in AnnData."""
-        try:
-            key(self)
-        except (IndexError, KeyError):
-            return False
-        return True
+        from ..acc import AdRef, MapAcc
+
+        if isinstance(key, MapAcc):
+            return True  # .layers and .{obs,var}{m,p} always exist, they might just be empty
+        return key.acc.isin(self, key.idx) if isinstance(key, AdRef) else key.isin(self)
 
     def _check_dimensions(self, key=None):
         key = {"obsm", "varm"} if key is None else {key}

@@ -270,6 +270,49 @@ def test_special[C](
     assert expr == expanded
 
 
+@pytest.mark.parametrize(
+    "ad_path",
+    [
+        *(p[0] for p in PATHS),
+        A,
+        A.obs,
+        A.layers,
+        A.layers["a"],
+        A.varm,
+        A.obsm["umap"],
+        A.obsp,
+        A.varp["cons"],
+    ],
+    ids=str,
+)
+def test_in(adata: AnnData, ad_path: AdRef) -> None:
+    assert ad_path in adata
+
+
+@pytest.mark.parametrize(
+    "ad_path",
+    [
+        A.layers["a"]["gene-0", :],  # not an obs name
+        A.layers["a"][:, "cell-3"],  # not a var name
+        A.layers["b"],
+        A.obsm["umap"][:, 3],
+        A.obsm["b"],
+        A.varp["cons"]["cell-1", :],  # not a var name
+        A.varp["cons"][:, "cell-2"],  # not a var name either
+        A.varp["b"],
+    ],
+    ids=str,
+)
+def test_not_in(adata: AnnData, ad_path: AdRef) -> None:
+    assert ad_path not in adata
+
+
+def test_not_in_empty(ad_path: AdRef) -> None:
+    if ad_path in {A.obs.index, A.var.index}:
+        pytest.xfail("obs.index and var.index are always in AnnData")
+    assert ad_path not in AnnData()
+
+
 def test_get_values(
     adata: AnnData,
     ad_path: AdRef,

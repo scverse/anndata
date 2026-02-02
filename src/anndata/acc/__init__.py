@@ -21,7 +21,8 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from anndata import AnnData
+    from .._core.aligned_mapping import AxisArrays
+    from .._core.xarray import Dataset2D
 
     if TYPE_CHECKING:  # for sphinx
         from . import hv
@@ -133,6 +134,14 @@ class AdRef[I: Hashable]:
         return self.acc.get(adata, self.idx)
 
 
+class MapAcc(abc.ABC):
+    r"""Accessor for mapping containers."""
+
+    @abc.abstractmethod
+    def __getitem__(self, k: str, /) -> RefAcc:
+        """Get a reference accessor for mapped array."""
+
+
 @dataclass(frozen=True)
 class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     """Abstract base class for reference accessors.
@@ -152,17 +161,28 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
         return self.ref_class(self, idx)  # type: ignore
 
     @abc.abstractmethod
-    def axes(self, idx: I, /) -> Axes: ...
+    def axes(self, idx: I, /) -> Axes:
+        """Get along which axes the referenced array is."""
+
     @abc.abstractmethod
-    def __repr__(self, /) -> str: ...
+    def __repr__(self, /) -> str:
+        """Get a string representation of the accessor."""
+
     @abc.abstractmethod
-    def idx_repr(self, idx: I, /) -> str: ...
+    def idx_repr(self, idx: I, /) -> str:
+        """Get a string representation of the index."""
+
     @abc.abstractmethod
-    def get(self, adata: AnnData, idx: I, /) -> Array: ...
+    def isin(self, adata: AnnData, idx: I | None = None, /) -> bool:
+        """Check if the referenced array is in the AnnData object."""
+
+    @abc.abstractmethod
+    def get(self, adata: AnnData, idx: I, /) -> Array:
+        """Get the referenced array from the AnnData object."""
 
 
 @dataclass(frozen=True)
-class LayerMapAcc[R: AdRef]:
+class LayerMapAcc[R: AdRef](MapAcc):
     r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     _: KW_ONLY
@@ -203,14 +223,38 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
 
-    def axes(self, idx: Idx2D, /) -> Axes:
-        return _idx2axes(idx)
+    def axes(self, idx: Idx2D, /) -> set[Literal["obs", "var"]]:
+        for ax_idx in idx:
+            if isinstance(ax_idx, str):
+                continue
+            if isinstance(ax_idx, slice) and ax_idx == slice(None):
+                continue
+            msg = f"Unsupported axis index {ax_idx!r} in index {idx!r} (not `:` or a string)"
+            raise ValueError(msg)
+        match idx:
+            case slice(), str():
+                return {"obs"}
+            case str(), slice():
+                return {"var"}
+            case slice(), slice():
+                return {"obs", "var"}
+            case _:  # pragma: no cover
+                msg = f"Invalid index: {idx}"
+                raise TypeError(msg)
 
     def __repr__(self) -> str:
         return f"A.layers[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
+
+    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+        if adata.X is None if self.k is None else self.k not in adata.layers:
+            return False
+        for i, ax in zip(idx or (), ("obs", "var"), strict=False):
+            if isinstance(i, str):  # at most one str
+                return i in getattr(adata, ax).index
+        return True  # idx is None or [:, :]
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
         ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
@@ -275,13 +319,19 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
 
+    def isin(self, adata: AnnData, idx: str | None = None) -> bool:
+        if idx is None:
+            return True  # obs and var index always exist
+        attr: pd.DataFrame | Dataset2D = getattr(adata, self.ax)
+        return idx in attr
+
     def get(self, adata: AnnData, k: str | None, /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
         return df.index.values if k is None else df[k].values
 
 
 @dataclass(frozen=True)
-class MultiMapAcc[R: AdRef]:
+class MultiMapAcc[R: AdRef](MapAcc):
     r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     ax: Literal["obs", "var"]
@@ -350,12 +400,18 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
+    def isin(self, adata: AnnData, idx: int | None = None) -> bool:
+        m: AxisArrays = getattr(adata, f"{self.ax}m")
+        if (arr := m.get(self.k)) is None:
+            return False
+        return idx is None or idx in range(arr.shape[1])
+
     def get(self, adata: AnnData, i: int, /) -> Array:
         return getattr(adata, f"{self.ax}m")[self.k][:, i]
 
 
 @dataclass(frozen=True)
-class GraphMapAcc[R: AdRef]:
+class GraphMapAcc[R: AdRef](MapAcc):
     r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     ax: Literal["obs", "var"]
@@ -423,6 +479,14 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
+
+    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+        if self.k not in getattr(adata, f"{self.ax}p"):
+            return False
+        if idx is None:
+            return True
+        [i] = (i for i in idx if isinstance(i, str))
+        return i in getattr(adata, self.ax).index
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.ax))
@@ -614,29 +678,6 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."
             raise AssertionError(msg)
-
-
-def _idx2axes(idx: Idx2D) -> set[Literal["obs", "var"]]:
-    """Get along which axes the referenced array is and validate the index."""
-    for ax_idx in idx:
-        if isinstance(ax_idx, str):
-            continue
-        if isinstance(ax_idx, slice) and ax_idx == slice(None):
-            continue
-        msg = (
-            f"Unsupported axis index {ax_idx!r} in index {idx!r} (not `:` or a string)"
-        )
-        raise ValueError(msg)
-    match idx:
-        case slice(), str():
-            return {"obs"}
-        case str(), slice():
-            return {"var"}
-        case slice(), slice():
-            return {"obs", "var"}
-        case _:  # pragma: no cover
-            msg = f"Invalid index: {idx}"
-            raise TypeError(msg)
 
 
 def __getattr__(name: Literal["hv"]) -> Any:
