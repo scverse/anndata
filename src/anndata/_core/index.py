@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 
 def _normalize_indices(
-    index: Index | None, names0: pd.Index, names1: pd.Index
+    index: Index[IndexManager] | None, names0: pd.Index, names1: pd.Index
 ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:

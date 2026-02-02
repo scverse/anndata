@@ -3,6 +3,7 @@ installer = "uv"
 dependency-groups = [ "dev" ]
 
 [envs.docs]
+python = "3.14"
 dependency-groups = [ "doc" ]
 scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from ..._types import Join_T
-    from ...compat import Index
+    from ...typing import Index
 
 ATTRS = ["obs", "obsm", "layers"]
 
