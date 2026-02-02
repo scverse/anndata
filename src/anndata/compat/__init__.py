@@ -22,6 +22,7 @@ from anndata.types import SupportsArrayApi
 from .._warnings import warn
 
 if TYPE_CHECKING:
+    from collections.abc import KeysView
     from typing import Any, TypeGuard
 
 
@@ -39,9 +40,9 @@ class IndexManager:
     ``np.asarray(index_manager)`` or let the ``__array__`` method be invoked.
     """
 
-    _manager: dict[str, SupportsArrayApi]
+    _manager: dict[tuple[int, int], SupportsArrayApi]
 
-    def __init__(self, *, device: str, arr: SupportsArrayApi):
+    def __init__(self, *, device: tuple[int, int], arr: SupportsArrayApi):
         self._manager = {device: arr}
 
     @classmethod
@@ -63,7 +64,7 @@ class IndexManager:
         res = np.from_dlpack(self._manager[(1, 0)])
         return res.copy() if copy else res
 
-    def keys(self):
+    def keys(self) -> KeysView[tuple[int, int]]:
         """Return the devices for which index arrays are available."""
         return self._manager.keys()
 
