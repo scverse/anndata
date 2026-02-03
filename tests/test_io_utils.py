@@ -117,8 +117,8 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
 
 @pytest.mark.parametrize("to", [np.array, pd.Series, lambda x: x])
 def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | list]):
-    x = [1, 2, 3]
-    result = to_writeable(to(x))
+    x = to([1, 2, 3])
+    result = to_writeable(x)
     assert result is x
 
 
