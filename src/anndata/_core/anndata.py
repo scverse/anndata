@@ -274,8 +274,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _init_as_view(
         self,
         adata_ref: AnnData,
-        oidx: _Index1DNorm[IndexManager] | int | np.integer,
-        vidx: _Index1DNorm[IndexManager] | int | np.integer,
+        oidx: _Index1DNorm | int | np.integer,
+        vidx: _Index1DNorm | int | np.integer,
     ):
         if adata_ref.isbacked and adata_ref.is_view:
             msg = (

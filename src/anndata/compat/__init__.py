@@ -22,7 +22,7 @@ from anndata.types import SupportsArrayApi
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    from typing import Any, TypeGuard
+    from typing import Any, TypeAlias, TypeGuard
 
 
 #############################
@@ -94,8 +94,8 @@ class IndexManager:
         return self._manager[device]
 
 
-CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
-CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
+CSMatrix: TypeAlias = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix  # noqa: UP040
+CSArray: TypeAlias = scipy.sparse.csr_array | scipy.sparse.csc_array  # noqa: UP040
 
 
 class Empty(Enum):

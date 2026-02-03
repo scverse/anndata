@@ -80,7 +80,7 @@ class XArrayDtype(_XrDtV, Enum):
 
 @singledispatch
 def _gen_anndata_index(
-    indexer: Index1D[IndexManager], index: pd.Index
+    indexer: Index1D, index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
@@ -261,7 +261,7 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 def _index_manager_to_numpy_idx_in_tuple(
-    subset_idx: tuple,
+    subset_idx: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
 ) -> tuple:
     """Convert IndexManager instances to numpy arrays in a tuple of indices."""
     return tuple(
@@ -282,7 +282,7 @@ def _ensure_numpy_idx(func: Callable) -> Callable:
     return _ensure
 
 
-def array_api_ix(*args: SupportsArrayApi):
+def array_api_ix(*args: SupportsArrayApi) -> tuple[SupportsArrayApi, ...]:
     """Vendored version of numpy's _ix for the array-api"""
     out = []
     n_dims = len(args)
@@ -300,8 +300,9 @@ def array_api_ix(*args: SupportsArrayApi):
 
 def _prepare_array_api_idx(
     a: SupportsArrayApi,
-    subset_idx: tuple,
-) -> tuple:
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> tuple[slice | SupportsArrayApi, ...]:
     """Prepare indices for array-api compatible subsetting."""
     xp = a.__array_namespace__()
 
@@ -323,10 +324,19 @@ def _prepare_array_api_idx(
 
 
 @singledispatch
-def _subset(
-    a: np.ndarray | pd.DataFrame,
-    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
-):
+def _subset[
+    T: np.ndarray
+    | pd.DataFrame
+    | SupportsArrayApi
+    | DaskArray
+    | CSArray
+    | CSMatrix
+    | Dataset2D
+](
+    a: T,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> T | np.ndarray:
     """Select a subset of array `a` using the given indices.
 
     For numpy arrays with array indices (not slices), this uses np.ix_ for
@@ -352,8 +362,10 @@ def _subset(
 @_subset.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(
-    a: DaskArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
-):
+    a: DaskArray,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> DaskArray:
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -364,10 +376,11 @@ def _subset_dask(
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
 @_ensure_numpy_idx
-def _subset_sparse(
-    a: CSMatrix | CSArray,
-    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
-):
+def _subset_sparse[T: CSMatrix | CSArray](
+    a: T,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> T:
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
@@ -380,18 +393,21 @@ def _subset_sparse(
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
 @_ensure_numpy_idx
-def _subset_df(
-    df: pd.DataFrame | Dataset2D,
-    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
-):
+def _subset_df[T: pd.DataFrame | Dataset2D](
+    df: T,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> T:
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
 @_ensure_numpy_idx
 def _subset_awkarray(
-    a: AwkArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
-):
+    a: AwkArray,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> AwkArray:
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -401,8 +417,10 @@ def _subset_awkarray(
 @_subset.register(h5py.Dataset)
 @_ensure_numpy_idx
 def _subset_dataset(
-    d: h5py.Dataset, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
-):
+    d: h5py.Dataset,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> np.ndarray:
     order: tuple[NDArray[np.integer] | slice, ...]
     inv_order: tuple[NDArray[np.integer] | slice, ...]
     order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
@@ -467,7 +485,8 @@ def _process_index_for_h5py(
 
 def _safe_fancy_index_h5py(
     dataset: h5py.Dataset,
-    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
 ) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing

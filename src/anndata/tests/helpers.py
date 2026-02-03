@@ -73,7 +73,7 @@ def get_jnp_or_none() -> None | ModuleType:
         return thing
 
     if TYPE_CHECKING or find_spec("jax"):
-        import jax.numpy as _jnp  # replace `this` with jax.numpy, “this” is used as demonstration that it works
+        import jax.numpy as _jnp
 
         return _or_none(_jnp)
     return None
