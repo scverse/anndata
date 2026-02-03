@@ -96,6 +96,12 @@ def _doctest_env(
     settings.datasetdir = old_dd
 
 
+if find_spec("jax"):
+    import jax
+
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+
+
 def pytest_itemcollected(item: pytest.Item) -> None:
     """Define behavior of pytest.mark.{gpu,array_api}."""
     for mark, package in [("gpu", "cupy"), ("array_api", "jax")]:

@@ -69,15 +69,14 @@ except ImportError:
 
 
 def get_jnp_or_none() -> None | ModuleType:
-    try:
-        import jax
-        import jax.numpy as jnp
+    def _or_none[T](thing: T) -> T | None:
+        return thing
 
-        # Enable JAX to use 64-bit floats by default
-        jax.config.update("jax_enable_x64", True)  # noqa: FBT003
-        return jnp
-    except ImportError:
-        return None
+    if TYPE_CHECKING or find_spec("jax"):
+        import jax.numpy as _jnp  # replace `this` with jax.numpy, “this” is used as demonstration that it works
+
+        return _or_none(_jnp)
+    return None
 
 
 # jax extension
