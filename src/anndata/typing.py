@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Never, TypeVar
@@ -33,10 +34,10 @@ if TYPE_CHECKING:
 
 __all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
 
-if TYPE_CHECKING:
+if TYPE_CHECKING or sys.version_info >= (3, 13):
     _M = TypeVar("_M", IndexManager, Never, default=Never)
 else:
-    _M = TypeVar("_M", IndexManager, Never)
+    _M = TypeVar("_M")
 
 _Index1DNorm: TypeAlias = (  # noqa: UP040
     slice
