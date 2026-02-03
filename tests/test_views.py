@@ -177,7 +177,12 @@ def test_view_subset_shapes():
     assert {k: v.shape[0] for k, v in view.varm.items()} == dict.fromkeys(view.varm, 5)
 
 
-def test_modify_view_component(matrix_type, mapping_name, request):
+def test_modify_view_component(
+    matrix_type: Callable,
+    mapping_name: str,
+    request: pytest.FixtureRequest,
+    subtests: pytest.Subtests,
+):
     adata = ad.AnnData(
         np.zeros((10, 10)),
         **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
@@ -197,18 +202,19 @@ def test_modify_view_component(matrix_type, mapping_name, request):
     init_hash = hash_func(adata)
 
     subset = adata[:5, :][:, :5]
-    assert subset.is_view
-    m = getattr(subset, mapping_name)["m"]
-    with (
-        pytest.raises(TypeError, match=r"immutable")
-        if is_jax
-        else pytest.warns(
-            ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"
-        )
-    ):
-        m[0, 0] = 100
-    if not is_jax:
-        assert not subset.is_view
+    with subtests.test("potentially initialize as view"):
+        assert subset.is_view
+        m = getattr(subset, mapping_name)["m"]
+        with (
+            pytest.raises(TypeError, match=r"immutable")
+            if is_jax
+            else pytest.warns(
+                ad.ImplicitModificationWarning, match=rf".*\.{mapping_name}.*"
+            )
+        ):
+            m[0, 0] = 100
+        if not is_jax:
+            assert not subset.is_view
     # TODO: Remove `raises` after https://github.com/scipy/scipy/pull/23626 becomes minimum version i.e., scipy 1.17.
 
     is_dask_with_broken_view_setting = (
@@ -219,19 +225,20 @@ def test_modify_view_component(matrix_type, mapping_name, request):
         not is_dask_with_broken_view_setting
         and "sparse_dask_array" in request.node.callspec.id
     )
-    if not is_jax:
-        with (
-            pytest.raises(ValueError, match=r"shape mismatch")
-            if Version(version("scipy")) < Version("1.17.0rc0")
-            and (
-                is_sparse_array_in_lower_dask_version
-                or is_dask_with_broken_view_setting
-            )
-            else nullcontext()
-        ):
-            assert getattr(subset, mapping_name)["m"][0, 0] == 100
-
-    assert init_hash == hash_func(adata)
+    with subtests.test("setting after view-initialization"):
+        if not is_jax:
+            with (
+                pytest.raises(ValueError, match=r"shape mismatch")
+                if Version(version("scipy")) < Version("1.17.0rc0")
+                and (
+                    is_sparse_array_in_lower_dask_version
+                    or is_dask_with_broken_view_setting
+                )
+                else nullcontext()
+            ):
+                assert getattr(subset, mapping_name)["m"][0, 0] == 100
+    with subtests.test("hash of anndata objects match after potential modifications"):
+        assert init_hash == hash_func(adata)
 
 
 @pytest.mark.parametrize("attr", ["obsm", "varm"])
