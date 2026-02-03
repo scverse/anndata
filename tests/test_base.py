@@ -423,28 +423,22 @@ def test_oob_boolean_slicing():
     assert str(len2) in str(e.value)
 
 
-def test_slicing_index_bool():
+def test_pd_index(subtests: pytest.Subtests):
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
         dict(obs_names=["A", "B", "C"]),
         dict(var_names=["a", "b", "c"]),
     )
-    assert_equal(
-        adata[pd.Index(adata.obs_names.isin(["A", "B"]))],
-        adata[adata.obs_names.isin(["A", "B"])],
-    )
-
-
-def test_slicing_index_int():
-    adata = AnnData(
-        np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
-        dict(obs_names=["A", "B", "C"]),
-        dict(var_names=["a", "b", "c"]),
-    )
-    assert_equal(
-        adata[pd.Index([0, 2])],
-        adata[[0, 2]],
-    )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index(adata.obs_names.isin(["A", "B"]))],
+            adata[adata.obs_names.isin(["A", "B"])],
+        )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index([0, 2])],
+            adata[[0, 2]],
+        )
 
 
 def test_slicing_strings():

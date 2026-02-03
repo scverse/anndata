@@ -147,7 +147,7 @@ def test_setting_daskarray(adata: AnnData):
     assert h == joblib.hash(adata)
 
 
-@pytest.mark.skipif(jnp is None, reason="JAX not installed")
+@pytest.mark.array_api
 def test_setting_jax(adata: AnnData):
     adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
     assert isinstance(adata.obsm["jax"], jnp.ndarray)

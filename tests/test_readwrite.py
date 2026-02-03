@@ -37,7 +37,6 @@ from anndata.tests.helpers import (
     jnp_array_or_idempotent,
 )
 
-# jax extension
 jnp = get_jnp_or_none()
 
 

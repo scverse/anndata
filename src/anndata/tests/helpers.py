@@ -79,7 +79,6 @@ def get_jnp_or_none() -> None | ModuleType:
     return None
 
 
-# jax extension
 jnp = get_jnp_or_none()
 
 
@@ -90,7 +89,6 @@ def jnp_array_or_idempotent(x):
     return jnp.array(x)
 
 
-# handle fast-array-utils presence for dask sparray support
 try:
     import fast_array_utils as _
 except ImportError:
