@@ -446,20 +446,20 @@ except ImportError:
 
 
 def _resolve_idxs(
-    old: tuple[_Index1DNorm, _Index1DNorm],
+    old: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
     new: tuple[_Index1DNorm, _Index1DNorm],
     adata: AnnData,
-) -> tuple[_Index1DNorm, _Index1DNorm]:
+) -> tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
     return o, v
 
 
 @singledispatch
 def _resolve_idx(
-    old: _Index1DNorm | IndexManager,
+    old: _Index1DNorm[IndexManager],
     new: _Index1DNorm,
     l: Literal[0, 1],
-) -> _Index1DNorm | IndexManager:
+) -> _Index1DNorm[IndexManager]:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
 
@@ -529,7 +529,7 @@ def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
     old: IndexManager, new: _Index1DNorm, l: Literal[0, 1]
-) -> IndexManager | _Index1DNorm:
+) -> _Index1DNorm[IndexManager]:
     """Resolve indices when old is an IndexManager.
 
     If new is an array-api array, use get_for_array to get a matching

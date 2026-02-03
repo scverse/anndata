@@ -80,7 +80,7 @@ class XArrayDtype(_XrDtV, Enum):
 
 @singledispatch
 def _gen_anndata_index(
-    indexer: Index1D, index: pd.Index
+    indexer: Index1D[IndexManager], index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
@@ -192,7 +192,7 @@ def _from_array(
 
 
 def _normalize_index(
-    indexer: Index1D, index: pd.Index
+    indexer: Index1D[IndexManager], index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
