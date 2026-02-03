@@ -565,7 +565,7 @@ def test_write_csv_view(typ, tmp_path):
     [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
 )
 def test_readwrite_empty(read, write, name, tmp_path, xp_array):
-    adata = ad.AnnData(uns=dict(empty=xp_array([], dtype=float)))
+    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"] is not None
