@@ -115,21 +115,10 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
         ad.io.read_elem(group)
 
 
-def test_to_writeable_numpy_passthrough():
-    x = np.array([1, 2, 3])
-    result = to_writeable(x)
-    assert result is x
-
-
-def test_to_writeable_pandas_passthrough():
-    x = pd.Series([1, 2, 3])
-    result = to_writeable(x)
-    assert result is x
-
-
-def test_to_writeable_list_fallback():
-    x = [1, 2, 3]  # Not array-api compatible, no __to_dlpack__
-    result = to_writeable(x)
+@pytest.mark.parametrize("to", [np.array, pd.Series, lambda x: x])
+def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | list]):
+    x = [1, 2, 3]
+    result = to_writeable(to(x))
     assert result is x
 
 
