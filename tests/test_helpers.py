@@ -326,21 +326,22 @@ def test_gen_adata_jax_backend():
 
 
 @pytest.mark.array_api
-def test_gen_adata_jax_subfields():
+def test_gen_adata_jax_subfield_assignment(subtests: pytest.Subtests):
     adata = gen_adata(
         (5, 5),
         X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
     )
 
-    adata.obsm["pca"] = jnp.asarray(adata.X[:, :2], dtype=jnp.float32)
-    adata.varm["gene_scores"] = jnp.asarray(adata.X.T[:3].T, dtype=jnp.float32)
-    adata.layers["counts"] = jnp.asarray(adata.X, dtype=jnp.float32)
+    adata.obsm["pca"] = adata.X[:, :2]
+    adata.varm["gene_scores"] = adata.X.T[:3].T
+    adata.layers["counts"] = adata.X
 
-    assert isinstance(adata.obsm["pca"], jnp.ndarray)
-    assert adata.obsm["pca"].shape == (5, 2)
-
-    assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
-    assert adata.varm["gene_scores"].shape == (5, 3)
-
-    assert isinstance(adata.layers["counts"], jnp.ndarray)
-    assert adata.layers["counts"].shape == adata.X.shape
+    with subtests.test("obsm"):
+        assert isinstance(adata.obsm["pca"], jnp.ndarray)
+        assert adata.obsm["pca"].shape == (5, 2)
+    with subtests.test("varm"):
+        assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
+        assert adata.varm["gene_scores"].shape == (5, 3)
+    with subtests.test("layers"):
+        assert isinstance(adata.layers["counts"], jnp.ndarray)
+        assert adata.layers["counts"].shape == adata.X.shape
