@@ -34,6 +34,7 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     get_jnp_or_none,
+    jnp_array_or_idempotent,
 )
 
 # jax extension
@@ -45,17 +46,12 @@ if TYPE_CHECKING:
     from typing import Literal
 
 HERE = Path(__file__).parent
-MAYBE_JAX_TYPE = (
-    [pytest.param(jnp.array, id="jax.array", marks=pytest.mark.array_api)]
-    if jnp is not None
-    else []
-)
 ARRAY_TYPES = [
     pytest.param(np.array, id="np.array"),
     pytest.param(as_dense_dask_array, id="dask_dense"),
     pytest.param(csr_matrix, id="csr_matrix"),
     pytest.param(csr_array, id="csr_array"),
-    *MAYBE_JAX_TYPE,
+    pytest.param(jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api),
 ]
 
 # ------------------------------------------------------------------------------
@@ -292,7 +288,9 @@ def test_readwrite_backed(typ, backing_h5ad):
         pytest.param(csc_matrix, id="csc_matrix"),
         pytest.param(csr_array, id="csr_array"),
         pytest.param(csc_array, id="csc_array"),
-        *MAYBE_JAX_TYPE,
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
     ],
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
@@ -498,14 +496,32 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [*MAYBE_JAX_TYPE, np.array, csr_matrix])
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
 def test_write_csv_view(typ, tmp_path):
     # https://github.com/scverse/anndata/issues/401
     import hashlib
@@ -544,9 +560,12 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-@pytest.mark.parametrize("xp", [np, jnp] if jnp is not None else [np])
-def test_readwrite_empty(read, write, name, tmp_path, xp):
-    adata = ad.AnnData(uns=dict(empty=xp.array([], dtype=float)))
+@pytest.mark.parametrize(
+    "xp_array",
+    [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
+)
+def test_readwrite_empty(read, write, name, tmp_path, xp_array):
+    adata = ad.AnnData(uns=dict(empty=xp_array([], dtype=float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"] is not None

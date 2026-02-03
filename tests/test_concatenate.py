@@ -35,6 +35,7 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_vstr_recarray,
     get_jnp_or_none,
+    jnp_array_or_idempotent,
 )
 from anndata.utils import asarray
 
@@ -1524,11 +1525,9 @@ def expected_shape(
 )
 @pytest.mark.parametrize(
     "array_type",
-    [pytest.param(np.array, id="np")]
-    if jnp is None
-    else [
+    [
         pytest.param(np.array, id="np"),
-        pytest.param(jnp.array, id="jax", marks=pytest.mark.array_api),
+        pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
     ],
 )
 def test_concat_size_0_axis(

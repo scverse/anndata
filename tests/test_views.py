@@ -44,6 +44,7 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     get_jnp_or_none,
+    jnp_array_or_idempotent,
     single_int_subset,
     single_subset,
     slice_int_subset,
@@ -1023,18 +1024,12 @@ def test_normalize_index_jax_boolean():
         pytest.param(int, _from_int, id="int"),
         pytest.param(np.int32, _from_int, id="np_int"),
         pytest.param(str, _from_str, id="str"),
-        *(
-            [
-                pytest.param(
-                    # TODO: jax.Array (aliased to jnp.ndarray) actually is not the "implementation" since `type(jnp.array(np.array([1])))` gives `jaxlib._jax.ArrayImpl`
-                    type(jnp.array(np.array([1]))),
-                    _from_array,
-                    id="jax",
-                    marks=pytest.mark.array_api,
-                )
-            ]
-            if jnp is not None
-            else []
+        pytest.param(
+            # TODO: jax.Array (aliased to jnp.ndarray) actually is not the "implementation" since `type(jnp.array(np.array([1])))` gives `jaxlib._jax.ArrayImpl`
+            type(jnp_array_or_idempotent(np.array([1]))),
+            _from_array,
+            id="jax",
+            marks=pytest.mark.array_api,
         ),
         *(
             [pytest.param(XDataArray, _from_xarray, id="xarray")]

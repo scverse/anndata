@@ -83,6 +83,14 @@ def get_jnp_or_none() -> None | ModuleType:
 # jax extension
 jnp = get_jnp_or_none()
 
+
+def jnp_array_or_idempotent(x):
+    if jnp is None:
+        # In this case, the test should be marked by `array_api` to be conditionally skipped
+        return x
+    return jnp.array(x)
+
+
 # handle fast-array-utils presence for dask sparray support
 try:
     import fast_array_utils as _
@@ -1140,12 +1148,8 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
+    pytest.param(as_dense_jax_array, id="jax_array", marks=pytest.mark.array_api),
 ]
-
-if jnp is not None:
-    BASE_MATRIX_PARAMS.append(
-        pytest.param(as_dense_jax_array, id="jax_array", marks=pytest.mark.array_api)
-    )
 
 DASK_MATRIX_PARAMS = [
     pytest.param(as_dense_dask_array, id="dense_dask_array"),
