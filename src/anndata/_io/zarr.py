@@ -71,7 +71,15 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     """
     with (
         zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-        if find_spec("zarrs") and not isinstance(store, zarr.Group)
+        if find_spec("zarrs")
+        and not isinstance(store, zarr.Group)
+        and (
+            (
+                isinstance(store, zarr.abc.Store)
+                and isinstance(store, zarr.storage.LocalStore)
+            )
+            or not isinstance(store, zarr.abc.Store)
+        )
         else nullcontext()
     ):
         f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
