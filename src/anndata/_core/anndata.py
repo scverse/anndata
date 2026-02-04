@@ -587,13 +587,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
-            if self._X is not None:
-                X = self._X
-            else:
-                X = as_view(
-                    _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                    ElementRef(self, "X"),
-                )
+            X = as_view(
+                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
+                ElementRef(self, "X"),
+            )
         else:
             X = self._X
         return X
