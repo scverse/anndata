@@ -625,7 +625,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self._init_as_actual(new)
                 return None
             else:
-                msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release."
+                msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
                 "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
                 "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
                 warn(msg, FutureWarning)
