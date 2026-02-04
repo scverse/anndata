@@ -121,9 +121,11 @@ class DataFrameLike(Protocol):
 
     def reindex(
         self,
+        *,
         index: pd.Index | None = None,
-        axis: Literal[0] = 0,
+        axis: Literal[0, 1] | None = 0,
         fill_value: Any = ...,
+        **kwargs,
     ) -> Self:
         """Reindex the DataFrame-like object to match a new index.
 
