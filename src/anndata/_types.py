@@ -109,6 +109,11 @@ class DataFrameLike(Protocol):
         """Column labels of the DataFrame-like object."""
         ...
 
+    @columns.setter
+    def _(self, v: Any) -> None:
+        """Setter for columns"""
+        ...
+
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the DataFrame-like object as (n_rows, n_columns)."""
