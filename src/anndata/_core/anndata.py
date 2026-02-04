@@ -608,13 +608,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if value is not None
             else None
         )
-        can_set_direct_non_none = value is not None and (
+        can_set_direct = value is None or (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         )
-        if not can_set_direct_non_none:
+        if not can_set_direct:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
         if self._is_view:
