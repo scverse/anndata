@@ -57,12 +57,9 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     `adata.attr[key1][key2][keyn]...`
     """
     new = adata_view.copy()
-    if attr_name == "X":
-        yield new
-    else:
-        attr = getattr(new, attr_name)
-        container = reduce(lambda d, k: d[k], keys, attr)
-        yield container
+    attr = getattr(new, attr_name)
+    container = reduce(lambda d, k: d[k], keys, attr)
+    yield container
     adata_view._init_as_actual(new)
 
 
