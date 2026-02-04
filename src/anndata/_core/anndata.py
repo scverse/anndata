@@ -622,8 +622,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if settings.copy_on_write_X:
                 msg = "Setting element `.X` of view, initializing view as actual."
                 warn(msg, ImplicitModificationWarning)
-                new = self.copy()
-                new._X = value
+                new = self._mutated_copy(X=value)
                 self._init_as_actual(new)
                 return None
             else:
@@ -1521,17 +1520,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
-            if self.is_view:
-                if self._X is not None:
-                    return self._mutated_copy(X=self._X)
-                if self._has_X():
-                    # TODO: How do I unambiguously check if this is a copy?
-                    # Subsetting this way means we don’t have to have a view type
-                    # defined for the matrix, which is needed for some of the
-                    # current distributed backend. Specifically Dask.
-                    return self._mutated_copy(
-                        X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-                    )
+            if self.is_view and self._has_X():
+                # TODO: How do I unambiguously check if this is a copy?
+                # Subsetting this way means we don’t have to have a view type
+                # defined for the matrix, which is needed for some of the
+                # current distributed backend. Specifically Dask.
+                return self._mutated_copy(
+                    X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
+                )
             return self._mutated_copy()
         else:
             from ..io import read_h5ad, write_h5ad
