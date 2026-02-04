@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .._types import DataFrameLike
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
+from ..types import DataFrameLike
 from ..utils import (
     axis_len,
     convert_to_dict,

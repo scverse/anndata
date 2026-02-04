@@ -8,9 +8,9 @@ from scipy import sparse
 
 from anndata.compat import CSArray, CSMatrix
 
-from .._types import DataFrameLike
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset
+from ..types import DataFrameLike
 from ..utils import (
     ensure_df_homogeneous,
     get_union_members,

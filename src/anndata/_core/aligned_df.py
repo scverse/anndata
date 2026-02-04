@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from pandas.api.types import is_string_dtype
 
-from .._types import DataFrameLike
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, pandas_as_str
+from ..types import DataFrameLike
 from ..utils import warn
 from .xarray import Dataset2D
 

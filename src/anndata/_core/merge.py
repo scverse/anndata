@@ -20,7 +20,6 @@ from scipy import sparse
 from anndata._core.file_backing import to_memory
 from anndata._warnings import ExperimentalFeatureWarning
 
-from .._types import DataFrameLike
 from ..compat import (
     AwkArray,
     CSArray,
@@ -30,6 +29,7 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
 )
+from ..types import DataFrameLike
 from ..utils import asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice

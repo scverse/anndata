@@ -10,12 +10,12 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from .._types import DataFrameLike
 from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from ..types import DataFrameLike
     from ..typing import Index, Index1D, _Index1DNorm
 
 
@@ -175,6 +175,8 @@ def _subset(
     subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ):
     # Check for DataFrameLike objects (pd.DataFrame, Dataset2D, etc.)
+    from ..types import DataFrameLike
+
     if isinstance(a, DataFrameLike):
         return a.iloc[subset_idx]
     # Select as combination of indexes, not coordinates

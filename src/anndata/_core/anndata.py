@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from .._types import DataFrameLike
+    from ..types import DataFrameLike
     from ..typing import Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
