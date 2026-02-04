@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
+from ..compat import AwkArray, CSArray, CSMatrix, CupyArray
+from ..types import DataFrameLike
 from ..utils import (
     axis_len,
     convert_to_dict,
@@ -24,7 +25,6 @@ from .access import ElementRef
 from .index import _subset
 from .storage import coerce_array
 from .views import as_view, view_update
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
-# TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
+# DataFrameLike encompasses pd.DataFrame and Dataset2D
+Value = DataFrameLike | CSMatrix | CSArray | np.ndarray
 
 
 class AlignedMappingBase[I: OneDIdx](MutableMapping[str, Value], ABC):
@@ -74,8 +74,6 @@ class AlignedMappingBase[I: OneDIdx](MutableMapping[str, Value], ABC):
             warn_once(msg, ExperimentalFeatureWarning)
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
             val = val.reshape((val.shape[0], 1))
-        elif isinstance(val, XDataset):
-            val = Dataset2D(val)
         for i, axis in enumerate(self.axes):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue

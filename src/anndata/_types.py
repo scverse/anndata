@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from . import typing
 from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from .utils import set_module
 
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
 
     from anndata._core.xarray import Dataset2D
 
+    from . import typing
     from ._io.specs.registry import (
         IOSpec,
         LazyDataStructures,
@@ -40,7 +40,6 @@ __all__ = [
 # These two are not public, so we don’t make them `type`s
 _ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
 _GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
-
 type StorageType = _ArrayStorageType | _GroupStorageType
 
 

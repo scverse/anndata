@@ -337,9 +337,9 @@ def gen_adata(  # noqa: PLR0913
 
     if has_xr := find_spec("xarray"):
         if obs_xdataset:
-            obs = XDataset.from_dataframe(obs)
+            obs = Dataset2D(XDataset.from_dataframe(obs))
         if var_xdataset:
-            var = XDataset.from_dataframe(var)
+            var = Dataset2D(XDataset.from_dataframe(var))
 
     if X_type is None:
         X = None
@@ -361,11 +361,11 @@ def gen_adata(  # noqa: PLR0913
         da=da.random.random((N, 50)),
     )
     if has_xr:
-        obsm["xdataset"] = XDataset.from_dataframe(
-            gen_typed_df(M, obs_names, dtypes=obs_dtypes)
+        obsm["xdataset"] = Dataset2D(
+            XDataset.from_dataframe(gen_typed_df(M, obs_names, dtypes=obs_dtypes))
         )
-        varm["xdataset"] = XDataset.from_dataframe(
-            gen_typed_df(N, var_names, dtypes=var_dtypes)
+        varm["xdataset"] = Dataset2D(
+            XDataset.from_dataframe(gen_typed_df(N, var_names, dtypes=var_dtypes))
         )
     obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
     obsm = maybe_add_sparse_array(

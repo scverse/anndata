@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 from scipy import sparse
 
 from anndata.compat import CSArray, CSMatrix
+from anndata.types import DataFrameLike
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
 from ..utils import (
     ensure_df_homogeneous,
     get_union_members,
@@ -17,7 +16,6 @@ from ..utils import (
     raise_value_error_if_multiindex_columns,
     warn,
 )
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from typing import Any
@@ -38,9 +36,7 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
-    if isinstance(value, XDataset):
-        value = Dataset2D(value)
-    if isinstance(value, (*array_data_structure_types, Dataset2D)):
+    if isinstance(value, array_data_structure_types):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)
@@ -56,7 +52,7 @@ def coerce_array(
     if any(is_non_csc_r_array_or_matrix):
         msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
         raise ValueError(msg)
-    if isinstance(value, pd.DataFrame):
+    if isinstance(value, DataFrameLike):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)
         return value if allow_df else ensure_df_homogeneous(value, name)

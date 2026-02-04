@@ -11,11 +11,11 @@ import pandas as pd
 from scipy.sparse import issparse
 
 from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from ..types import DataFrameLike
     from ..typing import Index, Index1D, _Index1DNorm
 
 
@@ -36,7 +36,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
 ) -> _Index1DNorm | int | np.integer:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
-        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
+        msg = f"Don't call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
 
     if isinstance(indexer, pd.Index | pd.Series):
@@ -92,7 +92,7 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
         elif issubclass(indexer.dtype.type, np.bool_):
             if indexer.shape != index.shape:
                 msg = (
-                    f"Boolean index does not match AnnData’s shape along this "
+                    f"Boolean index does not match AnnData's shape along this "
                     f"dimension. Boolean index has shape {indexer.shape} while "
                     f"AnnData index has shape {index.shape}."
                 )
@@ -171,9 +171,14 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 @singledispatch
 def _subset(
-    a: np.ndarray | pd.DataFrame,
+    a: np.ndarray | DataFrameLike,
     subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ):
+    # Check for DataFrameLike objects (pd.DataFrame, Dataset2D, etc.)
+    from ..types import DataFrameLike
+
+    if isinstance(a, DataFrameLike):
+        return a.iloc[subset_idx]
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, Iterable) for x in subset_idx):
@@ -205,15 +210,6 @@ def _subset_sparse(
             first_idx = np.flatnonzero(first_idx)
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
-
-
-@_subset.register(pd.DataFrame)
-@_subset.register(Dataset2D)
-def _subset_df(
-    df: pd.DataFrame | Dataset2D,
-    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
-):
-    return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)

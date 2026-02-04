@@ -8,9 +8,9 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset, pandas_as_str
+from ..compat import pandas_as_str
+from ..types import DataFrameLike
 from ..utils import warn
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -25,7 +25,7 @@ def _gen_dataframe(
     source: Literal["X", "shape"],
     attr: Literal["obs", "var"],
     length: int | None = None,
-) -> pd.DataFrame:  # pragma: no cover
+) -> DataFrameLike:  # pragma: no cover
     msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
     raise ValueError(msg)
 
@@ -69,9 +69,9 @@ def _gen_dataframe_mapping(
     return df
 
 
-@_gen_dataframe.register(pd.DataFrame)
+@_gen_dataframe.register(DataFrameLike)
 def _gen_dataframe_df(
-    anno: pd.DataFrame,
+    anno: DataFrameLike,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
@@ -129,27 +129,3 @@ def _mk_df_error(
             f"({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
-
-
-@_gen_dataframe.register(Dataset2D)
-def _gen_dataframe_xr(
-    anno: Dataset2D,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return anno
-
-
-@_gen_dataframe.register(XDataset)
-def _gen_dataframe_xdataset(
-    anno: XDataset,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return Dataset2D(anno)

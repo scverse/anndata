@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Self, overload
+from typing import TYPE_CHECKING, overload
 
 import numpy as np
 import pandas as pd
@@ -14,7 +13,14 @@ from anndata._warnings import warn
 from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Iterator
+    from collections.abc import (
+        Callable,
+        Collection,
+        Hashable,
+        Iterable,
+        Iterator,
+        Mapping,
+    )
     from typing import Any, Literal
 
     from .._types import Dataset2DIlocIndexer
@@ -33,16 +39,14 @@ def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-class Dataset2D(Mapping[Hashable, XDataArray | Self]):
+class Dataset2D:
     r"""
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
     are respected, namely that there is only one 1d dim and coord with the same name i.e.,
     like a :class:`pandas.DataFrame`.
 
-    You should not have to initiate this class yourself.  Setting an :class:`xarray.Dataset`
-    into a relevant part of the :class:`~anndata.AnnData` object will attempt to wrap that
-    object in this object, trying to enforce the "dataframe-invariants."
+    You will need to wrap :class:`xarray.Dataset` inside this class if you wish to set :attr:`~anndata.AnnData.obs` or :attr:`~anndata.AnnData.var` with that.
 
     Because xarray requires :attr:`xarray.Dataset.coords` to be in-memory, this class provides
     handling for an out-of-memory index via :attr:`~anndata.experimental.backed.Dataset2D.true_index`.
@@ -191,7 +195,7 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         -------
         The (2D) shape of the dataframe resolved from :attr:`~xarray.Dataset.sizes`.
         """
-        return (self.ds.sizes[self.index_dim], len(self.ds))
+        return (len(self), len(self.ds))
 
     @property
     def iloc(self) -> Dataset2DIlocIndexer:
@@ -363,7 +367,7 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         return iter(self.ds)
 
     def __len__(self) -> int:
-        return len(self.ds)
+        return self.ds.sizes[self.index_dim]
 
     @property
     def dtypes(self) -> Mapping[Hashable, np.dtype]:

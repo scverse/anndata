@@ -29,6 +29,7 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
 )
+from ..types import DataFrameLike
 from ..utils import asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
@@ -557,7 +558,7 @@ class Reindexer:
         """
         if self.no_change and (axis_len(el, axis) == len(self.old_idx)):
             return el
-        if isinstance(el, pd.DataFrame | Dataset2D):
+        if isinstance(el, DataFrameLike):
             return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
@@ -570,7 +571,7 @@ class Reindexer:
         else:
             return self._apply_to_array(el, axis=axis, fill_value=fill_value)
 
-    def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
+    def _apply_to_df_like(self, el: DataFrameLike, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = np.nan
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)

@@ -11,6 +11,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
+from anndata.types import DataFrameLike
 
 from .._settings import settings
 from ..compat import (
@@ -23,7 +24,6 @@ from ..compat import (
 )
 from ..utils import warn
 from .access import ElementRef
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView, Sequence
@@ -366,8 +366,8 @@ def as_view_cupy_csc(mtx, view_args):
     return CupySparseCSCView(mtx, view_args=view_args)
 
 
-@as_view.register(Dataset2D)
-def _(a: Dataset2D, view_args):
+@as_view.register(DataFrameLike)
+def _(a: DataFrameLike, view_args):
     return a
 
 

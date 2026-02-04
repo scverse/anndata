@@ -12,6 +12,7 @@ from .._types import (
     Write,
     WriteCallback,
 )
+from ..types import DataFrameLike, DataFrameLikeIlocIndexer
 from ..utils import module_get_attr_redirect
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_lazy
@@ -53,6 +54,8 @@ def __getattr__(attr_name: str) -> Any:
 __all__ = [
     "AnnCollection",
     "AnnLoader",
+    "DataFrameLike",
+    "DataFrameLikeIlocIndexer",
     "Dataset2DIlocIndexer",
     "IOSpec",
     "Read",

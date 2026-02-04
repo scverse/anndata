@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import XDataset
+    from ..types import DataFrameLike
     from ..typing import Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
@@ -772,7 +772,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame | XDataset, attr: Literal["obs", "var"]):
+    def _set_dim_df(self, value: DataFrameLike, attr: Literal["obs", "var"]):
         value = _gen_dataframe(
             value,
             [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
@@ -836,12 +836,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 v.index = value
 
     @property
-    def obs(self) -> pd.DataFrame | Dataset2D:
+    def obs(self) -> DataFrameLike:
         """One-dimensional annotation of observations (`pd.DataFrame`)."""
         return self._obs
 
     @obs.setter
-    def obs(self, value: pd.DataFrame | XDataset):
+    def obs(self, value: DataFrameLike):
         self._set_dim_df(value, "obs")
 
     @obs.deleter
@@ -859,12 +859,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         self._set_dim_index(names, "obs")
 
     @property
-    def var(self) -> pd.DataFrame | Dataset2D:
+    def var(self) -> DataFrameLike:
         """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
         return self._var
 
     @var.setter
-    def var(self, value: pd.DataFrame | XDataset):
+    def var(self, value: DataFrameLike):
         self._set_dim_df(value, "var")
 
     @var.deleter
