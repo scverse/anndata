@@ -208,6 +208,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     _adata_ref: AnnData | None
     _oidx: _Index1DNorm | None
     _vidx: _Index1DNorm | None
+    _X: None | _XDataType = None
 
     @old_positionals(
         "obsm",
@@ -586,10 +587,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         elif self.is_view and self._adata_ref.X is None:
             X = None
         elif self.is_view:
-            X = as_view(
-                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
-                ElementRef(self, "X"),
-            )
+            if self._X is not None:
+                X = self._X
+            else:
+                X = as_view(
+                    _subset(self._adata_ref.X, (self._oidx, self._vidx)),
+                    ElementRef(self, "X"),
+                )
         else:
             X = self._X
         return X
@@ -602,7 +606,30 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         #     return X
 
     @X.setter
-    def X(self, value: _XDataType | None):  # noqa: PLR0912
+    def X(self, value: _XDataType | None):  # noqa: PLR0912, PLR0915
+        value = (
+            coerce_array(value, name="X", allow_array_like=True)
+            if value is not None
+            else None
+        )
+        can_set_direct_non_none = value is not None and (
+            np.isscalar(value)
+            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+        )
+        if not can_set_direct_non_none:
+            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
+            raise ValueError(msg)
+        if self._is_view:
+            if settings.copy_on_write_X:
+                msg = "Setting element `.X` of view, initializing view as actual."
+                warn(msg, ImplicitModificationWarning)
+                self._X = value
+                return None
+            else:
+                msg = "Setting element `.X` of view will obey copy-on-write semantics in the next minor release. Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
+                warn(msg, FutureWarning)
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -611,7 +638,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
@@ -624,65 +650,51 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
             oidx, vidx = self._oidx, self._vidx
-        if (
-            np.isscalar(value)
-            or (hasattr(value, "shape") and (self.shape == value.shape))
-            or (self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-        ):
-            if not np.isscalar(value):
-                if self.is_view and any(
-                    isinstance(idx, np.ndarray)
-                    and len(np.unique(idx)) != len(idx.ravel())
-                    for idx in [oidx, vidx]
-                ):
-                    msg = (
-                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                        "The resulting `adata.X` will likely not equal the value to which you set it. "
-                        "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error."
-                    )
-                    warn(msg, FutureWarning)
-                if self.shape != value.shape:
-                    # For assigning vector of values to 2d array or matrix
-                    # Not necessary for row of 2d array
-                    value = value.reshape(self.shape)
-            if self.isbacked:
-                if self.is_view:
-                    X = self.file["X"]
-                    if isinstance(X, h5py.Group):
-                        msg = "Cannot write to views of sparse backed files"
-                        raise NotImplementedError(msg)
-                    X[oidx, vidx] = value
-                else:
-                    self._set_backed("X", value)
-            elif self.is_view:
-                if sparse.issparse(self._adata_ref._X) and isinstance(
-                    value, np.ndarray
-                ):
-                    if isinstance(self._adata_ref.X, CSArray):
-                        memory_class = sparse.coo_array
-                    else:
-                        memory_class = sparse.coo_matrix
-                    value = memory_class(value)
-                elif sparse.issparse(value) and isinstance(
-                    self._adata_ref._X, np.ndarray
-                ):
-                    msg = (
-                        "Trying to set a dense array with a sparse array on a view. "
-                        "Densifying the sparse array. "
-                        "This may incur excessive memory usage"
-                    )
-                    warn(msg, UserWarning)
-                    value = value.toarray()
-                msg = "Modifying `X` on a view results in data being overridden"
-                warn(msg, ImplicitModificationWarning)
-                self._adata_ref._X[oidx, vidx] = value
+        if not np.isscalar(value):
+            if self.is_view and any(
+                isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx.ravel())
+                for idx in [oidx, vidx]
+            ):
+                msg = (
+                    "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
+                    "The resulting `adata.X` will likely not equal the value to which you set it. "
+                    "To avoid this potential issue, please make a copy of the data first. "
+                    "In the future, this operation will throw an error."
+                )
+                warn(msg, FutureWarning)
+            if self.shape != value.shape:
+                # For assigning vector of values to 2d array or matrix
+                # Not necessary for row of 2d array
+                value = value.reshape(self.shape)
+        if self.isbacked:
+            if self.is_view:
+                X = self.file["X"]
+                if isinstance(X, h5py.Group):
+                    msg = "Cannot write to views of sparse backed files"
+                    raise NotImplementedError(msg)
+                X[oidx, vidx] = value
             else:
-                self._X = value
+                self._set_backed("X", value)
+        elif self.is_view:
+            if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
+                if isinstance(self._adata_ref.X, CSArray):
+                    memory_class = sparse.coo_array
+                else:
+                    memory_class = sparse.coo_matrix
+                value = memory_class(value)
+            elif sparse.issparse(value) and isinstance(self._adata_ref._X, np.ndarray):
+                msg = (
+                    "Trying to set a dense array with a sparse array on a view. "
+                    "Densifying the sparse array. "
+                    "This may incur excessive memory usage"
+                )
+                warn(msg, UserWarning)
+                value = value.toarray()
+            msg = "Modifying `X` on a view results in data being overridden"
+            warn(msg, ImplicitModificationWarning)
+            self._adata_ref._X[oidx, vidx] = value
         else:
-            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
-            raise ValueError(msg)
+            self._X = value
 
     @X.deleter
     def X(self):
