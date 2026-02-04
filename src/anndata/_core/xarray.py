@@ -40,9 +40,7 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     are respected, namely that there is only one 1d dim and coord with the same name i.e.,
     like a :class:`pandas.DataFrame`.
 
-    You should not have to initiate this class yourself.  Setting an :class:`xarray.Dataset`
-    into a relevant part of the :class:`~anndata.AnnData` object will attempt to wrap that
-    object in this object, trying to enforce the "dataframe-invariants."
+    You will need to wrap :class:`xarray.Dataset` inside this class if you wish to set :attr:`~anndata.AnnData.obs` or :attr:`~anndata.AnnData.var` with that.
 
     Because xarray requires :attr:`xarray.Dataset.coords` to be in-memory, this class provides
     handling for an out-of-memory index via :attr:`~anndata.experimental.backed.Dataset2D.true_index`.

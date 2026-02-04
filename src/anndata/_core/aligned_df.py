@@ -8,7 +8,7 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset, pandas_as_str
+from ..compat import pandas_as_str
 from ..types import DataFrameLike
 from ..utils import warn
 from .xarray import Dataset2D
@@ -148,15 +148,3 @@ def _gen_dataframe_xr(
     length: int | None = None,
 ):
     return anno
-
-
-@_gen_dataframe.register(XDataset)
-def _gen_dataframe_xdataset(
-    anno: XDataset,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return Dataset2D(anno)

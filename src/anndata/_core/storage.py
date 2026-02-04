@@ -9,7 +9,6 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
 from ..types import DataFrameLike
 from ..utils import (
     ensure_df_homogeneous,
@@ -39,8 +38,6 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
-    if isinstance(value, XDataset):
-        value = Dataset2D(value)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
