@@ -30,18 +30,7 @@ class ExtensionNamespace(Protocol):
 class DataFrameLikeIlocIndexer(Protocol):
     """Protocol for iloc-style indexers on DataFrame-like objects.
 
-    This protocol defines the minimal interface for positional-based indexing
-    that AnnData requires. Both :class:`pandas.DataFrame` and
-    :class:`~anndata.experimental.backed.Dataset2D` provide compatible
-    ``iloc`` accessors.
-
-    Examples
-    --------
-    >>> import pandas as pd
-    >>> from anndata._types import DataFrameLikeIlocIndexer
-    >>> df = pd.DataFrame({"a": [1, 2, 3]})
-    >>> isinstance(df.iloc, DataFrameLikeIlocIndexer)
-    True
+    Only requires `__getitem__`.
     """
 
     def __getitem__(self, idx: Any) -> Any: ...
@@ -50,27 +39,6 @@ class DataFrameLikeIlocIndexer(Protocol):
 @runtime_checkable
 class DataFrameLike(Protocol):
     """Protocol for DataFrame-like objects usable in AnnData.
-
-    This runtime-checkable protocol defines the minimal DataFrame API that
-    AnnData uses internally for ``obs``, ``var``, and similar dataframe-like
-    data containers. Any class implementing this protocol can be used as a
-    drop-in replacement for :class:`pandas.DataFrame` in these contexts.
-
-    The required interface includes:
-
-    - :attr:`index`: Row labels as a :class:`pandas.Index`
-    - :attr:`columns`: Column labels as a :class:`pandas.Index`
-    - :attr:`shape`: Tuple of (n_rows, n_columns)
-    - :attr:`iloc`: Positional indexer returning a :class:`DataFrameLikeIlocIndexer`
-    - :meth:`reindex`: Method to reindex rows
-
-    Examples
-    --------
-    >>> import pandas as pd
-    >>> from anndata._types import DataFrameLike
-    >>> df = pd.DataFrame({"a": [1, 2, 3]})
-    >>> isinstance(df, DataFrameLike)
-    True
 
     See Also
     --------
