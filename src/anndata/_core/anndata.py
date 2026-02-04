@@ -208,7 +208,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     _adata_ref: AnnData | None
     _oidx: _Index1DNorm | None
     _vidx: _Index1DNorm | None
-    _X: None | _XDataType = None
 
     @old_positionals(
         "obsm",
