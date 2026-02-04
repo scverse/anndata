@@ -38,13 +38,13 @@ classifiers = [
 dependencies = [
     "pandas >=2.2.2",
     "numpy>=2",
-    "scipy >=1.13",
+    "scipy >=1.13,!=1.17.0",
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
-    "zarr >=2.18.7, !=3.0.*",
+    "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
 ]
 dynamic = [ "version" ]
@@ -54,31 +54,36 @@ Documentation = "https://anndata.readthedocs.io/"
 Source = "https://github.com/scverse/anndata"
 Home-page = "https://github.com/scverse/anndata"
 
-
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "anndata[dev-doc]",
+    { include-group = "dev-doc" },
 ]
 doc = [
-    "sphinx>=8.2.1",
+    "sphinx>=9.1.0",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=2.2.0",
+    "sphinx-autodoc-typehints>=3.6.2",
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
-    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.16",
+    "scanpydoc[theme,typehints] >=0.17.1",
     "awkward>=2.6.3",
-    "IPython",                           # For syntax highlighting in notebooks
-    "myst_parser",
-    "sphinx_design>=0.5.0",
+    "IPython",                             # For syntax highlighting in notebooks
+    "myst-parser",
+    "sphinx-design",
+    "anndata[dask]",
+    "pandas>=3",
     # for unreleased changes
-    "anndata[dev-doc,dask]",
+    { include-group = "dev-doc" },
 ]
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+test = [
+    "fast-array-utils>=1.2.3",
+    "anndata[lazy]",
+    { include-group = "test-min" },
+]
 test-min = [
-    "pytest>=8.2",
+    "pytest",
     "pytest-cov",           # only for VS Code
     "pytest-randomly",
     "pytest-memray",
@@ -91,14 +96,14 @@ test-min = [
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
-    "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.6.3",
     "pyarrow",
+    "pooch",
     "anndata[dask]",
 ]
-test = [ "anndata[test-min,lazy]", "fast-array-utils>=1.2.3" ]
+
+[project.optional-dependencies]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
@@ -107,7 +112,7 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 # https://github.com/dask/dask/issues/11290
 # https://github.com/dask/dask/issues/11752
 dask = [
-    "dask[array]>=2023.10.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
 
 [tool.hatch.version]
@@ -120,8 +125,7 @@ packages = [ "src/anndata", "src/testing" ]
 data_file = "test-data/raw-coverage"
 source_pkgs = [ "anndata" ]
 omit = [ "src/anndata/_version.py", "**/test_*.py" ]
-concurrency = [ "multiprocessing" ]
-parallel = true
+patch = [ "subprocess" ]
 [tool.coverage.xml]
 output = "test-data/coverage.xml"
 [tool.coverage.paths]
@@ -131,10 +135,10 @@ exclude_also = [
     "if TYPE_CHECKING:",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
+strict = true
 addopts = [
     "--import-mode=importlib",
-    "--strict-markers",
     "--doctest-modules",
     "--pyargs",
     "-ptesting.anndata._pytest",
@@ -148,7 +152,6 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
     "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
-
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -158,14 +161,13 @@ filterwarnings_when_strict = [
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
     "default:anndata will no longer support zarr v2:DeprecationWarning",
-    "default:The codec `vlen-utf8:UserWarning",
-    "default:The dtype `StringDType():UserWarning",
     "default:Consolidated metadata is:UserWarning",
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
+    "default:Writing zarr v2:UserWarning",
 ]
-python_files = "test_*.py"
+python_files = [ "test_*.py" ]
 testpaths = [
     "anndata",                  # docstrings (module name due to --pyargs)
     "./tests",                  # unit tests
@@ -173,7 +175,6 @@ testpaths = [
     "./docs/concatenation.rst", # further doctests
 ]
 # For some reason this effects how logging is shown when tests are run
-xfail_strict = true
 markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
@@ -249,7 +250,7 @@ max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,GroupT"
 
 [tool.towncrier]
 package = "anndata"

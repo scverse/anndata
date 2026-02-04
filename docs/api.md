@@ -173,17 +173,27 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
+   :signatures: none
 
    experimental.IOSpec
    experimental.Read
    experimental.Write
    experimental.ReadCallback
    experimental.WriteCallback
-   experimental.StorageType
    experimental.backed.MaskedArray
    experimental.backed.CategoricalArray
    experimental.backed.Dataset2D
    experimental.Dataset2DIlocIndexer
+
+..
+    this is not a class/protocol so since the above
+    specifies a template, it gets used.
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.StorageType
 ```
 
 (extensions-api)=
@@ -237,9 +247,23 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
 
    abc.CSRDataset
    abc.CSCDataset
+```
+
+<!-- these are types, not classes, so don’t use the above template -->
+
+```{eval-rst}
+.. toctree::
+   :hidden:
+
+   typing
+
+.. autosummary::
+
+   typing.Index1D
    typing.Index
    typing.AxisStorable
    typing.RWAble

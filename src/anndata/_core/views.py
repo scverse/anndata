@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from ..compat import Index1DNorm
+    from ..typing import _Index1DNorm
 
 
 @contextmanager
@@ -313,6 +313,7 @@ def as_view_df(df, view_args):
     if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
+                # TODO: this mode is going away
                 with pd.option_context("mode.chained_assignment", None):
                     df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
@@ -436,22 +437,24 @@ except ImportError:
 
 
 def _resolve_idxs(
-    old: tuple[Index1DNorm, Index1DNorm],
-    new: tuple[Index1DNorm, Index1DNorm],
+    old: tuple[_Index1DNorm, _Index1DNorm],
+    new: tuple[_Index1DNorm, _Index1DNorm],
     adata: AnnData,
-) -> tuple[Index1DNorm, Index1DNorm]:
+) -> tuple[_Index1DNorm, _Index1DNorm]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
     return o, v
 
 
 @singledispatch
-def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
+def _resolve_idx(
+    old: _Index1DNorm, new: _Index1DNorm, l: Literal[0, 1]
+) -> _Index1DNorm:
     raise NotImplementedError
 
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: Index1DNorm, l: Literal[0, 1]
+    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: Literal[0, 1]
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
     if is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
@@ -464,7 +467,7 @@ def _resolve_idx_ndarray(
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: Index1DNorm, l: Literal[0, 1]
+    old: slice, new: _Index1DNorm, l: Literal[0, 1]
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)

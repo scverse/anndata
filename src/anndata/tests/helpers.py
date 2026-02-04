@@ -19,6 +19,7 @@ import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
+from zarr.storage import LocalStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -38,7 +39,6 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
-    is_zarr_v2,
 )
 from anndata.utils import asarray
 
@@ -50,8 +50,8 @@ if TYPE_CHECKING:
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
-    from .._types import ArrayStorageType
-    from ..compat import Index1D
+    from .._types import _ArrayStorageType
+    from ..typing import Index1D
 
     type _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
@@ -84,12 +84,13 @@ DEFAULT_KEY_TYPES = (
 DEFAULT_COL_TYPES = (
     pd.CategoricalDtype(ordered=False),
     pd.CategoricalDtype(ordered=True),
-    np.int64,
-    np.float64,
-    np.uint8,
-    np.bool_,
-    pd.BooleanDtype,
-    pd.Int32Dtype,
+    np.dtype(np.int64),
+    np.dtype(np.float64),
+    np.dtype(np.uint8),
+    np.dtype(bool),
+    pd.BooleanDtype(),
+    pd.Int32Dtype(),
+    pd.UInt8Dtype(),
 )
 
 
@@ -117,13 +118,11 @@ def gen_vstr_recarray(m, n, dtype=None):
 
 
 def issubdtype[DT](
-    a: np.dtype | pd.api.extensions.ExtensionDtype | type,
-    b: type[DT] | tuple[type[DT], ...],
+    a: np.dtype | pd.api.extensions.ExtensionDtype, b: type[DT] | tuple[type[DT], ...]
 ) -> TypeGuard[DT]:
+    assert not isinstance(a, type)
     if isinstance(b, tuple):
         return any(issubdtype(a, t) for t in b)
-    if isinstance(a, type) and issubclass(a, pd.api.extensions.ExtensionDtype):
-        return issubclass(a, b)
     if isinstance(a, pd.api.extensions.ExtensionDtype):
         return isinstance(a, b)
     try:
@@ -135,6 +134,7 @@ def issubdtype[DT](
 def gen_random_column(  # noqa: PLR0911
     n: int, dtype: np.dtype | pd.api.extensions.ExtensionDtype
 ) -> tuple[str, np.ndarray | pd.api.extensions.ExtensionArray]:
+    assert isinstance(dtype, np.dtype | pd.api.extensions.ExtensionDtype)
     if issubdtype(dtype, pd.CategoricalDtype):
         # TODO: Think about allowing index to be passed for n
         letters = np.fromiter(iter(ascii_letters), "U1")
@@ -151,13 +151,9 @@ def gen_random_column(  # noqa: PLR0911
             ),
         )
     if issubdtype(dtype, IntegerDtype):
-        return (
-            "nullable-int",
-            pd.arrays.IntegerArray(
-                np.random.randint(0, 1000, size=n, dtype=np.int32),
-                mask=np.random.randint(0, 2, size=n, dtype=bool),
-            ),
-        )
+        name, values = gen_random_column(n, dtype.numpy_dtype)
+        mask = np.random.randint(0, 2, size=n, dtype=bool)
+        return f"nullable-{name}", pd.arrays.IntegerArray(values, mask)
     if issubdtype(dtype, pd.StringDtype):
         letters = np.fromiter(iter(ascii_letters), "U1")
         array = pd.array(np.random.choice(letters, n), dtype=pd.StringDtype())
@@ -171,7 +167,7 @@ def gen_random_column(  # noqa: PLR0911
     if not issubdtype(dtype, np.number):  # pragma: no cover
         pytest.fail(f"Unexpected dtype: {dtype}")
 
-    n_bits = 8 * (dtype().itemsize if isinstance(dtype, type) else dtype.itemsize)
+    n_bits = 8 * dtype.itemsize
 
     if issubdtype(dtype, np.unsignedinteger):
         return f"uint{n_bits}", np.random.randint(0, 255, n, dtype=dtype)
@@ -331,8 +327,8 @@ def gen_adata(  # noqa: PLR0913
         random_state = np.random.default_rng()
 
     M, N = shape
-    obs_names = pd.Index(f"cell{i}" for i in range(shape[0]))
-    var_names = pd.Index(f"gene{i}" for i in range(shape[1]))
+    obs_names = pd.Index([f"cell{i}" for i in range(shape[0])], dtype="str")
+    var_names = pd.Index([f"gene{i}" for i in range(shape[1])], dtype="str")
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
@@ -662,7 +658,11 @@ def assert_equal_cupy_sparse(
 @assert_equal.register(h5py.Dataset)
 @assert_equal.register(ZarrArray)
 def assert_equal_h5py_dataset(
-    a: ArrayStorageType, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: _ArrayStorageType,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
@@ -1124,28 +1124,31 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if is_zarr_v2():
-    from zarr.storage import DirectoryStore as LocalStore
-else:
-    from zarr.storage import LocalStore
 
-
-class AccessTrackingStoreBase(LocalStore):
+class AccessTrackingStore(LocalStore):
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        # Needed for zarr v3 to prevent a read-only copy being made
-        # https://github.com/zarr-developers/zarr-python/pull/3156
-        if not is_zarr_v2() and "read_only" not in kwargs:
-            kwargs["read_only"] = True
+        import traceback
+
+        traceback.print_stack()
+        print(kwargs)
         super().__init__(*args, **kwargs)
+        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-        self._read_only = True
+    async def get(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> object:
+        self._check_and_track_key(key)
+        return await super().get(key, prototype=prototype, byte_range=byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1183,35 +1186,13 @@ class AccessTrackingStoreBase(LocalStore):
     def reset_key_trackers(self) -> None:
         self.initialize_key_trackers(self._access_count.keys())
 
-    def assert_access_count(self, key: str, count: int):
+    def assert_access_count(self, key: str, count: int) -> None:
+        __tracebackhide__ = True
         keys_accessed = self.get_subkeys_accessed(key)
         access_count = self.get_access_count(key)
         assert self.get_access_count(key) == count, (
             f"Found {access_count} accesses at {keys_accessed}"
         )
-
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs, read_only=True)
-
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:

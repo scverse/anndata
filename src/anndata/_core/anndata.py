@@ -25,7 +25,14 @@ from anndata._warnings import ImplicitModificationWarning
 
 from .. import utils
 from .._settings import settings
-from ..compat import CSArray, DaskArray, ZarrArray, _move_adj_mtx, old_positionals
+from ..compat import (
+    CSArray,
+    DaskArray,
+    ZarrArray,
+    _move_adj_mtx,
+    old_positionals,
+    pandas_as_str,
+)
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
@@ -33,6 +40,7 @@ from ..utils import (
     deprecation_msg,
     ensure_df_homogeneous,
     raise_value_error_if_multiindex_columns,
+    set_module,
     warn,
 )
 from .access import ElementRef
@@ -49,17 +57,17 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal
+    from typing import Any, ClassVar, Literal, NoReturn
 
     from zarr.storage import StoreLike
 
     from .._types import DataFrameLike
-    from ..compat import Index1D, Index1DNorm, XDataset
-    from ..typing import XDataType
+    from ..typing import Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import Index
 
 
+@set_module("anndata")
 class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     """\
     An annotated data matrix.
@@ -198,8 +206,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     # view attributes
     _adata_ref: AnnData | None
-    _oidx: Index1DNorm | None
-    _vidx: Index1DNorm | None
+    _oidx: _Index1DNorm | None
+    _vidx: _Index1DNorm | None
 
     @old_positionals(
         "obsm",
@@ -214,14 +222,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     )
     def __init__(  # noqa: PLR0913
         self,
-        X: XDataType | pd.DataFrame | None = None,
+        X: _XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, XDataType] | None = None,
+        layers: Mapping[str, _XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
@@ -230,8 +238,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         asview: bool = False,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1DNorm | int | np.integer | None = None,
-        vidx: Index1DNorm | int | np.integer | None = None,
+        oidx: _Index1DNorm | int | np.integer | None = None,
+        vidx: _Index1DNorm | int | np.integer | None = None,
     ):
         # check for any multi-indices that aren’t later checked in coerce_array
         for attr, key in [(obs, "obs"), (var, "var"), (X, "X")]:
@@ -265,8 +273,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _init_as_view(
         self,
         adata_ref: AnnData,
-        oidx: Index1DNorm | int | np.integer,
-        vidx: Index1DNorm | int | np.integer,
+        oidx: _Index1DNorm | int | np.integer,
+        vidx: _Index1DNorm | int | np.integer,
     ):
         if adata_ref.isbacked and adata_ref.is_view:
             msg = (
@@ -358,7 +366,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         # init from file
         if filename is not None:
-            self.file = AnnDataFileManager(self, filename, filemode)
+            fileobj, filename = (
+                (filename, None)
+                if isinstance(filename, h5py.File)
+                else (None, filename)
+            )
+            self.file = AnnDataFileManager(self, filename, filemode, fileobj)
         else:
             self.file = AnnDataFileManager(self, None)
 
@@ -386,11 +399,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", X.index.astype(str)))
+                    x_indices.append(("obs", "index", pandas_as_str(X.index)))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
-                    x_indices.append(("var", "columns", X.columns.astype(str)))
+                    x_indices.append(("var", "columns", pandas_as_str(X.columns)))
                 X = ensure_df_homogeneous(X, "X")
 
         # ----------------------------------------------------------------------
@@ -558,7 +571,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> XDataType | None:
+    def X(self) -> _XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -589,7 +602,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         #     return X
 
     @X.setter
-    def X(self, value: XDataType | None):  # noqa: PLR0912
+    def X(self, value: _XDataType | None):  # noqa: PLR0912
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -638,7 +651,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if self.is_view:
                     X = self.file["X"]
                     if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
+                        msg = "Cannot write to views of sparse backed files"
+                        raise NotImplementedError(msg)
                     X[oidx, vidx] = value
                 else:
                     self._set_backed("X", value)
@@ -758,7 +772,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: DataFrameLike | XDataset, attr: Literal["obs", "var"]):
+    def _set_dim_df(self, value: DataFrameLike, attr: Literal["obs", "var"]):
         value = _gen_dataframe(
             value,
             [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
@@ -790,7 +804,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             )
             raise ValueError(msg)
         else:
-            value = pd.Index(value)
+            value = (
+                value if isinstance(value, pd.Index) else pandas_as_str(pd.Index(value))
+            )
             if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
@@ -825,7 +841,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._obs
 
     @obs.setter
-    def obs(self, value: DataFrameLike | XDataset):
+    def obs(self, value: DataFrameLike):
         self._set_dim_df(value, "obs")
 
     @obs.deleter
@@ -848,7 +864,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._var
 
     @var.setter
-    def var(self, value: DataFrameLike | XDataset):
+    def var(self, value: DataFrameLike):
         self._set_dim_df(value, "var")
 
     @var.deleter
@@ -1050,7 +1066,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     def _normalize_indices(
         self, index: Index | None
-    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
+    ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...
@@ -1082,6 +1098,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
+            # TODO: this mode is going away
             with pd.option_context("mode.chained_assignment", None):
                 df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
@@ -1227,7 +1244,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | XDataType):
+    def __setitem__(self, index: Index, val: float | _XDataType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
@@ -1652,8 +1669,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         annoA-1  NaN  2.0  1.0  0.0
         annoA-2  NaN  3.0  2.0  0.0
         annoB-2  NaN  2.0  1.0  0.0
-        >>> outer.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> outer.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> outer.X
         array([[ 1.,  2.,  3., nan],
                [ 4.,  5.,  6., nan],
@@ -1735,8 +1752,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         ...     dict(var_names=['d', 'c', 'b']),
         ... )
         >>> adata = adata1.concatenate(adata2, adata3, join='outer')
-        >>> adata.var_names
-        Index(['a', 'b', 'c', 'd'], dtype='object')
+        >>> adata.var_names.astype("string")
+        Index(['a', 'b', 'c', 'd'], dtype='string')
         >>> adata.X.toarray()
         array([[0., 2., 3., 0.],
                [0., 5., 6., 0.],
@@ -1796,7 +1813,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         out.var = out.var.iloc[
             :,
             (
-                out.var.columns.str.extract(pat, expand=False)
+                out.var.columns.str
+                .extract(pat, expand=False)
                 .fillna("")
                 .argsort(kind="stable")
             ),
@@ -1804,25 +1822,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         return out
 
-    def var_names_make_unique(self, join: str = "-"):
+    def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.var_names = utils.make_index_unique(self.var.index, join)
 
     var_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def obs_names_make_unique(self, join: str = "-"):
+    def obs_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
         self.obs_names = utils.make_index_unique(self.obs.index, join)
 
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
-    def _check_uniqueness(self):
-        if not self.obs.index.is_unique:
+    def _check_uniqueness(self) -> None:
+        if self.obs.index[~self.obs.index.isna()].has_duplicates:
             utils.warn_names_duplicates("obs")
-        if not self.var.index.is_unique:
+        if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: Any):
+    def __contains__(self, key: Any) -> NoReturn:
         msg = "AnnData has no attribute __contains__, don’t check `in adata`."
         raise AttributeError(msg)
 

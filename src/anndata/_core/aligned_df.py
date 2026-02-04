@@ -9,7 +9,7 @@ from pandas.api.types import is_string_dtype
 
 from .._types import DataFrameLike
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, pandas_as_str
 from ..utils import warn
 from .xarray import Dataset2D
 
@@ -66,7 +66,7 @@ def _gen_dataframe_mapping(
         df = pd.DataFrame(
             anno,
             index=None if length is None else mk_index(length),
-            columns=None if anno else [],
+            columns=None if anno else pd.array([], dtype="str"),
         )
 
     if length is None:
@@ -95,12 +95,12 @@ def _gen_dataframe_df(
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
-    if not is_string_dtype(anno.index):
+    if not is_string_dtype(anno.index[~anno.index.isna()]):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)
-        anno.index = anno.index.astype(str)
+        anno.index = pandas_as_str(anno.index)
     if not len(anno.columns):
-        anno.columns = anno.columns.astype(str)
+        anno.columns = pandas_as_str(anno.columns)
     return anno
 
 

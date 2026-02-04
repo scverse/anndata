@@ -10,29 +10,39 @@ from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
 
+from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
 from ...compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     H5Array,
+    H5AsTypeView,
     XBackendArray,
     XDataArray,
     XZarrArrayWrapper,
     ZarrArray,
 )
-from ...compat import xarray as xr
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-    from anndata.compat import ZarrGroup
+    from numpy.typing import NDArray
+    from pandas._libs.missing import NAType
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from ...compat import Index1DNorm
+    from ...compat import ZarrGroup
+    from ...typing import _Index1DNorm
+
+    if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
+        from xarray.core.extension_array import PandasExtensionArray
+        from xarray.core.indexing import ExplicitIndexer
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type K = H5Array | ZarrArray
 
 
-class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
+class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrapper):
     def __init__(self, array: K) -> None:
-        self.chunks = array.chunks
+        # AstypeView from h5py .astype() lacks chunks attribute
+        self.chunks = getattr(array, "chunks", None)
         if isinstance(array, ZarrArray):
             super().__init__(array)
             return
@@ -40,14 +50,13 @@ class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
         self.shape = self._array.shape
         self.dtype = self._array.dtype
 
-    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer):
+    def __getitem__(self, key: ExplicitIndexer):
+        from xarray.core.indexing import IndexingSupport, explicit_indexing_adapter
+
         if isinstance(self._array, ZarrArray):
             return super().__getitem__(key)
-        res = xr.core.indexing.explicit_indexing_adapter(
-            key,
-            self.shape,
-            xr.core.indexing.IndexingSupport.OUTER_1VECTOR,
-            self._getitem,
+        res = explicit_indexing_adapter(
+            key, self.shape, IndexingSupport.OUTER_1VECTOR, self._getitem
         )
         return res
 
@@ -65,7 +74,7 @@ class ZarrOrHDF5Wrapper[K: (H5Array, ZarrArray)](XZarrArrayWrapper):
         if (
             isinstance(key, np.ndarray)
             and np.issubdtype(key.dtype, np.integer)
-            and isinstance(self._array, H5Array)
+            and isinstance(self._array, H5Array | H5AsTypeView)
         ):
             key_mask = np.zeros(self._array.shape).astype("bool")
             key_mask[key] = True
@@ -81,7 +90,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     """
 
     _codes: ZarrOrHDF5Wrapper[K]
-    _categories: ZarrArray | H5Array
+    _categories: K
     shape: tuple[int, ...]
     base_path_or_zarr_group: Path | ZarrGroup
     elem_name: str
@@ -89,7 +98,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     def __init__(
         self,
         codes: K,
-        categories: ZarrArray | H5Array,
+        categories: K,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
         *args,
@@ -112,27 +121,23 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
 
         return read_elem(self._categories)
 
-    def __getitem__(
-        self, key: xr.core.indexing.ExplicitIndexer
-    ) -> xr.core.extension_array.PandasExtensionArray:
+    def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
+        from xarray.core.extension_array import PandasExtensionArray
+
         codes = self._codes[key]
         categorical_array = pd.Categorical.from_codes(
             codes=codes, categories=self.categories, ordered=self._ordered
         )
         if settings.remove_unused_categories:
             categorical_array = categorical_array.remove_unused_categories()
-        return xr.core.extension_array.PandasExtensionArray(categorical_array)
+        return PandasExtensionArray(categorical_array)
 
     @cached_property
     def dtype(self):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type K = H5Array | ZarrArray
-
-
-class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
+class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -148,11 +153,11 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
 
     def __init__(
         self,
-        values: ZarrArray | H5Array,
+        values: K,
         dtype_str: Literal[
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
-        mask: ZarrArray | H5Array,
+        mask: K,
         base_path_or_zarr_group: Path | ZarrGroup,
         elem_name: str,
     ):
@@ -165,44 +170,37 @@ class MaskedArray[K: (H5Array, ZarrArray)](XBackendArray):
         self.elem_name = elem_name
 
     def __getitem__(
-        self, key: xr.core.indexing.ExplicitIndexer
-    ) -> xr.core.extension_array.PandasExtensionArray | np.ndarray:
+        self, key: ExplicitIndexer
+    ) -> PandasExtensionArray | NDArray[np.str_]:
         values = self._values[key]
         mask = self._mask[key]
-        if self._dtype_str == "nullable-integer":
-            # numpy does not support nan ints
-            extension_array = pd.arrays.IntegerArray(values, mask=mask)
-        elif self._dtype_str == "nullable-boolean":
-            extension_array = pd.arrays.BooleanArray(values, mask=mask)
-        elif self._dtype_str == "nullable-string-array":
+
+        if isinstance(self.dtype, np.dtypes.StringDType):
             # https://github.com/pydata/xarray/issues/10419
             values = values.astype(self.dtype)
             values[mask] = pd.NA
             return values
-        else:
-            msg = f"Invalid dtype_str {self._dtype_str}"
-            raise RuntimeError(msg)
-        return xr.core.extension_array.PandasExtensionArray(extension_array)
+
+        from xarray.core.extension_array import PandasExtensionArray
+
+        cls = self.dtype.construct_array_type()
+        return PandasExtensionArray(cls(values, mask))
 
     @cached_property
-    def dtype(self):
-        if self._dtype_str == "nullable-integer":
-            return pd.array(
-                [],
-                dtype=str(pd.api.types.pandas_dtype(self._values.dtype)).capitalize(),
-            ).dtype
-        elif self._dtype_str == "nullable-boolean":
-            return pd.BooleanDtype()
-        elif self._dtype_str == "nullable-string-array":
+    def dtype(self) -> BaseMaskedDtype | np.dtypes.StringDType[NAType]:
+        if self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
-            return NULLABLE_NUMPY_STRING_TYPE
-        msg = f"Invalid dtype_str {self._dtype_str}"
-        raise RuntimeError(msg)
+            return np.dtypes.StringDType(na_object=pd.NA)
+        try:
+            return pandas_nullable_dtype(self._values.dtype)
+        except NotImplementedError:
+            msg = f"Invalid dtype_str {self._dtype_str}"
+            raise RuntimeError(msg) from None
 
 
 @_subset.register(XDataArray)
 def _subset_masked(
-    a: XDataArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return a[subset_idx]
 

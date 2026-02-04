@@ -27,7 +27,6 @@ from anndata.compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -37,7 +36,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
@@ -307,7 +306,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        if isinstance(store, ZarrGroup):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
@@ -377,13 +376,18 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 
 
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
-def test_zarr_compression(tmp_path, zarr_write_format):
-    if zarr_write_format == 3 and is_zarr_v2():
-        pytest.xfail("Cannot write zarr v3 format with v2 package")
+@pytest.mark.parametrize(
+    "use_compression", [True, False], ids=["compressed", "uncompressed"]
+)
+def test_zarr_compression(
+    tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
+):
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
-    if zarr_write_format == 2 or is_zarr_v2():
+    if not use_compression:
+        compressor = None
+    elif zarr_write_format == 2:
         from numcodecs import Blosc
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -393,37 +397,28 @@ def test_zarr_compression(tmp_path, zarr_write_format):
         # Don't use Blosc since it's defaults can change:
         # https://github.com/zarr-developers/zarr-python/pull/3545
         compressor = ZstdCodec(level=3, checksum=True)
-    not_compressed = []
+    wrongly_compressed = []
 
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(value, key):
         if not isinstance(value, ZarrArray) or value.shape == ():
             return None
-        (read_compressor,) = value.compressors
+        (read_compressor,) = value.compressors or [None]
         if zarr_write_format == 2:
             if read_compressor != compressor:
-                not_compressed.append(key)
+                wrongly_compressed.append(key)
             return None
-        if read_compressor.to_dict() != compressor.to_dict():
-            print(read_compressor.to_dict(), compressor.to_dict())
-            not_compressed.append(key)
+        if (compressor is None and read_compressor is not None) or (
+            None not in {compressor, read_compressor}
+            and read_compressor.to_dict() != compressor.to_dict()
+        ):
+            wrongly_compressed.append(key)
 
-    if is_zarr_v2():
-        with zarr.open(pth, "r") as f:
-            f.visititems(check_compressed)
-    else:
-        f = zarr.open(pth, mode="r")
-        for key, value in f.members(max_depth=None):
-            check_compressed(value, key)
-
-    if not_compressed:
-        sep = "\n\t"
-        msg = (
-            f"These elements were not compressed correctly:{sep}"
-            f"{sep.join(not_compressed)}"
-        )
-        raise AssertionError(msg)
+    f = zarr.open(pth, mode="r")
+    for key, value in f.members(max_depth=None):
+        check_compressed(value, key)
+    assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
     expected = ad.read_zarr(pth)
     assert_equal(adata, expected)
@@ -550,22 +545,22 @@ def test_read_umi_tools():
 def test_write_categorical(
     *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
 ) -> None:
+    adata_pth = tmp_path / f"adata.{diskfmt}"
+    obs = dict(
+        str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
+        cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
+        **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
+    )
+    orig = ad.AnnData(obs=pd.DataFrame(obs))
     with ad.settings.override(allow_write_nullable_strings=True):
-        adata_pth = tmp_path / f"adata.{diskfmt}"
-        obs = dict(
-            str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
-            cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
-            **(dict(obj=["a", "a", "b", np.nan, np.nan]) if s2c else {}),
-        )
-        orig = ad.AnnData(obs=pd.DataFrame(obs))
         getattr(orig, f"write_{diskfmt}")(
             adata_pth, convert_strings_to_categoricals=s2c
         )
-        curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
-        assert np.all(orig.obs.notna() == curr.obs.notna())
-        assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
-        assert curr.obs["str"].dtype == ("category" if s2c else "string")
-        assert curr.obs["cat"].dtype == "category"
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    assert np.all(orig.obs.notna() == curr.obs.notna())
+    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+    assert curr.obs["str"].dtype == ("category" if s2c else "string")
+    assert curr.obs["cat"].dtype == "category"
 
 
 def test_write_categorical_index(tmp_path, diskfmt):
@@ -701,7 +696,9 @@ def _do_roundtrip(
 
 
 @pytest.fixture
-def roundtrip(diskfmt):
+def roundtrip(
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Callable[[ad.AnnData, Path], ad.AnnData]:
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
@@ -748,22 +745,27 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
     assert_equal(pbmc, from_disk2)
 
 
+@pytest.mark.filterwarnings(r"ignore:Observation names are not unique:UserWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_krumsiek11(tmp_path, diskfmt, roundtrip):
+def test_scanpy_krumsiek11(
+    tmp_path: Path,
+    diskfmt: Literal["h5ad", "zarr"],
+    roundtrip: Callable[[ad.AnnData, Path], ad.AnnData],
+) -> None:
     import scanpy as sc
 
-    # TODO: this should be fixed in scanpy instead
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):  # noqa: PT031
+    with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", r".*first_column_names.*no longer positional", FutureWarning
         )
         orig = sc.datasets.krumsiek11()
     del orig.uns["highlights"]  # Can’t write int keys
-    # Can’t write "string" dtype: https://github.com/scverse/anndata/issues/679
-    orig.obs["cell_type"] = orig.obs["cell_type"].astype(str)
-    with pytest.warns(UserWarning, match=r"Observation names are not unique"):
+    # Depending on pd.options.future.infer_string, this becomes either `object` or `'string'`
+    orig.var.columns = orig.var.columns.astype(str)
+    with ad.settings.override(allow_write_nullable_strings=True):
         curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
-
+    # These categories are constructed manually in scanpy's code so are not "roundtripped" from disk.
+    orig.obs["cell_type"] = orig.obs["cell_type"].astype(curr.obs["cell_type"].dtype)
     assert_equal(orig, curr, exact=True)
 
 
@@ -818,11 +820,16 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     [
         pytest.param(dict(base=None), id="dict_val"),
         pytest.param(
-            pd.DataFrame(dict(col_0=["string", None])).convert_dtypes(), id="df"
+            lambda: pd.DataFrame(
+                dict(col_0=pd.array(["string", None], dtype="string"))
+            ),
+            id="df",
         ),
     ],
 )
 def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
+    if callable(uns_val):
+        uns_val = uns_val()
     pth = tmp_path / f"adata_dtype.{diskfmt}"
 
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))
@@ -900,11 +907,7 @@ def test_read_lazy_import_error(func, tmp_path):
 @pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = (
-        zarr.convenience.open_consolidated(tmp_path)
-        if is_zarr_v2()
-        else zarr.open(tmp_path)
-    )
+    g = zarr.open(tmp_path)
     with pytest.raises(
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
@@ -912,7 +915,6 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
 def test_write_elem_version_mismatch(tmp_path: Path):
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))

@@ -18,11 +18,11 @@ class Dataset2D:
     params = (
         ("zarr", "h5ad"),
         ((-1,), None),
-        ("cat", "numeric", "string-array", "nullable-string-array"),
+        ("cat", "numeric", "string-array", "nullable-string-array", "all"),
     )
 
     def setup_cache(self):
-        n_obs = 10000
+        n_obs = 100_000
         array_types = {
             "numeric": np.arange(n_obs),
             "string-array": np.array(["a"] * n_obs),
@@ -40,17 +40,30 @@ class Dataset2D:
                 if writing_string_array_on_disk := (
                     isinstance(v, np.ndarray) and df["a"].dtype == "string"
                 ):
-                    df["a"] = df["a"].to_numpy()
+                    with pd.option_context("future.infer_string", False):  # noqa: FBT003
+                        df["a"] = df["a"].to_numpy()
                 with ad.settings.override(allow_write_nullable_strings=True):
                     ad.io.write_elem(store, "df", df)
                 if writing_string_array_on_disk:
                     assert store["df"]["a"].attrs["encoding-type"] == "string-array"
+        for store in [
+            h5py.File("data_all.h5ad", mode="w"),
+            zarr.open("data_all.zarr", mode="w", zarr_version=2),
+        ]:
+            df = pd.DataFrame(array_types, index=[f"cell{i}" for i in range(n_obs)])
+            # write a string array by triggering:
+            # https://github.com/scverse/anndata/blob/71966500949adcac4e49d2233f06e9f11f438e19/src/anndata/_io/specs/methods.py#L557-L559
+            df["string-array"] = df["string-array"].to_numpy().astype(object)
+            with ad.settings.override(allow_write_nullable_strings=True):
+                ad.io.write_elem(store, "df", df)
 
     def setup(
         self,
         store_type: Literal["zarr", "h5ad"],
         chunks: None | tuple[int],
-        array_type: Literal["cat", "numeric", "string-array", "nullable-string-array"],
+        array_type: Literal[
+            "cat", "numeric", "string-array", "nullable-string-array", "all"
+        ],
     ):
         self.store = (
             h5py.File(f"data_{array_type}.h5ad", mode="r")

@@ -1,25 +1,28 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Self, overload
 
 import numpy as np
 import pandas as pd
 
-from ..compat import XDataArray, XDataset, XVariable
+from anndata._warnings import warn
+
+from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Collection, Iterable, Iterator
     from typing import Any, Literal
 
     from .._types import Dataset2DIlocIndexer
 
 
-def requires_xarray(func):
+def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             import xarray  # noqa: F401
         except ImportError as e:
@@ -30,10 +33,8 @@ def requires_xarray(func):
     return wrapper
 
 
-class Dataset2D:
+class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     r"""
-    Bases :class:`~collections.abc.Mapping`\ [:class:`~collections.abc.Hashable`, :class:`~xarray.DataArray` | :class:`~anndata.experimental.backed.Dataset2D`\ ]
-
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
     are respected, namely that there is only one 1d dim and coord with the same name i.e.,
@@ -91,7 +92,7 @@ class Dataset2D:
         return self.ds.attrs.get("is_backed", False)
 
     @is_backed.setter
-    def is_backed(self, isbacked: bool) -> bool:
+    def is_backed(self, isbacked: bool) -> None:
         if not isbacked and "is_backed" in self.ds.attrs:
             del self.ds.attrs["is_backed"]
         else:
@@ -107,7 +108,8 @@ class Dataset2D:
 
     @property
     def true_index_dim(self) -> str:
-        """
+        """Key of the “true” index.
+
         Because xarray loads its coordinates/indexes in memory,
         we allow for signaling that a given variable, which is not a coordinate, is the "true" index.
 
@@ -120,7 +122,7 @@ class Dataset2D:
         return self.ds.attrs.get("indexing_key", self.index_dim)
 
     @true_index_dim.setter
-    def true_index_dim(self, val: str):
+    def true_index_dim(self, val: str | None) -> None:
         if val is None or (val == self.index_dim and "indexing_key" in self.ds.attrs):
             del self.ds.attrs["indexing_key"]
         elif val not in self.ds.dims:
@@ -136,8 +138,10 @@ class Dataset2D:
 
     @property
     def index(self) -> pd.Index:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability
-        A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`
+        """A :class:`pandas.Index` object corresponding to :attr:`anndata.experimental.backed.Dataset2D.index_dim`.
+
+        :attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.index` so this ensures usability.
+
         Returns
         -------
         The index of the of the dataframe as resolved from :attr:`~xarray.Dataset.coords`.
@@ -145,14 +149,26 @@ class Dataset2D:
         return self.ds.indexes[self.index_dim]
 
     @index.setter
-    def index(self, val) -> None:
+    def index(self, val: object | pd.Index | XDataArray) -> None:
         index_dim = self.index_dim
-        self.ds.coords[index_dim] = (index_dim, val)
-        if isinstance(val, pd.Index) and val.name is not None and val.name != index_dim:
-            self.ds.update(self.ds.rename({self.index_dim: val.name}))
-            del self.ds.coords[index_dim]
+        if (
+            isinstance(val, pd.Index | XDataArray)
+            and val.name is not None
+            and val.name != index_dim
+        ):
+            # swap the names of the dimensions out and drop the old index variable, setting `coords` in the process if `val` came from this dataset.
+            self._ds = self.ds.swap_dims({index_dim: val.name}).drop_vars(index_dim)
+            # swapping dims only changes the name, but not the underlying value i.e., the coordinate, if the underlying value was not present in the dataset.
+            # If we were to `__setitem__` on `.coords` without checking, `val` could have the old `index_dim` as its `name` because it was present in the dataset.
+            if val.name not in self.ds.coords:
+                self.ds.coords[val.name] = val
+            self._validate_shape_invariants(self._ds)
+        else:
+            self.ds.coords[index_dim] = (index_dim, val)
         # without `indexing_key` explicitly set on `self.ds.attrs`, `self.true_index_dim` will use the `self.index_dim`
-        if "indexing_key" in self.ds.attrs:
+        if "indexing_key" in self.ds.attrs and (
+            hasattr(val, "name") and val.name == self.ds.attrs["indexing_key"]
+        ):
             del self.ds.attrs["indexing_key"]
 
     @property
@@ -162,12 +178,14 @@ class Dataset2D:
 
     @property
     def true_index(self) -> pd.Index:
-        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`"""
-        return self.true_xr_index.to_index()
+        """:attr:`~anndata.experimental.backed.Dataset2D.true_xr_index` as a :class:`pandas.Index`."""
+        idx = self.true_xr_index.to_index()
+        idx.name = self.true_xr_index.name
+        return idx
 
     @property
     def shape(self) -> tuple[int, int]:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.shape` so this ensures usability.
 
         Returns
         -------
@@ -177,7 +195,7 @@ class Dataset2D:
 
     @property
     def iloc(self) -> Dataset2DIlocIndexer:
-        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability
+        """:attr:`~anndata.AnnData` internally looks for :attr:`~pandas.DataFrame.iloc` so this ensures usability.
 
         Returns
         -------
@@ -191,7 +209,7 @@ class Dataset2D:
     @overload
     def __getitem__(self, key: Hashable) -> XDataArray: ...
     @overload
-    def __getitem__(self, key: Iterable[Hashable]) -> Dataset2D: ...
+    def __getitem__(self, key: Collection[Hashable]) -> Dataset2D: ...
     def __getitem__(
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
@@ -225,18 +243,21 @@ class Dataset2D:
         -------
             :class:`pandas.DataFrame` with index set accordingly.
         """
+        index_key = self.ds.attrs.get("indexing_key", None)
+        all_columns = {*self.columns, *([] if index_key is None else [index_key])}
         # https://github.com/pydata/xarray/issues/10419
         non_nullable_string_cols = {
             col
-            for col in self.columns
+            for col in all_columns
             if not self[col].attrs.get("is_nullable_string", False)
         }
         df = self.ds.to_dataframe()
-        index_key = self.ds.attrs.get("indexing_key", None)
+        for col in all_columns - non_nullable_string_cols:
+            df[col] = (
+                pandas_as_str(df[col]) if col == index_key else df[col].astype("string")
+            )
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
-        for col in set(self.columns) - non_nullable_string_cols:
-            df[col] = df[col].astype(dtype="string")
         df.index.name = None  # matches old AnnData object
         return df
 
@@ -254,6 +275,16 @@ class Dataset2D:
         if index_key is not None:
             columns.discard(index_key)
         return pd.Index(columns)
+
+    @columns.setter
+    def columns(self, val) -> None:
+        if len(self.columns.symmetric_difference(val)) > 0:
+            msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
+            raise ValueError(msg)
+        warn(
+            "Renaming or reordering columns on `Dataset2D` has no effect because the underlying data structure has no apparent ordering on its keys",
+            UserWarning,
+        )
 
     def __setitem__(
         self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
@@ -335,9 +366,9 @@ class Dataset2D:
         return len(self.ds)
 
     @property
-    def dtypes(self) -> pd.Series:
+    def dtypes(self) -> Mapping[Hashable, np.dtype]:
         """
-        Return a Series with the dtypes of the variables in the Dataset2D.
+        Return a Mapping with the dtypes of the variables in the Dataset2D.
         """
         return self.ds.dtypes
 
