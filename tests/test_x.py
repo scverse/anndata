@@ -77,6 +77,8 @@ def test_setter_view(orig_array_type, new_array_type, *, copy_on_write_X: bool):
         assert_equal(view.X, to_assign)
         assert isinstance(view.X, type(to_assign) if copy_on_write_X else type(orig_X))
         assert_equal(adata.X, expected_X)
+        # If cow, then not a view and if not cow, it is a view
+        assert view.is_view != copy_on_write_X
 
 
 ###############################
