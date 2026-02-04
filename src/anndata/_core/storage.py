@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 from scipy import sparse
 
 from anndata.compat import CSArray, CSMatrix
+from anndata.types import DataFrameLike
 
 from .._warnings import ImplicitModificationWarning
-from ..types import DataFrameLike
 from ..utils import (
     ensure_df_homogeneous,
     get_union_members,
@@ -37,7 +36,7 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
-    if isinstance(value, (*array_data_structure_types, DataFrameLike)):
+    if isinstance(value, array_data_structure_types):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)
@@ -53,19 +52,10 @@ def coerce_array(
     if any(is_non_csc_r_array_or_matrix):
         msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
         raise ValueError(msg)
-    if isinstance(value, pd.DataFrame):
+    if isinstance(value, DataFrameLike):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)
         return value if allow_df else ensure_df_homogeneous(value, name)
-    # Handle other DataFrameLike objects (not pd.DataFrame)
-    if isinstance(value, DataFrameLike):
-        if allow_df:
-            return value
-        # For non-DataFrames, we can't use ensure_df_homogeneous
-        # so we convert to array via iloc
-        msg = f"DataFrameLike object used for {name} will be converted to array."
-        warn(msg, ImplicitModificationWarning)
-        return np.array(value.iloc[:, :])
     # if value is an array-like object, try to convert it
     e = None
     if allow_array_like:
