@@ -17,7 +17,6 @@ from ..utils import (
     raise_value_error_if_multiindex_columns,
     warn,
 )
-from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from typing import Any
@@ -38,7 +37,7 @@ def coerce_array(
         return value
     # If value is one of the allowed types, return it
     array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
-    if isinstance(value, (*array_data_structure_types, Dataset2D)):
+    if isinstance(value, (*array_data_structure_types, DataFrameLike)):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)

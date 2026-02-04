@@ -46,6 +46,10 @@ class DataFrameLike(Protocol):
         An xarray-based implementation of this protocol.
     """
 
+    def __len__(self) -> int:
+        """Number of rows in this object"""
+        ...
+
     @property
     def index(self) -> Index:
         """Row labels of the DataFrame-like object."""
