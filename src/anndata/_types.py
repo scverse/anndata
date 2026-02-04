@@ -65,7 +65,7 @@ class DataFrameLikeIlocIndexer(Protocol):
     True
     """
 
-    def __getitem__(self, idx: Any) -> Self: ...
+    def __getitem__(self, idx: Any) -> Any: ...
 
 
 @runtime_checkable
