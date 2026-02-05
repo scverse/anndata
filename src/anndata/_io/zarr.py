@@ -74,11 +74,8 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
         if find_spec("zarrs")
         and not isinstance(store, zarr.Group)
         and (
-            (
-                isinstance(store, zarr.abc.Store)
-                and isinstance(store, zarr.storage.LocalStore)
-            )
-            or not isinstance(store, zarr.abc.Store)
+            not isinstance(store, zarr.abc.Store)
+            or isinstance(store, zarr.storage.LocalStore)
         )
         else nullcontext()
     ):
