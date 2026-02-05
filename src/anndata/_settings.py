@@ -529,7 +529,11 @@ settings.register(
 settings.register(
     "copy_on_write_X",
     default_value=False,
-    description="Whether to copy-on-write X. Currently `my_adata_view[subset].X = value` will write back to the original AnnData object at the `subset` location. `X` is the only element where this behavior is implemented though.",
+    description=(
+        "Whether to copy-on-write X. "
+        "Currently `my_adata_view[subset].X = value` will write back to the original AnnData object at the `subset` location. "
+        "`X` is the only element where this behavior is implemented though."
+    ),
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
