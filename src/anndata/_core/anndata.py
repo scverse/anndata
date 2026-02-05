@@ -601,8 +601,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # else:
         #     return X
 
+    def _handle_view_X_cow(self, value: _XDataType | None):
+        if self._is_view:
+            if settings.copy_on_write_X:
+                msg = "Setting element `.X` of view, initializing view as actual."
+                warn(msg, ImplicitModificationWarning)
+                new = self._mutated_copy(X=value)
+                self._init_as_actual(new)
+                return None
+            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
+            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
+            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
+            warn(msg, FutureWarning)
+
     @X.setter
-    def X(self, value: _XDataType | None):  # noqa: PLR0912, PLR0915
+    def X(self, value: _XDataType | None):  # noqa: PLR0912
         value = (
             coerce_array(value, name="X", allow_array_like=True)
             if value is not None
@@ -617,17 +630,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if not can_set_direct_if_not_none:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
-        if self._is_view:
-            if settings.copy_on_write_X:
-                msg = "Setting element `.X` of view, initializing view as actual."
-                warn(msg, ImplicitModificationWarning)
-                new = self._mutated_copy(X=value)
-                self._init_as_actual(new)
-                return None
-            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
-            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
-            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
-            warn(msg, FutureWarning)
+        self._handle_view_X_cow(value)
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
