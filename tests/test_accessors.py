@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 type AdRefExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
 type AdRefSer = Sequence[str | int | None]
 
-with importlib.resources.open_text("anndata.acc", "acc-schema.json") as f:
+with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
 
 PATHS: list[tuple[AdRef, AdRefSer, AdRefExpected]] = [

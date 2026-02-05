@@ -579,7 +579,7 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     def to_json(self, ref: R) -> list[str | int | None]:
         """Serialize :class:`AdRef` to a JSON-compatible list.
 
-        Schema: `acc-schema.json <../acc-schema.json>`_
+        Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
         """
         from ._parse_json import to_json
 
@@ -588,7 +588,7 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     def from_json(self, data: Sequence[str | int | None]) -> R:
         """Create :class:`AdRef` from a JSON sequence.
 
-        Schema: `acc-schema.json <../acc-schema.json>`_
+        Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
 
         Raises
         ------

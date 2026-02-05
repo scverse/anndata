@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 _extension_dir = HERE / "extensions"
-acc_schema = HERE.parent / "src/anndata/acc/acc-schema.json"
+acc_schema = HERE.parent / "src/anndata/acc/acc-schema-v1.json"
 sys.path[:0] = [str(_extension_dir)]
 
 
