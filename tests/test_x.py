@@ -65,14 +65,12 @@ def test_setter_view(
     to_assign = new_array_type(np.ones((9, 9)))
     if not copy_on_write_X:
         expected_X[:9, :9] = asarray(to_assign)
-    if (
-        not copy_on_write_X
-        and isinstance(orig_X, np.ndarray)
-        and sparse.issparse(to_assign)
-    ):
         # https://github.com/scverse/anndata/issues/500
         request.applymarker(
-            pytest.mark.xfail("Cannot set a dense array with a sparse array")
+            pytest.mark.xfail(
+                condition=isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign),
+                reason="Cannot set a dense array with a sparse array",
+            )
         )
     view = adata[:9, :9]
     with pytest.warns(
