@@ -34,8 +34,21 @@ if TYPE_CHECKING:
     from ..typing import Index, _Index1DNorm
 
 
+__all__ = [
+    "_ensure_numpy_idx",
+    "_fix_slice_bounds",
+    "_normalize_indices",
+    "_safe_fancy_index_h5py",
+    "_subset",
+    "array_api_ix",
+    "get_vector",
+    "make_slice",
+    "unpack_index",
+]
+
+
 def _normalize_indices(
-    index: Index[IndexManager] | None, names0: pd.Index, names1: pd.Index
+    index: Index[IndexManager], names0: pd.Index, names1: pd.Index
 ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
@@ -55,7 +68,7 @@ class _XrDtV(NamedTuple):
     array_api_str: ArrayApiDtype
     kind: DtypeKind
 
-    def is_numeric_type(
+    def __call__(
         self,
         indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
     ) -> bool:
@@ -72,10 +85,10 @@ class _XrDtV(NamedTuple):
 
 
 class XArrayDtype(_XrDtV, Enum):
-    Float = _XrDtV(np.floating, "real floating", "f")
-    SignedInt = _XrDtV(np.signedinteger, "signed integer", "i")
-    UnsignedInt = _XrDtV(np.unsignedinteger, "unsigned integer", "u")
-    Bool = _XrDtV(np.bool, "bool", "b")
+    Float = (np.floating, "real floating", "f")
+    SignedInt = (np.signedinteger, "signed integer", "i")
+    UnsignedInt = (np.unsignedinteger, "unsigned integer", "u")
+    Bool = (np.bool, "bool", "b")
 
 
 @singledispatch
@@ -157,18 +170,16 @@ def _from_array(
     is_numpy_string = indexer.dtype == np.dtypes.StringDType()
     if not is_numpy_string or is_pandas:
         # if it is a float array or something along those lines, convert it to integers
-        if XArrayDtype.Float.is_numeric_type(indexer):
+        if XArrayDtype.Float(indexer):
             indexer_int = xp.astype(indexer, xp.int64)
             if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
             return indexer_int
-        if XArrayDtype.SignedInt.is_numeric_type(
-            indexer
-        ) or XArrayDtype.UnsignedInt.is_numeric_type(indexer):
+        if XArrayDtype.SignedInt(indexer) or XArrayDtype.UnsignedInt(indexer):
             # Might not work for range indexes
             return np.asarray(indexer) if is_pandas else indexer
-        if XArrayDtype.Bool.is_numeric_type(indexer):
+        if XArrayDtype.Bool(indexer):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -231,7 +242,7 @@ def _fix_slice_bounds[A: int, Z: int, S: int](
     return slice(start, stop, step)
 
 
-def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
+def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[M]]:
     if not isinstance(index, tuple):
         if index is Ellipsis:
             index = slice(None)
@@ -261,19 +272,33 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
 
 
 def _index_manager_to_numpy_idx_in_tuple(
-    subset_idx: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
-) -> tuple:
+    subset_idx: tuple[_Index1DNorm]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]:
     """Convert IndexManager instances to numpy arrays in a tuple of indices."""
     return tuple(
         np.asarray(idx) if isinstance(idx, IndexManager) else idx for idx in subset_idx
     )
 
 
-def _ensure_numpy_idx(func: Callable) -> Callable:
+def _ensure_numpy_idx[T, R](
+    func: Callable[[T, tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]], R],
+) -> Callable[
+    [
+        T,
+        tuple[_Index1DNorm[IndexManager]]
+        | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    ],
+    R,
+]:
     """Convert IndexManager instances to numpy arrays in a tuple of indices."""
 
     @wraps(func)
-    def _ensure(a, subset_idx):
+    def _ensure(
+        a: T,
+        subset_idx: tuple[_Index1DNorm[IndexManager]]
+        | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    ) -> R:
         return func(
             a,
             _index_manager_to_numpy_idx_in_tuple(subset_idx),
@@ -362,9 +387,7 @@ def _subset[
 @_subset.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(
-    a: DaskArray,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    a: DaskArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> DaskArray:
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
@@ -377,9 +400,7 @@ def _subset_dask(
 @_subset.register(CSArray)
 @_ensure_numpy_idx
 def _subset_sparse[T: CSMatrix | CSArray](
-    a: T,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    a: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> T:
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
@@ -394,9 +415,7 @@ def _subset_sparse[T: CSMatrix | CSArray](
 @_subset.register(Dataset2D)
 @_ensure_numpy_idx
 def _subset_df[T: pd.DataFrame | Dataset2D](
-    df: T,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    df: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> T:
     return df.iloc[subset_idx]
 
@@ -404,9 +423,7 @@ def _subset_df[T: pd.DataFrame | Dataset2D](
 @_subset.register(AwkArray)
 @_ensure_numpy_idx
 def _subset_awkarray(
-    a: AwkArray,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    a: AwkArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> AwkArray:
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
@@ -417,9 +434,7 @@ def _subset_awkarray(
 @_subset.register(h5py.Dataset)
 @_ensure_numpy_idx
 def _subset_dataset(
-    d: h5py.Dataset,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    d: h5py.Dataset, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> np.ndarray:
     order: tuple[NDArray[np.integer] | slice, ...]
     inv_order: tuple[NDArray[np.integer] | slice, ...]
@@ -485,8 +500,7 @@ def _process_index_for_h5py(
 
 def _safe_fancy_index_h5py(
     dataset: h5py.Dataset,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
 ) -> h5py.Dataset:
     # Handle multi-dimensional indexing of h5py dataset
     # This avoids h5py's limitation with multi-dimensional fancy indexing

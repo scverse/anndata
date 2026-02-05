@@ -337,7 +337,7 @@ def test_indices_dtypes():
     [pytest.param(get_jnp_or_none(), marks=pytest.mark.array_api), np],
     ids=["jax", "numpy"],
 )
-def test_slicing(xp):
+def test_slicing(xp) -> None:
     adata = AnnData(xp.array([[1, 2, 3], [4, 5, 6]]))
 
     # assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()  # No longer the case
@@ -423,7 +423,7 @@ def test_oob_boolean_slicing():
     assert str(len2) in str(e.value)
 
 
-def test_pd_index(subtests: pytest.Subtests):
+def test_pd_index(subtests: pytest.Subtests) -> None:
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
         dict(obs_names=["A", "B", "C"]),

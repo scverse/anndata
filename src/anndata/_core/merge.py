@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from anndata._types import Join_T
 
     from ..compat import XDataArray
+    from ..types import SupportsArrayApi
 
 
 ###################
@@ -627,7 +628,9 @@ class Reindexer:
 
         return out
 
-    def _apply_to_array_api(self, el, *, axis, fill_value=None):
+    def _apply_to_array_api(
+        self, el: SupportsArrayApi, *, axis: int, fill_value=None
+    ) -> SupportsArrayApi:
         if fill_value is None:
             fill_value = default_fill_value([el])
         xp = el.__array_namespace__()

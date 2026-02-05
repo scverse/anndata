@@ -336,7 +336,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.isbacked:
             self._X = None
 
-        # set raw, easy, as it's immutable anyways...
+        # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
             self._raw = adata_ref.raw[oidx]
@@ -1082,12 +1082,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: Index | None
+        self, index: Index
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...
-    def __delitem__(self, index: Index):
+    def __delitem__(self, index: Index) -> None:
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
         if not self.isbacked:

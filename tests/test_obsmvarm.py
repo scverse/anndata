@@ -148,7 +148,7 @@ def test_setting_daskarray(adata: AnnData):
 
 
 @pytest.mark.array_api
-def test_setting_jax(adata: AnnData):
+def test_setting_jax(adata: AnnData) -> None:
     adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
     assert isinstance(adata.obsm["jax"], jnp.ndarray)
 

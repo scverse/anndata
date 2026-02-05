@@ -29,6 +29,7 @@ class ExtensionNamespace(Protocol):
 @runtime_checkable
 class SupportsArrayApi(Protocol):
     device: str
+    shape: tuple[int, ...]
 
     def __array_namespace__(
         self,

@@ -131,7 +131,6 @@ def dtype(request):
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
-
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
     read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
@@ -171,7 +170,13 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+def test_readwrite_kitchensink(
+    tmp_path: Path,
+    storage: Literal["h5ad", "zarr"],
+    typ,
+    backing_h5ad: Path,
+    dataset_kwargs,
+) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -219,7 +224,7 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
@@ -265,7 +270,7 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
-def test_readwrite_backed(typ, backing_h5ad):
+def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -292,8 +297,7 @@ def test_readwrite_backed(typ, backing_h5ad):
         ),
     ],
 )
-def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
-
+def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
@@ -521,7 +525,7 @@ def test_write_csv(typ, tmp_path):
         csr_matrix,
     ],
 )
-def test_write_csv_view(typ, tmp_path):
+def test_write_csv_view(typ, tmp_path: Path) -> None:
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
@@ -563,7 +567,7 @@ def test_write_csv_view(typ, tmp_path):
     "xp_array",
     [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
 )
-def test_readwrite_empty(read, write, name, tmp_path, xp_array):
+def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
     adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)

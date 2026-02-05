@@ -366,7 +366,7 @@ class Writer:
 
         # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
         is_zarr_group = isinstance(store, ZarrGroup)
-        if "/" in k.split(store.name)[-1][1:]:
+        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
             if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)

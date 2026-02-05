@@ -138,7 +138,7 @@ skip_if_no_jax_gpu = pytest.mark.skipif(
 
 @skip_if_no_jax_gpu
 @pytest.mark.array_api
-def test_to_writeable_jax_gpu_array():
+def test_to_writeable_jax_gpu_array() -> None:
     x = jnp.asarray([1.0, 2.0], device=get_gpu_devices()[0])
     result = to_writeable(x)
     assert isinstance(result, np.ndarray)
@@ -146,7 +146,7 @@ def test_to_writeable_jax_gpu_array():
 
 
 @pytest.mark.array_api
-def test_to_writeable_does_not_recurse():
+def test_to_writeable_does_not_recurse() -> None:
     x = {"a": jnp.array([1.0, 2.0])}
     result = to_writeable(x)
     # since dict is not supported, it should return unchanged

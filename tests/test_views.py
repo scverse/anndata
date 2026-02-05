@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from types import EllipsisType, FunctionType
     from typing import Literal
 
+    from anndata.compat import CSMatrix
     from anndata.typing import Index
 
 
@@ -946,14 +947,16 @@ def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: 
         ),
     ],
 )
-def test_index_float_sequence_raises_error(index):
+def test_index_float_sequence_raises_error(
+    index: np.ndarray | CSMatrix | list[float],
+) -> None:
     adata = gen_adata((10, 10))
     with pytest.raises(IndexError, match=r"has floating point values"):
         adata[index]
 
 
 @pytest.mark.array_api
-def test_unsupported_jax_dtype():
+def test_unsupported_jax_dtype() -> None:
     index_jax = jnp.array([1 + 2j, 3 + 4j])
     adata = gen_adata((10, 10))
     with pytest.raises(
@@ -964,7 +967,7 @@ def test_unsupported_jax_dtype():
 
 @pytest.mark.array_api
 @pytest.mark.parametrize("dtype", [np.int32, np.float32])
-def test_jax_indexer(dtype: np.dtype):
+def test_jax_indexer(dtype: np.dtype) -> None:
     index = np.array([0, 3, 6], dtype=dtype)
     index_jax = jnp.array(index)
     adata = gen_adata((10, 10))
@@ -997,7 +1000,9 @@ def test_jax_indexer(dtype: np.dtype):
     ],
 )
 @pytest.mark.array_api
-def test_index_into_jax(index):
+def test_index_into_jax(
+    index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, ...],
+) -> None:
     X = np.random.default_rng().random((10, 10))
     adata = ad.AnnData(X=X)
     adata_as_jax = ad.AnnData(X=jnp.array(X))
@@ -1005,7 +1010,7 @@ def test_index_into_jax(index):
 
 
 @pytest.mark.array_api
-def test_normalize_index_jax_boolean():
+def test_normalize_index_jax_boolean() -> None:
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     mask = jnp.array([True, False] * 5)
     out = _normalize_index(mask, index)
@@ -1038,12 +1043,12 @@ def test_normalize_index_jax_boolean():
         ),
     ],
 )
-def test_normalize_index_dispatch(typ, expected_dispatch):
+def test_normalize_index_dispatch(typ: type, expected_dispatch: FunctionType) -> None:
     assert _gen_anndata_index.dispatch(typ) is expected_dispatch
 
 
 @pytest.mark.array_api
-def test_normalize_index_jax_float_valid():
+def test_normalize_index_jax_float_valid() -> None:
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     idx = jnp.array([0, 2, 4], dtype="float32")
     out = _normalize_index(idx, index)
@@ -1052,7 +1057,7 @@ def test_normalize_index_jax_float_valid():
 
 @pytest.mark.array_api
 @pytest.mark.parametrize("expanded_dim", [0, 1], ids=["row", "col"])
-def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]):
+def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]) -> None:
     index = pd.Index([f"cell_{i}" for i in range(5)])
     idx_col = jnp.arange(5).reshape((5, 1) if expanded_dim == 1 else (1, 5))
     out_col = _normalize_index(idx_col, index)
@@ -1072,7 +1077,7 @@ def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]):
     [True, False],
     ids=["with_numpy", "pure_jax"],
 )
-def test_double_index_jax(*, to_bool: bool, mixed: bool):
+def test_double_index_jax(*, to_bool: bool, mixed: bool) -> None:
     adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]

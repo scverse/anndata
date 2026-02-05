@@ -624,7 +624,7 @@ def assert_equal(
 @assert_equal.register(SupportsArrayApi)
 def assert_equal_array_api(
     a: SupportsArrayApi, b: object, *, exact: bool = False, elem_name: str | None = None
-):
+) -> None:
     if not np.isscalar(a):
         xp = a.__array_namespace__()
         # really force it on b

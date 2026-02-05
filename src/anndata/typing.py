@@ -40,15 +40,10 @@ else:
     _M = TypeVar("_M")
 
 _Index1DNorm: TypeAlias = (  # noqa: UP040
-    slice
-    | NDArray[np.bool_]
-    | NDArray[np.integer]
-    | SupportsArrayApi
-    | IndexManager
-    | _M
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApi | _M
 )
 # TODO: pd.Index[???]
-type Index1D[_M] = (
+type Index1D[_M: IndexManager] = (
     # 0D index
     int
     | str
@@ -70,7 +65,7 @@ type Index1D[_M] = (
 )
 """Index each :class:`~anndata.AnnData` object’s axis can be sliced with."""
 
-type Index[_M] = (
+type Index[_M: IndexManager] = (
     Index1D[_M]
     | EllipsisType
     | tuple[Index1D[_M] | EllipsisType, Index1D[_M] | EllipsisType]

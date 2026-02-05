@@ -22,7 +22,7 @@ from anndata.types import SupportsArrayApi
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    from typing import Any, TypeAlias, TypeGuard
+    from typing import Any, Self, TypeAlias, TypeGuard
 
 
 #############################
@@ -41,11 +41,11 @@ class IndexManager:
 
     _manager: dict[tuple[int, int], SupportsArrayApi]
 
-    def __init__(self, *, device: tuple[int, int], arr: SupportsArrayApi):
+    def __init__(self, *, device: tuple[int, int], arr: SupportsArrayApi) -> None:
         self._manager = {device: arr}
 
     @classmethod
-    def from_array(cls, arr: SupportsArrayApi):
+    def from_array(cls, arr: SupportsArrayApi) -> Self:
         """Create an IndexManager from an array-api compatible array."""
         return cls(device=arr.__dlpack_device__(), arr=arr)
 
@@ -63,11 +63,11 @@ class IndexManager:
         res = np.from_dlpack(self._manager[(1, 0)])
         return res.copy() if copy else res
 
-    def get_default(self):
+    def get_default(self) -> SupportsArrayApi:
         """Returns the first key added i.e., a no-copy index, useful for getting an array-api compatible index on some device."""
         return self._manager[next(iter(self._manager))]
 
-    def add_array(self, arr: SupportsArrayApi):
+    def add_array(self, arr: SupportsArrayApi) -> None:
         """Add an index array for a specific device."""
         self._manager[arr.__dlpack_device__()] = arr
 

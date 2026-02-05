@@ -456,9 +456,7 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(
-    old: _Index1DNorm[IndexManager],
-    new: _Index1DNorm,
-    l: Literal[0, 1],
+    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: Literal[0, 1]
 ) -> _Index1DNorm[IndexManager]:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
