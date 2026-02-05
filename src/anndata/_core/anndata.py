@@ -608,11 +608,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 warn(msg, ImplicitModificationWarning)
                 new = self._mutated_copy(X=value)
                 self._init_as_actual(new)
-                return None
+                return True
             msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
             "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
             "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
             warn(msg, FutureWarning)
+        return False
 
     @X.setter
     def X(self, value: _XDataType | None):  # noqa: PLR0912
@@ -630,7 +631,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if not can_set_direct_if_not_none:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
-        self._handle_view_X_cow(value)
+        if self._handle_view_X_cow(value):
+            return None
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
