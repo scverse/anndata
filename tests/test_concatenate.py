@@ -34,12 +34,10 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     gen_vstr_recarray,
-    get_jnp_or_none,
+    jnp,
     jnp_array_or_idempotent,
 )
 from anndata.utils import asarray
-
-jnp = get_jnp_or_none()
 
 JaxArray = jnp.ndarray if jnp is not None else None
 

@@ -10,10 +10,7 @@ from scipy import sparse
 
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import as_cupy, get_jnp_or_none, get_multiindex_columns_df
-
-jnp = get_jnp_or_none()
-
+from anndata.tests.helpers import as_cupy, get_multiindex_columns_df, jnp
 
 M, N = (100, 100)
 

@@ -13,9 +13,7 @@ import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
 from anndata.compat import _clean_uns
-from anndata.tests.helpers import get_jnp_or_none
-
-jnp = get_jnp_or_none()
+from anndata.tests.helpers import jnp
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

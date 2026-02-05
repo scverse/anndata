@@ -21,8 +21,8 @@ from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     assert_equal,
     gen_adata,
-    get_jnp_or_none,
     get_multiindex_columns_df,
+    jnp,
 )
 
 if TYPE_CHECKING:
@@ -334,7 +334,7 @@ def test_indices_dtypes():
 
 @pytest.mark.parametrize(
     "xp",
-    [pytest.param(get_jnp_or_none(), marks=pytest.mark.array_api), np],
+    [pytest.param(jnp, marks=pytest.mark.array_api), np],
     ids=["jax", "numpy"],
 )
 def test_slicing(xp) -> None:

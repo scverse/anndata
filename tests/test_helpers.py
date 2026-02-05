@@ -24,13 +24,11 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_awkward,
     gen_random_column,
-    get_jnp_or_none,
     issubdtype,
+    jnp,
     report_name,
 )
 from anndata.utils import axis_len
-
-jnp = get_jnp_or_none()
 
 
 @pytest.fixture

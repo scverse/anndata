@@ -43,7 +43,7 @@ from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     assert_equal,
     gen_adata,
-    get_jnp_or_none,
+    jnp,
     jnp_array_or_idempotent,
     single_int_subset,
     single_subset,
@@ -51,8 +51,6 @@ from anndata.tests.helpers import (
     subset_func,
 )
 from anndata.utils import asarray
-
-jnp = get_jnp_or_none()
 
 if TYPE_CHECKING:
     from collections.abc import Callable

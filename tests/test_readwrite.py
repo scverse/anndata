@@ -33,12 +33,9 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
-    get_jnp_or_none,
+    jnp,
     jnp_array_or_idempotent,
 )
-
-jnp = get_jnp_or_none()
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator

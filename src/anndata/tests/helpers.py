@@ -46,7 +46,6 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
-    from types import ModuleType
     from typing import Literal, TypeGuard
 
     from numpy.typing import NDArray
@@ -68,18 +67,16 @@ except ImportError:
     )
 
 
-def get_jnp_or_none() -> None | ModuleType:
-    def _or_none[T](thing: T) -> T | None:
-        return thing
-
-    if TYPE_CHECKING or find_spec("jax"):
-        import jax.numpy as _jnp
-
-        return _or_none(_jnp)
-    return None
+def _or_none[T](thing: T) -> T | None:
+    return thing
 
 
-jnp = get_jnp_or_none()
+if TYPE_CHECKING or find_spec("jax"):
+    import jax.numpy as _jnp
+
+    jnp = _or_none(_jnp)
+else:
+    jnp = None
 
 
 def jnp_array_or_idempotent(x):

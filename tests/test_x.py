@@ -14,13 +14,10 @@ from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     assert_equal,
     gen_adata,
-    get_jnp_or_none,
+    jnp,
     jnp_array_or_idempotent,
 )
 from anndata.utils import asarray
-
-jnp = get_jnp_or_none()
-
 
 UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_matrix, id="csr"),
