@@ -51,7 +51,7 @@ def test_repeat_indices_view():
 @pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("copy_on_write_X", [True, False], ids=["CoW", "update"])
-def test_setter_view(orig_array_type, new_array_type, *, copy_on_write_X: bool, f):
+def test_setter_view(orig_array_type, new_array_type, *, copy_on_write_X: bool):
     ad.settings.copy_on_write_X = copy_on_write_X
     adata = gen_adata((10, 10), X_type=orig_array_type)
     orig_X = adata.X
