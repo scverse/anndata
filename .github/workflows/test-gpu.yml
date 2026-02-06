@@ -81,7 +81,7 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run coverage run -nauto -m pytest -m "array_api or gpu"
+          uv run coverage run -m pytest -m "array_api or gpu" -n auto
           uv run coverage combine
           uv run coverage xml
 
