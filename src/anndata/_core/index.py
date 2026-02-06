@@ -308,7 +308,13 @@ def _ensure_numpy_idx[T, R](
 
 
 def array_api_ix(*args: SupportsArrayApi) -> tuple[SupportsArrayApi, ...]:
-    """Vendored version of numpy's _ix for the array-api"""
+    """Construct an open mesh from multiple sequences.
+    
+    Vendored version of `numpy.ix_` for the array-api.
+    
+    For each sequence `args[i]`, it returns an array with `.ndim == len(args)`,
+    `.size == .shape[i] == len(args[i])` (i.e. `shape[…] == 1` for each other dimension)
+    """
     out = []
     n_dims = len(args)
     for k, new in enumerate(args):
