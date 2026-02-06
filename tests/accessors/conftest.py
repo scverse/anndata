@@ -19,8 +19,8 @@ def adata() -> AnnData:
         dict(type=gen.integers(0, 3, size=100)),
         index="cell-" + pd.array(range(100)).astype(str),
     )
-    var_grp = pd.Categorical(
-        gen.integers(0, 6, size=50), categories=list(ascii_lowercase[:5])
+    var_grp = pd.Categorical.from_codes(
+        gen.integers(0, 6, size=50), categories=list(ascii_lowercase[:6])
     )
     var = pd.DataFrame(
         dict(grp=var_grp),

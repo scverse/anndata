@@ -17,6 +17,7 @@ import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._core.raw import Raw
 from anndata._settings import settings
+from anndata.acc import A
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     assert_equal,
@@ -600,7 +601,8 @@ def test_to_df_dense():
     pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
-def test_convenience():
+@pytest.mark.filterwarnings("ignore:Use anndata.acc.A instead of:FutureWarning")
+def test_convenience() -> None:
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
@@ -642,7 +644,7 @@ def test_convenience():
         )
 
 
-def test_1d_slice_dtypes():
+def test_1d_slice_dtypes() -> None:
     N, M = 10, 20
     obs_df = pd.DataFrame(
         dict(
@@ -666,12 +668,12 @@ def test_1d_slice_dtypes():
 
     new_obs_df = pd.DataFrame(index=adata.obs_names)
     for k in obs_df.columns:
-        new_obs_df[k] = adata.obs_vector(k)
+        new_obs_df[k] = A.obs[k](adata)
         assert new_obs_df[k].dtype == obs_df[k].dtype
     assert np.all(new_obs_df == obs_df)
     new_var_df = pd.DataFrame(index=adata.var_names)
     for k in var_df.columns:
-        new_var_df[k] = adata.var_vector(k)
+        new_var_df[k] = A.var[k](adata)
         assert new_var_df[k].dtype == var_df[k].dtype
     assert np.all(new_var_df == var_df)
 
