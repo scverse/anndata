@@ -42,6 +42,7 @@ class _AnnDataSettingsManager(SettingsManager):
     remove_unused_categories: bool = True
     check_uniqueness: bool = True
     allow_write_nullable_strings: bool = False
+    copy_on_write_X: bool = False
     zarr_write_format: Literal[2, 3] = 2
     use_sparse_array_on_read: bool = False
     min_rows_for_chunked_h5_copy: int = 1000
