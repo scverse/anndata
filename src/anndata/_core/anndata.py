@@ -2202,7 +2202,10 @@ def _check_2d_shape(X):
 
     Assure that X is always 2D: Unlike numpy we always deal with 2D arrays.
     """
-    if X.dtype.names is None and len(X.shape) != 2:
+    if (
+        isinstance(X, np.ndarray)
+        or (isinstance(X, np.ndarray) and X.dtype.names is None)
+    ) and len(X.shape) != 2:
         msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         raise ValueError(msg)
 

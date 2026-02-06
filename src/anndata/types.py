@@ -28,7 +28,6 @@ class ExtensionNamespace(Protocol):
 
 @runtime_checkable
 class SupportsArrayApi(Protocol):
-    device: str
     shape: tuple[int, ...]
 
     def __array_namespace__(
@@ -36,7 +35,6 @@ class SupportsArrayApi(Protocol):
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
     ) -> ModuleType: ...
-    def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
     def __dlpack__(
         self,
         *,
