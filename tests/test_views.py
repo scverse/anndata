@@ -1037,6 +1037,7 @@ def test_normalize_index_jax_boolean() -> None:
         ),
         pytest.param(
             type(mlx_array_or_idempotent(np.array([1]))),
+            _from_array,
             id="mlx",
             marks=pytest.mark.array_api,
         ),
