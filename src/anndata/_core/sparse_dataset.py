@@ -42,7 +42,7 @@ from ..compat import (
     ZarrGroup,
     _read_attr,
 )
-from .index import _fix_slice_bounds, _subset, unpack_index
+from .index import _ensure_numpy_idx, _fix_slice_bounds, _subset, unpack_index
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -666,6 +666,7 @@ def sparse_dataset(
 
 
 @_subset.register(BaseCompressedSparseDataset)
+@_ensure_numpy_idx
 def subset_sparsedataset(
     d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):

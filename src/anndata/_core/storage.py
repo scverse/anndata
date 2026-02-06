@@ -9,7 +9,7 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, has_xp
 from ..utils import (
     ensure_df_homogeneous,
     get_union_members,
@@ -45,6 +45,8 @@ def coerce_array(
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)
             value = value.A
+        return value
+    if has_xp(value):
         return value
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))

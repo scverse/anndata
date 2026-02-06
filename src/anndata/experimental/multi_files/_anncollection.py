@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Literal
 
-    from ..._core.index import Index
     from ..._types import Join_T
+    from ...typing import Index
 
 ATTRS = ["obs", "obsm", "layers"]
 

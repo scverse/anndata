@@ -102,7 +102,14 @@ test-min = [
     "pooch",
     "anndata[dask]",
 ]
-
+test-array-api = [
+    { include-group = "test-min" },
+    { include-group = "test-jax" },
+]
+test-jax = [
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
+]
 [project.optional-dependencies]
 gpu = [ "cupy" ]
 cu12 = [ "cupy-cuda12x" ]
@@ -181,6 +188,7 @@ markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
+    "array_api: tests specific to the array-api",
 ]
 
 [tool.ruff]

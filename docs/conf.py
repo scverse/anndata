@@ -173,6 +173,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # Type variable for internal use
+    ("py:class", "_M"),
 ]
 
 # -- Social cards ---------------------------------------------------------
