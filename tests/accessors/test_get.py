@@ -10,9 +10,18 @@ from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
 from anndata.acc import A
-from anndata.compat import DaskArray, XDataArray, XDataset, XVariable
+from anndata.compat import (
+    CupyArray,
+    CupyCSCMatrix,
+    CupyCSRMatrix,
+    DaskArray,
+    XDataArray,
+    XDataset,
+    XVariable,
+)
 from anndata.tests.helpers import (
     DASK_CAN_SPARRAY,
+    as_cupy,
     as_dense_dask_array,
     as_sparse_dask_array,
     as_sparse_dask_matrix,
@@ -52,9 +61,7 @@ DASK_TYPES = [
     # TODO: check inner type
     pytest.param(as_dense_dask_array, DaskArray, DaskArray, id="da.array[np.ndarray]"),
     pytest.param(
-        as_sparse_dask_array,
-        DaskArray,
-        DaskArray,
+        *(as_sparse_dask_array, DaskArray, DaskArray),
         marks=pytest.mark.skipif(
             not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
         ),
@@ -63,6 +70,16 @@ DASK_TYPES = [
     pytest.param(
         as_sparse_dask_matrix, DaskArray, DaskArray, id="da.array[sp.csc_matrix]"
     ),
+    pytest.param(
+        *(lambda x: as_cupy(as_dense_dask_array(x)), DaskArray, DaskArray),
+        marks=pytest.mark.gpu,
+        id="da.array[cp.ndarray]",
+    ),
+    pytest.param(
+        *(lambda x: as_cupy(as_sparse_dask_matrix(x)), DaskArray, DaskArray),
+        marks=pytest.mark.gpu,
+        id="da.array[cpx.csr_matrix]",
+    ),
 ]
 
 ND_TYPES = [
@@ -70,11 +87,16 @@ ND_TYPES = [
     # TODO: return 1D sparse array instead of 1D ndarray?
     pytest.param(sp.csr_array, np.ndarray, sp.csr_array, id="sp.csr_array"),
     pytest.param(sp.csc_matrix, np.ndarray, sp.csc_matrix, id="sp.csc_matrix"),
+    pytest.param(as_cupy, CupyArray, CupyArray, marks=pytest.mark.gpu, id="cp.ndarray"),
+    pytest.param(
+        *(lambda x: as_cupy(sp.csr_array(x)), CupyArray, CupyCSRMatrix),
+        marks=pytest.mark.gpu,
+        id="cpx.csr_matrix",
+    ),
     *[
         pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)
         for t in DASK_TYPES
     ],
-    # TODO: check cupy
 ]
 
 DF_TYPES = [
@@ -117,7 +139,7 @@ def convert_dataframes(
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(expected: Array, ad_ref: AdRef) -> np.ndarray:
+def _expected2np(expected: Array, ad_ref: AdRef, /) -> np.ndarray:
     ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
@@ -128,6 +150,8 @@ def _expected2np(expected: Array, ad_ref: AdRef) -> np.ndarray:
             return expected.to_numpy()
         case DaskArray():
             return _expected2np(expected.compute(), ad_ref)
+        case CupyArray() | CupyCSRMatrix() | CupyCSCMatrix():
+            return _expected2np(expected.get(), ad_ref)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")
 
