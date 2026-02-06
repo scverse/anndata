@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -50,17 +52,35 @@ def test_repeat_indices_view():
 
 @pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
-def test_setter_view(orig_array_type, new_array_type):
+@pytest.mark.parametrize("copy_on_write_X", [True, False], ids=["CoW", "update"])
+def test_setter_view(orig_array_type, new_array_type, *, copy_on_write_X: bool):
+    ad.settings.copy_on_write_X = copy_on_write_X
     adata = gen_adata((10, 10), X_type=orig_array_type)
     orig_X = adata.X
+    expected_X = asarray(orig_X.copy())
     to_assign = new_array_type(np.ones((9, 9)))
-    if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
-        # https://github.com/scverse/anndata/issues/500
-        pytest.xfail("Cannot set a dense array with a sparse array")
+    if not copy_on_write_X:
+        expected_X[:9, :9] = asarray(to_assign)
     view = adata[:9, :9]
-    view.X = to_assign
-    np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
-    assert isinstance(view.X, type(orig_X))
+    with (
+        pytest.warns(
+            ImplicitModificationWarning if copy_on_write_X else FutureWarning,
+            match=r"initializing view as actual"
+            if copy_on_write_X
+            else r"will obey copy-on-write semantics",
+        ),
+        pytest.warns(UserWarning, match=r"Trying to set a dense array")
+        if sparse.issparse(to_assign)
+        and isinstance(orig_X, np.ndarray)
+        and not copy_on_write_X
+        else nullcontext(),
+    ):
+        view.X = to_assign
+    assert_equal(view.X, to_assign)
+    assert isinstance(view.X, type(to_assign) if copy_on_write_X else type(orig_X))
+    assert_equal(adata.X, expected_X)
+    # If cow, then not a view and if not cow, it is a view
+    assert view.is_view != copy_on_write_X
 
 
 ###############################

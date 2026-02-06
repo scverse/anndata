@@ -169,6 +169,8 @@ filterwarnings_when_strict = [
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
     "default:Writing zarr v2:UserWarning",
+    # TODO: Remove in conjunction with or before https://github.com/scverse/anndata/pull/1707
+    "default:.*will obey copy-on-write semantics:FutureWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [

@@ -39,6 +39,7 @@ class SettingsManager[T]:
 class _AnnDataSettingsManager(SettingsManager):
     remove_unused_categories: bool = True
     check_uniqueness: bool = True
+    copy_on_write_X: bool = False
     allow_write_nullable_strings: bool | None = None
     zarr_write_format: Literal[2, 3] = 2
     use_sparse_array_on_read: bool = False
