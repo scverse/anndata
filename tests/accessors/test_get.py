@@ -117,17 +117,17 @@ def convert_dataframes(
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(expected: Array, ad_path: AdRef) -> np.ndarray:
-    ndim = len(ad_path.dims)
+def _expected2np(expected: Array, ad_ref: AdRef) -> np.ndarray:
+    ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
             return expected.flatten() if ndim == 1 else expected
         case sp.sparray() | sp.spmatrix():
-            return _expected2np(expected.toarray(), ad_path)
+            return _expected2np(expected.toarray(), ad_ref)
         case pd.Series() | XDataArray():
             return expected.to_numpy()
         case DaskArray():
-            return _expected2np(expected.compute(), ad_path)
+            return _expected2np(expected.compute(), ad_ref)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")
 
@@ -135,37 +135,37 @@ def _expected2np(expected: Array, ad_path: AdRef) -> np.ndarray:
 @pytest.fixture(
     params=[
         pytest.param(
-            (ad_path, ad_expected, *typ.values, convert),
+            (ad_ref, ad_expected, *typ.values, convert),
             marks=typ.marks,
-            id=f"{ad_path}-{typ.id}",
+            id=f"{ad_ref}-{typ.id}",
         )
         for paths, types, convert in (
             (ND_PATHS, ND_TYPES, convert_ndarrays),
             (DF_PATHS, DF_TYPES, convert_dataframes),
         )
-        for ad_path, ad_expected in paths
+        for ad_ref, ad_expected in paths
         for typ in types
     ]
 )
-def check_ad_path(
+def get_test_params(
     adata: AnnData, request: pytest.FixtureRequest
 ) -> tuple[AnnData, AdRef, type[Array], Array]:
-    ad_path, ad_expected, convert_array, type_expected_1d, type_expected_2d, convert = (
+    ad_ref, ad_expected, convert_array, type_expected_1d, type_expected_2d, convert = (
         request.param
     )
     convert(adata, convert_array)
     return (
         adata,
-        ad_path,
-        type_expected_1d if len(ad_path.dims) == 1 else type_expected_2d,
-        _expected2np(ad_expected(adata), ad_path),
+        ad_ref,
+        type_expected_1d if len(ad_ref.dims) == 1 else type_expected_2d,
+        _expected2np(ad_expected(adata), ad_ref),
     )
 
 
-def test_get_values(check_ad_path: tuple[AnnData, AdRef, type[Array], Array]) -> None:
-    adata, ad_path, type_expected, expected = check_ad_path
+def test_get_values(get_test_params: tuple[AnnData, AdRef, type[Array], Array]) -> None:
+    adata, ad_ref, type_expected, expected = get_test_params
 
-    vals = ad_path(adata)
+    vals = ad_ref(adata)
 
     assert isinstance(vals, type_expected)
     vals_np = asarray(vals)

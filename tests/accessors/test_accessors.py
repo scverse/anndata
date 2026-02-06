@@ -49,7 +49,7 @@ def path_and_expected_fn(
 
 
 @pytest.fixture(scope="session")
-def ad_path(path_and_expected_fn: tuple[AdRef, AdRefSer]) -> AdRef:
+def ad_ref(path_and_expected_fn: tuple[AdRef, AdRefSer]) -> AdRef:
     return path_and_expected_fn[0]
 
 
@@ -60,23 +60,23 @@ def ad_serialized(
     return path_and_expected_fn[1]
 
 
-def test_repr(ad_path: AdRef) -> None:
+def test_repr(ad_ref: AdRef) -> None:
     from anndata.acc import A  # for eval
 
-    assert repr(ad_path) == str(ad_path)
-    assert repr(ad_path)[:2] in {"A.", "A["}
-    assert eval(repr(ad_path)) == ad_path
+    assert repr(ad_ref) == str(ad_ref)
+    assert repr(ad_ref)[:2] in {"A.", "A["}
+    assert eval(repr(ad_ref)) == ad_ref
     del A
 
 
 @pytest.mark.parametrize("compare", ["json", "obj"])
 def test_serialization(
-    ad_path: AdRef, ad_serialized: AdRefSer, compare: Literal["json", "obj"]
+    ad_ref: AdRef, ad_serialized: AdRefSer, compare: Literal["json", "obj"]
 ) -> None:
     if compare == "obj":
-        assert A.from_json(ad_serialized) == ad_path
+        assert A.from_json(ad_serialized) == ad_ref
     else:
-        assert A.to_json(ad_path) == ad_serialized
+        assert A.to_json(ad_ref) == ad_serialized
 
 
 def test_serialization_schema(ad_serialized: AdRefSer) -> None:
@@ -84,7 +84,7 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
 
 
 @pytest.mark.parametrize(
-    ("ad_path", "dims"),
+    ("ad_ref", "dims"),
     [
         pytest.param(A[:, :], {"obs", "var"}, id="x"),
         pytest.param(A.layers["y"][:, :], {"obs", "var"}, id="layer"),
@@ -96,8 +96,8 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
         pytest.param(A.varp["d"][:, "c2"], {"var"}, id="varp-col"),
     ],
 )
-def test_dims(ad_path: AdRef, dims: Collection[Literal["obs", "var"]]) -> None:
-    assert ad_path.dims == dims
+def test_dims(ad_ref: AdRef, dims: Collection[Literal["obs", "var"]]) -> None:
+    assert ad_ref.dims == dims
 
 
 @pytest.mark.parametrize(
@@ -211,7 +211,7 @@ def test_special[C](
 
 
 @pytest.mark.parametrize(
-    "ad_path",
+    "ad_ref",
     [
         *(p[0] for p in PATHS),
         A,
@@ -225,12 +225,12 @@ def test_special[C](
     ],
     ids=str,
 )
-def test_in(adata: AnnData, ad_path: AdRef) -> None:
-    assert ad_path in adata
+def test_in(adata: AnnData, ad_ref: AdRef) -> None:
+    assert ad_ref in adata
 
 
 @pytest.mark.parametrize(
-    "ad_path",
+    "ad_ref",
     [
         A.layers["a"]["gene-0", :],  # not an obs name
         A.layers["a"][:, "cell-3"],  # not a var name
@@ -243,11 +243,11 @@ def test_in(adata: AnnData, ad_path: AdRef) -> None:
     ],
     ids=str,
 )
-def test_not_in(adata: AnnData, ad_path: AdRef) -> None:
-    assert ad_path not in adata
+def test_not_in(adata: AnnData, ad_ref: AdRef) -> None:
+    assert ad_ref not in adata
 
 
-def test_not_in_empty(ad_path: AdRef) -> None:
-    if ad_path in {A.obs.index, A.var.index}:
+def test_not_in_empty(ad_ref: AdRef) -> None:
+    if ad_ref in {A.obs.index, A.var.index}:
         pytest.xfail("obs.index and var.index are always in AnnData")
-    assert ad_path not in AnnData()
+    assert ad_ref not in AnnData()
