@@ -218,7 +218,7 @@ select = [
     "UP",   # pyupgrade
     "W",    # Warning detected by Pycodestyle
 ]
-external = [ "PLR0917" ] # preview rule
+external = [ "PLR0917", "PLW0108" ] # preview rules
 ignore = [
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines

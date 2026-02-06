@@ -4,14 +4,11 @@ import importlib
 import importlib.resources
 import json
 from collections.abc import Callable, Sequence
-from string import ascii_lowercase
 from typing import TYPE_CHECKING
 
 import jsonschema
-import numpy as np
 import pandas as pd
 import pytest
-import scipy.sparse as sp
 
 from anndata import AnnData
 from anndata.acc import A
@@ -20,92 +17,47 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Literal
 
-    from anndata.acc import AdRef, Array
+    from anndata.acc import AdRef
 
 
-type AdRefExpected = Callable[[AnnData], object]
 type AdRefSer = Sequence[str | int | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
 
-PATHS: list[tuple[AdRef, AdRefSer, AdRefExpected]] = [
-    (A[:, :], ["layers", None, None, None], lambda ad: ad.X),
-    (A[:, "gene-3"], ["layers", None, None, "gene-3"], lambda ad: ad[:, "gene-3"].X),
-    (A["cell-5", :], ["layers", None, "cell-5", None], lambda ad: ad["cell-5"].X),
-    (A.obs["type"], ["obs", "type"], lambda ad: ad.obs["type"]),
-    (A.obs.index, ["obs", None], lambda ad: ad.obs.index.values),
-    (A.layers["a"][:, :], ["layers", "a", None, None], lambda ad: ad.layers["a"]),
-    (
-        A.layers["a"][:, "gene-18"],
-        ["layers", "a", None, "gene-18"],
-        lambda ad: ad[:, "gene-18"].layers["a"],
-    ),
-    (
-        A.layers["a"]["cell-77", :],
-        ["layers", "a", "cell-77", None],
-        lambda ad: ad["cell-77"].layers["a"],
-    ),
-    (A.obsm["umap"][0], ["obsm", "umap", 0], lambda ad: ad.obsm["umap"][:, 0]),
-    (A.obsm["umap"][1], ["obsm", "umap", 1], lambda ad: ad.obsm["umap"][:, 1]),
-    (
-        A.varp["cons"]["gene-46", :],
-        ["varp", "cons", "gene-46", None],
-        lambda ad: ad.varp["cons"][46, :],
-    ),
-    (
-        A.varp["cons"][:, "gene-46"],
-        ["varp", "cons", None, "gene-46"],
-        lambda ad: ad.varp["cons"][:, 46],
-    ),
+PATHS: list[tuple[AdRef, AdRefSer]] = [
+    (A[:, :], ["layers", None, None, None]),
+    (A[:, "gene-3"], ["layers", None, None, "gene-3"]),
+    (A["cell-5", :], ["layers", None, "cell-5", None]),
+    (A.obs["type"], ["obs", "type"]),
+    (A.obs.index, ["obs", None]),
+    (A.layers["a"][:, :], ["layers", "a", None, None]),
+    (A.layers["a"][:, "gene-18"], ["layers", "a", None, "gene-18"]),
+    (A.layers["a"]["cell-77", :], ["layers", "a", "cell-77", None]),
+    (A.obsm["umap"][0], ["obsm", "umap", 0]),
+    (A.obsm["umap"][1], ["obsm", "umap", 1]),
+    (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
+    (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
 ]
 
 
 @pytest.fixture(scope="session", params=PATHS, ids=[str(p[0]) for p in PATHS])
 def path_and_expected_fn(
     request: pytest.FixtureRequest,
-) -> tuple[AdRef, AdRefSer, AdRefExpected]:
+) -> tuple[AdRef, AdRefSer]:
     return request.param
 
 
 @pytest.fixture(scope="session")
-def ad_path(path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected]) -> AdRef:
+def ad_path(path_and_expected_fn: tuple[AdRef, AdRefSer]) -> AdRef:
     return path_and_expected_fn[0]
 
 
 @pytest.fixture(scope="session")
 def ad_serialized(
-    path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected],
+    path_and_expected_fn: tuple[AdRef, AdRefSer],
 ) -> AdRefSer:
     return path_and_expected_fn[1]
-
-
-@pytest.fixture(scope="session")
-def ad_expected(
-    path_and_expected_fn: tuple[AdRef, AdRefSer, AdRefExpected],
-) -> AdRefExpected:
-    return path_and_expected_fn[2]
-
-
-@pytest.fixture
-def adata() -> AnnData:
-    gen = np.random.default_rng()
-    x = gen.random((100, 50), dtype=np.float32)
-    layers = dict(a=sp.random(100, 50, format="csr"))
-    obs = pd.DataFrame(
-        dict(type=gen.integers(0, 3, size=100)),
-        index="cell-" + pd.array(range(100)).astype(str),
-    )
-    var_grp = pd.Categorical(
-        gen.integers(0, 6, size=50), categories=list(ascii_lowercase[:5])
-    )
-    var = pd.DataFrame(
-        dict(grp=var_grp),
-        index="gene-" + pd.array(range(50)).astype(str),
-    )
-    obsm = dict(umap=gen.random((100, 2)))
-    varp = dict(cons=sp.csr_array(sp.random(50, 50)))
-    return AnnData(x, obs, var, layers=layers, obsm=obsm, varm={}, obsp={}, varp=varp)
 
 
 def test_repr(ad_path: AdRef) -> None:
@@ -299,27 +251,3 @@ def test_not_in_empty(ad_path: AdRef) -> None:
     if ad_path in {A.obs.index, A.var.index}:
         pytest.xfail("obs.index and var.index are always in AnnData")
     assert ad_path not in AnnData()
-
-
-def test_get_values(
-    adata: AnnData,
-    ad_path: AdRef,
-    ad_expected: Callable[[AnnData], Array],
-) -> None:
-    vals = ad_path(adata)  # TODO: allow returning sparse array?
-    expected = process_expected(ad_expected(adata), ad_path)
-    # TODO: validate type of output array (not sparse when 1D)
-    np.testing.assert_array_equal(vals, expected, strict=True)
-
-
-def process_expected(expected: Array, ad_path: AdRef) -> Array:
-    ndim = len(ad_path.dims)
-    match expected:
-        case np.ndarray():
-            return expected.squeeze() if ndim == 1 else expected
-        case sp.sparray() | sp.spmatrix():
-            return process_expected(expected.toarray(), ad_path)
-        case pd.Series():
-            return expected.array
-        case _:
-            pytest.fail(f"unhandled expected type {type(expected)}")

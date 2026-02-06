@@ -13,12 +13,14 @@ import scipy.sparse as sp
 
 from anndata import AnnData
 
+from .._core.xarray import Dataset2D
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
     from .._core.aligned_mapping import AxisArrays
-    from .._core.xarray import Dataset2D
+    from ..compat import XVariable
     from ..typing import _InMemoryArray
 
     if TYPE_CHECKING:  # for sphinx
@@ -177,6 +179,13 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     def get(self, adata: AnnData, idx: I, /) -> Array:
         """Get the referenced array from the AnnData object."""
 
+    def _maybe_flatten(self, idx: I, a: Array) -> Array:
+        if len(self.dims(idx)) != 1:
+            return a
+        if isinstance(a, (sp.sparray, sp.spmatrix)):
+            a = a.toarray()
+        return a.flatten()
+
 
 @dataclass(frozen=True)
 class LayerMapAcc[R: AdRef](MapAcc):
@@ -254,12 +263,8 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
         return True  # idx is None or [:, :]
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
-        ver_or_mat = adata[idx].X if self.k is None else adata[idx].layers[self.k]
-        if isinstance(ver_or_mat, sp.spmatrix | sp.sparray):
-            ver_or_mat = ver_or_mat.toarray()
-        # TODO: pandas
-        dims = self.dims(idx)
-        return ver_or_mat.flatten() if len(dims) == 1 else ver_or_mat
+        arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
+        return self._maybe_flatten(idx, arr)
 
 
 @dataclass(frozen=True)
@@ -322,9 +327,21 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
         attr: pd.DataFrame | Dataset2D = getattr(adata, self.dim)
         return idx in attr
 
-    def get(self, adata: AnnData, k: str | None, /) -> Array:
-        df = cast("pd.DataFrame", getattr(adata, self.dim))
-        return df.index.values if k is None else df[k].values
+    def get(
+        self, adata: AnnData, k: str | None, /
+    ) -> pd.api.extensions.ExtensionArray | XVariable:
+        match getattr(adata, self.dim), k:
+            case pd.DataFrame() as df, None:
+                return df.index.array
+            case Dataset2D() as ds, None:
+                return ds.xr_index.variable  # TODO: return cached index instead?
+            case pd.DataFrame() as df, k:
+                return df[k].array
+            case Dataset2D() as ds, k:
+                return ds[k].variable
+            case _:
+                msg = f"Unsupported {self.dim} container"
+                raise TypeError(msg)
 
 
 @dataclass(frozen=True)
@@ -404,7 +421,8 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
         return idx is None or idx in range(arr.shape[1])
 
     def get(self, adata: AnnData, i: int, /) -> Array:
-        return getattr(adata, f"{self.dim}m")[self.k][:, i]
+        arr = getattr(adata, f"{self.dim}m")[self.k][:, i]
+        return self._maybe_flatten(i, arr)
 
 
 @dataclass(frozen=True)
@@ -488,7 +506,8 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
         df = cast("pd.DataFrame", getattr(adata, self.dim))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
-        return getattr(adata, f"{self.dim}p")[self.k][iloc].toarray()
+        arr = getattr(adata, f"{self.dim}p")[self.k][iloc]
+        return self._maybe_flatten(idx, arr)
 
 
 @dataclass(frozen=True)

@@ -24,4 +24,5 @@
         //"-nauto",
     ],
     "python.terminal.activateEnvironment": true,
+    "python.analysis.include": ["src/**/*", "ci/scripts/**/*", "tests/**/*"],
 }
