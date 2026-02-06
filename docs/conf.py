@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 _extension_dir = HERE / "extensions"
+acc_schema = HERE.parent / "src/anndata/acc/acc-schema-v1.json"
 sys.path[:0] = [str(_extension_dir)]
 
 
@@ -28,6 +29,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
+html_extra_path = [str(acc_schema)]
 source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 master_doc = "index"
 default_role = "literal"
@@ -88,7 +90,7 @@ always_use_bars_union = True  # use `|`, not `Union` in types even when on Pytho
 todo_include_todos = False
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> None:
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
@@ -173,6 +175,9 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # this happens when a `type` or `class` is generic
+    ("py:class", "anndata.acc.GenericAlias"),
+    ("py:obj", "typing.R"),
 ]
 
 # -- Social cards ---------------------------------------------------------

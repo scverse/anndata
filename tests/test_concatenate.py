@@ -269,9 +269,8 @@ def test_concatenate_roundtrip(
     if backwards_compat and use_xdataset:
         import xarray as xr
 
-        result.var = xr.Dataset.from_dataframe(
-            result.var
-        )  # backwards compat always returns a dataframe
+        # backwards compat always returns a dataframe
+        result.var = xr.Dataset.from_dataframe(result.var)
 
     # Correcting for known differences
     orig, result = fix_known_differences(

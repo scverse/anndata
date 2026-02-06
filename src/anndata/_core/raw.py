@@ -10,7 +10,7 @@ from scipy.sparse import issparse
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays
-from .index import _normalize_index, _subset, get_vector, unpack_index
+from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_index
 from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
@@ -188,11 +188,11 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def var_vector(self, k: str) -> np.ndarray:
+    def var_vector(self, k: str, /) -> np.ndarray:
         # TODO decorator to copy AnnData.var_vector docstring
-        return get_vector(self, k, "var", "obs")
+        return _get_vector_ambiguous(self, k, "var", "obs")
 
-    def obs_vector(self, k: str) -> np.ndarray:
+    def obs_vector(self, k: str, /) -> np.ndarray:
         # TODO decorator to copy AnnData.obs_vector docstring
         idx = self._normalize_indices((slice(None), k))
         a = self.X[idx]

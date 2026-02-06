@@ -1019,7 +1019,7 @@ def resolve_cupy_type(val):
 
 
 @singledispatch
-def as_cupy(val, typ=None):
+def as_cupy(val, typ=None) -> CupyArray | CupyCSRMatrix | CupyCSCMatrix | DaskArray:
     """
     Rough conversion function
 
@@ -1057,7 +1057,7 @@ def as_cupy(val, typ=None):
 
 # TODO: test
 @as_cupy.register(DaskArray)
-def as_cupy_dask(a, typ=None):
+def as_cupy_dask(a, typ=None) -> DaskArray:
     if typ is None:
         typ = resolve_cupy_type(a._meta)
     return a.map_blocks(partial(as_cupy, typ=typ), dtype=a.dtype)

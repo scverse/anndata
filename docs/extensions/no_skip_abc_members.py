@@ -7,6 +7,8 @@ import sys
 from traceback import walk_stack
 from typing import TYPE_CHECKING
 
+from sphinx.util.typing import ExtensionMetadata
+
 if sys.version_info >= (3, 13):
     from typing import get_protocol_members, is_protocol
 else:
@@ -54,5 +56,6 @@ def no_skip_abc_members(  # noqa: PLR0917
     return None
 
 
-def setup(app: Sphinx) -> None:
+def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("autodoc-skip-member", no_skip_abc_members)
+    return ExtensionMetadata(parallel_read_safe=True)

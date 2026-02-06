@@ -71,6 +71,7 @@ doc = [
     "IPython",                             # For syntax highlighting in notebooks
     "myst-parser",
     "sphinx-design",
+    "holoviews",
     "anndata[dask]",
     "pandas>=3",
     # for unreleased changes
@@ -79,6 +80,7 @@ doc = [
 dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
 test = [
     "fast-array-utils>=1.2.3",
+    "holoviews",
     "anndata[lazy]",
     { include-group = "test-min" },
 ]
@@ -90,6 +92,7 @@ test-min = [
     "pytest-mock",
     "pytest-xdist[psutil]",
     "filelock",
+    "jsonschema",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
@@ -171,10 +174,12 @@ filterwarnings_when_strict = [
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
-    "anndata",                  # docstrings (module name due to --pyargs)
-    "./tests",                  # unit tests
-    "./ci/scripts",             # CI script tests
-    "./docs/concatenation.rst", # further doctests
+    "anndata",      # docstrings (module name due to --pyargs)
+    "./tests",      # unit tests
+    "./ci/scripts", # CI script tests
+    # further doctests
+    "./docs/accessors.rst",
+    "./docs/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [
@@ -215,7 +220,7 @@ select = [
     "UP",   # pyupgrade
     "W",    # Warning detected by Pycodestyle
 ]
-external = [ "PLR0917" ] # preview rule
+external = [ "PLR0917", "PLW0108" ] # preview rules
 ignore = [
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
