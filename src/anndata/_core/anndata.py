@@ -674,8 +674,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             and isinstance(self._vidx, IndexManager)
         ):
             oidx, vidx = array_api_ix(oidx, vidx)
-        else:
-            oidx, vidx = self._oidx, self._vidx
         if not np.isscalar(value):
             if self.is_view and any(
                 isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx.ravel())
