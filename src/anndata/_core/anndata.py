@@ -47,7 +47,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -1330,7 +1330,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             "E.g. `vec = A.obs['foo'](adata)` or `vec = A.layers['l']['bar', :](adata)`",
         )
     )
-    def obs_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
+    def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1350,7 +1350,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each obs in the same order
         as :attr:`obs_names`.
         """
-        return get_vector(self, k, "obs", "var", layer=layer)
+        return _get_vector_ambiguous(self, k, "obs", layer=layer)
 
     @deprecated(
         deprecation_msg(
@@ -1359,7 +1359,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             "E.g. `vec = A.var['foo'](adata)` or `vec = A.layers['l'][:, 'bar'](adata)`",
         )
     )
-    def var_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
+    def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1379,9 +1379,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each var in the same order
         as :attr:`var_names`.
         """
-        return get_vector(self, k, "var", "obs", layer=layer)
+        return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    def _mutated_copy(self, **kwargs):
+    def _mutated_copy(self, **kwargs) -> AnnData:
         """Creating AnnData with attributes optionally specified via kwargs."""
         if self.isbacked and (
             "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)

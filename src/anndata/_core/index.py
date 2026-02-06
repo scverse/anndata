@@ -18,8 +18,9 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from ..typing import Index, Index1D, _Index1DNorm
+    from ..typing import Index, Index1D, _Index1DNorm, _InMemoryArray
     from .anndata import AnnData
+    from .raw import Raw
 
 
 def _normalize_indices(
@@ -350,33 +351,22 @@ def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
     return tuple(mut)
 
 
-def get_vector(
-    adata: AnnData,
-    k: str,
-    coldim: Literal["obs", "var"],
-    idxdim: Literal["obs", "var"],
-    layer: str | None = None,
-):
-    # adata could be self if Raw and AnnData shared a parent
-    dims = ("obs", "var")
-    col = getattr(adata, coldim).columns
-    idx = getattr(adata, f"{idxdim}_names")
+def _get_vector_ambiguous(
+    adata: AnnData | Raw, k: str, dim: Literal["obs", "var"], layer: str | None = None
+) -> _InMemoryArray:
+    from ..acc import A
 
-    in_col = k in col
-    in_idx = k in idx
-
-    if (in_col + in_idx) == 2:
-        msg = f"Key {k} could be found in both .{idxdim}_names and .{coldim}.columns"
-        raise ValueError(msg)
-    elif (in_col + in_idx) == 0:
-        msg = f"Could not find key {k} in .{idxdim}_names or .{coldim}.columns."
-        raise KeyError(msg)
-    elif in_col:
-        return getattr(adata, coldim)[k].values
-    elif in_idx:
-        selected_dim = dims.index(idxdim)
-        idx = adata._normalize_indices(make_slice(k, selected_dim))
-        a = (adata.X if layer is None else adata.layers[layer])[idx]
-    if issparse(a):
-        a = a.toarray()
-    return np.ravel(a)
+    idxdim = "var" if dim == "obs" else "obs"
+    match (k in getattr(adata, dim), k in getattr(adata, f"{idxdim}_names")):
+        case True, True:
+            msg = f"Key {k} could be found in both .{idxdim}_names and .{dim}.columns"
+            raise ValueError(msg)
+        case False, False:
+            msg = f"Could not find key {k} in .{idxdim}_names or .{dim}.columns."
+            raise KeyError(msg)
+        case True, False:
+            ref = (A.obs if dim == "obs" else A.var)[k]
+        case False, True:
+            acc = A if layer is None else A.layers[layer]
+            ref = acc[k, :] if idxdim == "obs" else acc[:, k]
+    return ref(adata)  # type: ignore  (accessors don’t officially support Raw, but it works for the tested cases)
