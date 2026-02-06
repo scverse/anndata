@@ -597,8 +597,38 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # else:
         #     return X
 
+    def _handle_view_X_cow(self, value: XDataType | None):
+        if self._is_view:
+            if settings.copy_on_write_X:
+                msg = "Setting element `.X` of view, initializing view as actual."
+                warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
+                new = self._mutated_copy(X=value)
+                self._init_as_actual(new)
+                return True
+            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
+            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
+            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
+            warnings.warn(msg, FutureWarning, stacklevel=2)
+        return False
+
     @X.setter
     def X(self, value: XDataType | None):  # noqa: PLR0912
+        value = (
+            coerce_array(value, name="X", allow_array_like=True)
+            if value is not None
+            else None
+        )
+        can_set_direct_if_not_none = value is None or (
+            np.isscalar(value)
+            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+        )
+        if not can_set_direct_if_not_none:
+            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
+            raise ValueError(msg)
+        if self._handle_view_X_cow(value):
+            return None
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -607,7 +637,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
@@ -620,67 +649,51 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             oidx, vidx = np.ix_(self._oidx, self._vidx)
         else:
             oidx, vidx = self._oidx, self._vidx
-        if (
-            np.isscalar(value)
-            or (hasattr(value, "shape") and (self.shape == value.shape))
-            or (self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-        ):
-            if not np.isscalar(value):
-                if self.is_view and any(
-                    isinstance(idx, np.ndarray)
-                    and len(np.unique(idx)) != len(idx.ravel())
-                    for idx in [oidx, vidx]
-                ):
-                    msg = (
-                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                        "The resulting `adata.X` will likely not equal the value to which you set it. "
-                        "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error."
-                    )
-                    warnings.warn(msg, FutureWarning, stacklevel=1)
-                if self.shape != value.shape:
-                    # For assigning vector of values to 2d array or matrix
-                    # Not necessary for row of 2d array
-                    value = value.reshape(self.shape)
-            if self.isbacked:
-                if self.is_view:
-                    X = self.file["X"]
-                    if isinstance(X, h5py.Group):
-                        X = sparse_dataset(X)
-                    X[oidx, vidx] = value
-                else:
-                    self._set_backed("X", value)
-            elif self.is_view:
-                if sparse.issparse(self._adata_ref._X) and isinstance(
-                    value, np.ndarray
-                ):
-                    if isinstance(self._adata_ref.X, CSArray):
-                        memory_class = sparse.coo_array
-                    else:
-                        memory_class = sparse.coo_matrix
-                    value = memory_class(value)
-                elif sparse.issparse(value) and isinstance(
-                    self._adata_ref._X, np.ndarray
-                ):
-                    warnings.warn(
-                        "Trying to set a dense array with a sparse array on a view."
-                        "Densifying the sparse array."
-                        "This may incur excessive memory usage",
-                        stacklevel=2,
-                    )
-                    value = value.toarray()
-                warnings.warn(
-                    "Modifying `X` on a view results in data being overridden",
-                    ImplicitModificationWarning,
-                    stacklevel=2,
+        if not np.isscalar(value):
+            if self.is_view and any(
+                isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx.ravel())
+                for idx in [oidx, vidx]
+            ):
+                msg = (
+                    "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
+                    "The resulting `adata.X` will likely not equal the value to which you set it. "
+                    "To avoid this potential issue, please make a copy of the data first. "
+                    "In the future, this operation will throw an error."
                 )
-                self._adata_ref._X[oidx, vidx] = value
+                warnings.warn(msg, FutureWarning, stacklevel=2)
+            if self.shape != value.shape:
+                # For assigning vector of values to 2d array or matrix
+                # Not necessary for row of 2d array
+                value = value.reshape(self.shape)
+        if self.isbacked:
+            if self.is_view:
+                X = self.file["X"]
+                if isinstance(X, h5py.Group):
+                    msg = "Cannot write to views of sparse backed files"
+                    raise NotImplementedError(msg)
+                X[oidx, vidx] = value
             else:
-                self._X = value
+                self._set_backed("X", value)
+        elif self.is_view:
+            if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
+                if isinstance(self._adata_ref.X, CSArray):
+                    memory_class = sparse.coo_array
+                else:
+                    memory_class = sparse.coo_matrix
+                value = memory_class(value)
+            elif sparse.issparse(value) and isinstance(self._adata_ref._X, np.ndarray):
+                msg = (
+                    "Trying to set a dense array with a sparse array on a view. "
+                    "Densifying the sparse array. "
+                    "This may incur excessive memory usage"
+                )
+                warnings.warn(msg, UserWarning, stacklevel=2)
+                value = value.toarray()
+            msg = "Modifying `X` on a view results in data being overridden"
+            warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
+            self._adata_ref._X[oidx, vidx] = value
         else:
-            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
-            raise ValueError(msg)
+            self._X = value
 
     @X.deleter
     def X(self):
@@ -1492,8 +1505,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return self._mutated_copy(
                     X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
                 )
-            else:
-                return self._mutated_copy()
+            return self._mutated_copy()
         else:
             from ..io import read_h5ad, write_h5ad
 
