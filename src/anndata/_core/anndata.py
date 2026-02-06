@@ -630,9 +630,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # Handle IndexManager by extracting array_api compat if possible
         # Otherwise fall back to numpy
         oidx, vidx = (
-            idx.get_for_array(self._adata_ref._X)
-            if (is_mgr := isinstance(idx, IndexManager)) and has_xp(self._adata_ref._X)
-            else (np.array(idx) if is_mgr else idx)
+            (
+                idx.get_for_array(self._adata_ref._X)
+                if has_xp(self._adata_ref._X)
+                else np.array(idx)
+            )
+            if isinstance(idx, IndexManager) 
+            else idx
             for idx in (self._oidx, self._vidx)
         )
         if (
