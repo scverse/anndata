@@ -66,19 +66,17 @@ type Index = (
 )
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
 
-_XDataType: TypeAlias = (  # noqa: UP040
+_InMemoryArray: TypeAlias = (  # noqa: UP040
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
     | CSArray
-    | H5Array
-    | ZarrArray
-    | ZappyArray
-    | abc.CSRDataset
-    | abc.CSCDataset
     | DaskArray
     | CupyArray
     | CupySparseMatrix
+)
+_XDataType: TypeAlias = (  # noqa: UP040
+    _InMemoryArray | H5Array | ZarrArray | ZappyArray | abc.CSRDataset | abc.CSCDataset
 )
 _ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
 _InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040

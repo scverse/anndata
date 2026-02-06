@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, ClassVar, cast, overload
 
 import pandas as pd
 import scipy.sparse as sp
-from numpy.typing import NDArray
-from pandas.api.extensions import ExtensionArray
 
 from anndata import AnnData
 
@@ -19,17 +17,16 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
-    from numpy.typing import NDArray
-
     from .._core.aligned_mapping import AxisArrays
     from .._core.xarray import Dataset2D
+    from ..typing import _InMemoryArray
 
     if TYPE_CHECKING:  # for sphinx
         from . import hv
 
 
 type Axes = Collection[Literal["obs", "var"]]
-type Array = ExtensionArray | NDArray[Any]
+type Array = _InMemoryArray
 
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 """Index along the full length of one or both AnnData dimensions, resulting in a 1D or 2D array.

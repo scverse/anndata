@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Literal
 
-    from anndata.acc import AdRef
+    from anndata.acc import AdRef, Array
 
 
-type AdRefExpected = Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series]
+type AdRefExpected = Callable[[AnnData], object]
 type AdRefSer = Sequence[str | int | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
@@ -31,44 +31,32 @@ with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
 
 PATHS: list[tuple[AdRef, AdRefSer, AdRefExpected]] = [
     (A[:, :], ["layers", None, None, None], lambda ad: ad.X),
-    (
-        A[:, "gene-3"],
-        ["layers", None, None, "gene-3"],
-        lambda ad: ad[:, "gene-3"].X.flatten(),
-    ),
-    (
-        A["cell-5", :],
-        ["layers", None, "cell-5", None],
-        lambda ad: ad["cell-5"].X.flatten(),
-    ),
+    (A[:, "gene-3"], ["layers", None, None, "gene-3"], lambda ad: ad[:, "gene-3"].X),
+    (A["cell-5", :], ["layers", None, "cell-5", None], lambda ad: ad["cell-5"].X),
     (A.obs["type"], ["obs", "type"], lambda ad: ad.obs["type"]),
     (A.obs.index, ["obs", None], lambda ad: ad.obs.index.values),
-    (
-        A.layers["a"][:, :],
-        ["layers", "a", None, None],
-        lambda ad: ad.layers["a"].copy().toarray(),
-    ),
+    (A.layers["a"][:, :], ["layers", "a", None, None], lambda ad: ad.layers["a"]),
     (
         A.layers["a"][:, "gene-18"],
         ["layers", "a", None, "gene-18"],
-        lambda ad: ad[:, "gene-18"].layers["a"].copy().toarray().flatten(),
+        lambda ad: ad[:, "gene-18"].layers["a"],
     ),
     (
         A.layers["a"]["cell-77", :],
         ["layers", "a", "cell-77", None],
-        lambda ad: ad["cell-77"].layers["a"].copy().toarray().flatten(),
+        lambda ad: ad["cell-77"].layers["a"],
     ),
     (A.obsm["umap"][0], ["obsm", "umap", 0], lambda ad: ad.obsm["umap"][:, 0]),
     (A.obsm["umap"][1], ["obsm", "umap", 1], lambda ad: ad.obsm["umap"][:, 1]),
     (
         A.varp["cons"]["gene-46", :],
         ["varp", "cons", "gene-46", None],
-        lambda ad: ad.varp["cons"][46, :].toarray(),
+        lambda ad: ad.varp["cons"][46, :],
     ),
     (
         A.varp["cons"][:, "gene-46"],
         ["varp", "cons", None, "gene-46"],
-        lambda ad: ad.varp["cons"][:, 46].toarray(),
+        lambda ad: ad.varp["cons"][:, 46],
     ),
 ]
 
@@ -316,7 +304,22 @@ def test_not_in_empty(ad_path: AdRef) -> None:
 def test_get_values(
     adata: AnnData,
     ad_path: AdRef,
-    ad_expected: Callable[[AnnData], np.ndarray | sp.coo_array | pd.Series],
+    ad_expected: Callable[[AnnData], Array],
 ) -> None:
-    vals = ad_path(adata)
-    np.testing.assert_array_equal(vals, ad_expected(adata), strict=True)
+    vals = ad_path(adata)  # TODO: allow returning sparse array?
+    expected = process_expected(ad_expected(adata), ad_path)
+    # TODO: validate type of output array (not sparse when 1D)
+    np.testing.assert_array_equal(vals, expected, strict=True)
+
+
+def process_expected(expected: Array, ad_path: AdRef) -> Array:
+    ndim = len(ad_path.dims)
+    match expected:
+        case np.ndarray():
+            return expected.squeeze() if ndim == 1 else expected
+        case sp.sparray() | sp.spmatrix():
+            return process_expected(expected.toarray(), ad_path)
+        case pd.Series():
+            return expected.array
+        case _:
+            pytest.fail(f"unhandled expected type {type(expected)}")

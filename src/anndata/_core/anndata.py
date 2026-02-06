@@ -1323,28 +1323,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_X(self, *, use_raw: bool = False, layer: str | None = None):
-        """\
-        Convenience method for getting expression values
-        with common arguments and error handling.
-        """
-        is_layer = layer is not None
-        if use_raw and is_layer:
-            msg = (
-                "Cannot use expression from both layer and raw. You provided:"
-                f"`use_raw={use_raw}` and `layer={layer}`"
-            )
-            raise ValueError(msg)
-        if is_layer:
-            return self.layers[layer]
-        elif use_raw:
-            if self.raw is None:
-                msg = "This AnnData doesn’t have a value in `.raw`."
-                raise ValueError(msg)
-            return self.raw.X
-        else:
-            return self.X
-
+    @deprecated(
+        deprecation_msg(
+            "obs_vector",
+            "anndata.acc.A",
+            "E.g. `vec = A.obs['foo'](adata)` or `vec = A.layers['l']['bar', :](adata)`",
+        )
+    )
     def obs_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
@@ -1365,19 +1350,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each obs in the same order
         as :attr:`obs_names`.
         """
-        if layer == "X":
-            if "X" in self.layers:
-                pass
-            else:
-                msg = (
-                    "In a future version of AnnData, access to `.X` by passing"
-                    " `layer='X'` will be removed. Instead pass `layer=None`."
-                )
-                warn(msg, FutureWarning)
-                layer = None
         return get_vector(self, k, "obs", "var", layer=layer)
 
-    def var_vector(self, k, *, layer: str | None = None) -> np.ndarray:
+    @deprecated(
+        deprecation_msg(
+            "var_vector",
+            "anndata.acc.A",
+            "E.g. `vec = A.var['foo'](adata)` or `vec = A.layers['l'][:, 'bar'](adata)`",
+        )
+    )
+    def var_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1397,39 +1379,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each var in the same order
         as :attr:`var_names`.
         """
-        if layer == "X":
-            if "X" in self.layers:
-                pass
-            else:
-                msg = (
-                    "In a future version of AnnData, access to `.X` by passing "
-                    "`layer='X'` will be removed. Instead pass `layer=None`."
-                )
-                warn(msg, FutureWarning)
-                layer = None
         return get_vector(self, k, "var", "obs", layer=layer)
-
-    @deprecated(deprecation_msg("_get_obs_array", "obs_vector"))
-    def _get_obs_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
-        """\
-        Get an array from the layer (default layer='X') along the :attr:`obs`
-        dimension by first looking up `obs.keys` and then :attr:`obs_names`.
-        """
-        if not use_raw or k in self.obs.columns:
-            return self.obs_vector(k=k, layer=layer)
-        else:
-            return self.raw.obs_vector(k)
-
-    @deprecated(deprecation_msg("_get_var_array", "var_vector"))
-    def _get_var_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
-        """\
-        Get an array from the layer (default layer='X') along the :attr:`var`
-        dimension by first looking up `var.keys` and then :attr:`var_names`.
-        """
-        if not use_raw or k in self.var.columns:
-            return self.var_vector(k=k, layer=layer)
-        else:
-            return self.raw.var_vector(k)
 
     def _mutated_copy(self, **kwargs):
         """Creating AnnData with attributes optionally specified via kwargs."""
