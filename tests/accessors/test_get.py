@@ -10,7 +10,13 @@ from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
 from anndata.acc import A
-from anndata.compat import XDataArray, XDataset, XVariable
+from anndata.compat import DaskArray, XDataArray, XDataset, XVariable
+from anndata.tests.helpers import (
+    DASK_CAN_SPARRAY,
+    as_dense_dask_array,
+    as_sparse_dask_array,
+    as_sparse_dask_matrix,
+)
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -18,6 +24,9 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
     from anndata.acc import AdRef, Array
+
+
+needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installed.")
 
 
 ND_PATHS: list[tuple[AdRef, Callable[[AnnData], Array]]] = [
@@ -36,7 +45,24 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], Array]]] = [
 DF_PATHS: list[tuple[AdRef, Callable[[AnnData], Array]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index.values),
-    # TODO: copy entries from above that can also hold dataframes.
+    # TODO: copy entries from above that can also hold dataframes?
+]
+
+DASK_TYPES = [
+    # TODO: check inner type
+    pytest.param(as_dense_dask_array, DaskArray, DaskArray, id="da.array[np.ndarray]"),
+    pytest.param(
+        as_sparse_dask_array,
+        DaskArray,
+        DaskArray,
+        marks=pytest.mark.skipif(
+            not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+        ),
+        id="da.array[sp.csr_array]",
+    ),
+    pytest.param(
+        as_sparse_dask_matrix, DaskArray, DaskArray, id="da.array[sp.csc_matrix]"
+    ),
 ]
 
 ND_TYPES = [
@@ -44,6 +70,11 @@ ND_TYPES = [
     # TODO: return 1D sparse array instead of 1D ndarray?
     pytest.param(sp.csr_array, np.ndarray, sp.csr_array, id="sp.csr_array"),
     pytest.param(sp.csc_matrix, np.ndarray, sp.csc_matrix, id="sp.csc_matrix"),
+    *[
+        pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)
+        for t in DASK_TYPES
+    ],
+    # TODO: check cupy
 ]
 
 DF_TYPES = [
@@ -95,6 +126,8 @@ def _expected2np(expected: Array, ad_path: AdRef) -> np.ndarray:
             return _expected2np(expected.toarray(), ad_path)
         case pd.Series() | XDataArray():
             return expected.to_numpy()
+        case DaskArray():
+            return _expected2np(expected.compute(), ad_path)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")
 
@@ -132,7 +165,8 @@ def check_ad_path(
 def test_get_values(check_ad_path: tuple[AnnData, AdRef, type[Array], Array]) -> None:
     adata, ad_path, type_expected, expected = check_ad_path
 
-    vals = ad_path(adata)  # TODO: allow returning sparse array?
+    vals = ad_path(adata)
 
     assert isinstance(vals, type_expected)
-    np.testing.assert_array_equal(asarray(vals), expected, strict=True)
+    vals_np = asarray(vals)
+    np.testing.assert_array_equal(vals_np, expected, strict=True)

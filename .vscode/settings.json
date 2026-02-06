@@ -19,7 +19,7 @@
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
         "--color=yes",
-        "-vv",
+        "-vvv",
         "--strict-warnings",
         //"-nauto",
     ],

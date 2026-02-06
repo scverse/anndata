@@ -14,6 +14,7 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from .._core.xarray import Dataset2D
+from ..compat import DaskArray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
@@ -182,6 +183,8 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     def _maybe_flatten(self, idx: I, a: Array) -> Array:
         if len(self.dims(idx)) != 1:
             return a
+        if isinstance(a, DaskArray):
+            a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
         if isinstance(a, (sp.sparray, sp.spmatrix)):
             a = a.toarray()
         return a.flatten()
