@@ -35,6 +35,7 @@ from anndata.tests.helpers import (
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
+    mlx_array_or_idempotent,
 )
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ ARRAY_TYPES = [
     pytest.param(csr_matrix, id="csr_matrix"),
     pytest.param(csr_array, id="csr_array"),
     pytest.param(jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api),
+    pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
 ]
 
 # ------------------------------------------------------------------------------
@@ -292,6 +294,7 @@ def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
         pytest.param(
             jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
         ),
+        pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
     ],
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
@@ -502,6 +505,7 @@ def test_read_tsv_iter():
         pytest.param(
             jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
         ),
+        pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
         np.array,
         csr_matrix,
     ],
@@ -518,6 +522,7 @@ def test_write_csv(typ, tmp_path):
         pytest.param(
             jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
         ),
+        pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
         np.array,
         csr_matrix,
     ],
@@ -562,10 +567,14 @@ def test_write_csv_view(typ, tmp_path: Path) -> None:
 )
 @pytest.mark.parametrize(
     "xp_array",
-    [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
+    [
+        np.array,
+        pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api),
+        pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
+    ],
 )
 def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
-    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
+    adata = ad.AnnData(uns=dict(empty=xp_array([])))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"] is not None

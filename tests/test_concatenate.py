@@ -36,6 +36,7 @@ from anndata.tests.helpers import (
     gen_vstr_recarray,
     jnp,
     jnp_array_or_idempotent,
+    mlx_array_or_idempotent,
 )
 from anndata.utils import asarray
 
@@ -1526,6 +1527,7 @@ def expected_shape(
     [
         pytest.param(np.array, id="np"),
         pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
+        pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
     ],
 )
 def test_concat_size_0_axis(
@@ -1577,9 +1579,8 @@ def test_concat_size_0_axis(
         altaxis_new_inds = ~axis_labels(result, alt_axis).isin(axis_labels(a, alt_axis))
         axis_idx = make_idx_tuple(axis_new_inds, axis)
         altaxis_idx = make_idx_tuple(altaxis_new_inds, 1 - axis)
-
-        check_filled_like(result.X[axis_idx], elem_name="X")
-        check_filled_like(result.X[altaxis_idx], elem_name="X")
+        check_filled_like(result[axis_idx].X, elem_name="X")
+        check_filled_like(result[altaxis_idx].X, elem_name="X")
         for k, elem in result.layers.items():
             check_filled_like(elem[axis_idx], elem_name=f"layers/{k}")
             check_filled_like(elem[altaxis_idx], elem_name=f"layers/{k}")

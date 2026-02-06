@@ -18,6 +18,7 @@ from anndata.tests.helpers import (
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
+    mlx_array_or_idempotent,
 )
 from anndata.utils import asarray
 
@@ -28,6 +29,7 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
     pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
+    pytest.param(mlx_array_or_idempotent, id="mlx", marks=pytest.mark.array_api),
 ]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]

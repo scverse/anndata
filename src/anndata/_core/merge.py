@@ -1132,7 +1132,10 @@ def concat_pairwise_mapping(
         elif all(isinstance(el, DaskArray) for el in els):
             result[k] = _dask_block_diag(els)
         else:
-            result[k] = sparse.block_diag(els, format="csr")
+            result[k] = sparse.block_diag(
+                [np.array(e) if not sparse.issparse(e) else e for e in els],
+                format="csr",
+            )
     return result
 
 

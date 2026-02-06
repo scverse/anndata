@@ -89,8 +89,9 @@ class IndexManager:
             existing_xp = existing.__array_namespace__()
             if existing_xp is xp:
                 return existing
-            return xp.from_dlpack(existing)
-        self.add_array(xp.from_dlpack(src_arr, copy=True))
+            # https://github.com/ml-explore/mlx/issues/48#issuecomment-3862013095 for asarray/dlpack
+            return getattr(xp, "from_dlpack", xp.asarray)(existing)
+        self.add_array(getattr(xp, "from_dlpack", xp.asarray)(src_arr, copy=True))
         return self._manager[device]
 
 

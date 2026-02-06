@@ -86,6 +86,21 @@ def jnp_array_or_idempotent(x):
     return jnp.array(x)
 
 
+if TYPE_CHECKING or find_spec("mlx"):
+    import mlx.core as mx
+
+    mx = _or_none(mx)
+else:
+    mx = None
+
+
+def mlx_array_or_idempotent(x):
+    if mx is None:
+        # In this case, the test should be marked by `array_api` to be conditionally skipped
+        return x
+    return mx.array(x)
+
+
 try:
     import fast_array_utils as _
 except ImportError:

@@ -105,6 +105,7 @@ test-min = [
 test-array-api = [
     { include-group = "test-min" },
     { include-group = "test-jax" },
+    "mlx[cpu]",
 ]
 test-jax = [
     "jax>=0.6.0",

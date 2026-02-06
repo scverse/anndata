@@ -45,6 +45,7 @@ from anndata.tests.helpers import (
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
+    mlx_array_or_idempotent,
     single_int_subset,
     single_subset,
     slice_int_subset,
@@ -1032,6 +1033,12 @@ def test_normalize_index_jax_boolean() -> None:
             type(jnp_array_or_idempotent(np.array([1]))),
             _from_array,
             id="jax",
+            marks=pytest.mark.array_api,
+        ),
+        pytest.param(
+            type(mlx_array_or_idempotent(np.array([1]))),
+            _from_array,
+            id="mlx",
             marks=pytest.mark.array_api,
         ),
         *(
