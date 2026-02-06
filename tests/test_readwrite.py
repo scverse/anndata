@@ -574,7 +574,7 @@ def test_write_csv_view(typ, tmp_path: Path) -> None:
     ],
 )
 def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
-    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
+    adata = ad.AnnData(uns=dict(empty=xp_array([])))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
     assert ad_read.uns["empty"] is not None
