@@ -29,5 +29,5 @@ def cite_role(  # noqa: PLR0917
     return [node], []
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> None:
     app.add_role("cite", cite_role, override=True)
