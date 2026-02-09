@@ -117,6 +117,7 @@ def setup(app: Sphinx) -> None:
 
 
 intersphinx_mapping = dict(
+    array_api=("https://array-api.readthedocs.io/en/stable", None),
     awkward=("https://awkward-array.org/doc/stable", None),
     cupy=("https://docs.cupy.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),

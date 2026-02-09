@@ -56,7 +56,6 @@ Home-page = "https://github.com/scverse/anndata"
 
 [dependency-groups]
 dev = [
-    "types-array-api",
     { include-group = "dev-doc" },
 ]
 doc = [
@@ -78,7 +77,10 @@ doc = [
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
-dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+dev-doc = [
+    "towncrier>=24.8.0", # release notes tool
+    "types-array-api",   # for dev and linking in the docs
+]
 test = [
     "fast-array-utils>=1.2.3",
     "holoviews",
