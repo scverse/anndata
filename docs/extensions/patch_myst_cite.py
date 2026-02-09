@@ -6,6 +6,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from docutils import nodes, utils
+from sphinx.util.typing import ExtensionMetadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -29,5 +30,6 @@ def cite_role(  # noqa: PLR0917
     return [node], []
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> ExtensionMetadata:
     app.add_role("cite", cite_role, override=True)
+    return ExtensionMetadata(parallel_read_safe=True)
