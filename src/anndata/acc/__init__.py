@@ -34,7 +34,7 @@ type Array = _InMemoryArray
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 """Index along the full length of one or both AnnData dimensions, resulting in a 1D or 2D array.
 
-E.g. `a[:, 5]`, `a[18, :]`, or `a[:, :]`
+E.g. `a[:, "c"]`, `a["b", :]`, or `a[:, :]`
 """
 
 type Idx2DList = (
