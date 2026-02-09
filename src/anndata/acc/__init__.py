@@ -14,7 +14,7 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from .._core.xarray import Dataset2D
-from ..compat import DaskArray
+from ..compat import DaskArray, has_xp
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
@@ -188,7 +188,9 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
             a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
         if isinstance(a, (sp.sparray, sp.spmatrix)):
             a = a.toarray()
-        return a.flatten()
+        if has_xp(a):
+            return a.__array_namespace__().reshape(a, (a.size,))
+        return a.ravel()
 
 
 @dataclass(frozen=True)

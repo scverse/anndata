@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from enum import Enum
-    from types import ModuleType
     from typing import Any, Literal
+
+    from array_api.latest import ArrayNamespaceFull
 
     from ._core.anndata import AnnData
 
@@ -30,12 +31,13 @@ class ExtensionNamespace(Protocol):
 class SupportsArrayApi(Protocol):
     device: str
     shape: tuple[int, ...]
+    size: int
 
     def __array_namespace__(
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ModuleType: ...
+    ) -> ArrayNamespaceFull: ...
     def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
     def __dlpack__(
         self,

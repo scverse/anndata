@@ -56,6 +56,7 @@ Home-page = "https://github.com/scverse/anndata"
 
 [dependency-groups]
 dev = [
+    "types-array-api",
     { include-group = "dev-doc" },
 ]
 doc = [
