@@ -422,9 +422,9 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
 
     def isin(self, adata: AnnData, idx: int | None = None) -> bool:
         m: AxisArrays = getattr(adata, f"{self.dim}m")
-        if (arr := m.get(self.k)) is None:
+        if self.k not in m:
             return False
-        return idx is None or idx in range(arr.shape[1])
+        return idx is None or idx in range(m[self.k].shape[1])
 
     def get(self, adata: AnnData, i: int, /) -> Array:
         arr = getattr(adata, f"{self.dim}m")[self.k][:, i]
