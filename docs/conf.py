@@ -178,6 +178,7 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     # this happens when a `type` or `class` is generic
     ("py:class", "anndata.acc.GenericAlias"),
     ("py:obj", "typing.R"),
+    ("py:class", "_M"),
 ]
 
 # -- Social cards ---------------------------------------------------------

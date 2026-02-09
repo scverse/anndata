@@ -23,6 +23,7 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     get_multiindex_columns_df,
+    jnp,
 )
 
 if TYPE_CHECKING:
@@ -332,29 +333,44 @@ def test_indices_dtypes():
     assert adata.obs_names.tolist() == ["ö", "a"]
 
 
-def test_slicing():
-    adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
+@pytest.mark.parametrize(
+    "xp",
+    [pytest.param(jnp, marks=pytest.mark.array_api), np],
+    ids=["jax", "numpy"],
+)
+def test_slicing(xp) -> None:
+    adata = AnnData(xp.array([[1, 2, 3], [4, 5, 6]]))
 
     # assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()  # No longer the case
 
-    assert adata[0, 0].X.tolist() == np.reshape(1, (1, 1)).tolist()
-    assert adata[0, :].X.tolist() == np.reshape([1, 2, 3], (1, 3)).tolist()
-    assert adata[:, 0].X.tolist() == np.reshape([1, 4], (2, 1)).tolist()
+    assert adata[0, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
+    assert adata[0, :].X.tolist() == xp.reshape(xp.array([1, 2, 3]), (1, 3)).tolist()
+    assert adata[:, 0].X.tolist() == xp.reshape(xp.array([1, 4]), (2, 1)).tolist()
 
     assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[:, np.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
-    assert adata[:, np.array([False, True, True])].X.tolist() == [
+    assert adata[:, xp.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
+    assert adata[:, xp.array([False, True, True])].X.tolist() == [
         [2, 3],
         [5, 6],
     ]
+    assert (
+        adata[xp.array([0]), xp.array([0, 2])].X.tolist()
+        == adata[xp.array([0]), :][:, xp.array([0, 2])].X.tolist()
+    )
     assert adata[:, 1:3].X.tolist() == [[2, 3], [5, 6]]
 
     assert adata[0:2, :][:, 0:2].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[0:1, :][:, 0:2].X.tolist() == np.reshape([1, 2], (1, 2)).tolist()
-    assert adata[0, :][:, 0].X.tolist() == np.reshape(1, (1, 1)).tolist()
+    assert (
+        adata[0:1, :][:, 0:2].X.tolist()
+        == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
+    )
+    assert adata[0, :][:, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
     assert adata[:, 0:2][0:2, :].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[:, 0:2][0:1, :].X.tolist() == np.reshape([1, 2], (1, 2)).tolist()
-    assert adata[:, 0][0, :].X.tolist() == np.reshape(1, (1, 1)).tolist()
+    assert (
+        adata[:, 0:2][0:1, :].X.tolist()
+        == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
+    )
+    assert adata[:, 0][0, :].X.tolist() == xp.reshape(1, (1, 1)).tolist()
 
 
 def test_boolean_slicing():
@@ -406,6 +422,24 @@ def test_oob_boolean_slicing():
         AnnData(np.empty((100, len1)))[:, np.random.randint(0, 2, len2, dtype=bool)]
     assert str(len1) in str(e.value)
     assert str(len2) in str(e.value)
+
+
+def test_pd_index(subtests: pytest.Subtests) -> None:
+    adata = AnnData(
+        np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+        dict(obs_names=["A", "B", "C"]),
+        dict(var_names=["a", "b", "c"]),
+    )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index(adata.obs_names.isin(["A", "B"]))],
+            adata[adata.obs_names.isin(["A", "B"])],
+        )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index([0, 2])],
+            adata[[0, 2]],
+        )
 
 
 def test_slicing_strings():

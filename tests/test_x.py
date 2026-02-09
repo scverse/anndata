@@ -12,7 +12,13 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    jnp,
+    jnp_array_or_idempotent,
+)
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [
@@ -21,6 +27,7 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
+    pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
 ]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
@@ -43,6 +50,7 @@ def test_repeat_indices_view():
     adata = gen_adata((10, 10), X_type=np.asarray)
     subset = adata[[0, 0, 1, 1], :]
     mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
+
     with pytest.warns(
         FutureWarning,
         match=r"You are attempting to set `X` to a matrix on a view which has non-unique indices",
@@ -59,6 +67,11 @@ def test_setter_view(orig_array_type, new_array_type, *, copy_on_write_X: bool):
     orig_X = adata.X
     expected_X = asarray(orig_X.copy())
     to_assign = new_array_type(np.ones((9, 9)))
+    if not copy_on_write_X and jnp is not None and isinstance(orig_X, jnp.ndarray):
+        view = adata[:9, :9]
+        with pytest.raises(TypeError, match=r"immutable|in-place"):
+            view.X = to_assign
+        return
     if not copy_on_write_X:
         expected_X[:9, :9] = asarray(to_assign)
     view = adata[:9, :9]

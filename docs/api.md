@@ -225,6 +225,7 @@ Types used by the former:
    :toctree: generated/
 
    types.ExtensionNamespace
+   types.SupportsArrayApi
 ```
 
 (errors-api)=

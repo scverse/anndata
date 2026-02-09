@@ -10,7 +10,7 @@ from scipy import sparse
 
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import as_cupy, get_multiindex_columns_df
+from anndata.tests.helpers import as_cupy, get_multiindex_columns_df, jnp
 
 M, N = (100, 100)
 
@@ -142,6 +142,12 @@ def test_setting_daskarray(adata: AnnData):
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = da.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
+
+
+@pytest.mark.array_api
+def test_setting_jax(adata: AnnData) -> None:
+    adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
+    assert isinstance(adata.obsm["jax"], jnp.ndarray)
 
 
 def test_shape_error(adata: AnnData):
