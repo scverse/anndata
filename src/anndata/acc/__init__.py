@@ -62,7 +62,7 @@ __all__ = [
 
 
 class AdRef[I: Hashable]:
-    """A reference to a 1D or 2D array along one or two dimensions of an AnnData object.
+    r"""A reference to a 1D or 2D array along one or two dimensions of an AnnData object.
 
     Examples
     --------
@@ -70,11 +70,12 @@ class AdRef[I: Hashable]:
     You can then introspect the reference:
 
     >>> from anndata.acc import A
-    >>> A.obs.index.dims
+    >>> ref = A.obs["x"]
+    >>> ref.dims
     {'obs'}
-    >>> A.obs["x"].idx
+    >>> ref.idx
     'x'
-    >>> type(A.var["y"].acc)
+    >>> type(ref.acc)
     <class 'anndata.acc.MetaAcc'>
 
     See :mod:`anndata.acc` and :class:`AdAcc` for more examples.
