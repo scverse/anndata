@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from enum import Enum
     from typing import Any, Literal
 
-    from array_api.latest import ArrayNamespaceFull
+    from array_api.latest import ArrayNamespace
 
     from ._core.anndata import AnnData
 
@@ -37,7 +37,7 @@ class SupportsArrayApi(Protocol):
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ArrayNamespaceFull: ...
+    ) -> ArrayNamespace: ...
     def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
     def __dlpack__(
         self,
