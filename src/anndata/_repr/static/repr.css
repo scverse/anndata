@@ -281,108 +281,13 @@
         line-height: 1.6;
         color: var(--anndata-text-primary);
 
-        h1,
-        h2,
-        h3,
-        h4 {
-            margin-top: 16px;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--anndata-text-primary);
-        }
-
-        h1 {
-            font-size: 1.5em;
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--anndata-border-color);
-        }
-
-        h2 {
-            font-size: 1.3em;
-        }
-
-        h3 {
-            font-size: 1.1em;
-        }
-
-        p {
-            margin: 0 0 12px 0;
-        }
-
-        code {
-            background: var(--anndata-code-bg);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: var(--anndata-font-mono);
-            font-size: 0.9em;
-        }
-
         pre {
-            background: var(--anndata-code-bg);
-            padding: 12px;
-            border-radius: var(--anndata-radius);
-            overflow-x: auto;
-            margin: 12px 0;
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             font-family: var(--anndata-font-mono);
             font-size: 0.9em;
             line-height: 1.5;
-
-            code {
-                background: none;
-                padding: 0;
-            }
-        }
-
-        ul,
-        ol {
-            margin: 0 0 12px 24px;
-            padding-left: 0;
-            list-style-position: outside;
-        }
-
-        li {
-            margin: 4px 0;
-            padding-left: 4px;
-        }
-
-        a {
-            color: var(--anndata-link-color);
-            text-decoration: none;
-
-            &:hover {
-                text-decoration: underline;
-            }
-        }
-
-        blockquote {
-            margin: 12px 0;
-            padding: 8px 16px;
-            border-left: 3px solid var(--anndata-accent-color);
-            background: var(--anndata-bg-secondary);
-            color: var(--anndata-text-secondary);
-        }
-
-        table {
-            border-collapse: collapse;
-            margin: 12px 0;
-            font-size: 0.9em;
-            width: auto;
-        }
-
-        th,
-        td {
-            border: 1px solid var(--anndata-border-color);
-            padding: 6px 12px;
-            text-align: left;
-        }
-
-        th {
-            background: var(--anndata-bg-secondary);
-            font-weight: 600;
-        }
-
-        tbody tr:hover {
-            background: var(--anndata-bg-secondary);
         }
     }
 
@@ -1105,10 +1010,35 @@
     }
 }
 
-/* Dark mode - Jupyter/VS Code/Sphinx theme detection + manual dark mode class.
-   We intentionally don't use @media (prefers-color-scheme: dark) because it
-   reflects the OS preference, which can contradict the app theme (e.g., OS dark
-   + Furo light toggle). The attribute selectors below match the actual app state. */
+/* Dark mode - Three-tier approach:
+   Tier 1 (lowest): @media prefers-color-scheme — OS-level fallback for plain HTML
+     contexts (nbviewer, exported notebooks, standalone HTML) where no theme
+     attributes exist.
+   Tier 2: Explicit light theme selectors — override the media query when an app
+     is explicitly in light mode (handles "OS dark + app light" case).
+   Tier 3 (highest): Explicit dark theme selectors — match the actual app state. */
+
+/* Tier 1: OS dark mode fallback (fires only when no theme attribute overrides it) */
+@media (prefers-color-scheme: dark) {
+    .anndata-repr {
+        /* @dark-vars */
+    }
+}
+
+/* Tier 2: Explicit light theme selectors — override the OS dark media query
+   when the app is explicitly in light mode. Light variables are intentionally
+   duplicated from .anndata-repr defaults above (standard CSS practice). */
+[data-jp-theme-light="true"] .anndata-repr,
+.jp-Theme-Light .anndata-repr,
+body.vscode-light .anndata-repr,
+body[data-vscode-theme-kind="vscode-light"] .anndata-repr,
+[data-theme="light"] .anndata-repr,
+html[data-theme="light"] .anndata-repr,
+body.light-mode .anndata-repr {
+    /* @light-vars */
+}
+
+/* Tier 3: Explicit dark theme selectors — match the actual app state */
 [data-jp-theme-light="false"] .anndata-repr,
 .jp-Theme-Dark .anndata-repr,
 body.vscode-dark .anndata-repr,
@@ -1116,37 +1046,5 @@ body[data-vscode-theme-kind="vscode-dark"] .anndata-repr,
 [data-theme="dark"] .anndata-repr,
 html[data-theme="dark"] .anndata-repr,
 body.dark-mode .anndata-repr {
-    --anndata-bg-primary: #1e1e1e;
-    --anndata-bg-secondary: #252526;
-    --anndata-bg-tertiary: #2d2d2d;
-    --anndata-highlight: #264f78;
-    --anndata-text-primary: #e0e0e0;
-    --anndata-text-secondary: #a0a0a0;
-    --anndata-text-muted: #707070;
-    --anndata-border-color: #404040;
-    --anndata-border-light: #333333;
-    --anndata-accent-color: #58a6ff;
-    --anndata-warning-color: #d29922;
-    --anndata-warning-bg: #3d3200;
-    --anndata-error-color: #f85149;
-    --anndata-error-bg: #3d1a1a;
-    --anndata-success-color: #3fb950;
-    --anndata-info-color: #58a6ff;
-    --anndata-link-color: #58a6ff;
-    --anndata-code-bg: #2d2d2d;
-    /* Dtype colors - Dark mode */
-    --anndata-dtype-category: #d2a8ff;
-    --anndata-dtype-int: #79c0ff;
-    --anndata-dtype-float: #79c0ff;
-    --anndata-dtype-bool: #ff7b72;
-    --anndata-dtype-string: #a5d6ff;
-    --anndata-dtype-sparse: #7ee787;
-    --anndata-dtype-array: #79c0ff;
-    --anndata-dtype-dataframe: #d2a8ff;
-    --anndata-dtype-anndata: #ff7b72;
-    --anndata-dtype-dask: #ffc168;
-    --anndata-dtype-gpu: #a0db63;
-    --anndata-dtype-tpu: #67e8f9;
-    --anndata-dtype-awkward: #ff9d76;
-    --anndata-dtype-array-api: #e6c400;
+    /* @dark-vars */
 }

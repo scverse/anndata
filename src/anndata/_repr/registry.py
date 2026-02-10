@@ -48,6 +48,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import TypeGuard
 
 from .._repr_constants import (
     CSS_DTYPE_EXTENSION,
@@ -242,12 +246,17 @@ class FormatterContext:
         return "".join(parts)
 
 
-class TypeFormatter(ABC):
+class TypeFormatter[T](ABC):
     """
     Base class for type-specific formatters.
 
     Subclass this to add support for new types. The formatter will be
     called when can_format() returns True for an object.
+
+    The generic parameter ``T`` specifies the type that this formatter handles.
+    When ``can_format()`` returns ``True``, it narrows the type of ``obj`` to ``T``
+    via :class:`~typing.TypeGuard`, so ``format()`` receives ``obj: T`` without
+    manual casts. For duck-typed formatters, use ``TypeFormatter[object]``.
 
     Attributes
     ----------
@@ -264,7 +273,7 @@ class TypeFormatter(ABC):
     Formatter that only applies to uns section::
 
         @register_formatter
-        class MyUnsFormatter(TypeFormatter):
+        class MyUnsFormatter(TypeFormatter[MySpecialType]):
             sections = ("uns",)
 
             def can_format(self, obj, context):
@@ -276,7 +285,7 @@ class TypeFormatter(ABC):
     Formatter that applies to obsm and varm::
 
         @register_formatter
-        class MyMatrixFormatter(TypeFormatter):
+        class MyMatrixFormatter(TypeFormatter[MyMatrixType]):
             sections = ("obsm", "varm")
 
             def can_format(self, obj, context):
@@ -288,7 +297,7 @@ class TypeFormatter(ABC):
     Formatter that uses context for metadata lookup::
 
         @register_formatter
-        class AnnotatedCategoricalFormatter(TypeFormatter):
+        class AnnotatedCategoricalFormatter(TypeFormatter[pd.Series]):
             priority = 115  # Higher than default CategoricalFormatter
             sections = ("obs", "var")
 
@@ -310,8 +319,10 @@ class TypeFormatter(ABC):
     sections: tuple[str, ...] | None = None
 
     @abstractmethod
-    def can_format(self, obj: object, context: FormatterContext) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[T]:
         """Return True if this formatter can handle the given object.
+
+        When this returns ``True``, the type checker narrows ``obj`` to ``T``.
 
         Parameters
         ----------
@@ -331,7 +342,7 @@ class TypeFormatter(ABC):
         ...
 
     @abstractmethod
-    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
+    def format(self, obj: T, context: FormatterContext) -> FormattedOutput:
         """Format the object and return FormattedOutput."""
         ...
 
@@ -446,7 +457,7 @@ class SectionFormatter(ABC):
         return True
 
 
-class FallbackFormatter(TypeFormatter):
+class FallbackFormatter(TypeFormatter[object]):
     """
     Fallback formatter for unknown types.
 
@@ -457,7 +468,7 @@ class FallbackFormatter(TypeFormatter):
 
     priority: int = -1000  # Lowest priority, always checked last
 
-    def can_format(self, obj: object) -> bool:
+    def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
         return True  # Can format anything
 
     def format(  # noqa: PLR0912, PLR0915

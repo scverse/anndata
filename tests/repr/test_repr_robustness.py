@@ -1453,28 +1453,31 @@ class TestNestedAnnDataWithErrors:
 
 
 # =============================================================================
-# README modal with adversarial content
+# README data attribute edge cases
 # =============================================================================
 
 
-class TestEvilReadme:
-    """Tests for README modal with adversarial content (robustness)."""
+class TestReadmeEdgeCases:
+    """Tests for README data attribute with edge-case content.
+
+    README is displayed as plain text via textContent (not innerHTML),
+    so XSS vectors cannot fire. These tests verify that edge-case content
+    in the data-readme attribute doesn't break HTML well-formedness.
+    """
 
     def test_large_readme_handled(self, validate_html) -> None:
-        """Large README (50KB+) should be handled without bloating HTML."""
+        """Large README (50KB+) should not bloat HTML."""
         adata = AnnData(np.zeros((3, 3)))
-        adata.uns["README"] = "# Big README\n" + "A" * 50000
+        adata.uns["README"] = "Big README\n" + "A" * 50000
 
         html = adata._repr_html_()
         v = validate_html(html)
 
         v.assert_html_well_formed()
         v.assert_element_exists(".anndata-readme__icon")
-        # HTML should not be bloated excessively
-        # (The 50KB content will be in data attribute but shouldn't break HTML)
 
-    def test_unicode_chaos_in_readme(self, validate_html) -> None:
-        """Unicode edge cases in README should be handled."""
+    def test_unicode_in_readme(self, validate_html) -> None:
+        """Unicode edge cases in data-readme attribute."""
         adata = AnnData(np.zeros((3, 3)))
         adata.uns["README"] = """# Unicode Chaos
 RTL: \u202eSIHT DAER\u202c

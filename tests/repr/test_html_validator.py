@@ -601,6 +601,7 @@ class TestJupyterNotebookCompatibility:
             and "style" not in e.lower()
             and "script" not in e.lower()
             # vnu's CSS parser doesn't support native CSS nesting
+            # https://github.com/w3c/css-validator/issues/431
             and "css: parse error" not in e.lower()
         ]
         assert not critical, "HTML invalid in Jupyter context:\n" + "\n".join(critical)
@@ -640,6 +641,7 @@ class TestJupyterNotebookCompatibility:
             # Duplicate styles are OK in fragments
             and "duplicate" not in e.lower()
             # vnu's CSS parser doesn't support native CSS nesting
+            # https://github.com/w3c/css-validator/issues/431
             and "css: parse error" not in e.lower()
         ]
         assert not critical, "Combined cells invalid:\n" + "\n".join(critical)

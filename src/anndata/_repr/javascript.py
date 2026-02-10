@@ -6,7 +6,7 @@ Provides:
 - Search/filter functionality across all levels
 - Copy to clipboard
 - Nested content expansion
-- README modal with markdown rendering
+- README modal with plain text display
 
 The JavaScript is loaded from static/repr.js and wrapped in an IIFE
 that scopes it to a specific container element.
@@ -24,16 +24,6 @@ def _load_js_content() -> str:
     return files("anndata._repr.static").joinpath("repr.js").read_text(encoding="utf-8")
 
 
-@lru_cache(maxsize=1)
-def _load_markdown_parser() -> str:
-    """Load markdown parser JS from static file (cached)."""
-    return (
-        files("anndata._repr.static")
-        .joinpath("markdown-parser.js")
-        .read_text(encoding="utf-8")
-    )
-
-
 def get_javascript(container_id: str) -> str:
     """
     Get the JavaScript code for a specific container.
@@ -48,7 +38,6 @@ def get_javascript(container_id: str) -> str:
     JavaScript code wrapped in script tags
     """
     js_content = _load_js_content()
-    markdown_parser = _load_markdown_parser()
     return f"""<script>
 (function() {{
     // Scoped to avoid conflicts with multiple repr instances
@@ -56,7 +45,5 @@ def get_javascript(container_id: str) -> str:
     if (!container) return;
 
     {js_content}
-
-    {markdown_parser}
 }})();
 </script>"""

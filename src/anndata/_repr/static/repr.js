@@ -462,12 +462,12 @@ if (readmeIcon) {
         closeBtn.setAttribute("aria-label", "Close");
         header.appendChild(closeBtn);
 
-        // Content
+        // Content — plain text (no markdown parsing, XSS-safe via textContent)
         const content = document.createElement("div");
         content.className = "anndata-readme__content";
-
-        // Parse markdown to HTML (simple conversion)
-        content.innerHTML = parseMarkdown(readmeContent);
+        const pre = document.createElement("pre");
+        pre.textContent = readmeContent;
+        content.appendChild(pre);
 
         modal.appendChild(header);
         modal.appendChild(content);
