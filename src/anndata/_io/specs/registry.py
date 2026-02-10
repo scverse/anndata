@@ -7,10 +7,12 @@ from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import DaskArray, ZarrGroup, _read_attr, has_xp
 
 from ...utils import warn
 
@@ -19,11 +21,11 @@ if TYPE_CHECKING:
     from typing import Any
 
     from anndata._types import (
-        GroupStorageType,
         ReadCallback,
         StorageType,
         Write,
         WriteCallback,
+        _GroupStorageType,
         _WriteInternal,
     )
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -32,6 +34,21 @@ if TYPE_CHECKING:
     from ..._core.xarray import Dataset2D
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
+
+
+def to_writeable(x):
+    # Convert non-numpy arrays to dlpack
+    if has_xp(x) and not (isinstance(x, np.ndarray) or np.isscalar(x)):
+        return np.from_dlpack(x)
+    return x
+
+
+def normalize_nested(obj):
+    if isinstance(obj, dict):
+        return {k: normalize_nested(v) for k, v in obj.items()}
+    if isinstance(obj, list | tuple):
+        return type(obj)(normalize_nested(v) for v in obj)
+    return to_writeable(obj)
 
 
 # TODO: This probably should be replaced by a hashable Mapping due to conversion b/w "_" and "-"
@@ -72,7 +89,7 @@ class IORegistryError(Exception):
 def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: GroupStorageType, k: str, *args, **kwargs) -> None:
+        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs) -> None:
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
@@ -334,7 +351,7 @@ class Writer:
     @report_write_key_on_error
     def write_elem(
         self,
-        store: GroupStorageType,
+        store: _GroupStorageType,
         k: str,
         elem: RWAble,
         *,
@@ -349,7 +366,7 @@ class Writer:
 
         # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
         is_zarr_group = isinstance(store, ZarrGroup)
-        if "/" in k.split(store.name)[-1][1:]:
+        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
             if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
@@ -363,16 +380,14 @@ class Writer:
         dest_type = type(store)
 
         # Normalize k to absolute path
-        if (is_zarr_group and is_zarr_v2()) or (
-            isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute()
-        ):
+        if isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute():
             k = str(PurePosixPath(store.name) / k)
         is_consolidated = is_group_consolidated(store) if is_zarr_group else False
         if is_consolidated:
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
         if k == "/":
-            if isinstance(store, ZarrGroup) and not is_zarr_v2():
+            if isinstance(store, ZarrGroup):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())
@@ -380,6 +395,9 @@ class Writer:
                 store.clear()
         elif k in store:
             del store[k]
+
+        # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
+        elem = normalize_nested(elem)
 
         write_func = self.find_write_func(dest_type, elem, modifiers)
 
@@ -490,7 +508,7 @@ def read_elem_lazy(
 
 
 def write_elem(
-    store: GroupStorageType,
+    store: _GroupStorageType,
     k: str,
     elem: RWAble,
     *,

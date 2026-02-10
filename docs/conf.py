@@ -88,7 +88,7 @@ always_use_bars_union = True  # use `|`, not `Union` in types even when on Pytho
 todo_include_todos = False
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> None:
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
@@ -115,6 +115,7 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
+    array_api=("https://array-api.readthedocs.io/en/stable", None),
     awkward=("https://awkward-array.org/doc/stable", None),
     cupy=("https://docs.cupy.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
@@ -145,9 +146,10 @@ qualname_overrides = {
         for kind in ["", "View"]
     },
     # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
-    "anndata.compat.Index": "anndata.typing.Index",
     "anndata._types.StorageType": "anndata.experimental.StorageType",
     # https://github.com/theislab/scanpydoc/issues/254
+    "anndata.typing.Index1D": "anndata.typing.Index1D",
+    "anndata.typing.Index": "anndata.typing.Index",
     "anndata.typing.RWAble": "anndata.typing.RWAble",
     "anndata.typing.AxisStorable": "anndata.typing.AxisStorable",
     #### h5py
@@ -172,6 +174,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # Type variable for internal use
+    ("py:class", "_M"),
 ]
 
 # -- Social cards ---------------------------------------------------------

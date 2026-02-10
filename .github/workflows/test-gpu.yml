@@ -53,8 +53,9 @@ jobs:
         run: nvidia-smi
 
       - name: Install yq # https://cirun.slack.com/archives/C09SNDRB3A8/p1766512487317849?thread_ts=1766512112.938459&cid=C09SNDRB3A8
+        # https://github.com/mikefarah/yq/issues/2592 forces version pin
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.49.2/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
       - name: Extract max Python version from classifiers
@@ -73,14 +74,14 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[cu12]" --group=test -c ci/constraints.txt
+          uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
 
       - name: Run tests
         run: |
-          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage run -m pytest -m "array_api or gpu" -n auto
           uv run coverage combine
           uv run coverage xml
 

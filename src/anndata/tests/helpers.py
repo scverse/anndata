@@ -19,6 +19,7 @@ import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
+from zarr.storage import LocalStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -38,8 +39,9 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
-    is_zarr_v2,
+    has_xp,
 )
+from anndata.types import SupportsArrayApi
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -50,8 +52,8 @@ if TYPE_CHECKING:
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
-    from .._types import ArrayStorageType
-    from ..compat import Index1D
+    from .._types import _ArrayStorageType
+    from ..typing import Index1D
 
     type _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
 
@@ -63,6 +65,26 @@ except ImportError:
         *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
         *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
     )
+
+
+def _or_none[T](thing: T) -> T | None:
+    return thing
+
+
+if TYPE_CHECKING or find_spec("jax"):
+    import jax.numpy as _jnp
+
+    jnp = _or_none(_jnp)
+else:
+    jnp = None
+
+
+def jnp_array_or_idempotent(x):
+    if jnp is None:
+        # In this case, the test should be marked by `array_api` to be conditionally skipped
+        return x
+    return jnp.array(x)
+
 
 try:
     import fast_array_utils as _
@@ -280,7 +302,6 @@ def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
     X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
     *,
-    X_dtype: np.dtype = np.float32,
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
     ] = DEFAULT_COL_TYPES,
@@ -343,18 +364,21 @@ def gen_adata(  # noqa: PLR0913
 
     if X_type is None:
         X = None
+        xp = np
     else:
-        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype(X_dtype))
+        X = X_type(random_state.binomial(100, 0.005, (M, N)).astype("float32"))
+        xp = X.__array_namespace__() if has_xp(X) else np
 
+    # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
-        array=np.random.random((M, 50)),
+        array=xp.asarray(random_state.random((M, 50))),
         sparse=sparse.random(M, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(M, obs_names, dtypes=obs_dtypes),
         awk_2d_ragged=gen_awkward((M, None)),
         da=da.random.random((M, 50)),
     )
     varm = dict(
-        array=np.random.random((N, 50)),
+        array=xp.asarray(random_state.random((N, 50))),
         sparse=sparse.random(N, 100, format=sparse_fmt, random_state=random_state),
         df=gen_typed_df(N, var_names, dtypes=var_dtypes),
         awk_2d_ragged=gen_awkward((N, None)),
@@ -384,7 +408,7 @@ def gen_adata(  # noqa: PLR0913
         shape=(N, 100),
     )
     layers = dict(
-        array=np.random.random((M, N)),
+        array=xp.asarray(random_state.random((M, N))),
         sparse=sparse.random(M, N, format=sparse_fmt, random_state=random_state),
         da=da.random.random((M, N)),
     )
@@ -397,14 +421,14 @@ def gen_adata(  # noqa: PLR0913
     )
     layers = {k: v for k, v in layers.items() if type(v) in layers_types}
     obsp = dict(
-        array=np.random.random((M, M)),
+        array=xp.asarray(random_state.random((M, M))),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
     obsp["sparse_array"] = sparse.csr_array(
         sparse.random(M, M, format=sparse_fmt, random_state=random_state)
     )
     varp = dict(
-        array=np.random.random((N, N)),
+        array=xp.asarray(random_state.random((N, N))),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
     varp["sparse_array"] = sparse.csr_array(
@@ -416,7 +440,7 @@ def gen_adata(  # noqa: PLR0913
             scalar_str="str",
             scalar_int=42,
             scalar_float=3.0,
-            nested_further=dict(array=np.arange(5)),
+            nested_further=dict(array=xp.arange(5)),
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
@@ -580,7 +604,9 @@ def report_name(func):
 
 
 @report_name
-def _assert_equal(a, b):
+def _assert_equal(
+    a: object, b: object, *, exact: bool = False, elem_name: str | None = None
+):
     """Allows reporting elem name for simple assertion."""
     assert a == b
 
@@ -589,7 +615,24 @@ def _assert_equal(a, b):
 def assert_equal(
     a: object, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    _assert_equal(a, b, _elem_name=elem_name)
+    _assert_equal(a, b, exact=exact, _elem_name=elem_name)
+
+
+@assert_equal.register(SupportsArrayApi)
+def assert_equal_array_api(
+    a: SupportsArrayApi, b: object, *, exact: bool = False, elem_name: str | None = None
+) -> None:
+    if not np.isscalar(a):
+        xp = a.__array_namespace__()
+        # really force it on b
+        b = xp.array(asarray(b))
+        if exact:
+            assert xp.all(a == b)
+        else:
+            # for padding with NaN
+            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
+    else:
+        assert a == b
 
 
 @assert_equal.register(CupyArray)
@@ -658,7 +701,11 @@ def assert_equal_cupy_sparse(
 @assert_equal.register(h5py.Dataset)
 @assert_equal.register(ZarrArray)
 def assert_equal_h5py_dataset(
-    a: ArrayStorageType, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: _ArrayStorageType,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ):
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
@@ -879,6 +926,22 @@ def _(a):
 
 
 @singledispatch
+def as_dense_jax_array(a):
+    # for cases where jax does not support sparse arrays
+    return jnp.asarray(asarray(a))
+
+
+@as_dense_jax_array.register(CSMatrix)
+def _(a):
+    return jnp.array(a.toarray())
+
+
+@as_dense_jax_array.register(DaskArray)
+def _(a):
+    return jnp.array(a.compute())  # fallback for lazy arrays
+
+
+@singledispatch
 def _as_sparse_dask(
     a: NDArray | CSArray | CSMatrix | DaskArray,
     *,
@@ -1015,7 +1078,7 @@ def resolve_cupy_type(val):
 
 
 @singledispatch
-def as_cupy(val, typ=None):
+def as_cupy(val, typ=None) -> CupyArray | CupyCSRMatrix | CupyCSCMatrix | DaskArray:
     """
     Rough conversion function
 
@@ -1053,7 +1116,7 @@ def as_cupy(val, typ=None):
 
 # TODO: test
 @as_cupy.register(DaskArray)
-def as_cupy_dask(a, typ=None):
+def as_cupy_dask(a, typ=None) -> DaskArray:
     if typ is None:
         typ = resolve_cupy_type(a._meta)
     return a.map_blocks(partial(as_cupy, typ=typ), dtype=a.dtype)
@@ -1079,6 +1142,7 @@ BASE_MATRIX_PARAMS = [
     pytest.param(sparse.csc_matrix, id="scipy_csc_matrix"),
     pytest.param(sparse.csr_array, id="scipy_csr_array"),
     pytest.param(sparse.csc_array, id="scipy_csc_array"),
+    pytest.param(as_dense_jax_array, id="jax_array", marks=pytest.mark.array_api),
 ]
 
 DASK_MATRIX_PARAMS = [
@@ -1120,28 +1184,31 @@ DASK_CUPY_MATRIX_PARAMS = [
     ),
 ]
 
-if is_zarr_v2():
-    from zarr.storage import DirectoryStore as LocalStore
-else:
-    from zarr.storage import LocalStore
 
-
-class AccessTrackingStoreBase(LocalStore):
+class AccessTrackingStore(LocalStore):
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        # Needed for zarr v3 to prevent a read-only copy being made
-        # https://github.com/zarr-developers/zarr-python/pull/3156
-        if not is_zarr_v2() and "read_only" not in kwargs:
-            kwargs["read_only"] = True
+        import traceback
+
+        traceback.print_stack()
+        print(kwargs)
         super().__init__(*args, **kwargs)
+        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-        self._read_only = True
+    async def get(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> object:
+        self._check_and_track_key(key)
+        return await super().get(key, prototype=prototype, byte_range=byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1186,29 +1253,6 @@ class AccessTrackingStoreBase(LocalStore):
         assert self.get_access_count(key) == count, (
             f"Found {access_count} accesses at {keys_accessed}"
         )
-
-
-if is_zarr_v2():
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __getitem__(self, key: str) -> bytes:
-            self._check_and_track_key(key)
-            return super().__getitem__(key)
-
-else:
-
-    class AccessTrackingStore(AccessTrackingStoreBase):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs, read_only=True)
-
-        async def get(
-            self,
-            key: str,
-            prototype: BufferPrototype | None = None,
-            byte_range: ByteRequest | None = None,
-        ) -> object:
-            self._check_and_track_key(key)
-            return await super().get(key, prototype=prototype, byte_range=byte_range)
 
 
 def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:

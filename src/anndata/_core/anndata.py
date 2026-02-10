@@ -28,8 +28,10 @@ from .._settings import settings
 from ..compat import (
     CSArray,
     DaskArray,
+    IndexManager,
     ZarrArray,
     _move_adj_mtx,
+    has_xp,
     old_positionals,
     pandas_as_str,
 )
@@ -47,7 +49,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, get_vector
+from .index import _normalize_indices, _subset, array_api_ix, get_vector
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -61,10 +63,9 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..compat import Index1D, Index1DNorm, XDataset
-    from ..typing import XDataType
+    from ..compat import XDataset
+    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import Index
 
 
 @set_module("anndata")
@@ -206,8 +207,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     # view attributes
     _adata_ref: AnnData | None
-    _oidx: Index1DNorm | None
-    _vidx: Index1DNorm | None
+    _oidx: _Index1DNorm[IndexManager] | None
+    _vidx: _Index1DNorm[IndexManager] | None
 
     @old_positionals(
         "obsm",
@@ -222,14 +223,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     )
     def __init__(  # noqa: PLR0913
         self,
-        X: XDataType | pd.DataFrame | None = None,
+        X: _XDataType | pd.DataFrame | None = None,
         obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        layers: Mapping[str, XDataType] | None = None,
+        layers: Mapping[str, _XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
@@ -238,8 +239,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         asview: bool = False,
         obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        oidx: Index1DNorm | int | np.integer | None = None,
-        vidx: Index1DNorm | int | np.integer | None = None,
+        oidx: _Index1DNorm | int | np.integer | None = None,
+        vidx: _Index1DNorm | int | np.integer | None = None,
     ):
         # check for any multi-indices that aren’t later checked in coerce_array
         for attr, key in [(obs, "obs"), (var, "var"), (X, "X")]:
@@ -273,8 +274,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _init_as_view(
         self,
         adata_ref: AnnData,
-        oidx: Index1DNorm | int | np.integer,
-        vidx: Index1DNorm | int | np.integer,
+        oidx: _Index1DNorm | int | np.integer,
+        vidx: _Index1DNorm | int | np.integer,
     ):
         if adata_ref.isbacked and adata_ref.is_view:
             msg = (
@@ -302,15 +303,25 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
+        for axis, idx in [("o", oidx), ("v", vidx)]:
+            setattr(
+                self,
+                f"_{axis}idx",
+                IndexManager.from_array(idx) if has_xp(idx) else idx,
+            )
+
         # self._adata_ref is never a view
         self._adata_ref = adata_ref
-        self._oidx = oidx
-        self._vidx = vidx
         # the file is the same as of the reference object
         self.file = adata_ref.file
+
         # views on attributes of adata_ref
-        obs_sub = adata_ref.obs.iloc[oidx]
-        var_sub = adata_ref.var.iloc[vidx]
+        var_sub = adata_ref.var.iloc[
+            np.array(self._vidx) if isinstance(self._vidx, IndexManager) else self._vidx
+        ]
+        obs_sub = adata_ref.obs.iloc[
+            np.array(self._oidx) if isinstance(self._oidx, IndexManager) else self._oidx
+        ]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
@@ -629,7 +640,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> XDataType | None:
+    def X(self) -> _XDataType | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -659,8 +670,38 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # else:
         #     return X
 
+    def _handle_view_X_cow(self, value: _XDataType | None):
+        if self._is_view:
+            if settings.copy_on_write_X:
+                msg = "Setting element `.X` of view, initializing view as actual."
+                warn(msg, ImplicitModificationWarning)
+                new = self._mutated_copy(X=value)
+                self._init_as_actual(new)
+                return True
+            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
+            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
+            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
+            warn(msg, FutureWarning)
+        return False
+
     @X.setter
-    def X(self, value: XDataType | None):  # noqa: PLR0912
+    def X(self, value: _XDataType | None):  # noqa: PLR0912
+        value = (
+            coerce_array(value, name="X", allow_array_like=True)
+            if value is not None
+            else None
+        )
+        can_set_direct_if_not_none = value is None or (
+            np.isscalar(value)
+            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (self.n_vars == 1 and self.n_obs == len(value))
+            or (self.n_obs == 1 and self.n_vars == len(value))
+        )
+        if not can_set_direct_if_not_none:
+            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
+            raise ValueError(msg)
+        if self._handle_view_X_cow(value):
+            return None
         if value is None:
             if self.isbacked:
                 msg = "Cannot currently remove data matrix from backed object."
@@ -669,78 +710,73 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 self._init_as_actual(self.copy())
             self._X = None
             return
-        value = coerce_array(value, name="X", allow_array_like=True)
 
         # If indices are both arrays, we need to modify them
         # so we don’t set values like coordinates
         # This can occur if there are successive views
+        # Handle IndexManager by extracting array_api compat if possible
+        # Otherwise fall back to numpy
+        oidx, vidx = (
+            (
+                idx.get_for_array(self._adata_ref._X)
+                if has_xp(self._adata_ref._X)
+                else np.array(idx)
+            )
+            if isinstance(idx, IndexManager)
+            else idx
+            for idx in (self._oidx, self._vidx)
+        )
         if (
             self.is_view
-            and isinstance(self._oidx, np.ndarray)
-            and isinstance(self._vidx, np.ndarray)
+            and isinstance(self._oidx, IndexManager)
+            and isinstance(self._vidx, IndexManager)
         ):
-            oidx, vidx = np.ix_(self._oidx, self._vidx)
-        else:
-            oidx, vidx = self._oidx, self._vidx
-        if (
-            np.isscalar(value)
-            or (hasattr(value, "shape") and (self.shape == value.shape))
-            or (self.n_vars == 1 and self.n_obs == len(value))
-            or (self.n_obs == 1 and self.n_vars == len(value))
-        ):
-            if not np.isscalar(value):
-                if self.is_view and any(
-                    isinstance(idx, np.ndarray)
-                    and len(np.unique(idx)) != len(idx.ravel())
-                    for idx in [oidx, vidx]
-                ):
-                    msg = (
-                        "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                        "The resulting `adata.X` will likely not equal the value to which you set it. "
-                        "To avoid this potential issue, please make a copy of the data first. "
-                        "In the future, this operation will throw an error."
-                    )
-                    warn(msg, FutureWarning)
-                if self.shape != value.shape:
-                    # For assigning vector of values to 2d array or matrix
-                    # Not necessary for row of 2d array
-                    value = value.reshape(self.shape)
-            if self.isbacked:
-                if self.is_view:
-                    X = self.file["X"]
-                    if isinstance(X, h5py.Group):
-                        msg = "Cannot write to views of sparse backed files"
-                        raise NotImplementedError(msg)
-                    X[oidx, vidx] = value
-                else:
-                    self._set_backed("X", value)
-            elif self.is_view:
-                if sparse.issparse(self._adata_ref._X) and isinstance(
-                    value, np.ndarray
-                ):
-                    if isinstance(self._adata_ref.X, CSArray):
-                        memory_class = sparse.coo_array
-                    else:
-                        memory_class = sparse.coo_matrix
-                    value = memory_class(value)
-                elif sparse.issparse(value) and isinstance(
-                    self._adata_ref._X, np.ndarray
-                ):
-                    msg = (
-                        "Trying to set a dense array with a sparse array on a view. "
-                        "Densifying the sparse array. "
-                        "This may incur excessive memory usage"
-                    )
-                    warn(msg, UserWarning)
-                    value = value.toarray()
-                msg = "Modifying `X` on a view results in data being overridden"
-                warn(msg, ImplicitModificationWarning)
-                self._adata_ref._X[oidx, vidx] = value
+            oidx, vidx = array_api_ix(oidx, vidx)
+        if not np.isscalar(value):
+            if self.is_view and any(
+                isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx.ravel())
+                for idx in [oidx, vidx]
+            ):
+                msg = (
+                    "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
+                    "The resulting `adata.X` will likely not equal the value to which you set it. "
+                    "To avoid this potential issue, please make a copy of the data first. "
+                    "In the future, this operation will throw an error."
+                )
+                warn(msg, FutureWarning)
+            if self.shape != value.shape:
+                # For assigning vector of values to 2d array or matrix
+                # Not necessary for row of 2d array
+                value = value.reshape(self.shape)
+        if self.isbacked:
+            if self.is_view:
+                X = self.file["X"]
+                if isinstance(X, h5py.Group):
+                    msg = "Cannot write to views of sparse backed files"
+                    raise NotImplementedError(msg)
+                X[oidx, vidx] = value
             else:
-                self._X = value
+                self._set_backed("X", value)
+        elif self.is_view:
+            if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
+                if isinstance(self._adata_ref.X, CSArray):
+                    memory_class = sparse.coo_array
+                else:
+                    memory_class = sparse.coo_matrix
+                value = memory_class(value)
+            elif sparse.issparse(value) and isinstance(self._adata_ref._X, np.ndarray):
+                msg = (
+                    "Trying to set a dense array with a sparse array on a view. "
+                    "Densifying the sparse array. "
+                    "This may incur excessive memory usage"
+                )
+                warn(msg, UserWarning)
+                value = value.toarray()
+            msg = "Modifying `X` on a view results in data being overridden"
+            warn(msg, ImplicitModificationWarning)
+            self._adata_ref._X[oidx, vidx] = value
         else:
-            msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
-            raise ValueError(msg)
+            self._X = value
 
     @X.deleter
     def X(self):
@@ -1123,12 +1159,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: Index | None
-    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
+        self, index: Index
+    ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     # TODO: this is not quite complete...
-    def __delitem__(self, index: Index):
+    def __delitem__(self, index: Index) -> None:
         obs, var = self._normalize_indices(index)
         # TODO: does this really work?
         if not self.isbacked:
@@ -1302,7 +1338,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         self._init_as_actual(adata_subset)
 
     # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | XDataType):
+    def __setitem__(self, index: Index, val: float | _XDataType):
         if self.is_view:
             msg = "Object is view and cannot be accessed with `[]`."
             raise ValueError(msg)
@@ -1576,8 +1612,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return self._mutated_copy(
                     X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
                 )
-            else:
-                return self._mutated_copy()
+            return self._mutated_copy()
         else:
             from ..io import read_h5ad, write_h5ad
 

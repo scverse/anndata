@@ -27,13 +27,14 @@ from anndata.compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    jnp,
+    jnp_array_or_idempotent,
 )
 
 if TYPE_CHECKING:
@@ -41,7 +42,13 @@ if TYPE_CHECKING:
     from typing import Literal
 
 HERE = Path(__file__).parent
-
+ARRAY_TYPES = [
+    pytest.param(np.array, id="np.array"),
+    pytest.param(as_dense_dask_array, id="dask_dense"),
+    pytest.param(csr_matrix, id="csr_matrix"),
+    pytest.param(csr_array, id="csr_array"),
+    pytest.param(jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api),
+]
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -119,7 +126,7 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -159,8 +166,14 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_kitchensink(
+    tmp_path: Path,
+    storage: Literal["h5ad", "zarr"],
+    typ,
+    backing_h5ad: Path,
+    dataset_kwargs,
+) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -185,18 +198,20 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
+    used_jax = jnp is not None and isinstance(adata_src.X, jnp.ndarray)
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
     if isinstance(adata_src.raw.X, CSArray):
         assert isinstance(adata.raw.X, CSMatrix)
-    else:
+    elif not used_jax:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
         adata_src.uns["uns4"]["c"], type(adata.uns["uns4"]["c"]) | DaskArray
     )
-    assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
+    if not used_jax:
+        assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
 
     assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
@@ -205,13 +220,15 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -249,8 +266,8 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_backed(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -265,9 +282,19 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ",
+    [
+        pytest.param(np.array, id="np.array"),
+        pytest.param(csr_matrix, id="csr_matrix"),
+        pytest.param(csc_matrix, id="csc_matrix"),
+        pytest.param(csr_array, id="csr_array"),
+        pytest.param(csc_array, id="csc_array"),
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+    ],
 )
-def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
@@ -307,7 +334,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        if isinstance(store, ZarrGroup):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
@@ -376,16 +403,6 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-def test_write_zarr_v2_warns(tmp_path: Path):
-    with (
-        ad.settings.override(zarr_write_format=2),
-        pytest.warns(
-            UserWarning, match=r"Writing zarr v2 data will no longer be the default"
-        ),
-    ):
-        ad.AnnData(X=np.ones((5, 10))).write_zarr(tmp_path / "foo.zarr")
-
-
 @pytest.mark.parametrize("zarr_write_format", [2, 3])
 @pytest.mark.parametrize(
     "use_compression", [True, False], ids=["compressed", "uncompressed"]
@@ -393,14 +410,12 @@ def test_write_zarr_v2_warns(tmp_path: Path):
 def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
-    if zarr_write_format == 3 and is_zarr_v2():
-        pytest.xfail("Cannot write zarr v3 format with v2 package")
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if not use_compression:
         compressor = None
-    elif zarr_write_format == 2 or is_zarr_v2():
+    elif zarr_write_format == 2:
         from numcodecs import Blosc
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -428,13 +443,9 @@ def test_zarr_compression(
         ):
             wrongly_compressed.append(key)
 
-    if is_zarr_v2():
-        with zarr.open(pth, "r") as f:
-            f.visititems(check_compressed)
-    else:
-        f = zarr.open(pth, mode="r")
-        for key, value in f.members(max_depth=None):
-            check_compressed(value, key)
+    f = zarr.open(pth, mode="r")
+    for key, value in f.members(max_depth=None):
+        check_compressed(value, key)
     assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
     expected = ad.read_zarr(pth)
@@ -485,15 +496,33 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_write_csv_view(typ, tmp_path):
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
+def test_write_csv_view(typ, tmp_path: Path) -> None:
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
@@ -531,10 +560,15 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize(
+    "xp_array",
+    [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
+)
+def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
+    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
+    assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
 
@@ -924,11 +958,7 @@ def test_read_lazy_import_error(func, tmp_path):
 @pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = (
-        zarr.convenience.open_consolidated(tmp_path)
-        if is_zarr_v2()
-        else zarr.open(tmp_path)
-    )
+    g = zarr.open(tmp_path)
     with pytest.raises(
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
@@ -936,7 +966,6 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
 def test_write_elem_version_mismatch(tmp_path: Path):
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))

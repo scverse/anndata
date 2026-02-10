@@ -34,8 +34,13 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     gen_vstr_recarray,
+    jnp,
+    jnp_array_or_idempotent,
 )
 from anndata.utils import asarray
+
+JaxArray = jnp.ndarray if jnp is not None else None
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,6 +87,13 @@ def _filled_sparse_array(a, fill_value=None):
 def _filled_df(a, fill_value=np.nan):
     # dtype from pd.concat can be unintuitive, this returns something close enough
     return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
+
+
+if JaxArray is not None:
+
+    @filled_like.register(JaxArray)
+    def _(a, fill_value=None):
+        return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
@@ -269,9 +281,8 @@ def test_concatenate_roundtrip(
     if backwards_compat and use_xdataset:
         import xarray as xr
 
-        result.var = xr.Dataset.from_dataframe(
-            result.var
-        )  # backwards compat always returns a dataframe
+        # backwards compat always returns a dataframe
+        result.var = xr.Dataset.from_dataframe(result.var)
 
     # Correcting for known differences
     orig, result = fix_known_differences(
@@ -1509,8 +1520,21 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(np.array, id="np"),
+        pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
+    ],
+)
 def test_concat_size_0_axis(
-    axis_name, join_type, merge_strategy, shape, use_xdataset, force_lazy
+    axis_name,
+    join_type,
+    merge_strategy,
+    shape,
+    use_xdataset,
+    force_lazy,
+    array_type,
 ):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
@@ -1522,6 +1546,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        X_type=array_type,
     )
     b = gen_adata(
         shape,
@@ -1529,6 +1554,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        X_type=array_type,
     )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
@@ -1775,6 +1801,7 @@ def test_concat_duplicated_columns(join_type):
 
 
 @pytest.mark.gpu
+@pytest.mark.array_api
 def test_error_on_mixed_device():
     """https://github.com/scverse/anndata/issues/1083"""
     import cupy
