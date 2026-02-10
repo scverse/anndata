@@ -10,7 +10,7 @@ from copy import copy, deepcopy
 from functools import partial, singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
     from ..acc import AdRef, MapAcc, RefAcc
     from ..compat import XDataset
-    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
+    from ..typing import Index, Index1D, InMemoryArray, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -1121,8 +1121,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if obs == slice(None):
             del self._var.iloc[var, :]
 
-    def __getitem__(self, index: Index) -> AnnData:
-        """Returns a sliced view of the object."""
+    @overload
+    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
+    @overload
+    def __getitem__(self, index: Index) -> AnnData: ...
+    def __getitem__(self, index: Index | AdRef) -> AnnData | InMemoryArray:
+        """Slice AnnData object or retrieve an array using an :class:`AdRef`."""
+        from ..acc import AdRef
+
+        if isinstance(index, AdRef):
+            return index.acc.get(self, index.idx)
+
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 

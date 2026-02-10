@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -17,8 +17,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
+    from ..acc import AdRef
     from ..compat import CSMatrix
-    from ..typing import Index, _Index1DNorm
+    from ..typing import Index, InMemoryArray, _Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -122,7 +123,16 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    def __getitem__(self, index: Index) -> Raw:
+    @overload
+    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
+    @overload
+    def __getitem__(self, index: Index) -> Raw: ...
+    def __getitem__(self, index: Index | AdRef) -> Raw | InMemoryArray:
+        from ..acc import AdRef
+
+        if isinstance(index, AdRef):
+            return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
+
         oidx, vidx = self._normalize_indices(index)
 
         # To preserve two dimensional shape
@@ -188,11 +198,11 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def var_vector(self, k: str, /) -> np.ndarray:
+    def var_vector(self, k: str, /) -> InMemoryArray:
         # TODO decorator to copy AnnData.var_vector docstring
-        return _get_vector_ambiguous(self, k, "var", "obs")
+        return _get_vector_ambiguous(self, k, "var")
 
-    def obs_vector(self, k: str, /) -> np.ndarray:
+    def obs_vector(self, k: str, /) -> InMemoryArray:
         # TODO decorator to copy AnnData.obs_vector docstring
         idx = self._normalize_indices((slice(None), k))
         a = self.X[idx]

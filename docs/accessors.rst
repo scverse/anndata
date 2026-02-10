@@ -7,27 +7,43 @@ Accessors and paths
 
 :mod:`!anndata.acc` creates references to 1D and 2D arrays in an :class:`~anndata.AnnData` object.
 You can use these to drive e.g. plotting or validation code.
-For these purposes, they
+For these purposes, they are
 
-#.  are easy to create:
+#.  easy to create:
 
     The central :attr:`A` object allows you to create
     :class:`AdRef` objects that reference arrays
     along one or two dimensions of an :class:`anndata.AnnData` object:
 
     >>> from anndata.acc import A
-    >>> A[:, "gene-3"]  # reference to `adata[:, 3].X` as 1D vector
+    >>> A[:, "gene-3"]  # reference to `adata[:, "gene-3"].X` as 1D vector
     A[:, 'gene-3']
     >>> type(A[:, "gene-3"])
     <class 'anndata.acc.AdRef'>
 
-#.  introspectible
+    … and to use:
+
+    >>> import scanpy as sc
+    >>> adata = sc.datasets.pbmc3k_processed()
+
+    E.g. to check if `adata.varm["PCs"]` has at least 30 columns:
+
+    >>> A.varm["PCs"][:, 30] in adata
+    True
+
+    or to extract the referenced vector:
+
+    >>> ref = A.obs["louvain"]
+    >>> adata[ref].categories[:2]
+    Index(['CD4 T cells', 'CD14+ Monocytes'], dtype='str')
+
+#.  introspectible:
 
     :class:`AdRef`\ s have the :attr:`AdRef.dims`, :attr:`AdRef.idx`, and :attr:`AdRef.acc` attributes,
     allowing you to inspect all relevant properties.
 
     >>> pc0 = A.obsm["pca"][:, 0]
-    >>> pc0  # reference to the 0th column of `adata.obsm['pca']`
+    >>> pc0
     A.obsm['pca'][:, 0]
     >>> pc0.idx
     0
@@ -38,7 +54,7 @@ For these purposes, they
     >>> pc0.acc.k
     'pca'
 
-#.  convenient
+#.  convenient:
 
     Want to reference multiple vectors from the same object?
     Pass a list of indices to the vector accessor:
@@ -46,7 +62,7 @@ For these purposes, they
     >>> A.obsp["connectivities"][:, ["cell0", "cell1"]]
     [A.obsp['connectivities'][:, 'cell0'], A.obsp['connectivities'][:, 'cell1']]
 
-#.  extensible (see `extending accessors`_)
+#.  extensible: see `extending accessors`_.
 
 API
 ---

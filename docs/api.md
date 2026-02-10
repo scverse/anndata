@@ -276,6 +276,7 @@ Types used by the former:
 
    typing.Index1D
    typing.Index
+   typing.InMemoryArray
    typing.AxisStorable
    typing.RWAble
 ```

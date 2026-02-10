@@ -78,7 +78,7 @@ type Index[_M: IndexManager] = (
 )
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
 
-_InMemoryArray: TypeAlias = (  # noqa: UP040
+type InMemoryArray = (
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
@@ -87,8 +87,10 @@ _InMemoryArray: TypeAlias = (  # noqa: UP040
     | CupyArray
     | CupySparseMatrix
 )
+"""An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
+
 _XDataType: TypeAlias = (  # noqa: UP040
-    _InMemoryArray | H5Array | ZarrArray | ZappyArray | abc.CSRDataset | abc.CSCDataset
+    InMemoryArray | H5Array | ZarrArray | ZappyArray | abc.CSRDataset | abc.CSCDataset
 )
 _ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
 _InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040

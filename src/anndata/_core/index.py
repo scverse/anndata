@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from anndata.typing import Index1D
 
-    from ..typing import Index, _Index1DNorm, _InMemoryArray
+    from ..typing import Index, InMemoryArray, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
 
@@ -563,7 +563,7 @@ def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
 
 def _get_vector_ambiguous(
     adata: AnnData | Raw, k: str, dim: Literal["obs", "var"], layer: str | None = None
-) -> _InMemoryArray:
+) -> InMemoryArray:
     from ..acc import A
 
     idxdim = "var" if dim == "obs" else "obs"
@@ -579,4 +579,4 @@ def _get_vector_ambiguous(
         case False, True:
             acc = A if layer is None else A.layers[layer]
             ref = acc[k, :] if idxdim == "obs" else acc[:, k]
-    return ref(adata)  # type: ignore  (accessors don’t officially support Raw, but it works for the tested cases)
+    return adata[ref]

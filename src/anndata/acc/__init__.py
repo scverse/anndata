@@ -13,6 +13,7 @@ import scipy.sparse as sp
 
 from anndata import AnnData
 
+from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
 from ..compat import DaskArray, has_xp
 
@@ -22,14 +23,13 @@ if TYPE_CHECKING:
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
-    from ..typing import _InMemoryArray
+    from ..typing import InMemoryArray
 
     if TYPE_CHECKING:  # for sphinx
         from . import hv
 
 
 type Axes = Collection[Literal["obs", "var"]]
-type Array = _InMemoryArray
 
 type Idx2D = tuple[str | slice, slice] | tuple[slice, str | slice]
 """Index along the full length of one or both AnnData dimensions, resulting in a 1D or 2D array.
@@ -41,7 +41,7 @@ type Idx2DList = (
     tuple[list[str] | pd.Index[str], slice] | tuple[slice, list[str] | pd.Index[str]]
 )
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
-type AdRefFunc[I] = Callable[[AnnData, I], Array]
+type AdRefFunc[I] = Callable[[AnnData, I], InMemoryArray]
 
 
 __all__ = [
@@ -130,10 +130,6 @@ class AdRef[I: Hashable]:
     def __repr__(self) -> str:
         return self.__repr
 
-    def __call__(self, adata: AnnData) -> Array:
-        """Retrieve referenced array from AnnData."""
-        return self.acc.get(adata, self.idx)
-
 
 class MapAcc(abc.ABC):
     r"""Accessor for mapping containers."""
@@ -178,15 +174,15 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
         """Check if the referenced array is in the AnnData object."""
 
     @abc.abstractmethod
-    def get(self, adata: AnnData, idx: I, /) -> Array:
+    def get(self, adata: AnnData, idx: I, /) -> InMemoryArray:
         """Get the referenced array from the AnnData object."""
 
-    def _maybe_flatten(self, idx: I, a: Array) -> Array:
+    def _maybe_flatten(self, idx: I, a: InMemoryArray) -> InMemoryArray:
         if len(self.dims(idx)) != 1:
             return a
         if isinstance(a, DaskArray):
             a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
-        if isinstance(a, (sp.sparray, sp.spmatrix)):
+        if isinstance(a, sp.sparray | sp.spmatrix | ArrayView):
             a = a.toarray()
         if has_xp(a):
             return a.__array_namespace__().reshape(a, (a.size,))
@@ -268,7 +264,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
                 return i in getattr(adata, dim).index
         return True  # idx is None or [:, :]
 
-    def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
+    def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
 
@@ -426,7 +422,7 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
             return False
         return idx is None or idx in range(m[self.k].shape[1])
 
-    def get(self, adata: AnnData, i: int, /) -> Array:
+    def get(self, adata: AnnData, i: int, /) -> InMemoryArray:
         arr = getattr(adata, f"{self.dim}m")[self.k][:, i]
         return self._maybe_flatten(i, arr)
 
@@ -509,7 +505,7 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
         [i] = (i for i in idx if isinstance(i, str))
         return i in getattr(adata, self.dim).index
 
-    def get(self, adata: AnnData, idx: Idx2D, /) -> Array:
+    def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
         df = cast("pd.DataFrame", getattr(adata, self.dim))
         iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
         arr = getattr(adata, f"{self.dim}p")[self.k][iloc]
