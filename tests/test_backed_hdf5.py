@@ -154,7 +154,7 @@ def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     assert adata.file.is_open
 
     adata[:2, 0].X = [0, 0]
-    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
     assert adata_subset.is_view
@@ -346,6 +346,7 @@ def test_backed_modification_sparse(
 ):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse_format(adata.X)
+    orig = adata.X.copy()
     assert not adata.isbacked
 
     adata.write(backing_h5ad)
@@ -354,9 +355,9 @@ def test_backed_modification_sparse(
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    pat = r"Cannot write to views of sparse backed files"
-    with pytest.raises(NotImplementedError, match=pat):
-        adata[0, [0, 2]].X = 10
+    # Does not modify backed store
+    adata[0, [0, 2]].X = 10
+    np.testing.assert_equal(orig.toarray(), adata.X[...].toarray())
 
 
 # TODO: Work around h5py not supporting this

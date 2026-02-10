@@ -85,4 +85,5 @@ def test_assign_x_subset(file: h5py.File | zarr.Group):
 
     expected = x.copy()
     expected[3:7, 6:8] = np.zeros((4, 2))
-    assert_equal(adata.X, expected)
+    assert_equal(adata.X, x)
+    assert_equal(view.X, np.zeros((4, 2)))
