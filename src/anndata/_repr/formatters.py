@@ -718,9 +718,15 @@ class CuPyArrayFormatter(TypeFormatter):
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
-        device_info = ""
+        device_str = ""
         if hasattr(obj, "device"):
-            device_info = f"GPU:{obj.device.id}"
+            device_str = f"GPU:{obj.device.id}"
+
+        # Surface device in type_name so it's visible without hovering
+        if device_str:
+            type_display = f"cupy.ndarray ({shape_str}) {dtype_str} · {device_str}"
+        else:
+            type_display = f"cupy.ndarray ({shape_str}) {dtype_str}"
 
         # For obsm/varm sections, show number of columns in preview
         preview = None
@@ -729,9 +735,8 @@ class CuPyArrayFormatter(TypeFormatter):
             preview = f"({format_number(n_cols)} columns)"
 
         return FormattedOutput(
-            type_name=f"cupy.ndarray ({shape_str}) {dtype_str}",
+            type_name=type_display,
             css_class=CSS_DTYPE_GPU,
-            tooltip=device_info,
             preview=preview,
             is_serializable=True,
         )
@@ -836,9 +841,15 @@ class ArrayAPIFormatter(TypeFormatter):
         backend_label = self._FRIENDLY_NAMES.get(backend_label, backend_label)
 
         # Device info (present on array-api arrays; also on PyTorch/CuPy)
-        device_info = ""
+        device_str = ""
         with contextlib.suppress(Exception):
-            device_info = f" on {obj.device}"
+            device_str = str(obj.device)
+
+        # Surface device in type_name so it's visible without hovering
+        if device_str:
+            type_display = f"{type_name} ({shape_str}) {dtype_str} · {device_str}"
+        else:
+            type_display = f"{type_name} ({shape_str}) {dtype_str}"
 
         # For obsm/varm sections, show number of columns in preview
         preview = None
@@ -847,9 +858,9 @@ class ArrayAPIFormatter(TypeFormatter):
             preview = f"({format_number(n_cols)} columns)"
 
         return FormattedOutput(
-            type_name=f"{type_name} ({shape_str}) {dtype_str}",
+            type_name=type_display,
             css_class=CSS_DTYPE_ARRAY_API,
-            tooltip=f"{backend_label} array{device_info}",
+            tooltip=f"{backend_label} array",
             preview=preview,
             is_serializable=True,
         )

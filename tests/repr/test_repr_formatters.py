@@ -470,7 +470,7 @@ class TestSpecialArrayFormatters:
         assert "100" in result.type_name
         assert "50" in result.type_name
         assert result.css_class == "anndata-dtype--gpu"
-        assert "GPU:0" in result.tooltip
+        assert "GPU:0" in result.type_name
 
     def test_awkward_array_formatter_with_mock(self):
         """Test Awkward array formatter with a mock object."""
@@ -546,7 +546,7 @@ class TestArrayAPIFormatter:
         assert "50" in result.type_name
         assert result.css_class == "anndata-dtype--array-api"
         assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
-        assert "gpu:0" in result.tooltip
+        assert "gpu:0" in result.type_name
 
     def test_array_api_formatter_pytorch_like_duck_typing(self):
         """Test Array-API formatter with PyTorch-like tensor (duck-typing tier).
@@ -572,7 +572,7 @@ class TestArrayAPIFormatter:
         result = formatter.format(mock_tensor, FormatterContext())
 
         assert "PyTorch" in result.tooltip or "torch" in result.tooltip.lower()
-        assert "cuda:0" in result.tooltip
+        assert "cuda:0" in result.type_name
 
     def test_array_api_formatter_protocol_array(self):
         """Test Array-API formatter with full protocol array (tier 1)."""
@@ -589,7 +589,7 @@ class TestArrayAPIFormatter:
         result = formatter.format(mock_arr, FormatterContext())
 
         assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
-        assert "tpu:0" in result.tooltip
+        assert "tpu:0" in result.type_name
 
     def test_array_api_formatter_excludes_numpy(self):
         """Test Array-API formatter excludes numpy arrays."""
@@ -704,6 +704,19 @@ class TestFutureCompatibility:
         assert "float32" in result.type_name
         assert result.css_class == "anndata-dtype--array-api"
         assert "jax" in result.tooltip.lower()  # Backend info in tooltip
+
+    def test_array_api_device_visible_in_html(self):
+        """Test that device info is visible in rendered HTML, not just tooltip."""
+        mock_arr = _make_array_api_mock(
+            "jax.numpy", shape=(10, 5), dtype=np.dtype("float32"), device="cuda:0"
+        )
+
+        adata = AnnData(np.zeros((10, 5)))
+        adata.uns["gpu_array"] = mock_arr
+
+        html = adata._repr_html_()
+        # Device should appear in the visible type text, not just on hover
+        assert "cuda:0" in html
 
     def test_unknown_array_type_graceful_fallback(self):
         """Test that completely unknown array types don't break HTML rendering."""

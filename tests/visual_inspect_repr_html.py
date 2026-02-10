@@ -3343,6 +3343,76 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         """,
     ))
 
+    # Test 26: Array-API arrays with device info
+    # Uses mock objects — no GPU or JAX installation required
+    print("  26. Array-API arrays with device info")
+
+    def _make_visual_array_api_mock(module, *, shape, dtype, device="cpu"):
+        """Create a mock array satisfying the SupportsArrayApi protocol."""
+        ns_module = type("Namespace", (), {"__name__": module.split(".")[0]})()
+        cls = type(
+            "MockArrayAPI",
+            (),
+            {
+                "shape": shape,
+                "dtype": dtype,
+                "ndim": len(shape),
+                "device": device,
+                "__array_namespace__": lambda self, **kw: ns_module,
+                "to_device": lambda self, dev, /, **kw: self,
+                "__dlpack__": lambda self, **kw: None,
+                "__dlpack_device__": lambda self: (1, 0),
+            },
+        )
+        cls.__module__ = module
+        return cls()
+
+    n_obs_api, n_vars_api = 100, 50
+    adata_arrayapi = AnnData(
+        np.random.randn(n_obs_api, n_vars_api).astype(np.float32),
+        obs=pd.DataFrame(
+            {"cell_type": pd.Categorical(["T cell", "B cell"] * (n_obs_api // 2))},
+            index=[f"cell_{i}" for i in range(n_obs_api)],
+        ),
+        var=pd.DataFrame(
+            {"gene_name": [f"gene_{i}" for i in range(n_vars_api)]},
+            index=[f"gene_{i}" for i in range(n_vars_api)],
+        ),
+    )
+    # JAX array on GPU in obsm
+    adata_arrayapi.obsm["X_jax_gpu"] = _make_visual_array_api_mock(
+        "jax.numpy", shape=(n_obs_api, 30), dtype=np.dtype("float32"), device="cuda:0"
+    )
+    # JAX array on TPU in obsm
+    adata_arrayapi.obsm["X_jax_tpu"] = _make_visual_array_api_mock(
+        "jax.numpy", shape=(n_obs_api, 10), dtype=np.dtype("float16"), device="tpu:0"
+    )
+    # JAX array on CPU in obsm (device should still show)
+    adata_arrayapi.obsm["X_jax_cpu"] = _make_visual_array_api_mock(
+        "jax.numpy", shape=(n_obs_api, 50), dtype=np.dtype("float64"), device="cpu"
+    )
+    # Array-API array in uns
+    adata_arrayapi.uns["gpu_embedding"] = _make_visual_array_api_mock(
+        "jax.numpy", shape=(20, 5), dtype=np.dtype("float32"), device="cuda:1"
+    )
+
+    sections.append((
+        "26. Array-API Arrays with Device Info",
+        adata_arrayapi._repr_html_(),
+        "<p style='margin: 5px 0;'><b>Demonstrates Array-API formatted arrays with device "
+        "info visible inline</b> (no hover needed).</p>"
+        "<p style='margin: 5px 0;'>Uses mock objects that satisfy the "
+        "<code>SupportsArrayApi</code> protocol — no GPU or JAX installation required.</p>"
+        "<ul style='margin: 5px 0; padding-left: 20px;'>"
+        "<li><code>X_jax_gpu</code>: <code>MockArrayAPI</code> on <code>cuda:0</code></li>"
+        "<li><code>X_jax_tpu</code>: <code>MockArrayAPI</code> on <code>tpu:0</code></li>"
+        "<li><code>X_jax_cpu</code>: <code>MockArrayAPI</code> on <code>cpu</code></li>"
+        "<li><code>uns['gpu_embedding']</code>: <code>MockArrayAPI</code> on <code>cuda:1</code></li>"
+        "</ul>"
+        "<p style='margin: 5px 0;'>Device appears as <code>dtype · device</code> in the type "
+        "column, visible without hovering.</p>",
+    ))
+
     # Generate HTML file
     output_path = Path(__file__).parent / "repr_html_visual_test.html"
     html_content = create_html_page(sections)
