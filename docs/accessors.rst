@@ -79,10 +79,13 @@ See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
 
     AdRef
 
+.. _reference accessors:
+
+Reference accessors
+~~~~~~~~~~~~~~~~~~~
+
 The following :class:`!RefAcc` subclasses can be accessed using :attr:`AdRef.acc`,
 and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
-
-.. _reference-accessors:
 
 ..  autosummary::
     :toctree: generated/
@@ -138,7 +141,12 @@ and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
    generated/anndata.acc.GraphAcc
    generated/anndata.acc.Idx2D
 
-Finally, these classes are only useful for extending:
+Mapping accessors
+~~~~~~~~~~~~~~~~~
+
+Finally, these classes are mostly useful for extending,
+but might be useful for APIs that take a reference to a :class:`collections.abc.Mapping`
+of arrays:
 
 ..  autosummary::
     :toctree: generated/
@@ -154,4 +162,37 @@ Finally, these classes are only useful for extending:
 Extending accessors
 -------------------
 
-.. attention:: TODO
+There are three layers of extensibility:
+
+#.  subclassing :class:`RefAcc` and creating a new :class:`AdRef` instance for creating them:
+
+    ..  code-block:: python
+
+        import my_plotting_library as pl
+
+        class AdDim(RefAcc, pl.Dimension): ...
+        A = AdAcc(ref_class=AdDim)
+
+        pl.scatter(adata, A[:, "Actb"], color=A.obs["cell_type"])
+
+
+#.  subclass one or more of the `reference accessors`_, and create a new :class:`AdAcc` instance:
+
+    >>> from anndata.acc import AdAcc, AdRef, MetaAcc
+    >>>
+    >>> class TwoDRef(AdRef):
+    ...     """A reference able to refer to multiple metadata columns."""
+    ...     ...
+    >>>
+    >>> class MyMetaAcc(MetaAcc):
+    ...     def __getitem__(self, k):
+    ...         if isinstance(k, list):
+    ...             # override default behavior of returning a list of refs
+    ...             return self.ref_class(self, k)
+    ...         return super().__getitem__(k)
+    >>>
+    >>> A = AdAcc(ref_class=TwoDRef, meta_cls=MyMetaAcc)
+    >>> A.obs[["a", "b"]]
+    A.obs[['a', 'b']]
+
+#.  .. attention:: TODO

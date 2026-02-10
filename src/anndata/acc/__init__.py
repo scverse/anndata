@@ -85,7 +85,7 @@ class AdRef[I: Hashable]:
     acc: RefAcc[Self, I]
     """The accessor containing information about this array.
 
-    See :ref:`here <reference-accessors>` for all possible types this can assume.
+    See :ref:`here <reference accessors>` for all possible types this can assume.
     """
 
     idx: I
@@ -131,11 +131,13 @@ class AdRef[I: Hashable]:
         return self.__repr
 
 
-class MapAcc(abc.ABC):
+class MapAcc[R: RefAcc](abc.ABC):
     r"""Accessor for mapping containers."""
 
+    ref_acc_cls: type[R]
+
     @abc.abstractmethod
-    def __getitem__(self, k: str, /) -> RefAcc:
+    def __getitem__(self, k: str, /) -> R:
         """Get a reference accessor for mapped array."""
 
 
@@ -143,7 +145,7 @@ class MapAcc(abc.ABC):
 class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
     """Abstract base class for reference accessors.
 
-    See :ref:`here <reference-accessors>` for all existing subclasses.
+    See :ref:`here <reference accessors>` for all existing subclasses.
     """
 
     _: KW_ONLY
@@ -187,23 +189,6 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
         if has_xp(a):
             return a.__array_namespace__().reshape(a, (a.size,))
         return a.ravel()
-
-
-@dataclass(frozen=True)
-class LayerMapAcc[R: AdRef](MapAcc):
-    r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
-
-    _: KW_ONLY
-    ref_class: type[R]
-
-    def __getitem__(self, k: str, /) -> LayerAcc[R]:
-        if not isinstance(k, str):
-            msg = f"Unsupported layer {k!r}"
-            raise TypeError(msg)
-        return LayerAcc(k, ref_class=self.ref_class)
-
-    def __repr__(self) -> str:
-        return "A.layers"
 
 
 @dataclass(frozen=True)
@@ -267,6 +252,24 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
+
+
+@dataclass(frozen=True)
+class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
+    r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
+
+    _: KW_ONLY
+    ref_class: type[R]
+    ref_acc_cls: type[LayerAcc] = LayerAcc
+
+    def __getitem__(self, k: str, /) -> LayerAcc[R]:
+        if not isinstance(k, str):
+            msg = f"Unsupported layer {k!r}"
+            raise TypeError(msg)
+        return self.ref_acc_cls(k, ref_class=self.ref_class)
+
+    def __repr__(self) -> str:
+        return "A.layers"
 
 
 @dataclass(frozen=True)
@@ -347,26 +350,6 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
 
 
 @dataclass(frozen=True)
-class MultiMapAcc[R: AdRef](MapAcc):
-    r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
-
-    dim: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsm.dim == 'obs'`."""
-
-    _: KW_ONLY
-    ref_class: type[R]
-
-    def __getitem__(self, k: str, /) -> MultiAcc[R]:
-        if not isinstance(k, str):
-            msg = f"Unsupported {self.dim}m key {k!r}"
-            raise TypeError(msg)
-        return MultiAcc(self.dim, k, ref_class=self.ref_class)
-
-    def __repr__(self) -> str:
-        return f"A.{self.dim}m"
-
-
-@dataclass(frozen=True)
 class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
@@ -428,23 +411,24 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
 
 
 @dataclass(frozen=True)
-class GraphMapAcc[R: AdRef](MapAcc):
-    r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
+class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
+    r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     dim: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsp.dim == 'obs'`."""
+    """Axis this accessor refers to, e.g. `A.obsm.dim == 'obs'`."""
 
     _: KW_ONLY
     ref_class: type[R]
+    ref_acc_cls: type[MultiAcc] = MultiAcc
 
-    def __getitem__(self, k: str, /) -> GraphAcc[R]:
+    def __getitem__(self, k: str, /) -> MultiAcc[R]:
         if not isinstance(k, str):
-            msg = f"Unsupported {self.dim}p key {k!r}"
+            msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
-        return GraphAcc(self.dim, k, ref_class=self.ref_class)
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class)
 
     def __repr__(self) -> str:
-        return f"A.{self.dim}p"
+        return f"A.{self.dim}m"
 
 
 @dataclass(frozen=True)
@@ -513,6 +497,27 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
 
 @dataclass(frozen=True)
+class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
+    r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
+
+    dim: Literal["obs", "var"]
+    """Axis this accessor refers to, e.g. `A.obsp.dim == 'obs'`."""
+
+    _: KW_ONLY
+    ref_class: type[R]
+    ref_acc_cls: type[GraphAcc] = GraphAcc
+
+    def __getitem__(self, k: str, /) -> GraphAcc[R]:
+        if not isinstance(k, str):
+            msg = f"Unsupported {self.dim}p key {k!r}"
+            raise TypeError(msg)
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class)
+
+    def __repr__(self) -> str:
+        return f"A.{self.dim}p"
+
+
+@dataclass(frozen=True)
 class AdAcc[R: AdRef](LayerAcc[R]):
     r"""Accessor to create :class:`AdRef`\ s (:data:`A`).
 
@@ -521,6 +526,23 @@ class AdAcc[R: AdRef](LayerAcc[R]):
 
     k: None = field(init=False, default=None)
     """: `A[:, :]` is equivalent to `A.layers[None][:, :]`."""  # weird “:” is load-bearing 🤷
+
+    layer_cls: type[LayerAcc] = LayerAcc
+    """Class to use for `layers` accessors.
+
+    Note that :class:`!AdAcc` inherits from :class:`!LayerAcc`,
+    so if you want `A[:, :]` to inherit the behavior,
+    you need to create and use an :class:`!AdAcc` subclass.
+    """
+
+    meta_cls: type[MetaAcc] = MetaAcc
+    """Class to use for `obs`/`var` accessors."""
+
+    multi_cls: type[MultiAcc] = MultiAcc
+    """Class to use for `obsm`/`varm` accessors."""
+
+    graph_cls: type[GraphAcc] = GraphAcc
+    """Class to use for `obsp`/`varp` accessors."""
 
     layers: LayerMapAcc[R] = field(init=False)
     """Access complete layers or 1D vectors across observations or variables.
@@ -586,13 +608,19 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     })
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "layers", LayerMapAcc(ref_class=self.ref_class))
-        object.__setattr__(self, "obs", MetaAcc("obs", ref_class=self.ref_class))
-        object.__setattr__(self, "var", MetaAcc("var", ref_class=self.ref_class))
-        object.__setattr__(self, "obsm", MultiMapAcc("obs", ref_class=self.ref_class))
-        object.__setattr__(self, "varm", MultiMapAcc("var", ref_class=self.ref_class))
-        object.__setattr__(self, "obsp", GraphMapAcc("obs", ref_class=self.ref_class))
-        object.__setattr__(self, "varp", GraphMapAcc("var", ref_class=self.ref_class))
+        layers = LayerMapAcc(ref_class=self.ref_class, ref_acc_cls=self.layer_cls)
+        object.__setattr__(self, "layers", layers)
+        for dim in ("obs", "var"):
+            meta = self.meta_cls(dim, ref_class=self.ref_class)
+            multi = MultiMapAcc(
+                dim, ref_class=self.ref_class, ref_acc_cls=self.multi_cls
+            )
+            graphs = GraphMapAcc(
+                dim, ref_class=self.ref_class, ref_acc_cls=self.graph_cls
+            )
+            object.__setattr__(self, dim, meta)
+            object.__setattr__(self, f"{dim}m", multi)
+            object.__setattr__(self, f"{dim}p", graphs)
 
     def to_json(self, ref: R) -> list[str | int | None]:
         """Serialize :class:`AdRef` to a JSON-compatible list.
