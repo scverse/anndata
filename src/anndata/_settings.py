@@ -131,10 +131,7 @@ def check_and_get_bool_or_none(option: str, default_value: bool | None) -> bool 
 
 def check_and_get_int(option: str, default_value: int) -> int:
     return check_and_get_environ_var(
-        f"ANNDATA_{option.upper()}",
-        str(int(default_value)),
-        None,
-        lambda x: int(x),
+        f"ANNDATA_{option.upper()}", str(int(default_value)), None, int
     )
 
 
@@ -484,10 +481,7 @@ settings.register(
     description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
-        f"ANNDATA_{name.upper()}",
-        str(default),
-        ["2", "3"],
-        lambda x: int(x),
+        f"ANNDATA_{name.upper()}", str(default), ["2", "3"], int
     ),
 )
 
