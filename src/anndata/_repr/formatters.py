@@ -45,6 +45,7 @@ from .._repr_constants import (
     CSS_NESTED_ANNDATA,
     CSS_TEXT_MUTED,
 )
+from ..compat import has_xp
 from .components import render_category_list
 from .lazy import get_lazy_categorical_info, is_lazy_column
 from .registry import (
@@ -72,6 +73,8 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from .registry import FormatterContext
 
 
@@ -765,75 +768,77 @@ class ArrayAPIFormatter(TypeFormatter):
     """
     Formatter for Array-API compatible arrays (JAX, PyTorch, TensorFlow, etc.).
 
-    Future-proofing notes:
-    - PR #2063 (https://github.com/scverse/anndata/pull/2063) adds Array-API compatibility
-    - Handles JAX arrays, PyTorch tensors, TensorFlow tensors, and other array-like objects
-    - Uses duck typing to detect array-like objects without isinstance checks
-    - Low priority (50) ensures specific formatters (numpy, cupy, etc.) are tried first
+    Detection strategy (two tiers):
 
-    References:
-    - Array API Standard: https://data-apis.org/array-api/latest/
+    1. :func:`~anndata.compat.has_xp` — canonical check for arrays implementing the
+       `Array API standard <https://data-apis.org/array-api/latest/>`_ (e.g. JAX, CuPy).
+    2. Duck-typing fallback — catches arrays with ``shape``/``dtype``/``ndim`` that do
+       not (yet) implement the full protocol (e.g. PyTorch tensors, TensorFlow tensors).
+
+    Low priority (50) ensures specific formatters (numpy, cupy, dask, etc.)
+    are tried first.
     """
 
     priority = 50  # Lower than specific formatters (numpy=110, cupy=120) but higher than builtins
 
-    def can_format(self, obj: object, context: FormatterContext) -> bool:
-        # Duck typing: Check for array-like attributes
-        # Must have shape, dtype, and ndim (array-api standard)
-        has_array_attrs = (
-            hasattr(obj, "shape") and hasattr(obj, "dtype") and hasattr(obj, "ndim")
-        )
+    _FRIENDLY_NAMES: ClassVar[dict[str, str]] = {
+        "jax": "JAX",
+        "jaxlib": "JAX",
+        "torch": "PyTorch",
+        "tensorflow": "TensorFlow",
+        "tf": "TensorFlow",
+        "mxnet": "MXNet",
+        "cupy": "CuPy",
+    }
 
-        if not has_array_attrs:
+    # Modules already handled by dedicated formatters (defensive guard;
+    # the priority system normally prevents reaching this formatter).
+    _HANDLED_MODULES: ClassVar[tuple[str, ...]] = (
+        "numpy",
+        "pandas",
+        "scipy.sparse",
+        "cupy",
+        "cupyx",
+        "awkward",
+        "dask",
+    )
+
+    def can_format(self, obj: object, context: FormatterContext) -> bool:
+        # Tier 1: full Array API protocol (JAX, CuPy ≥12, numpy ≥2.0, …)
+        if has_xp(obj):
+            # numpy has its own formatter
+            return not isinstance(obj, np.ndarray)
+
+        # Tier 2: duck-typing for arrays that expose shape/dtype/ndim
+        # but don't implement the full protocol (PyTorch, TensorFlow, …)
+        if not (
+            hasattr(obj, "shape") and hasattr(obj, "dtype") and hasattr(obj, "ndim")
+        ):
             return False
 
-        # Exclude types that already have specific formatters
-        # This prevents conflicts and ensures more specific formatters take precedence
+        # Exclude types that have dedicated formatters
         module = type(obj).__module__
-        already_handled = isinstance(
-            obj, (np.ndarray, pd.DataFrame, pd.Series)
-        ) or module.startswith((
-            "numpy",
-            "pandas",
-            "scipy.sparse",
-            "cupy",  # Has CuPyArrayFormatter
-            "cupyx",
-            "awkward",  # Has AwkwardArrayFormatter
-            "dask",  # Has DaskArrayFormatter
-        ))
-
-        return not already_handled
+        return not isinstance(obj, np.ndarray) and not module.startswith(
+            self._HANDLED_MODULES
+        )
 
     def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
-        # Extract module and type information
-        module_name = type(obj).__module__.split(".")[0]  # e.g., "jax" from "jax.numpy"
         type_name = type(obj).__name__
-
         shape_str = " × ".join(format_number(s) for s in obj.shape)
         dtype_str = str(obj.dtype)
 
-        # Detect common array-api backends
-        # Known backends: JAX, PyTorch, TensorFlow, MXNet, etc.
-        known_backends = {
-            "jax": "JAX",
-            "jaxlib": "JAX",
-            "torch": "PyTorch",
-            "tensorflow": "TensorFlow",
-            "tf": "TensorFlow",
-            "mxnet": "MXNet",
-        }
-        backend_label = known_backends.get(module_name, module_name)
+        # Derive backend label: prefer __array_namespace__, fall back to module name
+        backend_label = type(obj).__module__.split(".")[0]
+        with contextlib.suppress(Exception):
+            xp = obj.__array_namespace__()
+            ns_name = getattr(xp, "__name__", "") or type(xp).__module__
+            backend_label = ns_name.split(".")[0]
+        backend_label = self._FRIENDLY_NAMES.get(backend_label, backend_label)
 
-        # Try to get device information (GPU vs CPU)
+        # Device info (present on array-api arrays; also on PyTorch/CuPy)
         device_info = ""
-        try:
-            if hasattr(obj, "device"):
-                device_info = f" on {obj.device}"
-            elif hasattr(obj, "device_buffer"):  # JAX
-                device_info = f" on {obj.device_buffer.device()}"
-        except Exception:  # noqa: BLE001
-            # Intentional broad catch: device access varies by backend and can fail
-            pass
+        with contextlib.suppress(Exception):
+            device_info = f" on {obj.device}"
 
         # For obsm/varm sections, show number of columns in preview
         preview = None
@@ -1126,7 +1131,7 @@ def _register_builtin_formatters() -> None:
         LazyColumnFormatter(),
         # Low-medium priority (Array-API compatible arrays)
         # Must come after specific array formatters (numpy, cupy, etc.) but before builtins
-        # Handles JAX, PyTorch, TensorFlow arrays added in PR #2063
+        # Handles JAX, PyTorch, TensorFlow arrays (PR #2071 added array-api support)
         ArrayAPIFormatter(),
         # Low priority (builtins)
         NoneFormatter(),

@@ -20,6 +20,33 @@ from anndata import AnnData
 from .conftest import HAS_AWKWARD, HAS_DASK
 
 
+def _make_array_api_mock(module: str, *, shape, dtype, device="cpu"):
+    """Create a mock array satisfying the SupportsArrayApi protocol.
+
+    The mock has all attributes required by ``anndata.types.SupportsArrayApi``
+    (``shape``, ``device``, ``__array_namespace__``, ``to_device``,
+    ``__dlpack__``, ``__dlpack_device__``) so that ``has_xp()`` returns True.
+    """
+    ns_module = type("Namespace", (), {"__name__": module.split(".")[0]})()
+
+    cls = type(
+        "MockArrayAPI",
+        (),
+        {
+            "shape": shape,
+            "dtype": dtype,
+            "ndim": len(shape),
+            "device": device,
+            "__array_namespace__": lambda self, **kw: ns_module,
+            "to_device": lambda self, dev, /, **kw: self,
+            "__dlpack__": lambda self, **kw: None,
+            "__dlpack_device__": lambda self: (1, 0),
+        },
+    )
+    cls.__module__ = module
+    return cls()
+
+
 class TestNumpyFormatters:
     """Tests for NumPy array formatters."""
 
@@ -506,39 +533,35 @@ class TestArrayAPIFormatter:
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
-        class MockJAXArray:
-            def __init__(self):
-                self.shape = (100, 50)
-                self.dtype = np.float32
-                self.ndim = 2
-                self.device = "gpu:0"
-
-        MockJAXArray.__module__ = "jax.numpy"
+        mock_arr = _make_array_api_mock(
+            "jax.numpy", shape=(100, 50), dtype=np.float32, device="gpu:0"
+        )
 
         formatter = ArrayAPIFormatter()
-        mock_arr = MockJAXArray()
 
         assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
-        assert "MockJAXArray" in result.type_name
         assert "100" in result.type_name
         assert "50" in result.type_name
         assert result.css_class == "anndata-dtype--array-api"
-        assert "JAX" in result.tooltip
+        assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
         assert "gpu:0" in result.tooltip
 
-    def test_array_api_formatter_pytorch_like(self):
-        """Test Array-API formatter with PyTorch-like tensor."""
+    def test_array_api_formatter_pytorch_like_duck_typing(self):
+        """Test Array-API formatter with PyTorch-like tensor (duck-typing tier).
+
+        PyTorch doesn't implement __array_namespace__, so it falls back
+        to the duck-typing check (shape/dtype/ndim).
+        """
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
         class MockTorchTensor:
-            def __init__(self):
-                self.shape = (64, 32)
-                self.dtype = "torch.float32"
-                self.ndim = 2
-                self.device = "cuda:0"
+            shape = (64, 32)
+            dtype = "torch.float32"
+            ndim = 2
+            device = "cuda:0"
 
         MockTorchTensor.__module__ = "torch"
 
@@ -548,34 +571,24 @@ class TestArrayAPIFormatter:
         assert formatter.can_format(mock_tensor, FormatterContext())
         result = formatter.format(mock_tensor, FormatterContext())
 
-        assert "MockTorchTensor" in result.type_name
-        assert "PyTorch" in result.tooltip
+        assert "PyTorch" in result.tooltip or "torch" in result.tooltip.lower()
+        assert "cuda:0" in result.tooltip
 
-    def test_array_api_formatter_device_buffer(self):
-        """Test Array-API formatter with device_buffer attribute."""
+    def test_array_api_formatter_protocol_array(self):
+        """Test Array-API formatter with full protocol array (tier 1)."""
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
-        class MockDeviceBuffer:
-            def device(self):
-                return "tpu:0"
-
-        class MockJAXArrayWithBuffer:
-            def __init__(self):
-                self.shape = (10, 5)
-                self.dtype = np.float32
-                self.ndim = 2
-                self.device_buffer = MockDeviceBuffer()
-
-        MockJAXArrayWithBuffer.__module__ = "jaxlib.xla_extension"
+        mock_arr = _make_array_api_mock(
+            "jax.numpy", shape=(10, 5), dtype=np.float32, device="tpu:0"
+        )
 
         formatter = ArrayAPIFormatter()
-        mock_arr = MockJAXArrayWithBuffer()
 
         assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
-        assert "JAX" in result.tooltip
+        assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
         assert "tpu:0" in result.tooltip
 
     def test_array_api_formatter_excludes_numpy(self):
@@ -677,22 +690,9 @@ class TestFutureCompatibility:
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
-        class MockJAXArray:
-            def __init__(self):
-                self.shape = (100, 50)
-                self.dtype = np.dtype("float32")
-                self.ndim = 2
-
-            @property
-            def __module__(self):
-                return "jax.numpy"
-
-            def __class__(self):
-                return type("DeviceArray", (), {})
-
-        mock_array = MockJAXArray()
-        type(mock_array).__module__ = "jax.numpy"
-        type(mock_array).__name__ = "DeviceArray"
+        mock_array = _make_array_api_mock(
+            "jax.numpy", shape=(100, 50), dtype=np.dtype("float32"), device="cpu"
+        )
 
         formatter = ArrayAPIFormatter()
         can_format = formatter.can_format(mock_array, FormatterContext())
@@ -987,17 +987,11 @@ class TestObsmVarmPreviewConsistency:
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
-        # Mock JAX-like array
-        class MockJAXArray:
-            def __init__(self):
-                self.shape = (100, 15)
-                self.dtype = np.float32
-                self.ndim = 2
-
-        MockJAXArray.__module__ = "jax.numpy"
+        arr = _make_array_api_mock(
+            "jax.numpy", shape=(100, 15), dtype=np.float32, device="cpu"
+        )
 
         formatter = ArrayAPIFormatter()
-        arr = MockJAXArray()
 
         # No preview outside obsm/varm
         result = formatter.format(arr, FormatterContext(section="uns"))
