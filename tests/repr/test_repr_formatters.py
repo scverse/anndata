@@ -27,7 +27,7 @@ def _make_array_api_mock(module: str, *, shape, dtype, device="cpu"):
     (``shape``, ``device``, ``__array_namespace__``, ``to_device``,
     ``__dlpack__``, ``__dlpack_device__``) so that ``has_xp()`` returns True.
     """
-    ns_module = type("Namespace", (), {"__name__": module.split(".")[0]})()
+    ns_module = type("Namespace", (), {"__name__": module.split(".", maxsplit=1)[0]})()
 
     cls = type(
         "MockArrayAPI",
