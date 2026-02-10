@@ -42,6 +42,7 @@
     --anndata-dtype-extension: #8250df;
     --anndata-dtype-dask: #fb8500;
     --anndata-dtype-gpu: #76b900;
+    --anndata-dtype-tpu: #0891b2;
     --anndata-dtype-awkward: #e85d04;
     --anndata-dtype-array-api: #9a6700;
     /* Column widths are set dynamically via inline style on container */
@@ -899,7 +900,6 @@
     .anndata-dtype--sparse {
         color: var(--anndata-dtype-sparse);
     }
-    .anndata-dtype--array,
     .anndata-dtype--ndarray {
         color: var(--anndata-dtype-array);
     }
@@ -922,6 +922,9 @@
     }
     .anndata-dtype--gpu {
         color: var(--anndata-dtype-gpu);
+    }
+    .anndata-dtype--tpu {
+        color: var(--anndata-dtype-tpu);
     }
     .anndata-dtype--awkward {
         color: var(--anndata-dtype-awkward);
@@ -1143,6 +1146,7 @@ body.dark-mode .anndata-repr {
     --anndata-dtype-anndata: #ff7b72;
     --anndata-dtype-dask: #ffc168;
     --anndata-dtype-gpu: #a0db63;
+    --anndata-dtype-tpu: #67e8f9;
     --anndata-dtype-awkward: #ff9d76;
     --anndata-dtype-array-api: #e6c400;
 }

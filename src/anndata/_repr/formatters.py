@@ -6,7 +6,6 @@ This module registers formatters for:
 - SciPy sparse matrices
 - Pandas DataFrames, Series, Categorical
 - Dask arrays
-- CuPy arrays (GPU)
 - Awkward arrays
 - AnnData objects (for recursive display in .uns)
 - Python built-in types
@@ -41,6 +40,7 @@ from .._repr_constants import (
     CSS_DTYPE_OBJECT,
     CSS_DTYPE_SPARSE,
     CSS_DTYPE_STRING,
+    CSS_DTYPE_TPU,
     CSS_DTYPE_UNKNOWN,
     CSS_NESTED_ANNDATA,
     CSS_TEXT_MUTED,
@@ -706,42 +706,6 @@ class DaskArrayFormatter(TypeFormatter):
         )
 
 
-class CuPyArrayFormatter(TypeFormatter):
-    """Formatter for cupy.ndarray (GPU arrays)."""
-
-    priority = 120
-
-    def can_format(self, obj: object, context: FormatterContext) -> bool:
-        return type(obj).__module__.startswith("cupy")
-
-    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
-        shape_str = " × ".join(format_number(s) for s in obj.shape)
-        dtype_str = str(obj.dtype)
-
-        device_str = ""
-        if hasattr(obj, "device"):
-            device_str = f"GPU:{obj.device.id}"
-
-        # Surface device in type_name so it's visible without hovering
-        if device_str:
-            type_display = f"cupy.ndarray ({shape_str}) {dtype_str} · {device_str}"
-        else:
-            type_display = f"cupy.ndarray ({shape_str}) {dtype_str}"
-
-        # For obsm/varm sections, show number of columns in preview
-        preview = None
-        if context.section in ("obsm", "varm") and len(obj.shape) == 2:
-            n_cols = obj.shape[1]
-            preview = f"({format_number(n_cols)} columns)"
-
-        return FormattedOutput(
-            type_name=type_display,
-            css_class=CSS_DTYPE_GPU,
-            preview=preview,
-            is_serializable=True,
-        )
-
-
 class AwkwardArrayFormatter(TypeFormatter):
     """Formatter for awkward.Array (ragged/jagged arrays)."""
 
@@ -771,7 +735,7 @@ class AwkwardArrayFormatter(TypeFormatter):
 
 class ArrayAPIFormatter(TypeFormatter):
     """
-    Formatter for Array-API compatible arrays (JAX, PyTorch, TensorFlow, etc.).
+    Formatter for Array-API compatible arrays (JAX, CuPy, PyTorch, TensorFlow, etc.).
 
     Detection strategy (two tiers):
 
@@ -780,11 +744,15 @@ class ArrayAPIFormatter(TypeFormatter):
     2. Duck-typing fallback — catches arrays with ``shape``/``dtype``/``ndim`` that do
        not (yet) implement the full protocol (e.g. PyTorch tensors, TensorFlow tensors).
 
-    Low priority (50) ensures specific formatters (numpy, cupy, dask, etc.)
+    CuPy arrays (≥12) implement the full Array API protocol, so they are handled
+    here. CuPy's device object exposes ``.id``; the formatter renders it as
+    ``GPU:{device.id}`` for a clean label.
+
+    Low priority (50) ensures specific formatters (numpy, dask, etc.)
     are tried first.
     """
 
-    priority = 50  # Lower than specific formatters (numpy=110, cupy=120) but higher than builtins
+    priority = 50  # Lower than specific formatters (numpy=110) but higher than builtins
 
     _FRIENDLY_NAMES: ClassVar[dict[str, str]] = {
         "jax": "JAX",
@@ -802,11 +770,19 @@ class ArrayAPIFormatter(TypeFormatter):
         "numpy",
         "pandas",
         "scipy.sparse",
-        "cupy",
-        "cupyx",
         "awkward",
         "dask",
     )
+
+    @staticmethod
+    def _device_css_class(device_str: str) -> str:
+        """Map device string to a CSS class: GPU (green), TPU (teal), CPU/other (amber)."""
+        lower = device_str.lower()
+        if "cuda" in lower or "gpu" in lower:
+            return CSS_DTYPE_GPU
+        if "tpu" in lower:
+            return CSS_DTYPE_TPU
+        return CSS_DTYPE_ARRAY_API
 
     def can_format(self, obj: object, context: FormatterContext) -> bool:
         # Tier 1: full Array API protocol (JAX, CuPy ≥12, numpy ≥2.0, …)
@@ -841,9 +817,16 @@ class ArrayAPIFormatter(TypeFormatter):
         backend_label = self._FRIENDLY_NAMES.get(backend_label, backend_label)
 
         # Device info (present on array-api arrays; also on PyTorch/CuPy)
+        # CuPy's device is a cupy.cuda.Device object — use GPU:{id} for a clean label
         device_str = ""
         with contextlib.suppress(Exception):
-            device_str = str(obj.device)
+            if hasattr(obj.device, "id"):
+                device_str = f"GPU:{obj.device.id}"
+            else:
+                device_str = str(obj.device)
+
+        # Color by device type: GPU (green), TPU (teal), CPU/other (amber)
+        css_class = self._device_css_class(device_str)
 
         # Surface device in type_name so it's visible without hovering
         if device_str:
@@ -859,7 +842,7 @@ class ArrayAPIFormatter(TypeFormatter):
 
         return FormattedOutput(
             type_name=type_display,
-            css_class=CSS_DTYPE_ARRAY_API,
+            css_class=css_class,
             tooltip=f"{backend_label} array",
             preview=preview,
             is_serializable=True,
@@ -1128,7 +1111,6 @@ def _register_builtin_formatters() -> None:
         # High priority (specific types)
         AnnDataFormatter(),
         DaskArrayFormatter(),
-        CuPyArrayFormatter(),
         AwkwardArrayFormatter(),
         NumpyMaskedArrayFormatter(),
         CategoricalFormatter(),

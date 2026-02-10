@@ -888,9 +888,9 @@ class FormatterRegistry:
         ...     print(f"{f['priority']:4d} {f['name']}")
          150 AnnDataFormatter
          120 DaskArrayFormatter
-         120 CuPyArrayFormatter
          120 AwkwardArrayFormatter
          110 NumpyMaskedArrayFormatter
+         110 CategoricalFormatter
         """
         return [
             {

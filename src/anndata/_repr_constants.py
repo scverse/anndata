@@ -92,11 +92,11 @@ CSS_DTYPE_DATAFRAME = "anndata-dtype--dataframe"
 CSS_DTYPE_ANNDATA = "anndata-dtype--anndata"
 # Array types
 CSS_DTYPE_NDARRAY = "anndata-dtype--ndarray"
-CSS_DTYPE_ARRAY = "anndata-dtype--array"
 CSS_DTYPE_SPARSE = "anndata-dtype--sparse"
 # Specialized array types
 CSS_DTYPE_DASK = "anndata-dtype--dask"
 CSS_DTYPE_GPU = "anndata-dtype--gpu"
+CSS_DTYPE_TPU = "anndata-dtype--tpu"
 CSS_DTYPE_AWKWARD = "anndata-dtype--awkward"
 CSS_DTYPE_ARRAY_API = "anndata-dtype--array-api"
 # Extension/unknown

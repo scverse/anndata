@@ -2,7 +2,7 @@
 Type formatter tests for the _repr module.
 
 Tests for NumpyArrayFormatter, SparseMatrixFormatter, CategoricalFormatter,
-DaskArrayFormatter, CuPyArrayFormatter, AwkwardArrayFormatter, ArrayAPIFormatter,
+DaskArrayFormatter, AwkwardArrayFormatter, ArrayAPIFormatter,
 and all built-in type formatters.
 """
 
@@ -422,7 +422,7 @@ class TestBuiltinFormatters:
 
 
 class TestSpecialArrayFormatters:
-    """Tests for special array type formatters (Dask, CuPy, Awkward, ArrayAPI)."""
+    """Tests for special array type formatters (Dask, Awkward, ArrayAPI)."""
 
     @pytest.mark.skipif(not HAS_DASK, reason="dask not installed")
     def test_dask_array_display(self):
@@ -444,29 +444,23 @@ class TestSpecialArrayFormatters:
         html = adata._repr_html_()
         assert "awkward" in html.lower()
 
-    def test_cupy_array_formatter_with_mock(self):
-        """Test CuPy array formatter with a mock CuPy array."""
-        from anndata._repr.formatters import CuPyArrayFormatter
+    def test_array_api_formatter_cupy_like(self):
+        """Test ArrayAPIFormatter handles CuPy-like arrays with GPU styling."""
+        from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
         class MockDevice:
             id = 0
 
-        class MockCuPyArray:
-            def __init__(self):
-                self.shape = (100, 50)
-                self.dtype = np.float32
-                self.device = MockDevice()
+        mock_arr = _make_array_api_mock(
+            "cupy._core.core", shape=(100, 50), dtype=np.float32, device=MockDevice()
+        )
 
-        MockCuPyArray.__module__ = "cupy._core.core"
-
-        formatter = CuPyArrayFormatter()
-        mock_arr = MockCuPyArray()
+        formatter = ArrayAPIFormatter()
 
         assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
-        assert "cupy" in result.type_name.lower()
         assert "100" in result.type_name
         assert "50" in result.type_name
         assert result.css_class == "anndata-dtype--gpu"
@@ -544,7 +538,7 @@ class TestArrayAPIFormatter:
 
         assert "100" in result.type_name
         assert "50" in result.type_name
-        assert result.css_class == "anndata-dtype--array-api"
+        assert result.css_class == "anndata-dtype--gpu"
         assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
         assert "gpu:0" in result.type_name
 
@@ -571,11 +565,12 @@ class TestArrayAPIFormatter:
         assert formatter.can_format(mock_tensor, FormatterContext())
         result = formatter.format(mock_tensor, FormatterContext())
 
+        assert result.css_class == "anndata-dtype--gpu"
         assert "PyTorch" in result.tooltip or "torch" in result.tooltip.lower()
         assert "cuda:0" in result.type_name
 
     def test_array_api_formatter_protocol_array(self):
-        """Test Array-API formatter with full protocol array (tier 1)."""
+        """Test Array-API formatter with full protocol array on TPU (tier 1)."""
         from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
@@ -588,6 +583,7 @@ class TestArrayAPIFormatter:
         assert formatter.can_format(mock_arr, FormatterContext())
         result = formatter.format(mock_arr, FormatterContext())
 
+        assert result.css_class == "anndata-dtype--tpu"
         assert "JAX" in result.tooltip or "jax" in result.tooltip.lower()
         assert "tpu:0" in result.type_name
 
@@ -944,21 +940,16 @@ class TestObsmVarmPreviewConsistency:
         result = formatter.format(arr, FormatterContext(section="varm"))
         assert result.preview == "(25 columns)"
 
-    def test_cupy_array_obsm_preview(self):
-        """Test CuPyArrayFormatter shows column count in obsm."""
-        from anndata._repr.formatters import CuPyArrayFormatter
+    def test_array_api_cupy_obsm_preview(self):
+        """Test ArrayAPIFormatter shows column count in obsm for CuPy-like arrays."""
+        from anndata._repr.formatters import ArrayAPIFormatter
         from anndata._repr.registry import FormatterContext
 
-        # Mock CuPy array
-        class MockCuPyArray:
-            def __init__(self):
-                self.shape = (100, 30)
-                self.dtype = np.float32
+        arr = _make_array_api_mock(
+            "cupy._core.core", shape=(100, 30), dtype=np.float32, device="gpu:0"
+        )
 
-        MockCuPyArray.__module__ = "cupy._core.core"
-
-        formatter = CuPyArrayFormatter()
-        arr = MockCuPyArray()
+        formatter = ArrayAPIFormatter()
 
         # No preview outside obsm/varm
         result = formatter.format(arr, FormatterContext(section="uns"))

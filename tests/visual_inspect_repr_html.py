@@ -3391,6 +3391,18 @@ The end. If you see this without any alerts or broken layout, the sanitization w
     adata_arrayapi.obsm["X_jax_cpu"] = _make_visual_array_api_mock(
         "jax.numpy", shape=(n_obs_api, 50), dtype=np.dtype("float64"), device="cpu"
     )
+
+    # CuPy-like array on GPU (handled by ArrayAPIFormatter with GPU-green styling)
+    class _MockGPUDevice:
+        id = 0
+
+    cupy_mock = _make_visual_array_api_mock(
+        "cupy._core.core",
+        shape=(n_obs_api, 20),
+        dtype=np.dtype("float32"),
+        device=_MockGPUDevice(),
+    )
+    adata_arrayapi.obsm["X_cupy_gpu"] = cupy_mock
     # Array-API array in uns
     adata_arrayapi.uns["gpu_embedding"] = _make_visual_array_api_mock(
         "jax.numpy", shape=(20, 5), dtype=np.dtype("float32"), device="cuda:1"
@@ -3407,6 +3419,7 @@ The end. If you see this without any alerts or broken layout, the sanitization w
         "<li><code>X_jax_gpu</code>: <code>MockArrayAPI</code> on <code>cuda:0</code></li>"
         "<li><code>X_jax_tpu</code>: <code>MockArrayAPI</code> on <code>tpu:0</code></li>"
         "<li><code>X_jax_cpu</code>: <code>MockArrayAPI</code> on <code>cpu</code></li>"
+        "<li><code>X_cupy_gpu</code>: CuPy-like on <code>GPU:0</code></li>"
         "<li><code>uns['gpu_embedding']</code>: <code>MockArrayAPI</code> on <code>cuda:1</code></li>"
         "</ul>"
         "<p style='margin: 5px 0;'>Device appears as <code>dtype · device</code> in the type "
