@@ -1126,7 +1126,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
     def __getitem__(self, index: Index | AdRef) -> AnnData | InMemoryArray:
-        """Slice AnnData object or retrieve an array using an :class:`AdRef`."""
+        """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
         from ..acc import AdRef
 
         if isinstance(index, AdRef):

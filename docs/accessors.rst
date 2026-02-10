@@ -13,7 +13,7 @@ For these purposes, they are
 
     The central :attr:`A` object allows you to create
     :class:`AdRef` objects that reference arrays
-    along one or two dimensions of an :class:`anndata.AnnData` object:
+    along one or two dimensions of an :class:`~anndata.AnnData` object:
 
     >>> from anndata.acc import A
     >>> A[:, "gene-3"]  # reference to `adata[:, "gene-3"].X` as 1D vector
@@ -71,17 +71,16 @@ The central starting point is :data:`!A`:
 
 .. autodata:: A
 
-See :class:`!AdAcc` for examples of how to use it:
+See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
 
 ..  autosummary::
     :toctree: generated/
     :template: class-minimal
 
-    AdAcc
     AdRef
 
-The following classes are behind :attr:`AdRef.acc`,
-and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
+The following :class:`!RefAcc` subclasses can be accessed using :attr:`AdRef.acc`,
+and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
 .. _reference-accessors:
 
@@ -91,18 +90,36 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
     RefAcc
 
-- :class:`MetaAcc` with :attr:`MetaAcc.dim`
-- :class:`LayerAcc` with :attr:`LayerAcc.k`
-- :class:`MultiAcc` with :attr:`MultiAcc.dim` and :attr:`MultiAcc.k`
-- :class:`GraphAcc` with :attr:`GraphAcc.dim` and :attr:`GraphAcc.k`
+..  list-table::
+    :header-rows: 1
+
+    - - Class
+      - Attributes
+      - Examples
+    - - :class:`AdAcc`
+      - is a :class:`LayerAcc` with `.k=None`
+      - `A["c1", :]`, `A[:, "g1"]`, `A[:, :]`
+    - - :class:`LayerAcc`
+      - :attr:`LayerAcc.k`
+      - `A.layers["c"][:, "g0"]`
+    - - :class:`MetaAcc`
+      - :attr:`MetaAcc.dim`
+      - `A.obs["a"]`, `A.var["b"]`
+    - - :class:`MultiAcc`
+      - :attr:`MultiAcc.dim`, :attr:`MultiAcc.k`
+      - `A.obsm["d"][:, 2]`
+    - - :class:`GraphAcc`
+      - :attr:`GraphAcc.dim`, :attr:`GraphAcc.k`
+      - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
 
 ..  hidden
     ..  autosummary::
         :toctree: generated/
         :template: class-minimal
 
-        MetaAcc
+        AdAcc
         LayerAcc
+        MetaAcc
         MultiAcc
         GraphAcc
 
@@ -114,8 +131,9 @@ and therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 .. toctree::
    :hidden:
 
-   generated/anndata.acc.MetaAcc
+   generated/anndata.acc.AdAcc
    generated/anndata.acc.LayerAcc
+   generated/anndata.acc.MetaAcc
    generated/anndata.acc.MultiAcc
    generated/anndata.acc.GraphAcc
    generated/anndata.acc.Idx2D
