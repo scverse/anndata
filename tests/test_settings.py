@@ -200,21 +200,19 @@ def test_option_typing(settings: SettingsManager):
 def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
     option_env_var = "ANNDATA_OPTION"
     assert hash("foo") == check_and_get_environ_var(
-        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        option_env_var, "foo", ["foo", "bar"], hash
     )
     monkeypatch.setenv(option_env_var, "bar")
     assert hash("bar") == check_and_get_environ_var(
-        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        option_env_var, "foo", ["foo", "bar"], hash
     )
     monkeypatch.setenv(option_env_var, "Not foo or bar")
     with pytest.warns(
         match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
     ):
-        check_and_get_environ_var(
-            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
-        )
+        check_and_get_environ_var(option_env_var, "foo", ["foo", "bar"], hash)
     assert hash("Not foo or bar") == check_and_get_environ_var(
-        option_env_var, "foo", cast=lambda x: hash(x)
+        option_env_var, "foo", cast=hash
     )
 
 
