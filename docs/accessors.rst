@@ -169,12 +169,20 @@ There are three layers of extensibility:
 
     ..  code-block:: python
 
-        import my_plotting_library as pl
+        from matplotlib import pyplot as plt
+        from anndata.acc import AdAcc, AdRef
 
-        class AdDim(RefAcc, pl.Dimension): ...
-        A = AdAcc(ref_class=AdDim)
+        class MplRef(AdRef, str):
+            """Matplotlib will only treat strings as references, so we subclass `str`."""
+            def __new__(cls, acc, idx) -> None:
+                obj = str.__new__(cls, str(AdRef(acc, idx)))
+                AdRef.__init__(obj, acc, idx)
+                return obj
 
-        pl.scatter(adata, A[:, "Actb"], color=A.obs["cell_type"])
+        A = AdAcc(ref_class=MplRef)
+
+        adata = sc.datasets.pbmc3k_processed()
+        plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
 
 
 #.  subclass one or more of the `reference accessors`_, and create a new :class:`AdAcc` instance:
@@ -205,6 +213,7 @@ There are three layers of extensibility:
     ... class EHRAcc(AdAcc):
     ...     tem: MetaAcc = field(init=False)
     ...     def __post_init__(self) -> None:
+    ...         super().__post_init__()
     ...         tem = MetaAcc("tem", ref_class=self.ref_class)
     ...         object.__setattr__(self, "tem", tem)  # necessary because it’s frozen
     >>>
