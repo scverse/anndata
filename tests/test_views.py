@@ -34,6 +34,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
+from anndata._warnings import ImplicitModificationWarning
 from anndata.compat import DaskArray, XDataArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -144,8 +145,10 @@ def test_views():
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
-
-    adata[:2, 0].X = [0, 0]
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+    ):
+        adata[:2, 0].X = [0, 0]
 
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
