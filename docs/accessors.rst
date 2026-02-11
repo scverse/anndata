@@ -84,7 +84,8 @@ See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
 Reference accessors
 ~~~~~~~~~~~~~~~~~~~
 
-The following :class:`!RefAcc` subclasses can be accessed using :attr:`AdRef.acc`,
+The following :class:`!RefAcc` subclasses correspond to the various key-value stores that anndata exposes.
+They can be accessed from references using :attr:`AdRef.acc`,
 and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
 ..  autosummary::
