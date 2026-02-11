@@ -29,14 +29,28 @@ body:
     attributes:
       label: Report
       description: |
-        Describe the bug you encountered, and what you were trying to do. Please use [github markdown][] features for readability.
+        Describe the bug you encountered, and what you were trying to do.
+        Executable example must list dependencies in [inline script metadata][].
+        When put in a file named `issue.py` using [uv run][] i.e., `uv run issue.py`, should show the issue.
 
+        Please use [github markdown][] features for readability.
+
+        [uv run]: https://docs.astral.sh/uv/guides/scripts/#running-a-script-with-dependencies
+        [inline script metadata]: https://packaging.python.org/en/latest/specifications/inline-script-metadata/#example
         [github markdown]: https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax
       value: |
         Code:
 
         ```python
+        # /// script
+        # requires-python = ">=3.12"
+        # dependencies = [
+        #   "anndata@git+https://github.com/scverse/anndata.git",
+        # ]
+        # ///
 
+        import anndata
+        # your reproducer code
         ```
 
         Traceback:
@@ -57,15 +71,15 @@ body:
         click the “Copy as Markdown” button,
         then paste the results into the text box below.
 
-        ```python
+        ```pycon
         In[1]: import anndata, session_info2; session_info2.session_info(dependencies=True)
         ```
 
-        Alternatively, run this in a console:
+        Alternatively, run this in your virtual environment:
 
         ```python
-        >>> import session_info2; print(session_info2.session_info(dependencies=True)._repr_mimebundle_()["text/markdown"])
+        python -m session_info2 -f markdown
         ```
-      render: python
+      render: markdown
     validations:
       required: true
