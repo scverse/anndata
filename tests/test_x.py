@@ -55,11 +55,11 @@ def test_setter_view(orig_array_type, new_array_type):
         pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
     ):
         view.X = to_assign
+    # view has been initialized
+    assert not view.is_view
     assert_equal(view.X, to_assign)
     assert isinstance(view.X, type(to_assign))
     assert_equal(adata.X, expected_X)
-    # If cow, then not a view and if not cow, it is a view
-    assert not view.is_view
 
 
 ###############################
