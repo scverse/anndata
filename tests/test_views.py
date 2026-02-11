@@ -24,6 +24,7 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
+from anndata._warnings import ImplicitModificationWarning
 from anndata.compat import NUMPY_2, CSArray, CupyCSCMatrix, DaskArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -119,21 +120,35 @@ def mapping_name(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False], ids=["CoW", "update"])
+def copy_on_write_X(request):
+    return request.param
+
+
 # ------------------------------------------------------------------------------
 # The test functions
 # ------------------------------------------------------------------------------
 
 
-def test_views():
+def test_views(*, copy_on_write_X: bool):
+    ad.settings.copy_on_write_X = copy_on_write_X
     X = np.array(X_list, dtype="int32")
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
-    adata[:2, 0].X = [0, 0]
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual")
+        if copy_on_write_X
+        else nullcontext()
+    ):
+        adata[:2, 0].X = [0, 0]
 
-    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
+    assert (
+        adata[:, 0].X.tolist()
+        == np.reshape([1, 4, 7] if copy_on_write_X else [0, 0, 7], (3, 1)).tolist()
+    )
 
     adata_subset = adata[:2, [0, 1]]
 
@@ -385,7 +400,8 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
 
 
 @IGNORE_SPARSE_EFFICIENCY_WARNING
-def test_set_scalar_subset_X(matrix_type, subset_func):
+def test_set_scalar_subset_X(matrix_type, subset_func, *, copy_on_write_X: bool):
+    ad.settings.copy_on_write_X = copy_on_write_X
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     orig_X_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)
@@ -394,9 +410,13 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
 
     adata_subset.X = 1
 
-    assert adata_subset.is_view
-    assert np.all(asarray(adata[subset_idx, :].X) == 1)
-    if isinstance(adata.X, CupyCSCMatrix):
+    assert adata_subset.is_view != copy_on_write_X
+    assert np.all(
+        asarray((adata_subset if copy_on_write_X else adata[subset_idx, :]).X) == 1
+    )
+    if copy_on_write_X:
+        assert asarray(orig_X_val == adata.X).all()
+    elif isinstance(adata.X, CupyCSCMatrix):
         # Comparison broken for CSC matrices
         # https://github.com/cupy/cupy/issues/7757
         assert asarray(orig_X_val.tocsr() != adata.X.tocsr()).sum() == mul(

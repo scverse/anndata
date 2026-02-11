@@ -600,6 +600,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _handle_view_X_cow(self, value: XDataType | None):
         if self._is_view:
             if settings.copy_on_write_X:
+                if np.isscalar(value) and value is not None:
+                    value = np.full(self.shape, fill_value=value)
+                if hasattr(value, "shape") and value.shape != self.shape:
+                    value = value.reshape(self.shape)
                 msg = "Setting element `.X` of view, initializing view as actual."
                 warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
                 new = self._mutated_copy(X=value)
