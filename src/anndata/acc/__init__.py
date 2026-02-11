@@ -116,8 +116,9 @@ class AdRef[I: Hashable]:
                     if type(self).__eq__ is AdRef.__eq__
                     else AdAcc(ref_class=type(self))
                 )
-                return self == a.resolve(value, strict=False)
-        return False
+                if (other := a.resolve(value, strict=False)) is not None:
+                    return self == other
+        return NotImplemented
 
     @cached_property
     def __repr(self) -> str:
