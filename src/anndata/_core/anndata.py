@@ -1837,11 +1837,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
         """Check if array is in AnnData."""
-        from ..acc import AdRef, MapAcc, RefAcc
+        from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
 
         match key:
-            case MapAcc():
-                return True  # .layers and .{obs,var}{m,p} always exist, they might just be empty
+            case LayerMapAcc():
+                return bool(self.layers)
+            case MultiMapAcc():
+                return bool(getattr(self, f"{key.dim}m"))
+            case GraphMapAcc():
+                return bool(getattr(self, f"{key.dim}p"))
+            case MapAcc():  # to check MapAccs, we need to know the attribute name
+                msg = f"Unknown MapAcc subclass {type(key)}."
+                raise TypeError(msg)
             case RefAcc():
                 return key.isin(self)
             case AdRef():
