@@ -71,12 +71,14 @@ class AdRef[I: Hashable]:
 
     >>> from anndata.acc import A
     >>> ref = A.obs["x"]
+    >>> type(ref)
+    <class 'anndata.acc.AdRef'>
     >>> ref.dims
     {'obs'}
     >>> ref.idx
     'x'
-    >>> type(ref.acc)
-    <class 'anndata.acc.MetaAcc'>
+    >>> ref.acc
+    A.obs
 
     See :mod:`anndata.acc` and :class:`AdAcc` for more examples.
 
