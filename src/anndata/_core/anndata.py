@@ -1836,7 +1836,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
-        """Check if array is in AnnData."""
+        """Check if array is in AnnData.
+
+        When passed a :class:`~anndata.acc.MapAcc`,
+        it will check if the referenced map has any entries,
+        e.g. `A.obsm in adata` will return `True` if `adata.obsm` is not empty.
+        """
         from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
 
         match key:
