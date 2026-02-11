@@ -15,7 +15,7 @@ from anndata import AnnData
 
 from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
-from ..compat import DaskArray, has_xp
+from ..compat import CupySparseMatrix, DaskArray, has_xp
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
@@ -190,7 +190,7 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
             return a
         if isinstance(a, DaskArray):
             a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
-        if isinstance(a, sp.sparray | sp.spmatrix | ArrayView):
+        if isinstance(a, sp.sparray | sp.spmatrix | CupySparseMatrix | ArrayView):
             a = a.toarray()
         if has_xp(a):
             return a.__array_namespace__().reshape(a, (a.size,))
