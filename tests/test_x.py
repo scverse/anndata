@@ -56,9 +56,10 @@ def test_setter_view(orig_array_type, new_array_type):
     ):
         view.X = to_assign
     # view has been initialized
-    assert not view.is_view
-    assert_equal(view.X, to_assign)
-    assert isinstance(view.X, type(to_assign))
+    new_adata = view
+    assert not new_adata.is_view
+    assert_equal(new_adata.X, to_assign)
+    assert isinstance(new_adata.X, type(to_assign))
     assert_equal(adata.X, expected_X)
 
 
