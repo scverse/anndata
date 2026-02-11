@@ -680,7 +680,7 @@ def test_convenience(subtests: pytest.Subtests) -> None:
         )
 
 
-def test_1d_slice_dtypes() -> None:
+def test_1d_slice_dtypes(subtests: pytest.Subtests) -> None:
     N, M = 10, 20
     obs_df = pd.DataFrame(
         dict(
@@ -702,16 +702,19 @@ def test_1d_slice_dtypes() -> None:
     )
     adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
 
-    new_obs_df = pd.DataFrame(index=adata.obs_names)
-    for k in obs_df.columns:
-        new_obs_df[k] = A.obs[k](adata)
-        assert new_obs_df[k].dtype == obs_df[k].dtype
-    assert np.all(new_obs_df == obs_df)
-    new_var_df = pd.DataFrame(index=adata.var_names)
-    for k in var_df.columns:
-        new_var_df[k] = A.var[k](adata)
-        assert new_var_df[k].dtype == var_df[k].dtype
-    assert np.all(new_var_df == var_df)
+    new_obs_df = pd.DataFrame(
+        {k: adata[A.obs[k]] for k in obs_df.columns}, index=adata.obs_names
+    )
+    new_var_df = pd.DataFrame(
+        {k: adata[A.var[k]] for k in var_df.columns}, index=adata.var_names
+    )
+
+    with subtests.test("obs"):
+        assert new_obs_df.dtypes.to_dict() == obs_df.dtypes.to_dict()
+        assert np.all(new_obs_df == obs_df)
+    with subtests.test("var"):
+        assert new_var_df.dtypes.to_dict() == var_df.dtypes.to_dict()
+        assert np.all(new_var_df == var_df)
 
 
 def test_to_df_sparse():

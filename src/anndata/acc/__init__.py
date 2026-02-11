@@ -406,7 +406,8 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
         return idx is None or idx in range(m[self.k].shape[1])
 
     def get(self, adata: AnnData, i: int, /) -> InMemoryArray:
-        arr = getattr(adata, f"{self.dim}m")[self.k][:, i]
+        # TODO: remove slicing when dropping scipy <1.14
+        arr = getattr(adata, f"{self.dim}m")[self.k][:, i : i + 1]
         return self._maybe_flatten(i, arr)
 
 
@@ -491,7 +492,8 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
         df = cast("pd.DataFrame", getattr(adata, self.dim))
-        iloc = tuple(df.index.get_loc(i) if isinstance(i, str) else i for i in idx)
+        # TODO: remove wrapping in [] when dropping scipy <1.14
+        iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
         arr = getattr(adata, f"{self.dim}p")[self.k][iloc]
         return self._maybe_flatten(idx, arr)
 

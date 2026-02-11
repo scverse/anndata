@@ -34,8 +34,8 @@ For these purposes, they are
     or to extract the referenced vector:
 
     >>> ref = A.obs["louvain"]
-    >>> adata[ref].categories[:2]
-    Index(['CD4 T cells', 'CD14+ Monocytes'], dtype='str')
+    >>> adata[ref].categories[:2]  # doctest: +ELLIPSIS
+    Index(['CD4 T cells', 'CD14+ Monocytes'], dtype=...)
 
 #.  introspectible:
 
