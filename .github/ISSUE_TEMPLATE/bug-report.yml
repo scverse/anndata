@@ -77,8 +77,8 @@ body:
 
         Alternatively, run this in your virtual environment:
 
-        ```python
-        session-info2 -f markdown
+        ```shell
+        session-info2 -f markdown  # do *not* use `uvx` for this
         ```
     validations:
       required: true
