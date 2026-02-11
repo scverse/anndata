@@ -91,7 +91,10 @@ class AdRef[I: Hashable]:
     """
 
     idx: I
-    """The index specifying the array."""
+    """The index into the complete array referenced by :attr:`acc` making it 1D or 2D.
+
+    E.g. a key of a `obs` or a :type:`Idx2D` into a 2D array.
+    """
 
     __match_args__: ClassVar = ("acc", "idx")
 
