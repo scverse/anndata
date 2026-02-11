@@ -11,8 +11,8 @@ For these purposes, they are
 
 #.  easy to create:
 
-    The central :attr:`A` object allows you to create
-    :class:`AdRef` objects that reference arrays
+    The central :attr:`A` object is an accessor for the whole :class:`~anndata.AnnData` object,
+    and allows you to create :class:`AdRef` objects that reference arrays
     along one or two dimensions of an :class:`~anndata.AnnData` object:
 
     >>> from anndata.acc import A
