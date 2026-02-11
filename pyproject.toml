@@ -71,7 +71,6 @@ doc = [
     "IPython",                             # For syntax highlighting in notebooks
     "myst-parser",
     "sphinx-design",
-    "holoviews",
     "anndata[dask]",
     "pandas>=3",
     # for unreleased changes
@@ -83,7 +82,6 @@ dev-doc = [
 ]
 test = [
     "fast-array-utils>=1.2.3",
-    "holoviews",
     "anndata[lazy]",
     { include-group = "test-min" },
 ]

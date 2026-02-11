@@ -25,9 +25,6 @@ if TYPE_CHECKING:
     from ..compat import XVariable
     from ..typing import InMemoryArray
 
-    if TYPE_CHECKING:  # for sphinx
-        from . import hv
-
 
 type Axes = Collection[Literal["obs", "var"]]
 
@@ -57,7 +54,6 @@ __all__ = [
     "MultiAcc",
     "MultiMapAcc",
     "RefAcc",
-    "hv",
 ]
 
 
@@ -734,17 +730,6 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."
             raise AssertionError(msg)
-
-
-def __getattr__(name: Literal["hv"]) -> Any:
-    __tracebackhide__ = True
-
-    if name == "hv":
-        import anndata.acc.hv
-
-        return anndata.acc.hv
-
-    raise AttributeError(name)
 
 
 if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
