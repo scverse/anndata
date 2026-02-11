@@ -529,6 +529,8 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     k: None = field(init=False, default=None)
     """: `A[:, :]` is equivalent to `A.layers[None][:, :]`."""  # weird “:” is load-bearing 🤷
 
+    ref_class: type[R] = AdRef
+
     layer_cls: type[LayerAcc] = LayerAcc
     """Class to use for `layers` accessors.
 
@@ -687,7 +689,7 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         return "A"
 
 
-A: AdAcc[AdRef] = AdAcc(ref_class=AdRef)
+A: AdAcc[AdRef] = AdAcc()
 r"""A global accessor to create :class:`AdRef`\ s."""
 
 

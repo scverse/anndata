@@ -195,4 +195,18 @@ There are three layers of extensibility:
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
 
-#.  .. attention:: TODO
+#.  subclass :class:`AdAcc` to add new accessors:
+
+    >>> from dataclasses import dataclass, field
+    >>> from anndata.acc import AdAcc, MetaAcc
+    >>>
+    >>> @dataclass(frozen=True)
+    ... class EHRAcc(AdAcc):
+    ...     tem: MetaAcc = field(init=False)
+    ...     def __post_init__(self) -> None:
+    ...         tem = MetaAcc("tem", ref_class=self.ref_class)
+    ...         object.__setattr__(self, "tem", tem)  # necessary because it’s frozen
+    >>>
+    >>> A = EHRAcc()
+    >>> A.tem["visit_id"]
+    A.tem['visit_id']
