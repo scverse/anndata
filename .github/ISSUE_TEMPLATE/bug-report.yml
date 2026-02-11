@@ -78,7 +78,7 @@ body:
         Alternatively, run this in your virtual environment:
 
         ```python
-        python -m session_info2 -f markdown
+        session-info2 -f markdown
         ```
     validations:
       required: true
