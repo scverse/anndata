@@ -80,6 +80,5 @@ body:
         ```python
         python -m session_info2 -f markdown
         ```
-      render: markdown
     validations:
       required: true
