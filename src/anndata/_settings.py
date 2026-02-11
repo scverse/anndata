@@ -374,9 +374,9 @@ class SettingsManager:
                     setattr(self, k, overrides.get(k))
             yield None
         finally:
-            # TODO: does the order need to be preserved when restoring?
-            for attr, value in restore.items():
-                setattr(self, attr, value)
+            for k in reversed(self._config.keys()):
+                if k in restore:
+                    setattr(self, k, restore.get(k))
 
     def __repr__(self) -> str:
         params = "".join(f"\t{k}={v!r},\n" for k, v in self._config.items())
