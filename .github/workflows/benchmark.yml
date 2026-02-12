@@ -46,6 +46,7 @@ jobs:
           environment-name: asv
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
+          # https://github.com/airspeed-velocity/asv/issues/1577
           create-args: >-
             python=${{ matrix.python }}
             asv>=0.6.4
