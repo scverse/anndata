@@ -146,7 +146,7 @@ def test_views(*, copy_on_write_X: bool):
             pytest.warns(FutureWarning, match=r"Automatic reshaping"),
         )
         if copy_on_write_X
-        else (nullcontext(),)
+        else ()
     )
     with ExitStack() as stack:
         for mgr in ctx_managers:
