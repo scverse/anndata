@@ -1783,7 +1783,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."
         )
-        warn(msg, UserWarning, stacklevel=2)
+        warn(msg, UserWarning)
     return AnnData(**{
         "layers": layers,
         axis_name: concat_annot,
