@@ -601,10 +601,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self._is_view:
             if settings.copy_on_write_X:
                 if np.isscalar(value) and value is not None:
-                    msg = "The ability to set with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
+                    msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
                     warnings.warn(msg, FutureWarning, stacklevel=2)
                     value = np.full(self.shape, fill_value=value)
                 if hasattr(value, "shape") and value.shape != self.shape:
+                    msg = "Automatic reshaping when setting X will be removed in the future."
+                    warnings.warn(msg, FutureWarning, stacklevel=2)
                     value = value.reshape(self.shape)
                 msg = "Setting element `.X` of view, initializing view as actual."
                 warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)

@@ -138,11 +138,19 @@ def test_views(*, copy_on_write_X: bool):
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
-    with (
-        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual")
+    ctx_managers = (
+        (
+            pytest.warns(
+                ImplicitModificationWarning, match=r"initializing view as actual"
+            ),
+            pytest.warns(FutureWarning, match=r"Automatic reshaping"),
+        )
         if copy_on_write_X
-        else nullcontext()
-    ):
+        else (nullcontext(),)
+    )
+    with ExitStack() as stack:
+        for mgr in ctx_managers:
+            stack.enter_context(mgr)
         adata[:2, 0].X = [0, 0]
 
     assert (
@@ -413,7 +421,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func, *, copy_on_write_X: bool)
                 ImplicitModificationWarning, match=r"initializing view as actual"
             ),
             pytest.warns(
-                FutureWarning, match=r"The ability to set with a scalar value"
+                FutureWarning, match=r"The ability to set X with a scalar value"
             ),
         )
         if copy_on_write_X
