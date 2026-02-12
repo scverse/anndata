@@ -153,7 +153,7 @@ def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     # know that the file is open again....
     assert adata.file.is_open
 
-    adata[:2, 0].X = [0, 0]
+    adata[:2, 0].X = np.array([[0], [0]])
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
@@ -356,7 +356,7 @@ def test_backed_modification_sparse(
     assert adata.isbacked
 
     # Does not modify backed store
-    adata[0, [0, 2]].X = 10
+    adata[0, [0, 2]].X = np.array([[10, 10]])
     np.testing.assert_equal(orig.toarray(), adata.X[...].toarray())
 
 

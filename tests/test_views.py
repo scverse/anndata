@@ -636,7 +636,7 @@ def test_view_of_view_modification(
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
     subset1 = adata[0, :]
     subset = subset1[:, 5:]
-    subset.X = np.ones(5)
+    subset.X = np.ones((1, 5))
     assert np.all(np.ones(5) == subset.X)
     assert np.all(asarray(subset1.X) == 0)
     assert np.all(asarray(adata.X) == 0)
