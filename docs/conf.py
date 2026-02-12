@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 _extension_dir = HERE / "extensions"
+acc_schema = HERE.parent / "src/anndata/acc/acc-schema-v1.json"
 sys.path[:0] = [str(_extension_dir)]
 
 
@@ -28,6 +29,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
+html_extra_path = [str(acc_schema)]
 source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 master_doc = "index"
 default_role = "literal"
@@ -74,7 +76,7 @@ nb_execution_mode = "off"
 autosummary_generate = True
 autodoc_member_order = "bysource"
 autodoc_mock_imports = ["torch"]
-# autodoc_default_flags = ['members']
+# autodoc_default_options = {}
 issues_github_path = "scverse/anndata"
 rtd_links_prefix = PurePosixPath("src")
 napoleon_google_docstring = False
@@ -152,6 +154,7 @@ qualname_overrides = {
     "anndata.typing.Index": "anndata.typing.Index",
     "anndata.typing.RWAble": "anndata.typing.RWAble",
     "anndata.typing.AxisStorable": "anndata.typing.AxisStorable",
+    "anndata.typing.InMemoryArray": "anndata.typing.InMemoryArray",
     #### h5py
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
@@ -174,7 +177,9 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
-    # Type variable for internal use
+    # this happens when a `type` or `class` is generic
+    ("py:class", "anndata.acc.GenericAlias"),
+    ("py:obj", "typing.R"),
     ("py:class", "_M"),
 ]
 

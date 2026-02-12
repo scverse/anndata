@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import BufferPrototype
 
+    from anndata.compat import CupyCSMatrix
+
     from .._types import _ArrayStorageType
     from ..typing import Index1D
 
@@ -945,7 +947,7 @@ def _(a):
 def _as_sparse_dask(
     a: NDArray | CSArray | CSMatrix | DaskArray,
     *,
-    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
 ) -> DaskArray:
     """Convert a to a sparse dask array, preserving sparse format and container (`cs{rc}_{array,matrix}`)."""
@@ -956,7 +958,7 @@ def _as_sparse_dask(
 def _(
     a: CSArray | CSMatrix | NDArray,
     *,
-    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
 ) -> DaskArray:
     import dask.array as da
@@ -969,7 +971,7 @@ def _(
 def _(
     a: DaskArray,
     *,
-    typ: type[CSArray | CSMatrix | CupyCSRMatrix],
+    typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
 ) -> DaskArray:
     assert chunks is None  # TODO: if needed we can add a .rechunk(chunks)
@@ -977,14 +979,14 @@ def _(
 
 
 def _as_sparse_dask_inner(
-    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix | CupyCSRMatrix]
+    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix | CupyCSMatrix]
 ) -> CSArray | CSMatrix:
     """Convert into a a sparse container that dask supports (or complain)."""
     if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
     if issubclass(typ, CupySparseMatrix):
-        a = as_cupy(a)  # can’t Cupy sparse constructors don’t accept numpy ndarrays
+        a = as_cupy(a)  # Cupy sparse constructors don’t accept numpy ndarrays
     return typ(a)
 
 
@@ -1078,7 +1080,7 @@ def resolve_cupy_type(val):
 
 
 @singledispatch
-def as_cupy(val, typ=None) -> CupyArray | CupyCSRMatrix | CupyCSCMatrix | DaskArray:
+def as_cupy(val, typ=None) -> CupyArray | CupyCSMatrix | DaskArray:
     """
     Rough conversion function
 
