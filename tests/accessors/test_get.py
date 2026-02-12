@@ -82,6 +82,7 @@ DASK_TYPES = [
     ),
 ]
 
+# (container, 1D type, 2D type)
 ND_TYPES = [
     pytest.param(np.asarray, np.ndarray, np.ndarray, id="np.ndarray"),
     # TODO: return 1D sparse array instead of 1D ndarray?
@@ -99,12 +100,13 @@ ND_TYPES = [
     ],
 ]
 
+# (container, column type, index type)
 DF_TYPES = [
-    pytest.param(pd.DataFrame, ExtensionArray, None, id="pd.DataFrame"),
+    pytest.param(pd.DataFrame, ExtensionArray, ExtensionArray, id="pd.DataFrame"),
     pytest.param(
         lambda df: XDataset.from_dataframe(df),  # noqa: PLW0108
         XVariable,
-        None,
+        ExtensionArray,
         marks=pytest.mark.skipif(
             not find_spec("xarray"), reason="xarray not installed."
         ),
@@ -176,16 +178,13 @@ def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:
 def get_test_params(
     adata: AnnData, request: pytest.FixtureRequest
 ) -> tuple[AnnData, AdRef, type[InMemoryArray], InMemoryArray]:
-    ad_ref, ad_expected, convert_array, type_expected_1d, type_expected_2d, convert = (
-        request.param
-    )
+    ad_ref, ad_expected, convert_array, *types_expected, convert = request.param
     convert(adata, convert_array)
-    return (
-        adata,
-        ad_ref,
-        type_expected_1d if len(ad_ref.dims) == 1 else type_expected_2d,
-        _expected2np(ad_expected(adata), ad_ref),
-    )
+    if convert is convert_ndarrays:  # (1D type, 2D type)
+        type_expected = types_expected[len(ad_ref.dims) > 1]
+    else:  # (column type, index type)
+        type_expected = types_expected[ad_ref.idx is None]
+    return adata, ad_ref, type_expected, _expected2np(ad_expected(adata), ad_ref)
 
 
 def test_get_values(
