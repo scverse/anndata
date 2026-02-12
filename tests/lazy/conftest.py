@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -11,7 +10,6 @@ from scipy import sparse
 
 import anndata as ad
 from anndata import AnnData
-from anndata._types import AnnDataElem
 from anndata.experimental import read_lazy
 from anndata.tests.helpers import (
     DEFAULT_COL_TYPES,
@@ -24,11 +22,8 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
     from pathlib import Path
     from typing import Literal
-
-ANNDATA_ELEMS = typing.get_args(AnnDataElem)
 
 
 @pytest.fixture(
@@ -93,8 +88,8 @@ def adata_remote_orig_with_path(
     orig = gen_adata(
         (100, 110),
         mtx_format,
-        obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
-        var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype),
+        obs_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
+        var_dtypes=(*DEFAULT_COL_TYPES, pd.StringDtype()),
         obsm_types=(*DEFAULT_KEY_TYPES, AwkArray),
         varm_types=(*DEFAULT_KEY_TYPES, AwkArray),
     )
@@ -203,21 +198,26 @@ def stores_for_concat(
     adatas_paths_var_indices_for_concatenation,
 ) -> list[AccessTrackingStore]:
     _, paths, _ = adatas_paths_var_indices_for_concatenation
-    return [AccessTrackingStore(path) for path in paths]
+    return [AccessTrackingStore(path, read_only=True) for path in paths]
 
 
 @pytest.fixture
 def lazy_adatas_for_concat(
-    stores_for_concat,
+    stores_for_concat: list[AccessTrackingStore], *, load_annotation_index: bool
 ) -> list[AnnData]:
-    return [read_lazy(store) for store in stores_for_concat]
+    return [
+        read_lazy(store, load_annotation_index=load_annotation_index)
+        for store in stores_for_concat
+    ]
 
 
 @pytest.fixture
 def adata_remote_with_store_tall_skinny(
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> tuple[AnnData, AccessTrackingStore]:
-    store = AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+    store = AccessTrackingStore(
+        adata_remote_with_store_tall_skinny_path, read_only=True
+    )
     remote = read_lazy(store)
     return remote, store
 
@@ -226,7 +226,7 @@ def adata_remote_with_store_tall_skinny(
 def remote_store_tall_skinny(
     adata_remote_with_store_tall_skinny_path: Path,
 ) -> AccessTrackingStore:
-    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path)
+    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path, read_only=True)
 
 
 @pytest.fixture
@@ -235,26 +235,3 @@ def adata_remote_tall_skinny(
 ) -> AnnData:
     remote = read_lazy(remote_store_tall_skinny)
     return remote
-
-
-def get_key_trackers_for_columns_on_axis(
-    adata: AnnData, axis: Literal["obs", "var"]
-) -> Generator[str, None, None]:
-    """Generate keys for tracking, using `codes` from categorical columns instead of the column name
-
-    Parameters
-    ----------
-    adata
-        Object to get keys from
-    axis
-        Axis to get keys from
-
-    Yields
-    ------
-    Keys for tracking
-    """
-    for col in getattr(adata, axis).columns:
-        yield f"{axis}/{col}" if "cat" not in col else f"{axis}/{col}/codes"
-
-
-ANNDATA_ELEMS = typing.get_args(AnnDataElem)

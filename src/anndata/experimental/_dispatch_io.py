@@ -8,18 +8,15 @@ if TYPE_CHECKING:
     from typing import Any
 
     from anndata._types import (
-        GroupStorageType,
         ReadCallback,
         StorageType,
         WriteCallback,
+        _GroupStorageType,
     )
     from anndata.typing import RWAble
 
 
-def read_dispatched(
-    elem: StorageType,
-    callback: ReadCallback,
-) -> RWAble:
+def read_dispatched(elem: StorageType, callback: ReadCallback) -> RWAble:
     """
     Read elem, calling the callback at each sub-element.
 
@@ -43,7 +40,7 @@ def read_dispatched(
 
 
 def write_dispatched(
-    store: GroupStorageType,
+    store: _GroupStorageType,
     key: str,
     elem: RWAble,
     callback: WriteCallback,

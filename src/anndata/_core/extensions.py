@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
-from typing import TYPE_CHECKING, Generic, TypeVar, get_type_hints, overload
-from warnings import warn
+from typing import TYPE_CHECKING, get_type_hints, overload
 
 from ..types import ExtensionNamespace
+from ..utils import warn
 from .anndata import AnnData
 
 if TYPE_CHECKING:
@@ -18,49 +17,12 @@ if TYPE_CHECKING:
 __all__ = ["register_anndata_namespace"]
 
 
-def find_stacklevel() -> int:
-    """
-    Find the first place in the stack that is not inside AnnData.
-
-    Taken from:
-    https://github.com/pola-rs/polars/blob/main/py-polars/polars/_utils/various.py#L447
-    """
-
-    pkg_dir = str(Path(__file__).parent.parent)
-
-    # https://stackoverflow.com/questions/17407119/python-inspect-stack-is-slow
-    frame = inspect.currentframe()
-    n = 0
-    try:
-        while frame:
-            fname = inspect.getfile(frame)
-            if fname.startswith(pkg_dir) or (
-                (qualname := getattr(frame.f_code, "co_qualname", None))
-                # ignore @singledispatch wrappers
-                and qualname.startswith("singledispatch.")
-            ):
-                frame = frame.f_back
-                n += 1
-            else:
-                break
-    finally:
-        # https://docs.python.org/3/library/inspect.html
-        # > Though the cycle detector will catch these, destruction of the frames
-        # > (and local variables) can be made deterministic by removing the cycle
-        # > in a finally clause.
-        del frame
-    return n
-
-
 # Reserved namespaces include accessors built into AnnData (currently there are none)
 # and all current attributes of AnnData
 _reserved_namespaces: set[str] = set(dir(AnnData))
 
-NameSpT = TypeVar("NameSpT", bound=ExtensionNamespace)
-T = TypeVar("T")
 
-
-class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
+class AccessorNameSpace[NameSpT: ExtensionNamespace](ExtensionNamespace):
     """Establish property-like namespace object for user-defined functionality."""
 
     def __init__(self, name: str, namespace: type[NameSpT]) -> None:
@@ -68,12 +30,12 @@ class AccessorNameSpace(ExtensionNamespace, Generic[NameSpT]):
         self._ns = namespace
 
     @overload
-    def __get__(self, instance: None, cls: type[T]) -> type[NameSpT]: ...
+    def __get__[T](self, instance: None, cls: type[T]) -> type[NameSpT]: ...
 
     @overload
-    def __get__(self, instance: T, cls: type[T]) -> NameSpT: ...
+    def __get__[T](self, instance: T, cls: type[T]) -> NameSpT: ...
 
-    def __get__(self, instance: T | None, cls: type[T]) -> NameSpT | type[NameSpT]:
+    def __get__[T](self, instance: T | None, cls: type[T]) -> NameSpT | type[NameSpT]:
         if instance is None:
             return self._ns
 
@@ -159,7 +121,7 @@ def _check_namespace_signature(ns_class: type) -> None:
             raise TypeError(msg)
 
 
-def _create_namespace(
+def _create_namespace[NameSpT: ExtensionNamespace](
     name: str, cls: type[AnnData]
 ) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Register custom namespace against the underlying AnnData class."""
@@ -173,7 +135,6 @@ def _create_namespace(
             warn(
                 f"Overriding existing custom namespace {name!r} (on {cls.__name__!r})",
                 UserWarning,
-                stacklevel=find_stacklevel(),
             )
         setattr(cls, name, AccessorNameSpace(name, ns_class))
         cls._accessors.add(name)
@@ -182,7 +143,7 @@ def _create_namespace(
     return namespace
 
 
-def register_anndata_namespace(
+def register_anndata_namespace[NameSpT: ExtensionNamespace](
     name: str,
 ) -> Callable[[type[NameSpT]], type[NameSpT]]:
     """Decorator for registering custom functionality with an :class:`~anndata.AnnData` object.

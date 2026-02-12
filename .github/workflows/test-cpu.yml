@@ -21,11 +21,11 @@ jobs:
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           filter: blob:none
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
       - id: get-envs
@@ -44,11 +44,17 @@ jobs:
       fail-fast: false
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
-        io_mark: ["zarr_io", "not zarr_io"]
-    env:  # environment variable for use in codecov’s env_vars tagging
+        io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
+        exclude:
+          - { env: { name: "hatch-test.array_api" }, io_mark: "dask_distributed" }
+
+    permissions:
+      id-token: write  # for codecov OIDC
+    env:  # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
+      IO_MARK: ${{ matrix.io_mark }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           filter: blob:none
@@ -57,44 +63,51 @@ jobs:
         run: sudo apt install -y hdf5-tools
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           python-version: ${{ matrix.env.python }}
 
       - name: Install dependencies
-        run: uvx hatch -v env create ${{ matrix.env.name }}
+        run: |
+          uv tool install hatch
+          hatch -v env create ${{ matrix.env.name }}
 
       - name: Run tests
-        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --cov --cov-report=xml --junitxml=test-data/test-results.xml -m "${{ matrix.io_mark }}" ${{ matrix.env.args }}
+        run: |
+          hatch run ${{ matrix.env.name }}:run-cov -v --color=yes ${{ matrix.io_mark != 'dask_distributed' && '-n auto' || '' }} --junitxml=test-data/test-results.xml -m "${{ matrix.env.name == 'hatch-test.array_api' && 'array_api and ' || '' }}${{ matrix.io_mark }}" ${{ matrix.env.args }}
+          hatch run ${{ matrix.env.name }}:cov-combine
+          hatch run ${{ matrix.env.name }}:coverage xml
+          hatch run ${{ matrix.env.name }}:cov-report
 
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
+          report_type: test_results
+          env_vars: ENV_NAME,IO_MARK
+          files: test-data/test-results.xml
+          use_oidc: true
           fail_ci_if_error: true
-          file: test-data/test-results.xml
 
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          env_vars: ENV_NAME
-          fail_ci_if_error: true
+          env_vars: ENV_NAME,IO_MARK
           files: test-data/coverage.xml
+          use_oidc: true
+          fail_ci_if_error: true
 
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           filter: blob:none
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
           cache: pip
@@ -111,11 +124,6 @@ jobs:
         run: |
           python -m build --sdist --wheel .
           twine check dist/*
-
-      - name: Check runtime version
-        run: |
-          pip install dist/*.whl
-          python -c 'import anndata; print(anndata.__version__)'
 
   check:
     if: always()

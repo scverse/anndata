@@ -32,7 +32,7 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           # no blob filter so asv can checkout other commits
@@ -46,11 +46,11 @@ jobs:
           environment-name: asv
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
-          # libmambapy upper bound: https://github.com/airspeed-velocity/asv/issues/1438
+          # https://github.com/airspeed-velocity/asv/issues/1577
           create-args: >-
             python=${{ matrix.python }}
-            asv
-            libmambapy<2
+            asv>=0.6.4
+            py_rattler<0.22
             conda-build
 
       - name: Cache datasets

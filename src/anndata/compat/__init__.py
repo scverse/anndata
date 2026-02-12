@@ -1,24 +1,28 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping, Sequence
-from functools import cache, partial, singledispatch
+from collections.abc import Mapping
+from enum import Enum, auto
+from functools import partial, singledispatch
+from importlib.metadata import version
 from importlib.util import find_spec
-from types import EllipsisType
-from typing import TYPE_CHECKING, TypeVar
-from warnings import warn
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
 import pandas as pd
-import scipy
-from numpy.typing import NDArray
+import scipy.sparse
+from legacy_api_wrap import legacy_api  # noqa: TID251
 from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
+from anndata.types import SupportsArrayApi
+
+from .._warnings import warn
+
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Self, TypeAlias, TypeGuard
 
 
 #############################
@@ -26,64 +30,102 @@ if TYPE_CHECKING:
 #############################
 
 
-CSMatrix = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix
-CSArray = scipy.sparse.csr_array | scipy.sparse.csc_array
+class IndexManager:
+    """Manages index arrays across multiple devices for efficient subsetting.
+
+    This class stores index arrays (for subsetting AnnData views) on different
+    devices and can produce the appropriate index array when subsetting arrays
+    that live on those devices. For numpy/pandas/sparse operations, use
+    ``np.asarray(index_manager)`` or let the ``__array__`` method be invoked.
+    """
+
+    _manager: dict[tuple[int, int], SupportsArrayApi]
+
+    def __init__(self, *, device: tuple[int, int], arr: SupportsArrayApi) -> None:
+        self._manager = {device: arr}
+
+    @classmethod
+    def from_array(cls, arr: SupportsArrayApi) -> Self:
+        """Create an IndexManager from an array-api compatible array."""
+        return cls(device=arr.__dlpack_device__(), arr=arr)
+
+    def __array__(
+        self,
+        dtype: np.dtype | None = None,
+        copy: bool | None = None,  # noqa: FBT001
+    ) -> np.ndarray:
+        """Return numpy array for compatibility with numpy/pandas/sparse operations."""
+        if (1, 0) not in self._manager:
+            # (1, 0) is the default python interpreter key from __dlpack_device__ i.e., where numpy arrays live.
+            # As of 2023 dlpack, it must be possible for a library to export to this, see: https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html#array_api.array.__dlpack__
+            # However, https://github.com/numpy/numpy/issues/20742 means we can't roundtrip jax arrays using dlpack so better to just let numpy do its thing in asarray.
+            self.add_array(np.asarray(self.get_default()))
+        res = np.from_dlpack(self._manager[(1, 0)])
+        return res.copy() if copy else res
+
+    def get_default(self) -> SupportsArrayApi:
+        """Returns the first key added i.e., a no-copy index, useful for getting an array-api compatible index on some device."""
+        return self._manager[next(iter(self._manager))]
+
+    def add_array(self, arr: SupportsArrayApi) -> None:
+        """Add an index array for a specific device."""
+        self._manager[arr.__dlpack_device__()] = arr
+
+    def get_for_array(self, arr: SupportsArrayApi) -> SupportsArrayApi:
+        """Get an index array on the same device as the input array.
+
+        If an index doesn't exist for the array's device, it will be
+        created by transferring from an existing device if possible. If an index
+        exists but has a different array-api implementation, it will
+        be converted to match the input array's array-api if possible.
+        Otherwise, the input is cached and returned.
+        """
+        device = arr.__dlpack_device__()
+        xp = arr.__array_namespace__()
+        src_arr = self._manager[next(iter(self._manager))]
+
+        if device in self._manager:
+            existing = self._manager[device]
+            existing_xp = existing.__array_namespace__()
+            if existing_xp is xp:
+                return existing
+            return xp.from_dlpack(existing)
+        self.add_array(xp.from_dlpack(src_arr, copy=True))
+        return self._manager[device]
 
 
-class Empty:
-    pass
+CSMatrix: TypeAlias = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix  # noqa: UP040
+CSArray: TypeAlias = scipy.sparse.csr_array | scipy.sparse.csc_array  # noqa: UP040
 
 
-Index1DNorm = slice | NDArray[np.bool_] | NDArray[np.integer]
-# TODO: pd.Index[???]
-Index1D = (
-    # 0D index
-    int
-    | str
-    | np.int64
-    # normalized 1D idex
-    | Index1DNorm
-    # different containers for mask, obs/varnames, or numerical index
-    | Sequence[int]
-    | Sequence[str]
-    | Sequence[bool]
-    | pd.Series  # bool, int, str
-    | pd.Index
-    | NDArray[np.str_]
-    | np.matrix  # bool
-    | CSMatrix  # bool
-    | CSArray  # bool
-)
-IndexRest = Index1D | EllipsisType
-Index = (
-    IndexRest
-    | tuple[Index1D, IndexRest]
-    | tuple[IndexRest, Index1D]
-    | tuple[Index1D, Index1D, EllipsisType]
-    | tuple[EllipsisType, Index1D, Index1D]
-    | tuple[Index1D, EllipsisType, Index1D]
-    | CSMatrix
-    | CSArray
-)
+class Empty(Enum):
+    TOKEN = auto()
+
+
 H5Group = h5py.Group
 H5Array = h5py.Dataset
 H5File = h5py.File
+
+# h5py recommends using .astype("T") over .asstr() when using numpy ≥2
+if TYPE_CHECKING:
+    from h5py._hl.dataset import AsTypeView as H5AsTypeView
+else:
+    try:
+        try:
+            from h5py._hl.dataset import AsTypeView as H5AsTypeView
+        except ImportError:
+            # h5py 3.11 uses AstypeWrapper (lowercase 't')
+            from h5py._hl.dataset import AstypeWrapper as H5AsTypeView
+    except ImportError:  # pragma: no cover
+        warn("AsTypeView changed import location", DeprecationWarning)
+        H5AsTypeView = type(
+            h5py.File.in_memory().create_dataset("x", shape=(), dtype="S1").astype("U1")
+        )
 
 
 #############################
 # Optional deps
 #############################
-@cache
-def is_zarr_v2() -> bool:
-    import zarr
-    from packaging.version import Version
-
-    return Version(zarr.__version__) < Version("3.0.0")
-
-
-if is_zarr_v2():
-    msg = "anndata will no longer support zarr v2 in the near future. Please prepare to upgrade to zarr>=3."
-    warn(msg, DeprecationWarning, stacklevel=2)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -107,17 +149,10 @@ else:
             return "mock zappy.base.ZappyArray"
 
 
-if TYPE_CHECKING:
-    # type checkers are confused and can only see …core.Array
-    from dask.array.core import Array as DaskArray
-elif find_spec("dask"):
+if TYPE_CHECKING or find_spec("dask"):
     from dask.array import Array as DaskArray
 else:
-
-    class DaskArray:
-        @staticmethod
-        def __repr__():
-            return "mock dask.array.core.Array"
+    DaskArray = type("Array", (), dict(__module__="dask.array"))
 
 
 if find_spec("xarray") or TYPE_CHECKING:
@@ -129,26 +164,13 @@ if find_spec("xarray") or TYPE_CHECKING:
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 else:
     xarray = None
-
-    class XDataArray:
-        def __repr__(self) -> str:
-            return "mock DataArray"
-
-    class XDataset:
-        def __repr__(self) -> str:
-            return "mock Dataset"
-
-    class XVariable:
-        def __repr__(self) -> str:
-            return "mock Variable"
-
-    class XZarrArrayWrapper:
-        def __repr__(self) -> str:
-            return "mock ZarrArrayWrapper"
-
-    class XBackendArray:
-        def __repr__(self) -> str:
-            return "mock BackendArray"
+    XDataArray = type("DataArray", (), dict(__module__="xarray"))
+    XDataset = type("Dataset", (), dict(__module__="xarray"))
+    XVariable = type("Variable", (), dict(__module__="xarray"))
+    XBackendArray = type("BackendArray", (), dict(__module__="xarray.backends"))
+    XZarrArrayWrapper = type(
+        "ZarrArrayWrapper", (), dict(__module__="xarray.backends.zarr")
+    )
 
 
 # https://github.com/scverse/anndata/issues/1749
@@ -174,36 +196,15 @@ if is_cupy_importable() or TYPE_CHECKING:
         da.register_chunk_type(CupyCSRMatrix)
         da.register_chunk_type(CupyCSCMatrix)
 else:
-
-    class CupySparseMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.spmatrix"
-
-    class CupyCSRMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csr_matrix"
-
-    class CupyCSCMatrix:
-        @staticmethod
-        def __repr__():
-            return "mock cupyx.scipy.sparse.csc_matrix"
-
-    class CupyArray:
-        @staticmethod
-        def __repr__():
-            return "mock cupy.ndarray"
+    CupyArray = type("ndarray", (), dict(__module__="cupy"))
+    CupySparseMatrix = type("spmatrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSRMatrix = type("csr_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
-if find_spec("legacy_api_wrap") or TYPE_CHECKING:
-    from legacy_api_wrap import legacy_api  # noqa: TID251
+CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
 
-    old_positionals = partial(legacy_api, category=FutureWarning)
-else:
-
-    def old_positionals(*old_positionals):
-        return lambda func: func
+old_positionals = partial(legacy_api, category=FutureWarning)
 
 
 #############################
@@ -211,25 +212,84 @@ else:
 #############################
 
 
-NULLABLE_NUMPY_STRING_TYPE = (
-    np.dtype("O")
-    if Version(np.__version__) < Version("2")
-    else np.dtypes.StringDType(na_object=pd.NA)
-)
+PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
+
+
+PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
+    pd.arrays.StringArray,
+    pd.arrays.ArrowStringArray,
+]
+# these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
+try:
+    from pandas.core.arrays.string_ import StringArrayNumpySemantics
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [StringArrayNumpySemantics]
+try:
+    from pandas.core.arrays.string_arrow import ArrowStringArrayNumpySemantics
+except ImportError:
+    pass
+else:
+    PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
+
+
+@overload
+def pandas_as_str(a: pd.Index[Any]) -> pd.Index[str]: ...
+@overload
+def pandas_as_str(a: pd.Series[Any]) -> pd.Series[str]: ...
+
+
+def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
+    """Convert to fitting dtype, maintaining NA semantics if possible.
+
+    This is `"str"` when `pd.options.future.infer_string` is `True` (e.g. in Pandas 3+), and `"object"` otherwise.
+    """
+    if a.array.dtype == "string":  # any `pd.StringDtype`
+        return a
+
+    if PANDAS_SUPPORTS_NA_VALUE:
+        dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
+    elif a.array.dtype.na_value is pd.NA:
+        dtype = pd.StringDtype()  # NA semantics
+    elif a.array.dtype.na_value is np.nan and find_spec("pyarrow"):  # noqa: PLW0177
+        # on pandas 2.2, this is the only way to get `np.nan` semantics
+        dtype = pd.StringDtype("pyarrow_numpy")
+    else:
+        msg = (
+            f"Converting an array with `dtype.na_value={a.array.dtype.na_value}` to a string array requires pyarrow or pandas>=2.3. "
+            "Converting to `pd.NA` semantics instead."
+        )
+        warn(msg, UserWarning)
+        dtype = pd.StringDtype()  # NA semantics
+    a = a.astype(dtype)
+    return a if pd.options.future.infer_string else a.astype(object)
+
+
+@overload
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
+) -> V: ...
+
+
+@overload
+def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
 
 
 @singledispatch
-def _read_attr(attrs: Mapping, name: str, default: Any | None = Empty):
-    if default is Empty:
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
+) -> V | T:
+    if default is Empty.TOKEN:
         return attrs[name]
     else:
         return attrs.get(name, default=default)
 
 
 @_read_attr.register(h5py.AttributeManager)
-def _read_attr_hdf5(
-    attrs: h5py.AttributeManager, name: str, default: Any | None = Empty
-):
+def _read_attr_hdf5[T](
+    attrs: h5py.AttributeManager, name: str, default: T | Empty = Empty.TOKEN
+) -> str | T:
     """
     Read an HDF5 attribute and perform all necessary conversions.
 
@@ -238,7 +298,7 @@ def _read_attr_hdf5(
     For example Julia's HDF5.jl writes string attributes as fixed-size strings, which
     are read as bytes by h5py.
     """
-    if name not in attrs and default is not Empty:
+    if name not in attrs and default is not Empty.TOKEN:
         return default
     attr = attrs[name]
     attr_id = attrs.get_id(name)
@@ -325,12 +385,9 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-Group_T = TypeVar("Group_T", bound=ZarrGroup | h5py.Group)
-
-
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe(
+def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
     f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
 ) -> Group_T:
     if len(df.columns) > 5_000 and isinstance(f, H5Group):
@@ -371,10 +428,8 @@ def _clean_uns(adata: AnnData):  # noqa: F821
         del adata.uns[cats_name]
 
 
-def _move_adj_mtx(d):
-    """
-    Read-time fix for moving adjacency matrices from uns to obsp
-    """
+def _move_adj_mtx(d) -> None:
+    """Read-time fix for moving adjacency matrices from uns to obsp."""
     n = d.get("uns", {}).get("neighbors", {})
     obsp = d.setdefault("obsp", {})
 
@@ -388,8 +443,7 @@ def _move_adj_mtx(d):
                 f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
                 "This is where adjacency matrices should go now."
             )
-            # 5: caller -> 4: legacy_api_wrap -> 3: `AnnData.__init__` -> 2: `_init_as_actual` → 1: here
-            warn(msg, FutureWarning, stacklevel=5)
+            warn(msg, FutureWarning)
             obsp[k] = n.pop(k)
 
 
@@ -430,9 +484,5 @@ def _safe_transpose(x):
         return x.T
 
 
-def _map_cat_to_str(cat: pd.Categorical) -> pd.Categorical:
-    if Version(pd.__version__) >= Version("2.1"):
-        # Argument added in pandas 2.1
-        return cat.map(str, na_action="ignore")
-    else:
-        return cat.map(str)
+def has_xp(x) -> TypeGuard[SupportsArrayApi]:
+    return isinstance(x, SupportsArrayApi)

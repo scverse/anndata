@@ -52,9 +52,11 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install yq
+      - name: Install yq # https://cirun.slack.com/archives/C09SNDRB3A8/p1766512487317849?thread_ts=1766512112.938459&cid=C09SNDRB3A8
+        # https://github.com/mikefarah/yq/issues/2592 forces version pin
         run: |
-          sudo snap install yq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.49.2/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Extract max Python version from classifiers
         run: |
@@ -63,21 +65,25 @@ jobs:
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
         with:
           enable-cache: true
-          python-version: ${{ env.max_python_version }}
+          # Any Cuda 14+ will support Python 3.14: https://github.com/cupy/cupy/issues/9346
+          python-version: '3.13'  # ${{ env.max_python_version }}
 
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
+          uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
 
-      - name: Run test
-        run: uv run coverage run -m pytest -m gpu -n auto --cov --cov-report=xml
+      - name: Run tests
+        run: |
+          uv run coverage run -m pytest -m "array_api or gpu" -n auto
+          uv run coverage combine
+          uv run coverage xml
 
       - uses: codecov/codecov-action@v5
         with:

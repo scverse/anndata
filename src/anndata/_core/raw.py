@@ -17,7 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
-    from ..compat import CSMatrix, Index, Index1DNorm
+    from ..compat import CSMatrix
+    from ..typing import Index, _Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -173,7 +174,7 @@ class Raw:
 
     def _normalize_indices(
         self, packed_index: Index
-    ) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
+    ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
             packed_index = packed_index.values

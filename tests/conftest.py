@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from functools import partial
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
-import dask
 import joblib
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
-from anndata.compat import is_zarr_v2
-
-if Version(dask.__version__) < Version("2024.8.0"):
+if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from types import EllipsisType
+    from typing import Literal
 
 
 @pytest.fixture
@@ -34,19 +34,12 @@ def backing_h5ad(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(
-    params=[
-        ("h5ad", None),
-        ("zarr", 2),
-        pytest.param(
-            ("zarr", 3),
-            marks=pytest.mark.skipif(
-                is_zarr_v2(), reason="zarr v3 file format not supported with v2 package"
-            ),
-        ),
-    ],
+    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
     ids=["h5ad", "zarr2", "zarr3"],
 )
-def diskfmt(request):
+def diskfmt(
+    request: pytest.FixtureRequest,
+) -> Generator[Literal["h5ad", "zarr"], None, None]:
     if (fmt := request.param[0]) == "h5ad":
         yield fmt
     else:
@@ -55,7 +48,9 @@ def diskfmt(request):
 
 
 @pytest.fixture
-def diskfmt2(diskfmt):
+def diskfmt2(
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Generator[Literal["zarr", "h5ad"], None, None]:
     if diskfmt == "h5ad":
         with ad.settings.override(zarr_write_format=2):
             yield "zarr"
@@ -118,11 +113,14 @@ def local_cluster_addr(
     # Adapted from https://pytest-xdist.readthedocs.io/en/latest/how-to.html#making-session-scoped-fixtures-execute-only-once
     import dask.distributed as dd
 
-    def make_cluster() -> dd.LocalCluster:
-        return dd.LocalCluster(n_workers=1, threads_per_worker=1)
+    def make_cluster(worker_id: str) -> dd.LocalCluster:
+        # If we're not using multiple pytest-xdist workers, let the cluster have multiple workers.
+        return dd.LocalCluster(
+            n_workers=1 if worker_id != "master" else 2, threads_per_worker=1
+        )
 
     if worker_id == "master":
-        with make_cluster() as cluster:
+        with make_cluster(worker_id) as cluster:
             yield cluster.scheduler_address
             return
 
@@ -138,7 +136,7 @@ def local_cluster_addr(
         yield address
         return
 
-    with make_cluster() as cluster:
+    with make_cluster(worker_id) as cluster:
         fn.write_text(cluster.scheduler_address)
         lock.release()
         yield cluster.scheduler_address

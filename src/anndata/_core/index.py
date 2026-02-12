@@ -1,91 +1,185 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from functools import singledispatch
+from enum import Enum
+from functools import singledispatch, wraps
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
 
 import h5py
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from ..compat import AwkArray, CSArray, CSMatrix, DaskArray, XDataArray
+from anndata.types import SupportsArrayApi
+
+from ..compat import (
+    AwkArray,
+    CSArray,
+    CSMatrix,
+    DaskArray,
+    IndexManager,
+    XDataArray,
+    has_xp,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from ..compat import Index, Index1D, Index1DNorm
+    from collections.abc import Callable
+
+    from numpy.typing import NDArray
+
+    from anndata.typing import Index1D
+
+    from ..typing import Index, _Index1DNorm
+
+
+__all__ = [
+    "_ensure_numpy_idx",
+    "_fix_slice_bounds",
+    "_normalize_indices",
+    "_safe_fancy_index_h5py",
+    "_subset",
+    "array_api_ix",
+    "get_vector",
+    "make_slice",
+    "unpack_index",
+]
 
 
 def _normalize_indices(
-    index: Index | None, names0: pd.Index, names1: pd.Index
-) -> tuple[Index1DNorm | int | np.integer, Index1DNorm | int | np.integer]:
+    index: Index[IndexManager], names0: pd.Index, names1: pd.Index
+) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
-    # deal with pd.Series
-    if isinstance(index, pd.Series):
-        index = index.values
-    if isinstance(index, tuple):
-        # TODO: The series should probably be aligned first
-        index = tuple(i.values if isinstance(i, pd.Series) else i for i in index)
     ax0, ax1 = unpack_index(index)
     ax0 = _normalize_index(ax0, names0)
     ax1 = _normalize_index(ax1, names1)
     return ax0, ax1
 
 
-def _normalize_index(  # noqa: PLR0911, PLR0912
-    indexer: Index1D, index: pd.Index
-) -> Index1DNorm | int | np.integer:
-    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
-    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
-        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
-        raise TypeError(msg)
+ArrayApiDtype = Literal["real floating", "signed integer", "unsigned integer", "bool"]
+DtypeKind = Literal["f", "i", "u", "b"]
 
-    # the following is insanely slow for sequences,
-    # we replaced it using pandas below
+
+class _XrDtV(NamedTuple):
+    type: type[np.generic]
+    array_api_str: ArrayApiDtype
+    kind: DtypeKind
+
+    def __call__(
+        self,
+        indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+    ) -> bool:
+        return (
+            has_xp(indexer)
+            and indexer.__array_namespace__().isdtype(indexer.dtype, self.array_api_str)
+        ) or (
+            isinstance(indexer, pd.api.extensions.ExtensionArray)
+            and (
+                issubclass(indexer.dtype.type, self.type)
+                or indexer.dtype.kind == self.kind
+            )
+        )
+
+
+class XArrayDtype(_XrDtV, Enum):
+    Float = (np.floating, "real floating", "f")
+    SignedInt = (np.signedinteger, "signed integer", "i")
+    UnsignedInt = (np.unsignedinteger, "unsigned integer", "u")
+    Bool = (np.bool, "bool", "b")
+
+
+@singledispatch
+def _gen_anndata_index(
+    indexer: Index1D, index: pd.Index
+) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
+    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
+    raise IndexError(msg)
+
+
+@_gen_anndata_index.register(slice)
+def _from_slice(indexer: slice, index: pd.Index) -> slice:
     def name_idx(i):
         if isinstance(i, str):
             i = index.get_loc(i)
         return i
 
-    if isinstance(indexer, slice):
-        start = name_idx(indexer.start)
-        stop = name_idx(indexer.stop)
-        # string slices can only be inclusive, so +1 in that case
-        if isinstance(indexer.stop, str):
-            stop = None if stop is None else stop + 1
-        step = indexer.step
-        return slice(start, stop, step)
-    elif isinstance(indexer, np.integer | int):
-        return indexer
-    elif isinstance(indexer, str):
-        return index.get_loc(indexer)  # int
-    elif isinstance(
-        indexer, Sequence | np.ndarray | pd.Index | CSMatrix | np.matrix | CSArray
-    ):
-        if hasattr(indexer, "shape") and (
-            (indexer.shape == (index.shape[0], 1))
-            or (indexer.shape == (1, index.shape[0]))
-        ):
-            if isinstance(indexer, CSMatrix | CSArray):
-                indexer = indexer.toarray()
-            indexer = np.ravel(indexer)
-        if not isinstance(indexer, np.ndarray | pd.Index):
-            indexer = np.array(indexer)
-            if len(indexer) == 0:
-                indexer = indexer.astype(int)
-        if isinstance(indexer, np.ndarray) and np.issubdtype(
-            indexer.dtype, np.floating
-        ):
-            indexer_int = indexer.astype(int)
-            if np.all((indexer - indexer_int) != 0):
+    start = name_idx(indexer.start)
+    stop = name_idx(indexer.stop)
+    # string slices can only be inclusive, so +1 in that case
+    if isinstance(indexer.stop, str):
+        stop = None if stop is None else stop + 1
+    step = indexer.step
+    return slice(start, stop, step)
+
+
+@_gen_anndata_index.register(np.integer | int)
+def _from_int(indexer: np.integer | int, index: pd.Index) -> np.integer | int:
+    return indexer
+
+
+@_gen_anndata_index.register(str)
+def _from_str(indexer: str, index: pd.Index) -> int:
+    return index.get_loc(indexer)
+
+
+@_gen_anndata_index.register(XDataArray)
+def _from_xarray(indexer: XDataArray, index: pd.Index) -> np.ndarray:
+    if isinstance(indexer.data, DaskArray):
+        return indexer.data.compute()
+    return indexer.data
+
+
+@_gen_anndata_index.register(CSMatrix | CSArray)
+def _from_sparse(
+    indexer: CSMatrix | CSArray,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    indexer = indexer.toarray()
+    return _gen_anndata_index(indexer, index)
+
+
+@_gen_anndata_index.register(Sequence)
+def _from_sequence(
+    indexer: Sequence,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    indexer: np.ndarray = np.array(indexer)
+    if len(indexer) == 0:
+        indexer = indexer.astype(int)
+    return _gen_anndata_index(indexer, index)
+
+
+@_gen_anndata_index.register(
+    SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix
+)
+def _from_array(
+    indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+    index: pd.Index,
+) -> SupportsArrayApi:
+    # convert to the 1D if it's accidentally 2D column/row vector
+    # convert sparse into dense arrays if needed
+    use_xp = has_xp(indexer)
+    is_pandas = isinstance(indexer, pd.api.extensions.ExtensionArray)
+    xp = indexer.__array_namespace__() if use_xp else np
+    if indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0]):
+        indexer = xp.ravel(indexer)
+    # https://github.com/numpy/numpy/issues/27545
+    is_numpy_string = indexer.dtype == np.dtypes.StringDType()
+    if not is_numpy_string or is_pandas:
+        # if it is a float array or something along those lines, convert it to integers
+        if XArrayDtype.Float(indexer):
+            indexer_int = xp.astype(indexer, xp.int64)
+            if xp.all((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
-        if issubclass(indexer.dtype.type, np.integer | np.floating):
-            return indexer  # Might not work for range indexes
-        elif issubclass(indexer.dtype.type, np.bool_):
+            return indexer_int
+        if XArrayDtype.SignedInt(indexer) or XArrayDtype.UnsignedInt(indexer):
+            # Might not work for range indexes
+            return np.asarray(indexer) if is_pandas else indexer
+        if XArrayDtype.Bool(indexer):
             if indexer.shape != index.shape:
                 msg = (
                     f"Boolean index does not match AnnData’s shape along this "
@@ -93,26 +187,40 @@ def _normalize_index(  # noqa: PLR0911, PLR0912
                     f"AnnData index has shape {index.shape}."
                 )
                 raise IndexError(msg)
-            return indexer
-        else:  # indexer should be string array
-            positions = index.get_indexer(indexer)
-            if np.any(positions < 0):
-                not_found = indexer[positions < 0]
-                msg = (
-                    f"Values {list(not_found)}, from {list(indexer)}, "
-                    "are not valid obs/ var names or indices."
-                )
-                raise KeyError(msg)
-            return positions  # np.ndarray[int]
-    elif isinstance(indexer, XDataArray):
-        if isinstance(indexer.data, DaskArray):
-            return indexer.data.compute()
-        return indexer.data
-    msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
-    raise IndexError()
+            return np.asarray(indexer) if is_pandas else indexer
+        if not isinstance(indexer, np.ndarray) and has_xp(indexer):
+            msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
+            raise ValueError(msg)
+    positions = index.get_indexer(indexer)  # indexer should be string array
+    if xp.any(positions < 0):
+        not_found = indexer[positions < 0]
+        msg = (
+            f"Values {list(not_found)}, from {list(indexer)}, "
+            "are not valid obs/ var names or indices."
+        )
+        raise KeyError(msg)
+    return positions  # np.ndarray[int]
 
 
-def _fix_slice_bounds(s: slice, length: int) -> slice:
+def _normalize_index(
+    indexer: Index1D[IndexManager], index: pd.Index
+) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
+    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
+    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
+        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
+        raise TypeError(msg)
+
+    if isinstance(indexer, pd.Index | pd.Series):
+        indexer = indexer.array
+    if isinstance(indexer, IndexManager):
+        indexer = indexer.get_default()
+
+    return _gen_anndata_index(indexer, index)
+
+
+def _fix_slice_bounds[A: int, Z: int, S: int](
+    s: slice[A | None, Z | None, S | None], length: int
+) -> slice[A, Z, S]:
     """The slice will be clipped to length, and the step won't be None.
 
     E.g. infer None valued attributes.
@@ -127,11 +235,14 @@ def _fix_slice_bounds(s: slice, length: int) -> slice:
         # Reverse
         start = s.start if s.start is not None else length
         stop = s.stop if s.stop is not None else 0
+    else:
+        msg = "step must be non-zero"
+        raise AssertionError(msg)
 
     return slice(start, stop, step)
 
 
-def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
+def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[M]]:
     if not isinstance(index, tuple):
         if index is Ellipsis:
             index = slice(None)
@@ -160,8 +271,118 @@ def unpack_index(index: Index) -> tuple[Index1D, Index1D]:
     raise IndexError(msg)
 
 
+def _index_manager_to_numpy_idx_in_tuple(
+    subset_idx: tuple[_Index1DNorm]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]:
+    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+    return tuple(
+        np.asarray(idx) if isinstance(idx, IndexManager) else idx for idx in subset_idx
+    )
+
+
+def _ensure_numpy_idx[T, R](
+    func: Callable[[T, tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]], R],
+) -> Callable[
+    [
+        T,
+        tuple[_Index1DNorm[IndexManager]]
+        | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    ],
+    R,
+]:
+    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+
+    @wraps(func)
+    def _ensure(
+        a: T,
+        subset_idx: tuple[_Index1DNorm[IndexManager]]
+        | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    ) -> R:
+        return func(
+            a,
+            _index_manager_to_numpy_idx_in_tuple(subset_idx),
+        )
+
+    return _ensure
+
+
+def array_api_ix(*args: SupportsArrayApi) -> tuple[SupportsArrayApi, ...]:
+    """Construct an open mesh from multiple sequences.
+
+    Vendored version of `numpy.ix_` for the array-api.
+
+    For each sequence `args[i]`, it returns an array with `.ndim == len(args)`,
+    `.size == .shape[i] == len(args[i])` (i.e. `shape[…] == 1` for each other dimension)
+    """
+    out = []
+    n_dims = len(args)
+    for k, new in enumerate(args):
+        xp = new.__array_namespace__()
+        if new.ndim != 1:  # pragma: no cover
+            msg = "Cross index must be 1 dimensional"
+            raise ValueError(msg)
+        if xp.isdtype(new.dtype, "bool"):
+            (new,) = new.nonzero()
+        new = new.reshape((1,) * k + (new.size,) + (1,) * (n_dims - k - 1))
+        out.append(new)
+    return tuple(out)
+
+
+def _prepare_array_api_idx(
+    a: SupportsArrayApi,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> tuple[slice | SupportsArrayApi, ...]:
+    """Prepare indices for array-api compatible subsetting."""
+    xp = a.__array_namespace__()
+
+    def get_idx(idx):
+        if isinstance(idx, IndexManager):
+            return idx.get_for_array(a)
+        elif isinstance(idx, slice) or has_xp(idx):
+            return idx
+        else:  # pragma: no cover
+            # Convert numpy/list to array-api array on the target device
+            # In theory should be unreachable so this is a last resort since xp.asarray is pretty undefined.
+            return xp.asarray(idx, device=a.device)
+
+    maybe_array_api_idxs = tuple(get_idx(idx) for idx in subset_idx)
+    if all(isinstance(x, type(a)) for x in maybe_array_api_idxs):
+        return array_api_ix(*maybe_array_api_idxs)
+
+    return maybe_array_api_idxs
+
+
 @singledispatch
-def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
+def _subset[
+    T: np.ndarray
+    | pd.DataFrame
+    | SupportsArrayApi
+    | DaskArray
+    | CSArray
+    | CSMatrix
+    | Dataset2D
+](
+    a: T,
+    subset_idx: tuple[_Index1DNorm[IndexManager]]
+    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+) -> T | np.ndarray:
+    """Select a subset of array `a` using the given indices.
+
+    For numpy arrays with array indices (not slices), this uses np.ix_ for
+    coordinate-based indexing. For array-api arrays, it uses device-aware
+    indexing with IndexManager support.
+    """
+    # Check if this is an array-api array (not numpy)
+    if has_xp(a) and not isinstance(a, np.ndarray):
+        # Use array-api aware indexing
+        subset_idx = _prepare_array_api_idx(a, subset_idx)
+        return a[subset_idx]
+
+    # For numpy arrays and other types, ensure we have numpy indices
+    subset_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)
+
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray
     if all(isinstance(x, Iterable) for x in subset_idx):
@@ -170,7 +391,10 @@ def _subset(a: np.ndarray | pd.DataFrame, subset_idx: Index):
 
 
 @_subset.register(DaskArray)
-def _subset_dask(a: DaskArray, subset_idx: Index):
+@_ensure_numpy_idx
+def _subset_dask(
+    a: DaskArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> DaskArray:
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         if issparse(a._meta) and a._meta.format == "csc":
             return a[:, subset_idx[1]][subset_idx[0], :]
@@ -180,24 +404,33 @@ def _subset_dask(a: DaskArray, subset_idx: Index):
 
 @_subset.register(CSMatrix)
 @_subset.register(CSArray)
-def _subset_sparse(a: CSMatrix | CSArray, subset_idx: Index):
+@_ensure_numpy_idx
+def _subset_sparse[T: CSMatrix | CSArray](
+    a: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> T:
     # Correcting for indexing behaviour of sparse.spmatrix
     if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
         first_idx = subset_idx[0]
         if issubclass(first_idx.dtype.type, np.bool_):
-            first_idx = np.where(first_idx)[0]
+            first_idx = np.flatnonzero(first_idx)
         subset_idx = (first_idx.reshape(-1, 1), *subset_idx[1:])
     return a[subset_idx]
 
 
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
-def _subset_df(df: pd.DataFrame | Dataset2D, subset_idx: Index):
+@_ensure_numpy_idx
+def _subset_df[T: pd.DataFrame | Dataset2D](
+    df: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> T:
     return df.iloc[subset_idx]
 
 
 @_subset.register(AwkArray)
-def _subset_awkarray(a: AwkArray, subset_idx: Index):
+@_ensure_numpy_idx
+def _subset_awkarray(
+    a: AwkArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> AwkArray:
     if all(isinstance(x, Iterable) for x in subset_idx):
         subset_idx = np.ix_(*subset_idx)
     return a[subset_idx]
@@ -205,23 +438,122 @@ def _subset_awkarray(a: AwkArray, subset_idx: Index):
 
 # Registration for SparseDataset occurs in sparse_dataset.py
 @_subset.register(h5py.Dataset)
-def _subset_dataset(d: h5py.Dataset, subset_idx: Index):
-    if not isinstance(subset_idx, tuple):
-        subset_idx = (subset_idx,)
-    ordered = list(subset_idx)
-    rev_order = [slice(None) for _ in range(len(subset_idx))]
-    for axis, axis_idx in enumerate(ordered.copy()):
-        if isinstance(axis_idx, np.ndarray):
-            if axis_idx.dtype == bool:
-                axis_idx = np.where(axis_idx)[0]
-            order = np.argsort(axis_idx)
-            ordered[axis] = axis_idx[order]
-            rev_order[axis] = np.argsort(order)
+@_ensure_numpy_idx
+def _subset_dataset(
+    d: h5py.Dataset, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> np.ndarray:
+    order: tuple[NDArray[np.integer] | slice, ...]
+    inv_order: tuple[NDArray[np.integer] | slice, ...]
+    order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
+    # check for duplicates or multi-dimensional fancy indexing
+    array_dims = [i for i in order if isinstance(i, np.ndarray)]
+    has_duplicates = any(len(np.unique(i)) != len(i) for i in array_dims)
+    # Use safe indexing if there are duplicates OR multiple array dimensions
+    # (h5py doesn't support multi-dimensional fancy indexing natively)
+    if has_duplicates or len(array_dims) > 1:
+        # For multi-dimensional indexing, bypass the sorting logic and use original indices
+        return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
-    return d[tuple(ordered)][tuple(rev_order)]
+    return d[order][inv_order]
 
 
-def make_slice(idx, dimidx, n=2):
+@overload
+def _index_order_and_inverse(
+    axis_idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
+@overload
+def _index_order_and_inverse(axis_idx: slice) -> tuple[slice, slice]: ...
+def _index_order_and_inverse(
+    axis_idx: _Index1DNorm,
+) -> tuple[_Index1DNorm, NDArray[np.integer] | slice]:
+    """Order and get inverse index array."""
+    if not isinstance(axis_idx, np.ndarray):
+        return axis_idx, slice(None)
+    if axis_idx.dtype == bool:
+        axis_idx = np.flatnonzero(axis_idx)
+    order = np.argsort(axis_idx)
+    return axis_idx[order], np.argsort(order)
+
+
+@overload
+def _process_index_for_h5py(
+    idx: NDArray[np.integer] | NDArray[np.bool_],
+) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
+@overload
+def _process_index_for_h5py(idx: slice) -> tuple[slice, None]: ...
+def _process_index_for_h5py(
+    idx: _Index1DNorm,
+) -> tuple[_Index1DNorm, NDArray[np.integer] | None]:
+    """Process a single index for h5py compatibility, handling sorting and duplicates."""
+    if not isinstance(idx, np.ndarray):
+        # Not an array (slice, integer, list) - no special processing needed
+        return idx, None
+
+    if idx.dtype == bool:
+        idx = np.flatnonzero(idx)
+
+    # For h5py fancy indexing, we need sorted indices
+    # But we also need to track how to reverse the sorting
+    unique, inverse = np.unique(idx, return_inverse=True)
+    return (
+        # Has duplicates - use unique + inverse mapping approach
+        (unique, inverse)
+        if len(unique) != len(idx)
+        # No duplicates - just sort and track reverse mapping
+        else _index_order_and_inverse(idx)
+    )
+
+
+def _safe_fancy_index_h5py(
+    dataset: h5py.Dataset,
+    subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm],
+) -> h5py.Dataset:
+    # Handle multi-dimensional indexing of h5py dataset
+    # This avoids h5py's limitation with multi-dimensional fancy indexing
+    # without loading the entire dataset into memory
+
+    # Convert boolean arrays to integer arrays and handle sorting for h5py
+    processed_indices: tuple[NDArray[np.integer] | slice, ...]
+    reverse_indices: tuple[NDArray[np.integer] | None, ...]
+    processed_indices, reverse_indices = zip(
+        *map(_process_index_for_h5py, subset_idx), strict=True
+    )
+
+    # First find the index that reduces the size of the dataset the most
+    i_min = np.argmin([
+        _get_index_size(inds, dataset.shape[i]) / dataset.shape[i]
+        for i, inds in enumerate(processed_indices)
+    ])
+
+    # Apply the most selective index first to h5py dataset
+    first_index = [slice(None)] * len(processed_indices)
+    first_index[i_min] = processed_indices[i_min]
+    in_memory_array = cast("np.ndarray", dataset[tuple(first_index)])
+
+    # Apply remaining indices to the numpy array
+    remaining_indices = list(processed_indices)
+    remaining_indices[i_min] = slice(None)  # Already applied
+    result = in_memory_array[tuple(remaining_indices)]
+
+    # Now apply reverse mappings to get the original order
+    for dim, reverse_map in enumerate(reverse_indices):
+        if reverse_map is not None:
+            result = result.take(reverse_map, axis=dim)
+
+    return result
+
+
+def _get_index_size(idx: _Index1DNorm, dim_size: int) -> int:
+    """Get size for any index type."""
+    if isinstance(idx, slice):
+        return len(range(*idx.indices(dim_size)))
+    elif isinstance(idx, int):
+        return 1
+    else:  # For other types, try to get length
+        return len(idx)
+
+
+def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:
     mut = list(repeat(slice(None), n))
     mut[dimidx] = idx
     return tuple(mut)

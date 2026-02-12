@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import warnings
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
 from types import NoneType
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -17,7 +16,9 @@ from ..utils import (
     axis_len,
     convert_to_dict,
     deprecated,
+    deprecation_msg,
     raise_value_error_if_multiindex_columns,
+    warn,
     warn_once,
 )
 from .access import ElementRef
@@ -39,13 +40,10 @@ TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
 Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
-K = TypeVar("K", str, str | None)
-P = TypeVar("P", bound="AlignedMappingBase")
-"""Parent mapping an AlignedView is based on."""
-I = TypeVar("I", OneDIdx, TwoDIdx)
 
-
-class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
+class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
+    MutableMapping[str, Value], ABC
+):
     """\
     An abstract base class for Mappings containing array-like values aligned
     to either one or both AnnData axes.
@@ -72,12 +70,11 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
     def _validate_value(self, val: Value, key: K) -> Value:
         """Raises an error if value is invalid"""
         if isinstance(val, AwkArray):
-            warn_once(
+            msg = (
                 "Support for Awkward Arrays is currently experimental. "
-                "Behavior may change in the future. Please report any issues you may encounter!",
-                ExperimentalFeatureWarning,
-                # stacklevel=3,
+                "Behavior may change in the future. Please report any issues you may encounter!"
             )
+            warn_once(msg, ExperimentalFeatureWarning)
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
             val = val.reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
@@ -133,12 +130,14 @@ class AlignedMappingBase(MutableMapping[K, Value], ABC, Generic[K]):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)")
+    @deprecated(deprecation_msg("as_dict", "dict(obj)"))
     def as_dict(self) -> dict:
         return dict(self)
 
 
-class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
+class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | None)](
+    AlignedMappingBase
+):
     is_view: ClassVar[Literal[True]] = True
 
     # override docstring
@@ -154,7 +153,7 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
     subset_idx: I
     """The subset of the parent to view."""
 
-    def __init__(self, parent_mapping: P, parent_view: AnnData, subset_idx: I):
+    def __init__(self, parent_mapping: P, parent_view: AnnData, subset_idx: I) -> None:
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
@@ -172,12 +171,11 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
 
     def __setitem__(self, key: K, value: Value) -> None:
         value = self._validate_value(value, key)  # Validate before mutating
-        warnings.warn(
+        msg = (
             f"Setting element `.{self.attrname}['{key}']` of view, "
-            "initializing view as actual.",
-            ImplicitModificationWarning,
-            stacklevel=2,
+            "initializing view as actual."
         )
+        warn(msg, ImplicitModificationWarning)
         with view_update(self.parent, self.attrname, ()) as new_mapping:
             if value is None:
                 del new_mapping[key]
@@ -188,12 +186,11 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
         if key not in self:
             msg = f"{key!r} not found in view of {self.attrname}"
             raise KeyError(msg)  # Make sure it exists before bothering with a copy
-        warnings.warn(
+        msg = (
             f"Removing element `.{self.attrname}['{key}']` of view, "
-            "initializing view as actual.",
-            ImplicitModificationWarning,
-            stacklevel=2,
+            "initializing view as actual."
         )
+        warn(msg, ImplicitModificationWarning)
         with view_update(self.parent, self.attrname, ()) as new_mapping:
             del new_mapping[key]
 
@@ -207,7 +204,7 @@ class AlignedView(AlignedMappingBase[K], Generic[K, P, I]):
         return len(self.parent_mapping)
 
 
-class AlignedActual(AlignedMappingBase[K], Generic[K]):
+class AlignedActual[K: (str, str | None)](AlignedMappingBase[K]):
     is_view: ClassVar[Literal[False]] = False
 
     _data: MutableMapping[K, Value]
@@ -403,7 +400,7 @@ PairwiseArraysBase._view_class = PairwiseArraysView
 PairwiseArraysBase._actual_class = PairwiseArrays
 
 
-AlignedMapping = (
+type AlignedMapping = (
     AxisArrays
     | AxisArraysView
     | Layers
@@ -411,12 +408,11 @@ AlignedMapping = (
     | PairwiseArrays
     | PairwiseArraysView
 )
-T = TypeVar("T", bound=AlignedMapping)
 """Pair of types to be aligned."""
 
 
 @dataclass
-class AlignedMappingProperty(property, Generic[K, T]):
+class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     """A :class:`property` that creates an ephemeral AlignedMapping.
 
     The actual data is stored as `f'_{self.name}'` in the parent object.

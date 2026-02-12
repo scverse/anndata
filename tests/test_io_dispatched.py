@@ -5,17 +5,23 @@ from typing import TYPE_CHECKING
 
 import h5py
 import pytest
+import scipy.sparse as sp
 import zarr
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, ZarrGroup
 from anndata.experimental import read_dispatched, write_dispatched
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    visititems_zarr,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.mark.zarr_io
@@ -33,7 +39,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
@@ -64,7 +70,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
@@ -85,12 +91,30 @@ def test_read_dispatched_null_case(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
 
     assert_equal(expected, actual)
+
+
+@pytest.mark.zarr_io
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+def test_write_dispatched_csr_dataset(
+    tmp_path: Path, sparse_format: Literal["csr", "csc"]
+):
+    ad.io.write_elem(
+        open_write_group(tmp_path / "arr.zarr"),
+        "/",
+        sp.random(10, 10, format=sparse_format),
+    )
+    X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
+
+    def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
+        assert iospec.encoding_type == f"{sparse_format}_matrix"
+
+    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
 
 
 @pytest.mark.zarr_io
@@ -157,21 +181,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         elif re.match(r"var[mp]?/\w+", k):
             assert v.chunks[0] == N
 
-    if is_zarr_v2():
-        z.visititems(check_chunking)
-    else:
-
-        def visititems(
-            z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
-        ) -> None:
-            for key in z:
-                maybe_group = z[key]
-                if isinstance(maybe_group, ZarrGroup):
-                    visititems(maybe_group, visitor)
-                else:
-                    visitor(key, maybe_group)
-
-        visititems(z, check_chunking)
+    visititems_zarr(z, check_chunking)
 
 
 @pytest.mark.zarr_io
@@ -185,21 +195,19 @@ def test_io_dispatched_keys(tmp_path: Path):
     zarr_path = tmp_path / "test.zarr"
 
     def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
-        h5ad_write_keys.append(k if is_zarr_v2() else k.strip("/"))
+        h5ad_write_keys.append(k.strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
-        zarr_write_keys.append(
-            k if is_zarr_v2() else f"{store.name.strip('/')}/{k.strip('/')}".strip("/")
-        )
+        zarr_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def h5ad_reader(func, elem_name: str, elem, iospec):
-        h5ad_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
+        h5ad_read_keys.append(elem_name.strip("/"))
         return func(elem)
 
     def zarr_reader(func, elem_name: str, elem, iospec):
-        zarr_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
+        zarr_read_keys.append(elem_name.strip("/"))
         return func(elem)
 
     adata = gen_adata((50, 100), **GEN_ADATA_NO_XARRAY_ARGS)

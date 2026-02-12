@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Mapping
 from functools import singledispatch
 from typing import TYPE_CHECKING
@@ -9,7 +8,8 @@ import pandas as pd
 from pandas.api.types import is_string_dtype
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, pandas_as_str
+from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def _gen_dataframe_mapping(
         df = pd.DataFrame(
             anno,
             index=None if length is None else mk_index(length),
-            columns=None if anno else [],
+            columns=None if anno else pd.array([], dtype="str"),
         )
 
     if length is None:
@@ -78,15 +78,22 @@ def _gen_dataframe_df(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
+    if isinstance(anno.index, pd.MultiIndex):
+        msg = (
+            "pandas.MultiIndex not supported as index for obs or var on declaration.\n\
+            You can set `obs_names` manually although most operations after will error or convert to str.\n\
+            This behavior will likely be clarified in a future breaking release."
+        )
+        raise ValueError(msg)
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
-    if not is_string_dtype(anno.index):
+    if not is_string_dtype(anno.index[~anno.index.isna()]):
         msg = "Transforming to str index."
-        warnings.warn(msg, ImplicitModificationWarning, stacklevel=2)
-        anno.index = anno.index.astype(str)
+        warn(msg, ImplicitModificationWarning)
+        anno.index = pandas_as_str(anno.index)
     if not len(anno.columns):
-        anno.columns = anno.columns.astype(str)
+        anno.columns = pandas_as_str(anno.columns)
     return anno
 
 

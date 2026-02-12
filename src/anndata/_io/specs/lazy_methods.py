@@ -15,21 +15,20 @@ from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import (
-    NULLABLE_NUMPY_STRING_TYPE,
     DaskArray,
     H5Array,
     H5Group,
-    XDataArray,
     XDataset,
+    XVariable,
     ZarrArray,
     ZarrGroup,
 )
 
-from .registry import _LAZY_REGISTRY, IOSpec
+from .registry import _LAZY_REGISTRY, IOSpec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Literal, ParamSpec, TypeVar
+    from typing import Literal
 
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
@@ -37,13 +36,9 @@ if TYPE_CHECKING:
     from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
-        Literal[None],
+        None,
         dict[str, Sequence[tuple[int, int]]],
     ]
-
-    P = ParamSpec("P")
-    R = TypeVar("R")
-    D = TypeVar("D")
 
 
 @overload
@@ -53,9 +48,9 @@ def maybe_open_h5(
 ) -> Generator[H5File, None, None]: ...
 @overload
 @contextmanager
-def maybe_open_h5(path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
+def maybe_open_h5[D](path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
 @contextmanager
-def maybe_open_h5(
+def maybe_open_h5[D](
     path_or_other: H5File | D, elem_name: str
 ) -> Generator[H5File | D, None, None]:
     if not isinstance(path_or_other, Path):
@@ -82,7 +77,7 @@ def compute_chunk_layout_for_axis_size(
 
 
 def make_dask_chunk(
-    path_or_sparse_dataset: Path | D,
+    path_or_sparse_dataset: Path | object,
     elem_name: str,
     block_info: BlockInfo | None = None,
 ) -> CSMatrix | CSArray:
@@ -195,6 +190,9 @@ def resolve_chunks(
     return elem.chunks
 
 
+# TODO: `map_blocks` of a string array in h5py is so insanely slow on benchmarking that in the case someone has
+# a pure string annotation (not categoricals! or nullables strings!), it's probably better to pay the memory penalty.
+# In the long run, it might be good to figure out what exactly is going on here but for now, this will do.
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
     elem: H5Array,
@@ -204,10 +202,8 @@ def read_h5_string_array(
 ) -> DaskArray:
     import dask.array as da
 
-    from anndata._io.h5ad import read_dataset
-
     chunks = resolve_chunks(elem, chunks, tuple(elem.shape))
-    return da.from_array(read_dataset(elem), chunks=chunks)
+    return da.from_array(read_elem(elem), chunks=chunks)
 
 
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
@@ -247,39 +243,33 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     dim_name: str,
     index: np.NDArray,
-) -> Generator[tuple[str, XDataArray], None, None]:
+) -> Generator[tuple[str, XVariable], None, None]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
-    from ...compat import XDataArray
     from ...compat import xarray as xr
 
     for k, v in elem_dict.items():
         if isinstance(v, DaskArray) and k != dim_name:
-            data_array = XDataArray(v, coords=[index], dims=[dim_name], name=k)
+            variable = xr.Variable([dim_name], data=v)
         elif isinstance(v, CategoricalArray | MaskedArray) and k != dim_name:
             variable = xr.Variable(
-                data=xr.core.indexing.LazilyIndexedArray(v), dims=[dim_name]
-            )
-            data_array = XDataArray(
-                variable,
-                coords=[index],
-                dims=[dim_name],
-                name=k,
+                [dim_name],
+                data=xr.core.indexing.LazilyIndexedArray(v),
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": isinstance(v, MaskedArray)
-                    and v.dtype == NULLABLE_NUMPY_STRING_TYPE,
+                    "is_nullable_string": (
+                        isinstance(v, MaskedArray)
+                        and isinstance(v.dtype, pd.StringDtype | np.dtypes.StringDType)
+                    ),
                 },
             )
         elif k == dim_name:
-            data_array = XDataArray(
-                index, coords=[index], dims=[dim_name], name=dim_name
-            )
+            variable = xr.Variable([dim_name], data=index)
         else:
             msg = f"Could not read {k}: {v} from into xarray Dataset2D"
             raise ValueError(msg)
-        yield k, data_array
+        yield k, variable
 
 
 DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
@@ -295,6 +285,10 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
+    from xarray.core.indexing import BasicIndexer
+
+    from ...experimental.backed._lazy_arrays import MaskedArray
+
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -303,8 +297,13 @@ def read_dataframe(
     # which is used below as well.
     if not use_range_index:
         dim_name = elem.attrs["_index"]
-        # no sense in reading this in multiple times
-        index = elem_dict[dim_name].compute()
+        # no sense in reading this in multiple times since xarray requires an in-memory index
+        if isinstance(elem_dict[dim_name], DaskArray):
+            index = elem_dict[dim_name].compute()
+        elif isinstance(elem_dict[dim_name], MaskedArray):
+            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
+        else:
+            raise NotImplementedError()
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
@@ -312,11 +311,9 @@ def read_dataframe(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
     if use_range_index:
-        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XDataArray(
-            index,
-            coords=[index],
-            dims=[DUMMY_RANGE_INDEX_KEY],
-            name=DUMMY_RANGE_INDEX_KEY,
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XVariable(
+            [DUMMY_RANGE_INDEX_KEY],
+            data=index,
         )
     ds = Dataset2D(XDataset(elem_xarray_dict))
     ds.is_backed = True
@@ -364,9 +361,14 @@ def read_nullable(
         Path(filename(elem)) if isinstance(elem, H5Group) else elem
     )
     elem_name = get_elem_name(elem)
+    values = elem["values"]
+    # HDF5 stores strings as bytes; use .astype("T") to decode on access
+    # h5py recommends .astype("T") over .asstr() when using numpy ≥2
+    if encoding_type == "nullable-string-array" and isinstance(elem, H5Group):
+        values = values.astype("T")
     return MaskedArray(
-        values=elem["values"],
-        mask=elem.get("mask", None),
+        values=values,
+        mask=elem["mask"],
         dtype_str=encoding_type,
         base_path_or_zarr_group=base_path_or_zarr_group,
         elem_name=elem_name,

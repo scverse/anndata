@@ -11,14 +11,13 @@ import pytest
 import anndata as ad
 from anndata._core.file_backing import to_memory
 from anndata.experimental import read_lazy
+from anndata.experimental.backed._io import ANNDATA_ELEMS
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
-
-from .conftest import ANNDATA_ELEMS, get_key_trackers_for_columns_on_axis
 
 pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed")
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Literal
 
@@ -27,6 +26,26 @@ if TYPE_CHECKING:
     from anndata import AnnData
     from anndata._types import AnnDataElem, Join_T
     from anndata.tests.helpers import AccessTrackingStore
+
+
+def get_key_trackers_for_columns_on_axis(
+    adata: AnnData, axis: Literal["obs", "var"]
+) -> Generator[str, None, None]:
+    """Generate keys for tracking, using `codes` from categorical columns instead of the column name
+
+    Parameters
+    ----------
+    adata
+        Object to get keys from
+    axis
+        Axis to get keys from
+
+    Yields
+    ------
+    Keys for tracking
+    """
+    for col in getattr(adata, axis).columns:
+        yield f"{axis}/{col}" if "cat" not in col else f"{axis}/{col}/codes"
 
 
 def unify_extension_dtypes(
@@ -147,17 +166,21 @@ def test_concat_to_memory_obs(
 
 
 def test_concat_to_memory_obs_dtypes(
+    subtests: pytest.Subtests,
     lazy_adatas_for_concat: list[AnnData],
     join: Join_T,
-):
+) -> None:
     concated_remote = ad.concat(lazy_adatas_for_concat, join=join)
     # check preservation of non-categorical dtypes on the concat axis
-    assert concated_remote.obs["int64"].dtype == "int64"
-    assert concated_remote.obs["uint8"].dtype == "uint8"
-    assert concated_remote.obs["nullable-int"].dtype == "int32"
-    assert concated_remote.obs["float64"].dtype == "float64"
-    assert concated_remote.obs["bool"].dtype == "bool"
-    assert concated_remote.obs["nullable-bool"].dtype == "bool"
+    for name in concated_remote.obs.columns:
+        dtype = name.removeprefix("nullable-")
+        with subtests.test(col=name):
+            try:
+                assert concated_remote.obs[name].dtype == dtype
+            except AssertionError:
+                if "cat" in name:
+                    pytest.xfail("categorical dtypes are not preserved")
+                raise
 
 
 def test_concat_to_memory_var(
@@ -218,6 +241,7 @@ def test_concat_to_memory_var(
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
 def test_concat_data_with_cluster_to_memory(
     adata_remote: AnnData, join: Join_T, local_cluster_addr: str
 ) -> None:

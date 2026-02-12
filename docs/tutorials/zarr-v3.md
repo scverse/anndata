@@ -6,7 +6,11 @@ Here is a quick guide on some of our learnings so far:
 
 ## Consolidated Metadata
 
-All `zarr` stores are now consolidated by default when written via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`.  For more information on this topic, please seee {ref}`the zarr docs <zarr:user-guide-consolidated-metadata>`.  Practcally, this changes means that once a store has been written, it should be treated as immutable **unless you remove the consolidated metadata and/or rewrite after the mutating operation** i.e., if you wish to use `anndata.io.write_elem` to add a column to `obs`, a `layer` etc. to an existing store.  For example, to mutate an existing store on-disk, you may do:
+All `zarr` stores are now consolidated by default when written via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`.
+For more information on this topic, please see the zarr [consolidated metadata] user guide.
+Practcally, this changes means that once a store has been written, it should be treated as immutable **unless you remove the consolidated metadata and/or rewrite after the mutating operation** i.e.,
+if you wish to use {func}`anndata.io.write_elem` to add a column to `obs`, a `layer` etc. to an existing store.
+For example, to mutate an existing store on-disk, you may do:
 
 ```python
 g = zarr.open_group(orig_path, mode="a", use_consolidated=False)
@@ -19,13 +23,14 @@ ad.io.write_elem(
 zarr.consolidate_metadata(g.store)
 ```
 
-In this example, the store was opened unconsolidated (trying to open it as a consolidated store would error out), edited, and then reconsolidated.  Alternatively, one could simple delete the file containing the consolidated metadata first at the root, `.zmetadata`.
+In this example, the store was opened unconsolidated (trying to open it as a consolidated store would error out), edited, and then reconsolidated.
+Alternatively, one could simple delete the file containing the consolidated metadata first at the root, `.zmetadata`.
 
 ## Remote data
 
 We now provide the {func}`anndata.experimental.read_lazy` feature for reading as much of the {class}`~anndata.AnnData` object as lazily as possible, using `dask` and {mod}`xarray`.
 Please note that this feature is experimental and subject to change.
-To enable this functionality in a performant and feature-complete way for remote data sources, we use {doc}`zarr:user-guide/consolidated_metadata` on the `zarr` store (written by default).
+To enable this functionality in a performant and feature-complete way for remote data sources, we use [consolidated metadata] on the `zarr` store (written by default).
 Please note that this introduces consistency issues – if you update the structure of the underlying `zarr` store i.e., remove a column from `obs`, the consolidated metadata will no longer be valid.
 Further, note that without consolidated metadata, we cannot guarantee your stored `AnnData` object will be fully readable.
 And even if it is fully readable, it will almost certainly be much slower to read.
@@ -37,8 +42,9 @@ There are two ways of opening remote `zarr` stores from the `zarr-python` packag
 
 Local data generally poses a different set of challenges.
 First, write speeds can be somewhat slow and second, the creation of many small files on a file system can slow down a filesystem.
-For the "many small files" problem, `zarr` has introduced {ref}`sharding <zarr:user-guide-sharding>` in the v3 file format.
-Sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use sharding.
+For the "many small files" problem, `zarr` has introduced [sharding] in the v3 file format.
+We offer {attr}`anndata.settings.auto_shard_zarr_v3` to hook into zarr's ability to automatically compute shards, which is experimental at the moment.
+Manual sharding requires knowledge of the array element you are writing (such as shape or data type), though, and therefore you will need to use {func}`anndata.experimental.write_dispatched` to use custom sharding.
 For example, you cannot shard a 1D array with `shard` sizes `(256, 256)`.
 Here is a short example, although you should tune the sizes to your own use-case and also use the compression that makes the most sense for you:
 
@@ -94,18 +100,15 @@ The default `zarr-python` v3 codec for the v3 format is no longer `blosc` but `z
 While `zstd` is more widespread, you may find its performance to not meet your old expectations.
 Therefore, we recommend passing in the {class}`zarr.codecs.BloscCodec` to `compressor` on {func}`~anndata.AnnData.write_zarr` if you wish to return to the old behavior.
 
-There is currently a bug with `numcodecs` that prevents data written from other non-numcodecs `zstd` implementations from being read in by the default zarr pipeline (to which the above rust pipeline falls back if it cannot handle a datatype or indexing scheme, like `vlen-string`): {issue}`zarr-developers/numcodecs#424`.
-Thus is may be advisable to use `BloscCodec` with `zarr` v3 file format data if you wish to use the rust-accelerated pipeline until this issue is resolved.
-
-The same issue with `zstd` applies to data that may eventually be written by the GPU `zstd` implementation (see below).
-
 ## Dask
 
-Zarr v3 should be compatible with dask, although the default behavior is to use zarr's chunking for dask's own. With sharding, this behavior may be undesirable as shards can often contain many small chunks, thereby slowing down i/o as dask will need to index into the zarr store for every chunk.  Therefore it may be better to customize this behavior by passing `chunks=my_zarr_array.shards` as an argument to {func}`dask.array.from_zarr` or similar.
+Zarr v3 should be compatible with dask, although the default behavior is to use zarr's chunking for dask's own.
+With sharding, this behavior may be undesirable as shards can often contain many small chunks, thereby slowing down i/o as dask will need to index into the zarr store for every chunk.
+Therefore it may be better to customize this behavior by passing `chunks=my_zarr_array.shards` as an argument to {func}`dask.array.from_zarr` or similar.
 
 ## GPU i/o
 
-At the moment, it is unlikely your `anndata` i/o will work if you use {ref}`zarr.config.enable_gpu <zarr:user-guide-gpu>`.
+At the moment, it is unlikely your `anndata` i/o will work if you use [`zarr.config.enable_gpu`][GPU user guide].
 It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
 `kvikio` currently provides a {class}`kvikio.zarr.GDSStore` although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: {pr}`zarr-developers/zarr-python#2863`.
 
@@ -118,5 +121,8 @@ However, `zarr-python` has a fully `async` API and provides its own event-loop s
 We anticipate providing `async` versions of {func}`anndata.io.read_elem` and {func}`anndata.experimental.read_dispatched` so that users can download data asynchronously without using the `zarr-python` event loop.
 We also would like to create an asynchronous partial reader to enable iterative streaming of a dataset.
 
+[consolidated metadata]: https://zarr.readthedocs.io/en/latest/user-guide/consolidated_metadata/
 [`obstore` claims]: https://developmentseed.org/obstore/latest/performance
+[sharding]: https://zarr.readthedocs.io/en/stable/user-guide/arrays/#sharding
 [zarr-benchmarks]: https://github.com/LDeakin/zarr_benchmarks
+[GPU user guide]: https://zarr.readthedocs.io/en/stable/user-guide/gpu/

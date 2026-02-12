@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.machinery
 import os
 import re
 import types
@@ -31,7 +31,7 @@ description_3 = "My doc string 3!"
 type_3 = list[int]
 
 
-def validate_int_list(val) -> bool:
+def validate_int_list(val: list, settings: SettingsManager) -> bool:
     if not isinstance(val, list) or not [isinstance(type(e), int) for e in val]:
         msg = f"{val!r} is not a valid int list"
         raise TypeError(msg)
@@ -200,21 +200,19 @@ def test_option_typing(settings: SettingsManager):
 def test_check_and_get_environ_var(monkeypatch: pytest.MonkeyPatch):
     option_env_var = "ANNDATA_OPTION"
     assert hash("foo") == check_and_get_environ_var(
-        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        option_env_var, "foo", ["foo", "bar"], hash
     )
     monkeypatch.setenv(option_env_var, "bar")
     assert hash("bar") == check_and_get_environ_var(
-        option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
+        option_env_var, "foo", ["foo", "bar"], hash
     )
     monkeypatch.setenv(option_env_var, "Not foo or bar")
     with pytest.warns(
         match=f"Value '{re.escape(os.environ[option_env_var])}' is not in allowed"
     ):
-        check_and_get_environ_var(
-            option_env_var, "foo", ["foo", "bar"], lambda x: hash(x)
-        )
+        check_and_get_environ_var(option_env_var, "foo", ["foo", "bar"], hash)
     assert hash("Not foo or bar") == check_and_get_environ_var(
-        option_env_var, "foo", cast=lambda x: hash(x)
+        option_env_var, "foo", cast=hash
     )
 
 
@@ -266,7 +264,7 @@ def test_describe(*, as_rst: bool, expected: str, settings: SettingsManager):
     assert settings.describe("test_var_3", as_rst=as_rst) == expected
 
 
-def test_hints():
+def test_hints() -> None:
     settings = ad.settings
     types_loader = importlib.machinery.SourceFileLoader(
         "settings_types",
@@ -274,8 +272,9 @@ def test_hints():
     )
     settings_types_mod = types.ModuleType(types_loader.name)
     types_loader.exec_module(settings_types_mod)
-    for settings_key in dir(settings):
-        if not settings_key.startswith("_"):
-            assert hasattr(settings_types_mod._AnnDataSettingsManager, settings_key)
-    for settings_key in dir(settings_types_mod._AnnDataSettingsManager):
-        assert hasattr(settings, settings_key)
+
+    obj_attrs, typing_attrs = (
+        {k for k in dir(o) if not k.startswith("_")}
+        for o in (settings, settings_types_mod._AnnDataSettingsManager)
+    )
+    assert obj_attrs == typing_attrs

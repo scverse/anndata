@@ -11,7 +11,8 @@ import zarr
 from anndata import AnnData
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
-from anndata.io import write_elem
+from anndata.experimental.backed._io import ANNDATA_ELEMS
+from anndata.io import read_zarr, write_elem
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     AccessTrackingStore,
@@ -19,8 +20,6 @@ from anndata.tests.helpers import (
     gen_adata,
     gen_typed_df,
 )
-
-from .conftest import ANNDATA_ELEMS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,9 +65,10 @@ def test_access_count_subset(
     adata_remote_tall_skinny: AnnData,
 ):
     non_obs_elem_names = filter(lambda e: e != "obs", ANNDATA_ELEMS)
-    remote_store_tall_skinny.initialize_key_trackers(
-        ["obs/cat/codes", *non_obs_elem_names]
-    )
+    remote_store_tall_skinny.initialize_key_trackers([
+        "obs/cat/codes",
+        *non_obs_elem_names,
+    ])
     adata_remote_tall_skinny[adata_remote_tall_skinny.obs["cat"] == "a", :]
     # all codes read in for subset (from 4 chunks as set in the fixture)
     remote_store_tall_skinny.assert_access_count("obs/cat/codes", 4)
@@ -90,23 +90,34 @@ def test_access_count_subset_column_compute(
 
 def test_access_count_index(
     remote_store_tall_skinny: AccessTrackingStore,
-):
+    adata_remote_with_store_tall_skinny_path: Path,
+) -> None:
+    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
+
     remote_store_tall_skinny.initialize_key_trackers(["obs/_index"])
     read_lazy(remote_store_tall_skinny, load_annotation_index=False)
     remote_store_tall_skinny.assert_access_count("obs/_index", 0)
+
     read_lazy(remote_store_tall_skinny)
-    # 4 is number of chunks
-    remote_store_tall_skinny.assert_access_count("obs/_index", 4)
+    n_chunks = 4
+    count_expected = (  # *2 when mask exists
+        n_chunks * 2 if adata_orig.obs.index.dtype == "string" else n_chunks
+    )
+    remote_store_tall_skinny.assert_access_count("obs/_index", count_expected)
 
 
 def test_access_count_dtype(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
-):
+    adata_remote_with_store_tall_skinny_path: Path,
+) -> None:
+
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 0)
-    # This should only cause categories to be read in once
+
+    # This should only cause categories to be read in once (and their mask if applicable)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
+    remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     adata_remote_tall_skinny.obs["cat"].dtype  # noqa: B018
     remote_store_tall_skinny.assert_access_count("obs/cat/categories", 1)
@@ -130,7 +141,7 @@ def test_access_counts_obsm_df(tmp_path: Path):
         index=adata.obs_names,
     )
     adata.write_zarr(tmp_path)
-    store = AccessTrackingStore(tmp_path)
+    store = AccessTrackingStore(tmp_path, read_only=True)
     store.initialize_key_trackers(["obsm/df"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obsm/df", 0)
@@ -174,17 +185,39 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 @pytest.mark.zarr_io
 def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((1000, 1000), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
+    adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
-    store = AccessTrackingStore(orig_pth)
+    store = AccessTrackingStore(orig_pth, read_only=True)
     store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+@pytest.mark.zarr_io
+def test_empty_df_warns(tmp_path: Path):
+    adata = AnnData(X=np.ones((10, 10)))
+    zarr_path = tmp_path / "orig.zarr"
+    adata.write_zarr(zarr_path)
+    with pytest.warns(
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
+    ):
+        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
+
+
+def test_h5_file_obj(tmp_path: Path):
+    adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    orig_pth = tmp_path / "adata.h5ad"
+    adata.write_h5ad(orig_pth)
+    remote = read_lazy(orig_pth)
+    assert remote.file.is_open
+    assert remote.filename == orig_pth
+    assert_equal(remote.to_memory(), adata)
 
 
 @pytest.fixture(scope="session")
@@ -211,3 +244,32 @@ def test_chunks_df(
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks
+
+
+def test_nullable_string_index_decoding(tmp_path: Path):
+    """Test that nullable string indices are properly decoded from bytes.
+
+    HDF5 stores strings as bytes. When reading nullable-string-array indices,
+    they should be decoded to proper strings, not converted using str() which
+    would produce "b'...'" representations.
+
+    Regression test for https://github.com/scverse/anndata/issues/2271
+    """
+    expected_obs = ["cell_A", "cell_B", "cell_C", "cell_D", "cell_E"]
+    expected_var = ["gene_X", "gene_Y", "gene_Z"]
+
+    adata = AnnData(
+        np.zeros((len(expected_obs), len(expected_var))),
+        obs=dict(obs_names=expected_obs),
+        var=dict(var_names=expected_var),
+    )
+
+    path = tmp_path / "test.h5ad"
+    adata.write_h5ad(path)
+
+    lazy = read_lazy(path)
+    obs_names = list(lazy.obs_names)
+    var_names = list(lazy.var_names)
+
+    assert obs_names == expected_obs
+    assert var_names == expected_var

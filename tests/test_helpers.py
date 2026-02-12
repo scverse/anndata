@@ -18,40 +18,17 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
+    as_sparse_dask_array,
     asarray,
     assert_equal,
     gen_adata,
     gen_awkward,
     gen_random_column,
     issubdtype,
+    jnp,
     report_name,
 )
 from anndata.utils import axis_len
-
-# Testing to see if all error types can have the key name appended.
-# Currently fails for 22/118 since they have required arguments. Not sure what to do about that.
-#
-# @singledispatch
-# def iswarning(x):
-#     return iswarning(type(x))
-
-# @iswarning.register(type)
-# def _notwarning(x):
-#     return False
-
-# @iswarning.register(Warning)
-# def _iswarning(x):
-#     return True
-
-# @pytest.mark.parametrize("exception", list(filter(lambda t: not iswarning(t), Exception.__subclasses__())))
-# def test_report_name_types(exception):
-#     def throw(e):
-#         raise e()
-#     tag = "".join(np.random.permutation(list(ascii_letters)))
-
-#     with pytest.raises(exception) as err:
-#         report_name(throw)(exception, _elem_name=tag)
-#     assert tag in str(err.value)
 
 
 @pytest.fixture
@@ -87,7 +64,15 @@ def test_gen_awkward(shape, datashape):
     assert arr.type == arr_type
 
 
-@pytest.mark.parametrize("dtype", [*DEFAULT_COL_TYPES, pd.StringDtype])
+@pytest.mark.parametrize(
+    "dtype",
+    [*DEFAULT_COL_TYPES, pd.StringDtype()],
+    ids=lambda dt: (
+        f"{dt}-{'' if dt.ordered else 'un'}ordered"
+        if isinstance(dt, pd.CategoricalDtype)
+        else str(dt)
+    ),
+)
 def test_gen_random_column(dtype):
     _, col = gen_random_column(10, dtype)
     assert len(col) == 10
@@ -96,7 +81,7 @@ def test_gen_random_column(dtype):
         assert issubdtype(col.dtype, pd.CategoricalDtype)
         assert col.dtype.ordered == dtype.ordered
     else:
-        assert issubdtype(col.dtype, dtype)
+        assert col.dtype == dtype
 
 
 # Does this work for every warning?
@@ -278,10 +263,7 @@ def test_assert_equal_dask_sparse_arrays():
     "input_type", BASE_MATRIX_PARAMS + DASK_MATRIX_PARAMS + CUPY_MATRIX_PARAMS
 )
 @pytest.mark.parametrize(
-    (
-        "as_dask_type",
-        "mem_type",
-    ),
+    ("as_dask_type", "mem_type"),
     [
         pytest.param(
             as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
@@ -301,6 +283,8 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     rng = np.random.default_rng(42)
     X_source = rng.poisson(size=SHAPE).astype(np.float32)
     X_input = input_type(X_source)
+    if jnp is not None and isinstance(X_input, jnp.ndarray):
+        pytest.xfail("Jax inside of dask is not supported")
     X_output = as_dask_type(X_input)
     X_computed = X_output.compute()
 
@@ -313,12 +297,11 @@ def test_as_dask_functions(input_type, as_dask_type, mem_type):
     assert_equal(asarray(X_computed), X_source)
 
 
-@pytest.mark.parametrize(
-    "dask_matrix_type",
-    DASK_MATRIX_PARAMS,
-)
+@pytest.mark.parametrize("dask_matrix_type", DASK_MATRIX_PARAMS)
 @pytest.mark.gpu
-def test_as_cupy_dask(dask_matrix_type):
+def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
+    if dask_matrix_type is as_sparse_dask_array:
+        request.applymarker(pytest.mark.xfail(reason="cupy does not support CSArray"))
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
     X_cpu = dask_matrix_type(rng.normal(size=SHAPE))
@@ -326,3 +309,37 @@ def test_as_cupy_dask(dask_matrix_type):
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())
+
+
+@pytest.mark.array_api
+def test_gen_adata_jax_backend() -> None:
+    adata = gen_adata(
+        (5, 5),
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    assert isinstance(adata.X, jnp.ndarray | type(jnp.ones(1)))  # jax.Array
+    assert adata.X.shape == (5, 5)
+    assert adata.X.dtype == jnp.float32
+
+
+@pytest.mark.array_api
+def test_gen_adata_jax_subfield_assignment(subtests: pytest.Subtests) -> None:
+    adata = gen_adata(
+        (5, 5),
+        X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
+    )
+
+    adata.obsm["pca"] = adata.X[:, :2]
+    adata.varm["gene_scores"] = adata.X.T[:3].T
+    adata.layers["counts"] = adata.X
+
+    with subtests.test("obsm"):
+        assert isinstance(adata.obsm["pca"], jnp.ndarray)
+        assert adata.obsm["pca"].shape == (5, 2)
+    with subtests.test("varm"):
+        assert isinstance(adata.varm["gene_scores"], jnp.ndarray)
+        assert adata.varm["gene_scores"].shape == (5, 3)
+    with subtests.test("layers"):
+        assert isinstance(adata.layers["counts"], jnp.ndarray)
+        assert adata.layers["counts"].shape == adata.X.shape

@@ -10,7 +10,12 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData
 from anndata._warnings import ImplicitModificationWarning
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    assert_equal,
+    gen_adata,
+    jnp_array_or_idempotent,
+)
 from anndata.utils import asarray
 
 UNLABELLED_ARRAY_TYPES = [
@@ -19,6 +24,7 @@ UNLABELLED_ARRAY_TYPES = [
     pytest.param(sparse.csr_array, id="csr_array"),
     pytest.param(sparse.csc_array, id="csc_array"),
     pytest.param(asarray, id="ndarray"),
+    pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
 ]
 SINGULAR_SHAPES = [
     pytest.param(shape, id=str(shape)) for shape in [(1, 10), (10, 1), (1, 1)]
@@ -37,30 +43,24 @@ def test_setter_singular_dim(shape, orig_array_type, new_array_type):
     assert isinstance(adata.X, type(to_assign))
 
 
-def test_repeat_indices_view():
-    adata = gen_adata((10, 10), X_type=np.asarray)
-    subset = adata[[0, 0, 1, 1], :]
-    mat = np.array([np.ones(adata.shape[1]) * i for i in range(4)])
-    with pytest.warns(
-        FutureWarning,
-        match=r"You are attempting to set `X` to a matrix on a view which has non-unique indices",
-    ):
-        subset.X = mat
-
-
 @pytest.mark.parametrize("orig_array_type", UNLABELLED_ARRAY_TYPES)
 @pytest.mark.parametrize("new_array_type", UNLABELLED_ARRAY_TYPES)
 def test_setter_view(orig_array_type, new_array_type):
     adata = gen_adata((10, 10), X_type=orig_array_type)
     orig_X = adata.X
+    expected_X = asarray(orig_X.copy())
     to_assign = new_array_type(np.ones((9, 9)))
-    if isinstance(orig_X, np.ndarray) and sparse.issparse(to_assign):
-        # https://github.com/scverse/anndata/issues/500
-        pytest.xfail("Cannot set a dense array with a sparse array")
     view = adata[:9, :9]
-    view.X = to_assign
-    np.testing.assert_equal(asarray(view.X), np.ones((9, 9)))
-    assert isinstance(view.X, type(orig_X))
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+    ):
+        view.X = to_assign
+    # view has been initialized
+    new_adata = view
+    assert not new_adata.is_view
+    assert_equal(new_adata.X, to_assign)
+    assert isinstance(new_adata.X, type(to_assign))
+    assert_equal(adata.X, expected_X)
 
 
 ###############################
@@ -154,7 +154,7 @@ def test_copy_view():
 def test_io_missing_X(tmp_path, diskfmt):
     file_pth = tmp_path / f"x_none_adata.{diskfmt}"
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
-    read = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    read = getattr(ad, f"read_{diskfmt}")
 
     adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
@@ -163,26 +163,6 @@ def test_io_missing_X(tmp_path, diskfmt):
     from_disk = read(file_pth)
 
     assert_equal(from_disk, adata)
-
-
-def test_set_dense_x_view_from_sparse():
-    x = np.zeros((100, 30))
-    x1 = np.ones((100, 30))
-    orig = ad.AnnData(x)
-    view = orig[:30]
-    with (
-        pytest.warns(
-            UserWarning,
-            match=r"Trying to set a dense array with a sparse array on a view",
-        ),
-        pytest.warns(
-            ImplicitModificationWarning, match=r"Modifying `X` on a view results"
-        ),
-    ):
-        view.X = sparse.csr_matrix(x1[:30])
-    assert_equal(view.X, x1[:30])
-    assert_equal(orig.X[:30], x1[:30])  # change propagates through
-    assert_equal(orig.X[30:], x[30:])  # change propagates through
 
 
 def test_fail_on_non_csr_csc_matrix():

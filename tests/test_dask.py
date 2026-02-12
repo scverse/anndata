@@ -4,30 +4,37 @@ For tests using dask
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata.compat import CupyArray, DaskArray
+from anndata.compat import CSArray, CSMatrix, CupyArray, DaskArray
 from anndata.experimental.merge import as_group
 from anndata.tests.helpers import (
+    BASE_MATRIX_PARAMS,
+    DASK_CAN_SPARRAY,
+    DASK_MATRIX_PARAMS,
     GEN_ADATA_DASK_ARGS,
-    as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     as_dense_dask_array,
     as_sparse_dask_array,
+    as_sparse_dask_matrix,
     assert_equal,
+    check_all_sharded,
     gen_adata,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Literal
+
+    from numpy.typing import NDArray
 
 
 pytest.importorskip("dask.array")
@@ -81,7 +88,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
@@ -107,39 +114,46 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
 
 @pytest.mark.xdist_group("dask")
+@pytest.mark.dask_distributed
+@pytest.mark.parametrize(
+    "auto_shard_zarr_v3",
+    [pytest.param(True, id="shard"), pytest.param(False, id="no-shard")],
+)
 def test_dask_distributed_write(
     adata: AnnData,
     tmp_path: Path,
     diskfmt: Literal["h5ad", "zarr"],
     local_cluster_addr: str,
+    *,
+    auto_shard_zarr_v3: bool,
 ) -> None:
+    if auto_shard_zarr_v3 and ad.settings.zarr_write_format == 2:
+        pytest.skip(reason="Cannot shard v2 data")
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
 
     pth = tmp_path / f"test_write.{diskfmt}"
-    g = as_group(pth, mode="w")
-
-    with dd.Client(local_cluster_addr):
+    with as_group(pth, mode="w") as g, dd.Client(local_cluster_addr):
         M, N = adata.X.shape
         adata.obsm["a"] = da.random.random((M, 10))
         adata.obsm["b"] = da.random.random((M, 10))
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
-        if diskfmt == "h5ad":
-            with pytest.raises(ValueError, match=r"Cannot write dask arrays to hdf5"):
-                ad.io.write_elem(g, "", orig)
-            return
-        ad.io.write_elem(g, "", orig)
+        with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
+            ad.io.write_elem(g, "", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
-        g = as_group(pth, mode="r")
-        curr = ad.io.read_elem(g)
+        with as_group(pth, mode="r") as g:
+            if auto_shard_zarr_v3:
+                check_all_sharded(g)
+            curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 
     assert_equal(curr.varm["a"], orig.varm["a"])
     assert_equal(curr.obsm["a"], orig.obsm["a"])
+    assert_equal(curr.X, orig.X)
 
     assert isinstance(curr.X, np.ndarray)
     assert isinstance(curr.obsm["a"], np.ndarray)
@@ -155,7 +169,7 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
@@ -197,7 +211,7 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
@@ -276,13 +290,18 @@ def test_assign_X(adata):
 @pytest.mark.parametrize(
     ("array_func", "mem_type"),
     [
-        pytest.param(as_dense_dask_array, np.ndarray, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, sparse.csr_matrix, id="sparse_dask_array"),
+        pytest.param(as_dense_dask_array, np.ndarray, id="dense"),
+        pytest.param(as_sparse_dask_matrix, CSMatrix, id="sparse_matrix"),
         pytest.param(
-            as_dense_cupy_dask_array,
-            CupyArray,
-            id="cupy_dense_dask_array",
-            marks=pytest.mark.gpu,
+            as_sparse_dask_array,
+            CSArray,
+            marks=pytest.mark.skipif(
+                not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+            ),
+            id="sparse_array",
+        ),
+        pytest.param(
+            as_dense_cupy_dask_array, CupyArray, id="cupy_dense", marks=pytest.mark.gpu
         ),
     ],
 )
@@ -311,29 +330,17 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
     assert isinstance(orig.uns["da"]["da"], DaskArray)
 
 
-@pytest.mark.parametrize(
-    "array_func",
-    [
-        pytest.param(as_dense_dask_array, id="dense_dask_array"),
-        pytest.param(as_sparse_dask_array, id="sparse_dask_array"),
-        pytest.param(
-            as_dense_cupy_dask_array,
-            id="cupy_dense_dask_array",
-            marks=pytest.mark.gpu,
-        ),
-        pytest.param(
-            as_cupy_sparse_dask_array,
-            id="cupy_sparse_dask_array",
-            marks=pytest.mark.gpu,
-        ),
-    ],
-)
-def test_dask_to_disk_view(array_func, diskfmt, tmp_path):
+@pytest.mark.parametrize("to_dask", [*BASE_MATRIX_PARAMS, *DASK_MATRIX_PARAMS])
+def test_dask_to_disk_view(
+    to_dask: Callable[[NDArray], DaskArray],
+    diskfmt: Literal["h5ad", "zarr"],
+    tmp_path: Path,
+) -> None:
     random_state = np.random.default_rng()
-    orig = ad.AnnData(
-        # need to change type for cupy
-        array_func(random_state.binomial(100, 0.005, (20, 15)).astype("float32"))
-    )
+    arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")
+
+    # TODO: need to change type for cupy
+    orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]
     path = tmp_path / f"test.{diskfmt}"
     getattr(orig, f"write_{diskfmt}")(path)

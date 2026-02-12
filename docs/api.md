@@ -64,7 +64,6 @@ You might have more success by assembling the {class}`AnnData` object yourself f
    io.read_csv
    io.read_excel
    io.read_hdf
-   io.read_loom
    io.read_mtx
    io.read_text
    io.read_umi_tools
@@ -89,12 +88,16 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
     .. autosummary::
        :toctree: generated/
 
+       io.read_loom
+       AnnData.write_loom
        io.write_h5ad
        io.write_zarr
 
 .. toctree::
    :hidden:
 
+   generated/anndata.io.read_loom
+   generated/anndata.AnnData.write_loom
    generated/anndata.io.write_h5ad
    generated/anndata.io.write_zarr
 ```
@@ -115,7 +118,6 @@ Writing formats that cannot represent all aspects of {class}`AnnData` objects.
    :toctree: generated/
 
    AnnData.write_csvs
-   AnnData.write_loom
 ```
 
 (experimental-api)=
@@ -171,17 +173,27 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
+   :signatures: none
 
    experimental.IOSpec
    experimental.Read
    experimental.Write
    experimental.ReadCallback
    experimental.WriteCallback
-   experimental.StorageType
    experimental.backed.MaskedArray
    experimental.backed.CategoricalArray
    experimental.backed.Dataset2D
    experimental.Dataset2DIlocIndexer
+
+..
+    this is not a class/protocol so since the above
+    specifies a template, it gets used.
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.StorageType
 ```
 
 (extensions-api)=
@@ -203,6 +215,7 @@ Types used by the former:
    :toctree: generated/
 
    types.ExtensionNamespace
+   types.SupportsArrayApi
 ```
 
 (errors-api)=
@@ -235,9 +248,23 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
 
    abc.CSRDataset
    abc.CSCDataset
+```
+
+<!-- these are types, not classes, so don’t use the above template -->
+
+```{eval-rst}
+.. toctree::
+   :hidden:
+
+   typing
+
+.. autosummary::
+
+   typing.Index1D
    typing.Index
    typing.AxisStorable
    typing.RWAble

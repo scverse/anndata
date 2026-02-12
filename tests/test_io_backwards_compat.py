@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 from subprocess import run
 from typing import TYPE_CHECKING
@@ -11,7 +13,6 @@ import zarr.storage
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
@@ -22,6 +23,10 @@ ARCHIVE_PTH = Path(__file__).parent / "data/archives"
 
 @pytest.fixture(params=list(ARCHIVE_PTH.glob("v*")), ids=lambda x: x.name)
 def archive_dir(request: pytest.FixtureRequest) -> Path:
+    assert isinstance(request.param, Path)
+    if request.param.name == "v0.5.0":
+        reason = "v0.5.0 has no zarr and very different format"
+        request.applymarker(pytest.mark.xfail(reason=reason))
     return request.param
 
 
@@ -33,7 +38,7 @@ def read_archive(
         return ad.read_h5ad(path), path
     if format == "zarr":
         path = archive_dir / "adata.zarr.zip"
-        store = path if is_zarr_v2() else zarr.storage.ZipStore(path)
+        store = zarr.storage.ZipStore(path)
         return ad.read_zarr(store), path
     pytest.fail(f"Unknown format: {format}")
 
@@ -45,19 +50,26 @@ def test_backwards_compat_files(archive_dir: Path) -> None:
     assert_equal(from_h5ad, from_zarr, exact=True)
 
 
+@pytest.mark.skipif(
+    not os.environ.get("CI") and shutil.which("h5diff") is None,
+    reason="not in CI and h5diff not installed",
+)
 def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     if archive_dir.name in {"v0.7.8", "v0.7.0"}:
         pytest.skip("DataFrame encoding changed between 0.7 and now")
     adata, in_path = read_archive(archive_dir, "h5ad")
-    adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
-    diff_proc = run(["h5diff", in_path, out_path], check=False)
-    assert diff_proc.returncode == 0
+    with ad.settings.override(allow_write_nullable_strings=False):
+        adata.write_h5ad(out_path := tmp_path / "adata.h5ad")
+    diff_proc = run(
+        ["h5diff", "-c", in_path, out_path], check=False, capture_output=True, text=True
+    )
+    assert diff_proc.returncode == 0, diff_proc.stdout
 
 
 def test_clean_uns_backwards_compat(tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     orig = ad.AnnData(
         sparse.csr_matrix((3, 5), dtype="float32"),

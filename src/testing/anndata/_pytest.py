@@ -11,66 +11,107 @@ from __future__ import annotations
 
 import re
 import warnings
+from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, cast
 
+import pandas as pd
 import pytest
+from packaging.version import Version
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Sequence
     from pathlib import Path
+
+    from ._doctest import WarningFilter
+
+# Use a marker present in the environment so VS Code’s tests behave identical
+IS_PRE = Version(version("zarr")).is_prerelease
+
+# Hack, but I didn’t feel like adding rST syntax to define warning filters
+# TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
+_RST_FILTERS: Sequence[WarningFilter] = (
+    ("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning, "", 0),
+)
+
+
+def setup_env() -> None:
+    import anndata
+
+    anndata.settings.reset(anndata.settings._registered_options.keys())
+
+    if IS_PRE:
+        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
+        pd.options.future.infer_string = True
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _anndata_session_env(request: pytest.FixtureRequest) -> None:
+    setup_env()
 
 
 @pytest.fixture(autouse=True)
 def _anndata_test_env(request: pytest.FixtureRequest) -> None:
-    import anndata
-
     if isinstance(request.node, pytest.DoctestItem):
         request.getfixturevalue("_doctest_env")
 
-    anndata.settings.reset(anndata.settings._registered_options.keys())
+    setup_env()
 
 
 @pytest.fixture
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
 ) -> Generator[None, None, None]:
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"Importing read_.* from `anndata` is deprecated"
-        )
-        from scanpy import settings
-
     from contextlib import chdir
+
+    from scanpy import settings
 
     from anndata.utils import import_name
 
+    assert isinstance(request.node, pytest.DoctestItem)
     assert isinstance(request.node.parent, pytest.Module)
     # request.node.parent is either a DoctestModule or a DoctestTextFile.
     # Only DoctestModule has a .obj attribute (the imported module).
     if request.node.parent.obj:
         func = import_name(request.node.name)
-        warning_detail: tuple[type[Warning], str, bool] | None
-        if warning_detail := getattr(func, "__deprecated", None):
-            cat, msg, _ = warning_detail
-            warnings.filterwarnings("ignore", category=cat, message=re.escape(msg))
-        if (mod := getattr(func, "_doctest_needs", None)) is not None and not find_spec(
-            mod
-        ):
+        if msg := cast("str | None", getattr(func, "__deprecated__", None)):
+            warnings.filterwarnings(
+                "ignore", category=FutureWarning, message=re.escape(msg)
+            )
+        if (
+            mod := cast("str | None", getattr(func, "_doctest_needs", None))
+        ) is not None and not find_spec(mod):
             request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
+        for filter in cast(
+            "Sequence[WarningFilter]", getattr(func, "_doctest_warning_filter", ())
+        ):
+            warnings.filterwarnings(*filter)
+    elif request.node.name.endswith(".rst"):
+        for filter in _RST_FILTERS:
+            warnings.filterwarnings(*filter)
+
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield
     settings.datasetdir = old_dd
 
 
+if find_spec("jax"):
+    import jax
+
+    jax.config.update("jax_enable_x64", True)  # noqa: FBT003
+
+
 def pytest_itemcollected(item: pytest.Item) -> None:
-    """Define behavior of pytest.mark.gpu."""
-    is_gpu = len(list(item.iter_markers(name="gpu"))) > 0
-    if is_gpu:
-        item.add_marker(
-            pytest.mark.skipif(not find_spec("cupy"), reason="Cupy not installed.")
-        )
+    """Define behavior of pytest.mark.{gpu,array_api}."""
+    for mark, package in [("gpu", "cupy"), ("array_api", "jax")]:
+        is_marked = len(list(item.iter_markers(name=mark))) > 0
+        if is_marked:
+            item.add_marker(
+                pytest.mark.skipif(
+                    not find_spec(package), reason=f"{package} not installed."
+                )
+            )
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

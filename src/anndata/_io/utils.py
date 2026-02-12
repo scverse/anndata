@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from functools import WRAPPER_ASSIGNMENTS, wraps
+from collections.abc import Callable
+from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
-from typing import TYPE_CHECKING, cast
-from warnings import warn
+from typing import TYPE_CHECKING, Literal, cast
 
-import h5py
-from packaging.version import Version
+import numpy as np
+import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import Any, Literal
+
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .._types import StorageType, _WriteInternal
     from ..compat import H5Group, ZarrGroup
@@ -21,9 +24,6 @@ if TYPE_CHECKING:
 
     Storage = StorageType | BaseCompressedSparseDataset
 
-# For allowing h5py v3
-# https://github.com/scverse/anndata/issues/442
-H5PY_V3 = Version(h5py.__version__).major >= 3
 
 # -------------------------------------------------------------------------------
 # Type conversion
@@ -124,6 +124,30 @@ def check_key(key):
         raise TypeError(msg)
 
 
+@cache
+def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
+    """Infer nullable dtype from numpy dtype.
+
+    There is no public pandas API for this, so this is the cleanest way.
+    See <https://github.com/pandas-dev/pandas/issues/63608>
+    """
+    try:
+        from pandas.core.dtypes.dtypes import BaseMaskedDtype
+    except ImportError:
+        pass
+    else:
+        return BaseMaskedDtype.from_numpy_dtype(dtype)
+
+    match dtype.kind:
+        case "b":
+            array_type = pd.arrays.BooleanArray
+        case "i" | "u":
+            array_type = pd.arrays.IntegerArray
+        case _:
+            raise NotImplementedError
+    return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
+
+
 # -------------------------------------------------------------------------------
 # Generic functions
 # -------------------------------------------------------------------------------
@@ -133,7 +157,7 @@ def read_attribute(*args, **kwargs):
     from .specs import read_elem
 
     msg = "This internal function has been deprecated, please use read_elem instead"
-    warn(msg, FutureWarning, stacklevel=2)
+    warn(msg, FutureWarning)
     return read_elem(*args, **kwargs)
 
 
@@ -141,7 +165,7 @@ def write_attribute(*args, **kwargs):
     from .specs import write_elem
 
     msg = "This internal function has been deprecated, please use write_elem instead"
-    warn(msg, FutureWarning, stacklevel=2)
+    warn(msg, FutureWarning)
     return write_elem(*args, **kwargs)
 
 

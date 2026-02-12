@@ -20,7 +20,7 @@ def test_str_to_categorical(dtype):
     a = ad.AnnData(obs=obs.copy())
 
     a.strings_to_categoricals()
-    expected = obs["str"].astype("category")
+    expected = obs["str"].astype(pd.CategoricalDtype(pd.Index(["a", "b"], dtype=dtype)))
     pd.testing.assert_series_equal(expected, a.obs["str"])
 
 
@@ -66,8 +66,31 @@ def test_non_str_to_not_categorical():
     pd.testing.assert_frame_equal(expected_non_transformed, result_non_transformed)
 
 
-def test_error_multiindex():
+def test_error_col_multiindex():
     adata = ad.AnnData(np.random.rand(100, 10))
     df = get_multiindex_columns_df((adata.shape[0], 20))
     with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
+        adata.obs = df
+
+
+def test_error_row_multiindex():
+    df = pd.DataFrame(
+        {"x": [1, 2, 3]},
+        index=pd.MultiIndex.from_tuples([("a", 1), ("b", 2), ("c", 3)]),
+    )
+    with pytest.raises(
+        ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+    ):
+        ad.AnnData(df)
+
+
+def test_error_row_multiindex_setter():
+    df = pd.DataFrame(
+        {"x": [1, 2, 3]},
+        index=pd.MultiIndex.from_tuples([("a", 1), ("b", 2), ("c", 3)]),
+    )
+    adata = ad.AnnData(np.random.rand(3, 10))
+    with pytest.raises(
+        ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+    ):
         adata.obs = df
