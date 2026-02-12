@@ -147,6 +147,7 @@ def test_views():
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
     with (
         pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+        pytest.warns(FutureWarning, match=r"Automatic reshaping"),
     ):
         adata[:2, 0].X = [0, 0]
 
@@ -444,8 +445,11 @@ def test_set_scalar_subset_X(matrix_type, subset_func):
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
-
-    adata_subset.X = 1
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+        pytest.warns(FutureWarning, match=r"The ability to set X with a scalar value"),
+    ):
+        adata_subset.X = 1
 
     # Subset materializes on write
     assert not adata_subset.is_view

@@ -634,8 +634,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             else None
         )
         if np.isscalar(value) and value is not None:
+            msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
+            warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
         if hasattr(value, "shape") and value.shape != self.shape:
+            msg = "Automatic reshaping when setting X will be removed in the future."
+            warn(msg, FutureWarning)
             value = value.reshape(self.shape)
         can_set_direct_if_not_none = value is None or (
             np.isscalar(value)
