@@ -29,7 +29,7 @@ def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
     if "." not in spec:
         msg = (
             f"Cannot parse accessor {spec!r} that isn’t period-separated, "
-            "e.g. `A.obs.x` for accessing the 1d array at column `x` of `obs`."
+            "e.g. `obs.x` for accessing the 1d array at column `x` of `obs`."
         )
         raise ValueError(msg)
     acc_name, rest = spec.split(".", 1)
