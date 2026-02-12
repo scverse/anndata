@@ -12,8 +12,8 @@ from scipy import sparse as sp
 from anndata.acc import A
 from anndata.compat import (
     CupyArray,
-    CupyCSCMatrix,
     CupyCSRMatrix,
+    CupySparseMatrix,
     DaskArray,
     XDataArray,
     XDataset,
@@ -152,7 +152,7 @@ def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:
             return expected.to_numpy()
         case DaskArray():
             return _expected2np(expected.compute(), ad_ref)
-        case CupyArray() | CupyCSRMatrix() | CupyCSCMatrix():
+        case CupyArray() | CupySparseMatrix():
             return _expected2np(expected.get(), ad_ref)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")
