@@ -115,19 +115,24 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
             :header-rows: 1
 
             -   - Class
-                - Attributes
-                - Examples
+                - has attributes
+                - available as `A.???`
+                - Example :term:`reference` creation
             -   - :class:`LayerAcc`
-                - :attr:`LayerAcc.k`
+                - :attr:`~LayerAcc.k`
+                - :attr:`~AdAcc.X`, :attr:`~AdAcc.layers`\ `[key]`
                 - `A.X[:, :]`, `A.layers["c"][:, "g0"]`
             -   - :class:`MetaAcc`
-                - :attr:`MetaAcc.dim`
+                - :attr:`~MetaAcc.dim`
+                - :attr:`~AdAcc.obs`, :attr:`~AdAcc.var`
                 - `A.obs["a"]`, `A.var["b"]`
             -   - :class:`MultiAcc`
-                - :attr:`MultiAcc.dim`, :attr:`MultiAcc.k`
+                - :attr:`~MultiAcc.dim`, :attr:`~MultiAcc.k`
+                - :attr:`~AdAcc.obsm`\ `[key]`, :attr:`~AdAcc.varm`\ `[key]`
                 - `A.obsm["d"][:, 2]`
             -   - :class:`GraphAcc`
-                - :attr:`GraphAcc.dim`, :attr:`GraphAcc.k`
+                - :attr:`~GraphAcc.dim`, :attr:`~GraphAcc.k`
+                - :attr:`~AdAcc.obsp`\ `[key]`, :attr:`~AdAcc.varp`\ `[key]`
                 - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
 
     mapping accessor
