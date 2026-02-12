@@ -48,8 +48,8 @@ jobs:
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
           create-args: >-
             python=${{ matrix.python }}
-            asv
-            py_rattler
+            asv>=0.6.4
+            py_rattler<0.22
             conda-build
 
       - name: Cache datasets
