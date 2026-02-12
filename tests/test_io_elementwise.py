@@ -946,7 +946,7 @@ def test_write_auto_sharded(tmp_path: Path, override: dict):
         with (
             pytest.raises(
                 ValueError,
-                match=r"Cannot use sharding with `zarr-python<3`.",
+                match=r"Cannot write v3 format against v2 package",
             ),
             ad.settings.override(**override),
         ):
