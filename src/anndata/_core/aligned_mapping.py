@@ -186,7 +186,7 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         if key not in self:
             msg = f"{key!r} not found in view of {self.attrname}"
             raise KeyError(msg)  # Make sure it exists before bothering with a copy
-        if key is not None and self.attrname != "layers":
+        if not (key is None and self.attrname == "layers"):
             msg = (
                 f"Removing element `.{self.attrname}['{key}']` of view, "
                 "initializing view as actual."
