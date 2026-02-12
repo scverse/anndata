@@ -437,7 +437,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func, *, copy_on_write_X: bool)
         asarray((adata_subset if copy_on_write_X else adata[subset_idx, :]).X) == 1
     )
     if copy_on_write_X:
-        assert asarray(orig_X_val == adata.X).all()
+        assert (asarray(orig_X_val) == asarray(adata.X)).all()
     elif isinstance(adata.X, CupyCSCMatrix):
         # Comparison broken for CSC matrices
         # https://github.com/cupy/cupy/issues/7757
