@@ -19,7 +19,7 @@ from anndata.tests.helpers import assert_equal
 
 
 @pytest.fixture
-def adata():
+def adata() -> AnnData:
     adata = AnnData(
         X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
@@ -32,46 +32,11 @@ def adata():
     return adata
 
 
-def test_get_obsvar_array_warn(adata):
+def test_get_obsvar_array_warn(adata: AnnData) -> None:
     with pytest.warns(FutureWarning):
-        adata._get_obs_array("a")
+        adata.obs_vector("a")
     with pytest.warns(FutureWarning):
-        adata._get_var_array("s1")
-
-
-@pytest.mark.filterwarnings("ignore::FutureWarning")
-def test_get_obsvar_array(adata):
-    assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
-    assert np.allclose(
-        adata._get_obs_array("a", layer="x2"),
-        adata.obs_vector("a", layer="x2"),
-    )
-    assert np.allclose(
-        adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
-    )
-    assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
-    assert np.allclose(
-        adata._get_var_array("s1", layer="x2"),
-        adata.var_vector("s1", layer="x2"),
-    )
-    assert np.allclose(
-        adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
-    )
-
-
-def test_obsvar_vector_Xlayer(adata):
-    with pytest.warns(FutureWarning):
-        adata.var_vector("s1", layer="X")
-    with pytest.warns(FutureWarning):
-        adata.obs_vector("a", layer="X")
-
-    adata = adata.copy()
-    adata.layers["X"] = adata.X * 3
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        adata.var_vector("s1", layer="X")
-        adata.obs_vector("a", layer="X")
+        adata.var_vector("s1")
 
 
 def test_deprecated_write_attribute(tmp_path):
