@@ -611,7 +611,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if not can_set_direct_if_not_none:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
-        if self.is_view:
+        if self.is_view and value is not None:
             msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
         if value is not None:
