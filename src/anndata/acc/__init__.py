@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING, ClassVar, cast, overload
 import pandas as pd
 import scipy.sparse as sp
 
-from anndata import AnnData
-
 from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
 from ..compat import CupySparseMatrix, DaskArray, has_xp
@@ -21,6 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
+    from .. import AnnData
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
     from ..typing import InMemoryArray
@@ -38,7 +37,8 @@ type Idx2DList = (
     tuple[list[str] | pd.Index[str], slice] | tuple[slice, list[str] | pd.Index[str]]
 )
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
-type AdRefFunc[I] = Callable[[AnnData, I], InMemoryArray]
+
+type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 
 
 __all__ = [
@@ -178,10 +178,10 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
         """Check if the referenced array is in the AnnData object."""
 
     @abc.abstractmethod
-    def get(self, adata: AnnData, idx: I, /) -> InMemoryArray:
+    def get(self, adata: AnnData, idx: I, /) -> Array:
         """Get the referenced array from the AnnData object."""
 
-    def _maybe_flatten(self, idx: I, a: InMemoryArray) -> InMemoryArray:
+    def _maybe_flatten(self, idx: I, a: Array) -> Array:
         if len(self.dims(idx)) != 1:
             return a
         if isinstance(a, DaskArray):
@@ -341,7 +341,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
             case pd.DataFrame() as df, None:
                 return df.index.array
             case Dataset2D() as ds, None:
-                return ds.xr_index.variable  # TODO: return cached index instead?
+                return ds.true_index.array
             case pd.DataFrame() as df, k:
                 return df[k].array
             case Dataset2D() as ds, k:

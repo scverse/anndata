@@ -128,8 +128,8 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
                 - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
 
     mapping accessor
-        :class:`MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
-        e.g. `A.layers` or `A.obsm` are both :class:`MapAcc`\ s,
+        :class:`!MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
+        e.g. `A.layers` or `A.obsm` are both :class:`!MapAcc`\ s,
         while `A.layers["a"]` is a :class:`LayerAcc` and `A.obsm["b"]` is a :class:`MultiAcc`.
         :class:`!MapAcc`\ s are mostly useful for extending,
         but might be useful for APIs that need to refer to a :class:`~collections.abc.Mapping` of arrays:

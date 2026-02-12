@@ -101,5 +101,5 @@ type AxisStorable = (
 )
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-type RWAble = AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
+type RWAble = AxisStorable | AnnData | pd.api.extensions.ExtensionArray
 """A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""

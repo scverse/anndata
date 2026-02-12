@@ -63,9 +63,9 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import XDataset
-    from ..typing import Index, Index1D, InMemoryArray, _Index1DNorm, _XDataType
+    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -1122,10 +1122,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             del self._var.iloc[var, :]
 
     @overload
-    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
+    def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(self, index: Index | AdRef) -> AnnData | InMemoryArray:
+    def __getitem__(self, index: Index | AdRef) -> AnnData | Array:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
         from ..acc import AdRef
 
