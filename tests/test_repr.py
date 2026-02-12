@@ -59,4 +59,7 @@ def test_removal(adata, adata_attr):
     attr = adata_attr
     assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE)
     delattr(adata, attr)
-    assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE) is None
+    if attr != "layers":
+        assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE) is None
+    else:
+        assert re.search(r"^\s+layers: None.*$", repr(adata), flags=re.MULTILINE)
