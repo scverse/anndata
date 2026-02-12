@@ -74,30 +74,6 @@ def test_obsvar_vector_Xlayer(adata):
         adata.obs_vector("a", layer="X")
 
 
-# This should break in 0.9
-def test_dtype_warning():
-    # Tests a warning is thrown
-    with pytest.warns(FutureWarning):
-        a = AnnData(np.ones((3, 3)), dtype=np.float32)
-    assert a.X.dtype == np.float32
-
-    # This shouldn't warn, shouldn't copy
-    with warnings.catch_warnings(record=True) as record:
-        b_X = np.ones((3, 3), dtype=np.float64)
-        b = AnnData(b_X)
-        assert not record
-    assert b_X is b.X
-    assert b.X.dtype == np.float64
-
-    # Should warn, should copy
-    c_X = np.ones((3, 3), dtype=np.float32)
-    with pytest.warns(FutureWarning):
-        c = AnnData(c_X, dtype=np.float64)
-    assert not record
-    assert c_X is not c.X
-    assert c.X.dtype == np.float64
-
-
 def test_deprecated_write_attribute(tmp_path):
     pth = tmp_path / "file.h5"
     A = np.random.randn(20, 10)
