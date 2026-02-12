@@ -602,8 +602,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
-        can_set_direct_if_not_none = value is None or (
-            np.isscalar(value)
+        can_set_direct_if_not_none = (
+            value is None
             or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
@@ -614,9 +614,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.is_view:
             msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
-            new = self._mutated_copy(X=value)
-            self._init_as_actual(new)
-            return
         if value is not None:
             self.layers[None] = value
         else:
