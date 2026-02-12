@@ -5,7 +5,6 @@ from copy import deepcopy
 from functools import partial
 from importlib.metadata import version
 from importlib.util import find_spec
-from operator import mul
 from typing import TYPE_CHECKING
 
 import joblib
@@ -35,7 +34,8 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata.compat import CupyCSCMatrix, DaskArray, XDataArray
+from anndata._warnings import ImplicitModificationWarning
+from anndata.compat import DaskArray, XDataArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
     CUPY_MATRIX_PARAMS,
@@ -145,10 +145,13 @@ def test_views():
 
     assert adata[:, 0].is_view
     assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+        pytest.warns(FutureWarning, match=r"Automatic reshaping"),
+    ):
+        adata[:2, 0].X = [0, 0]
 
-    adata[:2, 0].X = [0, 0]
-
-    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
 
@@ -439,28 +442,19 @@ def test_not_set_subset_X_dask(matrix_type_no_gpu, subset_func):
 @IGNORE_SPARSE_EFFICIENCY_WARNING
 def test_set_scalar_subset_X(matrix_type, subset_func):
     adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
-    orig_X_val = adata.X.copy()
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"initializing view as actual"),
+        pytest.warns(FutureWarning, match=r"The ability to set X with a scalar value"),
+    ):
+        adata_subset.X = 1
 
-    if jnp is not None and isinstance(adata.X, jnp.ndarray):
-        with pytest.raises(TypeError, match=r"immutable"):
-            adata_subset.X = 1
-        return
-
-    adata_subset.X = 1
-
-    assert adata_subset.is_view
-    assert np.all(asarray(adata[subset_idx, :].X) == 1)
-    if isinstance(adata.X, CupyCSCMatrix):
-        # Comparison broken for CSC matrices
-        # https://github.com/cupy/cupy/issues/7757
-        assert asarray(orig_X_val.tocsr() != adata.X.tocsr()).sum() == mul(
-            *adata_subset.shape
-        )
-    else:
-        assert asarray(orig_X_val != adata.X).sum() == mul(*adata_subset.shape)
+    # Subset materializes on write
+    assert not adata_subset.is_view
+    assert np.all(asarray(adata_subset.X) == 1)
+    assert np.all(asarray(adata.X) == 0)
 
 
 # TODO: Use different kind of subsetting for adata and view
@@ -635,18 +629,17 @@ def test_view_of_view(adata_gen: ad.AnnData, subset_func, subset_func2) -> None:
     assert isinstance(view_of_view_copy.X, type(adata.X))
 
 
-def test_view_of_view_modification():
-    adata = ad.AnnData(np.zeros((10, 10)))
-    adata[0, :][:, 5:].X = np.ones(5)
-    assert np.all(adata.X[0, 5:] == np.ones(5))
-    adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2))
-    assert np.all(adata.X[1:3, 1:3] == np.ones((2, 2)))
-
-    adata.X = sparse.csr_matrix(adata.X)
-    adata[0, :][:, 5:].X = np.ones(5) * 2
-    assert np.all(asarray(adata.X)[0, 5:] == np.ones(5) * 2)
-    adata[[1, 2], :][:, [1, 2]].X = np.ones((2, 2)) * 2
-    assert np.all(asarray(adata.X)[1:3, 1:3] == np.ones((2, 2)) * 2)
+@pytest.mark.parametrize("matrix_type", [sparse.csr_matrix, np.array])
+def test_view_of_view_modification(
+    matrix_type: Callable[[np.ndarray], sparse.csr_matrix | np.ndarray],
+):
+    adata = ad.AnnData(matrix_type(np.zeros((10, 10))))
+    subset1 = adata[0, :]
+    subset = subset1[:, 5:]
+    subset.X = np.ones((1, 5))
+    assert np.all(np.ones(5) == subset.X)
+    assert np.all(asarray(subset1.X) == 0)
+    assert np.all(asarray(adata.X) == 0)
 
 
 def test_double_index(subset_func, subset_func2):
