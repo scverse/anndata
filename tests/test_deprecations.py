@@ -6,8 +6,6 @@ This includes correct behaviour as well as throwing warnings.
 
 from __future__ import annotations
 
-import warnings
-
 import h5py
 import numpy as np
 import pytest
