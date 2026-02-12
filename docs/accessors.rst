@@ -90,12 +90,15 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         It is independent of individual objects and can be inspected,
         checked for equality, used as mapping keys, or applied to concrete objects,
         e.g. via `ref in adata` or `adata[ref]`.
+        An example of this would be `A.obsm["d"][:, 2]` but not `A.obsm["d"]`,
+        which is a :term:`reference accessor`.
 
     accessor
         An instance of any of the `*Acc` classes, i.e. :class:`AdAcc`,
         or subclasses of :class:`MapAcc` or :class:`RefAcc`.
         Can be descended into via attribute access to get deeper accessors
         (e.g. `A` → `A.obs`) or references (e.g. `A.obs.index`, `A.obs["c"]`).
+        Their presence in an anndata object can also be checked via `acc in adata`.
 
     reference accessor
         :class:`!RefAcc` subclasses directly create :term:`reference`\ s (:class:`AdRef` instances).
