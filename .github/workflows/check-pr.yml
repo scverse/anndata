@@ -4,8 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - master
     types:
+      # title changes
+      - edited
       # milestone changes
       - milestoned
       - demilestoned
@@ -23,19 +24,47 @@ env:
   LABELS: ${{ join(github.event.pull_request.labels.*.name, '|') }}
 
 jobs:
+  # This job verifies that the milestone is present or not necessary
+  # and determines if “check-relnotes” needs to be run.
   check-milestone:
     name: "Triage: Check PR title, milestone, and labels"
     runs-on: ubuntu-latest
     steps:
-      - name: Check if merging isn’t blocked
-        uses: flying-sheep/check@v1
-        with:
-          success: ${{ ! contains(env.LABELS, 'DON’T MERGE') }}
       - name: Check if a milestone is necessary and exists
         uses: flying-sheep/check@v1
         with:
           success: ${{ github.event.pull_request.user.login == 'pre-commit-ci[bot]' || github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone') }}
+      - name: Check if the “Release notes” checkbox is checked and filled
+        uses: kaisugi/action-regex-match@v1.0.2
+        id: checked-relnotes
+        with:
+          text: ${{ github.event.pull_request.body }}
+          regex: '^\s*- \[x\].*Release note'
+          flags: m
       - name: Check if PR title is valid
+        id: check-title
         uses: amannn/action-semantic-pull-request@v6
         env: # Needs repo options: “Squash and merge” with commit message set to “PR title”
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      allow-no-relnotes: ${{ steps.checked-relnotes.outputs.match && true || false }}
+      type: ${{ steps.check-title.outputs.type }}
+  # This job verifies that the relevant release notes file has been modified.
+  check-relnotes:
+    name: Check for release notes
+    runs-on: ubuntu-latest
+    needs: check-milestone
+    if: github.event.pull_request.user.login != 'pre-commit-ci[bot]' && needs.check-milestone.outputs.allow-no-relnotes && !contains(fromJSON('["style","refactor","test","build","ci"]'), needs.check-milestone.outputs.type)
+    steps:
+      - uses: actions/checkout@v6
+        with: { filter: 'blob:none', fetch-depth: 0 }
+      - name: Find out if a relevant release fragment is added
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: | # this is intentionally a string
+            relnotes: 'docs/release-notes/${{ github.event.pull_request.number }}.${{ needs.check-milestone.outputs.type }}.md'
+      - name: Check if a relevant release fragment is added
+        uses: flying-sheep/check@v1
+        with:
+          success: ${{ steps.changes.outputs.relnotes }}

@@ -19,9 +19,10 @@
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
         "--color=yes",
-        "-vv",
+        "-vvv",
         "--strict-warnings",
         //"-nauto",
     ],
     "python.terminal.activateEnvironment": true,
+    "python.analysis.include": ["src/**/*", "ci/scripts/**/*", "tests/**/*"],
 }

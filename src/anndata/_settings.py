@@ -368,15 +368,18 @@ class SettingsManager:
         """
         restore = {a: getattr(self, a) for a in overrides}
         try:
-            # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding
+            # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding.
+            # Otherwise an error would be raised setting sharding before zarr version if the zarr version is 2.
             for k in self._config:
                 if k in overrides:
                     setattr(self, k, overrides.get(k))
             yield None
         finally:
-            # TODO: does the order need to be preserved when restoring?
-            for attr, value in restore.items():
-                setattr(self, attr, value)
+            # In the try block, we went in the forward order i.e., zarr version before sharding, but in the reset here, we go in the reverse order i.e., sharding before zarr version.
+            # Otherwise an error would be raised if we reversed the zarr version first and it was 3 previously.
+            for k in reversed(self._config.keys()):
+                if k in restore:
+                    setattr(self, k, restore.get(k))
 
     def __repr__(self) -> str:
         params = "".join(f"\t{k}={v!r},\n" for k, v in self._config.items())

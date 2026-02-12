@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from anndata._types import _ArrayStorageType, _GroupStorageType
-    from anndata.compat import CSArray, CSMatrix
+    from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
     from anndata.typing import AxisStorable, _InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
@@ -128,7 +128,7 @@ def _to_cpu_mem_wrapper(write_func):
     def wrapper(
         f,
         k,
-        cupy_val: CupyArray | CupyCSCMatrix | CupyCSRMatrix,
+        cupy_val: CupyArray | CupyCSMatrix,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
