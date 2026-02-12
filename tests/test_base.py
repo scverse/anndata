@@ -221,15 +221,13 @@ def test_convert_matrix(attr, when):
     assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
 
 
-@pytest.mark.parametrize(
-    "attr", ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
-)
-def test_attr_deletion(attr: str):
+def test_attr_deletion():
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
     empty = AnnData(None, obs=full.obs[[]], var=full.var[[]])
-    delattr(full, attr)
-    assert_equal(getattr(full, attr), getattr(empty, attr))
+    for attr in ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]:
+        delattr(full, attr)
+        assert_equal(getattr(full, attr), getattr(empty, attr))
     assert_equal(full, empty, exact=True)
 
 
