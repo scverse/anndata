@@ -70,6 +70,55 @@ def max_loaded_elems(request) -> int:
     return request.param
 
 
+def make_concat_adatas(
+    *,
+    array_type: Literal["array", "sparse", "sparse_array"] = "sparse",
+    axis: Literal[0, 1] = 0,
+    reindex: bool = True,
+    same_off_axis_names: bool = False,
+    gen_adata_kwargs: dict | None = None,
+):
+    """Generate adatas for concat tests.
+
+    Parameters
+    ----------
+    array_type
+        Type of array for X matrix ("array" for dense, "sparse" for sparse)
+    axis
+        Concatenation axis
+    reindex
+        Whether to randomize both axes (True) or only the concat axis (False)
+    same_off_axis_names
+        If True, keep identical off-axis names across all adatas (required for VDS)
+    gen_adata_kwargs
+        Optional kwargs to pass to gen_adata (e.g., obsm_types, varm_types, layers_types)
+    """
+    _, off_axis_name = _resolve_axis(1 - axis)
+    random_axes = {0, 1} if reindex else {axis}
+    sparse_fmt = "csr" if axis == 0 else "csc"
+    kw = gen_adata_kwargs if gen_adata_kwargs is not None else GEN_ADATA_OOC_CONCAT_ARGS
+
+    adatas = []
+    for i in range(3):
+        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
+        a = gen_adata(
+            (M, N),
+            X_type=get_array_type(array_type, axis),
+            sparse_fmt=sparse_fmt,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # Modify off-axis names unless same_off_axis_names is True
+        if not same_off_axis_names:
+            off_names = getattr(a, f"{off_axis_name}_names").array
+            off_names[1::2] = f"{i}-" + off_names[1::2]
+            setattr(a, f"{off_axis_name}_names", off_names)
+        adatas.append(a)
+
+    return adatas
+
+
 def _adatas_to_paths(adatas, tmp_path, file_format):
     """
     Gets list of adatas, writes them and returns their paths as zarr
@@ -97,9 +146,10 @@ def assert_eq_concat_on_disk(
     adatas,
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
-    max_loaded_elems: int | None = None,
     *args,
     merge_strategy: merge.StrategiesLiteral | None = None,
+    use_virtual_concat: bool = False,
+    max_loaded_elems: int | None = None,
     **kwargs,
 ):
     # create one from the concat function
@@ -109,8 +159,29 @@ def assert_eq_concat_on_disk(
     out_name = tmp_path / f"out.{file_format}"
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
+    concat_on_disk(
+        paths,
+        out_name,
+        *args,
+        use_virtual_concat=use_virtual_concat,
+        merge=merge_strategy,
+        **kwargs,
+    )
     with as_group(out_name, mode="r") as rg:
+        # Verify virtual datasets are created when expected
+        if use_virtual_concat and file_format == "h5ad":
+            x_elem = rg["X"]
+            if isinstance(x_elem, h5py.Dataset):
+                # Dense array - X is a dataset
+                assert x_elem.is_virtual, "Expected virtual dataset for dense X"
+            else:
+                # Sparse array - X is a group with data/indices datasets
+                assert x_elem["data"].is_virtual, (
+                    "Expected virtual dataset for sparse X/data"
+                )
+                assert x_elem["indices"].is_virtual, (
+                    "Expected virtual dataset for sparse X/indices"
+                )
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
 
@@ -139,11 +210,8 @@ def test_anndatas(
     reindex: bool,
     merge_strategy: merge.StrategiesLiteral,
 ):
-    _, off_axis_name = _resolve_axis(1 - axis)
-    random_axes = {0, 1} if reindex else {axis}
-    sparse_fmt = "csr" if axis == 0 else "csc"
-    kw = (
-        GEN_ADATA_OOC_CONCAT_ARGS
+    gen_adata_kwargs = (
+        None
         if not reindex
         else dict(
             obsm_types=(get_array_type("sparse", 1 - axis), np.ndarray, pd.DataFrame),
@@ -151,32 +219,38 @@ def test_anndatas(
             layers_types=(get_array_type("sparse", axis), np.ndarray, pd.DataFrame),
         )
     )
-
-    adatas = []
-    for i in range(3):
-        M, N = (np.random.randint(5, 10) if a in random_axes else 50 for a in (0, 1))
-        a = gen_adata(
-            (M, N),
-            X_type=get_array_type(array_type, axis),
-            sparse_fmt=sparse_fmt,
-            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
-            var_dtypes=[pd.CategoricalDtype(ordered=False)],
-            **kw,
-        )
-        # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
-        off_names[1::2] = f"{i}-" + off_names[1::2]
-        setattr(a, f"{off_axis_name}_names", off_names)
-        adatas.append(a)
+    adatas = make_concat_adatas(
+        array_type=array_type,
+        axis=axis,
+        reindex=reindex,
+        gen_adata_kwargs=gen_adata_kwargs,
+    )
 
     assert_eq_concat_on_disk(
         adatas,
         tmp_path,
         file_format,
-        max_loaded_elems,
+        max_loaded_elems=max_loaded_elems,
         axis=axis,
         join=join_type,
         merge_strategy=merge_strategy,
+    )
+
+
+@pytest.mark.parametrize("array_type", ["sparse", "array"], ids=["sparse", "dense"])
+def test_virtual_concat(tmp_path, array_type, axis):
+    """Verify virtual concat actually creates HDF5 virtual datasets when indices match."""
+    # Use same_off_axis_names=True so indices match and VDS can be used
+    adatas = make_concat_adatas(
+        array_type=array_type, axis=axis, reindex=False, same_off_axis_names=True
+    )
+    assert_eq_concat_on_disk(
+        adatas,
+        tmp_path,
+        "h5ad",
+        use_virtual_concat=True,
+        axis=axis,
+        join="inner",
     )
 
 
@@ -258,7 +332,13 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
         for i in range(len(xxxm_adatas)):
             xxxm_adatas[i] = xxxm_adatas[i].T
             xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
-    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
+    assert_eq_concat_on_disk(
+        xxxm_adatas,
+        tmp_path,
+        file_format,
+        join=join_type,
+        use_virtual_concat=False,
+    )
 
 
 def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
