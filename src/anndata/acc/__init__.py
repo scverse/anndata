@@ -365,10 +365,17 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
     >>> A.obsm["pca"][:, 0]
     A.obsm['pca'][:, 0]
 
+    Note that something like this is invalid,
+    as it references an array that isn’t aligned to an anndata dimension.
+
+    ..  code:: python
+
+        A.varm["PCs"]["cell-0", :]
+
     """
 
     dim: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsm[k].dim == 'obs'`."""
+    """Dimension this accessor refers to, e.g. `A.obsm[k].dim == 'obs'`."""
 
     k: str
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
@@ -421,7 +428,7 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     dim: Literal["obs", "var"]
-    """Axis this accessor refers to, e.g. `A.obsm.dim == 'obs'`."""
+    """Dimension this accessor refers to, e.g. `A.obsm.dim == 'obs'`."""
 
     _: KW_ONLY
     ref_class: type[R]
