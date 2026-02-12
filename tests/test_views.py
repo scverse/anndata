@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from copy import deepcopy
 from functools import partial
 from importlib.metadata import version
@@ -407,8 +407,22 @@ def test_set_scalar_subset_X(matrix_type, subset_func, *, copy_on_write_X: bool)
     subset_idx = subset_func(adata.obs_names)
 
     adata_subset = adata[subset_idx, :]
-
-    adata_subset.X = 1
+    ctx_managers = (
+        (
+            pytest.warns(
+                ImplicitModificationWarning, match=r"initializing view as actual"
+            ),
+            pytest.warns(
+                FutureWarning, match=r"The ability to set with a scalar value"
+            ),
+        )
+        if copy_on_write_X
+        else (nullcontext(),)
+    )
+    with ExitStack() as stack:
+        for mgr in ctx_managers:
+            stack.enter_context(mgr)
+        adata_subset.X = 1
 
     assert adata_subset.is_view != copy_on_write_X
     assert np.all(
