@@ -283,3 +283,46 @@ fragment.perf.name = "Performance"
 fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
 fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
+
+[tool.mypy]
+exclude = [
+    '^src/testing/anndata/__init__\.py$',
+    '^src/testing/anndata/_doctest\.py$',
+]
+explicit_package_bases = true
+ignore_missing_imports = true
+mypy_path = [ '$MYPY_CONFIG_FILE_DIR/src' ]
+
+[[tool.mypy.overrides]]
+module = [ "anndata/*" ]
+
+disable_error_code = [
+    "import-untyped",
+    "no-redef",
+    "attr-defined",
+    "union-attr",
+    "index",
+    "assignment",
+    "arg-type",
+    "return-value",
+    "type-arg",
+    "type-var",
+    "return",
+    "call-arg",
+    "misc",
+    "override",
+    "valid-type",
+    "has-type",
+    "name-defined",
+    "var-annotated",
+    "call-overload",
+    "operator",
+    "list-item",
+]
+
+[[tool.mypy.overrides]]
+module = [ "testing/*" ]
+
+disable_error_code = [
+    "attr-defined",
+]
