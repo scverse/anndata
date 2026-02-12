@@ -605,27 +605,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         else:
             X = self._X
         return X
-        # if self.n_obs == 1 and self.n_vars == 1:
-        #     return X[0, 0]
-        # elif self.n_obs == 1 or self.n_vars == 1:
-        #     if issparse(X): X = X.toarray()
-        #     return X.flatten()
-        # else:
-        #     return X
-
-    def _handle_view_X_cow(self, value: _XDataType | None):
-        if self._is_view:
-            if settings.copy_on_write_X:
-                msg = "Setting element `.X` of view, initializing view as actual."
-                warn(msg, ImplicitModificationWarning)
-                new = self._mutated_copy(X=value)
-                self._init_as_actual(new)
-                return True
-            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
-            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
-            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
-            warn(msg, FutureWarning)
-        return False
 
     @X.setter
     def X(self, value: _XDataType | None):
