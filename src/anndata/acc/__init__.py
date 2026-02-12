@@ -238,7 +238,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
                 raise TypeError(msg)
 
     def __repr__(self) -> str:
-        return f"A.layers[{self.k!r}]"
+        return "A.X" if self.k is None else f"A.layers[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
@@ -264,8 +264,8 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     ref_class: type[R]
     ref_acc_cls: type[LayerAcc] = LayerAcc
 
-    def __getitem__(self, k: str, /) -> LayerAcc[R]:
-        if not isinstance(k, str):
+    def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
+        if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
         return self.ref_acc_cls(k, ref_class=self.ref_class)
@@ -522,24 +522,16 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
 
 
 @dataclass(frozen=True)
-class AdAcc[R: AdRef](LayerAcc[R]):
+class AdAcc[R: AdRef]:
     r"""Accessor to create :class:`AdRef`\ s (:data:`A`).
 
     See examples below and in :mod:`anndata.acc`.
     """
 
-    k: None = field(init=False, default=None)
-    """: `A[:, :]` is equivalent to `A.layers[None][:, :]`."""  # weird “:” is load-bearing 🤷
-
     ref_class: type[R] = AdRef
 
     layer_cls: type[LayerAcc] = LayerAcc
-    """Class to use for `layers` accessors.
-
-    Note that :class:`!AdAcc` inherits from :class:`!LayerAcc`,
-    so if you want `A[:, :]` to inherit the behavior,
-    you need to create and use an :class:`!AdAcc` subclass.
-    """
+    """Class to use for `layers` accessors."""
 
     meta_cls: type[MetaAcc] = MetaAcc
     """Class to use for `obs`/`var` accessors."""
@@ -549,6 +541,14 @@ class AdAcc[R: AdRef](LayerAcc[R]):
 
     graph_cls: type[GraphAcc] = GraphAcc
     """Class to use for `obsp`/`varp` accessors."""
+
+    X: LayerAcc[R] = field(init=False)
+    """Access data matrix (shortcut for `A.layers[None]`).
+
+    >>> A.X[:, :]
+    >>> A.X["cell-1", :]
+    >>> A.X[:, "gene-5"]
+    """
 
     layers: LayerMapAcc[R] = field(init=False)
     """Access complete layers or 1D vectors across observations or variables.
@@ -614,7 +614,9 @@ class AdAcc[R: AdRef](LayerAcc[R]):
     })
 
     def __post_init__(self) -> None:
+        x = self.layer_cls(None, ref_class=self.ref_class)
         layers = LayerMapAcc(ref_class=self.ref_class, ref_acc_cls=self.layer_cls)
+        object.__setattr__(self, "X", x)
         object.__setattr__(self, "layers", layers)
         for dim in ("obs", "var"):
             meta = self.meta_cls(dim, ref_class=self.ref_class)
@@ -665,7 +667,7 @@ class AdAcc[R: AdRef](LayerAcc[R]):
         Examples
         --------
         >>> A.resolve("X[:,:]")
-        A[:, :]
+        A.X[:, :]
         >>> A.resolve("layers.y[c,:]")
         A.layers['y']['c', :]
         >>> A.resolve("layers.y[:,g]")

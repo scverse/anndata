@@ -16,9 +16,9 @@ For these purposes, they are
     along one or two dimensions of an :class:`~anndata.AnnData` object:
 
     >>> from anndata.acc import A
-    >>> A[:, "gene-3"]  # reference to `adata[:, "gene-3"].X` as 1D vector
-    A[:, 'gene-3']
-    >>> type(A[:, "gene-3"])
+    >>> A.X[:, "gene-3"]  # reference to `adata[:, "gene-3"].X` as 1D vector
+    A.X[:, 'gene-3']
+    >>> type(A.X[:, "gene-3"])
     <class 'anndata.acc.AdRef'>
 
     … and to use:
@@ -77,6 +77,7 @@ See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
     :toctree: generated/
     :template: class-minimal
 
+    AdAcc
     AdRef
 
 .. _reference accessors:
@@ -100,12 +101,9 @@ and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
     - - Class
       - Attributes
       - Examples
-    - - :class:`AdAcc`
-      - is a :class:`LayerAcc` with `.k=None`
-      - `A["c1", :]`, `A[:, "g1"]`, `A[:, :]`
     - - :class:`LayerAcc`
       - :attr:`LayerAcc.k`
-      - `A.layers["c"][:, "g0"]`
+      - `A.X[:, :]`, `A.layers["c"][:, "g0"]`
     - - :class:`MetaAcc`
       - :attr:`MetaAcc.dim`
       - `A.obs["a"]`, `A.var["b"]`
@@ -121,7 +119,6 @@ and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
         :toctree: generated/
         :template: class-minimal
 
-        AdAcc
         LayerAcc
         MetaAcc
         MultiAcc
@@ -135,7 +132,6 @@ and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 .. toctree::
    :hidden:
 
-   generated/anndata.acc.AdAcc
    generated/anndata.acc.LayerAcc
    generated/anndata.acc.MetaAcc
    generated/anndata.acc.MultiAcc

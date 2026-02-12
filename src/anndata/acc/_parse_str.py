@@ -25,7 +25,7 @@ def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
             return None
 
     if spec.startswith("X["):
-        return _parse_path_2d(lambda _: a, spec)
+        return _parse_path_2d(lambda _: a.X, spec)
     if "." not in spec:
         msg = (
             f"Cannot parse accessor {spec!r} that isn’t period-separated, "
@@ -43,7 +43,7 @@ def parse[P: AdRef](a: AdAcc[P], spec: str, *, strict: bool = True) -> P | None:
         case None:  # pragma: no cover
             msg = (
                 f"Unknown accessor {spec!r}. "
-                f"We support '{a.ATTRS}.*' and `AdRef` instances."
+                f"We support '{{{','.join(a.ATTRS)}}}.*' and `AdRef` instances."
             )
             raise ValueError(msg)
     msg = f"Unhandled accessor {spec!r}. This is a bug!"  # pragma: no cover

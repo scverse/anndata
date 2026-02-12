@@ -26,9 +26,9 @@ with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
 
 PATHS: list[tuple[AdRef, AdRefSer]] = [
-    (A[:, :], ["layers", None, None, None]),
-    (A[:, "gene-3"], ["layers", None, None, "gene-3"]),
-    (A["cell-5", :], ["layers", None, "cell-5", None]),
+    (A.X[:, :], ["layers", None, None, None]),
+    (A.X[:, "gene-3"], ["layers", None, None, "gene-3"]),
+    (A.X["cell-5", :], ["layers", None, "cell-5", None]),
     (A.obs["type"], ["obs", "type"]),
     (A.obs.index, ["obs", None]),
     (A.layers["a"][:, :], ["layers", "a", None, None]),
@@ -64,7 +64,7 @@ def test_repr(ad_ref: AdRef) -> None:
     from anndata.acc import A  # for eval
 
     assert repr(ad_ref) == str(ad_ref)
-    assert repr(ad_ref)[:2] in {"A.", "A["}
+    assert repr(ad_ref)[:2] == "A."
     assert eval(repr(ad_ref)) == ad_ref
     del A
 
@@ -86,7 +86,7 @@ def test_serialization_schema(ad_serialized: AdRefSer) -> None:
 @pytest.mark.parametrize(
     ("ad_ref", "dims"),
     [
-        pytest.param(A[:, :], {"obs", "var"}, id="x"),
+        pytest.param(A.X[:, :], {"obs", "var"}, id="x"),
         pytest.param(A.layers["y"][:, :], {"obs", "var"}, id="layer"),
         # selecting one obs gives a vector along the var dimension:
         pytest.param(A.layers["y"]["c", :], {"var"}, id="layer-obs"),
@@ -133,9 +133,9 @@ def test_match(*, obj: object, expected: object) -> None:
 @pytest.mark.parametrize(
     "mk_path",
     [
-        pytest.param(lambda: A[:3, :], id="x-partslice"),
-        pytest.param(lambda: A[:, b""], id="x-nostr"),
-        pytest.param(lambda: A[["a"], ["b"]], id="x-twolists"),
+        pytest.param(lambda: A.X[:3, :], id="x-partslice"),
+        pytest.param(lambda: A.X[:, b""], id="x-nostr"),
+        pytest.param(lambda: A.X[["a"], ["b"]], id="x-twolists"),
         pytest.param(lambda: A.layers[1], id="layers-nostr"),
         pytest.param(lambda: A.layers["a"][:3, :], id="layer-partslice"),
         pytest.param(lambda: A.layers["a"][:, b""], id="layer-nostr"),
@@ -160,8 +160,12 @@ def test_invalid(mk_path: Callable[[], AdRef]) -> None:
     [
         pytest.param(lambda l: A.obs[l("a", "b")], [A.obs["a"], A.obs["b"]], id="obs"),
         pytest.param(lambda l: A.var[l("x", "y")], [A.var["x"], A.var["y"]], id="var"),
-        pytest.param(lambda l: A[l("a", "b"), :], [A["a", :], A["b", :]], id="x-obs"),
-        pytest.param(lambda l: A[:, l("x", "y")], [A[:, "x"], A[:, "y"]], id="x-var"),
+        pytest.param(
+            lambda l: A.X[l("a", "b"), :], [A.X["a", :], A.X["b", :]], id="x-obs"
+        ),
+        pytest.param(
+            lambda l: A.X[:, l("x", "y")], [A.X[:, "x"], A.X[:, "y"]], id="x-var"
+        ),
         pytest.param(
             lambda l: A.layers["l"][l("a", "b"), :],
             [A.layers["l"]["a", :], A.layers["l"]["b", :]],
@@ -214,13 +218,13 @@ def test_special[C](
     "ad_ref",
     [
         *(p[0] for p in PATHS),
-        A,
+        A.X,
         A.obs,
         A.layers,
         A.layers["a"],
-        A.varm,
+        A.obsm,
         A.obsm["umap"],
-        A.obsp,
+        A.varp,
         A.varp["cons"],
     ],
     ids=str,
@@ -237,6 +241,8 @@ def test_in(adata: AnnData, ad_ref: AdRef) -> None:
         A.layers["b"],
         A.obsm["umap"][:, 3],
         A.obsm["b"],
+        A.varm,
+        A.obsp,
         A.varp["cons"]["cell-1", :],  # not a var name
         A.varp["cons"][:, "cell-2"],  # not a var name either
         A.varp["b"],

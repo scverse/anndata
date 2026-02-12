@@ -28,8 +28,7 @@ def _as_idx_2d(data: Sequence[str | int | None]) -> Idx2D | None:
 def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
     match data:
         case ["layers", str() | None as l, *idx] if idx := _as_idx_2d(idx):
-            layer = a if l is None else a.layers[l]
-            return layer[idx]
+            return a.layers[l][idx]
         case ["obs" | "var" as dim, str() | None as col]:
             acc = a.obs if dim == "obs" else a.var
             return acc.index if col is None else acc[col]

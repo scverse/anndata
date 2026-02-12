@@ -39,9 +39,9 @@ needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installe
 
 
 ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
-    (A[:, :], lambda ad: ad.X),
-    (A[:, "gene-3"], lambda ad: ad[:, "gene-3"].X),
-    (A["cell-5", :], lambda ad: ad["cell-5"].X),
+    (A.X[:, :], lambda ad: ad.X),
+    (A.X[:, "gene-3"], lambda ad: ad[:, "gene-3"].X),
+    (A.X["cell-5", :], lambda ad: ad["cell-5"].X),
     (A.layers["a"][:, :], lambda ad: ad.layers["a"]),
     (A.layers["a"][:, "gene-18"], lambda ad: ad[:, "gene-18"].layers["a"]),
     (A.layers["a"]["cell-77", :], lambda ad: ad["cell-77"].layers["a"]),
