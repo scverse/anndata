@@ -6,7 +6,7 @@ Accessors and paths
 .. module:: anndata.acc
 
 :mod:`!anndata.acc` provides :term:`accessor`\ s that create :term:`reference`\ s
-to 1D and 2D arrays in :class:`~anndata.AnnData` objects.
+to axis-aligned 1D and 2D arrays in :class:`~anndata.AnnData` objects.
 You can use these to drive e.g. plotting or validation code.
 For these purposes, they are
 
@@ -73,7 +73,7 @@ The central :term:`accessor` is :data:`!A`:
 
 .. autodata:: A
 
-See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s (:attr:`AdRef`\ s).
+See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s (i.e., :attr:`AdRef`\ s).
 
 ..  autosummary::
     :toctree: generated/
