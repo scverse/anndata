@@ -81,9 +81,9 @@ class AdRef[I: Hashable]:
     """
 
     acc: RefAcc[Self, I]
-    """The accessor containing information about this array.
+    r"""The accessor containing information about this array.
 
-    See :ref:`here <reference accessors>` for all possible types this can assume.
+    See :term:`reference accessor`\ s for all possible types this can assume.
     """
 
     idx: I
@@ -145,9 +145,9 @@ class MapAcc[R: RefAcc](abc.ABC):
 
 @dataclass(frozen=True)
 class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
-    """Abstract base class for reference accessors.
+    r"""Abstract base class for reference accessors.
 
-    See :ref:`here <reference accessors>` for all existing subclasses.
+    See :term:`reference accessor`\ s for all existing subclasses.
     """
 
     _: KW_ONLY

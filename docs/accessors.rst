@@ -5,15 +5,17 @@ Accessors and paths
 
 .. module:: anndata.acc
 
-:mod:`!anndata.acc` creates references to 1D and 2D arrays in an :class:`~anndata.AnnData` object.
+:mod:`!anndata.acc` provides :term:`accessor`\ s that create :term:`reference`\ s
+to 1D and 2D arrays in :class:`~anndata.AnnData` objects.
 You can use these to drive e.g. plotting or validation code.
 For these purposes, they are
 
 #.  easy to create:
 
-    The central :attr:`A` object is an accessor for the whole :class:`~anndata.AnnData` object,
-    and allows you to create :class:`AdRef` objects that reference arrays
-    along one or two dimensions of an :class:`~anndata.AnnData` object:
+    The central :attr:`A` object is an :term:`accessor` for the whole :class:`~anndata.AnnData` object,
+    and allows you to create :class:`AdRef` objects,
+    which are :term:`reference`\ s to arrays spanning one or two dimensions
+    of an :class:`~anndata.AnnData` object (without being bound to a specific object):
 
     >>> from anndata.acc import A
     >>> A.X[:, "gene-3"]  # reference to `adata[:, "gene-3"].X` as 1D vector
@@ -64,14 +66,14 @@ For these purposes, they are
 
 #.  extensible: see `extending accessors`_.
 
-API
----
+API & Glossary
+--------------
 
-The central starting point is :data:`!A`:
+The central :term:`accessor` is :data:`!A`:
 
 .. autodata:: A
 
-See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
+See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s (:attr:`AdRef`\ s).
 
 ..  autosummary::
     :toctree: generated/
@@ -80,41 +82,68 @@ See :class:`AdAcc` for examples of how to use it to create :attr:`AdRef`\ s.
     AdAcc
     AdRef
 
-.. _reference accessors:
+..  glossary::
 
-Reference accessors
-~~~~~~~~~~~~~~~~~~~
+    reference
+        An instance of :class:`AdRef`.
+        References a 1D or 2D array in :class:`~anndata.AnnData` objects.
+        It is independent of individual objects and can be inspected,
+        checked for equality, used as mapping keys, or applied to concrete objects,
+        e.g. via `ref in adata` or `adata[ref]`.
 
-The following :class:`!RefAcc` subclasses correspond to the various key-value stores that anndata exposes.
-They can be accessed from references using :attr:`AdRef.acc`,
-and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
+    accessor
+        An instance of any of the `*Acc` classes, i.e. :class:`AdAcc`,
+        or subclasses of :class:`MapAcc` or :class:`RefAcc`.
+        Can be descended into via attribute access to get deeper accessors
+        (e.g. `A` → `A.obs`) or references (e.g. `A.obs.index`, `A.obs["c"]`).
 
-..  autosummary::
-    :toctree: generated/
-    :template: class-minimal
+    reference accessor
+        :class:`!RefAcc` subclasses directly create :term:`reference`\ s (:class:`AdRef` instances).
+        They can be accessed from these references using the :attr:`AdRef.acc` attribute,
+        and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
-    RefAcc
+        ..  autosummary::
+            :toctree: generated/
+            :template: class-minimal
 
-..  list-table::
-    :header-rows: 1
+            RefAcc
 
-    - - Class
-      - Attributes
-      - Examples
-    - - :class:`LayerAcc`
-      - :attr:`LayerAcc.k`
-      - `A.X[:, :]`, `A.layers["c"][:, "g0"]`
-    - - :class:`MetaAcc`
-      - :attr:`MetaAcc.dim`
-      - `A.obs["a"]`, `A.var["b"]`
-    - - :class:`MultiAcc`
-      - :attr:`MultiAcc.dim`, :attr:`MultiAcc.k`
-      - `A.obsm["d"][:, 2]`
-    - - :class:`GraphAcc`
-      - :attr:`GraphAcc.dim`, :attr:`GraphAcc.k`
-      - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
+        ..  list-table::
+            :header-rows: 1
 
-..  hidden
+            -   - Class
+                - Attributes
+                - Examples
+            -   - :class:`LayerAcc`
+                - :attr:`LayerAcc.k`
+                - `A.X[:, :]`, `A.layers["c"][:, "g0"]`
+            -   - :class:`MetaAcc`
+                - :attr:`MetaAcc.dim`
+                - `A.obs["a"]`, `A.var["b"]`
+            -   - :class:`MultiAcc`
+                - :attr:`MultiAcc.dim`, :attr:`MultiAcc.k`
+                - `A.obsm["d"][:, 2]`
+            -   - :class:`GraphAcc`
+                - :attr:`GraphAcc.dim`, :attr:`GraphAcc.k`
+                - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
+
+    mapping accessor
+        :class:`MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
+        e.g. `A.layers` or `A.obsm` are both :class:`MapAcc`\ s,
+        while `A.layers["a"]` is a :class:`LayerAcc` and `A.obsm["b"]` is a :class:`MultiAcc`.
+        :class:`!MapAcc`\ s are mostly useful for extending,
+        but might be useful for APIs that need to refer to a :class:`~collections.abc.Mapping` of arrays:
+
+        ..  autosummary::
+            :toctree: generated/
+            :template: class-minimal
+
+            MapAcc
+            LayerMapAcc
+            MultiMapAcc
+            GraphMapAcc
+
+..  this indented code makes autosummary generate the pages
     ..  autosummary::
         :toctree: generated/
         :template: class-minimal
@@ -129,30 +158,14 @@ and are therefore useful in :ref:`matches <match>` or :func:`isinstance` checks:
 
         Idx2D
 
-.. toctree::
-   :hidden:
+..  toctree::
+    :hidden:
 
-   generated/anndata.acc.LayerAcc
-   generated/anndata.acc.MetaAcc
-   generated/anndata.acc.MultiAcc
-   generated/anndata.acc.GraphAcc
-   generated/anndata.acc.Idx2D
-
-Mapping accessors
-~~~~~~~~~~~~~~~~~
-
-Finally, these classes are mostly useful for extending,
-but might be useful for APIs that take a reference to a :class:`collections.abc.Mapping`
-of arrays:
-
-..  autosummary::
-    :toctree: generated/
-    :template: class-minimal
-
-    MapAcc
-    LayerMapAcc
-    MultiMapAcc
-    GraphMapAcc
+    generated/anndata.acc.LayerAcc
+    generated/anndata.acc.MetaAcc
+    generated/anndata.acc.MultiAcc
+    generated/anndata.acc.GraphAcc
+    generated/anndata.acc.Idx2D
 
 .. _extending accessors:
 
@@ -181,7 +194,7 @@ There are three layers of extensibility:
         plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
 
 
-#.  subclass one or more of the `reference accessors`_, and create a new :class:`AdAcc` instance:
+#.  subclass one or more of the :term:`reference accessor`\ s, and create a new :class:`AdAcc` instance:
 
     >>> from anndata.acc import AdAcc, AdRef, MetaAcc
     >>>
