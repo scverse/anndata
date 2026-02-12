@@ -133,6 +133,7 @@ def test_match(*, obj: object, expected: object) -> None:
 @pytest.mark.parametrize(
     "mk_path",
     [
+        pytest.param(lambda: A.X["c1"], id="x-notuple"),
         pytest.param(lambda: A.X[:3, :], id="x-partslice"),
         pytest.param(lambda: A.X[:, b""], id="x-nostr"),
         pytest.param(lambda: A.X[["a"], ["b"]], id="x-twolists"),

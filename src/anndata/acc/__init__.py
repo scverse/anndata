@@ -219,6 +219,9 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
         return super().__getitem__(idx)
 
     def dims(self, idx: Idx2D, /) -> set[Literal["obs", "var"]]:
+        if not isinstance(idx, tuple):
+            msg = f"Unsupported index {idx!r} is not a tuple. Did you mean `{self}[{idx!r}, :]`?"
+            raise TypeError(msg)
         for dim_idx in idx:
             if isinstance(dim_idx, str):
                 continue
