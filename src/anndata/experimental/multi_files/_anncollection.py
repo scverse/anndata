@@ -56,7 +56,7 @@ def _harmonize_types(attrs_keys, adatas):
         arrs = []
         for a in adatas:
             attr_arr = getattr(a, attr)
-            if key is not None:
+            if (key is None and attr == "layers") or key is not None:
                 attr_arr = attr_arr[key]
             arrs.append(attr_arr)
         # hacky but numpy find_common_type doesn't work with categoricals
