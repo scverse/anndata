@@ -577,6 +577,6 @@ def _get_vector_ambiguous(
         case True, False:
             ref = (A.obs if dim == "obs" else A.var)[k]
         case False, True:
-            acc = A if layer is None else A.layers[layer]
+            acc = A.layers[layer]
             ref = acc[k, :] if idxdim == "obs" else acc[:, k]
     return adata[ref]
