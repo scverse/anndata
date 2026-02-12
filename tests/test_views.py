@@ -425,7 +425,7 @@ def test_set_scalar_subset_X(matrix_type, subset_func, *, copy_on_write_X: bool)
             ),
         )
         if copy_on_write_X
-        else (nullcontext(),)
+        else ()
     )
     with ExitStack() as stack:
         for mgr in ctx_managers:
