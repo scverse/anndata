@@ -52,7 +52,9 @@ class Raw:
             self.varm = varm
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(adata.X, CupyArray | CupySparseMatrix):
+            if adata.X is None:
+                self._X = None
+            elif isinstance(adata.X, CupyArray | CupySparseMatrix):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
@@ -171,7 +173,7 @@ class Raw:
         from anndata import AnnData
 
         return AnnData(
-            X=self.X.copy(),
+            X=None if self.X is None else self.X.copy(),
             var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),

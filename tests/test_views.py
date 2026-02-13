@@ -6,6 +6,7 @@ from functools import partial
 from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
+from warnings import filterwarnings
 
 import joblib
 import numpy as np
@@ -545,6 +546,9 @@ def test_view_delitem(attr):
     "attr", ["X", "obs", "var", "obsm", "varm", "obsp", "varp", "layers", "uns"]
 )
 def test_view_delattr(attr, subset_func):
+    # we shouldn’t trigger a warning here
+    filterwarnings("error", category=ad.ImplicitModificationWarning)
+
     base = gen_adata((10, 10), **GEN_ADATA_DASK_ARGS)
     orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
@@ -553,8 +557,20 @@ def test_view_delattr(attr, subset_func):
     delattr(subset, attr)
 
     assert not subset.is_view
-    # Should now have same value as default
-    assert_equal(getattr(subset, attr), getattr(empty, attr))
+    # Should now have same value as default, except for `layers`, which still has the `None` key for `subset`
+    if attr == "layers":
+        assert_equal(
+            {k: v for k, v in getattr(subset, attr).items() if k is not None},
+            getattr(empty, attr),
+        )
+    else:
+        assert_equal(getattr(subset, attr), getattr(empty, attr))
+
+    if attr in {"obs", "var"}:
+        assert getattr(subset, attr).empty
+    else:
+        assert not getattr(subset, attr), "should be falsy"
+
     assert orig_hash == tokenize(base)  # Original should not be modified
 
 

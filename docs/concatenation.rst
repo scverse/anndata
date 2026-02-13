@@ -29,6 +29,7 @@ Let's start off with an example:
         uns: 'bulk_labels_colors', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
+        layers: None
         obsp: ...
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
@@ -42,6 +43,7 @@ If we split this object up by clusters of observations, then stack those subsets
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
+        layers: None
 
 Note that we concatenated along the observations by default, and that most elements aligned to the observations were concatenated as well.
 A notable exception is :attr:`~anndata.AnnData.obsp`, which can be re-enabled with the `pairwise` keyword argument.
@@ -168,6 +170,7 @@ First, our example case:
         uns: 'pca'
         obsm: 'X_pca'
         varm: 'PCs'
+        layers: None
 
 Now we will split this object by the categorical `"blobs"` and recombine it to illustrate different merge strategies.
 
@@ -184,6 +187,7 @@ Now we will split this object by the categorical `"blobs"` and recombine it to i
         uns: 'pca'
         obsm: 'X_pca', 'qc'
         varm: 'PCs', '0_qc'
+        layers: None
 
 `adatas` is now a list of datasets with disjoint sets of observations and a common set of variables.
 Each object has had QC metrics computed, with observation-wise metrics stored under `"qc"` in `.obsm`, and variable-wise metrics stored with a unique key for each subset.
@@ -193,16 +197,19 @@ Taking a look at how this affects concatenation:
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
+        layers: None
     >>> ad.concat(adatas, merge="same")
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
         varm: 'PCs'
+        layers: None
     >>> ad.concat(adatas, merge="unique")
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
         obsm: 'X_pca', 'qc'
         varm: 'PCs', '0_qc', '1_qc', '2_qc', '3_qc', '4_qc'
+        layers: None
 
 Note that comparisons are made after indices are aligned.
 That is, if the objects only share a subset of indices on the alternative axis, it's only required that values for those indices match when using a strategy like `"same"`.
