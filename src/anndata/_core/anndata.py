@@ -1289,7 +1289,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         deprecation_msg(
             "obs_vector",
             "anndata.acc.A",
-            "E.g. `vec = A.obs['foo'](adata)` or `vec = A.layers['l']['bar', :](adata)`",
+            "E.g. `vec = adata[A.obs['foo']]` or `vec = adata[A.layers['l']['bar', :]]`",
         )
     )
     def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
@@ -1318,7 +1318,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         deprecation_msg(
             "var_vector",
             "anndata.acc.A",
-            "E.g. `vec = A.var['foo'](adata)` or `vec = A.layers['l'][:, 'bar'](adata)`",
+            "E.g. `vec = adata[A.var['foo']]` or `vec = adata[A.layers['l'][:, 'bar']]`",
         )
     )
     def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
