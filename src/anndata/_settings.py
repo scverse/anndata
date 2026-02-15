@@ -12,6 +12,17 @@ from inspect import Parameter, signature
 from types import GenericAlias, NoneType
 from typing import TYPE_CHECKING, NamedTuple, cast
 
+from ._repr_constants import (
+    DEFAULT_FOLD_THRESHOLD,
+    DEFAULT_MAX_CATEGORIES,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_MAX_FIELD_WIDTH,
+    DEFAULT_MAX_ITEMS,
+    DEFAULT_MAX_LAZY_CATEGORIES,
+    DEFAULT_MAX_README_SIZE,
+    DEFAULT_TYPE_WIDTH,
+    DEFAULT_UNIQUE_LIMIT,
+)
 from ._warnings import warn
 from .compat import old_positionals
 
@@ -533,6 +544,110 @@ settings.register(
     ),
     validate=validate_bool,
     get_from_env=check_and_get_bool,
+)
+
+
+# HTML representation settings
+settings.register(
+    "repr_html_enabled",
+    default_value=True,
+    description="Whether to use rich HTML representation in Jupyter notebooks. Set to False to use plain text repr.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "repr_html_fold_threshold",
+    default_value=DEFAULT_FOLD_THRESHOLD,
+    description="Auto-fold sections in HTML repr when they have more than this many entries.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_depth",
+    default_value=DEFAULT_MAX_DEPTH,
+    description="Maximum recursion depth for nested AnnData objects in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_items",
+    default_value=DEFAULT_MAX_ITEMS,
+    description="Maximum number of items to show per section in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_categories",
+    default_value=DEFAULT_MAX_CATEGORIES,
+    description="Maximum number of category values to display inline in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_lazy_categories",
+    default_value=DEFAULT_MAX_LAZY_CATEGORIES,
+    description=(
+        "Maximum categories to load for lazy categoricals in HTML repr. "
+        "For lazy AnnData (from read_lazy()), loading categories requires reading "
+        "from disk. This limit prevents loading too many categories. "
+        "Set to 0 to disable loading categories entirely (metadata-only mode)."
+    ),
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_unique_limit",
+    default_value=DEFAULT_UNIQUE_LIMIT,
+    description="Maximum number of rows to compute unique counts for in HTML repr. Set to 0 to disable.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_dataframe_expand",
+    default_value=False,
+    description=(
+        "Whether to show expandable pandas DataFrame previews in HTML repr. "
+        "When enabled, DataFrames in obsm/varm can be expanded to show their content "
+        "using pandas _repr_html_() (rich Jupyter-style output). Configure pandas "
+        "display options to control output: pd.set_option('display.max_rows', 10)"
+    ),
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "repr_html_max_field_width",
+    default_value=DEFAULT_MAX_FIELD_WIDTH,
+    description="Maximum width in pixels for the field name column in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_type_width",
+    default_value=DEFAULT_TYPE_WIDTH,
+    description="Width in pixels for the type column in HTML repr.",
+    validate=validate_int,
+    get_from_env=check_and_get_int,
+)
+
+settings.register(
+    "repr_html_max_readme_size",
+    default_value=DEFAULT_MAX_README_SIZE,
+    description=(
+        "Maximum size in characters for README content in HTML repr. "
+        "READMEs larger than this will be truncated with a note. "
+        "Set to 0 to disable truncation (not recommended for very large READMEs)."
+    ),
+    validate=validate_int,
+    get_from_env=check_and_get_int,
 )
 
 
