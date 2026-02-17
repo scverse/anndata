@@ -499,8 +499,11 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
             return False
         if idx is None:
             return True
-        [i] = (i for i in idx if isinstance(i, str))
-        return i in getattr(adata, self.dim).index
+        match [i for i in idx if isinstance(i, str)]:
+            case []:
+                return True
+            case [i]:
+                return i in getattr(adata, self.dim).index
 
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
         df = cast("pd.DataFrame", getattr(adata, self.dim))
