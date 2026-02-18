@@ -10,7 +10,7 @@ from copy import copy, deepcopy
 from functools import partial, singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -49,7 +49,7 @@ from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _normalize_indices, _subset, array_api_ix, get_vector
+from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .storage import coerce_array
@@ -59,10 +59,11 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal, NoReturn
+    from typing import Any, ClassVar, Literal
 
     from zarr.storage import StoreLike
 
+    from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import XDataset
     from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -662,35 +663,22 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         else:
             X = self._X
         return X
-        # if self.n_obs == 1 and self.n_vars == 1:
-        #     return X[0, 0]
-        # elif self.n_obs == 1 or self.n_vars == 1:
-        #     if issparse(X): X = X.toarray()
-        #     return X.flatten()
-        # else:
-        #     return X
-
-    def _handle_view_X_cow(self, value: _XDataType | None):
-        if self._is_view:
-            if settings.copy_on_write_X:
-                msg = "Setting element `.X` of view, initializing view as actual."
-                warn(msg, ImplicitModificationWarning)
-                new = self._mutated_copy(X=value)
-                self._init_as_actual(new)
-                return True
-            msg = "Setting element `.X` of view of `AnnData` object will obey copy-on-write semantics in the next minor release. "
-            "In other words, this subset of your original `AnnData` will be copied-in-place and initialized with the value passed into this setter. "
-            "Set `anndata.settings.copy_on_write_X = True` to begin opting in to this behavior."
-            warn(msg, FutureWarning)
-        return False
 
     @X.setter
-    def X(self, value: _XDataType | None):  # noqa: PLR0912
+    def X(self, value: _XDataType | None):
         value = (
             coerce_array(value, name="X", allow_array_like=True)
             if value is not None
             else None
         )
+        if np.isscalar(value) and value is not None:
+            msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
+            warn(msg, FutureWarning)
+            value = np.full(self.shape, fill_value=value)
+        if hasattr(value, "shape") and value.shape != self.shape:
+            msg = "Automatic reshaping when setting X will be removed in the future."
+            warn(msg, FutureWarning)
+            value = value.reshape(self.shape)
         can_set_direct_if_not_none = value is None or (
             np.isscalar(value)
             or (hasattr(value, "shape") and (self.shape == value.shape))
@@ -700,83 +688,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if not can_set_direct_if_not_none:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
-        if self._handle_view_X_cow(value):
-            return None
-        if value is None:
-            if self.isbacked:
-                msg = "Cannot currently remove data matrix from backed object."
-                raise NotImplementedError(msg)
-            if self.is_view:
-                self._init_as_actual(self.copy())
-            self._X = None
-            return
-
-        # If indices are both arrays, we need to modify them
-        # so we don’t set values like coordinates
-        # This can occur if there are successive views
-        # Handle IndexManager by extracting array_api compat if possible
-        # Otherwise fall back to numpy
-        oidx, vidx = (
-            (
-                idx.get_for_array(self._adata_ref._X)
-                if has_xp(self._adata_ref._X)
-                else np.array(idx)
-            )
-            if isinstance(idx, IndexManager)
-            else idx
-            for idx in (self._oidx, self._vidx)
-        )
-        if (
-            self.is_view
-            and isinstance(self._oidx, IndexManager)
-            and isinstance(self._vidx, IndexManager)
-        ):
-            oidx, vidx = array_api_ix(oidx, vidx)
-        if not np.isscalar(value):
-            if self.is_view and any(
-                isinstance(idx, np.ndarray) and len(np.unique(idx)) != len(idx.ravel())
-                for idx in [oidx, vidx]
-            ):
-                msg = (
-                    "You are attempting to set `X` to a matrix on a view which has non-unique indices. "
-                    "The resulting `adata.X` will likely not equal the value to which you set it. "
-                    "To avoid this potential issue, please make a copy of the data first. "
-                    "In the future, this operation will throw an error."
-                )
-                warn(msg, FutureWarning)
-            if self.shape != value.shape:
-                # For assigning vector of values to 2d array or matrix
-                # Not necessary for row of 2d array
-                value = value.reshape(self.shape)
-        if self.isbacked:
-            if self.is_view:
-                X = self.file["X"]
-                if isinstance(X, h5py.Group):
-                    msg = "Cannot write to views of sparse backed files"
-                    raise NotImplementedError(msg)
-                X[oidx, vidx] = value
-            else:
-                self._set_backed("X", value)
-        elif self.is_view:
-            if sparse.issparse(self._adata_ref._X) and isinstance(value, np.ndarray):
-                if isinstance(self._adata_ref.X, CSArray):
-                    memory_class = sparse.coo_array
-                else:
-                    memory_class = sparse.coo_matrix
-                value = memory_class(value)
-            elif sparse.issparse(value) and isinstance(self._adata_ref._X, np.ndarray):
-                msg = (
-                    "Trying to set a dense array with a sparse array on a view. "
-                    "Densifying the sparse array. "
-                    "This may incur excessive memory usage"
-                )
-                warn(msg, UserWarning)
-                value = value.toarray()
-            msg = "Modifying `X` on a view results in data being overridden"
+        if self.is_view:
+            msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
-            self._adata_ref._X[oidx, vidx] = value
-        else:
-            self._X = value
+            new = self._mutated_copy(X=value)
+            self._init_as_actual(new)
+            return
+        self._X = value
 
     @X.deleter
     def X(self):
@@ -1178,8 +1096,17 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if obs == slice(None):
             del self._var.iloc[var, :]
 
-    def __getitem__(self, index: Index) -> AnnData:
-        """Returns a sliced view of the object."""
+    @overload
+    def __getitem__(self, index: AdRef) -> Array: ...
+    @overload
+    def __getitem__(self, index: Index) -> AnnData: ...
+    def __getitem__(self, index: Index | AdRef) -> AnnData | Array:
+        """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
+        from ..acc import AdRef
+
+        if isinstance(index, AdRef):
+            return index.acc.get(self, index.idx)
+
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
@@ -1416,29 +1343,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
-    def _get_X(self, *, use_raw: bool = False, layer: str | None = None):
-        """\
-        Convenience method for getting expression values
-        with common arguments and error handling.
-        """
-        is_layer = layer is not None
-        if use_raw and is_layer:
-            msg = (
-                "Cannot use expression from both layer and raw. You provided:"
-                f"`use_raw={use_raw}` and `layer={layer}`"
-            )
-            raise ValueError(msg)
-        if is_layer:
-            return self.layers[layer]
-        elif use_raw:
-            if self.raw is None:
-                msg = "This AnnData doesn’t have a value in `.raw`."
-                raise ValueError(msg)
-            return self.raw.X
-        else:
-            return self.X
-
-    def obs_vector(self, k: str, *, layer: str | None = None) -> np.ndarray:
+    @deprecated(
+        deprecation_msg(
+            "obs_vector",
+            "anndata.acc.A",
+            "E.g. `vec = adata[A.obs['foo']]` or `vec = adata[A.layers['l']['bar', :]]`",
+        )
+    )
+    def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1458,19 +1370,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each obs in the same order
         as :attr:`obs_names`.
         """
-        if layer == "X":
-            if "X" in self.layers:
-                pass
-            else:
-                msg = (
-                    "In a future version of AnnData, access to `.X` by passing"
-                    " `layer='X'` will be removed. Instead pass `layer=None`."
-                )
-                warn(msg, FutureWarning)
-                layer = None
-        return get_vector(self, k, "obs", "var", layer=layer)
+        return _get_vector_ambiguous(self, k, "obs", layer=layer)
 
-    def var_vector(self, k, *, layer: str | None = None) -> np.ndarray:
+    @deprecated(
+        deprecation_msg(
+            "var_vector",
+            "anndata.acc.A",
+            "E.g. `vec = adata[A.var['foo']]` or `vec = adata[A.layers['l'][:, 'bar']]`",
+        )
+    )
+    def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
         Convenience function for returning a 1 dimensional ndarray of values
         from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
@@ -1490,41 +1399,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         A one dimensional ndarray, with values for each var in the same order
         as :attr:`var_names`.
         """
-        if layer == "X":
-            if "X" in self.layers:
-                pass
-            else:
-                msg = (
-                    "In a future version of AnnData, access to `.X` by passing "
-                    "`layer='X'` will be removed. Instead pass `layer=None`."
-                )
-                warn(msg, FutureWarning)
-                layer = None
-        return get_vector(self, k, "var", "obs", layer=layer)
+        return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    @deprecated(deprecation_msg("_get_obs_array", "obs_vector"))
-    def _get_obs_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
-        """\
-        Get an array from the layer (default layer='X') along the :attr:`obs`
-        dimension by first looking up `obs.keys` and then :attr:`obs_names`.
-        """
-        if not use_raw or k in self.obs.columns:
-            return self.obs_vector(k=k, layer=layer)
-        else:
-            return self.raw.obs_vector(k)
-
-    @deprecated(deprecation_msg("_get_var_array", "var_vector"))
-    def _get_var_array(self, k, use_raw=False, layer=None):  # noqa: FBT002
-        """\
-        Get an array from the layer (default layer='X') along the :attr:`var`
-        dimension by first looking up `var.keys` and then :attr:`var_names`.
-        """
-        if not use_raw or k in self.var.columns:
-            return self.var_vector(k=k, layer=layer)
-        else:
-            return self.raw.var_vector(k)
-
-    def _mutated_copy(self, **kwargs):
+    def _mutated_copy(self, **kwargs) -> AnnData:
         """Creating AnnData with attributes optionally specified via kwargs."""
         if self.isbacked and (
             "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)
@@ -1933,9 +1810,32 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.var.index[~self.var.index.isna()].has_duplicates:
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: Any) -> NoReturn:
-        msg = "AnnData has no attribute __contains__, don’t check `in adata`."
-        raise AttributeError(msg)
+    def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
+        """Check if array is in AnnData.
+
+        When passed a :class:`~anndata.acc.MapAcc`,
+        it will check if the referenced map has any entries,
+        e.g. `A.obsm in adata` will return `True` if `adata.obsm` is not empty.
+        """
+        from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
+
+        match key:
+            case LayerMapAcc():
+                return bool(self.layers)
+            case MultiMapAcc():
+                return bool(getattr(self, f"{key.dim}m"))
+            case GraphMapAcc():
+                return bool(getattr(self, f"{key.dim}p"))
+            case MapAcc():  # to check MapAccs, we need to know the attribute name
+                msg = f"Unknown MapAcc subclass {type(key)}."
+                raise TypeError(msg)
+            case RefAcc():
+                return key.isin(self)
+            case AdRef():
+                return key.acc.isin(self, key.idx)
+            case _:
+                msg = f"Unexpected key {key!r} is not a valid reference (`anndata.acc.*`)."
+                raise TypeError(msg)
 
     def _check_dimensions(self, key=None):
         key = {"obsm", "varm"} if key is None else {key}

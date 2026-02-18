@@ -31,6 +31,7 @@ class ExtensionNamespace(Protocol):
 class SupportsArrayApi(Protocol):
     device: str
     shape: tuple[int, ...]
+    size: int
 
     def __array_namespace__(
         self,

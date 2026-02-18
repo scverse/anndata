@@ -13,6 +13,16 @@ The central class:
    AnnData
 ```
 
+Its attributes are reflected in the {doc}`/accessors` API ({mod}`!anndata.acc`).
+If you want to write e.g. plotting or validation code for anndata objects, look there!
+
+```{eval-rst}
+.. toctree::
+   :hidden:
+
+   anndata.acc <accessors>
+```
+
 (combining-api)=
 
 ## Combining
@@ -266,6 +276,7 @@ Types used by the former:
 
    typing.Index1D
    typing.Index
+   typing.InMemoryArray
    typing.AxisStorable
    typing.RWAble
 ```

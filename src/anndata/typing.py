@@ -78,19 +78,19 @@ type Index[_M: IndexManager] = (
 )
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
 
-_XDataType: TypeAlias = (  # noqa: UP040
+type InMemoryArray = (
     np.ndarray
     | ma.MaskedArray
     | CSMatrix
     | CSArray
-    | H5Array
-    | ZarrArray
-    | ZappyArray
-    | abc.CSRDataset
-    | abc.CSCDataset
     | DaskArray
     | CupyArray
     | CupySparseMatrix
+)
+"""An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
+
+_XDataType: TypeAlias = (  # noqa: UP040
+    InMemoryArray | H5Array | ZarrArray | ZappyArray | abc.CSRDataset | abc.CSCDataset
 )
 _ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
 _InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
@@ -101,5 +101,5 @@ type AxisStorable = (
 )
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-type RWAble = AxisStorable | AnnData | pd.Categorical | pd.api.extensions.ExtensionArray
+type RWAble = AxisStorable | AnnData | pd.api.extensions.ExtensionArray
 """A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
