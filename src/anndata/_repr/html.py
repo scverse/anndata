@@ -78,8 +78,6 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from anndata import AnnData
 
     from .registry import SectionFormatter

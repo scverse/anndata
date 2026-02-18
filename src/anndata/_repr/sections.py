@@ -543,7 +543,9 @@ def _generate_raw_repr_html(
                 f"<div><strong>obs_names:</strong> {format_index_preview(obs_names)}</div>"
             )
         else:
-            parts.append("<div><strong>obs_names:</strong> <em>not available</em></div>")
+            parts.append(
+                "<div><strong>obs_names:</strong> <em>not available</em></div>"
+            )
     except Exception:  # noqa: BLE001
         parts.append("<div><strong>obs_names:</strong> <em>not available</em></div>")
     try:
@@ -553,7 +555,9 @@ def _generate_raw_repr_html(
                 f"<div><strong>var_names:</strong> {format_index_preview(var_names)}</div>"
             )
         else:
-            parts.append("<div><strong>var_names:</strong> <em>not available</em></div>")
+            parts.append(
+                "<div><strong>var_names:</strong> <em>not available</em></div>"
+            )
     except Exception:  # noqa: BLE001
         parts.append("<div><strong>var_names:</strong> <em>not available</em></div>")
     parts.append("</div>")
