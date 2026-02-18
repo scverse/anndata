@@ -3283,6 +3283,7 @@ Size bomb below (50KB):
                 "shape": shape,
                 "dtype": dtype,
                 "ndim": len(shape),
+                "size": int(np.prod(shape)),
                 "device": device,
                 "__array_namespace__": lambda self, **kw: ns_module,
                 "to_device": lambda self, dev, /, **kw: self,
