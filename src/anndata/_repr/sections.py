@@ -58,6 +58,7 @@ from .registry import (
 )
 from .utils import (
     escape_html,
+    format_index_preview,
     format_number,
 )
 
@@ -531,6 +532,30 @@ def _generate_raw_repr_html(
     parts.append('<span class="anndata-header__type">Raw</span>')
     shape_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
     parts.append(f'<span class="anndata-header__shape">{shape_str}</span>')
+    parts.append("</div>")
+
+    # Index preview (obs_names and var_names)
+    parts.append('<div class="anndata-header__index">')
+    try:
+        obs_names = getattr(raw, "obs_names", None)
+        if obs_names is not None:
+            parts.append(
+                f"<div><strong>obs_names:</strong> {format_index_preview(obs_names)}</div>"
+            )
+        else:
+            parts.append("<div><strong>obs_names:</strong> <em>not available</em></div>")
+    except Exception:  # noqa: BLE001
+        parts.append("<div><strong>obs_names:</strong> <em>not available</em></div>")
+    try:
+        var_names = getattr(raw, "var_names", None)
+        if var_names is not None:
+            parts.append(
+                f"<div><strong>var_names:</strong> {format_index_preview(var_names)}</div>"
+            )
+        else:
+            parts.append("<div><strong>var_names:</strong> <em>not available</em></div>")
+    except Exception:  # noqa: BLE001
+        parts.append("<div><strong>var_names:</strong> <em>not available</em></div>")
     parts.append("</div>")
 
     # X section - show matrix info (with error handling)

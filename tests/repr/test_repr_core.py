@@ -604,9 +604,9 @@ class TestIndexPreviewRendering:
     def test_format_index_preview_decodes_bytes(self):
         """Test index preview decodes bytes values."""
         # Can't easily set bytes index, so just verify function exists
-        from anndata._repr.html import _format_index_preview
+        from anndata._repr.utils import format_index_preview
 
-        assert callable(_format_index_preview)
+        assert callable(format_index_preview)
 
 
 class TestRenderHeaderBadges:

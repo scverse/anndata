@@ -67,6 +67,7 @@ from .sections import (
 )
 from .utils import (
     escape_html,
+    format_index_preview,
     format_memory_size,
     format_number,
     get_anndata_version,
@@ -588,46 +589,15 @@ def _render_index_preview(adata: AnnData) -> str:
     parts = ['<div class="anndata-header__index">']
 
     # obs_names preview
-    obs_preview = _format_index_preview(adata.obs_names)
+    obs_preview = format_index_preview(adata.obs_names, DEFAULT_PREVIEW_ITEMS)
     parts.append(f"<div><strong>obs_names:</strong> {obs_preview}</div>")
 
     # var_names preview
-    var_preview = _format_index_preview(adata.var_names)
+    var_preview = format_index_preview(adata.var_names, DEFAULT_PREVIEW_ITEMS)
     parts.append(f"<div><strong>var_names:</strong> {var_preview}</div>")
 
     parts.append("</div>")
     return "\n".join(parts)
-
-
-def _format_index_preview(index: pd.Index) -> str:
-    """Format a preview of an index.
-
-    Handles bytes index values (from older h5ad files) by decoding them.
-    """
-    n = len(index)
-    if n == 0:
-        return "<em>empty</em>"
-
-    def format_value(x: object) -> str:
-        """Format a single index value, decoding bytes if needed."""
-        if isinstance(x, bytes):
-            try:
-                return x.decode("utf-8")
-            except UnicodeDecodeError:
-                return x.decode("latin-1")
-        return str(x)
-
-    preview_n = DEFAULT_PREVIEW_ITEMS
-    if n <= preview_n * 2:
-        # Show all
-        items = [escape_html(format_value(x)) for x in index]
-    else:
-        # Show first and last
-        first = [escape_html(format_value(x)) for x in index[:preview_n]]
-        last = [escape_html(format_value(x)) for x in index[-preview_n:]]
-        items = [*first, "...", *last]
-
-    return ", ".join(items)
 
 
 def _render_max_depth_indicator(adata: AnnData) -> str:

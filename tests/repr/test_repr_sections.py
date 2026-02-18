@@ -53,6 +53,88 @@ class TestRawSection:
         v = validate_html(html)
         v.assert_section_exists("raw")
 
+    def test_raw_index_preview_obs_names(self, validate_html):
+        """Test raw expanded view shows obs_names preview."""
+        adata = AnnData(
+            np.zeros((5, 10)),
+            obs=pd.DataFrame(index=["alpha", "beta", "gamma", "delta", "epsilon"]),
+        )
+        adata.raw = adata.copy()
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_text_visible("obs_names")
+        v.assert_text_visible("alpha")
+        v.assert_text_visible("epsilon")
+
+    def test_raw_index_preview_var_names(self, validate_html):
+        """Test raw expanded view shows var_names preview."""
+        adata = AnnData(
+            np.zeros((5, 3)),
+            var=pd.DataFrame(index=["geneA", "geneB", "geneC"]),
+        )
+        adata.raw = adata.copy()
+        html = adata._repr_html_()
+        v = validate_html(html)
+        v.assert_text_visible("var_names")
+        v.assert_text_visible("geneA")
+        v.assert_text_visible("geneC")
+
+    def test_raw_index_preview_truncation(self):
+        """Test raw index preview truncates long indices with ellipsis."""
+        adata = AnnData(
+            np.zeros((20, 15)),
+            obs=pd.DataFrame(index=[f"cell_{i}" for i in range(20)]),
+            var=pd.DataFrame(index=[f"gene_{i}" for i in range(15)]),
+        )
+        adata.raw = adata.copy()
+        html = adata._repr_html_()
+        # First and last items should appear with ellipsis in between
+        assert "cell_0" in html
+        assert "cell_19" in html
+        assert "gene_0" in html
+        assert "gene_14" in html
+        assert "..." in html
+
+    def test_raw_index_preview_differs_from_parent(self, validate_html):
+        """Test raw var_names preview shows original vars, not subsetted parent."""
+        adata = AnnData(
+            np.zeros((5, 20)),
+            var=pd.DataFrame(index=[f"gene_{i}" for i in range(20)]),
+        )
+        adata.raw = adata.copy()
+        adata = adata[:, :3]  # Subset parent to 3 vars
+        html = adata._repr_html_()
+        # Raw should still show original var_names (20 genes)
+        assert "gene_19" in html
+        v = validate_html(html)
+        v.assert_text_visible("var_names")
+
+    def test_raw_index_preview_absent_gracefully(self):
+        """Test raw handles missing obs_names/var_names gracefully."""
+        from anndata._repr.registry import FormatterContext
+        from anndata._repr.sections import _generate_raw_repr_html
+
+        class FakeRaw:
+            n_obs = 5
+            n_vars = 3
+            X = None
+
+            @property
+            def obs_names(self):
+                msg = "no obs_names"
+                raise AttributeError(msg)
+
+            @property
+            def var_names(self):
+                msg = "no var_names"
+                raise AttributeError(msg)
+
+        ctx = FormatterContext(depth=1, max_depth=3, section="raw")
+        html = _generate_raw_repr_html(FakeRaw(), ctx)
+        assert "not available" in html
+        assert "obs_names" in html
+        assert "var_names" in html
+
 
 class TestRepresentationCompleteness:
     """Verify all data is accurately represented."""
