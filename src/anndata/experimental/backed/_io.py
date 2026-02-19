@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,8 +14,8 @@ from testing.anndata._doctest import doctest_needs
 from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
-from ...compat import ZarrGroup, is_zarr_v2
-from ...utils import warn
+from ...compat import ZarrGroup
+from ...utils import get_literal_members, warn
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from anndata._types import Read, StorageType
 
 
-ANNDATA_ELEMS: tuple[AnnDataElem, ...] = typing.get_args(AnnDataElem.__value__)
+ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 
 @doctest_needs("xarray")
@@ -62,19 +61,25 @@ def read_lazy(
     Preparing example objects
 
     >>> import anndata as ad
-    >>> from urllib.request import urlretrieve
+    >>> import pooch
     >>> import scanpy as sc
     >>> base_url = "https://datasets.cellxgene.cziscience.com"
-    >>> def get_cellxgene_data(id_: str):
-    ...     out_path = sc.settings.datasetdir / f"{id_}.h5ad"
-    ...     if out_path.exists():
-    ...         return out_path
-    ...     file_url = f"{base_url}/{id_}.h5ad"
-    ...     sc.settings.datasetdir.mkdir(parents=True, exist_ok=True)
-    ...     urlretrieve(file_url, out_path)
-    ...     return out_path
-    >>> path_b_cells = get_cellxgene_data("a93eab58-3d82-4b61-8a2f-d7666dcdb7c4")
-    >>> path_fetal = get_cellxgene_data("d170ff04-6da0-4156-a719-f8e1bbefbf53")
+    >>> # To update hashes: pooch.retrieve(url, known_hash=None) prints the new hash
+    >>> def get_cellxgene_data(id_: str, hash_: str):
+    ...     return pooch.retrieve(
+    ...         f"{base_url}/{id_}.h5ad",
+    ...         known_hash=hash_,
+    ...         fname=f"{id_}.h5ad",
+    ...         path=sc.settings.datasetdir,
+    ...     )
+    >>> path_b_cells = get_cellxgene_data(
+    ...     "a93eab58-3d82-4b61-8a2f-d7666dcdb7c4",
+    ...     "sha256:dac90fe2aa8b78aee2c1fc963104592f8eff7b873ca21d01a51a5e416734651c",
+    ... )
+    >>> path_fetal = get_cellxgene_data(
+    ...     "d170ff04-6da0-4156-a719-f8e1bbefbf53",
+    ...     "sha256:d497eebca03533919877b6fc876e8c9d8ba063199ddc86dd9fbcb9d1d87a3622",
+    ... )
     >>> b_cells_adata = ad.experimental.read_lazy(path_b_cells)
     >>> fetal_adata = ad.experimental.read_lazy(path_fetal)
     >>> print(b_cells_adata)
@@ -101,11 +106,9 @@ def read_lazy(
         import zarr
 
         if not isinstance(store, ZarrGroup):
-            # v3 returns a ValueError for consolidated metadata not found
-            err_cls = KeyError if is_zarr_v2() else ValueError
             try:
                 f = zarr.open_consolidated(store, mode="r")
-            except err_cls:
+            except ValueError:
                 msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
                 warn(msg, UserWarning)
                 has_keys = False

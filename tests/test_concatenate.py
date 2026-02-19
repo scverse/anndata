@@ -34,8 +34,13 @@ from anndata.tests.helpers import (
     assert_equal,
     gen_adata,
     gen_vstr_recarray,
+    jnp,
+    jnp_array_or_idempotent,
 )
 from anndata.utils import asarray
+
+JaxArray = jnp.ndarray if jnp is not None else None
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,6 +87,13 @@ def _filled_sparse_array(a, fill_value=None):
 def _filled_df(a, fill_value=np.nan):
     # dtype from pd.concat can be unintuitive, this returns something close enough
     return a.loc[[], :].reindex(index=a.index, fill_value=fill_value)
+
+
+if JaxArray is not None:
+
+    @filled_like.register(JaxArray)
+    def _(a, fill_value=None):
+        return jnp.full_like(a, jnp.nan if fill_value is None else fill_value)
 
 
 def check_filled_like(x, fill_value=None, elem_name=None):
@@ -269,9 +281,8 @@ def test_concatenate_roundtrip(
     if backwards_compat and use_xdataset:
         import xarray as xr
 
-        result.var = xr.Dataset.from_dataframe(
-            result.var
-        )  # backwards compat always returns a dataframe
+        # backwards compat always returns a dataframe
+        result.var = xr.Dataset.from_dataframe(result.var)
 
     # Correcting for known differences
     orig, result = fix_known_differences(
@@ -1450,18 +1461,38 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
-def test_concat_names(axis_name, use_xdataset, force_lazy):
-    get_annot = attrgetter(axis_name)
+@pytest.mark.parametrize(
+    ("index_unique", "expect_unique"),
+    [
+        pytest.param(None, False, id="default"),
+        pytest.param("-", True, id="force_unique"),
+    ],
+)
+@pytest.mark.parametrize("with_missing", [True, False], ids=["missing", "no_missing"])
+def test_concat_names(
+    *,
+    axis_name: Literal["obs", "var"],
+    use_xdataset: bool,
+    force_lazy: bool,
+    index_unique: str | None,
+    expect_unique: bool,
+    with_missing: bool,
+) -> None:
+    get_annot: attrgetter[pd.DataFrame] = attrgetter(axis_name)
 
     lhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
     rhs = gen_adata((10, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
+    if with_missing:
+        for s in [lhs, rhs]:
+            new_index = pd.Index([*get_annot(s).index[:5], *([pd.NA] * 5)])
+            setattr(s, f"{axis_name}_names", new_index)
 
-    assert not get_annot(
-        concat([lhs, rhs], axis=axis_name, force_lazy=force_lazy)
-    ).index.is_unique
-    assert get_annot(
-        concat([lhs, rhs], axis=axis_name, index_unique="-", force_lazy=force_lazy)
-    ).index.is_unique
+    cat = concat(
+        [lhs, rhs], axis=axis_name, index_unique=index_unique, force_lazy=force_lazy
+    )
+    assert get_annot(cat).index[~get_annot(cat).index.isna()].is_unique is expect_unique
+    if with_missing:
+        assert get_annot(cat).index.isna().sum() == 10
 
 
 def axis_labels(adata: AnnData, axis: Literal[0, 1]) -> pd.Index:
@@ -1489,19 +1520,33 @@ def expected_shape(
 @pytest.mark.parametrize(
     "shape", [pytest.param((8, 0), id="no_var"), pytest.param((0, 10), id="no_obs")]
 )
+@pytest.mark.parametrize(
+    "array_type",
+    [
+        pytest.param(np.array, id="np"),
+        pytest.param(jnp_array_or_idempotent, id="jax", marks=pytest.mark.array_api),
+    ],
+)
 def test_concat_size_0_axis(
-    axis_name, join_type, merge_strategy, shape, use_xdataset, force_lazy
+    axis_name,
+    join_type,
+    merge_strategy,
+    shape,
+    use_xdataset,
+    force_lazy,
+    array_type,
 ):
     """Regression test for https://github.com/scverse/anndata/issues/526"""
     axis, axis_name = merge._resolve_axis(axis_name)
     alt_axis = 1 - axis
-    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype)
+    col_dtypes = (*DEFAULT_COL_TYPES, pd.StringDtype())
     a = gen_adata(
         (5, 7),
         obs_dtypes=col_dtypes,
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        X_type=array_type,
     )
     b = gen_adata(
         shape,
@@ -1509,6 +1554,7 @@ def test_concat_size_0_axis(
         var_dtypes=col_dtypes,
         obs_xdataset=use_xdataset,
         var_xdataset=use_xdataset,
+        X_type=array_type,
     )
 
     expected_size = expected_shape(a, b, axis=axis, join=join_type)
@@ -1755,6 +1801,7 @@ def test_concat_duplicated_columns(join_type):
 
 
 @pytest.mark.gpu
+@pytest.mark.array_api
 def test_error_on_mixed_device():
     """https://github.com/scverse/anndata/issues/1083"""
     import cupy

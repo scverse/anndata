@@ -14,7 +14,7 @@ import pandas as pd
 from scipy import sparse
 
 from .. import AnnData
-from ..compat import old_positionals
+from ..compat import old_positionals, pandas_as_str
 from ..utils import deprecated, warn
 from .utils import is_float
 
@@ -74,8 +74,8 @@ def read_excel(
 
     df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
-    row = dict(row_names=df.iloc[:, 0].values.astype(str))
-    col = dict(col_names=np.array(df.columns[1:], dtype=str))
+    row = dict(row_names=pandas_as_str(df.iloc[:, 0]).array)
+    col = dict(col_names=pandas_as_str(df.columns[1:]).array)
     return AnnData(X, row, col)
 
 

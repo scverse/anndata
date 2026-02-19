@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from . import typing
 from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
+from .utils import set_module
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any
+    from typing import Any, TypeAlias
 
     from anndata._core.xarray import Dataset2D
 
@@ -22,26 +23,28 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type S = StorageType
+    type RWAble = typing.RWAble
 
 
 __all__ = [
-    "ArrayStorageType",
-    "GroupStorageType",
     "StorageType",
+    "_ArrayStorageType",
+    "_GroupStorageType",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
-type ArrayStorageType = ZarrArray | H5Array
-type GroupStorageType = ZarrGroup | H5Group
-type StorageType = ArrayStorageType | GroupStorageType
+# These two are not public, so we don’t make them `type`s
+_ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
+_GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type S = StorageType
-type RWAble = typing.RWAble
+type StorageType = _ArrayStorageType | _GroupStorageType
 
 
+@set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
     def __getitem__(self, idx: Any) -> Dataset2D: ...
 
@@ -60,6 +63,7 @@ class _ReadLazyInternal[S: StorageType](Protocol):
     ) -> LazyDataStructures: ...
 
 
+@set_module("anndata.experimental")
 class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(self, elem: S) -> RWAble:
         """Low-level reading function for an element.
@@ -106,6 +110,7 @@ class _WriteInternal[RWAble: typing.RWAble](Protocol):
     ) -> None: ...
 
 
+@set_module("anndata.experimental")
 class Write[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
@@ -126,11 +131,12 @@ class Write[RWAble: typing.RWAble](Protocol):
         v
             The element to write out.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
         """
         ...
 
 
+@set_module("anndata.experimental")
 class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
@@ -162,6 +168,7 @@ class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
         ...
 
 
+@set_module("anndata.experimental")
 class WriteCallback[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
@@ -190,7 +197,7 @@ class WriteCallback[RWAble: typing.RWAble](Protocol):
         iospec
             Internal AnnData encoding specification for the element.
         dataset_kwargs
-            Keyword arguments to be passed to a library-level io function, like `chunks` for :doc:`zarr:index`.
+            Keyword arguments to be passed to a library-level io function, like `chunks` for :mod:`zarr`.
         """
         ...
 

@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Literal
 
-    from ..._core.index import Index
     from ..._types import Join_T
+    from ...typing import Index
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -492,7 +492,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
                 # change dtype for all keys of .obsm
                 "obsm": lambda a: np.asarray(a, dtype="float32"),
                 # change type only for one key of .obs
-                "obs": dict(key1=lambda c: c.astype(str)),
+                "obs": dict(key1=lambda c: c.astype("string")),
             }
         """
         return self._convert
@@ -838,7 +838,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 # change dtype for all keys of .obsm
                 "obsm": lambda a: np.asarray(a, dtype="float32"),
                 # change type only for one key of .obs
-                "obs": dict(key1=lambda c: c.astype(str)),
+                "obs": dict(key1=lambda c: c.astype("string")),
             }
         """
         return self._convert

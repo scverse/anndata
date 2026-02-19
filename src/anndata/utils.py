@@ -4,7 +4,8 @@ import re
 import sys
 import warnings
 from functools import partial, singledispatch
-from typing import TYPE_CHECKING
+from types import FunctionType, UnionType
+from typing import TYPE_CHECKING, Literal, TypeAliasType, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -19,8 +20,8 @@ from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
-    from typing import Any, Literal, LiteralString
+    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from typing import Any, LiteralString
 
 logger = get_logger(__name__)
 
@@ -218,7 +219,7 @@ except ImportError:
     pass
 
 
-def make_index_unique(index: pd.Index, join: str = "-"):
+def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:
     """
     Makes the index unique by appending a number string to each duplicate index element:
     '1', '2', etc.
@@ -237,18 +238,18 @@ def make_index_unique(index: pd.Index, join: str = "-"):
     --------
     >>> from anndata import AnnData
     >>> adata = AnnData(np.ones((2, 3)), var=pd.DataFrame(index=["a", "a", "b"]))
-    >>> adata.var_names
-    Index(['a', 'a', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a', 'b'], dtype='string')
     >>> adata.var_names_make_unique()
-    >>> adata.var_names
-    Index(['a', 'a-1', 'b'], dtype='object')
+    >>> adata.var_names.astype("string")
+    Index(['a', 'a-1', 'b'], dtype='string')
     """
     if index.is_unique:
         return index
     from collections import Counter
 
-    values = index.values.copy()
-    indices_dup = index.duplicated(keep="first")
+    values = index.array.copy()
+    indices_dup = index.duplicated(keep="first") & ~index.isna()
     values_dup = values[indices_dup]
     values_set = set(values)
     counter = Counter()
@@ -406,6 +407,34 @@ class DeprecationMixinMeta(type):
             for item in type.__dir__(cls)
             if not is_hidden(getattr(cls, item, None))
         ]
+
+
+def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
+    def decorator(f: C) -> C:
+        f.__module__ = name
+        return f
+
+    return decorator
+
+
+def get_union_members[T](
+    typ: TypeAliasType | UnionType | T,
+    can_get_args: Callable[[object], bool] = lambda _: False,
+) -> tuple[T, ...]:
+    """Get args of a nested union of types."""
+    while isinstance(typ, TypeAliasType):
+        typ = typ.__value__
+    if not isinstance(typ, UnionType) and not can_get_args(typ):
+        return (typ,)
+    return tuple(
+        t for sub in get_args(typ) for t in get_union_members(sub, can_get_args)
+    )
+
+
+get_literal_members = partial(
+    get_union_members, can_get_args=lambda x: get_origin(x) is Literal
+)
+"""Get args of a nested union of Literal types."""
 
 
 def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
