@@ -35,7 +35,11 @@ class Raw:
         X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
-    ):
+    ) -> None:
+        if X is not None and X.shape[0] != adata.n_obs:
+            msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"
+            raise ValueError(msg)
+
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually

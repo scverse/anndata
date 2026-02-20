@@ -699,19 +699,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._raw
 
     @raw.setter
-    def raw(self, value: AnnData):
+    def raw(self, value: AnnData) -> None:
         if value is None:
             del self.raw
-        elif not isinstance(value, AnnData):
+            return
+        if not isinstance(value, AnnData):
             msg = "Can only init raw attribute with an AnnData object."
             raise ValueError(msg)
-        else:
-            if self.is_view:
-                self._init_as_actual(self.copy())
-            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
+        raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
+        if self.is_view:
+            self._init_as_actual(self.copy())
+        self._raw = raw
 
     @raw.deleter
-    def raw(self):
+    def raw(self) -> None:
         if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = None
