@@ -32,7 +32,9 @@ DEFAULT_TYPE_WIDTH = 220  # Width for type column
 # Field name column width calculation constants
 # These values are empirically tuned for the default 13px monospace font
 CHAR_WIDTH_PX = 8  # Average character width for monospace at 13px font-size
-COPY_BUTTON_PADDING_PX = 54  # Extra space for copy button + cell padding (24px for grid border-box)
+COPY_BUTTON_PADDING_PX = (
+    54  # Extra space for copy button + cell padding (24px for grid border-box)
+)
 MIN_FIELD_WIDTH_PX = 104  # Minimum column width (includes 24px cell padding)
 DEFAULT_FIELD_WIDTH_PX = 100  # Default when no field names exist
 

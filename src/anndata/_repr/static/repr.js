@@ -173,14 +173,10 @@ function filterEntries(query) {
 
                 // Find the parent entry that contains this nested content
                 // Structure: div.anndata-entry > details > .anndata-entry__nested-content
-                const parentEntry = nestedContainer.closest(
-                    ".anndata-entry",
-                );
+                const parentEntry = nestedContainer.closest(".anndata-entry");
                 if (!parentEntry) break;
 
-                if (
-                    parentEntry.classList.contains("anndata-entry--hidden")
-                ) {
+                if (parentEntry.classList.contains("anndata-entry--hidden")) {
                     parentEntry.classList.remove("anndata-entry--hidden");
                     totalMatches++;
                 }
@@ -314,7 +310,9 @@ function updateWrapButtonVisibility(btn, list, metaCell, wrappedClass) {
 function setupWrapButtons(buttonSelector, listSelector, wrappedClass) {
     container.querySelectorAll(buttonSelector).forEach((btn) => {
         const entry = btn.closest(".anndata-entry");
-        const metaCell = entry ? entry.querySelector(".anndata-entry__preview") : null;
+        const metaCell = entry
+            ? entry.querySelector(".anndata-entry__preview")
+            : null;
         const list = metaCell ? metaCell.querySelector(listSelector) : null;
 
         // Initial visibility check
@@ -365,7 +363,9 @@ function updateAllWrapButtons() {
     ].forEach(([btnSel, listSel, wrappedClass]) => {
         container.querySelectorAll(btnSel).forEach((btn) => {
             const entry = btn.closest(".anndata-entry");
-            const metaCell = entry ? entry.querySelector(".anndata-entry__preview") : null;
+            const metaCell = entry
+                ? entry.querySelector(".anndata-entry__preview")
+                : null;
             const list = metaCell ? metaCell.querySelector(listSel) : null;
             updateWrapButtonVisibility(btn, list, metaCell, wrappedClass);
         });

@@ -128,9 +128,9 @@ class TestCSSValidation:
         assert "light-dark(" in html, "CSS should use light-dark() for theming"
         assert "color-scheme:" in html, "CSS should declare color-scheme"
         # Theme selectors should still be present for explicit app themes
-        assert (
-            "jp-Theme-Dark" in html or "[data-jp-theme-light" in html
-        ), "CSS should include Jupyter theme selectors"
+        assert "jp-Theme-Dark" in html or "[data-jp-theme-light" in html, (
+            "CSS should include Jupyter theme selectors"
+        )
 
 
 class TestBasicHTMLGeneration:

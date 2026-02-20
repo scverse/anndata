@@ -477,9 +477,7 @@ def _render_raw_section(
 
     # Single row with raw info
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
-    parts.append(
-        render_entry_row_open("raw", "Raw", has_expandable_content=can_expand)
-    )
+    parts.append(render_entry_row_open("raw", "Raw", has_expandable_content=can_expand))
     parts.append(render_name_cell("raw"))
     type_cell_config = TypeCellConfig(
         type_name=type_str,

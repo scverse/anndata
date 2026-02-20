@@ -485,7 +485,10 @@
 
     .anndata-section__entries {
         display: grid;
-        grid-template-columns: var(--anndata-name-col-width, 150px) var(--anndata-type-col-width, 180px) 1fr;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(
+                --anndata-type-col-width,
+                180px
+            ) 1fr;
         font-size: 12px;
         width: 100%;
     }
@@ -547,7 +550,10 @@
        so nested content below is a normal block child at full width */
     details.anndata-entry > summary.anndata-entry__summary {
         display: grid;
-        grid-template-columns: var(--anndata-name-col-width, 150px) var(--anndata-type-col-width, 180px) 1fr;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(
+                --anndata-type-col-width,
+                180px
+            ) 1fr;
         list-style: none;
         cursor: pointer;
         position: relative;
@@ -575,7 +581,8 @@
     }
 
     /* Reserve space for the expand indicator */
-    details.anndata-entry > summary.anndata-entry__summary > .anndata-entry__preview {
+    details.anndata-entry > summary.anndata-entry__summary
+        > .anndata-entry__preview {
         padding-right: 24px;
     }
 
@@ -1041,4 +1048,3 @@
         color: var(--anndata-warning-color);
     }
 }
-
