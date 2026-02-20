@@ -305,7 +305,7 @@ class TestAdBlockerCompatibility:
 
         assert "anndata-header__type" in html or "anndata" in html.lower()
         assert "anndata-entry" in html or "anndata-section" in html
-        assert "anndata-section__table" in html or "table" in html.lower()
+        assert "anndata-section__entries" in html or "anndata-entry" in html
         assert len(html) > 1000
 
 

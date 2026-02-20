@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from .._repr_constants import (
     CSS_ENTRY,
     CSS_TEXT_MUTED,
-    ENTRY_TABLE_COLSPAN,
     NOT_SERIALIZABLE_MSG,
     STYLE_HIDDEN,
 )
@@ -33,12 +32,14 @@ def render_entry_row_open(
     *,
     has_warnings: bool = False,
     is_error: bool = False,
+    has_expandable_content: bool = False,
     extra_classes: str = "",
 ) -> str:
-    """Render the opening <tr> tag for an entry row.
+    """Render the opening tag for an entry row.
 
-    This consolidates the repeated pattern of building entry row opening tags
-    with data attributes for search/filter functionality.
+    For regular entries, returns ``<div class="anndata-entry ...">``.
+    For expandable entries, returns ``<details class="anndata-entry ..."><summary ...>``
+    so the whole row acts as the disclosure toggle.
 
     Parameters
     ----------
@@ -50,17 +51,14 @@ def render_entry_row_open(
         Whether the entry has warnings
     is_error
         Whether the entry has errors (not serializable, invalid key)
+    has_expandable_content
+        Whether this entry has nested content (uses ``<details>``/``<summary>``)
     extra_classes
         Additional CSS classes to include
 
     Returns
     -------
-    Opening <tr> tag with class and data attributes
-
-    Example
-    -------
-    >>> open_tag = render_entry_row_open("gene_name", "category", has_warnings=True)
-    >>> # Returns: '<tr class="anndata-entry warning" data-key="gene_name" data-dtype="category">'
+    Opening tag(s) with class and data attributes
     """
     # Build CSS class string
     classes = [CSS_ENTRY]
@@ -74,7 +72,13 @@ def render_entry_row_open(
 
     escaped_key = escape_html(key)
     escaped_dtype = escape_html(dtype)
-    return f'<tr class="{css_class}" data-key="{escaped_key}" data-dtype="{escaped_dtype}">'
+
+    if has_expandable_content:
+        return (
+            f'<details class="{css_class}" data-key="{escaped_key}" data-dtype="{escaped_dtype}">'
+            f'<summary class="anndata-entry__summary">'
+        )
+    return f'<div class="{css_class}" data-key="{escaped_key}" data-dtype="{escaped_dtype}">'
 
 
 def render_warning_icon(
@@ -231,40 +235,28 @@ def render_muted_span(text: str) -> str:
     return f'<span class="{CSS_TEXT_MUTED}">{escape_html(text)}</span>'
 
 
-def render_expand_button() -> str:
-    """Render an expand/collapse button for nested content.
+def render_nested_content(html_content: str) -> str:
+    """Render nested/expanded content inside an expandable entry.
 
-    Returns
-    -------
-    HTML string for the expand button (hidden by default, shown by JS)
-    """
-    return (
-        f'<button class="anndata-entry__expand" style="{STYLE_HIDDEN}" '
-        f'aria-expanded="false">Expand ▼</button>'
-    )
-
-
-def render_nested_content_cell(
-    html_content: str, colspan: int = ENTRY_TABLE_COLSPAN
-) -> str:
-    """Render a table cell containing nested/expanded content.
+    The entry must have been opened with ``has_expandable_content=True``
+    (which makes it a ``<details>`` with ``<summary>``).  This function
+    closes the ``<summary>`` and adds the nested content.  The caller
+    must close the entry with ``</details>``.
 
     Parameters
     ----------
     html_content
-        The HTML content to display in the nested cell
-    colspan
-        Number of columns to span (default: 3)
+        The HTML content to display when expanded
 
     Returns
     -------
-    HTML string for a table row with nested content
+    HTML closing the summary and wrapping nested content
     """
     return (
-        f'<tr class="anndata-entry--nested">'
-        f'<td colspan="{colspan}" class="anndata-entry__nested-content">'
+        f"</summary>"
+        f'<div class="anndata-entry__nested-content">'
         f'<div class="anndata-entry__expanded">{html_content}</div>'
-        f"</td></tr>"
+        f"</div>"
     )
 
 
@@ -375,16 +367,16 @@ def render_name_cell(name: str) -> str:
 
     Returns
     -------
-    HTML string for the table cell
+    HTML string for the cell div
     """
     escaped_name = escape_html(name)
     return (
-        f'<td class="anndata-entry__name">'
+        f'<div class="anndata-entry__name">'
         f'<div class="anndata-entry__name-inner">'
         f'<span class="anndata-entry__name-text" title="{escaped_name}">{escaped_name}</span>'
         f"{render_copy_button(name, 'Copy name')}"
         f"</div>"
-        f"</td>"
+        f"</div>"
     )
 
 
@@ -545,12 +537,11 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     tooltip = config.tooltip
     warnings = config.warnings
     is_not_serializable = config.is_not_serializable
-    has_expandable_content = config.has_expandable_content
     has_columns_list = config.has_columns_list
     has_categories_list = config.has_categories_list
     append_type_html = config.append_type_html
 
-    parts = ['<td class="anndata-entry__type">']
+    parts = ['<div class="anndata-entry__type">']
 
     # Type content: handle different cases
     if type_html and not append_type_html:
@@ -569,10 +560,6 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
         render_warning_icon(warnings or [], is_not_serializable=is_not_serializable)
     )
 
-    # Expand button for expandable content
-    if has_expandable_content:
-        parts.append(render_expand_button())
-
     # Wrap buttons
     if has_columns_list:
         parts.append(render_columns_wrap_button())
@@ -583,7 +570,7 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     if type_html and append_type_html:
         parts.append(f'<div class="anndata-entry__custom">{type_html}</div>')
 
-    parts.append("</td>")
+    parts.append("</div>")
     return "".join(parts)
 
 
@@ -607,12 +594,12 @@ def render_entry_preview_cell(
     -------
     HTML string for the preview cell
     """
-    parts = ['<td class="anndata-entry__preview">']
+    parts = ['<div class="anndata-entry__preview">']
 
     if preview_html:
         parts.append(preview_html)
     elif preview_text:
         parts.append(render_muted_span(preview_text))
 
-    parts.append("</td>")
+    parts.append("</div>")
     return "".join(parts)

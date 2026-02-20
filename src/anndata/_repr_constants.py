@@ -32,8 +32,8 @@ DEFAULT_TYPE_WIDTH = 220  # Width for type column
 # Field name column width calculation constants
 # These values are empirically tuned for the default 13px monospace font
 CHAR_WIDTH_PX = 8  # Average character width for monospace at 13px font-size
-COPY_BUTTON_PADDING_PX = 30  # Extra space for copy button and cell padding
-MIN_FIELD_WIDTH_PX = 80  # Minimum column width to avoid cramped display
+COPY_BUTTON_PADDING_PX = 54  # Extra space for copy button + cell padding (24px for grid border-box)
+MIN_FIELD_WIDTH_PX = 104  # Minimum column width (includes 24px cell padding)
 DEFAULT_FIELD_WIDTH_PX = 100  # Default when no field names exist
 
 # Inline style for graceful degradation (hidden until JS enables).
@@ -63,9 +63,6 @@ STRING_INLINE_LIMIT = 20  # Max string length before truncating inline
 DF_COLS_PREVIEW_LIMIT = 5  # Max columns to show in compact preview
 DF_COLS_PREVIEW_MAX_LEN = 40  # Max total chars for column list string
 
-# Table structure
-ENTRY_TABLE_COLSPAN = 3  # Number of columns in entry table (name, type, preview)
-
 # CSS class names for entry rows (BEM: anndata-entry block)
 CSS_ENTRY = "anndata-entry"
 CSS_ENTRY_NAME = "anndata-entry__name"
@@ -74,7 +71,6 @@ CSS_ENTRY_PREVIEW = "anndata-entry__preview"
 CSS_TEXT_MUTED = "anndata-text--muted"
 CSS_TEXT_ERROR = "anndata-text--error"
 CSS_TEXT_WARNING = "anndata-text--warning"
-CSS_NESTED_ROW = "anndata-entry--nested"
 CSS_NESTED_CONTENT = "anndata-entry__nested-content"
 CSS_NESTED_ANNDATA = "anndata-entry__nested-anndata"
 

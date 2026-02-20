@@ -92,10 +92,6 @@
     /* --- JS-enabled overrides --- */
 
     &.anndata-repr--js {
-        .anndata-section__table {
-            table-layout: fixed;
-        }
-
         .anndata-entry__preview {
             overflow: hidden;
             text-overflow: ellipsis;
@@ -487,13 +483,15 @@
         overflow: hidden;
     }
 
-    .anndata-section__table {
-        width: 100%;
-        border-collapse: collapse;
+    .anndata-section__entries {
+        display: grid;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(--anndata-type-col-width, 180px) 1fr;
         font-size: 12px;
+        width: 100%;
     }
 
     .anndata-section__truncated {
+        grid-column: 1 / -1;
         padding: 8px 12px;
         font-size: 11px;
         color: var(--anndata-text-muted);
@@ -511,6 +509,7 @@
     /* --- Entries --- */
 
     .anndata-entry {
+        grid-column: 1 / -1;
         transition: background-color 0.1s;
 
         &:nth-child(even) {
@@ -533,14 +532,51 @@
             background: var(--anndata-error-bg) !important;
         }
 
-        td {
-            padding: 6px 12px;
-            vertical-align: middle;
-        }
-
         &:hover .anndata-entry__copy {
             opacity: 1;
         }
+    }
+
+    /* Regular (non-expandable) entries use subgrid for column alignment */
+    div.anndata-entry {
+        display: grid;
+        grid-template-columns: subgrid;
+    }
+
+    /* Expandable entry summary — uses explicit columns (not subgrid)
+       so nested content below is a normal block child at full width */
+    details.anndata-entry > summary.anndata-entry__summary {
+        display: grid;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(--anndata-type-col-width, 180px) 1fr;
+        list-style: none;
+        cursor: pointer;
+        position: relative;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        /* Expand indicator arrow */
+        &::after {
+            content: "\25B6"; /* ▶ */
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 8px;
+            color: var(--anndata-accent-color);
+            transition: transform 0.15s;
+        }
+    }
+
+    /* When open, rotate the arrow */
+    details.anndata-entry[open] > summary.anndata-entry__summary::after {
+        transform: translateY(-50%) rotate(90deg);
+    }
+
+    /* Reserve space for the expand indicator */
+    details.anndata-entry > summary.anndata-entry__summary > .anndata-entry__preview {
+        padding-right: 24px;
     }
 
     .anndata-entry__name {
@@ -558,8 +594,9 @@
         color: var(--anndata-text-primary, #212529);
         white-space: nowrap;
         text-align: left;
-        /* Fixed width for name column */
-        width: var(--anndata-name-col-width, 150px);
+        padding: 6px 12px;
+        align-self: center;
+        min-width: 0;
     }
 
     .anndata-entry__name-inner {
@@ -592,9 +629,8 @@
         color: var(--anndata-text-secondary, #6c757d);
         text-align: left;
         white-space: nowrap;
-        /* Fixed width for consistent alignment (dtype names are predictable) */
-        width: var(--anndata-type-col-width, 180px);
-        min-width: var(--anndata-type-col-width, 180px);
+        padding: 6px 12px;
+        align-self: center;
     }
 
     .anndata-entry__preview {
@@ -604,7 +640,9 @@
         /* Default: allow wrapping for graceful no-JS degradation */
         white-space: normal;
         word-break: break-word;
-        /* Takes remaining space */
+        padding: 6px 12px;
+        align-self: center;
+        min-width: 0;
     }
 
     /* Copy button */
@@ -686,41 +724,10 @@
         margin-left: 2px;
     }
 
-    /* Expandable nested content */
-    .anndata-entry__expand {
-        padding: 2px 8px;
-        font-size: 11px;
-        color: var(--anndata-accent-color);
-        background: transparent;
-        border: 1px solid var(--anndata-accent-color);
-        border-radius: var(--anndata-radius);
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            color 0.15s;
-        vertical-align: middle;
-        margin-left: 4px;
-
-        &:hover {
-            background: var(--anndata-accent-color);
-            color: white;
-        }
-    }
-
-    .anndata-entry--nested {
-        display: none;
-
-        &.anndata-entry--expanded {
-            display: table-row;
-        }
-    }
-
+    /* Nested content area (inside expandable entries) */
     .anndata-entry__nested-content {
-        /* Padding here doesn't accumulate because each nested-content is a fresh table cell */
         padding: 12px;
         background: var(--anndata-bg-secondary);
-        /* Constrain width to prevent wide tables from expanding the layout */
-        max-width: 1px;
         overflow: hidden;
     }
 
@@ -728,9 +735,6 @@
         display: block;
         overflow-x: auto;
         overflow-y: hidden;
-        /* Use width:0 + min-width:100% trick to prevent table from expanding container */
-        width: 0;
-        min-width: 100%;
         padding: 12px;
         box-sizing: border-box;
         -webkit-overflow-scrolling: touch;
@@ -789,7 +793,7 @@
             }
         }
 
-        /* Nested AnnData wrapper - no extra padding */
+        /* Nested AnnData wrapper — fill width, no extra padding */
         &:has(> .anndata-entry__nested-anndata) {
             padding: 0;
             text-align: left;
@@ -797,16 +801,16 @@
 
         > .anndata-entry__nested-anndata {
             display: block;
+            width: 100%;
             margin: 0;
-            max-width: 100%;
             box-sizing: border-box;
         }
     }
 
-    /* Nested .anndata-repr should not add extra margin and must fit within parent */
+    /* Nested .anndata-repr must fill its container */
     .anndata-entry__nested-anndata > .anndata-repr {
         margin: 0;
-        max-width: 100%;
+        width: 100%;
         box-sizing: border-box;
     }
 

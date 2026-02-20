@@ -18,7 +18,6 @@ from .._repr_constants import (
     CSS_DTYPE_DATAFRAME,
     CSS_TEXT_ERROR,
     CSS_TEXT_MUTED,
-    ENTRY_TABLE_COLSPAN,
 )
 from .components import (
     TypeCellConfig,
@@ -26,7 +25,7 @@ from .components import (
     render_entry_row_open,
     render_entry_type_cell,
     render_name_cell,
-    render_nested_content_cell,
+    render_nested_content,
 )
 from .registry import formatter_registry
 from .utils import escape_html, format_number
@@ -124,9 +123,9 @@ def render_section(  # noqa: PLR0913
 
     # Content
     parts.append('<div class="anndata-section__content">')
-    parts.append('<table class="anndata-section__table">')
+    parts.append('<div class="anndata-section__entries">')
     parts.append(entries_html)
-    parts.append("</table></div></details>")
+    parts.append("</div></div></details>")
 
     return "\n".join(parts)
 
@@ -178,7 +177,7 @@ def render_empty_section(
 
 def render_truncation_indicator(remaining: int) -> str:
     """Render a truncation indicator."""
-    return f'<tr><td colspan="{ENTRY_TABLE_COLSPAN}" class="anndata-section__truncated">... and {format_number(remaining)} more</td></tr>'
+    return f'<div class="anndata-section__truncated">... and {format_number(remaining)} more</div>'
 
 
 def get_section_tooltip(section: str) -> str:
@@ -349,6 +348,7 @@ def render_formatted_entry(
             output.type_name,
             has_warnings=bool(all_warnings),
             is_error=has_error,
+            has_expandable_content=has_expandable_content,
         )
     ]
 
@@ -392,10 +392,12 @@ def render_formatted_entry(
         )
     )
 
-    parts.append("</tr>")
-
-    # Expandable content row
-    if output.expanded_html is not None:
-        parts.append(render_nested_content_cell(output.expanded_html))
+    # Expandable entries use <details>/<summary>; render_nested_content
+    # closes the <summary> and adds the nested content div.
+    if has_expandable_content:
+        parts.append(render_nested_content(output.expanded_html))
+        parts.append("</details>")
+    else:
+        parts.append("</div>")
 
     return "\n".join(parts)

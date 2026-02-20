@@ -12,9 +12,6 @@ container.querySelectorAll(".anndata-entry__copy").forEach((btn) => {
 container.querySelectorAll(".anndata-search__box").forEach((box) => {
     box.style.display = "inline-flex";
 });
-container.querySelectorAll(".anndata-entry__expand").forEach((btn) => {
-    btn.style.display = "inline-block";
-});
 container.querySelectorAll(".anndata-search__toggle").forEach((btn) => {
     btn.style.display = "inline-flex";
 });
@@ -139,14 +136,11 @@ function filterEntries(query) {
                 ".anndata-entry__nested-content",
             );
             if (nestedContent) {
-                const nestedRow = nestedContent.closest(
-                    ".anndata-entry--nested",
+                const expandableEntry = nestedContent.closest(
+                    "details.anndata-entry",
                 );
-                if (
-                    nestedRow &&
-                    !nestedRow.classList.contains("anndata-entry--expanded")
-                ) {
-                    nestedRow.classList.add("anndata-entry--expanded");
+                if (expandableEntry && !expandableEntry.open) {
+                    expandableEntry.open = true;
                 }
             }
         } else {
@@ -177,28 +171,30 @@ function filterEntries(query) {
                 );
                 if (!nestedContainer) break;
 
-                // Find the parent row that contains this nested content
-                // Structure: tr.anndata-entry > tr.anndata-entry--nested > td.anndata-entry__nested-content
-                const nestedRow = nestedContainer.closest(
-                    ".anndata-entry--nested",
+                // Find the parent entry that contains this nested content
+                // Structure: div.anndata-entry > details > .anndata-entry__nested-content
+                const parentEntry = nestedContainer.closest(
+                    ".anndata-entry",
                 );
-                if (!nestedRow) break;
+                if (!parentEntry) break;
 
-                // The parent entry is the previous sibling row
-                const parentEntry = nestedRow.previousElementSibling;
                 if (
-                    parentEntry &&
-                    parentEntry.classList.contains("anndata-entry")
+                    parentEntry.classList.contains("anndata-entry--hidden")
                 ) {
-                    if (
-                        parentEntry.classList.contains("anndata-entry--hidden")
-                    ) {
-                        parentEntry.classList.remove("anndata-entry--hidden");
-                        totalMatches++;
-                    }
+                    parentEntry.classList.remove("anndata-entry--hidden");
+                    totalMatches++;
                 }
-                // Continue searching from the parent's container
-                element = nestedRow.parentElement;
+
+                // Open the expandable entry so nested content is visible
+                const expandableEntry = nestedContainer.closest(
+                    "details.anndata-entry",
+                );
+                if (expandableEntry && !expandableEntry.open) {
+                    expandableEntry.open = true;
+                }
+
+                // Continue searching from the parent entry's container
+                element = parentEntry.parentElement;
             }
         });
     }
@@ -297,38 +293,6 @@ container.querySelectorAll(".anndata-entry__copy").forEach((btn) => {
     });
 });
 
-// Expand/collapse nested content
-container.querySelectorAll(".anndata-entry__expand").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-
-        const entry = btn.closest(".anndata-entry");
-        if (!entry) return;
-
-        // The nested content is in a sibling <tr class="anndata-entry--nested">
-        // which contains <td class="anndata-entry__nested-content">
-        const nestedRow = entry.nextElementSibling;
-        if (
-            !nestedRow ||
-            !nestedRow.classList.contains("anndata-entry--nested")
-        )
-            return;
-
-        const nestedContent = nestedRow.querySelector(
-            ".anndata-entry__nested-content",
-        );
-        if (!nestedContent) return;
-
-        const isExpanded = nestedRow.classList.toggle(
-            "anndata-entry--expanded",
-        );
-
-        btn.textContent = isExpanded ? "Collapse ▲" : "Expand ▼";
-        btn.setAttribute("aria-expanded", isExpanded);
-        nestedRow.setAttribute("aria-hidden", !isExpanded);
-    });
-});
-
 // Helper to check if element is overflowing
 function isOverflowing(el) {
     return el.scrollWidth > el.clientWidth;
@@ -349,8 +313,8 @@ function updateWrapButtonVisibility(btn, list, metaCell, wrappedClass) {
 // Factory function to set up wrap button handlers (DRY pattern for cats/cols buttons)
 function setupWrapButtons(buttonSelector, listSelector, wrappedClass) {
     container.querySelectorAll(buttonSelector).forEach((btn) => {
-        const typeCell = btn.closest(".anndata-entry__type");
-        const metaCell = typeCell ? typeCell.nextElementSibling : null;
+        const entry = btn.closest(".anndata-entry");
+        const metaCell = entry ? entry.querySelector(".anndata-entry__preview") : null;
         const list = metaCell ? metaCell.querySelector(listSelector) : null;
 
         // Initial visibility check
@@ -400,8 +364,8 @@ function updateAllWrapButtons() {
         ],
     ].forEach(([btnSel, listSel, wrappedClass]) => {
         container.querySelectorAll(btnSel).forEach((btn) => {
-            const typeCell = btn.closest(".anndata-entry__type");
-            const metaCell = typeCell ? typeCell.nextElementSibling : null;
+            const entry = btn.closest(".anndata-entry");
+            const metaCell = entry ? entry.querySelector(".anndata-entry__preview") : null;
             const list = metaCell ? metaCell.querySelector(listSel) : null;
             updateWrapButtonVisibility(btn, list, metaCell, wrappedClass);
         });

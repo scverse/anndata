@@ -1913,6 +1913,13 @@ def main():  # noqa: PLR0915, PLR0912
         adata_nojs.obs[f"metric_{i}"] = np.random.randn(30)
     adata_nojs.obsm["X_pca"] = np.random.randn(30, 10).astype(np.float32)
     adata_nojs.layers["raw"] = np.random.randn(30, 15).astype(np.float32)
+    # Add nested AnnData to test native <details> expand without JS
+    adata_nojs.uns["nested_adata"] = AnnData(
+        np.zeros((5, 3)),
+        obs=pd.DataFrame({"label": ["A", "B", "C", "D", "E"]}),
+    )
+    # Add raw section to test raw rendering without JS
+    adata_nojs.raw = adata_nojs.copy()
     # Add a DataFrame with many columns to test column list wrapping without JS
     adata_nojs.obsm["cell_measurements"] = pd.DataFrame(
         {
@@ -1947,8 +1954,10 @@ def main():  # noqa: PLR0915, PLR0912
         "This example has script tags removed to simulate environments where JS is disabled. "
         "All content should be visible, sections should be expanded, category lists and "
         "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
-        "(fold icons, copy buttons, search, expand, wrap toggle) should be hidden. "
-        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping.",
+        "(fold icons, copy buttons, search, wrap toggle) should be hidden. "
+        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
+        "Includes a nested AnnData in uns and a raw section — both use native &lt;details&gt; "
+        "for expand/collapse which works without JS.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)

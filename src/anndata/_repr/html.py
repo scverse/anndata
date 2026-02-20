@@ -152,8 +152,8 @@ def _calculate_field_name_width(adata: AnnData, max_width: int) -> int:
     max_len = max(len(str(name)) for name in all_names)
     width_px = (max_len * CHAR_WIDTH_PX) + COPY_BUTTON_PADDING_PX
 
-    # Clamp to reasonable range
-    return max(MIN_FIELD_WIDTH_PX, min(width_px, max_width))
+    # Clamp to reasonable range (max_width from user setting always wins)
+    return min(max(MIN_FIELD_WIDTH_PX, width_px), max_width)
 
 
 def _resolve_setting(override: int | None, setting_name: str, default: int) -> int:

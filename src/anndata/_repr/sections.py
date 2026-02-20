@@ -41,7 +41,7 @@ from .components import (
     render_entry_row_open,
     render_entry_type_cell,
     render_name_cell,
-    render_nested_content_cell,
+    render_nested_content,
 )
 from .core import (
     get_section_tooltip,
@@ -343,21 +343,21 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     parts.append("</summary>")
 
     parts.append('<div class="anndata-section__content">')
-    parts.append('<table class="anndata-section__table">')
+    parts.append('<div class="anndata-section__entries">')
 
     for attr_name, type_desc in unknown_sections:
         parts.append(render_entry_row_open(attr_name, type_desc))
         parts.append(render_name_cell(attr_name))
-        parts.append('<td class="anndata-entry__type">')
+        parts.append('<div class="anndata-entry__type">')
         parts.append(
             f'<span class="{CSS_DTYPE_UNKNOWN}" title="Unrecognized attribute">'
             f"{escape_html(type_desc)}</span>"
         )
-        parts.append("</td>")
-        parts.append('<td class="anndata-entry__preview"></td>')
-        parts.append("</tr>")
+        parts.append("</div>")
+        parts.append('<div class="anndata-entry__preview"></div>')
+        parts.append("</div>")
 
-    parts.append("</table>")
+    parts.append("</div>")
     parts.append("</div>")
     parts.append("</details>")
 
@@ -473,30 +473,33 @@ def _render_raw_section(
 
     # Single row container (like a minimal section with just one entry)
     parts = ['<div class="anndata-sec anndata-sec-raw" data-section="raw">']
-    parts.append('<table class="anndata-section__table">')
+    parts.append('<div class="anndata-section__entries">')
 
-    # Single row with raw info and expand button
+    # Single row with raw info
     type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
-    parts.append(render_entry_row_open("raw", "Raw"))
+    parts.append(
+        render_entry_row_open("raw", "Raw", has_expandable_content=can_expand)
+    )
     parts.append(render_name_cell("raw"))
     type_cell_config = TypeCellConfig(
         type_name=type_str,
         css_class=CSS_DTYPE_ANNDATA,
-        has_expandable_content=can_expand,
     )
     parts.append(render_entry_type_cell(type_cell_config))
     parts.append(render_entry_preview_cell(preview_text=meta_text))
-    parts.append("</tr>")
 
-    # Nested content (hidden by default, shown on expand)
+    # Nested content (entry is <details>/<summary> when can_expand)
     if can_expand:
         nested_html = _generate_raw_repr_html(raw, context.child("raw"))
         # Wrap in anndata-entry__nested-anndata for specific styling
         wrapped_html = f'<div class="anndata-entry__nested-anndata">{nested_html}</div>'
-        parts.append(render_nested_content_cell(wrapped_html))
+        parts.append(render_nested_content(wrapped_html))
+        parts.append("</details>")  # close expandable entry
+    else:
+        parts.append("</div>")  # close plain entry
 
-    parts.append("</table>")
-    parts.append("</div>")
+    parts.append("</div>")  # close entries grid
+    parts.append("</div>")  # close section
 
     return "\n".join(parts)
 
