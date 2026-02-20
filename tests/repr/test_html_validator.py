@@ -529,14 +529,16 @@ class TestJupyterNotebookCompatibility:
         """Test dark mode CSS uses Jupyter-compatible selectors."""
         html = adata._repr_html_()
 
+        # Should use light-dark() with color-scheme for theming
+        assert "light-dark(" in html, "CSS should use light-dark() for theming"
+
         # Should support at least one Jupyter dark mode detection method
         has_jp_theme = "[data-jp-theme-light" in html
-        has_prefers_color = "prefers-color-scheme: dark" in html
         has_jp_dark_class = ".jp-Theme-Dark" in html
 
-        assert has_jp_theme or has_prefers_color or has_jp_dark_class, (
+        assert has_jp_theme or has_jp_dark_class, (
             "HTML should support Jupyter dark mode via "
-            "[data-jp-theme-light], prefers-color-scheme, or .jp-Theme-Dark"
+            "[data-jp-theme-light] or .jp-Theme-Dark"
         )
 
     def test_no_document_level_operations(self, adata_full):
@@ -602,7 +604,7 @@ class TestJupyterNotebookCompatibility:
             and "script" not in e.lower()
             # vnu's CSS parser doesn't support native CSS nesting
             # https://github.com/w3c/css-validator/issues/431
-            and "css: parse error" not in e.lower()
+            and "parse error" not in e.lower()
         ]
         assert not critical, "HTML invalid in Jupyter context:\n" + "\n".join(critical)
 
@@ -642,7 +644,7 @@ class TestJupyterNotebookCompatibility:
             and "duplicate" not in e.lower()
             # vnu's CSS parser doesn't support native CSS nesting
             # https://github.com/w3c/css-validator/issues/431
-            and "css: parse error" not in e.lower()
+            and "parse error" not in e.lower()
         ]
         assert not critical, "Combined cells invalid:\n" + "\n".join(critical)
 

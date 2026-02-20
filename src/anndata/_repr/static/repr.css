@@ -1,50 +1,78 @@
 /* AnnData HTML Representation Styles */
 /* Scoped to .anndata-repr to avoid conflicts */
 /* Uses native CSS nesting (Chrome 120+, Firefox 117+, Safari 17.2+) */
+/* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) */
 
 .anndata-repr {
-    /* CSS Variables - Light mode (default) */
-    --anndata-bg-primary: #ffffff;
-    --anndata-bg-secondary: #f8f9fa;
-    --anndata-bg-tertiary: #e9ecef;
-    --anndata-highlight: #e7f1ff;
-    --anndata-text-primary: #212529;
-    --anndata-text-secondary: #6c757d;
-    --anndata-text-muted: #adb5bd;
-    --anndata-border-color: #dee2e6;
-    --anndata-border-light: #e9ecef;
-    --anndata-accent-color: #0d6efd;
-    --anndata-warning-color: #ffc107;
-    --anndata-warning-bg: #fff3cd;
-    --anndata-error-color: #dc3545;
-    --anndata-error-bg: #f8d7da;
-    --anndata-success-color: #198754;
-    --anndata-info-color: #0dcaf0;
-    --anndata-link-color: #0d6efd;
-    --anndata-code-bg: #f8f9fa;
+    /* Opt into light-dark(): responds to used color scheme, defaulting to light */
+    color-scheme: light dark;
+
+    /* --- Theme overrides ---
+       When an app explicitly sets a theme, override the color scheme so
+       light-dark() picks the correct value regardless of OS preference. */
+
+    body.light-mode &,
+    [data-theme="light"] &,
+    html[data-theme="light"] &,
+    [data-jp-theme-light="true"] &,
+    .jp-Theme-Light &,
+    body.vscode-light &,
+    body[data-vscode-theme-kind="vscode-light"] & {
+        color-scheme: light;
+    }
+
+    body.dark-mode &,
+    [data-theme="dark"] &,
+    html[data-theme="dark"] &,
+    [data-jp-theme-light="false"] &,
+    .jp-Theme-Dark &,
+    body.vscode-dark &,
+    body[data-vscode-theme-kind="vscode-dark"] & {
+        color-scheme: dark;
+    }
+
+    /* CSS Variables — each defined once via light-dark(light, dark) */
+    --anndata-bg-primary: light-dark(#ffffff, #1e1e1e);
+    --anndata-bg-secondary: light-dark(#f8f9fa, #252526);
+    --anndata-bg-tertiary: light-dark(#e9ecef, #2d2d2d);
+    --anndata-highlight: light-dark(#e7f1ff, #264f78);
+    --anndata-text-primary: light-dark(#212529, #e0e0e0);
+    --anndata-text-secondary: light-dark(#6c757d, #a0a0a0);
+    --anndata-text-muted: light-dark(#adb5bd, #707070);
+    --anndata-border-color: light-dark(#dee2e6, #404040);
+    --anndata-border-light: light-dark(#e9ecef, #333333);
+    --anndata-accent-color: light-dark(#0d6efd, #58a6ff);
+    --anndata-warning-color: light-dark(#ffc107, #d29922);
+    --anndata-warning-bg: light-dark(#fff3cd, #3d3200);
+    --anndata-error-color: light-dark(#dc3545, #f85149);
+    --anndata-error-bg: light-dark(#f8d7da, #3d1a1a);
+    --anndata-success-color: light-dark(#198754, #3fb950);
+    --anndata-info-color: light-dark(#0dcaf0, #58a6ff);
+    --anndata-link-color: light-dark(#0d6efd, #58a6ff);
+    --anndata-code-bg: light-dark(#f8f9fa, #2d2d2d);
     --anndata-radius: 4px;
     --anndata-font-mono:
         ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --anndata-font-size: 13px;
     --anndata-line-height: 1.4;
-    /* Dtype colors - Light mode */
-    --anndata-dtype-category: #8250df;
-    --anndata-dtype-int: #0550ae;
-    --anndata-dtype-float: #0550ae;
-    --anndata-dtype-bool: #cf222e;
-    --anndata-dtype-string: #0a3069;
-    --anndata-dtype-object: #6e7781;
-    --anndata-dtype-sparse: #1a7f37;
-    --anndata-dtype-array: #0550ae;
-    --anndata-dtype-dataframe: #8250df;
-    --anndata-dtype-anndata: #cf222e;
-    --anndata-dtype-unknown: #6e7781;
-    --anndata-dtype-extension: #8250df;
-    --anndata-dtype-dask: #fb8500;
-    --anndata-dtype-gpu: #76b900;
-    --anndata-dtype-tpu: #0891b2;
-    --anndata-dtype-awkward: #e85d04;
-    --anndata-dtype-array-api: #9a6700;
+    /* Dtype colors */
+    --anndata-dtype-category: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-int: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-float: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-bool: light-dark(#cf222e, #ff7b72);
+    --anndata-dtype-string: light-dark(#0a3069, #a5d6ff);
+    --anndata-dtype-object: light-dark(#6e7781, #a0a0a0);
+    --anndata-dtype-sparse: light-dark(#1a7f37, #7ee787);
+    --anndata-dtype-array: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-dataframe: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-anndata: light-dark(#cf222e, #ff7b72);
+    --anndata-dtype-unknown: light-dark(#6e7781, #a0a0a0);
+    --anndata-dtype-extension: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-dask: light-dark(#fb8500, #ffc168);
+    --anndata-dtype-gpu: light-dark(#76b900, #a0db63);
+    --anndata-dtype-tpu: light-dark(#0891b2, #67e8f9);
+    --anndata-dtype-awkward: light-dark(#e85d04, #ff9d76);
+    --anndata-dtype-array-api: light-dark(#9a6700, #e6c400);
     /* Column widths are set dynamically via inline style on container */
 
     font-family:
@@ -1010,41 +1038,3 @@
     }
 }
 
-/* Dark mode - Three-tier approach:
-   Tier 1 (lowest): @media prefers-color-scheme — OS-level fallback for plain HTML
-     contexts (nbviewer, exported notebooks, standalone HTML) where no theme
-     attributes exist.
-   Tier 2: Explicit light theme selectors — override the media query when an app
-     is explicitly in light mode (handles "OS dark + app light" case).
-   Tier 3 (highest): Explicit dark theme selectors — match the actual app state. */
-
-/* Tier 1: OS dark mode fallback (fires only when no theme attribute overrides it) */
-@media (prefers-color-scheme: dark) {
-    .anndata-repr {
-        /* @dark-vars */
-    }
-}
-
-/* Tier 2: Explicit light theme selectors — override the OS dark media query
-   when the app is explicitly in light mode. Light variables are intentionally
-   duplicated from .anndata-repr defaults above (standard CSS practice). */
-[data-jp-theme-light="true"] .anndata-repr,
-.jp-Theme-Light .anndata-repr,
-body.vscode-light .anndata-repr,
-body[data-vscode-theme-kind="vscode-light"] .anndata-repr,
-[data-theme="light"] .anndata-repr,
-html[data-theme="light"] .anndata-repr,
-body.light-mode .anndata-repr {
-    /* @light-vars */
-}
-
-/* Tier 3: Explicit dark theme selectors — match the actual app state */
-[data-jp-theme-light="false"] .anndata-repr,
-.jp-Theme-Dark .anndata-repr,
-body.vscode-dark .anndata-repr,
-body[data-vscode-theme-kind="vscode-dark"] .anndata-repr,
-[data-theme="dark"] .anndata-repr,
-html[data-theme="dark"] .anndata-repr,
-body.dark-mode .anndata-repr {
-    /* @dark-vars */
-}

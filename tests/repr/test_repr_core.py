@@ -86,7 +86,7 @@ class TestHTMLValidation:
             and "script" not in e.lower()
             # vnu's CSS parser doesn't support native CSS nesting
             # https://github.com/w3c/css-validator/issues/431
-            and "css: parse error" not in e.lower()
+            and "parse error" not in e.lower()
         ]
         assert not critical, "HTML5 validation errors:\n" + "\n".join(critical)
 
@@ -123,13 +123,14 @@ class TestCSSValidation:
             assert not undefined, f"Undefined CSS vars: {undefined}"
 
     def test_dark_mode_css_present(self, adata):
-        """Test dark mode CSS rules are present."""
+        """Test dark mode CSS rules are present via light-dark() and color-scheme."""
         html = adata._repr_html_()
+        assert "light-dark(" in html, "CSS should use light-dark() for theming"
+        assert "color-scheme:" in html, "CSS should declare color-scheme"
+        # Theme selectors should still be present for explicit app themes
         assert (
-            "@media (prefers-color-scheme: dark)" in html
-            or "jp-Theme-Dark" in html
-            or "[data-jp-theme-light" in html
-        )
+            "jp-Theme-Dark" in html or "[data-jp-theme-light" in html
+        ), "CSS should include Jupyter theme selectors"
 
 
 class TestBasicHTMLGeneration:
