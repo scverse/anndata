@@ -1,7 +1,8 @@
 /* AnnData HTML Representation Styles */
 /* Scoped to .anndata-repr to avoid conflicts */
 /* Uses native CSS nesting (Chrome 120+, Firefox 117+, Safari 17.2+) */
-/* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) */
+/* Uses subgrid (Chrome 117+, Firefox 71+, Safari 16+) */
+/* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) — the bottleneck */
 
 .anndata-repr {
     /* Opt into light-dark(): responds to used color scheme, defaulting to light */
@@ -126,6 +127,13 @@
                 overflow: visible;
                 text-overflow: clip;
             }
+        }
+
+        /* Allow preview cell to expand when wrap button is toggled */
+        .anndata-entry__preview.anndata-entry--expanded {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
         }
 
         .anndata-categories__wrap,
@@ -515,7 +523,7 @@
         grid-column: 1 / -1;
         transition: background-color 0.1s;
 
-        &:nth-child(even) {
+        &:nth-child(even of .anndata-entry:not(.anndata-entry--hidden)) {
             background: var(--anndata-bg-secondary);
         }
 

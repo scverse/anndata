@@ -36,7 +36,9 @@ COPY_BUTTON_PADDING_PX = (
     54  # Extra space for copy button + cell padding (24px for grid border-box)
 )
 MIN_FIELD_WIDTH_PX = 104  # Minimum column width (includes 24px cell padding)
-DEFAULT_FIELD_WIDTH_PX = 100  # Default when no field names exist
+DEFAULT_FIELD_WIDTH_PX = (
+    104  # Default when no field names exist (matches MIN_FIELD_WIDTH_PX)
+)
 
 # Inline style for graceful degradation (hidden until JS enables).
 # JS sets different display values per element, so this must stay inline.

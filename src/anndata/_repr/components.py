@@ -452,8 +452,6 @@ class TypeCellConfig:
         List of warning messages
     is_not_serializable
         Whether the data cannot be serialized to H5AD/Zarr
-    has_expandable_content
-        Whether to show expand button
     has_columns_list
         Whether to show columns wrap button
     has_categories_list
@@ -486,7 +484,6 @@ class TypeCellConfig:
     tooltip: str = ""
     warnings: list[str] = field(default_factory=list)
     is_not_serializable: bool = False
-    has_expandable_content: bool = False
     has_columns_list: bool = False
     has_categories_list: bool = False
     append_type_html: bool = False

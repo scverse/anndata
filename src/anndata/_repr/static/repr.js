@@ -172,7 +172,7 @@ function filterEntries(query) {
                 if (!nestedContainer) break;
 
                 // Find the parent entry that contains this nested content
-                // Structure: div.anndata-entry > details > .anndata-entry__nested-content
+                // Structure: details.anndata-entry > .anndata-entry__nested-content
                 const parentEntry = nestedContainer.closest(".anndata-entry");
                 if (!parentEntry) break;
 

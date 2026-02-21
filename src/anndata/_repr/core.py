@@ -363,7 +363,6 @@ def render_formatted_entry(
         tooltip=output.tooltip,
         warnings=all_warnings,
         is_not_serializable=not output.is_serializable,
-        has_expandable_content=has_expandable_content,
         has_columns_list=has_columns_list,
         has_categories_list=has_categories,
         append_type_html=append_type_html,
