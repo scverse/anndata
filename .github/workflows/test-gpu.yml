@@ -52,6 +52,11 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
+        with:
+          enable-cache: true
+
       - name: Extract max Python version from classifiers
         run: |
           import os
@@ -61,15 +66,9 @@ jobs:
             print(f"max_python_version={max_ver}", file=f)
         shell: uvx --with=check-python-versions==0.24 python {0}
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
-        with:
-          enable-cache: true
-          python-version: ${{ env.max_python_version }}
-
       - name: Install AnnData
         run: |
-          uv venv
+          uv venv -p ${{ env.max_python_version }}
           uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
