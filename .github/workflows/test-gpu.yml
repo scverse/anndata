@@ -62,13 +62,13 @@ jobs:
           import os
           import check_python_versions.sources.pyproject as cpv
           *_, max_ver = cpv.get_supported_python_versions()
-          with open(os.environ["GITHUB_ENV"], "a") as f:
-            print(f"max_python_version={max_ver}", file=f)
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+            print(f"UV_PYTHON={max_ver}", file=env)
         shell: uvx --with=check-python-versions==0.24 python {0}
 
       - name: Install AnnData
         run: |
-          uv venv -p ${{ env.max_python_version }}
+          uv venv
           uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
