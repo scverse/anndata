@@ -130,14 +130,26 @@ class Raw:
     @overload
     def __getitem__(self, index: AdRef) -> InMemoryArray: ...
     @overload
-    def __getitem__(self, index: Index) -> Raw: ...
-    def __getitem__(self, index: Index | AdRef) -> Raw | InMemoryArray:
+    def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw: ...
+    def __getitem__(
+        self, index: Index | tuple[AnnData, Index] | AdRef
+    ) -> Raw | InMemoryArray:
         from ..acc import AdRef
+        from .anndata import AnnData
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
 
-        oidx, vidx = self._normalize_indices(index)
+        if (
+            isinstance(index, tuple)
+            and len(index) == 2
+            and isinstance(index[0], AnnData)
+        ):
+            adata, index = index
+            oidx, vidx = self._normalize_indices(index)
+        else:
+            oidx, vidx = self._normalize_indices(index)
+            adata = self._adata[oidx]
 
         # To preserve two dimensional shape
         if isinstance(vidx, int | np.integer):
@@ -148,7 +160,7 @@ class Raw:
         X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
+        new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()

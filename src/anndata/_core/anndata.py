@@ -340,8 +340,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
-            self._raw = adata_ref.raw[oidx]
-            self._raw._adata = self
+            self._raw = adata_ref.raw[self, oidx]
         else:
             self._raw = None
 
