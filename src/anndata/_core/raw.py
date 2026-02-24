@@ -33,7 +33,11 @@ class Raw:
         X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
-    ):
+    ) -> None:
+        if X is not None and X.shape[0] != adata.n_obs:
+            msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"
+            raise ValueError(msg)
+
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually
@@ -121,8 +125,19 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    def __getitem__(self, index: Index) -> Raw:
-        oidx, vidx = self._normalize_indices(index)
+    def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw:
+        from .anndata import AnnData
+
+        if (
+            isinstance(index, tuple)
+            and len(index) == 2
+            and isinstance(index[0], AnnData)
+        ):
+            adata, index = index
+            oidx, vidx = self._normalize_indices(index)
+        else:
+            oidx, vidx = self._normalize_indices(index)
+            adata = self._adata[oidx]
 
         # To preserve two dimensional shape
         if isinstance(vidx, int | np.integer):
@@ -133,7 +148,7 @@ class Raw:
         X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
+        new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
