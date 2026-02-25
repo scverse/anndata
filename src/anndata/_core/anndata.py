@@ -332,8 +332,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
-            self._raw = adata_ref.raw[oidx]
-            self._raw._adata = self
+            self._raw = adata_ref.raw[self, oidx]
         else:
             self._raw = None
 
@@ -681,19 +680,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._raw
 
     @raw.setter
-    def raw(self, value: AnnData):
+    def raw(self, value: AnnData) -> None:
         if value is None:
             del self.raw
-        elif not isinstance(value, AnnData):
+            return
+        if not isinstance(value, AnnData):
             msg = "Can only init raw attribute with an AnnData object."
             raise ValueError(msg)
-        else:
-            if self.is_view:
-                self._init_as_actual(self.copy())
-            self._raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
+        raw = Raw(self, X=value.X, var=value.var, varm=value.varm)
+        if self.is_view:
+            self._init_as_actual(self.copy())
+        self._raw = raw
 
     @raw.deleter
-    def raw(self):
+    def raw(self) -> None:
         if self.is_view:
             self._init_as_actual(self.copy())
         self._raw = None
@@ -1271,7 +1271,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         deprecation_msg(
             "obs_vector",
             "anndata.acc.A",
-            "E.g. `vec = A.obs['foo'](adata)` or `vec = A.layers['l']['bar', :](adata)`",
+            "E.g. `vec = adata[A.obs['foo']]` or `vec = adata[A.layers['l']['bar', :]]`",
         )
     )
     def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
@@ -1300,7 +1300,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         deprecation_msg(
             "var_vector",
             "anndata.acc.A",
-            "E.g. `vec = A.var['foo'](adata)` or `vec = A.layers['l'][:, 'bar'](adata)`",
+            "E.g. `vec = adata[A.var['foo']]` or `vec = adata[A.layers['l'][:, 'bar']]`",
         )
     )
     def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:

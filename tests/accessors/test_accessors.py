@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Literal
 
-    from anndata.acc import AdRef
+    from anndata.acc import AdRef, MapAcc
 
 
 type AdRefSer = Sequence[str | int | None]
@@ -36,6 +36,7 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.layers["a"]["cell-77", :], ["layers", "a", "cell-77", None]),
     (A.obsm["umap"][0], ["obsm", "umap", 0]),
     (A.obsm["umap"][1], ["obsm", "umap", 1]),
+    (A.varp["cons"][:, :], ["varp", "cons", None, None]),
     (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
     (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
 ]
@@ -216,7 +217,7 @@ def test_special[C](
 
 
 @pytest.mark.parametrize(
-    "ad_ref",
+    "ref_or_acc",
     [
         *(p[0] for p in PATHS),
         A.X,
@@ -230,12 +231,12 @@ def test_special[C](
     ],
     ids=str,
 )
-def test_in(adata: AnnData, ad_ref: AdRef) -> None:
-    assert ad_ref in adata
+def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
+    assert ref_or_acc in adata
 
 
 @pytest.mark.parametrize(
-    "ad_ref",
+    "ref_or_acc",
     [
         A.layers["a"]["gene-0", :],  # not an obs name
         A.layers["a"][:, "cell-3"],  # not a var name
@@ -250,8 +251,8 @@ def test_in(adata: AnnData, ad_ref: AdRef) -> None:
     ],
     ids=str,
 )
-def test_not_in(adata: AnnData, ad_ref: AdRef) -> None:
-    assert ad_ref not in adata
+def test_not_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
+    assert ref_or_acc not in adata
 
 
 def test_not_in_empty(ad_ref: AdRef) -> None:

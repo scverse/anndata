@@ -47,6 +47,7 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.layers["a"]["cell-77", :], lambda ad: ad["cell-77"].layers["a"]),
     (A.obsm["umap"][0], lambda ad: asarray(ad.obsm["umap"])[:, 0]),
     (A.obsm["umap"][1], lambda ad: asarray(ad.obsm["umap"])[:, 1]),
+    (A.varp["cons"][:, :], lambda ad: asarray(ad.varp["cons"])),
     (A.varp["cons"]["gene-46", :], lambda ad: asarray(ad.varp["cons"])[46, :]),
     (A.varp["cons"][:, "gene-46"], lambda ad: asarray(ad.varp["cons"])[:, 46]),
 ]
