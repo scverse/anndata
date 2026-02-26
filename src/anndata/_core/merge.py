@@ -1532,7 +1532,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
-        layers: Noneå
+        layers: None
     >>> outer.var_names.astype("string")
     Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default

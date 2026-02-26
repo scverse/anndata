@@ -588,7 +588,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self.layers.get(None)
 
     @X.setter
-    def X(self, value: _XDataType | None):
+    def X(self, value: _XDataType | None) -> None:
         value = (
             coerce_array(value, name="X", allow_array_like=True)
             if value is not None
@@ -611,13 +611,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if not can_set_direct_if_not_none:
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
-        if self.is_view and value is not None:
+        if self.is_view:
             msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
+            self._init_as_actual(self._copy(X=value))
+            return None
         if value is not None:
             self.layers[None] = value
         else:
             self.layers.pop(None)
+        return None
 
     @X.deleter
     def X(self) -> None:
@@ -1325,7 +1328,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    def _copy(self) -> AnnData:
+    def _copy(self, *, X: _XDataType | None = None) -> AnnData:
         if self.isbacked and self.raw is not None:
             msg = (
                 "This function does not currently handle backed objects "
@@ -1335,6 +1338,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         new = {}
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
             new[key] = getattr(self, key).copy()
+            if X is not None and key == "layers":
+                new[key][None] = X
         new["uns"] = deepcopy(self._uns)
         if self.raw is not None:
             new["raw"] = self.raw.copy()
