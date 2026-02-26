@@ -40,6 +40,7 @@ from ..utils import (
     deprecated,
     deprecation_msg,
     ensure_df_homogeneous,
+    get_union_members,
     raise_value_error_if_multiindex_columns,
     set_module,
     warn,
@@ -1328,7 +1329,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         """
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    def _copy(self, *, X: _XDataType | None = None) -> AnnData:
+    def _copy(
+        self, *, X: _XDataType | None | Literal["no_set_X"] = "no_set_X"
+    ) -> AnnData:
+        from ..typing import _XDataType
+
         if self.isbacked and self.raw is not None:
             msg = (
                 "This function does not currently handle backed objects "
@@ -1338,7 +1343,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         new = {}
         for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
             new[key] = getattr(self, key).copy()
-            if X is not None and key == "layers":
+            if key == "layers" and isinstance(
+                X, (*get_union_members(_XDataType), type(None))
+            ):
                 new[key][None] = X
         new["uns"] = deepcopy(self._uns)
         if self.raw is not None:
