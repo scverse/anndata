@@ -286,3 +286,6 @@ fragment.perf.name = "Performance"
 fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
 fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
+
+[tool.uv]
+override-dependencies = [ "virtualenv<21" ]
