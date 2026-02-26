@@ -510,7 +510,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return X.__sizeof__()
 
         sizes = {}
-        attrs = ["X", "_obs", "_var"]
+        attrs = ["_obs", "_var"] + (["X"] if self.isbacked else [])
         attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
         for attr in attrs + attrs_multi:
             if attr in attrs_multi:
