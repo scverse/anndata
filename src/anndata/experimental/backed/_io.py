@@ -20,6 +20,7 @@ from .. import read_dispatched
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import Literal
 
     from anndata._io.specs.registry import IOSpec
     from anndata._types import Read, StorageType
@@ -34,6 +35,7 @@ def read_lazy(
     store: PathLike[str] | str | MutableMapping | ZarrGroup | h5py.File | h5py.Group,
     *,
     load_annotation_index: bool = True,
+    method: Literal["dask", "backed"] = "dask",
 ) -> AnnData:
     """
     Lazily read in on-disk/in-cloud AnnData stores, including `obs` and `var`.
@@ -43,13 +45,18 @@ def read_lazy(
     ----------
     store
         A store-like object to be read in.  If :class:`zarr.Group`, it is best for it to be consolidated.
-        If a path to an ``.h5ad`` file is provided, the open HDF5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user’s responsibility to close it when done with the returned object.
+        If a path to an ``.h5ad`` file is provided, the open HDF5 file will be attached to the {class}`~anndata.AnnData` at the `file` attribute and it will be the user's responsibility to close it when done with the returned object.
         For this reason, it is recommended to use an {class}`h5py.File` as the `store` argument when working with h5 files.
         It must remain open for at least as long as this returned object is in use.
     load_annotation_index
         Whether or not to use a range index for the `{obs,var}` :class:`xarray.Dataset` so as not to load the index into memory.
         If `False`, the real `index` will be inserted as `{obs,var}_names` in the object but not be one of the `coords` thereby preventing read operations.
         Access to `adata.obs.index` will also only give the dummy index, and not the "real" index that is file-backed.
+    method
+        If ``"dask"`` (the default), array data is backed by :class:`dask.array.Array`.
+        If ``"backed"``, array data is backed directly by :class:`zarr.Array` or :class:`h5py.Dataset`
+        for dense arrays and by :class:`~anndata.abc.CSRDataset` / :class:`~anndata.abc.CSCDataset`
+        for sparse arrays, without requiring dask.
 
     Returns
     -------
@@ -149,8 +156,10 @@ def read_lazy(
                 elem_name[:4] in {"/obs", "/var"}
                 or elem_name[:8] in {"/raw/obs", "/raw/var"}
             ):
-                return read_elem_lazy(elem, use_range_index=not load_annotation_index)
-            return read_elem_lazy(elem)
+                return read_elem_lazy(
+                    elem, use_range_index=not load_annotation_index, method=method
+                )
+            return read_elem_lazy(elem, method=method)
         elif iospec.encoding_type in {"awkward-array"}:
             return read_dispatched(elem, None)
         elif iospec.encoding_type == "dict":

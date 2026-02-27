@@ -1193,12 +1193,8 @@ class AccessTrackingStore(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        import traceback
 
-        traceback.print_stack()
-        print(kwargs)
         super().__init__(*args, **kwargs)
-        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)

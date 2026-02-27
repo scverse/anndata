@@ -198,6 +198,36 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
             raise RuntimeError(msg) from None
 
 
+class BackedArray[K: (H5Array | H5AsTypeView, ZarrArray)](ZarrOrHDF5Wrapper):
+    """
+    A wrapper class that exposes a :class:`zarr.Array` or :class:`h5py.Dataset` as an
+    :class:`xarray.backends.BackendArray` for non-dask lazy reading.
+
+    Used in ``mode="simple"`` by :func:`~anndata.experimental.read_lazy`.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.backends.BackendArray`.
+    """
+
+
+class BackedStringArray[K: (H5Array | H5AsTypeView, ZarrArray)](ZarrOrHDF5Wrapper):
+    """
+    A wrapper class that exposes a :class:`zarr.Array` or :class:`h5py.Dataset` holding
+    variable-length strings as an :class:`xarray.backends.BackendArray` for non-dask lazy
+    reading.  HDF5 bytes are decoded to str on access.
+
+    Used in ``mode="simple"`` by :func:`~anndata.experimental.read_lazy`.
+    We do not guarantee the stability of this API beyond that guaranteed
+    by :class:`xarray.backends.BackendArray`.
+    """
+
+    def __init__(self, array: K) -> None:
+        # For HDF5, wrap with .astype("T") for transparent string decoding.
+        if isinstance(array, H5Array) and array.dtype.kind == "S":
+            array = array.astype("T")
+        super().__init__(array)
+        self.dtype = np.dtype("O")  # object dtype for strings
+
+
 @_subset.register(XDataArray)
 def _subset_masked(
     a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
@@ -218,3 +248,13 @@ def _(a: MaskedArray):
 @get_chunksize.register(CategoricalArray)
 def _(a: CategoricalArray):
     return get_chunksize(a._codes)
+
+
+@get_chunksize.register(BackedArray)
+def _(a: BackedArray):
+    return get_chunksize(a._wrapper)
+
+
+@get_chunksize.register(BackedStringArray)
+def _(a: BackedStringArray):
+    return get_chunksize(a._wrapper)

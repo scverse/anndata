@@ -24,7 +24,7 @@ from anndata.compat import (
     ZarrGroup,
 )
 
-from .registry import _LAZY_REGISTRY, IOSpec, read_elem
+from .registry import _BACKED_REGISTRY, _DASK_REGISTRY, IOSpec, get_spec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ...compat import CSArray, CSMatrix, H5File
-    from .registry import LazyDataStructures, LazyReader
+    from .registry import DaskReader, LazyDataStructures
 
     BlockInfo = Mapping[
         None,
@@ -112,14 +112,14 @@ def get_chunksize(obj) -> tuple[int, ...]:
     raise ValueError(msg)
 
 
-@_LAZY_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
-@_LAZY_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
-@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
-@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
+@_DASK_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
+@_DASK_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
+@_DASK_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
+@_DASK_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_as_dask(
     elem: H5Group | ZarrGroup,
     *,
-    _reader: LazyReader,
+    _reader: DaskReader,
     chunks: tuple[int, ...] | None = None,  # only tuple[int, int] is supported here
 ) -> DaskArray:
     import dask.array as da
@@ -172,6 +172,19 @@ def read_sparse_as_dask(
     return da_mtx
 
 
+@_BACKED_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
+@_BACKED_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
+@_BACKED_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
+@_BACKED_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
+def read_sparse_as_backed(
+    elem: H5Group | ZarrGroup,
+    *,
+    _reader: DaskReader,
+) -> CSRDataset | CSCDataset:
+    """Return a sparse_dataset (CSRDataset/CSCDataset) without going through dask."""
+    return ad.io.sparse_dataset(elem, should_cache_indptr=False)
+
+
 def resolve_chunks(
     elem: H5Array | ZarrArray,
     chunks_arg: tuple[int, ...] | None,
@@ -193,11 +206,11 @@ def resolve_chunks(
 # TODO: `map_blocks` of a string array in h5py is so insanely slow on benchmarking that in the case someone has
 # a pure string annotation (not categoricals! or nullables strings!), it's probably better to pay the memory penalty.
 # In the long run, it might be good to figure out what exactly is going on here but for now, this will do.
-@_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+@_DASK_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
     elem: H5Array,
     *,
-    _reader: LazyReader,
+    _reader: DaskReader,
     chunks: tuple[int] | None = None,
 ) -> DaskArray:
     import dask.array as da
@@ -206,9 +219,9 @@ def read_h5_string_array(
     return da.from_array(read_elem(elem), chunks=chunks)
 
 
-@_LAZY_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
+@_DASK_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
 def read_h5_array(
-    elem: H5Array, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
+    elem: H5Array, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     import dask.array as da
 
@@ -229,14 +242,36 @@ def read_h5_array(
     )
 
 
-@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
-@_LAZY_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
+@_DASK_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
+@_DASK_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 def read_zarr_array(
-    elem: ZarrArray, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
+    elem: ZarrArray, *, _reader: DaskReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     import dask.array as da
 
     return da.from_zarr(elem, chunks=chunks)
+
+
+@_BACKED_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
+@_BACKED_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
+def read_h5_array_backed(
+    elem: H5Array,
+    *,
+    _reader: DaskReader,
+) -> H5Array:
+    """Return the h5py.Dataset directly (zero-copy, lazy)."""
+    return elem
+
+
+@_BACKED_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
+@_BACKED_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
+def read_zarr_array_backed(
+    elem: ZarrArray,
+    *,
+    _reader: DaskReader,
+) -> ZarrArray:
+    """Return the zarr.Array directly (zero-copy, lazy)."""
+    return elem
 
 
 def _gen_xarray_dict_iterator_from_elems(
@@ -244,7 +279,12 @@ def _gen_xarray_dict_iterator_from_elems(
     dim_name: str,
     index: np.NDArray,
 ) -> Generator[tuple[str, XVariable], None, None]:
-    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+    from anndata.experimental.backed._lazy_arrays import (
+        BackedArray,
+        BackedStringArray,
+        CategoricalArray,
+        MaskedArray,
+    )
 
     from ...compat import xarray as xr
 
@@ -264,6 +304,11 @@ def _gen_xarray_dict_iterator_from_elems(
                     ),
                 },
             )
+        elif isinstance(v, BackedArray | BackedStringArray) and k != dim_name:
+            variable = xr.Variable(
+                [dim_name],
+                data=xr.core.indexing.LazilyIndexedArray(v),
+            )
         elif k == dim_name:
             variable = xr.Variable([dim_name], data=index)
         else:
@@ -275,20 +320,38 @@ def _gen_xarray_dict_iterator_from_elems(
 DUMMY_RANGE_INDEX_KEY = "_anndata_dummy_range_index"
 
 
-@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
-@_LAZY_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
+def _extract_index_from_elem_dict(
+    elem_dict: dict,
+    dim_name: str,
+) -> np.ndarray:
+    """Read the index column into memory, handling all supported column types."""
+    from xarray.core.indexing import BasicIndexer
+
+    from ...experimental.backed._lazy_arrays import (
+        BackedArray,
+        BackedStringArray,
+        MaskedArray,
+    )
+
+    v = elem_dict[dim_name]
+    if isinstance(v, DaskArray):
+        return v.compute()
+    if isinstance(v, (BackedArray, BackedStringArray, MaskedArray)):
+        return v[BasicIndexer((slice(None),))]
+    msg = f"Cannot extract index from {type(v)}"
+    raise NotImplementedError(msg)
+
+
+@_DASK_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_DASK_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
 @requires_xarray
 def read_dataframe(
     elem: H5Group | ZarrGroup,
     *,
-    _reader: LazyReader,
+    _reader: DaskReader,
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
-    from xarray.core.indexing import BasicIndexer
-
-    from ...experimental.backed._lazy_arrays import MaskedArray
-
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
@@ -297,13 +360,7 @@ def read_dataframe(
     # which is used below as well.
     if not use_range_index:
         dim_name = elem.attrs["_index"]
-        # no sense in reading this in multiple times since xarray requires an in-memory index
-        if isinstance(elem_dict[dim_name], DaskArray):
-            index = elem_dict[dim_name].compute()
-        elif isinstance(elem_dict[dim_name], MaskedArray):
-            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
-        else:
-            raise NotImplementedError()
+        index = _extract_index_from_elem_dict(elem_dict, dim_name)
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
@@ -323,13 +380,73 @@ def read_dataframe(
     return ds
 
 
-@_LAZY_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
-@_LAZY_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
+@_BACKED_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_BACKED_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
+@requires_xarray
+def read_dataframe_backed(
+    elem: H5Group | ZarrGroup,
+    *,
+    _reader: DaskReader,
+    use_range_index: bool = False,
+) -> Dataset2D:
+    """Read a dataframe lazily without dask, using BackedArray/BackedStringArray wrappers."""
+    from ...experimental.backed._lazy_arrays import BackedArray, BackedStringArray
+
+    # Read raw elements via the backed registry so sub-columns come back as
+    # zarr.Array / h5py.Dataset / CategoricalArray / MaskedArray.
+    raw_dict: dict[str, object] = {
+        k: _reader.read_elem(elem[k])
+        for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
+    }
+
+    # Wrap raw arrays into BackedArray / BackedStringArray for xarray compatibility.
+    def _wrap(k: str, v: object) -> object:
+        if isinstance(v, H5Array | ZarrArray):
+            iospec = get_spec(elem[k])  # peek at the on-disk spec
+            if iospec.encoding_type == "string-array":
+                return BackedStringArray(v)
+            return BackedArray(v)
+        # CategoricalArray / MaskedArray already work as XBackendArray
+        return v
+
+    elem_dict = {k: _wrap(k, v) for k, v in raw_dict.items()}
+
+    if not use_range_index:
+        dim_name = elem.attrs["_index"]
+        index = _extract_index_from_elem_dict(elem_dict, dim_name)
+    else:
+        dim_name = DUMMY_RANGE_INDEX_KEY
+        index = pd.RangeIndex(len(raw_dict[elem.attrs["_index"]])).astype("str")
+
+    elem_xarray_dict = dict(
+        _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
+    )
+    if use_range_index:
+        elem_xarray_dict[DUMMY_RANGE_INDEX_KEY] = XVariable(
+            [DUMMY_RANGE_INDEX_KEY],
+            data=index,
+        )
+    ds = Dataset2D(XDataset(elem_xarray_dict))
+    ds.is_backed = True
+    ds.true_index_dim = elem.attrs["_index"]
+    return ds
+
+
+# ---------------------------------------------------------------------------
+# Categorical and nullable: identical for both registry modes — register once
+# on both registries.
+# ---------------------------------------------------------------------------
+
+
+@_DASK_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_DASK_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
+@_BACKED_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_BACKED_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
 @requires_xarray
 def read_categorical(
     elem: H5Group | ZarrGroup,
     *,
-    _reader: LazyReader,
+    _reader: DaskReader,
 ) -> CategoricalArray:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
 
@@ -353,7 +470,7 @@ def read_nullable(
     encoding_type: Literal[
         "nullable-integer", "nullable-boolean", "nullable-string-array"
     ],
-    _reader: LazyReader,
+    _reader: DaskReader,
 ) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
 
@@ -375,8 +492,14 @@ def read_nullable(
     )
 
 
-for dtype in ["integer", "boolean", "string-array"]:
-    for group_type in [ZarrGroup, H5Group]:
-        _LAZY_REGISTRY.register_read(group_type, IOSpec(f"nullable-{dtype}", "0.1.0"))(
-            partial(read_nullable, encoding_type=f"nullable-{dtype}")
+for _dtype in ["integer", "boolean", "string-array"]:
+    for _group_type in [ZarrGroup, H5Group]:
+        _read_nullable_partial = partial(
+            read_nullable, encoding_type=f"nullable-{_dtype}"
         )
+        _DASK_REGISTRY.register_read(
+            _group_type, IOSpec(f"nullable-{_dtype}", "0.1.0")
+        )(_read_nullable_partial)
+        _BACKED_REGISTRY.register_read(
+            _group_type, IOSpec(f"nullable-{_dtype}", "0.1.0")
+        )(_read_nullable_partial)
