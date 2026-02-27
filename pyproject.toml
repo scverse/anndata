@@ -286,3 +286,7 @@ fragment.perf.name = "Performance"
 fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
 fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
+
+[tool.uv]
+# https://github.com/pypa/hatch/issues/2193
+override-dependencies = [ "virtualenv<21" ]
