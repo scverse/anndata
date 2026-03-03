@@ -1,0 +1,1058 @@
+/* AnnData HTML Representation Styles */
+/* Scoped to .anndata-repr to avoid conflicts */
+/* Uses native CSS nesting (Chrome 120+, Firefox 117+, Safari 17.2+) */
+/* Uses subgrid (Chrome 117+, Firefox 71+, Safari 16+) */
+/* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) — the bottleneck */
+
+.anndata-repr {
+    /* Opt into light-dark(): responds to used color scheme, defaulting to light */
+    color-scheme: light dark;
+
+    /* --- Theme overrides ---
+       When an app explicitly sets a theme, override the color scheme so
+       light-dark() picks the correct value regardless of OS preference. */
+
+    body.light-mode &,
+    [data-theme="light"] &,
+    html[data-theme="light"] &,
+    [data-jp-theme-light="true"] &,
+    .jp-Theme-Light &,
+    body.vscode-light &,
+    body[data-vscode-theme-kind="vscode-light"] & {
+        color-scheme: light;
+    }
+
+    body.dark-mode &,
+    [data-theme="dark"] &,
+    html[data-theme="dark"] &,
+    [data-jp-theme-light="false"] &,
+    .jp-Theme-Dark &,
+    body.vscode-dark &,
+    body[data-vscode-theme-kind="vscode-dark"] & {
+        color-scheme: dark;
+    }
+
+    /* CSS Variables — each defined once via light-dark(light, dark) */
+    --anndata-bg-primary: light-dark(#ffffff, #1e1e1e);
+    --anndata-bg-secondary: light-dark(#f8f9fa, #252526);
+    --anndata-bg-tertiary: light-dark(#e9ecef, #2d2d2d);
+    --anndata-highlight: light-dark(#e7f1ff, #264f78);
+    --anndata-text-primary: light-dark(#212529, #e0e0e0);
+    --anndata-text-secondary: light-dark(#6c757d, #a0a0a0);
+    --anndata-text-muted: light-dark(#adb5bd, #707070);
+    --anndata-border-color: light-dark(#dee2e6, #404040);
+    --anndata-border-light: light-dark(#e9ecef, #333333);
+    --anndata-accent-color: light-dark(#0d6efd, #58a6ff);
+    --anndata-warning-color: light-dark(#ffc107, #d29922);
+    --anndata-warning-bg: light-dark(#fff3cd, #3d3200);
+    --anndata-error-color: light-dark(#dc3545, #f85149);
+    --anndata-error-bg: light-dark(#f8d7da, #3d1a1a);
+    --anndata-success-color: light-dark(#198754, #3fb950);
+    --anndata-info-color: light-dark(#0dcaf0, #58a6ff);
+    --anndata-link-color: light-dark(#0d6efd, #58a6ff);
+    --anndata-code-bg: light-dark(#f8f9fa, #2d2d2d);
+    --anndata-radius: 4px;
+    --anndata-font-mono:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --anndata-font-size: 13px;
+    --anndata-line-height: 1.4;
+    /* Dtype colors */
+    --anndata-dtype-category: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-int: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-float: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-bool: light-dark(#cf222e, #ff7b72);
+    --anndata-dtype-string: light-dark(#0a3069, #a5d6ff);
+    --anndata-dtype-object: light-dark(#6e7781, #a0a0a0);
+    --anndata-dtype-sparse: light-dark(#1a7f37, #7ee787);
+    --anndata-dtype-array: light-dark(#0550ae, #79c0ff);
+    --anndata-dtype-dataframe: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-anndata: light-dark(#cf222e, #ff7b72);
+    --anndata-dtype-unknown: light-dark(#6e7781, #a0a0a0);
+    --anndata-dtype-extension: light-dark(#8250df, #d2a8ff);
+    --anndata-dtype-dask: light-dark(#fb8500, #ffc168);
+    --anndata-dtype-gpu: light-dark(#76b900, #a0db63);
+    --anndata-dtype-tpu: light-dark(#0891b2, #67e8f9);
+    --anndata-dtype-awkward: light-dark(#e85d04, #ff9d76);
+    --anndata-dtype-array-api: light-dark(#9a6700, #e6c400);
+    /* Column widths are set dynamically via inline style on container */
+
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+        sans-serif;
+    font-size: var(--anndata-font-size);
+    line-height: var(--anndata-line-height);
+    color: var(--anndata-text-primary);
+    background: var(--anndata-bg-primary);
+    border: 1px solid var(--anndata-border-color);
+    border-radius: var(--anndata-radius);
+    padding: 0;
+    margin: 8px 0;
+    max-width: 100%;
+    overflow: hidden;
+
+    /* --- JS-enabled overrides --- */
+
+    &.anndata-repr--js {
+        .anndata-entry__preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .anndata-categories {
+            display: inline;
+            white-space: nowrap;
+            word-break: normal;
+
+            &.anndata-categories--wrapped {
+                display: inline;
+                max-width: none;
+                white-space: normal;
+                word-break: break-word;
+                overflow: visible;
+                text-overflow: clip;
+            }
+        }
+
+        .anndata-columns {
+            display: inline;
+            white-space: nowrap;
+            word-break: normal;
+
+            &.anndata-columns--wrapped {
+                display: inline;
+                max-width: none;
+                white-space: normal;
+                word-break: break-word;
+                overflow: visible;
+                text-overflow: clip;
+            }
+        }
+
+        /* Allow preview cell to expand when wrap button is toggled */
+        .anndata-entry__preview.anndata-entry--expanded {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
+        .anndata-categories__wrap,
+        .anndata-columns__wrap {
+            display: inline-block;
+        }
+    }
+
+    /* --- Header --- */
+
+    .anndata-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: var(--anndata-bg-secondary, #f8f9fa);
+        border-bottom: 1px solid var(--anndata-border-color, #dee2e6);
+    }
+
+    .anndata-header__type {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--anndata-text-primary, #212529);
+    }
+
+    .anndata-header__shape {
+        font-family: var(
+            --anndata-font-mono,
+            ui-monospace,
+            SFMono-Regular,
+            "SF Mono",
+            Menlo,
+            Consolas,
+            monospace
+        );
+        font-size: 12px;
+        color: var(--anndata-text-secondary, #6c757d);
+    }
+
+    .anndata-header__index {
+        padding: 8px 12px;
+        font-size: 11px;
+        font-family: var(
+            --anndata-font-mono,
+            ui-monospace,
+            SFMono-Regular,
+            "SF Mono",
+            Menlo,
+            Consolas,
+            monospace
+        );
+        color: var(--anndata-text-secondary, #6c757d);
+        background: var(--anndata-bg-primary, #ffffff);
+        border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        strong {
+            color: var(--anndata-text-primary, #212529);
+            font-weight: 500;
+        }
+    }
+
+    /* --- Badges --- */
+
+    .anndata-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        border-radius: 10px;
+        white-space: nowrap;
+    }
+
+    /* Badge modifiers must be siblings, not nested children.
+       In CSS nesting, &--modifier inside a doubly-nested rule produces
+       :is(parent child)--modifier which is an invalid selector. */
+    .anndata-badge--view {
+        background: var(--anndata-info-color);
+        color: white;
+    }
+
+    .anndata-badge--backed {
+        background: var(--anndata-success-color);
+        color: white;
+    }
+
+    .anndata-badge--lazy {
+        background: var(--anndata-warning-color);
+        color: white;
+    }
+
+    .anndata-badge--extension {
+        background: var(--anndata-accent-color);
+        color: white;
+    }
+
+    /* --- README --- */
+
+    .anndata-readme__icon {
+        cursor: pointer;
+        font-size: 14px;
+        opacity: 0.7;
+        transition: opacity 0.15s;
+        margin-left: 4px;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+
+    .anndata-readme__overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+    }
+
+    .anndata-readme__modal {
+        background: var(--anndata-bg-primary);
+        border: 1px solid var(--anndata-border-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        max-width: 700px;
+        max-height: 80vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .anndata-readme__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--anndata-border-color);
+        background: var(--anndata-bg-secondary);
+
+        h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--anndata-text-primary);
+        }
+    }
+
+    .anndata-readme__close {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: var(--anndata-text-secondary);
+        padding: 0 4px;
+        line-height: 1;
+
+        &:hover {
+            color: var(--anndata-text-primary);
+        }
+    }
+
+    .anndata-readme__content {
+        padding: 16px;
+        overflow-y: auto;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--anndata-text-primary);
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: var(--anndata-font-mono);
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+    }
+
+    /* --- Search box --- */
+
+    .anndata-search__box {
+        display: inline-flex;
+        align-items: center;
+        max-width: 300px;
+        border: 1px solid var(--anndata-border-color);
+        border-radius: var(--anndata-radius);
+        background: var(--anndata-bg-primary);
+        transition: border-color 0.15s;
+
+        &:focus-within {
+            border-color: var(--anndata-accent-color);
+        }
+
+        &.anndata-search__box--error {
+            border-color: #dc3545;
+
+            .anndata-search__input {
+                background: rgba(220, 53, 69, 0.05);
+            }
+        }
+    }
+
+    .anndata-search__input {
+        flex: 1;
+        min-width: 120px;
+        padding: 6px 8px;
+        font-size: 12px;
+        border: none;
+        background: transparent;
+        color: var(--anndata-text-primary);
+        outline: none;
+
+        &::placeholder {
+            color: var(--anndata-text-muted);
+        }
+    }
+
+    .anndata-search__indicator {
+        display: none;
+        margin-left: 8px;
+        font-size: 11px;
+        color: var(--anndata-accent-color);
+
+        /* JS toggles .anndata--active (not BEM --active modifier) */
+        &.anndata--active {
+            display: inline;
+        }
+    }
+
+    .anndata-search__toggles {
+        display: flex;
+        gap: 1px;
+        padding-right: 4px;
+        border-left: 1px solid var(--anndata-border-light);
+        margin-left: 4px;
+        padding-left: 4px;
+    }
+
+    .anndata-search__toggle {
+        display: none; /* Hidden until JS enables */
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--anndata-text-muted);
+        font-size: 10px;
+        font-family: var(--anndata-font-mono);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+
+        &:hover {
+            background: var(--anndata-bg-secondary);
+            color: var(--anndata-text-primary);
+        }
+
+        /* JS toggles .anndata--active (not BEM --active modifier) */
+        &.anndata--active {
+            background: var(--anndata-accent-color);
+            color: white;
+        }
+    }
+
+    /* --- Sections --- */
+
+    .anndata-section {
+        border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
+
+        &:last-child {
+            border-bottom: none;
+        }
+    }
+
+    .anndata-section > summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        user-select: none;
+        background: var(--anndata-bg-primary, #ffffff);
+        transition: background-color 0.15s;
+        list-style: none;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        &::before {
+            content: "\25BC"; /* ▼ */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            font-size: 10px;
+            color: var(--anndata-text-muted, #adb5bd);
+            transition: transform 0.15s;
+            transform-origin: center;
+            flex-shrink: 0;
+        }
+
+        &:hover {
+            background: var(--anndata-bg-secondary, #f8f9fa);
+        }
+    }
+
+    .anndata-section:not([open]) > summary::before {
+        transform: rotate(-90deg);
+    }
+
+    .anndata-section__name {
+        font-weight: 600;
+        color: var(--anndata-text-primary, #212529);
+    }
+
+    .anndata-section__count {
+        font-size: 11px;
+        color: var(--anndata-text-secondary, #6c757d);
+    }
+
+    .anndata-section__help {
+        margin-left: auto;
+        padding: 2px 6px;
+        font-size: 11px;
+        color: var(--anndata-text-muted, #adb5bd);
+        text-decoration: none;
+        border-radius: var(--anndata-radius, 4px);
+        transition:
+            color 0.15s,
+            background-color 0.15s;
+
+        &:hover {
+            color: var(--anndata-accent-color, #0d6efd);
+            background: var(--anndata-bg-tertiary, #e9ecef);
+        }
+    }
+
+    .anndata-section__content {
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .anndata-section__entries {
+        display: grid;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(
+                --anndata-type-col-width,
+                180px
+            ) 1fr;
+        font-size: 12px;
+        width: 100%;
+    }
+
+    .anndata-section__truncated {
+        grid-column: 1 / -1;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: var(--anndata-text-muted);
+        text-align: center;
+        font-style: italic;
+    }
+
+    .anndata-section__empty {
+        padding: 8px 12px;
+        font-size: 11px;
+        color: var(--anndata-text-muted);
+        font-style: italic;
+    }
+
+    /* --- Entries --- */
+
+    .anndata-entry {
+        grid-column: 1 / -1;
+        transition: background-color 0.1s;
+
+        &:nth-child(even of .anndata-entry:not(.anndata-entry--hidden)) {
+            background: var(--anndata-bg-secondary);
+        }
+
+        &:hover {
+            background: var(--anndata-bg-tertiary, #e9ecef);
+        }
+
+        &.anndata-entry--hidden {
+            display: none;
+        }
+
+        &.warning {
+            background: var(--anndata-warning-bg) !important;
+        }
+
+        &.error {
+            background: var(--anndata-error-bg) !important;
+        }
+
+        &:hover .anndata-entry__copy {
+            opacity: 1;
+        }
+    }
+
+    /* Regular (non-expandable) entries use subgrid for column alignment */
+    div.anndata-entry {
+        display: grid;
+        grid-template-columns: subgrid;
+    }
+
+    /* Expandable entry summary — uses explicit columns (not subgrid)
+       so nested content below is a normal block child at full width */
+    details.anndata-entry > summary.anndata-entry__summary {
+        display: grid;
+        grid-template-columns: var(--anndata-name-col-width, 150px) var(
+                --anndata-type-col-width,
+                180px
+            ) 1fr;
+        list-style: none;
+        cursor: pointer;
+        position: relative;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        /* Expand indicator arrow */
+        &::after {
+            content: "\25B6"; /* ▶ */
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 8px;
+            color: var(--anndata-accent-color);
+            transition: transform 0.15s;
+        }
+    }
+
+    /* When open, rotate the arrow */
+    details.anndata-entry[open] > summary.anndata-entry__summary::after {
+        transform: translateY(-50%) rotate(90deg);
+    }
+
+    /* Reserve space for the expand indicator */
+    details.anndata-entry > summary.anndata-entry__summary
+        > .anndata-entry__preview {
+        padding-right: 24px;
+    }
+
+    .anndata-entry__name {
+        font-family: var(
+            --anndata-font-mono,
+            ui-monospace,
+            SFMono-Regular,
+            "SF Mono",
+            Menlo,
+            Consolas,
+            monospace
+        );
+        font-size: var(--anndata-font-size, 13px);
+        font-weight: 500;
+        color: var(--anndata-text-primary, #212529);
+        white-space: nowrap;
+        text-align: left;
+        padding: 6px 12px;
+        align-self: center;
+        min-width: 0;
+    }
+
+    .anndata-entry__name-inner {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0; /* Allow flex child to shrink below content size */
+    }
+
+    .anndata-entry__name-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0; /* Allow text to shrink and show ellipsis */
+        font-size: inherit; /* Prevent mobile browsers from auto-sizing truncated text */
+    }
+
+    .anndata-entry__type {
+        font-family: var(
+            --anndata-font-mono,
+            ui-monospace,
+            SFMono-Regular,
+            "SF Mono",
+            Menlo,
+            Consolas,
+            monospace
+        );
+        font-size: 11px;
+        color: var(--anndata-text-secondary, #6c757d);
+        text-align: left;
+        white-space: nowrap;
+        padding: 6px 12px;
+        align-self: center;
+    }
+
+    .anndata-entry__preview {
+        font-size: 11px;
+        color: var(--anndata-text-muted, #adb5bd);
+        text-align: right;
+        /* Default: allow wrapping for graceful no-JS degradation */
+        white-space: normal;
+        word-break: break-word;
+        padding: 6px 12px;
+        align-self: center;
+        min-width: 0;
+    }
+
+    /* Copy button */
+    .anndata-entry__copy {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 2px;
+        cursor: pointer;
+        opacity: 0;
+        transition:
+            opacity 0.15s,
+            background-color 0.15s;
+        flex-shrink: 0;
+        position: relative;
+
+        &::before,
+        &::after {
+            content: "";
+            position: absolute;
+            width: 7px;
+            height: 8px;
+            border: 1.5px solid var(--anndata-text-muted);
+            border-radius: 1px;
+            background: var(--anndata-bg-primary);
+        }
+
+        &::before {
+            top: 2px;
+            left: 2px;
+        }
+
+        &::after {
+            top: 5px;
+            left: 5px;
+        }
+
+        &:hover {
+            &::before,
+            &::after {
+                border-color: var(--anndata-accent-color);
+            }
+        }
+
+        /* When copied, hide squares and show checkmark */
+        &.anndata-entry__copy--copied {
+            &::before,
+            &::after {
+                display: none;
+            }
+
+            &::before {
+                display: block;
+                content: "\2713";
+                width: auto;
+                height: auto;
+                border: none;
+                background: none;
+                color: var(--anndata-success-color);
+                font-size: 12px;
+                font-weight: bold;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+        }
+    }
+
+    .anndata-entry__warning {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--anndata-warning-color);
+        cursor: pointer;
+        margin-left: 2px;
+    }
+
+    /* Nested content area (inside expandable entries) */
+    .anndata-entry__nested-content {
+        padding: 12px;
+        background: var(--anndata-bg-secondary);
+        overflow: hidden;
+    }
+
+    .anndata-entry__expanded {
+        display: block;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 12px;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+
+        /* Jupyter-like table styling for embedded DataFrames */
+        > div {
+            display: inline-block;
+        }
+
+        table {
+            border-collapse: collapse;
+            border-spacing: 0;
+            border: none;
+            font-size: 12px;
+            font-family: var(--anndata-font-mono);
+            table-layout: auto;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        thead {
+            border-bottom: 1px solid var(--anndata-border-color);
+            vertical-align: bottom;
+        }
+
+        th,
+        td {
+            vertical-align: middle;
+            padding: 6px 10px;
+            line-height: normal;
+            border: none;
+            text-align: right;
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--anndata-text-primary);
+            background: var(--anndata-bg-secondary);
+        }
+
+        td {
+            color: var(--anndata-text-primary);
+        }
+
+        tbody tr {
+            &:nth-child(odd) {
+                background: var(--anndata-bg-primary);
+            }
+
+            &:nth-child(even) {
+                background: var(--anndata-bg-secondary);
+            }
+
+            &:hover {
+                background: var(--anndata-highlight);
+            }
+        }
+
+        /* Nested AnnData wrapper — fill width, no extra padding */
+        &:has(> .anndata-entry__nested-anndata) {
+            padding: 0;
+            text-align: left;
+        }
+
+        > .anndata-entry__nested-anndata {
+            display: block;
+            width: 100%;
+            margin: 0;
+            box-sizing: border-box;
+        }
+    }
+
+    /* Nested .anndata-repr must fill its container */
+    .anndata-entry__nested-anndata > .anndata-repr {
+        margin: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* --- Dtype colors --- */
+
+    .anndata-dtype--category {
+        color: var(--anndata-dtype-category);
+    }
+    .anndata-dtype--int {
+        color: var(--anndata-dtype-int);
+    }
+    .anndata-dtype--float {
+        color: var(--anndata-dtype-float);
+    }
+    .anndata-dtype--bool {
+        color: var(--anndata-dtype-bool);
+    }
+    .anndata-dtype--string {
+        color: var(--anndata-dtype-string);
+    }
+    .anndata-dtype--object {
+        color: var(--anndata-dtype-object);
+    }
+    .anndata-dtype--sparse {
+        color: var(--anndata-dtype-sparse);
+    }
+    .anndata-dtype--ndarray {
+        color: var(--anndata-dtype-array);
+    }
+    .anndata-dtype--dataframe {
+        color: var(--anndata-dtype-dataframe);
+    }
+    .anndata-dtype--anndata {
+        color: var(--anndata-dtype-anndata);
+        font-weight: 600;
+    }
+    .anndata-dtype--unknown {
+        color: var(--anndata-dtype-unknown);
+        font-style: italic;
+    }
+    .anndata-dtype--extension {
+        color: var(--anndata-dtype-extension);
+    }
+    .anndata-dtype--dask {
+        color: var(--anndata-dtype-dask);
+    }
+    .anndata-dtype--gpu {
+        color: var(--anndata-dtype-gpu);
+    }
+    .anndata-dtype--tpu {
+        color: var(--anndata-dtype-tpu);
+    }
+    .anndata-dtype--awkward {
+        color: var(--anndata-dtype-awkward);
+    }
+    .anndata-dtype--array-api {
+        color: var(--anndata-dtype-array-api);
+    }
+
+    /* --- Color swatches --- */
+
+    .anndata-colors {
+        display: inline-flex;
+        gap: 2px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+
+    .anndata-colors__swatch {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        border: 1px solid var(--anndata-border-color);
+    }
+
+    .anndata-colors__swatch--invalid {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+        color: var(--anndata-text-muted);
+        background: var(--anndata-bg-tertiary);
+        cursor: help;
+    }
+
+    /* --- Category / Columns lists --- */
+
+    .anndata-categories {
+        display: inline;
+        white-space: normal;
+        word-break: break-word;
+        color: var(--anndata-text-muted);
+    }
+
+    .anndata-categories__item {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin-right: 8px;
+    }
+
+    .anndata-categories__wrap,
+    .anndata-columns__wrap {
+        display: none;
+        background: transparent;
+        border: none;
+        color: var(--anndata-text-muted);
+        cursor: pointer;
+        font-size: 11px;
+        padding: 0 4px;
+        margin-left: 4px;
+        transition: color 0.15s;
+        vertical-align: middle;
+
+        &:hover {
+            color: var(--anndata-accent-color);
+        }
+    }
+
+    .anndata-columns {
+        display: inline;
+        white-space: normal;
+        word-break: break-word;
+        color: var(--anndata-text-muted);
+    }
+
+    /* --- X entry row --- */
+
+    .anndata-x__entry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
+        color: var(--anndata-text-secondary, #6c757d);
+
+        > span:first-child {
+            font-family: var(--anndata-font-mono);
+            font-weight: 600;
+            min-width: 60px;
+        }
+
+        > span:last-child {
+            font-family: var(--anndata-font-mono);
+            font-size: 11px;
+        }
+    }
+
+    /* --- Depth limit --- */
+
+    .anndata-depth-limit {
+        padding: 8px 12px;
+        font-size: 11px;
+        color: var(--anndata-text-muted);
+        background: var(--anndata-bg-tertiary);
+        border-radius: var(--anndata-radius);
+        text-align: center;
+    }
+
+    /* --- Header filepath --- */
+
+    .anndata-header__filepath {
+        font-family: var(--anndata-font-mono);
+        font-size: 11px;
+        color: var(--anndata-text-secondary, #6c757d);
+    }
+
+    /* --- Spacer (flex-grow pushes siblings apart) --- */
+
+    .anndata-spacer {
+        flex-grow: 1;
+    }
+
+    /* --- Category dot (color indicator) --- */
+
+    .anndata-categories__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    /* --- Custom type content --- */
+
+    .anndata-entry__custom {
+        margin-top: 4px;
+    }
+
+    /* --- Error entry --- */
+
+    .anndata-entry--error {
+        color: var(--anndata-error-color, #dc3545);
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+
+    .anndata-badge--error {
+        color: var(--anndata-error-color, #dc3545);
+    }
+
+    /* --- Footer --- */
+
+    .anndata-footer {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 12px;
+        font-size: 10px;
+        font-family:
+            -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: var(--anndata-text-muted);
+        border-top: 1px solid var(--anndata-border-light);
+    }
+
+    /* --- Text helpers --- */
+
+    .anndata-text--muted {
+        color: var(--anndata-text-muted);
+    }
+
+    .anndata-text--error {
+        color: var(--anndata-error-color);
+        font-weight: 500;
+    }
+
+    .anndata-text--warning {
+        color: var(--anndata-warning-color);
+    }
+}
