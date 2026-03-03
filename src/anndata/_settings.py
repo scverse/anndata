@@ -247,7 +247,7 @@ class SettingsManager:
     def _update_override_function_for_new_option(
         self,
         option: str,
-    ):
+    ) -> None:
         """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
 
         Parameters
@@ -274,9 +274,10 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast("str", self.override.__doc__)
-        insert_index = doc.find("\n        Yields")
-        option_docstring = "\t" + "\t".join(
+        doc = textwrap.dedent(cast("str", self.override.__doc__))
+        insert_index = doc.find("\n\nYields")
+        assert insert_index != -1
+        option_docstring = "".join(
             self.describe(option, should_print_description=False).splitlines(
                 keepends=True
             )
