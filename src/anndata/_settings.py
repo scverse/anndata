@@ -10,13 +10,13 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias, NoneType
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from ._warnings import warn
 from .compat import old_positionals
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Generator, Sequence
     from typing import Any, Self, TypeGuard
 
 
@@ -355,7 +355,7 @@ class SettingsManager:
             self._config[option] = self._registered_options[option].default_value
 
     @contextmanager
-    def override(self, **overrides):
+    def override(self, **overrides) -> Generator[None]:
         """
         Provides local override via keyword arguments as a context manager.
 
