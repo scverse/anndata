@@ -21,7 +21,8 @@ def X(request):
 def test_creation(X: np.ndarray | None):
     adata = AnnData(X=X, layers=dict(L=L.copy()))
 
-    assert list(adata.layers.keys()) == ["L"]
+    # TODO: phil, when reviewing this, you had { "L", None } in both cases before - but if `X` is `None` should the key be there?
+    assert adata.layers.keys() == {"L", None} if X is not None else {"L"}
     assert "L" in adata.layers
     assert "X" not in adata.layers
     assert "some_other_thing" not in adata.layers

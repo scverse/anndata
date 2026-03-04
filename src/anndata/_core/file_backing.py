@@ -115,7 +115,7 @@ class AnnDataFileManager:
 
     def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
-        self._adata._X = self._adata.X[()]
+        self._adata.X = self._adata.X[()]
         self._file.close()
         self._file = None
         self._filename = None

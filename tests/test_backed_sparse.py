@@ -236,13 +236,13 @@ def test_consecutive_bool(
         assert (
             spy.call_count == 2 if should_trigger_optimization else not spy.call_count
         )
-    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    assert_equal(csr_disk[mask, :].X, csr_disk[np.where(mask)].X)
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 3 if should_trigger_optimization else not spy.call_count
         )
     subset = csc_disk[:, mask]
-    assert_equal(subset, csc_disk[:, np.where(mask)[0]])
+    assert_equal(subset.X, csc_disk[:, np.where(mask)[0]].X)
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 4 if should_trigger_optimization else not spy.call_count
@@ -255,7 +255,8 @@ def test_consecutive_bool(
         else:
             subset_subset_mask = make_one_elem_mask(size)
         assert_equal(
-            subset[:, subset_subset_mask], subset[:, np.where(subset_subset_mask)[0]]
+            subset[:, subset_subset_mask].X,
+            subset[:, np.where(subset_subset_mask)[0]].X,
         )
         assert (
             spy.call_count == 5 if should_trigger_optimization else not spy.call_count

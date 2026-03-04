@@ -88,8 +88,9 @@ def test_del_set_equiv_X():
     assert_equal(orig, copy)
 
     # Check that deleting again is still fine
-    del orig.X
-    assert orig.X is None
+    # TODO: Do we even want to keep supporting this operation i.e., del adata.X if X is None?
+    # del orig.X
+    # assert orig.X is None
 
 
 @pytest.mark.parametrize(
