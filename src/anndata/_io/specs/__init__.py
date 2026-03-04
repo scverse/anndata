@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from . import lazy_methods, methods
 from .registry import (
-    _LAZY_REGISTRY,  # noqa: F401
+    _BACKED_REGISTRY,  # noqa: F401
+    _DASK_REGISTRY,  # noqa: F401
     _REGISTRY,  # noqa: F401
     IOSpec,
     Reader,

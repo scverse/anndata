@@ -962,7 +962,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         is_x_none = (
             getattr(self._adata_ref if self._is_view else self, "_X", None) is None
         )
-        return is_filename_none and is_x_none
+        # TODO: How breaking of a change is it to start return True for other things (i.e., read_lazy with method="backed") in AnnData.isbacked?
+        is_x_open_dataset = isinstance(
+            getattr(self._adata_ref if self._is_view else self, "_X", None),
+            ZarrArray | h5py.Dataset | BaseCompressedSparseDataset,
+        )
+        return (is_filename_none and is_x_none) or is_x_open_dataset
 
     @property
     def is_view(self) -> bool:

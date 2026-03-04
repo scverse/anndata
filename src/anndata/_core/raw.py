@@ -62,9 +62,6 @@ class Raw:
                 self._X = adata.X.copy()
             self._var = adata.var.copy()
             self.varm = adata.varm.copy()
-        elif adata.isbacked:
-            msg = "Cannot specify X if adata is backed"
-            raise ValueError(msg)
 
     def _get_X(self, layer=None):
         if layer is not None:

@@ -15,14 +15,30 @@ if TYPE_CHECKING:
     from typing import Any, TypeAlias
 
     from anndata._core.xarray import Dataset2D
+    from anndata.abc import CSCDataset, CSRDataset
 
-    from ._io.specs.registry import (
-        IOSpec,
-        LazyDataStructures,
-        LazyReader,
-        Reader,
-        Writer,
+    #: Objects returned by :class:`DaskReader` — always include a :class:`~dask.array.Array`.
+    from anndata.compat import DaskArray
+    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+
+    from ._io.specs.registry import BackedReader, DaskReader, IOSpec, Reader, Writer
+
+    type DaskDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
+
+    #: Objects returned by :class:`BackedReader` — file-backed, never dask.
+    type BackedDataStructures = (
+        ZarrArray
+        | H5Array
+        | CSRDataset
+        | CSCDataset
+        | Dataset2D
+        | CategoricalArray
+        | MaskedArray
     )
+
+    # Legacy umbrella alias kept for external code that imported it
+    type LazyDataStructures = DaskDataStructures | BackedDataStructures
+
 else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
     type S = StorageType
     type RWAble = typing.RWAble
@@ -32,12 +48,14 @@ __all__ = [
     "StorageType",
     "_ArrayStorageType",
     "_GroupStorageType",
+    "_ReadBackedInternal",
+    "_ReadDaskInternal",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
-# These two are not public, so we don’t make them `type`s
+# These two are not public, so we don't make them `type`s
 _ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
 _GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 
@@ -53,14 +71,41 @@ class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(self, elem: S, *, _reader: Reader) -> RWAble: ...
 
 
-class _ReadLazyInternal[S: StorageType](Protocol):
+class _ReadDaskInternal[S: StorageType](Protocol):
+    """Internal protocol for functions registered on :data:`~anndata._io.specs.registry._DASK_REGISTRY`.
+
+    The ``_reader`` is always a :class:`~anndata._io.specs.registry.DaskReader` and
+    the optional ``chunks`` kwarg controls dask chunking.
+    Return type is one of :data:`DaskDataStructures`.
+    """
+
     def __call__(
         self,
         elem: S,
         *,
-        _reader: LazyReader,
+        _reader: DaskReader,
         chunks: tuple[int, ...] | None = None,
-    ) -> LazyDataStructures: ...
+    ) -> DaskDataStructures: ...
+
+
+class _ReadBackedInternal[S: StorageType](Protocol):
+    """Internal protocol for functions registered on :data:`~anndata._io.specs.registry._BACKED_REGISTRY`.
+
+    The ``_reader`` is always a :class:`~anndata._io.specs.registry.BackedReader`.
+    There is no ``chunks`` kwarg — backed reads are zero-copy and unchunked.
+    Return type is one of :data:`BackedDataStructures`.
+    """
+
+    def __call__(
+        self,
+        elem: S,
+        *,
+        _reader: BackedReader,
+    ) -> BackedDataStructures: ...
+
+
+# Legacy alias: the old single protocol covered both modes.
+_ReadLazyInternal = _ReadDaskInternal
 
 
 @set_module("anndata.experimental")
@@ -79,23 +124,52 @@ class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
         ...
 
 
-class ReadLazy[S](Protocol):
+class ReadDask[S](Protocol):
+    """Public callable type produced by :meth:`~anndata._io.specs.registry.DaskReader.read_elem`
+    after the internal ``_reader`` argument is bound via :func:`functools.partial`.
+    Returns one of :data:`DaskDataStructures`.
+    """
+
     def __call__(
         self, elem: S, *, chunks: tuple[int, ...] | None = None
-    ) -> LazyDataStructures:
-        """Low-level reading function for a lazy element.
+    ) -> DaskDataStructures:
+        """Low-level reading function for a dask-backed element.
 
         Parameters
         ----------
         elem
             The element to read from.
         chunks
-            The chunk size to be used.
+            The dask chunk size to be used.
         Returns
         -------
-        The lazy element read from the store.
+        A dask-backed lazy element (see :data:`DaskDataStructures`).
         """
         ...
+
+
+class ReadBacked[S](Protocol):
+    """Public callable type produced by :meth:`~anndata._io.specs.registry.BackedReader.read_elem`
+    after the internal ``_reader`` argument is bound via :func:`functools.partial`.
+    Returns one of :data:`BackedDataStructures`.
+    """
+
+    def __call__(self, elem: S) -> BackedDataStructures:
+        """Low-level reading function for a file-backed (non-dask) element.
+
+        Parameters
+        ----------
+        elem
+            The element to read from.
+        Returns
+        -------
+        A file-backed lazy element (see :data:`BackedDataStructures`).
+        """
+        ...
+
+
+# Legacy alias
+ReadLazy = ReadDask
 
 
 class _WriteInternal[RWAble: typing.RWAble](Protocol):
