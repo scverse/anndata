@@ -1313,7 +1313,8 @@ def make_xarray_extension_dtypes_dask(
         )
 
 
-DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
+DS_CONCAT_DUMMY_INDEX_NAME = "__private_concat_index__"
+DS_MERGE_DUMMY_INDEX_NAME = "__private_merge_index__"
 
 
 def concat_dataset2d_on_annot_axis(
@@ -1725,7 +1726,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             if a.true_index_dim != a.index_dim:
                 a.index = a.true_index
         annotations_with_only_dask = [
-            a.ds.rename({a.true_index_dim: "merge_index"})
+            a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
             for a in annotations_with_only_dask
         ]
         alt_annot = Dataset2D(
