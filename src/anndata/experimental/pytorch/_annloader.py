@@ -163,8 +163,7 @@ class AnnLoader(DataLoader):
         if use_cuda is not _UNSET:
             if device != "cpu":
                 msg = (
-                    "Cannot specify both 'device' and 'use_cuda'. "
-                    "Use 'device' instead."
+                    "Cannot specify both 'device' and 'use_cuda'. Use 'device' instead."
                 )
                 raise ValueError(msg)
             warn(
