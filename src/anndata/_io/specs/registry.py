@@ -11,16 +11,26 @@ import numpy as np
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
-from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._types import (
+    Read,
+    ReadBacked,
+    ReadDask,
+    _ReadBackedInternal,
+    _ReadDaskInternal,
+    _ReadInternal,
+)
 from anndata.compat import DaskArray, ZarrGroup, _read_attr, has_xp
 
 from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, Literal
 
     from anndata._types import (
+        BackedDataStructures,
+        DaskDataStructures,
+        LazyDataStructures,
         ReadCallback,
         StorageType,
         Write,
@@ -28,12 +38,7 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
-
-    from ..._core.xarray import Dataset2D
-
-    type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
 
 def to_writeable(x):
@@ -100,7 +105,10 @@ def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
     return decorator
 
 
-class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
+class IORegistry[
+    RI: (_ReadInternal, _ReadDaskInternal, _ReadBackedInternal),
+    R: (Read, ReadDask, ReadBacked),
+]:
     read: dict[tuple[type, IOSpec, frozenset[str]], RI]
     read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
     write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
@@ -234,7 +242,12 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
-_LAZY_REGISTRY: IORegistry[_ReadLazyInternal, ReadLazy] = IORegistry()
+_DASK_REGISTRY: IORegistry[_ReadDaskInternal, ReadDask] = IORegistry()
+_BACKED_REGISTRY: IORegistry[_ReadBackedInternal, ReadBacked] = IORegistry()
+
+# Legacy aliases kept for any external code that may import them
+_LAZY_REGISTRY = _DASK_REGISTRY
+_SIMPLE_REGISTRY = _BACKED_REGISTRY
 
 
 @singledispatch
@@ -301,7 +314,9 @@ class Reader:
         return self.callback(read_func, elem.name, elem, iospec=iospec)
 
 
-class LazyReader(Reader):
+class DaskReader(Reader):
+    """Reads store elements as dask-backed lazy objects. Uses :data:`_DASK_REGISTRY`."""
+
     @report_read_key_on_error
     def read_elem(
         self,
@@ -309,11 +324,11 @@ class LazyReader(Reader):
         modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int, ...] | None = None,
         **kwargs,
-    ) -> LazyDataStructures:
-        """Read a dask element from a store. See exported function for more details."""
+    ) -> DaskDataStructures:
+        """Read a dask-backed element from a store. Returns one of :data:`~anndata._types.DaskDataStructures`."""
 
         iospec = get_spec(elem)
-        read_func: ReadLazy = self.registry.get_read(
+        read_func: ReadDask = self.registry.get_read(
             type(elem), iospec, modifiers, reader=self
         )
         if self.callback is not None:
@@ -323,12 +338,44 @@ class LazyReader(Reader):
         for kwarg in kwargs:
             if kwarg not in read_params:
                 msg = (
-                    f"Keyword argument {kwarg} passed to read_elem_lazy are not supported by the "
+                    f"Keyword argument {kwarg} passed to read_elem_lazy are not in dask mode supported by the "
                     "registered read function."
                 )
                 raise ValueError(msg)
         if "chunks" in read_params:
             kwargs["chunks"] = chunks
+        return read_func(elem, **kwargs)
+
+
+class BackedReader(Reader):
+    """Reads store elements as file-backed objects (zarr.Array / h5py.Dataset / sparse_dataset)
+    instead of dask arrays. Uses :data:`_BACKED_REGISTRY`."""
+
+    @report_read_key_on_error
+    def read_elem(
+        self,
+        elem: StorageType,
+        modifiers: frozenset[str] = frozenset(),
+        chunks: tuple[int, ...] | None = None,
+        **kwargs,
+    ) -> BackedDataStructures:
+        """Read a file-backed element from a store. Returns one of :data:`~anndata._types.BackedDataStructures`."""
+
+        iospec = get_spec(elem)
+        read_func: ReadBacked = self.registry.get_read(
+            type(elem), iospec, modifiers, reader=self
+        )
+        if self.callback is not None:
+            msg = "Backed reading does not use a callback. Ignoring callback."
+            warn(msg, UserWarning)
+        read_params = inspect.signature(read_func).parameters
+        for kwarg in kwargs:
+            if kwarg not in read_params:
+                msg = (
+                    f"Keyword argument {kwarg} passed to read_elem_lazy are not in backed mode supported by the "
+                    "registered read function."
+                )
+                raise ValueError(msg)
         return read_func(elem, **kwargs)
 
 
@@ -429,7 +476,11 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType,
+    chunks: tuple[int, ...] | None = None,
+    *,
+    method: Literal["dask", "backed"] = "dask",
+    **kwargs,
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
@@ -449,10 +500,16 @@ def read_elem_lazy(
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
+       Ignored when ``mode="backed"``.
+    method
+        If ``"dask"`` (the default), return a :class:`dask.array.Array`-backed object.
+        If ``"backed"``, return a file-backed object (:class:`zarr.Array`,
+        :class:`h5py.Dataset`, or :class:`~anndata.abc.CSRDataset` /
+        :class:`~anndata.abc.CSCDataset` for sparse data) without dask.
 
     Returns
     -------
-        A "lazy" elem
+        A lazy elem.
 
     Examples
     --------
@@ -504,7 +561,9 @@ def read_elem_lazy(
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, -1))
     >>> adata.X = ad.experimental.read_elem_lazy(g["X"], chunks=(500, None))
     """
-    return LazyReader(_LAZY_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
+    if method == "backed":
+        return BackedReader(_BACKED_REGISTRY).read_elem(elem, **kwargs)
+    return DaskReader(_DASK_REGISTRY).read_elem(elem, chunks=chunks, **kwargs)
 
 
 def write_elem(

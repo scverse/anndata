@@ -36,6 +36,13 @@ def mtx_format(request):
 
 
 @pytest.fixture(
+    params=["dask", "backed"],
+)
+def method(request) -> Literal["dask", "backed"]:
+    return request.param
+
+
+@pytest.fixture(
     params=[True, False], ids=["vars_different", "vars_same"], scope="session"
 )
 def are_vars_different(request):
@@ -231,7 +238,7 @@ def remote_store_tall_skinny(
 
 @pytest.fixture
 def adata_remote_tall_skinny(
-    remote_store_tall_skinny: AccessTrackingStore,
+    remote_store_tall_skinny: AccessTrackingStore, method: Literal["dask", "backed"]
 ) -> AnnData:
-    remote = read_lazy(remote_store_tall_skinny)
+    remote = read_lazy(remote_store_tall_skinny, method=method)
     return remote
