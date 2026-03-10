@@ -5,7 +5,7 @@ from copy import copy
 from functools import partial
 from importlib.util import find_spec
 from math import ceil
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.sparse import issparse
@@ -23,6 +23,7 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
+    from typing import Literal
 
     from scipy.sparse import spmatrix
 
