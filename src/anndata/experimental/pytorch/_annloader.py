@@ -71,7 +71,9 @@ class BatchIndexSampler(Sampler):
         return length
 
 
-def default_converter(arr: Array, *, device: Literal["cpu", "cuda", "mps"] = "cpu", pin_memory: bool):
+def default_converter(
+    arr: Array, *, device: Literal["cpu", "cuda", "mps"] = "cpu", pin_memory: bool
+):
     if isinstance(arr, torch.Tensor):
         arr = arr.to(device)
         if device == "cpu" and pin_memory:
