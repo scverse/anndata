@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -9,9 +9,10 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset
+from ..compat import XDataset, has_xp
 from ..utils import (
     ensure_df_homogeneous,
+    get_union_members,
     join_english,
     raise_value_error_if_multiindex_columns,
     warn,
@@ -30,13 +31,13 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
-    from ..typing import ArrayDataStructureTypes
+    from ..typing import _ArrayDataStructureTypes
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    array_data_structure_types = get_args(ArrayDataStructureTypes)
+    array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
     if isinstance(value, XDataset):
         value = Dataset2D(value)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):
@@ -44,6 +45,8 @@ def coerce_array(
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)
             value = value.A
+        return value
+    if has_xp(value):
         return value
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))

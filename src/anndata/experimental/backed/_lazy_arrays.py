@@ -29,13 +29,14 @@ if TYPE_CHECKING:
     from pandas._libs.missing import NAType
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from anndata.compat import ZarrGroup
-
-    from ...compat import Index1DNorm
+    from ...compat import ZarrGroup
+    from ...typing import _Index1DNorm
 
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
         from xarray.core.extension_array import PandasExtensionArray
         from xarray.core.indexing import ExplicitIndexer
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type K = H5Array | ZarrArray
 
 
 class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrapper):
@@ -136,10 +137,6 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type K = H5Array | H5AsTypeView | ZarrArray
-
-
 class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
@@ -203,7 +200,7 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
 
 @_subset.register(XDataArray)
 def _subset_masked(
-    a: XDataArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return a[subset_idx]
 

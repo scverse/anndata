@@ -88,7 +88,7 @@ def test_dask_write(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
@@ -169,7 +169,7 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))
@@ -211,7 +211,7 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
 
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     M, N = adata.X.shape
     adata.obsm["a"] = da.random.random((M, 10))

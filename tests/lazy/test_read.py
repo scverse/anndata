@@ -141,7 +141,7 @@ def test_access_counts_obsm_df(tmp_path: Path):
         index=adata.obs_names,
     )
     adata.write_zarr(tmp_path)
-    store = AccessTrackingStore(tmp_path)
+    store = AccessTrackingStore(tmp_path, read_only=True)
     store.initialize_key_trackers(["obsm/df"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obsm/df", 0)
@@ -189,13 +189,25 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
     (orig_pth / ".zmetadata").unlink()
-    store = AccessTrackingStore(orig_pth)
+    store = AccessTrackingStore(orig_pth, read_only=True)
     store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
     store.assert_access_count("obs/.zgroup", 1)
+
+
+@pytest.mark.zarr_io
+def test_empty_df_warns(tmp_path: Path):
+    adata = AnnData(X=np.ones((10, 10)))
+    zarr_path = tmp_path / "orig.zarr"
+    adata.write_zarr(zarr_path)
+    with pytest.warns(
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
+    ):
+        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
 
 
 def test_h5_file_obj(tmp_path: Path):

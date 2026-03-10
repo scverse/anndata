@@ -13,6 +13,16 @@ The central class:
    AnnData
 ```
 
+Its attributes are reflected in the {doc}`/accessors` API ({mod}`!anndata.acc`).
+If you want to write e.g. plotting or validation code for anndata objects, look there!
+
+```{eval-rst}
+.. toctree::
+   :hidden:
+
+   anndata.acc <accessors>
+```
+
 (combining-api)=
 
 ## Combining
@@ -173,17 +183,27 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
+   :signatures: none
 
    experimental.IOSpec
    experimental.Read
    experimental.Write
    experimental.ReadCallback
    experimental.WriteCallback
-   experimental.StorageType
    experimental.backed.MaskedArray
    experimental.backed.CategoricalArray
    experimental.backed.Dataset2D
    experimental.Dataset2DIlocIndexer
+
+..
+    this is not a class/protocol so since the above
+    specifies a template, it gets used.
+
+.. autosummary::
+   :toctree: generated/
+
+   experimental.StorageType
 ```
 
 (extensions-api)=
@@ -205,6 +225,7 @@ Types used by the former:
    :toctree: generated/
 
    types.ExtensionNamespace
+   types.SupportsArrayApi
 ```
 
 (errors-api)=
@@ -237,10 +258,25 @@ Types used by the former:
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
 
    abc.CSRDataset
    abc.CSCDataset
+```
+
+<!-- these are types, not classes, so don’t use the above template -->
+
+```{eval-rst}
+.. toctree::
+   :hidden:
+
+   typing
+
+.. autosummary::
+
+   typing.Index1D
    typing.Index
+   typing.InMemoryArray
    typing.AxisStorable
    typing.RWAble
 ```

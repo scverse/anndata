@@ -11,6 +11,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
+from anndata.types import SupportsArrayApi
 
 from .._settings import settings
 from ..compat import (
@@ -19,7 +20,9 @@ from ..compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
+    IndexManager,
     ZappyArray,
+    has_xp,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -33,7 +36,7 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
 
-    from ..compat import Index1DNorm
+    from ..typing import _Index1DNorm
 
 
 @contextmanager
@@ -294,8 +297,14 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
-    msg = f"No view type has been registered for {type(obj)}"
-    raise NotImplementedError(msg)
+    if has_xp(obj):
+        # TODO: Determine if we need some sort of specific view object for array-api, or some sort of wrapper that just warns loudly?
+        # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
+        # You should NOT update views.
+        return obj
+    else:  # pragma: no cover
+        msg = f"No view type has been registered for {type(obj)}"
+        raise NotImplementedError(msg)
 
 
 @as_view.register(np.ndarray)
@@ -437,22 +446,53 @@ except ImportError:
 
 
 def _resolve_idxs(
-    old: tuple[Index1DNorm, Index1DNorm],
-    new: tuple[Index1DNorm, Index1DNorm],
+    old: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    new: tuple[_Index1DNorm, _Index1DNorm],
     adata: AnnData,
-) -> tuple[Index1DNorm, Index1DNorm]:
+) -> tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
     return o, v
 
 
 @singledispatch
-def _resolve_idx(old: Index1DNorm, new: Index1DNorm, l: Literal[0, 1]) -> Index1DNorm:
-    raise NotImplementedError
+def _resolve_idx(
+    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: Literal[0, 1]
+) -> _Index1DNorm[IndexManager]:
+    msg = f"Unrecognized indexer of type {type(old)}"
+    raise TypeError(msg)
+
+
+@_resolve_idx.register(SupportsArrayApi)
+def _resolve_idx_array_api(
+    old: SupportsArrayApi, new: _Index1DNorm, l: Literal[0, 1]
+) -> SupportsArrayApi:
+    xp = old.__array_namespace__()
+
+    # handle slice indexing by converting to array indices
+    if isinstance(new, slice):
+        new = xp.arange(*new.indices(old.shape[0]))
+    if not has_xp(new):  # pragma: no cover
+        msg = "New indexer must have array api compatibility"
+        raise RuntimeError(msg)
+
+    if (new_xp := new.__array_namespace__()) is not xp:
+        msg = f"Cannot resolve indices when the old indexer and new indexer are not the same array-api compatible type. old: {xp}, new: {new_xp}"
+        raise RuntimeError(msg)
+    if xp.isdtype(old.dtype, "bool"):
+        if xp.isdtype(new.dtype, "bool"):
+            n = old.shape[0]
+            selected = xp.nonzero(old)[0][new]
+            return xp.any(
+                xp.arange(n)[:, None] == selected[None, :],
+                axis=1,
+            )
+        old = xp.where(old)[0]
+    return old[new]
 
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: Index1DNorm, l: Literal[0, 1]
+    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: Literal[0, 1]
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
     if is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
@@ -465,7 +505,7 @@ def _resolve_idx_ndarray(
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: Index1DNorm, l: Literal[0, 1]
+    old: slice, new: _Index1DNorm, l: Literal[0, 1]
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
@@ -482,3 +522,21 @@ def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
     elif stop < 0:
         stop = None
     return slice(start, stop, step)
+
+
+@_resolve_idx.register(IndexManager)
+def _resolve_idx_index_manager(
+    old: IndexManager, new: _Index1DNorm, l: Literal[0, 1]
+) -> _Index1DNorm[IndexManager]:
+    """Resolve indices when old is an IndexManager.
+
+    If new is an array-api array, use get_for_array to get a matching
+    index and resolve with the array-api implementation. Device mismatch
+    raises an error.
+    """
+    if has_xp(new):
+        old_arr = old.get_for_array(new)
+        return IndexManager.from_array(_resolve_idx(old_arr, new, l))
+
+    resolved = _resolve_idx_ndarray(old.get_default(), new, l)
+    return IndexManager.from_array(resolved) if has_xp(resolved) else resolved

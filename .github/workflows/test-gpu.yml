@@ -52,35 +52,31 @@ jobs:
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
-      - name: Install yq # https://cirun.slack.com/archives/C09SNDRB3A8/p1766512487317849?thread_ts=1766512112.938459&cid=C09SNDRB3A8
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Extract max Python version from classifiers
-        run: |
-          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )(\d\.\d+)')
-          max_version=$(echo "$classifiers" | sort -V | tail -1)
-          echo "max_python_version=$max_version" >> $GITHUB_ENV
-
       - name: Install UV
         uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
         with:
           enable-cache: true
-          # Any Cuda 14+ will support Python 3.14: https://github.com/cupy/cupy/issues/9346
-          python-version: '3.13'  # ${{ env.max_python_version }}
+
+      - name: Extract max Python version from classifiers
+        run: |
+          import os
+          import check_python_versions.sources.pyproject as cpv
+          *_, max_ver = cpv.get_supported_python_versions()
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+            print(f"UV_PYTHON={max_ver}", file=env)
+        shell: uvx --with=check-python-versions==0.24 python {0}
 
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[cu12]" --group=test -c ci/constraints.txt
+          uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
 
       - name: Run tests
         run: |
-          uv run coverage run -m pytest -m gpu -n auto
+          uv run coverage run -m pytest -m "array_api or gpu" -n auto
           uv run coverage combine
           uv run coverage xml
 

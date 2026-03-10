@@ -13,7 +13,6 @@ import zarr.storage
 from scipy import sparse
 
 import anndata as ad
-from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ def read_archive(
         return ad.read_h5ad(path), path
     if format == "zarr":
         path = archive_dir / "adata.zarr.zip"
-        store = path if is_zarr_v2() else zarr.storage.ZipStore(path)
+        store = zarr.storage.ZipStore(path)
         return ad.read_zarr(store), path
     pytest.fail(f"Unknown format: {format}")
 
@@ -70,7 +69,7 @@ def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
 def test_clean_uns_backwards_compat(tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     orig = ad.AnnData(
         sparse.csr_matrix((3, 5), dtype="float32"),

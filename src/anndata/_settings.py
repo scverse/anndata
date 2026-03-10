@@ -10,13 +10,13 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias, NoneType
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from ._warnings import warn
-from .compat import is_zarr_v2, old_positionals
+from .compat import old_positionals
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Generator, Sequence
     from typing import Any, Self, TypeGuard
 
 
@@ -120,10 +120,7 @@ def check_and_get_bool_or_none(option: str, default_value: bool | None) -> bool 
 
 def check_and_get_int(option: str, default_value: int) -> int:
     return check_and_get_environ_var(
-        f"ANNDATA_{option.upper()}",
-        str(int(default_value)),
-        None,
-        lambda x: int(x),
+        f"ANNDATA_{option.upper()}", str(int(default_value)), None, int
     )
 
 
@@ -250,7 +247,7 @@ class SettingsManager:
     def _update_override_function_for_new_option(
         self,
         option: str,
-    ):
+    ) -> None:
         """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
 
         Parameters
@@ -277,9 +274,10 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast("str", self.override.__doc__)
-        insert_index = doc.find("\n        Yields")
-        option_docstring = "\t" + "\t".join(
+        doc = textwrap.dedent(cast("str", self.override.__doc__))
+        insert_index = doc.find("\n\nYields")
+        assert insert_index != -1
+        option_docstring = "".join(
             self.describe(option, should_print_description=False).splitlines(
                 keepends=True
             )
@@ -358,7 +356,7 @@ class SettingsManager:
             self._config[option] = self._registered_options[option].default_value
 
     @contextmanager
-    def override(self, **overrides):
+    def override(self, **overrides) -> Generator[None]:
         """
         Provides local override via keyword arguments as a context manager.
 
@@ -371,15 +369,18 @@ class SettingsManager:
         """
         restore = {a: getattr(self, a) for a in overrides}
         try:
-            # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding
+            # Preserve order so that settings that depend on each other can be overridden together i.e., always override zarr version before sharding.
+            # Otherwise an error would be raised setting sharding before zarr version if the zarr version is 2.
             for k in self._config:
                 if k in overrides:
                     setattr(self, k, overrides.get(k))
             yield None
         finally:
-            # TODO: does the order need to be preserved when restoring?
-            for attr, value in restore.items():
-                setattr(self, attr, value)
+            # In the try block, we went in the forward order i.e., zarr version before sharding, but in the reset here, we go in the reverse order i.e., sharding before zarr version.
+            # Otherwise an error would be raised if we reversed the zarr version first and it was 3 previously.
+            for k in reversed(self._config.keys()):
+                if k in restore:
+                    setattr(self, k, restore.get(k))
 
     def __repr__(self) -> str:
         params = "".join(f"\t{k}={v!r},\n" for k, v in self._config.items())
@@ -455,9 +456,6 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
-    if format == 3 and is_zarr_v2():
-        msg = "Cannot write v3 format against v2 package"
-        raise ValueError(msg)
     if format == 2 and getattr(settings, "auto_shard_zarr_v3", False):
         msg = "Cannot set `zarr_write_format` to 2 with autosharding on.  Please set to `False` `anndata.settings.auto_shard_zarr_v3`"
         raise ValueError(msg)
@@ -465,13 +463,9 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
 
 def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
     validate_bool(auto_shard, settings)
-    if auto_shard:
-        if is_zarr_v2():
-            msg = "Cannot use sharding with `zarr-python<3`. Please upgrade package and set `anndata.settings.zarr_write_format` to 3."
-            raise ValueError(msg)
-        if settings.zarr_write_format == 2:
-            msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
-            raise ValueError(msg)
+    if auto_shard and settings.zarr_write_format == 2:
+        msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
+        raise ValueError(msg)
 
 
 settings.register(
@@ -480,10 +474,7 @@ settings.register(
     description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
-        f"ANNDATA_{name.upper()}",
-        str(default),
-        ["2", "3"],
-        lambda x: int(x),
+        f"ANNDATA_{name.upper()}", str(default), ["2", "3"], int
     ),
 )
 
@@ -517,10 +508,31 @@ settings.register(
 )
 
 settings.register(
+    "write_csr_csc_indices_with_min_possible_dtype",
+    default_value=False,
+    description="Write a csr or csc matrix with the minimum possible data type for `indices`, always unsigned integer.",
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
     "auto_shard_zarr_v3",
     default_value=False,
     description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
     validate=validate_zarr_sharding,
+    get_from_env=check_and_get_bool,
+)
+
+
+settings.register(
+    "copy_on_write_X",
+    default_value=False,
+    description=(
+        "Whether to copy-on-write X. "
+        "Currently `my_adata_view[subset].X = value` will write back to the original AnnData object at the `subset` location. "
+        "`X` is the only element where this behavior is implemented though."
+    ),
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
