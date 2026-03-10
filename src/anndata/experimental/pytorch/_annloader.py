@@ -5,14 +5,14 @@ from copy import copy
 from functools import partial
 from importlib.util import find_spec
 from math import ceil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
 from ..._warnings import warn
-from ...compat import old_positionals
+from ...compat import Empty, old_positionals
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 if find_spec("torch") or TYPE_CHECKING:
@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
     type Array = torch.Tensor | np.ndarray | spmatrix
-
-_UNSET = object()
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -73,7 +71,7 @@ class BatchIndexSampler(Sampler):
         return length
 
 
-def default_converter(arr: Array, *, device: str = "cpu", pin_memory: bool):
+def default_converter(arr: Array, *, device: Literal["cpu", "cuda", "mps"] = "cpu", pin_memory: bool):
     if isinstance(arr, torch.Tensor):
         arr = arr.to(device)
         if device == "cpu" and pin_memory:
@@ -156,11 +154,11 @@ class AnnLoader(DataLoader):
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,
-        device: str = "cpu",
-        use_cuda: bool = _UNSET,
+        device: Literal["cpu", "cuda", "mps"] = "cpu",
+        use_cuda: bool = Empty.TOKEN,
         **kwargs,
     ):
-        if use_cuda is not _UNSET:
+        if use_cuda is not Empty.TOKEN:
             if device != "cpu":
                 msg = (
                     "Cannot specify both 'device' and 'use_cuda'. Use 'device' instead."
