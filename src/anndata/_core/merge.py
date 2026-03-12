@@ -1313,8 +1313,8 @@ def make_xarray_extension_dtypes_dask(
         )
 
 
-DS_CONCAT_DUMMY_INDEX_NAME = "__private_concat_index__"
-DS_MERGE_DUMMY_INDEX_NAME = "__private_merge_index__"
+DS_CONCAT_DUMMY_INDEX_NAME = "_anndata_concat_index"
+DS_MERGE_DUMMY_INDEX_NAME = "_anndata_merge_index"
 
 
 def concat_dataset2d_on_annot_axis(
