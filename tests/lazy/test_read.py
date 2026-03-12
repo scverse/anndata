@@ -95,16 +95,16 @@ def test_access_count_index(
 ) -> None:
     adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
 
-    remote_store_tall_skinny.initialize_key_trackers(["obs/_index"])
+    remote_store_tall_skinny.initialize_key_trackers(["obs/obs_names"])
     read_lazy(remote_store_tall_skinny, load_annotation_index=False)
-    remote_store_tall_skinny.assert_access_count("obs/_index", 0)
+    remote_store_tall_skinny.assert_access_count("obs/obs_names", 0)
 
     read_lazy(remote_store_tall_skinny)
     n_chunks = 4
     count_expected = (  # *2 when mask exists
         n_chunks * 2 if adata_orig.obs.index.dtype == "string" else n_chunks
     )
-    remote_store_tall_skinny.assert_access_count("obs/_index", count_expected)
+    remote_store_tall_skinny.assert_access_count("obs/obs_names", count_expected)
 
 
 def test_access_count_dtype(
