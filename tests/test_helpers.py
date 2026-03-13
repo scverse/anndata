@@ -248,18 +248,18 @@ def test_assert_equal_dask_arrays():
     assert_equal(c, d)
 
 
-def test_assert_equal_sparse_index_dtype():
+@pytest.mark.parametrize("attr", ["indices", "indptr"])
+def test_assert_equal_sparse_index_dtype(attr):
     """assert_equal(exact=True) should detect indptr/indices dtype mismatches."""
-    a = sparse.random(10, 10, format="csr", density=0.3)
-    b = a.copy()
-    b.indptr = b.indptr.astype(np.int64)
-    b.indices = b.indices.astype(np.int64)
+    a = sparse.csr_matrix(np.eye(3))
+    b = sparse.csr_matrix(np.eye(3))
+    setattr(b, attr, getattr(b, attr).astype(np.int32))
 
     # Non-exact comparison should pass (values are identical)
     assert_equal(a, b, exact=False)
 
     # Exact comparison should catch the dtype mismatch
-    with pytest.raises(AssertionError, match="indptr dtype mismatch"):
+    with pytest.raises(AssertionError, match=attr):
         assert_equal(a, b, exact=True)
 
 
