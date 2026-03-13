@@ -229,9 +229,9 @@ def register_anndata_namespace[NameSpT: ExtensionNamespace](
     >>> # Use the registered namespace
     >>> adata.transform.log1p()  # Transforms X and returns the AnnData object
     AnnData object with n_obs × n_vars = 100 × 2000
-        layers: 'log1p'
+        layers: None, 'log1p'
     >>> adata.transform.arcsinh()  # Transforms X and returns the AnnData object
     AnnData object with n_obs × n_vars = 100 × 2000
-        layers: 'log1p', 'arcsinh'
+        layers: None, 'log1p', 'arcsinh'
     """
     return _create_namespace(name, AnnData)
