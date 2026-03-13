@@ -11,7 +11,8 @@ import numpy as np
 from scipy.sparse import issparse
 
 from ..._core.anndata import AnnData
-from ...compat import old_positionals
+from ..._warnings import warn
+from ...compat import Empty, old_positionals
 from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
 
 if find_spec("torch") or TYPE_CHECKING:
@@ -22,6 +23,7 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
+    from typing import Literal
 
     from scipy.sparse import spmatrix
 
@@ -70,21 +72,19 @@ class BatchIndexSampler(Sampler):
         return length
 
 
-# maybe replace use_cuda with explicit device option
-def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
+def default_converter(
+    arr: Array, *, device: Literal["cpu", "cuda", "mps"] = "cpu", pin_memory: bool
+):
     if isinstance(arr, torch.Tensor):
-        if use_cuda:
-            arr = arr.cuda()
-        elif pin_memory:
+        arr = arr.to(device)
+        if device == "cpu" and pin_memory:
             arr = arr.pin_memory()
     elif arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
         if issparse(arr):
             arr = arr.toarray()
-        if use_cuda:
-            arr = torch.tensor(arr, device="cuda")
-        else:
-            arr = torch.tensor(arr)
-            arr = arr.pin_memory() if pin_memory else arr
+        arr = torch.tensor(arr, device=device)
+        if device == "cpu" and pin_memory:
+            arr = arr.pin_memory()
     return arr
 
 
@@ -135,12 +135,15 @@ class AnnLoader(DataLoader):
         Set to `True` to have the data reshuffled at every epoch.
     use_default_converter
         Use the default converter to convert arrays to pytorch tensors, transfer to
-        the default cuda device (if `use_cuda=True`), do memory pinning (if `pin_memory=True`).
+        the specified device (if `device` is set), do memory pinning (if `pin_memory=True`).
         If you pass an AnnCollection object with prespecified converters, the default converter
         won't overwrite these converters but will be applied on top of them.
+    device
+        Transfer pytorch tensors to the specified device after conversion.
+        Only works if `use_default_converter=True`.
     use_cuda
-        Transfer pytorch tensors to the default cuda device after conversion.
-        Only works if `use_default_converter=True`
+        .. deprecated::
+            Use `device='cuda'` instead.
     **kwargs
         Arguments for PyTorch DataLoader. If `adatas` is not an `AnnCollection` object, then also
         arguments for `AnnCollection` initialization.
@@ -154,9 +157,23 @@ class AnnLoader(DataLoader):
         batch_size: int = 1,
         shuffle: bool = False,
         use_default_converter: bool = True,
-        use_cuda: bool = False,
+        device: Literal["cpu", "cuda", "mps"] = "cpu",
+        use_cuda: bool = Empty.TOKEN,
         **kwargs,
     ):
+        if use_cuda is not Empty.TOKEN:
+            if device != "cpu":
+                msg = (
+                    "Cannot specify both 'device' and 'use_cuda'. Use 'device' instead."
+                )
+                raise ValueError(msg)
+            warn(
+                "'use_cuda' is deprecated, use 'device' instead. "
+                "Pass device='cuda' instead of use_cuda=True.",
+                FutureWarning,
+            )
+            device = "cuda" if use_cuda else "cpu"
+
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
@@ -191,7 +208,7 @@ class AnnLoader(DataLoader):
         if use_default_converter:
             pin_memory = kwargs.pop("pin_memory", False)
             _converter = partial(
-                default_converter, use_cuda=use_cuda, pin_memory=pin_memory
+                default_converter, device=device, pin_memory=pin_memory
             )
             dataset.convert = _convert_on_top(
                 dataset.convert, _converter, dict(dataset.attrs_keys, X=[])
