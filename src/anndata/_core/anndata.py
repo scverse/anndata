@@ -1023,21 +1023,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
-    # TODO: this is not quite complete...
-    def __delitem__(self, index: Index) -> None:
-        obs, var = self._normalize_indices(index)
-        # TODO: does this really work?
-        if not self.isbacked:
-            del self._X[obs, var]
-        else:
-            X = self.file["X"]
-            del X[obs, var]
-            self._set_backed("X", X)
-        if var == slice(None):
-            del self._obs.iloc[obs, :]
-        if obs == slice(None):
-            del self._var.iloc[var, :]
-
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
@@ -1205,19 +1190,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         adata_subset = self[index].copy()
 
         self._init_as_actual(adata_subset)
-
-    # TODO: Update, possibly remove
-    def __setitem__(self, index: Index, val: float | _XDataType):
-        if self.is_view:
-            msg = "Object is view and cannot be accessed with `[]`."
-            raise ValueError(msg)
-        obs, var = self._normalize_indices(index)
-        if not self.isbacked:
-            self._X[obs, var] = val
-        else:
-            X = self.file["X"]
-            X[obs, var] = val
-            self._set_backed("X", X)
 
     def __len__(self) -> int:
         return self.shape[0]
