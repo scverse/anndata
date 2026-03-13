@@ -10,11 +10,7 @@ import pandas as pd
 import pytest
 
 import anndata
-from anndata import (
-    AnnData,
-    ImplicitModificationWarning,
-    read_h5ad,
-)
+from anndata import AnnData, ImplicitModificationWarning, read_h5ad
 from anndata.compat import AwkArray
 from anndata.compat import awkward as ak
 from anndata.tests.helpers import assert_equal, gen_adata, gen_awkward

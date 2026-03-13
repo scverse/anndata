@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -10,15 +10,16 @@ from scipy.sparse import issparse
 from ..compat import CupyArray, CupySparseMatrix
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays
-from .index import _normalize_index, _subset, get_vector, unpack_index
+from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_index
 from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
 
+    from ..acc import AdRef
     from ..compat import CSMatrix
-    from ..typing import Index, _Index1DNorm
+    from ..typing import Index, InMemoryArray, _Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -34,7 +35,11 @@ class Raw:
         X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
-    ):
+    ) -> None:
+        if X is not None and X.shape[0] != adata.n_obs:
+            msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"
+            raise ValueError(msg)
+
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually
@@ -122,8 +127,29 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    def __getitem__(self, index: Index) -> Raw:
-        oidx, vidx = self._normalize_indices(index)
+    @overload
+    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
+    @overload
+    def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw: ...
+    def __getitem__(
+        self, index: Index | tuple[AnnData, Index] | AdRef
+    ) -> Raw | InMemoryArray:
+        from ..acc import AdRef
+        from .anndata import AnnData
+
+        if isinstance(index, AdRef):
+            return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
+
+        if (
+            isinstance(index, tuple)
+            and len(index) == 2
+            and isinstance(index[0], AnnData)
+        ):
+            adata, index = index
+            oidx, vidx = self._normalize_indices(index)
+        else:
+            oidx, vidx = self._normalize_indices(index)
+            adata = self._adata[oidx]
 
         # To preserve two dimensional shape
         if isinstance(vidx, int | np.integer):
@@ -134,7 +160,7 @@ class Raw:
         X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
+        new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
@@ -188,11 +214,11 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def var_vector(self, k: str) -> np.ndarray:
+    def var_vector(self, k: str, /) -> InMemoryArray:
         # TODO decorator to copy AnnData.var_vector docstring
-        return get_vector(self, k, "var", "obs")
+        return _get_vector_ambiguous(self, k, "var")
 
-    def obs_vector(self, k: str) -> np.ndarray:
+    def obs_vector(self, k: str, /) -> InMemoryArray:
         # TODO decorator to copy AnnData.obs_vector docstring
         idx = self._normalize_indices((slice(None), k))
         a = self.X[idx]

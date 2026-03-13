@@ -33,6 +33,8 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    jnp,
+    jnp_array_or_idempotent,
 )
 
 if TYPE_CHECKING:
@@ -40,7 +42,13 @@ if TYPE_CHECKING:
     from typing import Literal
 
 HERE = Path(__file__).parent
-
+ARRAY_TYPES = [
+    pytest.param(np.array, id="np.array"),
+    pytest.param(as_dense_dask_array, id="dask_dense"),
+    pytest.param(csr_matrix, id="csr_matrix"),
+    pytest.param(csr_array, id="csr_array"),
+    pytest.param(jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api),
+]
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -118,7 +126,7 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -158,8 +166,14 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_kitchensink(
+    tmp_path: Path,
+    storage: Literal["h5ad", "zarr"],
+    typ,
+    backing_h5ad: Path,
+    dataset_kwargs,
+) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -184,18 +198,20 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
+    used_jax = jnp is not None and isinstance(adata_src.X, jnp.ndarray)
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
     if isinstance(adata_src.raw.X, CSArray):
         assert isinstance(adata.raw.X, CSMatrix)
-    else:
+    elif not used_jax:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
         adata_src.uns["uns4"]["c"], type(adata.uns["uns4"]["c"]) | DaskArray
     )
-    assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
+    if not used_jax:
+        assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
 
     assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
@@ -204,13 +220,15 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -248,8 +266,8 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_backed(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -264,9 +282,19 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ",
+    [
+        pytest.param(np.array, id="np.array"),
+        pytest.param(csr_matrix, id="csr_matrix"),
+        pytest.param(csc_matrix, id="csc_matrix"),
+        pytest.param(csr_array, id="csr_array"),
+        pytest.param(csc_array, id="csc_array"),
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+    ],
 )
-def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
@@ -468,15 +496,33 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_write_csv_view(typ, tmp_path):
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
+def test_write_csv_view(typ, tmp_path: Path) -> None:
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
@@ -514,10 +560,15 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize(
+    "xp_array",
+    [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
+)
+def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
+    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
+    assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
 

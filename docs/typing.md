@@ -5,6 +5,7 @@
 
 .. autotype:: Index1D
 .. autotype:: Index
+.. autotype:: InMemoryArray
 .. autotype:: AxisStorable
 .. autotype:: RWAble
 ```

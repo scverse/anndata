@@ -35,9 +35,9 @@ def test_io(
         "default", r".*NullTerminatedBytes", UnstableSpecificationWarning
     )
 
-    read1 = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    read1 = getattr(ad, f"read_{diskfmt}")
     write1 = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
-    read2 = lambda pth: getattr(ad, f"read_{diskfmt2}")(pth)
+    read2 = getattr(ad, f"read_{diskfmt2}")
     write2 = lambda adata, pth: getattr(adata, f"write_{diskfmt2}")(pth)
 
     filepth1 = tmp_path / f"test1.{diskfmt}"

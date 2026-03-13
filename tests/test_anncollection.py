@@ -71,6 +71,6 @@ def test_convert(adatas):
     le.fit(dat[:].obs["a_test"])
 
     obs_no_convert = dat[:].obs["a_test"]
-    convert = dict(obs={"a_test": lambda a: le.transform(a)})
+    convert = dict(obs={"a_test": le.transform})
     dat.convert = convert
     np.testing.assert_array_equal(dat[:].obs["a_test"], le.transform(obs_no_convert))

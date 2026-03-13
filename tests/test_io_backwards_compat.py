@@ -69,7 +69,7 @@ def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
 def test_clean_uns_backwards_compat(tmp_path, diskfmt):
     pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
-    read = lambda x: getattr(ad, f"read_{diskfmt}")(x)
+    read = getattr(ad, f"read_{diskfmt}")
 
     orig = ad.AnnData(
         sparse.csr_matrix((3, 5), dtype="float32"),
