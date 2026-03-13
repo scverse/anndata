@@ -689,9 +689,7 @@ def assert_equal_sparse(
     elem_name: str | None = None,
 ):
     if exact and sparse.issparse(b) and hasattr(a, "indptr") and hasattr(b, "indptr"):
-        assert a.indptr.dtype == b.indptr.dtype, (
-            f"{elem_name}: indptr dtype mismatch"
-        )
+        assert a.indptr.dtype == b.indptr.dtype, f"{elem_name}: indptr dtype mismatch"
         assert a.indices.dtype == b.indices.dtype, (
             f"{elem_name}: indices dtype mismatch"
         )
