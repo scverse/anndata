@@ -967,6 +967,8 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 @pytest.mark.zarr_io
 def test_write_elem_version_mismatch(tmp_path: Path):
+
+    tmp_path = Path("foo")
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))
     g = zarr.open_group(
@@ -975,5 +977,18 @@ def test_write_elem_version_mismatch(tmp_path: Path):
         zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
     )
     ad.io.write_elem(g, "/", adata)
+    adata_roundtripped = ad.read_zarr(g)
+    assert_equal(adata_roundtripped, adata)
+
+
+@pytest.mark.zarr_io
+def test_write_zarr_store(tmp_path: Path):
+    zarr_path = tmp_path / "foo.zarr"
+    adata = ad.AnnData(np.ones((10, 10)))
+    g = zarr.open_group(
+        zarr_path,
+        mode="w",
+    )
+    adata.write_zarr(g)
     adata_roundtripped = ad.read_zarr(g)
     assert_equal(adata_roundtripped, adata)

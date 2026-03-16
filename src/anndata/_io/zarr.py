@@ -147,7 +147,11 @@ def open_write_group(
 ) -> zarr.Group:
     if "zarr_format" not in kwargs:
         kwargs["zarr_format"] = settings.zarr_write_format
-    return zarr.open_group(store, mode=mode, **kwargs)
+    return (
+        zarr.open_group(store, mode=mode, **kwargs)
+        if not isinstance(store, zarr.Group)
+        else store
+    )
 
 
 def is_group_consolidated(group: zarr.Group) -> bool:
