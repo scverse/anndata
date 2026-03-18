@@ -302,10 +302,9 @@ def test_concatenate_dense():
     assert adata.obsm.keys() == {"X_1", "X_2"}
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
-    # with batch_key and batch_categories
-    adata = concat([adata1, adata2, adata3], batch_key="batch1")
+    adata = concat([adata1, adata2, adata3], label="batch1")
     assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch1"]
-    adata = concat([adata1, adata2, adata3], batch_categories=["a1", "a2", "a3"])
+    adata = concat([adata1, adata2, adata3], label="batch1", keys=["a1", "a2", "a3"])
     assert adata.obs["batch"].cat.categories.tolist() == ["a1", "a2", "a3"]
     assert adata.var_names.tolist() == ["b", "c"]
 
@@ -516,7 +515,9 @@ def test_concatenate_layers_outer(array_type, fill_val):
     )
     b = AnnData(X=np.ones((10, 20)))
 
-    c = concat([a, b], join="outer", fill_value=fill_val, batch_categories=["a", "b"])
+    c = concat(
+        [a, b], join="outer", fill_value=fill_val, label="batch", keys=["a", "b"]
+    )
 
     np.testing.assert_array_equal(
         asarray(c[c.obs["batch"] == "b"].layers["a"]), fill_val
