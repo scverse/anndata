@@ -48,10 +48,6 @@ if TYPE_CHECKING:
 
     from anndata._types import Join_T
 
-mark_legacy_concatenate = pytest.mark.filterwarnings(
-    r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"
-)
-
 
 @singledispatch
 def filled_like(a, fill_value=None):
@@ -167,9 +163,7 @@ def force_lazy(request):
     return request.param
 
 
-def fix_known_differences(
-    orig: AnnData, result: AnnData, *, backwards_compat: bool = True
-):
+def fix_known_differences(orig: AnnData, result: AnnData):
     """
     Helper function for reducing anndata's to only the elements we expect to be
     equivalent after concatenation.
@@ -180,14 +174,6 @@ def fix_known_differences(
     """
     orig = orig.copy()
     result = result.copy()
-
-    if backwards_compat:
-        del orig.varm
-        del orig.varp
-        if isinstance(result.obs, Dataset2D):
-            result.obs = result.obs.ds.drop_vars(["batch"])
-        else:
-            result.obs.drop(columns=["batch"], inplace=True)
 
     for attrname in ("obs", "var"):
         if isinstance(getattr(result, attrname), Dataset2D):
@@ -240,28 +226,12 @@ def test_concat_interface_errors(use_xdataset):
         concat([])
 
 
-@pytest.mark.parametrize(
-    ("concat_func", "backwards_compat"),
-    [
-        pytest.param(partial(concat, merge="unique"), False, id="concat"),
-        pytest.param(
-            lambda x, **kwargs: x[0].concatenate(x[1:], **kwargs),
-            True,
-            marks=mark_legacy_concatenate,
-            id="concatenate",
-        ),
-    ],
-)
 def test_concatenate_roundtrip(
     join_type,
     array_type,
-    concat_func,
-    backwards_compat,
     use_xdataset,
     force_lazy,
 ):
-    if backwards_compat and force_lazy:
-        pytest.skip("unsupported")
     adata = gen_adata(
         (100, 10),
         X_type=array_type,
@@ -277,17 +247,12 @@ def test_concatenate_roundtrip(
         subset_idx = np.random.choice(remaining, n, replace=False)
         subsets.append(adata[subset_idx])
         remaining = remaining.difference(subset_idx)
-    result = concat_func(subsets, join=join_type, uns_merge="same", index_unique=None)
-    if backwards_compat and use_xdataset:
-        import xarray as xr
-
-        # backwards compat always returns a dataframe
-        result.var = xr.Dataset.from_dataframe(result.var)
+    result = concat(
+        subsets, join=join_type, uns_merge="same", index_unique=None, merge="unique"
+    )
 
     # Correcting for known differences
-    orig, result = fix_known_differences(
-        adata, result, backwards_compat=backwards_compat
-    )
+    orig, result = fix_known_differences(adata, result)
 
     assert_equal(result[orig.obs_names].copy(), orig)
     base_type = type(orig.X)
@@ -298,7 +263,6 @@ def test_concatenate_roundtrip(
     assert isinstance(result.X, base_type)
 
 
-@mark_legacy_concatenate
 def test_concatenate_dense():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -328,7 +292,7 @@ def test_concatenate_dense():
     )
 
     # inner join
-    adata = adata1.concatenate(adata2, adata3)
+    adata = concat([adata1, adata2, adata3])
     X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
     assert adata.X.astype(int).tolist() == X_combined
     assert adata.layers["Xs"].astype(int).tolist() == X_combined
@@ -339,14 +303,14 @@ def test_concatenate_dense():
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
     # with batch_key and batch_categories
-    adata = adata1.concatenate(adata2, adata3, batch_key="batch1")
+    adata = concat([adata1, adata2, adata3], batch_key="batch1")
     assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch1"]
-    adata = adata1.concatenate(adata2, adata3, batch_categories=["a1", "a2", "a3"])
+    adata = concat([adata1, adata2, adata3], batch_categories=["a1", "a2", "a3"])
     assert adata.obs["batch"].cat.categories.tolist() == ["a1", "a2", "a3"]
     assert adata.var_names.tolist() == ["b", "c"]
 
     # outer join
-    adata = adata1.concatenate(adata2, adata3, join="outer")
+    adata = concat([adata1, adata2, adata3], join="outer")
 
     X_ref = np.array([
         [1.0, 2.0, 3.0, np.nan],
@@ -370,14 +334,13 @@ def test_concatenate_dense():
     assert np.allclose(var_ma.compressed(), var_ma_ref.compressed())
 
 
-@mark_legacy_concatenate
 def test_concatenate_layers(array_type, join_type):
     adatas = []
     for _ in range(5):
         a = array_type(sparse.random(100, 200, format="csr"))
         adatas.append(AnnData(X=a, layers={"a": a}))
 
-    merged = adatas[0].concatenate(adatas[1:], join=join_type)
+    merged = concat(adatas, join=join_type)
     assert_equal(merged.X, merged.layers["a"])
 
 
@@ -430,9 +393,8 @@ def obsm_adatas():
     ]
 
 
-@mark_legacy_concatenate
 def test_concatenate_obsm_inner(obsm_adatas):
-    adata = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
+    adata = concat(obsm_adatas, join="inner")
 
     assert set(adata.obsm.keys()) == {"dense", "df"}
     assert adata.obsm["dense"].shape == (9, 2)
@@ -460,13 +422,10 @@ def test_concatenate_obsm_inner(obsm_adatas):
     pd.testing.assert_frame_equal(true_df, cur_df)
 
 
-@mark_legacy_concatenate
 def test_concatenate_obsm_outer(obsm_adatas, fill_val):
-    outer = obsm_adatas[0].concatenate(
-        obsm_adatas[1:], join="outer", fill_value=fill_val
-    )
+    outer = concat(obsm_adatas, join="outer", fill_value=fill_val)
 
-    inner = obsm_adatas[0].concatenate(obsm_adatas[1:], join="inner")
+    inner = concat(obsm_adatas, join="inner")
     for k, inner_v in inner.obsm.items():
         assert np.array_equal(
             _subset(outer.obsm[k], (slice(None), slice(None, inner_v.shape[1]))),
@@ -536,7 +495,6 @@ def test_concat_annot_join(obsm_adatas, join_type):
     )
 
 
-@mark_legacy_concatenate
 def test_concatenate_layers_misaligned(array_type, join_type):
     adatas = []
     for _ in range(5):
@@ -546,11 +504,10 @@ def test_concatenate_layers_misaligned(array_type, join_type):
             adata[:, np.random.choice(adata.var_names, 150, replace=False)].copy()
         )
 
-    merged = adatas[0].concatenate(adatas[1:], join=join_type)
+    merged = concat(adatas, join=join_type)
     assert_equal(merged.X, merged.layers["a"])
 
 
-@mark_legacy_concatenate
 def test_concatenate_layers_outer(array_type, fill_val):
     # Testing that issue #368 is fixed
     a = AnnData(
@@ -559,14 +516,13 @@ def test_concatenate_layers_outer(array_type, fill_val):
     )
     b = AnnData(X=np.ones((10, 20)))
 
-    c = a.concatenate(b, join="outer", fill_value=fill_val, batch_categories=["a", "b"])
+    c = concat([a, b], join="outer", fill_value=fill_val, batch_categories=["a", "b"])
 
     np.testing.assert_array_equal(
         asarray(c[c.obs["batch"] == "b"].layers["a"]), fill_val
     )
 
 
-@mark_legacy_concatenate
 def test_concatenate_fill_value(fill_val):
     def get_obs_els(adata):
         return {
@@ -598,7 +554,7 @@ def test_concatenate_fill_value(fill_val):
         for k in [k for k, v in tmp_ad.varm.items() if isinstance(v, AwkArray)]:
             del tmp_ad.varm[k]
 
-    joined = adata1.concatenate([adata2, adata3], join="outer", fill_value=fill_val)
+    joined = concat([adata1, adata2, adata3], join="outer", fill_value=fill_val)
 
     ptr = 0
     for orig in [adata1, adata2, adata3]:
@@ -612,7 +568,6 @@ def test_concatenate_fill_value(fill_val):
         ptr += orig.n_obs
 
 
-@mark_legacy_concatenate
 def test_concatenate_dense_duplicates():
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -652,7 +607,7 @@ def test_concatenate_dense_duplicates():
         ),
     )
 
-    adata = adata1.concatenate(adata2, adata3)
+    adata = concat([adata1, adata2, adata3])
     assert adata.var.columns.tolist() == [
         "annoA",
         "annoB",
@@ -664,7 +619,6 @@ def test_concatenate_dense_duplicates():
     ]
 
 
-@mark_legacy_concatenate
 def test_concatenate_sparse():
     # sparse data
     from scipy.sparse import csr_matrix
@@ -693,13 +647,13 @@ def test_concatenate_sparse():
     )
 
     # inner join
-    adata = adata1.concatenate(adata2, adata3)
+    adata = concat([adata1, adata2, adata3])
     X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [0, 2], [6, 5]]
     assert adata.X.toarray().astype(int).tolist() == X_combined
     assert adata.layers["Xs"].toarray().astype(int).tolist() == X_combined
 
     # outer join
-    adata = adata1.concatenate(adata2, adata3, join="outer")
+    adata = concat([adata1, adata2, adata3], join="outer")
     assert adata.X.toarray().tolist() == [
         [0.0, 2.0, 3.0, 0.0],
         [0.0, 5.0, 6.0, 0.0],
@@ -710,7 +664,6 @@ def test_concatenate_sparse():
     ]
 
 
-@mark_legacy_concatenate
 def test_concatenate_mixed():
     X1 = sparse.csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
     X2 = sparse.csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
@@ -741,12 +694,11 @@ def test_concatenate_mixed():
         layers=dict(counts=X2),  # sic
     )
 
-    adata_all = AnnData.concatenate(adata1, adata2, adata3, adata4)
+    adata_all = concat([adata1, adata2, adata3, adata4])
     assert isinstance(adata_all.X, sparse.csr_matrix)
     assert isinstance(adata_all.layers["counts"], sparse.csr_matrix)
 
 
-@mark_legacy_concatenate
 def test_concatenate_with_raw():
     # dense data
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -785,20 +737,20 @@ def test_concatenate_with_raw():
     adata2.raw = adata2.copy()
     adata3.raw = adata3.copy()
 
-    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    adata_all = concat([adata1, adata2, adata3])
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == {"b", "c"}
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(adata_all.raw.X, adata_all.X)
 
-    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
+    adata_all = concat([adata1, adata2, adata3], join="outer")
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcd")
     assert_equal(adata_all.raw.to_adata().obs, adata_all.obs)
     assert np.array_equal(np.nan_to_num(adata_all.raw.X), np.nan_to_num(adata_all.X))
 
     adata3.raw = adata4.copy()
-    adata_all = AnnData.concatenate(adata1, adata2, adata3, join="outer")
+    adata_all = concat([adata1, adata2, adata3], join="outer")
     assert isinstance(adata_all.raw, Raw)
     assert set(adata_all.raw.var_names) == set("abcdz")
     assert set(adata_all.var_names) == set("abcd")
@@ -814,13 +766,13 @@ def test_concatenate_with_raw():
             "not concatenating `.raw` attributes."
         ),
     ):
-        adata_all = AnnData.concatenate(adata1, adata2, adata3)
+        adata_all = concat([adata1, adata2, adata3])
     assert adata_all.raw is None
 
     del adata1.raw
     del adata2.raw
     assert all(_adata.raw is None for _adata in (adata1, adata2, adata3))
-    adata_all = AnnData.concatenate(adata1, adata2, adata3)
+    adata_all = concat([adata1, adata2, adata3])
     assert adata_all.raw is None
 
 
@@ -1232,11 +1184,9 @@ def test_concatenate_uns(unss, merge_strategy, result, value_gen):
         to `[{"a": [1, 2, 3]}, {"a": [1, 2, 3]}]`.
     """
     # So we can see what the initial pattern was meant to be
-    print(merge_strategy, "\n", unss, "\n", result)
     result, *unss = permute_nested_values([result, *unss], value_gen)
     adatas = [uns_ad(uns) for uns in unss]
-    with pytest.warns(FutureWarning, match=r"concatenate is deprecated"):
-        merged = AnnData.concatenate(*adatas, uns_merge=merge_strategy).uns
+    merged = concat(adatas, uns_merge=merge_strategy).uns
     assert_equal(merged, result, elem_name="uns")
 
 
@@ -1634,7 +1584,6 @@ def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
     check_filled_like(result, elem_name=f"{axis}m/{elem}")
 
 
-@mark_legacy_concatenate
 def test_concatenate_size_0_axis():
     # https://github.com/scverse/anndata/issues/526
 
@@ -1642,8 +1591,7 @@ def test_concatenate_size_0_axis():
     b = gen_adata((5, 0))
 
     # Mostly testing that this doesn't error
-    assert a.concatenate([b]).shape == (10, 0)
-    assert b.concatenate([a]).shape == (10, 0)
+    assert concat([a, b]).shape == (10, 0)
 
 
 def test_concat_null_X(use_xdataset):
