@@ -69,13 +69,13 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
     with (
         zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
         if find_spec("zarrs")
-        and not isinstance(store, zarr.Group)
         and (
-            not isinstance(store, zarr.abc.Store)
-            or isinstance(store, zarr.storage.LocalStore)
+            not isinstance(f.store, zarr.abc.Store)
+            or isinstance(f.store, zarr.storage.LocalStore)
         )
         else nullcontext()
     ):
