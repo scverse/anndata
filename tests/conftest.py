@@ -44,7 +44,7 @@ def diskfmt(
         yield fmt
     else:
         with ad.settings.override(
-            zarr_write_format=request.param[1], auto_shard_zarr_v3=request.param[1] == 3
+            auto_shard_zarr_v3=request.param[1] == 3, zarr_write_format=request.param[1]
         ):
             yield fmt
 
