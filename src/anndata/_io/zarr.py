@@ -30,6 +30,7 @@ def write_zarr(
     adata: AnnData,
     *,
     chunks: tuple[int, ...] | None = None,
+    consolidate_metadata: bool = True,
     convert_strings_to_categoricals: bool = True,
     **ds_kwargs,
 ) -> None:
@@ -55,7 +56,8 @@ def write_zarr(
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
     write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-    zarr.consolidate_metadata(f.store)
+    if consolidate_metadata:
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:

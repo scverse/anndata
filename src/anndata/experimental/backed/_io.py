@@ -15,7 +15,7 @@ from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
 from ...compat import ZarrGroup
-from ...utils import get_literal_members, warn
+from ...utils import get_literal_members
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -106,13 +106,15 @@ def read_lazy(
         import zarr
 
         if not isinstance(store, ZarrGroup):
-            try:
-                f = zarr.open_consolidated(store, mode="r")
-            except ValueError:
-                msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
-                warn(msg, UserWarning)
-                has_keys = False
-                f = zarr.open_group(store, mode="r")
+            from anndata._io.zarr import is_group_consolidated
+
+            has_keys = is_group_consolidated()
+            f = (
+                zarr.open_consolidated(store, mode="r")
+                if has_keys
+                else zarr.open_group(store, mode="r")
+            )
+
         else:
             f = store
     elif is_store_arg_h5_store:

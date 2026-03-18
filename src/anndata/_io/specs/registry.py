@@ -386,14 +386,8 @@ class Writer:
         if is_consolidated:
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
-        if k == "/":
-            if isinstance(store, ZarrGroup):
-                from zarr.core.sync import sync
 
-                sync(store.store.clear())
-            else:
-                store.clear()
-        elif k in store:
+        if k != "/" and k in store:
             del store[k]
 
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData

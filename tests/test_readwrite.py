@@ -967,7 +967,6 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 @pytest.mark.zarr_io
 def test_write_elem_version_mismatch(tmp_path: Path):
-
     tmp_path = Path("foo")
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))
@@ -992,3 +991,36 @@ def test_write_zarr_store(tmp_path: Path):
     adata.write_zarr(g)
     adata_roundtripped = ad.read_zarr(g)
     assert_equal(adata_roundtripped, adata)
+
+
+@pytest.mark.zarr_io
+def test_write_zarr_store_overwrite(tmp_path: Path):
+    zarr_path = tmp_path / "foo.zarr"
+    adata1 = ad.AnnData(np.ones((10, 10)))
+    g = zarr.open_group(
+        zarr_path,
+        mode="w",
+    )
+    adata1.write_zarr(g, consolidate_metadata=False)
+    adata2 = ad.AnnData(np.zeros((5, 5)))
+
+    adata2.write_zarr(g, consolidate_metadata=False)
+    adata_roundtripped = ad.read_zarr(g)
+    assert_equal(adata_roundtripped, adata2)
+
+
+@pytest.mark.zarr_io
+def test_write_zarr_store_separate_groups(tmp_path: Path):
+    zarr_path = tmp_path / "foo.zarr"
+    adata1 = ad.AnnData(np.ones((10, 10)))
+    adata2 = ad.AnnData(np.zeros((5, 5)))
+    g = zarr.open_group(
+        zarr_path,
+        mode="w",
+    )
+    g1 = g.create_group("g1")
+    g2 = g.create_group("g2")
+    adata1.write_zarr(g1, consolidate_metadata=False)
+    adata2.write_zarr(g2, consolidate_metadata=False)
+    assert_equal(ad.read_zarr(g1), adata1)
+    assert_equal(ad.read_zarr(g2), adata2)
