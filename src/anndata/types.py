@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
     from array_api.latest import ArrayNamespace
 
+    from anndata.acc import AdRef, RefAcc
     from anndata.typing import RWAble
 
     from ._core.anndata import AnnData
@@ -53,4 +54,6 @@ class SupportsArrayApi(Protocol):
 
 
 class FoldFunc[T](Protocol):
-    def __call__(self, elem: RWAble, *, acc: T | None) -> T | None: ...
+    def __call__(
+        self, elem: RWAble, *, accumulate: T, ref_acc: RefAcc | AdRef | None
+    ) -> T | None: ...

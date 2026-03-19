@@ -4,7 +4,7 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
 from functools import partial, singledispatchmethod
@@ -22,6 +22,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
+from anndata.acc import A, AdRef, GraphAcc, LayerAcc, MultiAcc
 
 from .. import utils
 from .._settings import settings
@@ -66,7 +67,7 @@ if TYPE_CHECKING:
     from anndata.types import FoldFunc
     from anndata.typing import RWAble
 
-    from ..acc import AdRef, Array, MapAcc, RefAcc
+    from ..acc import Array, MapAcc, RefAcc
     from ..compat import XDataset
     from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -516,36 +517,39 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
-        def get_size(X) -> int:
+        def get_size[R: dict[RefAcc | None, int]](
+            X: RWAble,
+            *,
+            accumulate: R,
+            ref_acc: RefAcc | AdRef | None,
+        ) -> R:
             def cs_to_bytes(X) -> int:
                 return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
-            if isinstance(X, h5py.Dataset) and with_disk:
-                return int(np.array(X.shape).prod() * X.dtype.itemsize)
-            elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
-                return cs_to_bytes(X._to_backed())
-            elif issparse(X):
-                return cs_to_bytes(X)
-            else:
-                return X.__sizeof__()
+            if is_elem := (
+                (is_ad_ref := isinstance(ref_acc, AdRef))
+                or isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc)
+            ) or (ref_acc is None and X is not self.uns):
+                key = ref_acc.acc if is_ad_ref else ref_acc
+                if isinstance(X, h5py.Dataset) and with_disk:
+                    accumulate[key] += int(np.array(X.shape).prod() * X.dtype.itemsize)
+                elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
+                    accumulate[key] += cs_to_bytes(X._to_backed())
+                elif issparse(X):
+                    accumulate[key] += cs_to_bytes(X)
+                else:
+                    accumulate[key] += X.__sizeof__()
+            if not is_elem or ref_acc is A.X:
+                s = accumulate[ref_acc]
+                if s > 0 and show_stratified:
+                    from tqdm import tqdm
 
-        sizes = {}
-        attrs = ["X", "_obs", "_var"]
-        attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
-        for attr in attrs + attrs_multi:
-            if attr in attrs_multi:
-                keys = getattr(self, attr).keys()
-                s = sum(get_size(getattr(self, attr)[k]) for k in keys)
-            else:
-                s = get_size(getattr(self, attr))
-            if s > 0 and show_stratified:
-                from tqdm import tqdm
+                    print(
+                        f"Size of {repr(ref_acc).replace('A.', '') if ref_acc is not None else 'uns'}: {tqdm.format_sizeof(s, 'B')}"
+                    )
+            return accumulate
 
-                print(
-                    f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
-                )
-            sizes[attr] = s
-        return sum(sizes.values())
+        return sum(self.fold(get_size, init=defaultdict(int)).values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
@@ -1450,7 +1454,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             return read_h5ad(filename, backed=mode)
 
     def fold[T](self, func: FoldFunc[T], *, init: T) -> T:
-        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
+        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object in DFS order.
 
         Parameters
         ----------
@@ -1474,12 +1478,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             "obsp",
             "varp",
             "layers",
-            "uns",
         ]:
             attr = getattr(self, attr_name)
+            acc = getattr(A, attr_name)
             if attr_name != "X":
                 for elem_name in attr:
-                    accumulate = func(attr[elem_name], accumulate=accumulate)
+                    ref = acc[elem_name]
+                    accumulate = func(
+                        attr[elem_name], accumulate=accumulate, ref_acc=ref
+                    )
+            accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
+        for elem in self.uns:
+            accumulate = func(elem, accumulate=accumulate, ref_acc=None)
         return accumulate
 
     def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
@@ -1502,11 +1512,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if store_type is None or store_type in dest_type.__module__
         }
 
-        def predicate(x: RWAble, *, accumulate: bool):
-            if isinstance(x, pd.Series):
-                # matches behavior in methods.py
-                x = x._values
-            return accumulate and type(x) in writeable_elems
+        def predicate(x: RWAble, *, accumulate: bool, ref_acc: AdRef | RefAcc | None):
+            if isinstance(ref_acc, AdRef) or ref_acc is None:
+                if isinstance(x, pd.Series):
+                    # matches behavior in methods.py
+                    x = x._values
+                return accumulate and type(x) in writeable_elems
+            return accumulate
 
         return self.fold(predicate, init=True)
 
