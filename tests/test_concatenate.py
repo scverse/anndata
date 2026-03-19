@@ -292,24 +292,24 @@ def test_concatenate_dense():
     )
 
     # inner join
-    adata = concat([adata1, adata2, adata3], join="outer")
-    X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
-    assert adata.X.astype(int).tolist() == X_combined
-    assert adata.layers["Xs"].astype(int).tolist() == X_combined
-    assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch"]
-    assert adata.var.columns.tolist() == ["annoA-0", "annoA-1", "annoB-2"]
-    assert adata.var.values.tolist() == [[1, 2, 2], [2, 1, 1]]
+    adata = concat([adata1, adata2, adata3], merge="first", label="batch")
+    X_combined = np.array([[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]])
+    assert_equal(X_combined, adata.X)
+    assert_equal(adata.layers["Xs"], X_combined)
+    assert adata.obs.columns.tolist() == ["batch"]
+    assert adata.var.columns.tolist() == ["annoA", "annoB"]
+    assert adata.var.values.tolist() == [[1, 2], [2, 1]]
     assert adata.obsm.keys() == {"X_1", "X_2"}
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
     adata = concat([adata1, adata2, adata3], label="batch1")
-    assert adata.obs.columns.tolist() == ["anno1", "anno2", "batch1"]
+    assert adata.obs.columns.tolist() == ["batch1"]
     adata = concat([adata1, adata2, adata3], label="batch1", keys=["a1", "a2", "a3"])
-    assert adata.obs["batch"].cat.categories.tolist() == ["a1", "a2", "a3"]
+    assert adata.obs["batch1"].cat.categories.tolist() == ["a1", "a2", "a3"]
     assert adata.var_names.tolist() == ["b", "c"]
 
     # outer join
-    adata = concat([adata1, adata2, adata3], join="outer")
+    adata = concat([adata1, adata2, adata3], join="outer", merge="first")
 
     X_ref = np.array([
         [1.0, 2.0, 3.0, np.nan],
@@ -323,10 +323,10 @@ def test_concatenate_dense():
     var_ma = ma.masked_invalid(adata.var.values.tolist())
     var_ma_ref = ma.masked_invalid(
         np.array([
-            [0.0, np.nan, np.nan],
-            [1.0, 2.0, 2.0],
-            [2.0, 1.0, 1.0],
-            [np.nan, 0.0, 0.0],
+            [0.0, np.nan],
+            [1.0, 2.0],
+            [2.0, 1.0],
+            [np.nan, 0.0],
         ])
     )
     assert np.array_equal(var_ma.mask, var_ma_ref.mask)
@@ -569,7 +569,42 @@ def test_concatenate_fill_value(fill_val):
         ptr += orig.n_obs
 
 
-def test_concatenate_dense_duplicates():
+@pytest.mark.parametrize(
+    ("merge", "expected_cols"),
+    [
+        (
+            "first",
+            [
+                "annoA",
+                "annoB",
+                "annoC",
+                "annoD",
+                "annoE",
+            ],
+        ),
+        (
+            "same",
+            [
+                "annoA",
+                "annoB",
+            ],
+        ),
+        (
+            "unique",
+            [
+                "annoA",
+                "annoB",
+                "annoC",
+                "annoE",
+            ],
+        ),
+        ("only", ["annoE"]),
+        (None, []),
+    ],
+)
+def test_concatenate_merge(
+    merge: Literal["first", "unique", "same", "only"] | None, expected_cols: list[str]
+):
     X1 = np.array([[1, 2, 3], [4, 5, 6]])
     X2 = np.array([[1, 2, 3], [4, 5, 6]])
     X3 = np.array([[1, 2, 3], [4, 5, 6]])
@@ -605,19 +640,12 @@ def test_concatenate_dense_duplicates():
             annoA=[0, 1, 2],
             annoB=[1.1, 1.0, 2.0],
             annoD=[2.1, 2.0, 3.1],
+            annoE=[2.1, 2.0, 3.1],
         ),
     )
 
-    adata = concat([adata1, adata2, adata3], join="outer")
-    assert adata.var.columns.tolist() == [
-        "annoA",
-        "annoB",
-        "annoC-0",
-        "annoD-0",
-        "annoC-1",
-        "annoD-1",
-        "annoD-2",
-    ]
+    adata = concat([adata1, adata2, adata3], merge=merge)
+    assert adata.var.columns.tolist() == expected_cols
 
 
 def test_concatenate_sparse():
