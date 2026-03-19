@@ -292,7 +292,7 @@ def test_concatenate_dense():
     )
 
     # inner join
-    adata = concat([adata1, adata2, adata3])
+    adata = concat([adata1, adata2, adata3], join="outer")
     X_combined = [[2, 3], [5, 6], [3, 2], [6, 5], [3, 2], [6, 5]]
     assert adata.X.astype(int).tolist() == X_combined
     assert adata.layers["Xs"].astype(int).tolist() == X_combined
@@ -608,7 +608,7 @@ def test_concatenate_dense_duplicates():
         ),
     )
 
-    adata = concat([adata1, adata2, adata3])
+    adata = concat([adata1, adata2, adata3], join="outer")
     assert adata.var.columns.tolist() == [
         "annoA",
         "annoB",
