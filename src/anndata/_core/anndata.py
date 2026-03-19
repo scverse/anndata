@@ -1450,7 +1450,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             return read_h5ad(filename, backed=mode)
 
     def fold[T](self, func: FoldFunc[T], *, init: T) -> T:
-        acc = init
+        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
+
+        Parameters
+        ----------
+        func
+            The function that performs the accumulation
+        init
+            The starting value
+
+
+        Returns
+        -------
+            An accumulated value
+        """
+        accumulate = init
         for attr_name in [
             "X",
             "obs",
@@ -1465,10 +1479,21 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             attr = getattr(self, attr_name)
             if attr_name != "X":
                 for elem_name in attr:
-                    acc = func(attr[elem_name], acc=acc)
-        return acc
+                    accumulate = func(attr[elem_name], accumulate=accumulate)
+        return accumulate
 
     def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
+        """Whether or not an `AnnData` object can be written to disk for a given store type.
+
+        Parameters
+        ----------
+        store_type
+            Which backing store - `None` indicates that it can be writeable to either.
+
+        Returns
+        -------
+            Whether or not this object is writable.
+        """
         from anndata._io.specs.registry import _REGISTRY
 
         writeable_elems = {
@@ -1477,11 +1502,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if store_type is None or store_type in dest_type.__module__
         }
 
-        def predicate(x: RWAble, *, acc: bool):
+        def predicate(x: RWAble, *, accumulate: bool):
             if isinstance(x, pd.Series):
                 # matches behavior in methods.py
                 x = x._values
-            return acc and type(x) in writeable_elems
+            return accumulate and type(x) in writeable_elems
 
         return self.fold(predicate, init=True)
 
