@@ -8,6 +8,8 @@ if TYPE_CHECKING:
 
     from array_api.latest import ArrayNamespace
 
+    from anndata.typing import RWAble
+
     from ._core.anndata import AnnData
 
 
@@ -48,3 +50,7 @@ class SupportsArrayApi(Protocol):
         copy: bool | None = None,
     ) -> Any: ...
     def __dlpack_device__(self) -> tuple[int, int]: ...
+
+
+class FoldFunc[T](Protocol):
+    def __call__(self, elem: RWAble, *, acc: T | None) -> T | None: ...

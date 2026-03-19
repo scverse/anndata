@@ -63,6 +63,9 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
+    from anndata.types import FoldFunc
+    from anndata.typing import RWAble
+
     from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import XDataset
     from ..typing import Index, Index1D, _Index1DNorm, _XDataType
@@ -1445,6 +1448,42 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             mode = self.file._filemode
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
+
+    def fold[T](self, func: FoldFunc[T], *, init: T) -> T:
+        acc = init
+        for attr_name in [
+            "X",
+            "obs",
+            "var",
+            "obsm",
+            "varm",
+            "obsp",
+            "varp",
+            "layers",
+            "uns",
+        ]:
+            attr = getattr(self, attr_name)
+            if attr_name != "X":
+                for elem_name in attr:
+                    acc = func(attr[elem_name], acc=acc)
+        return acc
+
+    def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
+        from anndata._io.specs.registry import _REGISTRY
+
+        writeable_elems = {
+            src_type
+            for (dest_type, src_type, __) in _REGISTRY.write
+            if store_type is None or store_type in dest_type.__module__
+        }
+
+        def predicate(x: RWAble, *, acc: bool):
+            if isinstance(x, pd.Series):
+                # matches behavior in methods.py
+                x = x._values
+            return acc and type(x) in writeable_elems
+
+        return self.fold(predicate, init=True)
 
     @deprecated(
         deprecation_msg(

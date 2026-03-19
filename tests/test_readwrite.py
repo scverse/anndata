@@ -99,7 +99,7 @@ def dataset_kwargs(request):
 
 
 @pytest.fixture
-def rw(backing_h5ad):
+def rw(backing_h5ad) -> tuple[ad.AnnData, ad.AnnData]:
     M, N = 100, 101
     orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
@@ -124,6 +124,27 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 # The test functions
 # ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_write(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+    adata, _ = rw
+    assert adata.can_write(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_not_write_with_custom_array(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+    import pyarrow as pa
+
+    adata, _ = rw
+    adata.obs["arrow_array"] = pd.arrays.ArrowExtensionArray(
+        pa.array([{"x": 1, "y": True}] * adata.shape[0])
+    )
+    assert not adata.can_write(store_type=store_type)
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
