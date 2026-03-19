@@ -22,7 +22,7 @@ from scipy import sparse
 from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
-from anndata.acc import A, AdRef, GraphAcc, LayerAcc, MultiAcc
+from anndata.acc import A, AdAcc, AdRef, GraphAcc, LayerAcc, MultiAcc
 
 from .. import utils
 from .._settings import settings
@@ -517,20 +517,34 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
-        def get_size[R: dict[RefAcc | None, int]](
+        def get_size[R: dict[type[RefAcc | MapAcc | AdAcc] | None, int]](
             X: RWAble,
             *,
             accumulate: R,
-            ref_acc: RefAcc | AdRef | None,
+            ref_acc: RefAcc | AdRef | MapAcc | None,
         ) -> R:
             def cs_to_bytes(X) -> int:
                 return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
             if is_elem := (
-                (is_ad_ref := isinstance(ref_acc, AdRef))
-                or isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc)
-            ) or (ref_acc is None and X is not self.uns):
-                key = ref_acc.acc if is_ad_ref else ref_acc
+                (
+                    # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
+                    (is_ad_ref := isinstance(ref_acc, AdRef))
+                    or (
+                        is_ref_acc := isinstance(
+                            ref_acc, LayerAcc | MultiAcc | GraphAcc
+                        )
+                    )
+                )
+                # an element of uns
+                or (ref_acc is None and X is not self.uns)
+            ):
+                if is_ad_ref:
+                    key = type(ref_acc.acc)
+                elif is_ref_acc:
+                    key = ref_acc.parent_type
+                else:
+                    key = None
                 if isinstance(X, h5py.Dataset) and with_disk:
                     accumulate[key] += int(np.array(X.shape).prod() * X.dtype.itemsize)
                 elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
@@ -539,8 +553,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     accumulate[key] += cs_to_bytes(X)
                 else:
                     accumulate[key] += X.__sizeof__()
-            if not is_elem or ref_acc is A.X:
-                s = accumulate[ref_acc]
+            # if this is X or a parent elem maybe print it out.
+            if (is_x := ref_acc is A.X) or not is_elem:
+                if ref_acc is not None:
+                    s = accumulate[AdAcc if is_x else type(ref_acc)]
+                else:
+                    s = accumulate[None]
                 if s > 0 and show_stratified:
                     from tqdm import tqdm
 
@@ -1453,8 +1471,14 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
-    def fold[T](self, func: FoldFunc[T], *, init: T) -> T:
-        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object in DFS order.
+    def fold[T](
+        self,
+        func: FoldFunc[T],
+        *,
+        init: T,
+        order: Literal["DFS-pre", "DFS-post"] = "DFS-post",
+    ) -> T:
+        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
 
         Parameters
         ----------
@@ -1462,6 +1486,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             The function that performs the accumulation
         init
             The starting value
+        order
+            How to visit the items in the fold.
+            "DFS-pre" indicates that parent-elements like uns, obs, and varp get visited first.
+            "DFS-post" means they get visited afterwards.
+            The `AnnData` itself is not visited.
+
 
 
         Returns
@@ -1478,18 +1508,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             "obsp",
             "varp",
             "layers",
+            "uns",
         ]:
             attr = getattr(self, attr_name)
-            acc = getattr(A, attr_name)
+            acc = getattr(A, attr_name) if attr_name != "uns" else None
+            if order == "DFS-pre":
+                accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
             if attr_name != "X":
                 for elem_name in attr:
-                    ref = acc[elem_name]
+                    ref = acc[elem_name] if acc is not None else None
                     accumulate = func(
                         attr[elem_name], accumulate=accumulate, ref_acc=ref
                     )
-            accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
-        for elem in self.uns:
-            accumulate = func(elem, accumulate=accumulate, ref_acc=None)
+            if order == "DFS-post":
+                accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
         return accumulate
 
     def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
