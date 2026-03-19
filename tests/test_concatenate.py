@@ -230,7 +230,6 @@ def test_concatenate_roundtrip(
     join_type,
     array_type,
     use_xdataset,
-    force_lazy,
 ):
     adata = gen_adata(
         (100, 10),
