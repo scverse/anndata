@@ -243,6 +243,11 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         -------
             :class:`pandas.DataFrame` with index set accordingly.
         """
+        from anndata._core.merge import (
+            DS_CONCAT_DUMMY_INDEX_NAME,
+            DS_MERGE_DUMMY_INDEX_NAME,
+        )
+
         index_key = self.ds.attrs.get("indexing_key", None)
         all_columns = {*self.columns, *([] if index_key is None else [index_key])}
         # https://github.com/pydata/xarray/issues/10419
@@ -258,7 +263,12 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
             )
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
-        df.index.name = None  # matches old AnnData object
+        if df.index.name in {
+            "_index",
+            DS_CONCAT_DUMMY_INDEX_NAME,
+            DS_MERGE_DUMMY_INDEX_NAME,
+        }:
+            df.index.name = None  # matches old AnnData object
         return df
 
     @property

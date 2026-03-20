@@ -688,6 +688,11 @@ def assert_equal_sparse(
     exact: bool = False,
     elem_name: str | None = None,
 ):
+    if exact and sparse.issparse(b) and hasattr(a, "indptr") and hasattr(b, "indptr"):
+        assert a.indptr.dtype == b.indptr.dtype, f"{elem_name}: indptr dtype mismatch"
+        assert a.indices.dtype == b.indices.dtype, (
+            f"{elem_name}: indices dtype mismatch"
+        )
     a = asarray(a)
     assert_equal(b, a, exact=exact, elem_name=elem_name)
 
@@ -1193,12 +1198,7 @@ class AccessTrackingStore(LocalStore):
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, *args, **kwargs):
-        import traceback
-
-        traceback.print_stack()
-        print(kwargs)
         super().__init__(*args, **kwargs)
-        print(self._read_only)
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)

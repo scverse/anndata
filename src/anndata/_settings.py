@@ -10,7 +10,7 @@ from enum import Enum
 from functools import partial
 from inspect import Parameter, signature
 from types import GenericAlias, NoneType
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from ._repr_constants import (
     DEFAULT_FOLD_THRESHOLD,
@@ -27,7 +27,7 @@ from ._warnings import warn
 from .compat import old_positionals
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Generator, Sequence
     from typing import Any, Self, TypeGuard
 
 
@@ -258,7 +258,7 @@ class SettingsManager:
     def _update_override_function_for_new_option(
         self,
         option: str,
-    ):
+    ) -> None:
         """This function updates the keyword arguments, docstring, and annotations of the `SettingsManager.override` function as the `SettingsManager.register` method is called.
 
         Parameters
@@ -285,9 +285,10 @@ class SettingsManager:
             ]
         )
         # Update docstring for `SettingsManager.override` as well.
-        doc = cast("str", self.override.__doc__)
-        insert_index = doc.find("\n        Yields")
-        option_docstring = "\t" + "\t".join(
+        doc = textwrap.dedent(cast("str", self.override.__doc__))
+        insert_index = doc.find("\n\nYields")
+        assert insert_index != -1
+        option_docstring = "".join(
             self.describe(option, should_print_description=False).splitlines(
                 keepends=True
             )
@@ -366,7 +367,7 @@ class SettingsManager:
             self._config[option] = self._registered_options[option].default_value
 
     @contextmanager
-    def override(self, **overrides):
+    def override(self, **overrides) -> Generator[None]:
         """
         Provides local override via keyword arguments as a context manager.
 
