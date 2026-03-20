@@ -571,32 +571,9 @@ def test_concatenate_fill_value(fill_val):
 @pytest.mark.parametrize(
     ("merge", "expected_cols"),
     [
-        (
-            "first",
-            [
-                "annoA",
-                "annoB",
-                "annoC",
-                "annoD",
-                "annoE",
-            ],
-        ),
-        (
-            "same",
-            [
-                "annoA",
-                "annoB",
-            ],
-        ),
-        (
-            "unique",
-            [
-                "annoA",
-                "annoB",
-                "annoC",
-                "annoE",
-            ],
-        ),
+        ("first", ["annoA", "annoB", "annoC", "annoD", "annoE"]),
+        ("same", ["annoA", "annoB"]),
+        ("unique", ["annoA", "annoB", "annoC", "annoE"]),
         ("only", ["annoE"]),
         (None, []),
     ],
