@@ -191,7 +191,7 @@ def test_df_warnings():
 def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
     adata = gen_adata((10, 20))
     if use_uns:
-        adata.uns = {"foo": np.arange(10)}
+        adata.uns = {"foo": np.arange(10), "nested": {"here": np.arange(10)}}
     if use_raw:
         adata.raw = adata.copy()
     adata.__sizeof__(show_stratified=True)

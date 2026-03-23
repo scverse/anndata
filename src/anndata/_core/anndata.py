@@ -67,7 +67,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from ..acc import Array, MapAcc, RefAcc
-    from ..compat import CSMatrix, XDataset
+    from ..compat import CSArray, CSMatrix, XDataset
     from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
@@ -526,6 +526,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return cs_to_bytes(X._to_backed())
             elif issparse(X):
                 return cs_to_bytes(X)
+            elif isinstance(X, dict):
+                return sum(get_size(v) for v in X.values())
             else:
                 return X.__sizeof__()
 
@@ -542,7 +544,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 for key in X.varm:
                     accumulate[Raw] += get_size(X.varm[key])
             elif ref_acc is None:  # "None but not Raw" is uns
-                accumulate[None] = sum(get_size(v) for v in self.uns.values())
+                accumulate[None] = get_size(self.uns)
             if is_elem := (
                 # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
                 (is_ad_ref := isinstance(ref_acc, AdRef))
