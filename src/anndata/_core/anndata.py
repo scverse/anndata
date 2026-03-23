@@ -570,7 +570,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
             return accumulate
 
-        return sum(self.fold(fold_size, init=defaultdict(int)).values())
+        return sum(self.reduce(fold_size, init=defaultdict(int)).values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
@@ -1446,7 +1446,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
-    def fold[T](
+    def reduce[T](
         self,
         func: FoldFunc[T],
         *,
@@ -1462,7 +1462,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         init
             The starting value
         order
-            How to visit the items in the fold.
+            How to visit the items in the reduce.
             "DFS-pre" indicates that parent-elements like uns, obs, and varp get visited first.
             "DFS-post" means they get visited afterwards.
             The `AnnData` itself is not visited.
@@ -1545,7 +1545,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return accumulate and type(elem) in writeable_elems
             return accumulate
 
-        return self.fold(predicate, init=True)
+        return self.reduce(predicate, init=True)
 
     @deprecated(
         deprecation_msg(
