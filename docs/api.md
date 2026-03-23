@@ -268,7 +268,7 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   types.FoldFunc
+   types.ReduceFunc
 ```
 
 <!-- these are types, not classes, so don’t use the above template -->

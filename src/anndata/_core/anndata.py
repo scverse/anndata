@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
-    from anndata.types import FoldFunc
+    from anndata.types import ReduceFunc
     from anndata.typing import RWAble
 
     from ..acc import Array, MapAcc, RefAcc
@@ -1448,22 +1448,29 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
     def reduce[T](
         self,
-        func: FoldFunc[T],
+        func: ReduceFunc[T],
         *,
         init: T,
         order: Literal["DFS-pre", "DFS-post"] = "DFS-post",
     ) -> T:
         """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
 
+        All visits inside the user-defined `func` are distinguishable via the `ref_acc` + `elem` args.
+        Visits to {attr}`~AnnData.raw` pass `ref_acc is None` and `isinstance(elem, Raw)` to the :func:`types.ReduceFunc`.
+        Visits to {attr}`~AnnData.uns` pass `ref_acc is None` and `isinstance(elem, dict)` to the :func:`types.ReduceFunc`.
+        Furthermore, neither element is descended into.
+        This behavior could change where a new `ref_acc` type will be available, in which case we could start descending in these cases.
+        All other elements will have a non-`None` `ref_acc` argument.
+
         Parameters
         ----------
         func
-            The function that performs the accumulation
+            The function that performs the accumulation.
         init
             The starting value
         order
             How to visit the items in the reduce.
-            "DFS-pre" indicates that parent-elements like uns, obs, and varp get visited first.
+            "DFS-pre" indicates that parent-elements like layers, obs, and varp get visited first.
             "DFS-post" means they get visited afterwards.
             The `AnnData` itself is not visited.
 

@@ -53,11 +53,27 @@ class SupportsArrayApi(Protocol):
     def __dlpack_device__(self) -> tuple[int, int]: ...
 
 
-class FoldFunc[T](Protocol):
+class ReduceFunc[T](Protocol):
     def __call__(
         self,
         elem: RWAble,
         *,
         accumulate: T,
         ref_acc: AdAcc | RefAcc | AdRef | MapAcc | None,
-    ) -> T: ...
+    ) -> T:
+        """Function to be called on each visit within :func:`AnnData.reduce`.
+
+        Parameters
+        ----------
+        elem
+            The current element.
+        accumulate
+            The value being accumulated.
+        ref_acc
+            A reference to help uses distinguish where they are in the `AnnData` object.
+
+        Returns
+        -------
+            An accumulated value
+        """
+        ...
