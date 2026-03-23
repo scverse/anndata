@@ -68,7 +68,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from ..acc import Array, MapAcc, RefAcc
-    from ..compat import XDataset
+    from ..compat import CSMatrix, XDataset
     from ..typing import Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
@@ -517,27 +517,37 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
-        def get_size[R: dict[type[RefAcc | MapAcc | AdAcc] | None, int]](
+        def cs_to_bytes(X: CSArray | CSMatrix) -> int:
+            return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
+
+        def get_size(X: RWAble) -> int:
+            if isinstance(X, h5py.Dataset) and with_disk:
+                return int(np.array(X.shape).prod() * X.dtype.itemsize)
+            elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
+                return cs_to_bytes(X._to_backed())
+            elif issparse(X):
+                return cs_to_bytes(X)
+            else:
+                return X.__sizeof__()
+
+        def fold_size[R: dict[type[RefAcc | MapAcc | AdAcc | Raw] | None, int]](
             X: RWAble,
             *,
             accumulate: R,
             ref_acc: RefAcc | AdRef | MapAcc | None,
         ) -> R:
-            def cs_to_bytes(X) -> int:
-                return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
-
+            if isinstance(X, Raw):
+                ref_acc = X  # type: ignore[assignment]
+                accumulate[Raw] += get_size(X.X)
+                accumulate[Raw] += get_size(X.var)
+                for key in X.varm:
+                    accumulate[Raw] += get_size(X.varm[key])
+            elif ref_acc is None:  # "None but not Raw" is uns
+                accumulate[None] = sum(get_size(v) for v in self.uns.values())
             if is_elem := (
-                (
-                    # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
-                    (is_ad_ref := isinstance(ref_acc, AdRef))
-                    or (
-                        is_ref_acc := isinstance(
-                            ref_acc, LayerAcc | MultiAcc | GraphAcc
-                        )
-                    )
-                )
-                # an element of uns
-                or (ref_acc is None and X is not self.uns)
+                # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
+                (is_ad_ref := isinstance(ref_acc, AdRef))
+                or (is_ref_acc := isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc))
             ):
                 if is_ad_ref:
                     key = type(ref_acc.acc)
@@ -545,18 +555,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     key = ref_acc.parent_type
                 else:
                     key = None
-                if isinstance(X, h5py.Dataset) and with_disk:
-                    accumulate[key] += int(np.array(X.shape).prod() * X.dtype.itemsize)
-                elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
-                    accumulate[key] += cs_to_bytes(X._to_backed())
-                elif issparse(X):
-                    accumulate[key] += cs_to_bytes(X)
-                else:
-                    accumulate[key] += X.__sizeof__()
+                accumulate[key] += get_size(X)
             # if this is X or a parent elem maybe print it out.
             if (is_x := ref_acc is A.X) or not is_elem:
                 if ref_acc is not None:
-                    s = accumulate[AdAcc if is_x else type(ref_acc)]
+                    s = accumulate[AdAcc if is_x else type(ref_acc)]  # type: ignore[assignment]
                 else:
                     s = accumulate[None]
                 if s > 0 and show_stratified:
@@ -567,7 +570,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
             return accumulate
 
-        return sum(self.fold(get_size, init=defaultdict(int)).values())
+        return sum(self.fold(fold_size, init=defaultdict(int)).values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
@@ -1480,10 +1483,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             "obsp",
             "varp",
             "layers",
-            "uns",
         ]:
             attr = getattr(self, attr_name)
-            acc = getattr(A, attr_name) if attr_name != "uns" else None
+            acc = getattr(A, attr_name)
             if order == "DFS-pre":
                 accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
             if attr_name != "X":
@@ -1494,6 +1496,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     )
             if order == "DFS-post":
                 accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
+        accumulate = func(self.uns, accumulate=accumulate, ref_acc=None)
+        accumulate = func(self.raw, accumulate=accumulate, ref_acc=None)
         return accumulate
 
     def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
@@ -1516,12 +1520,29 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if store_type is None or store_type in dest_type.__module__
         }
 
-        def predicate(x: RWAble, *, accumulate: bool, ref_acc: AdRef | RefAcc | None):
+        def predicate(
+            elem: RWAble,
+            *,
+            accumulate: bool,
+            ref_acc: AdAcc | RefAcc | AdRef | MapAcc | None,
+        ):
+            if isinstance(elem, Raw):
+                accumulate = accumulate and type(elem.X) in writeable_elems
+                return accumulate and all(
+                    type(e[attr]) in writeable_elems
+                    for e in [elem.var, elem.varm]
+                    for attr in e
+                )
+            if ref_acc is None and isinstance(elem, dict):
+                return accumulate and all(
+                    predicate(e, accumulate=accumulate, ref_acc=None)
+                    for e in elem.values()
+                )
             if isinstance(ref_acc, AdRef) or ref_acc is None:
-                if isinstance(x, pd.Series):
+                if isinstance(elem, pd.Series):
                     # matches behavior in methods.py
-                    x = x._values
-                return accumulate and type(x) in writeable_elems
+                    elem = elem._values
+                return accumulate and type(elem) in writeable_elems
             return accumulate
 
         return self.fold(predicate, init=True)
