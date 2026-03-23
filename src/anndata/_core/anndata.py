@@ -1461,7 +1461,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         Visits to {attr}`~AnnData.uns` pass `ref_acc is None` and `isinstance(elem, dict)` to the :func:`types.ReduceFunc`.
         Furthermore, neither element is descended into.
         This behavior could change where a new `ref_acc` type will be available, in which case we could start descending in these cases.
-        All other elements will have a non-`None` `ref_acc` argument.
+        All other elements will have a non-`None` `ref_acc` argument indicating the path at which `elem` was created in the `AnnData`.
 
         Parameters
         ----------
