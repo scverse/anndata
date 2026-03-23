@@ -548,14 +548,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if is_elem := (
                 # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
                 (is_ad_ref := isinstance(ref_acc, AdRef))
-                or (is_ref_acc := isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc))
+                or isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc)
             ):
-                if is_ad_ref:
-                    key = type(ref_acc.acc)
-                elif is_ref_acc:
-                    key = ref_acc.parent_type
-                else:
-                    key = None
+                key = type(ref_acc.acc) if is_ad_ref else ref_acc.parent_type
                 accumulate[key] += get_size(X)
             # if this is X or a parent elem maybe print it out.
             if (is_x := ref_acc is A.X) or not is_elem:
