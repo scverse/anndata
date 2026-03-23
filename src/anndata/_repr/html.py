@@ -298,6 +298,26 @@ def generate_repr_html(  # noqa: PLR0913
         f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}" style="{style}">'
     )
 
+    # No-CSS fallback: visible by default, hidden by CSS when styles load.
+    # This helps users who open nbconvert-executed notebooks in JupyterLab,
+    # where <style> tags are stripped from untrusted notebooks.
+    if depth == 0:
+        # Use only the first line of repr (shape info) to avoid bloating HTML
+        summary = escape_html(repr(adata).split("\n", 1)[0])
+        parts.append(
+            '<div class="anndata-repr__nocss">'
+            "<pre>"
+            f"{summary}\n\n"
+            "<b>Styled representation not available.</b>\n"
+            "JupyterLab strips &lt;style&gt; tags from untrusted notebooks. "
+            "This happens when a notebook was executed outside Jupyter "
+            "(e.g. via <code>nbconvert --execute</code>) or transferred from "
+            "another user.\n\n"
+            "Run `jupyter trust notebook.ipynb` and reload to fix this.\n"
+            "</pre>"
+            "</div>"
+        )
+
     # Header (with search box integrated on the right)
     if show_header:
         parts.append(

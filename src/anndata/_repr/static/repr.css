@@ -8,6 +8,11 @@
     /* Opt into light-dark(): responds to used color scheme, defaulting to light */
     color-scheme: light dark;
 
+    /* Hide the no-CSS fallback when styles are loaded */
+    .anndata-repr__nocss {
+        display: none;
+    }
+
     /* --- Theme overrides ---
        When an app explicitly sets a theme, override the color scheme so
        light-dark() picks the correct value regardless of OS preference. */
