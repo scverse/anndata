@@ -1456,7 +1456,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     ) -> T:
         """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
 
-        All visits inside the user-defined `func` are distinguishable via the `ref_acc` + `elem` args.
+        All visits inside the user-defined `func` (see :func:`types.ReduceFunc`) are distinguishable via the `ref_acc` + `elem` args.
         Visits to {attr}`~AnnData.raw` pass `ref_acc is None` and `isinstance(elem, Raw)` to the :func:`types.ReduceFunc`.
         Visits to {attr}`~AnnData.uns` pass `ref_acc is None` and `isinstance(elem, dict)` to the :func:`types.ReduceFunc`.
         Furthermore, neither element is descended into.
