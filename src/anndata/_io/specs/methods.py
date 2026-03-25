@@ -523,7 +523,7 @@ def write_basic_dask_dask_dense(
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g, scheduler="threads")
+    da.store(elem, g)
 
 
 @_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
