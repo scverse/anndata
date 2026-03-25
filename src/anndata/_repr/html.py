@@ -303,7 +303,10 @@ def generate_repr_html(  # noqa: PLR0913
     # where <style> tags are stripped from untrusted notebooks.
     if depth == 0:
         # Use only the first line of repr (shape info) to avoid bloating HTML
-        summary = escape_html(repr(adata).split("\n", 1)[0])
+        try:
+            summary = escape_html(repr(adata).split("\n", 1)[0])
+        except Exception:  # noqa: BLE001
+            summary = escape_html(f"AnnData object with n_obs × n_vars = {adata.n_obs} × {adata.n_vars}")
         parts.append(
             '<div class="anndata-repr__nocss">'
             "<pre>"
