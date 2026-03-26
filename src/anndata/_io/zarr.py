@@ -69,6 +69,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
+
     def callback(func, elem_name: str, elem, iospec):
         """Read with handling for backwards compat"""
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
