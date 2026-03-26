@@ -69,30 +69,29 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
+    def callback(func, elem_name: str, elem, iospec):
+        """Read with handling for backwards compat"""
+        if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+            return AnnData(**{
+                k: read_dispatched(v, callback)
+                for k, v in dict(elem).items()
+                if not k.startswith("raw.")
+            })
+        elif elem_name.startswith("/raw."):
+            return None
+        elif elem_name in {"/obs", "/var"}:
+            return read_dataframe(elem)
+        elif elem_name == "/raw":
+            # Backwards compat
+            return _read_legacy_raw(f, func(elem), read_dataframe, func)
+        return func(elem)
+
     with (
         zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
         if find_spec("zarrs")
         else nullcontext()
     ):
         f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
-
-        # Read with handling for backwards compat
-        def callback(func, elem_name: str, elem, iospec):
-            if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(**{
-                    k: read_dispatched(v, callback)
-                    for k, v in dict(elem).items()
-                    if not k.startswith("raw.")
-                })
-            elif elem_name.startswith("/raw."):
-                return None
-            elif elem_name in {"/obs", "/var"}:
-                return read_dataframe(elem)
-            elif elem_name == "/raw":
-                # Backwards compat
-                return _read_legacy_raw(f, func(elem), read_dataframe, func)
-            return func(elem)
-
         adata = read_dispatched(f, callback=callback)
 
     # Backwards compat (should figure out which version)
