@@ -33,6 +33,13 @@ def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 
+@pytest.fixture(autouse=True)
+def set_zarrs() -> Path:
+    import zarr
+
+    zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+
+
 @pytest.fixture(
     params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
     ids=["h5ad", "zarr2", "zarr3"],
