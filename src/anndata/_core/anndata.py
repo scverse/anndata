@@ -409,7 +409,13 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", pandas_as_str(X.index)))
+                    x_indices.append((
+                        "obs",
+                        "index",
+                        pandas_as_str(X.index)
+                        if settings.force_str_index_when_non_numeric
+                        else X.index,
+                    ))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
@@ -750,7 +756,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         if self.shape[attr == "var"] != len(value):
             msg = f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
             raise ValueError(msg)
-        if isinstance(value, pd.Index) and not isinstance(value.name, str | type(None)):
+        if (
+            settings.restrict_index_types
+            and isinstance(value, pd.Index)
+            and not isinstance(value.name, str | type(None))
+        ):
             msg = (
                 f"AnnData expects .{attr}.index.name to be a string or None, "
                 f"but you passed a name of type {type(value.name).__name__!r}"
@@ -763,7 +773,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
-            len(value) > 0
+            settings.restrict_index_types
+            and len(value) > 0
             and not isinstance(value, pd.RangeIndex)
             and infer_dtype(value) not in {"string", "bytes"}
         ):
@@ -1430,9 +1441,15 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self) -> None:
-        if self.obs.index[~self.obs.index.isna()].has_duplicates:
+        if (
+            settings.restrict_index_types
+            and self.obs.index[~self.obs.index.isna()].has_duplicates
+        ):
             utils.warn_names_duplicates("obs")
-        if self.var.index[~self.var.index.isna()].has_duplicates:
+        if (
+            settings.restrict_index_types
+            and self.var.index[~self.var.index.isna()].has_duplicates
+        ):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:

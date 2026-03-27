@@ -13,6 +13,7 @@ from scipy.sparse import issparse
 
 from anndata.types import SupportsArrayApi
 
+from .._settings import settings
 from ..compat import (
     AwkArray,
     CSArray,
@@ -52,7 +53,9 @@ __all__ = [
 
 def _normalize_indices(
     index: Index[IndexManager], names0: pd.Index, names1: pd.Index
-) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
+) -> tuple[
+    _Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer | pd.MultiIndex
+]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
         index = index[0]
@@ -156,16 +159,22 @@ def _from_sequence(
 
 
 @_gen_anndata_index.register(
-    SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix
+    SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix | pd.MultiIndex
 )
 def _from_array(
-    indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+    indexer: SupportsArrayApi
+    | pd.api.extensions.ExtensionArray
+    | np.matrix
+    | pd.MultiIndex,
     index: pd.Index,
 ) -> SupportsArrayApi:
     # convert to the 1D if it's accidentally 2D column/row vector
     # convert sparse into dense arrays if needed
     use_xp = has_xp(indexer)
-    is_pandas = isinstance(indexer, pd.api.extensions.ExtensionArray)
+    is_pandas = isinstance(
+        indexer,
+        pd.api.extensions.ExtensionArray | pd.MultiIndex,
+    )
     xp = indexer.__array_namespace__() if use_xp else np
     if indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0]):
         indexer = xp.ravel(indexer)
@@ -207,13 +216,16 @@ def _from_array(
 
 def _normalize_index(
     indexer: Index1D[IndexManager], index: pd.Index
-) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
+) -> _Index1DNorm | int | np.integer | SupportsArrayApi | pd.MultiIndex:
     # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
     if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
 
-    if isinstance(indexer, pd.Index | pd.Series):
+    # MultiIndex raises a ValueError here
+    if isinstance(indexer, pd.Index | pd.Series) and (
+        not isinstance(indexer, pd.MultiIndex) or settings.restrict_index_types
+    ):
         indexer = indexer.array
     if isinstance(indexer, IndexManager):
         indexer = indexer.get_default()

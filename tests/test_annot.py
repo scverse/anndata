@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from natsort import natsorted
 
 import anndata as ad
-from anndata.tests.helpers import get_multiindex_columns_df
+from anndata._warnings import ImplicitModificationWarning
+from anndata.tests.helpers import assert_equal, get_multiindex_columns_df
 
 
 @pytest.mark.parametrize("dtype", [object, "string"])
@@ -73,24 +77,77 @@ def test_error_col_multiindex():
         adata.obs = df
 
 
-def test_error_row_multiindex():
+@pytest.mark.parametrize(
+    "restrict_index_types", [True, False], ids=["error", "no_error"]
+)
+def test_row_multiindex(restrict_index_types):
+    ad.settings.restrict_index_types = restrict_index_types
     df = pd.DataFrame(
         {"x": [1, 2, 3]},
         index=pd.MultiIndex.from_tuples([("a", 1), ("b", 2), ("c", 3)]),
     )
-    with pytest.raises(
-        ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+    with (
+        pytest.raises(
+            ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+        )
+        if restrict_index_types
+        else nullcontext()
     ):
-        ad.AnnData(df)
+        adata = ad.AnnData(df)
+        assert_equal(adata[0], adata[pd.MultiIndex.from_tuples([("a", 1)])])
 
 
-def test_error_row_multiindex_setter():
+@pytest.mark.parametrize(
+    "restrict_index_types", [True, False], ids=["error", "no_error"]
+)
+def test_row_multiindex_setter(restrict_index_types):
+    ad.settings.restrict_index_types = restrict_index_types
     df = pd.DataFrame(
         {"x": [1, 2, 3]},
         index=pd.MultiIndex.from_tuples([("a", 1), ("b", 2), ("c", 3)]),
     )
     adata = ad.AnnData(np.random.rand(3, 10))
-    with pytest.raises(
-        ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+    with (
+        pytest.raises(
+            ValueError, match=r"pandas.MultiIndex not supported as index for obs or var"
+        )
+        if restrict_index_types
+        else nullcontext()
     ):
         adata.obs = df
+        assert_equal(adata[0], adata[pd.MultiIndex.from_tuples([("a", 1)])])
+
+
+@pytest.mark.parametrize(
+    "restrict_index_types", [True, False], ids=["restrict", "unrestricted"]
+)
+def test_arrow_index(restrict_index_types):
+    ad.settings.restrict_index_types = restrict_index_types
+    df = pd.DataFrame(
+        {"x": [1, 2, 3]},
+        index=pd.Index(
+            pd.arrays.ArrowExtensionArray(
+                pa.array([
+                    {"x": 1, "y": True},
+                    {"x": 2, "y": False},
+                    {"x": 3, "y": False},
+                ])
+            )
+        ),
+    )
+    with (
+        pytest.warns(ImplicitModificationWarning, match=r"Transforming to str index.")
+        if restrict_index_types
+        else nullcontext()
+    ):
+        adata = ad.AnnData(np.random.rand(3, 10), obs=df)
+    # If we restricted the type, the index is now a string
+    with (
+        pytest.raises(TypeError, match=r"unhashable type: 'dict'")
+        if restrict_index_types
+        else nullcontext()
+    ):
+        assert_equal(
+            adata[pd.arrays.ArrowExtensionArray(pa.array([{"x": 1, "y": True}]))],
+            adata[0],
+        )
