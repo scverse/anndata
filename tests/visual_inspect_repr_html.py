@@ -263,6 +263,86 @@ try:
                 entries.append(FormattedEntry(key=key, output=output))
             return entries
 
+    @register_formatter
+    class TreeMetadataSectionFormatter(SectionFormatter):
+        """Section formatter for TreeData metadata as a compact inline row.
+
+        This demonstrates a fully custom section representation using
+        ``render_html()`` instead of the standard ``get_entries()`` path.
+        When ``render_html()`` is defined, it takes precedence and the
+        returned HTML is inserted directly — no ``<details>`` wrapping,
+        no entry grid. This is useful for compact metadata that doesn't
+        fit the "list of entries" pattern.
+
+        Renders like the X entry — a single non-foldable line showing
+        key=value pairs for label, alignment, and allow_overlap.
+        All values are escaped via ``escape_html(repr(val))``.
+        """
+
+        @property
+        def section_name(self) -> str:
+            return "tree_metadata"
+
+        @property
+        def display_name(self) -> str:
+            return "tree"
+
+        @property
+        def after_section(self) -> str:
+            return "X"
+
+        @property
+        def doc_url(self) -> str:
+            return TREEDATA_DOCS
+
+        @property
+        def tooltip(self) -> str:
+            return "Tree configuration parameters (TreeData)"
+
+        def should_show(self, obj) -> bool:
+            return hasattr(obj, "_tree_label")
+
+        def get_entries(self, obj, context: FormatterContext) -> list[FormattedEntry]:
+            """Fallback if render_html fails (e.g., missing optional dependency)."""
+            entries = []
+            for attr, label in [
+                ("_tree_label", "label"),
+                ("_alignment", "alignment"),
+                ("_allow_overlap", "allow_overlap"),
+            ]:
+                val = getattr(obj, attr, None)
+                if val is not None:
+                    output = FormattedOutput(
+                        type_name=type(val).__name__,
+                        preview=repr(val),
+                    )
+                    entries.append(FormattedEntry(key=label, output=output))
+            return entries
+
+        def render_html(self, obj, context: FormatterContext) -> str:
+            """Render as a compact line instead of a foldable section."""
+            from anndata._repr.utils import escape_html
+
+            pairs = []
+            for attr, label in [
+                ("_tree_label", "label"),
+                ("_alignment", "alignment"),
+                ("_allow_overlap", "allow_overlap"),
+            ]:
+                val = getattr(obj, attr, None)
+                if val is not None:
+                    pairs.append(
+                        f'<span style="color:var(--anndata-text-secondary,#6c757d);">{label}=</span>'
+                        f"{escape_html(repr(val))}"
+                    )
+            summary = " &nbsp; ".join(pairs)
+            return (
+                '<div class="anndata-x__entry">'
+                f"<span>tree</span>"
+                f"<span>{summary}</span>"
+                "</div>"
+            )
+
 except (ImportError, AttributeError):
     # AttributeError can occur on Python 3.14+ with incompatible networkx versions
     HAS_TREEDATA = False
@@ -954,7 +1034,7 @@ def create_test_treedata():
         parent = ["module_1", "module_2", "module_3", "module_4", "module_5"][i % 5]
         var_tree.add_edge(parent, name)
 
-    # Create TreeData (label=None prevents adding "tree" column to obs/var)
+    # Create TreeData with explicit metadata values
     tdata = TreeData(
         X=np.random.randn(n_obs, n_vars).astype(np.float32),
         obs=pd.DataFrame(
@@ -964,7 +1044,9 @@ def create_test_treedata():
         var=pd.DataFrame({"gene_name": var_names}, index=var_names),
         obst={"phylogeny": obs_tree},
         vart={"gene_ontology": var_tree},
-        label=None,  # Don't add "tree" column
+        label="phylogeny",
+        alignment="leaves",
+        allow_overlap=False,
     )
 
     # Add standard annotations
@@ -1969,11 +2051,20 @@ def main():  # noqa: PLR0915, PLR0912
             tdata._repr_html_(),
             "Demonstrates how to add custom sections using SectionFormatter. "
             "This example uses <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
-            "to show 'obst' and 'vart' sections "
-            "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>). "
-            "The 'obst' section appears after 'obsm' and 'vart' after 'varm'. "
-            "Click the <b>▼</b> arrow button to see an SVG tree visualization. "
-            "Trees with >30 leaves show a text message instead of the full preview.",
+            "to show three custom sections:<br><br>"
+            "<b>Standard sections</b> (via <code>get_entries()</code>):<br>"
+            "<ul>"
+            "<li><b>obst</b> (after obsm) and <b>vart</b> (after varm) — foldable sections with SVG tree previews. "
+            "Click the <b>▼</b> arrow to expand. Trees with &gt;30 leaves show a text message instead.</li>"
+            "</ul>"
+            "<b>Fully custom section</b> (via <code>render_html()</code>):<br>"
+            "<ul>"
+            "<li><b>tree</b> (after X) — a compact non-foldable line showing TreeData's metadata "
+            "(<code>label</code>, <code>alignment</code>, <code>allow_overlap</code>). "
+            "Uses <code>render_html()</code> to bypass the standard entry grid and produce "
+            "raw HTML directly, similar to how the X row is rendered.</li>"
+            "</ul>"
+            "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>)",
         ))
 
     # Test 15: Expandable DataFrame in obsm

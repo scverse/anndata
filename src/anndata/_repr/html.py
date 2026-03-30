@@ -451,7 +451,27 @@ def _render_custom_section(
     formatter: SectionFormatter,
     context: FormatterContext,
 ) -> str:
-    """Render a custom section using its registered formatter."""
+    """Render a custom section using its registered formatter.
+
+    If the formatter defines ``render_html(obj, context)``, it is tried
+    first and the result is used as-is (no ``<details>`` wrapping).
+    If ``render_html`` fails, falls back to the standard ``get_entries``
+    path so formatters can provide both an enhanced and a safe representation.
+    """
+    # Allow formatters to produce raw HTML (e.g., compact inline rows)
+    if hasattr(formatter, "render_html"):
+        try:
+            return formatter.render_html(adata, context)
+        except Exception as e:  # noqa: BLE001
+            from .._warnings import warn
+
+            warn(
+                f"Custom section formatter '{formatter.section_name}' render_html failed, "
+                f"falling back to get_entries: {e}",
+                UserWarning,
+            )
+            # Fall through to get_entries below
+
     try:
         entries = formatter.get_entries(adata, context)
     except Exception as e:  # noqa: BLE001
