@@ -222,7 +222,8 @@ def test_repr_html_section_formatter_render_html_crash_fallback(adata):
             ]
 
         def render_html(self, obj, context):
-            raise RuntimeError("intentional crash")
+            msg = "intentional crash"
+            raise RuntimeError(msg)
 
     try:
         with warnings.catch_warnings(record=True) as w:
