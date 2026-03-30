@@ -547,8 +547,13 @@ def format_index_preview(index: pd.Index, preview_n: int = 5) -> str:
 
 
 def escape_html(text: str) -> str:
-    """Escape HTML special characters."""
-    return html.escape(str(text))
+    """Escape HTML special characters and replace null bytes.
+
+    Null bytes in user data (e.g., column names like ``"null\\x00byte"``)
+    break HTML parsers and cause truncated rendering. They are replaced
+    with the Unicode replacement character U+FFFD.
+    """
+    return html.escape(str(text).replace("\x00", "\ufffd"))
 
 
 def sanitize_for_id(text: str) -> str:

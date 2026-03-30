@@ -415,7 +415,7 @@ class TestUnicodeEdgeCases:
         v.assert_section_exists("obs")
 
     def test_null_byte_in_string(self, validate_html):
-        """Null bytes in strings should be handled."""
+        """Null bytes in strings should be replaced, not leak into HTML."""
         adata = AnnData(np.zeros((3, 3)))
         adata.uns["null_byte"] = "before\x00after"
 
@@ -424,6 +424,24 @@ class TestUnicodeEdgeCases:
 
         v.assert_html_well_formed()
         v.assert_section_exists("uns")
+        assert "\x00" not in html
+
+    def test_null_byte_in_column_name(self, validate_html):
+        """Null bytes in column names must not leak into HTML output."""
+        adata = AnnData(
+            np.zeros((3, 2)),
+            obs=pd.DataFrame(
+                {"null\x00col": [1, 2, 3]},
+                index=["a", "b", "c"],
+            ),
+        )
+        html = adata._repr_html_()
+        v = validate_html(html)
+
+        v.assert_html_well_formed()
+        assert "\x00" not in html
+        # Null byte replaced with U+FFFD (replacement character)
+        assert "\ufffd" in html
 
     def test_mixed_unicode_categories(self, validate_html):
         """Mixed unicode in categorical should work."""

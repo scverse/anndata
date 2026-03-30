@@ -81,7 +81,6 @@ def test_repr_html_section_formatter_get_entries(adata):
     from anndata._repr import (
         FormattedEntry,
         FormattedOutput,
-        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -119,8 +118,6 @@ def test_repr_html_section_formatter_get_entries(adata):
 def test_repr_html_section_formatter_render_html(adata):
     """Custom SectionFormatter with render_html produces raw HTML (no <details>)."""
     from anndata._repr import (
-        FormattedEntry,
-        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -156,8 +153,6 @@ def test_repr_html_section_formatter_render_html(adata):
 def test_repr_html_section_formatter_render_html_escaping(adata):
     """render_html output is inserted as-is — formatter must escape values."""
     from anndata._repr import (
-        FormattedEntry,
-        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -202,7 +197,6 @@ def test_repr_html_section_formatter_render_html_crash_fallback(adata):
     from anndata._repr import (
         FormattedEntry,
         FormattedOutput,
-        FormatterContext,
         SectionFormatter,
         register_formatter,
     )
@@ -238,9 +232,7 @@ def test_repr_html_section_formatter_render_html_crash_fallback(adata):
             assert html is not None
             assert "anndata-repr" in html
             # Should warn about the crash
-            crash_warnings = [
-                x for x in w if "render_html failed" in str(x.message)
-            ]
+            crash_warnings = [x for x in w if "render_html failed" in str(x.message)]
             assert len(crash_warnings) == 1
             # Should fall back to get_entries
             assert "fallback_key" in html
