@@ -4,14 +4,22 @@
 /* Uses subgrid (Chrome 117+, Firefox 71+, Safari 16+) */
 /* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) — the bottleneck */
 
+/* Dual-representation toggle (xarray pattern):
+   The rich HTML has inline style="display:none" so it's hidden by default.
+   The text fallback <pre> is visible by default. When this stylesheet loads,
+   we flip: show the rich HTML, hide the text fallback.
+   In environments that strip <style> (GitHub, untrusted notebooks),
+   the inline display:none survives and users see the clean text repr. */
+.anndata-repr-fallback {
+    display: none;
+}
+
 .anndata-repr {
+    /* Override the inline display:none to show rich HTML when CSS loads */
+    display: block !important;
+
     /* Opt into light-dark(): responds to used color scheme, defaulting to light */
     color-scheme: light dark;
-
-    /* Hide the no-CSS fallback when styles are loaded */
-    .anndata-repr__nocss {
-        display: none;
-    }
 
     /* --- Theme overrides ---
        When an app explicitly sets a theme, override the color scheme so

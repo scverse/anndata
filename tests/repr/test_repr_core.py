@@ -300,6 +300,50 @@ class TestSettings:
             v.assert_truncation_indicator()
 
 
+class TestDualRepresentation:
+    """Test the dual-representation fallback for environments that strip CSS."""
+
+    def test_text_fallback_present(self, adata):
+        """Text fallback <pre> should be present in HTML output."""
+        html = adata._repr_html_()
+        assert '<pre class="anndata-repr-fallback">' in html
+
+    def test_text_fallback_contains_repr(self, adata):
+        """Text fallback should contain the full text repr."""
+        html = adata._repr_html_()
+        text_repr = repr(adata)
+        # The first line of the text repr should appear in the fallback
+        first_line = text_repr.split("\n")[0]
+        assert first_line in html or first_line.replace("×", "&times;") in html
+
+    def test_rich_html_hidden_by_default(self, adata):
+        """Rich HTML container should have inline display:none."""
+        html = adata._repr_html_()
+        # The anndata-repr div should have display:none in its style
+        assert 'style="display:none; ' in html
+
+    def test_fallback_survives_style_stripping(self, adata):
+        """When <style> and <script> are stripped, only text fallback is visible."""
+        html = adata._repr_html_()
+        # Simulate GitHub/untrusted notebook: strip style and script tags
+        stripped = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
+        stripped = re.sub(r"<script[^>]*>.*?</script>", "", stripped, flags=re.DOTALL)
+
+        # Text fallback should remain (no style hiding it)
+        assert '<pre class="anndata-repr-fallback">' in stripped
+        # Rich HTML still has display:none inline
+        assert "display:none" in stripped
+
+    def test_nested_repr_no_fallback(self):
+        """Nested AnnData (depth > 0) should not have text fallback."""
+        from anndata._repr.html import generate_repr_html
+
+        adata = AnnData(np.zeros((5, 3)))
+        html = generate_repr_html(adata, depth=1)
+        assert "anndata-repr-fallback" not in html
+        assert "display:none" not in html
+
+
 class TestColumnWidthSettings:
     """Test column width calculation settings."""
 

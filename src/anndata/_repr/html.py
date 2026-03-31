@@ -292,36 +292,27 @@ def generate_repr_html(  # noqa: PLR0913
     # Get type column width from settings
     type_width = get_setting("repr_html_type_width", default=DEFAULT_TYPE_WIDTH)
 
-    # Container with computed column widths as CSS variables
-    style = f"--anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
+    # Text fallback: visible by default, hidden by CSS when styles load.
+    # GitHub and untrusted JupyterLab strip <style> tags, so the rich HTML
+    # (hidden via inline display:none) stays hidden and this <pre> shows instead.
+    if depth == 0:
+        try:
+            text_repr = escape_html(repr(adata))
+        except Exception:  # noqa: BLE001
+            text_repr = escape_html(
+                f"AnnData object with n_obs × n_vars = {adata.n_obs} × {adata.n_vars}"
+            )
+        parts.append(f'<pre class="anndata-repr-fallback">{text_repr}</pre>')
+
+    # Container with computed column widths as CSS variables.
+    # Hidden by default (display:none); CSS overrides to display:block.
+    # This ensures environments that strip <style> (GitHub, untrusted notebooks)
+    # show only the text fallback above.
+    hide = "display:none; " if depth == 0 else ""
+    style = f"{hide}--anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
     parts.append(
         f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}" style="{style}">'
     )
-
-    # No-CSS fallback: visible by default, hidden by CSS when styles load.
-    # This helps users who open nbconvert-executed notebooks in JupyterLab,
-    # where <style> tags are stripped from untrusted notebooks.
-    if depth == 0:
-        # Use only the first line of repr (shape info) to avoid bloating HTML
-        try:
-            summary = escape_html(repr(adata).split("\n", 1)[0])
-        except Exception:  # noqa: BLE001
-            summary = escape_html(
-                f"AnnData object with n_obs × n_vars = {adata.n_obs} × {adata.n_vars}"
-            )
-        parts.append(
-            '<div class="anndata-repr__nocss">'
-            "<pre>"
-            f"{summary}\n\n"
-            "<b>Styled representation not available.</b>\n"
-            "JupyterLab strips &lt;style&gt; tags from untrusted notebooks. "
-            "This happens when a notebook was executed outside Jupyter "
-            "(e.g. via <code>nbconvert --execute</code>) or transferred from "
-            "another user.\n\n"
-            "Run `jupyter trust notebook.ipynb` and reload to fix this.\n"
-            "</pre>"
-            "</div>"
-        )
 
     # Header (with search box integrated on the right)
     if show_header:

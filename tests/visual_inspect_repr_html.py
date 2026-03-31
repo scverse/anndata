@@ -1411,6 +1411,15 @@ def strip_script_tags(html: str) -> str:
     return re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
 
 
+def strip_style_and_script_tags(html: str) -> str:
+    """Remove <style> and <script> tags to simulate GitHub/untrusted notebook rendering."""
+    import re
+
+    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
+    html = re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
+    return html
+
+
 def main():  # noqa: PLR0915, PLR0912
     """Generate visual test HTML file."""
     print("Generating visual test cases...")
@@ -2040,6 +2049,41 @@ def main():  # noqa: PLR0915, PLR0912
         "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
         "Includes a nested AnnData in uns and a raw section — both use native &lt;details&gt; "
         "for expand/collapse which works without JS.",
+    ))
+
+    # Test 13b: No CSS (GitHub / untrusted notebook fallback)
+    print("  13b. No CSS (GitHub / untrusted notebook fallback)")
+    adata_nocss = AnnData(
+        sp.random(500, 200, density=0.1, format="csr", dtype=np.float32),
+        obs=pd.DataFrame({
+            "cell_type": pd.Categorical(["T-cell", "B-cell", "NK", "Mono", "DC"] * 100),
+            "patient": pd.Categorical([f"P{i}" for i in range(50)] * 10),
+            "score": np.random.rand(500),
+        }),
+        var=pd.DataFrame({"gene_name": [f"gene_{i}" for i in range(200)]}),
+    )
+    adata_nocss.obsm["X_pca"] = np.random.randn(500, 20).astype(np.float32)
+    adata_nocss.uns["method"] = "scran"
+    nocss_html = strip_style_and_script_tags(adata_nocss._repr_html_())
+    # Wrap in an iframe (srcdoc) so it's fully isolated from the page's CSS.
+    # Without isolation, the <style> blocks from other test cases would style this too.
+    import html as html_mod
+
+    iframe_srcdoc = html_mod.escape(nocss_html)
+    iframe_html = (
+        f'<iframe srcdoc="{iframe_srcdoc}" '
+        'style="width:100%; border:1px solid #ccc; border-radius:4px; background:white;" '
+        "onload=\"this.style.height = this.contentDocument.documentElement.scrollHeight + 20 + 'px'\">"
+        "</iframe>"
+    )
+    sections.append((
+        "13b. No CSS (GitHub / untrusted notebook fallback)",
+        iframe_html,
+        "Simulates GitHub's notebook renderer which strips &lt;style&gt; and &lt;script&gt; tags. "
+        "Rendered in an iframe for CSS isolation. "
+        "You should see the plain text repr (like <code>repr(adata)</code>) in a &lt;pre&gt; block. "
+        "The rich HTML is hidden via inline <code>display:none</code> that survives style stripping. "
+        "This is the xarray-style dual-representation pattern.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
