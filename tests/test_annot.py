@@ -123,31 +123,34 @@ def test_row_multiindex_setter(restrict_index_types):
 )
 def test_arrow_index(restrict_index_types):
     ad.settings.restrict_index_types = restrict_index_types
+    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists
+    arr = pa.array(
+        [
+            1_700_000_000_000_000_000,
+            1_700_000_100_000_000_000,
+            1_700_000_200_000_000_000,
+            1_700_000_300_000_000_000,
+        ],
+        type=pa.timestamp("ns"),
+    )
+
     df = pd.DataFrame(
-        {"x": [1, 2, 3]},
-        index=pd.Index(
-            pd.arrays.ArrowExtensionArray(
-                pa.array([
-                    {"x": 1, "y": True},
-                    {"x": 2, "y": False},
-                    {"x": 3, "y": False},
-                ])
-            )
-        ),
+        {"x": [1, 2, 3, 4]},
+        index=pd.Index(pd.arrays.ArrowExtensionArray(arr)),
     )
     with (
         pytest.warns(ImplicitModificationWarning, match=r"Transforming to str index.")
         if restrict_index_types
         else nullcontext()
     ):
-        adata = ad.AnnData(np.random.rand(3, 10), obs=df)
+        adata = ad.AnnData(np.random.rand(4, 10), obs=df)
     # If we restricted the type, the index is now a string
     with (
-        pytest.raises(TypeError, match=r"unhashable type: 'dict'")
+        pytest.raises(KeyError, match=r".*are not valid obs/ var names or indices")
         if restrict_index_types
         else nullcontext()
     ):
         assert_equal(
-            adata[pd.arrays.ArrowExtensionArray(pa.array([{"x": 1, "y": True}]))],
-            adata[0],
+            adata[pd.Index(pd.arrays.ArrowExtensionArray(arr))[0:2]],
+            adata[0:2],
         )
