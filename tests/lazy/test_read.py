@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from importlib.util import find_spec
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -9,6 +11,7 @@ import pytest
 import zarr
 
 from anndata import AnnData
+from anndata._settings import settings
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
 from anndata.experimental.backed._io import ANNDATA_ELEMS
@@ -23,7 +26,7 @@ from anndata.tests.helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
+    from typing import Literal
 
     from anndata._types import AnnDataElem
 
@@ -184,18 +187,33 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 
 @pytest.mark.zarr_io
-def test_unconsolidated(tmp_path: Path, mtx_format):
-    adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
+@pytest.mark.parametrize("zarr_version", [2, 3])
+def test_unconsolidated(tmp_path: Path, zarr_version: Literal[2, 3]):
+    if zarr_version == 2:
+        settings.auto_shard_zarr_v3 = False
+    settings.zarr_write_format = zarr_version
+    adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
-    (orig_pth / ".zmetadata").unlink()
+    if zarr_version == 2:
+        (orig_pth / ".zmetadata").unlink()
+    else:
+        z = zarr.open(orig_pth)
+        metadata = z.metadata.to_dict()
+        del metadata["consolidated_metadata"]
+        with Path.open(orig_pth / "zarr.json", mode="w") as f:
+            f.write(json.dumps(metadata))
     store = AccessTrackingStore(orig_pth, read_only=True)
-    store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
+    store.initialize_key_trackers(
+        ["obs/.zgroup"] if zarr_version == 2 else ["obs/zarr.json"]
+    )
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
-    store.assert_access_count("obs/.zgroup", 1)
+    store.assert_access_count(
+        f"obs/{'.zgroup' if zarr_version == 2 else 'zarr.json'}", 1
+    )
 
 
 @pytest.mark.zarr_io

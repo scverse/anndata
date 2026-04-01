@@ -931,11 +931,10 @@ def test_write_auto_sharded(tmp_path: Path, override: dict):
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_against_v2_format():
-    with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
+def test_write_auto_sharded_against_v2_format_default():
+    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: SIM117
         with ad.settings.override(zarr_write_format=2):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                pass
+            pass
 
 
 @pytest.mark.zarr_io
