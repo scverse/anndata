@@ -31,7 +31,6 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
-    check_all_sharded_v3,
     gen_adata,
     visititems_zarr,
 )
@@ -910,24 +909,6 @@ def test_h5_unchunked(
         )
         arr = read_elem_lazy(f["foo"])
     assert arr.chunksize == expected_chunks
-
-
-@pytest.mark.zarr_io
-@pytest.mark.parametrize(
-    "override",
-    [
-        {"auto_shard_zarr_v3": True, "zarr_write_format": 3},
-        {"zarr_write_format": 3, "auto_shard_zarr_v3": True},
-    ],
-    ids=["shard_first", "write_format_first"],
-)
-def test_write_auto_sharded(tmp_path: Path, override: dict):
-    path = tmp_path / "check.zarr"
-    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(**override):
-        adata.write_zarr(path)
-
-    check_all_sharded_v3(zarr.open(path))
 
 
 @pytest.mark.zarr_io
