@@ -300,48 +300,57 @@ class TestSettings:
             v.assert_truncation_indicator()
 
 
-class TestDualRepresentation:
-    """Test the dual-representation fallback for environments that strip CSS."""
+class TestGracefulDegradation:
+    """Test that the HTML repr degrades gracefully without CSS/JS."""
 
-    def test_text_fallback_present(self, adata):
-        """Text fallback <pre> should be present in HTML output."""
+    def test_inline_monospace_font(self, adata):
+        """Container should have inline monospace font for no-CSS readability."""
         html = adata._repr_html_()
-        assert '<pre class="anndata-repr-fallback">' in html
+        assert "font-family: monospace" in html
 
-    def test_text_fallback_contains_repr(self, adata):
-        """Text fallback should contain the full text repr."""
+    def test_span_cells_for_inline_layout(self, adata):
+        """Entry cells should use <span> (inline) not <div> (block)."""
         html = adata._repr_html_()
-        text_repr = repr(adata)
-        # The first line of the text repr should appear in the fallback
-        first_line = text_repr.split("\n")[0]
-        assert first_line in html or first_line.replace("×", "&times;") in html
+        assert '<span class="anndata-entry__name"' in html
+        assert '<span class="anndata-entry__type"' in html
+        assert '<span class="anndata-entry__preview"' in html
 
-    def test_rich_html_hidden_by_default(self, adata):
-        """Rich HTML container should have inline display:none."""
+    def test_column_widths_via_css_variables(self, adata):
+        """Name and type cells should have inline min-width for column alignment."""
         html = adata._repr_html_()
-        # The anndata-repr div should have display:none in its style
-        assert 'style="display:none; ' in html
+        assert "min-width:var(--anndata-name-col-width" in html
+        assert "min-width:var(--anndata-type-col-width" in html
 
-    def test_fallback_survives_style_stripping(self, adata):
-        """When <style> and <script> are stripped, only text fallback is visible."""
+    def test_nocss_hint_visible_without_css(self, adata):
+        """No-CSS hint should be visible when CSS is stripped."""
         html = adata._repr_html_()
-        # Simulate GitHub/untrusted notebook: strip style and script tags
+        assert "anndata-repr__hint-nocss" in html
+        # No inline display:none on the hint — visible by default
+        assert 'hint-nocss" style="display:none"' not in html
+
+    def test_nojs_hint_hidden_by_default(self, adata):
+        """No-JS hint should be hidden by default (shown by CSS, hidden by JS)."""
+        html = adata._repr_html_()
+        assert 'anndata-repr__hint-nojs" style="display:none"' in html
+
+    def test_category_separators(self):
+        """Category items should have comma separators for no-CSS readability."""
+        adata = AnnData(np.zeros((10, 3)))
+        adata.obs["cat"] = pd.Categorical(["A", "B"] * 5)
+        html = adata._repr_html_()
+        assert "anndata-categories__sep" in html
+
+    def test_structure_survives_style_stripping(self, adata):
+        """When CSS/JS are stripped, the HTML structure is still intact."""
+        html = adata._repr_html_()
         stripped = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
         stripped = re.sub(r"<script[^>]*>.*?</script>", "", stripped, flags=re.DOTALL)
 
-        # Text fallback should remain (no style hiding it)
-        assert '<pre class="anndata-repr-fallback">' in stripped
-        # Rich HTML still has display:none inline
-        assert "display:none" in stripped
-
-    def test_nested_repr_no_fallback(self):
-        """Nested AnnData (depth > 0) should not have text fallback."""
-        from anndata._repr.html import generate_repr_html
-
-        adata = AnnData(np.zeros((5, 3)))
-        html = generate_repr_html(adata, depth=1)
-        assert "anndata-repr-fallback" not in html
-        assert "display:none" not in html
+        # Rich HTML is visible (no display:none)
+        assert '<div class="anndata-repr"' in stripped
+        # Sections use <details> for folding
+        assert "<details" in stripped
+        assert "<summary" in stripped
 
 
 class TestColumnWidthSettings:

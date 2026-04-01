@@ -1285,10 +1285,8 @@ class TestSectionTruncation:
         # data-key, data-copy, visible text, tooltip)
         key_count = html.count("key_")
         assert key_count < 1200, f"Too many keys in HTML: {key_count}"
-        # Also verify that key_0299 (the last one) is NOT shown in the rich HTML
-        # (it may appear in the text fallback <pre>, so check only the rich portion)
-        rich_html = html.split('<div class="anndata-repr"', 1)[-1]
-        assert "key_0299" not in rich_html, "Last key should not be shown (truncation)"
+        # Also verify that key_0299 (the last one) is NOT shown (truncation)
+        assert "key_0299" not in html, "Last key should not be shown (truncation)"
 
 
 # =============================================================================

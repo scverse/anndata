@@ -292,24 +292,12 @@ def generate_repr_html(  # noqa: PLR0913
     # Get type column width from settings
     type_width = get_setting("repr_html_type_width", default=DEFAULT_TYPE_WIDTH)
 
-    # Text fallback: visible by default, hidden by CSS when styles load.
-    # GitHub and untrusted JupyterLab strip <style> tags, so the rich HTML
-    # (hidden via inline display:none) stays hidden and this <pre> shows instead.
-    if depth == 0:
-        try:
-            text_repr = escape_html(repr(adata))
-        except Exception:  # noqa: BLE001
-            text_repr = escape_html(
-                f"AnnData object with n_obs × n_vars = {adata.n_obs} × {adata.n_vars}"
-            )
-        parts.append(f'<pre class="anndata-repr-fallback">{text_repr}</pre>')
-
     # Container with computed column widths as CSS variables.
-    # Hidden by default (display:none); CSS overrides to display:block.
-    # This ensures environments that strip <style> (GitHub, untrusted notebooks)
-    # show only the text fallback above.
-    hide = "display:none; " if depth == 0 else ""
-    style = f"{hide}--anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
+    # Inline font-family:monospace provides readable fallback when CSS is stripped
+    # (GitHub, untrusted notebooks). CSS overrides with its own font stack.
+    # Inline min-width on cells + CSS custom properties give column alignment
+    # even without a stylesheet.
+    style = f"font-family: monospace; --anndata-name-col-width: {field_width}px; --anndata-type-col-width: {type_width}px;"
     parts.append(
         f'<div class="anndata-repr" id="{container_id}" data-depth="{depth}" style="{style}">'
     )
@@ -334,6 +322,23 @@ def generate_repr_html(  # noqa: PLR0913
     # Footer with metadata (only at top level)
     if depth == 0:
         parts.append(_render_footer(adata))
+        # Degradation hints: visible only when CSS or JS is missing.
+        # No-CSS hint: visible by default, hidden by CSS.
+        parts.append(
+            '<div class="anndata-repr__hint-nocss">'
+            "<em>Styled representation available in Jupyter and trusted notebooks "
+            "(colors, search, type highlighting).</em>"
+            "</div>"
+        )
+        # No-JS hint: hidden by default (no-CSS case already has its own hint),
+        # shown by CSS (for static HTML with styles but no JS),
+        # hidden again by JS on init.
+        parts.append(
+            '<div class="anndata-repr__hint-nojs" style="display:none">'
+            "<em>Interactive features (search, copy, category wrapping) "
+            "require JavaScript. Trust this notebook to enable them.</em>"
+            "</div>"
+        )
 
     parts.append("</div>")  # anndata-repr
 

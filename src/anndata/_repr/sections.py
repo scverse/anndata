@@ -348,13 +348,13 @@ def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     for attr_name, type_desc in unknown_sections:
         parts.append(render_entry_row_open(attr_name, type_desc))
         parts.append(render_name_cell(attr_name))
-        parts.append('<div class="anndata-entry__type">')
+        parts.append('<span class="anndata-entry__type">')
         parts.append(
             f'<span class="{CSS_DTYPE_UNKNOWN}" title="Unrecognized attribute">'
             f"{escape_html(type_desc)}</span>"
         )
-        parts.append("</div>")
-        parts.append('<div class="anndata-entry__preview"></div>')
+        parts.append("</span>")
+        parts.append('<span class="anndata-entry__preview"></span>')
         parts.append("</div>")
 
     parts.append("</div>")

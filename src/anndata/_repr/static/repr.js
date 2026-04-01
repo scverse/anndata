@@ -17,6 +17,11 @@ container.querySelectorAll(".anndata-search__toggle").forEach((btn) => {
 });
 // Filter indicator is shown via CSS .active class, no need to set display here
 
+// Hide the no-JS hint now that JavaScript is running
+container.querySelectorAll(".anndata-repr__hint-nojs").forEach((el) => {
+    el.style.display = "none";
+});
+
 // Section collapse is handled natively by <details>/<summary> elements.
 // No JS needed for section toggle — the browser handles open/close state.
 

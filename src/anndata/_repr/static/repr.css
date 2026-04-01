@@ -4,19 +4,22 @@
 /* Uses subgrid (Chrome 117+, Firefox 71+, Safari 16+) */
 /* Uses light-dark() (Chrome 123+, Firefox 120+, Safari 17.5+) — the bottleneck */
 
-/* Dual-representation toggle (xarray pattern):
-   The rich HTML has inline style="display:none" so it's hidden by default.
-   The text fallback <pre> is visible by default. When this stylesheet loads,
-   we flip: show the rich HTML, hide the text fallback.
-   In environments that strip <style> (GitHub, untrusted notebooks),
-   the inline display:none survives and users see the clean text repr. */
-.anndata-repr-fallback {
-    display: none;
-}
-
 .anndata-repr {
-    /* Override the inline display:none to show rich HTML when CSS loads */
-    display: block !important;
+    /* Hide the no-CSS hint when styles are loaded */
+    .anndata-repr__hint-nocss {
+        display: none;
+    }
+
+    /* Show the no-JS hint only when CSS loads but JS hasn't run.
+       JS adds .anndata-repr--js on init, so this rule only matches
+       in CSS-but-no-JS environments (e.g., nbconvert static HTML).
+       The hint is hidden by default (inline display:none) for the no-CSS case. */
+    &:not(.anndata-repr--js) .anndata-repr__hint-nojs {
+        display: block !important;
+        padding: 4px 12px;
+        font-size: 11px;
+        color: var(--anndata-text-muted);
+    }
 
     /* Opt into light-dark(): responds to used color scheme, defaulting to light */
     color-scheme: light dark;
@@ -149,10 +152,10 @@
             text-overflow: clip;
         }
 
-        .anndata-categories__wrap,
-        .anndata-columns__wrap {
-            display: inline-block;
-        }
+        /* Wrap buttons: visibility is managed by JS (updateWrapButtonVisibility).
+           JS sets inline style.display based on overflow detection.
+           No CSS override needed here — just ensure they're not display:none
+           from the base rule, so JS can take over. */
     }
 
     /* --- Header --- */
@@ -607,6 +610,15 @@
         padding-right: 24px;
     }
 
+    /* Reset inline fallback styles on entry cells — grid controls sizing */
+    .anndata-entry__name,
+    .anndata-entry__type,
+    .anndata-entry__preview {
+        display: block !important;
+        min-width: 0 !important;
+        vertical-align: baseline !important;
+    }
+
     .anndata-entry__name {
         font-family: var(
             --anndata-font-mono,
@@ -624,7 +636,6 @@
         text-align: left;
         padding: 6px 12px;
         align-self: center;
-        min-width: 0;
     }
 
     .anndata-entry__name-inner {
@@ -754,6 +765,7 @@
 
     /* Nested content area (inside expandable entries) */
     .anndata-entry__nested-content {
+        margin-left: 0;
         padding: 12px;
         background: var(--anndata-bg-secondary);
         overflow: hidden;
@@ -933,6 +945,10 @@
         white-space: normal;
         word-break: break-word;
         color: var(--anndata-text-muted);
+    }
+
+    .anndata-categories__sep {
+        display: none;
     }
 
     .anndata-categories__item {

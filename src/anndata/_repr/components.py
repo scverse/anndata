@@ -197,7 +197,7 @@ def _render_wrap_button(css_class: str) -> str:
 
     Internal helper used by render_categories_wrap_button and render_columns_wrap_button.
     """
-    return f'<button class="{css_class}" title="Expand to multi-line view">▼</button>'
+    return f'<button class="{css_class}" style="display:none" title="Expand to multi-line view">▼</button>'
 
 
 def render_categories_wrap_button() -> str:
@@ -254,7 +254,7 @@ def render_nested_content(html_content: str) -> str:
     """
     return (
         f"</summary>"
-        f'<div class="anndata-entry__nested-content">'
+        f'<div class="anndata-entry__nested-content" style="margin-left:1.5em">'
         f'<div class="anndata-entry__expanded">{html_content}</div>'
         f"</div>"
     )
@@ -371,12 +371,12 @@ def render_name_cell(name: str) -> str:
     """
     escaped_name = escape_html(name)
     return (
-        f'<div class="anndata-entry__name">'
-        f'<div class="anndata-entry__name-inner">'
+        f'<span class="anndata-entry__name" style="display:inline-block;min-width:var(--anndata-name-col-width,100px);vertical-align:top">'
+        f'<span class="anndata-entry__name-inner">'
         f'<span class="anndata-entry__name-text" title="{escaped_name}">{escaped_name}</span>'
         f"{render_copy_button(name, 'Copy name')}"
-        f"</div>"
-        f"</div>"
+        f"</span>"
+        f"</span>"
     )
 
 
@@ -407,6 +407,8 @@ def render_category_list(
     """
     parts = ['<span class="anndata-categories">']
     for i, cat in enumerate(categories[:max_cats]):
+        if i > 0:
+            parts.append('<span class="anndata-categories__sep">, </span>')
         cat_name = escape_html(str(cat))
         color = colors[i] if colors and i < len(colors) else None
         parts.append('<span class="anndata-categories__item">')
@@ -538,7 +540,9 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
     has_categories_list = config.has_categories_list
     append_type_html = config.append_type_html
 
-    parts = ['<div class="anndata-entry__type">']
+    parts = [
+        '<span class="anndata-entry__type" style="display:inline-block;min-width:var(--anndata-type-col-width,180px);vertical-align:top">'
+    ]
 
     # Type content: handle different cases
     if type_html and not append_type_html:
@@ -565,9 +569,9 @@ def render_entry_type_cell(config: TypeCellConfig) -> str:
 
     # Appended type_html (for custom inline rendering below the type)
     if type_html and append_type_html:
-        parts.append(f'<div class="anndata-entry__custom">{type_html}</div>')
+        parts.append(f'<span class="anndata-entry__custom">{type_html}</span>')
 
-    parts.append("</div>")
+    parts.append("</span>")
     return "".join(parts)
 
 
@@ -591,12 +595,14 @@ def render_entry_preview_cell(
     -------
     HTML string for the preview cell
     """
-    parts = ['<div class="anndata-entry__preview">']
+    parts = [
+        '<span class="anndata-entry__preview" style="display:inline-block;vertical-align:top">'
+    ]
 
     if preview_html:
         parts.append(preview_html)
     elif preview_text:
         parts.append(render_muted_span(preview_text))
 
-    parts.append("</div>")
+    parts.append("</span>")
     return "".join(parts)

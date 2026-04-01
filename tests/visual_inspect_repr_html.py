@@ -2052,19 +2052,9 @@ def main():  # noqa: PLR0915, PLR0912
     ))
 
     # Test 13b: No CSS (GitHub / untrusted notebook fallback)
+    # Reuse the full AnnData from test 1 (has nested adata, raw, many sections)
     print("  13b. No CSS (GitHub / untrusted notebook fallback)")
-    adata_nocss = AnnData(
-        sp.random(500, 200, density=0.1, format="csr", dtype=np.float32),
-        obs=pd.DataFrame({
-            "cell_type": pd.Categorical(["T-cell", "B-cell", "NK", "Mono", "DC"] * 100),
-            "patient": pd.Categorical([f"P{i}" for i in range(50)] * 10),
-            "score": np.random.rand(500),
-        }),
-        var=pd.DataFrame({"gene_name": [f"gene_{i}" for i in range(200)]}),
-    )
-    adata_nocss.obsm["X_pca"] = np.random.randn(500, 20).astype(np.float32)
-    adata_nocss.uns["method"] = "scran"
-    nocss_html = strip_style_and_script_tags(adata_nocss._repr_html_())
+    nocss_html = strip_style_and_script_tags(adata_full._repr_html_())
     # Wrap in an iframe (srcdoc) so it's fully isolated from the page's CSS.
     # Without isolation, the <style> blocks from other test cases would style this too.
     import html as html_mod
@@ -2081,9 +2071,9 @@ def main():  # noqa: PLR0915, PLR0912
         iframe_html,
         "Simulates GitHub's notebook renderer which strips &lt;style&gt; and &lt;script&gt; tags. "
         "Rendered in an iframe for CSS isolation. "
-        "You should see the plain text repr (like <code>repr(adata)</code>) in a &lt;pre&gt; block. "
-        "The rich HTML is hidden via inline <code>display:none</code> that survives style stripping. "
-        "This is the xarray-style dual-representation pattern.",
+        "The rich HTML degrades gracefully: inline &lt;span&gt; cells keep entries on one line, "
+        "monospace font, CSS variable column widths, and comma-separated categories. "
+        "Sections fold/unfold via native &lt;details&gt;/&lt;summary&gt;.",
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
