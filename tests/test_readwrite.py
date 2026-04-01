@@ -29,9 +29,11 @@ from anndata.compat import (
     _read_attr,
 )
 from anndata.tests.helpers import (
+    DEFAULT_KEY_TYPES,
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
+    check_all_sharded_v3,
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
@@ -900,6 +902,17 @@ def test_io_dtype(tmp_path, diskfmt, dtype, roundtrip):
     curr = roundtrip(orig, pth)
 
     assert curr.X.dtype == dtype
+
+
+def test_zarr_v3_sharded_default(tmp_path):
+    pth = tmp_path / "adata.zarr"
+
+    orig = gen_adata(
+        (10, 20), obsm_types=DEFAULT_KEY_TYPES, varm_types=DEFAULT_KEY_TYPES
+    )
+    orig.write_zarr(pth)
+
+    check_all_sharded_v3(zarr.open(pth))
 
 
 def test_h5py_attr_limit(tmp_path):

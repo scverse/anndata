@@ -25,7 +25,7 @@ from anndata.tests.helpers import (
     as_sparse_dask_array,
     as_sparse_dask_matrix,
     assert_equal,
-    check_all_sharded,
+    check_all_sharded_v3,
     gen_adata,
 )
 
@@ -145,7 +145,7 @@ def test_dask_distributed_write(
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
             if auto_shard_zarr_v3:
-                check_all_sharded(g)
+                check_all_sharded_v3(g)
             curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):

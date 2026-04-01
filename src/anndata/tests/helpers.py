@@ -1278,9 +1278,10 @@ def visititems_zarr(
             visitor(key, maybe_group)
 
 
-def check_all_sharded(g: ZarrGroup):
+def check_all_sharded_v3(g: ZarrGroup):
     def visit(key: str, arr: zarr.Array | zarr.Group):
         # Check for recarray via https://numpy.org/doc/stable/user/basics.rec.html#manipulating-and-displaying-structured-datatypes
+        assert arr.metadata.zarr_format == 3
         if isinstance(arr, zarr.Array) and arr.shape != () and arr.dtype.names is None:
             assert arr.shards is not None
 

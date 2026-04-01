@@ -31,7 +31,7 @@ from anndata.tests.helpers import (
     as_cupy_sparse_dask_array,
     as_dense_cupy_dask_array,
     assert_equal,
-    check_all_sharded,
+    check_all_sharded_v3,
     gen_adata,
     visititems_zarr,
 )
@@ -927,7 +927,7 @@ def test_write_auto_sharded(tmp_path: Path, override: dict):
     with ad.settings.override(**override):
         adata.write_zarr(path)
 
-    check_all_sharded(zarr.open(path))
+    check_all_sharded_v3(zarr.open(path))
 
 
 @pytest.mark.zarr_io
