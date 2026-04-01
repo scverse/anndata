@@ -54,7 +54,7 @@ def diskfmt2(
     diskfmt: Literal["h5ad", "zarr"],
 ) -> Generator[Literal["zarr", "h5ad"], None, None]:
     if diskfmt == "h5ad":
-        with ad.settings.override(auto_shard_zarr_v3=False, zarr_write_format=2):
+        with ad.settings.override(zarr_write_format=2):
             yield "zarr"
     else:
         yield "h5ad"

@@ -438,7 +438,8 @@ def write_basic(
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+        if f.metadata.zarr_format == 3:
+            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
         f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
         if isinstance(elem, ZarrArray | H5Array):
@@ -518,7 +519,8 @@ def write_basic_dask_dask_dense(
     is_h5 = isinstance(f, H5Group)
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+        if f.metadata.zarr_format == 3:
+            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
     if is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
@@ -602,7 +604,8 @@ def write_vlen_string_array_zarr(
     filters, fill_value = None, None
     if f.metadata.zarr_format == 2:
         filters, fill_value = [VLenUTF8()], ""
-    dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+        if f.metadata.zarr_format == 3:
+            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
     f.create_array(
         k,
         shape=elem.shape,
@@ -727,7 +730,8 @@ def write_sparse_compressed(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
         else:
-            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+            if f.metadata.zarr_format == 3:
+                dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
             arr = g.create_array(
                 attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )

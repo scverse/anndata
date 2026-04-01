@@ -456,9 +456,6 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
-    if format == 2 and getattr(settings, "auto_shard_zarr_v3", False):
-        msg = "Cannot set `zarr_write_format` to 2 with autosharding on.  Please set to `False` `anndata.settings.auto_shard_zarr_v3`"
-        raise ValueError(msg)
 
 
 def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001

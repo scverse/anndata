@@ -189,8 +189,6 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 @pytest.mark.zarr_io
 @pytest.mark.parametrize("zarr_version", [2, 3])
 def test_unconsolidated(tmp_path: Path, zarr_version: Literal[2, 3]):
-    if zarr_version == 2:
-        settings.auto_shard_zarr_v3 = False
     settings.zarr_write_format = zarr_version
     adata = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
