@@ -466,14 +466,6 @@ def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa
 
 
 settings.register(
-    "auto_shard_zarr_v3",
-    default_value=True,
-    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
-    validate=validate_zarr_sharding,
-    get_from_env=check_and_get_bool,
-)
-
-settings.register(
     "zarr_write_format",
     default_value=3,
     description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
@@ -517,6 +509,14 @@ settings.register(
     default_value=False,
     description="Write a csr or csc matrix with the minimum possible data type for `indices`, always unsigned integer.",
     validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
+settings.register(
+    "auto_shard_zarr_v3",
+    default_value=True,
+    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
+    validate=validate_zarr_sharding,
     get_from_env=check_and_get_bool,
 )
 
