@@ -225,7 +225,7 @@ def df_group(tmp_path_factory) -> zarr.Group:
     df = gen_typed_df(120)
     path = tmp_path_factory.mktemp("foo.zarr")
     g = zarr.open_group(path, mode="w", zarr_format=2)
-    write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
+    write_elem(g, "foo", df, dataset_kwargs={"chunks": (25,)})
     return zarr.open(path, mode="r")["foo"]
 
 

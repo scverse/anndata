@@ -485,7 +485,7 @@ def read_elem_lazy(
 
     >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
     >>> adata.layers["dense"]
-    dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
+    dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(85, 2047), chunktype=numpy.ndarray>
 
     Making a new anndata object from on-disk, with custom chunks:
 
