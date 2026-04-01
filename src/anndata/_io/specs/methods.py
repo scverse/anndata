@@ -604,8 +604,8 @@ def write_vlen_string_array_zarr(
     filters, fill_value = None, None
     if f.metadata.zarr_format == 2:
         filters, fill_value = [VLenUTF8()], ""
-        if f.metadata.zarr_format == 3:
-            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
+    if f.metadata.zarr_format == 3:
+        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
     f.create_array(
         k,
         shape=elem.shape,

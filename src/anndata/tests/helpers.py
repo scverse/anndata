@@ -1283,6 +1283,6 @@ def check_all_sharded_v3(g: ZarrGroup):
         # Check for recarray via https://numpy.org/doc/stable/user/basics.rec.html#manipulating-and-displaying-structured-datatypes
         assert arr.metadata.zarr_format == 3
         if isinstance(arr, zarr.Array) and arr.shape != () and arr.dtype.names is None:
-            assert arr.shards is not None
+            assert arr.shards is not None, arr
 
     visititems_zarr(g, visitor=visit)
