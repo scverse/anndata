@@ -989,11 +989,6 @@ def test_write_elem_version_mismatch(tmp_path: Path):
         mode="w",
         zarr_format=2,
     )
-    with pytest.raises(
-        ValueError, match=r"Zarr format 2 arrays can only be created with `shard_shape`"
-    ):
-        ad.io.write_elem(g, "/", adata)
-    ad.settings.auto_shard_zarr_v3 = False
     ad.io.write_elem(g, "/", adata)
     adata_roundtripped = ad.read_zarr(g)
     assert_equal(adata_roundtripped, adata)

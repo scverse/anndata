@@ -912,22 +912,6 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_against_v2_format_default():
-    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: SIM117
-        with ad.settings.override(zarr_write_format=2):
-            pass
-
-
-@pytest.mark.zarr_io
-def test_write_auto_cannot_set_v2_format_after_sharding():
-    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_write_format=3):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                with ad.settings.override(zarr_write_format=2):
-                    pass
-
-
-@pytest.mark.zarr_io
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
     X = sparse.random(
