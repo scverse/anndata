@@ -857,7 +857,7 @@ def test_chunking_1d_array(
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
-    write_elem(store, "foo", arr, dataset_kwargs={"chunks": 25})
+    write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
     arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert arr.chunksize == expected_chunks
 
