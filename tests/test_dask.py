@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -144,7 +145,7 @@ def test_dask_distributed_write(
             ad.io.write_elem(g, "", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
-            if auto_shard_zarr_v3:
+            if auto_shard_zarr_v3 and isinstance(g, zarr.Group):
                 check_all_sharded_v3(g)
             curr = ad.io.read_elem(g)
 
