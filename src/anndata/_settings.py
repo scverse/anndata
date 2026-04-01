@@ -460,9 +460,6 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
 
 def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
     validate_bool(auto_shard, settings)
-    if auto_shard and getattr(settings, "zarr_write_format", 3) == 2:
-        msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
-        raise ValueError(msg)
 
 
 settings.register(
