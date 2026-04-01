@@ -412,6 +412,8 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
+    if zarr_write_format == 2:
+        ad.settings.auto_shard_zarr_v3 = False
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
@@ -985,8 +987,13 @@ def test_write_elem_version_mismatch(tmp_path: Path):
     g = zarr.open_group(
         zarr_path,
         mode="w",
-        zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
+        zarr_format=2,
     )
+    with pytest.raises(
+        ValueError, match=r"Zarr format 2 arrays can only be created with `shard_shape`"
+    ):
+        ad.io.write_elem(g, "/", adata)
+    ad.settings.auto_shard_zarr_v3 = False
     ad.io.write_elem(g, "/", adata)
     adata_roundtripped = ad.read_zarr(g)
     assert_equal(adata_roundtripped, adata)
