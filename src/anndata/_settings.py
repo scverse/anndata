@@ -463,10 +463,18 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
 
 def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
     validate_bool(auto_shard, settings)
-    if auto_shard and settings.zarr_write_format == 2:
+    if auto_shard and getattr(settings, "zarr_write_format", 3) == 2:
         msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
         raise ValueError(msg)
 
+
+settings.register(
+    "auto_shard_zarr_v3",
+    default_value=True,
+    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
+    validate=validate_zarr_sharding,
+    get_from_env=check_and_get_bool,
+)
 
 settings.register(
     "zarr_write_format",
@@ -514,15 +522,6 @@ settings.register(
     validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
-
-settings.register(
-    "auto_shard_zarr_v3",
-    default_value=True,
-    description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
-    validate=validate_zarr_sharding,
-    get_from_env=check_and_get_bool,
-)
-
 
 settings.register(
     "copy_on_write_X",
