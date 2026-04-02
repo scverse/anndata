@@ -483,9 +483,11 @@ def read_elem_lazy(
 
     Reading a dense matrix from a zarr store lazily:
 
-    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
+    >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(
+    ...     g["layers/dense"], chunks=(500, 500)
+    ... )
     >>> adata.layers["dense"]
-    dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(3, 64), chunktype=numpy.ndarray>
+    dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(500, 500), chunktype=numpy.ndarray>
 
     Making a new anndata object from on-disk, with custom chunks:
 
