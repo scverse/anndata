@@ -172,7 +172,9 @@ filterwarnings_when_strict = [
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
     "default:Consolidated metadata is:UserWarning",
+    # https://github.com/zarr-developers/zarr-python/pull/3781
     "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
     # TODO: Remove in conjunction with or before https://github.com/scverse/anndata/pull/1707
     "default:.*will obey copy-on-write semantics:FutureWarning",
