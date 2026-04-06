@@ -1689,7 +1689,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         concat_annot = pd.concat(
             unify_dtypes(annotations_in_memory),
-            join=join,
+            join="outer",
             ignore_index=True,
         )
         concat_annot.index = concat_indices
