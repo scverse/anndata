@@ -192,11 +192,6 @@ class RefAcc[R: AdRef[I], I](abc.ABC):  # type: ignore
             return a.__array_namespace__().reshape(a, (a.size,))
         return a.ravel()
 
-    @property
-    @abc.abstractmethod
-    def parent_type(self) -> type[MapAcc | AdAcc]:
-        """Get the parent to this reference accessor"""
-
 
 @dataclass(frozen=True)
 class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
@@ -213,10 +208,6 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
     k: str | None
     """Key this accessor refers to, e.g. `A.layers['counts'].k == 'counts'`."""
-
-    @property
-    def parent_type(self) -> type[MapAcc | AdAcc]:
-        return LayerMapAcc if self.k is not None else AdAcc
 
     @overload
     def __getitem__(self, idx: Idx2D, /) -> R: ...
@@ -308,10 +299,6 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None]):
     """Axis this accessor refers to, e.g. `A.obs.dim == 'obs'`."""
 
     @property
-    def parent_type(self) -> type[MapAcc | AdAcc]:
-        return AdAcc
-
-    @property
     def index(self) -> R:
         """Index :class:`AdRef`, i.e. `A.obs.index` or `A.var.index`."""
         return self[None]
@@ -392,10 +379,6 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int]):
 
     k: str
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
-
-    @property
-    def parent_type(self) -> type[MapAcc | AdAcc]:
-        return MultiMapAcc
 
     @staticmethod
     def process_idx(i: object, /) -> int | list[int] | pd.Index[int]:
@@ -479,10 +462,6 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
 
     k: str
     """Key this accessor refers to, e.g. `A.obsp['x'].k == 'x'`."""
-
-    @property
-    def parent_type(self) -> type[MapAcc | AdAcc]:
-        return GraphMapAcc
 
     def process_idx(self, idx: Idx2D, /) -> Idx2D:
         if not all(isinstance(i, str | slice) for i in idx):
