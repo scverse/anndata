@@ -192,6 +192,8 @@ def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
     adata = gen_adata((10, 20))
     if use_uns:
         adata.uns = {"foo": np.arange(10), "nested": {"here": np.arange(10)}}
+    else:
+        adata.uns = {}
     if use_raw:
         adata.raw = adata.copy()
     adata.__sizeof__(show_stratified=True)
@@ -203,10 +205,10 @@ def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
         "varm",
         "obsp",
         "varp",
-        *(["uns"] if use_uns else []),
-        *(["raw"] if use_raw else []),
     ]:
         assert attr in captured.out
+    assert use_uns == ("uns" in captured.out)
+    assert use_raw == ("raw" in captured.out)
 
 
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])

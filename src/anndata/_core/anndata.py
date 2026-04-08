@@ -21,13 +21,13 @@ from pandas.api.types import infer_dtype
 from scipy.sparse import issparse
 
 from anndata._warnings import ImplicitModificationWarning
-from anndata.acc import A, AdAcc, AdRef, GraphAcc, LayerAcc, MultiAcc
 
 from .. import utils
 from .._settings import settings
 from ..compat import (
     DaskArray,
     IndexManager,
+    XDataset,
     ZarrArray,
     _move_adj_mtx,
     has_xp,
@@ -56,7 +56,7 @@ from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Generator, Iterable
     from os import PathLike
     from typing import Any, ClassVar, Literal
 
@@ -66,9 +66,10 @@ if TYPE_CHECKING:
     from anndata.types import ReduceFunc
     from anndata.typing import RWAble
 
-    from ..acc import Array, MapAcc, RefAcc
-    from ..compat import CSArray, CSMatrix, XDataset
-    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
+    from .._types import AnnDataElem
+    from ..acc import AdRef, Array, MapAcc, RefAcc
+    from ..compat import CSArray, CSMatrix
+    from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -526,44 +527,32 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return cs_to_bytes(X._to_backed())
             elif issparse(X):
                 return cs_to_bytes(X)
-            elif isinstance(X, dict):
+            elif isinstance(X, dict | MutableMapping):
                 return sum(get_size(v) for v in X.values())
             else:
                 return X.__sizeof__()
 
-        def fold_size[R: dict[type[RefAcc | MapAcc | AdAcc | Raw] | None, int]](
-            X: RWAble,
+        def fold_size(
+            elem: _XDataType | AxisStorable | pd.DataFrame | XDataset,
             *,
-            accumulate: R,
-            ref_acc: RefAcc | AdRef | MapAcc | None,
-        ) -> R:
-            if isinstance(X, Raw):
-                ref_acc = X  # type: ignore[assignment]
-                accumulate[Raw] += get_size(X.X)
-                accumulate[Raw] += get_size(X.var)
-                for key in X.varm:
-                    accumulate[Raw] += get_size(X.varm[key])
-            elif ref_acc is None:  # "None but not Raw" is uns
-                accumulate[None] = get_size(self.uns)
-            if is_elem := (
-                # an array of some sort i.e., from AdRef (from obs/var) or a reference to one
-                (is_ad_ref := isinstance(ref_acc, AdRef))
-                or isinstance(ref_acc, LayerAcc | MultiAcc | GraphAcc)
-            ):
-                key = type(ref_acc.acc) if is_ad_ref else ref_acc.parent_type
-                accumulate[key] += get_size(X)
-            # if this is X or a parent elem maybe print it out.
-            if (is_x := ref_acc is A.X) or not is_elem:
-                if ref_acc is not None:
-                    s = accumulate[AdAcc if is_x else type(ref_acc)]  # type: ignore[assignment]
-                else:
-                    s = accumulate[None]
-                if s > 0 and show_stratified:
-                    from tqdm import tqdm
+            accumulate: dict[str, int],
+            attr_name: str | None,  # TODO: type
+        ):
+            if elem is None:
+                size = 0
+            elif elem is self.raw:
+                size = (
+                    get_size(elem.X)
+                    + get_size(elem.var)
+                    + sum(get_size(v) for v in elem.varm.values())
+                )
+            else:
+                size = get_size(elem)
+            accumulate[attr_name] = size
+            if size > 0 and show_stratified:
+                from tqdm import tqdm
 
-                    print(
-                        f"Size of {repr(ref_acc).replace('A.', '') if ref_acc is not None else 'uns'}: {tqdm.format_sizeof(s, 'B')}"
-                    )
+                print(f"Size of {attr_name}: {tqdm.format_sizeof(size, 'B')}")
             return accumulate
 
         return sum(self.reduce(fold_size, init=defaultdict(int)).values())
@@ -571,19 +560,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
-        for attr in [
-            "obs",
-            "var",
-            "uns",
-            "obsm",
-            "varm",
-            "layers",
-            "obsp",
-            "varp",
-        ]:
-            keys = getattr(self, attr).keys()
-            if len(keys) > 0:
-                descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
+        for attr_name, elem in self.iter():
+            if attr_name not in {"raw", "X"}:
+                keys = elem.keys()
+                if len(keys) > 0:
+                    descr += f"\n    {attr_name}: {str(list(keys))[1:-1]}"
         return descr
 
     def __repr__(self) -> str:
@@ -1389,27 +1370,16 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
-        for attr_name in [
-            "X",
-            "obs",
-            "var",
-            "obsm",
-            "varm",
-            "obsp",
-            "varp",
-            "layers",
-            "uns",
-        ]:
-            attr = getattr(self, attr_name, None)
+        for attr_name, attr in self.iter():
             if attr is not None:
-                new[attr_name] = to_memory(attr, copy=copy)
-
-        if self.raw is not None:
-            new["raw"] = {
-                "X": to_memory(self.raw.X, copy=copy),
-                "var": to_memory(self.raw.var, copy=copy),
-                "varm": to_memory(self.raw.varm, copy=copy),
-            }
+                if attr is self.raw:
+                    new["raw"] = {
+                        "X": to_memory(self.raw.X, copy=copy),
+                        "var": to_memory(self.raw.var, copy=copy),
+                        "varm": to_memory(self.raw.varm, copy=copy),
+                    }
+                else:
+                    new[attr_name] = to_memory(attr, copy=copy)
 
         if self.isbacked:
             self.file.close()
@@ -1441,6 +1411,28 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             mode = self.file._filemode
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
+
+    def iter(
+        self,
+    ) -> Generator[
+        tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+    ]:
+        for attr_name in [
+            "X",
+            "obs",
+            "var",
+            "obsm",
+            "varm",
+            "obsp",
+            "varp",
+            "layers",
+            "uns",
+            "raw",
+        ]:
+            was_closed = self.isbacked and not self.file.is_open
+            yield (attr_name, getattr(self, attr_name))
+            if was_closed:
+                self.file.close()
 
     def reduce[T](
         self,
@@ -1477,30 +1469,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             An accumulated value
         """
         accumulate = init
-        for attr_name in [
-            "X",
-            "obs",
-            "var",
-            "obsm",
-            "varm",
-            "obsp",
-            "varp",
-            "layers",
-        ]:
-            attr = getattr(self, attr_name)
-            acc = getattr(A, attr_name)
-            if order == "DFS-pre":
-                accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
-            if attr_name != "X":
-                for elem_name in attr:
-                    ref = acc[elem_name] if acc is not None else None
-                    accumulate = func(
-                        attr[elem_name], accumulate=accumulate, ref_acc=ref
-                    )
-            if order == "DFS-post":
-                accumulate = func(attr, accumulate=accumulate, ref_acc=acc)
-        accumulate = func(self.uns, accumulate=accumulate, ref_acc=None)
-        accumulate = func(self.raw, accumulate=accumulate, ref_acc=None)
+        for attr_name, attr in self.iter():
+            accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
     def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
@@ -1515,6 +1485,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         -------
             Whether or not this object is writable.
         """
+
         from anndata._io.specs.registry import _REGISTRY
 
         writeable_elems = {
@@ -1527,26 +1498,34 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             elem: RWAble,
             *,
             accumulate: bool,
-            ref_acc: AdAcc | RefAcc | AdRef | MapAcc | None,
+            attr_name: str | None = None,  # TODO: type
         ):
-            if isinstance(elem, Raw):
+            if elem is None:
+                return accumulate
+            if attr_name == "raw":
                 accumulate = accumulate and type(elem.X) in writeable_elems
                 return accumulate and all(
                     type(e[attr]) in writeable_elems
                     for e in [elem.var, elem.varm]
                     for attr in e
                 )
-            if ref_acc is None and isinstance(elem, dict):
+            if attr_name in (
+                "obs",
+                "obsm",
+                "varm",
+                "var",
+                "layers",
+                "varp",
+                "obsp",
+                "uns",
+            ) or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
                 return accumulate and all(
-                    predicate(e, accumulate=accumulate, ref_acc=None)
-                    for e in elem.values()
+                    predicate(elem[k], accumulate=accumulate) for k in elem
                 )
-            if isinstance(ref_acc, AdRef) or ref_acc is None:
-                if isinstance(elem, pd.Series):
-                    # matches behavior in methods.py
-                    elem = elem._values
-                return accumulate and type(elem) in writeable_elems
-            return accumulate
+            if isinstance(elem, pd.Series):
+                # matches behavior in methods.py
+                elem = elem._values
+            return accumulate and type(elem) in writeable_elems
 
         return self.reduce(predicate, init=True)
 
