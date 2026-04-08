@@ -1628,6 +1628,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         store: StoreLike,
         *,
         chunks: tuple[int, ...] | None = None,
+        consolidate_metadata: bool = True,
         convert_strings_to_categoricals: bool = True,
     ):
         """\
@@ -1639,6 +1640,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
         chunks
             Chunk shape.
+        consolidate_metadata
+            Whether to consolidate Zarr metadata.
         convert_strings_to_categoricals
             Convert string columns to categorical.
         """
@@ -1655,6 +1658,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             store,
             self,
             chunks=chunks,
+            consolidate_metadata=consolidate_metadata,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
         )
 
