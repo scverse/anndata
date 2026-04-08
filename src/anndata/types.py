@@ -7,8 +7,13 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from array_api.latest import ArrayNamespace
+    from pandas import DataFrame
+
+    from anndata.typing import AxisStorable, _XDataType
 
     from ._core.anndata import AnnData
+    from ._types import AnnDataElem
+    from .compat import XDataset
 
 
 @runtime_checkable
@@ -48,3 +53,29 @@ class SupportsArrayApi(Protocol):
         copy: bool | None = None,
     ) -> Any: ...
     def __dlpack_device__(self) -> tuple[int, int]: ...
+
+
+class ReduceFunc[T](Protocol):
+    def __call__(
+        self,
+        elem: _XDataType | AxisStorable | DataFrame | XDataset,
+        *,
+        accumulate: T,
+        attr_name: AnnDataElem | None,
+    ) -> T:
+        """Function to be called on each visit within :meth:`anndata.AnnData.reduce`.
+
+        Parameters
+        ----------
+        elem
+            The current element.
+        accumulate
+            The value being accumulated.
+        ref_acc
+            A reference to help uses distinguish where they are in the `AnnData` object.
+
+        Returns
+        -------
+            An accumulated value
+        """
+        ...
