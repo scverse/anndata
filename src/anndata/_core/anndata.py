@@ -1417,6 +1417,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     ) -> Generator[
         tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
     ]:
+        """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
         for attr_name in [
             "X",
             "obs",
