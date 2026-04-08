@@ -41,10 +41,6 @@ def write_zarr(
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
-    # TODO: Use spec writing system for this
-    f = open_write_group(store)
-    f.attrs.setdefault("encoding-type", "anndata")
-    f.attrs.setdefault("encoding-version", "0.1.0")
 
     def callback(
         write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
@@ -57,8 +53,27 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-    zarr.consolidate_metadata(f.store)
+    with (
+        (
+            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+            if find_spec("zarrs")
+            else nullcontext()
+        ),
+        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+    ):
+        if find_spec("zarrs"):
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*unsupported by ZarrsCodecPipeline.*",
+                category=UserWarning,
+            )
+        # TODO: Use spec writing system for this
+        f = open_write_group(store)
+        f.attrs.setdefault("encoding-type", "anndata")
+        f.attrs.setdefault("encoding-version", "0.1.0")
+
+        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
