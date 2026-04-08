@@ -1439,16 +1439,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         func: ReduceFunc[T],
         *,
         init: T,
-        order: Literal["DFS-pre", "DFS-post"] = "DFS-post",
     ) -> T:
-        """Accumulate a value starting from init by iterating over the "elems"/leaf nodes of the AnnData object.
-
-        All visits inside the user-defined `func` (see :func:`types.ReduceFunc`) are distinguishable via the `ref_acc` + `elem` args.
-        Visits to {attr}`~AnnData.raw` pass `ref_acc is None` and `isinstance(elem, Raw)` to the :func:`types.ReduceFunc`.
-        Visits to {attr}`~AnnData.uns` pass `ref_acc is None` and `isinstance(elem, dict)` to the :func:`types.ReduceFunc`.
-        Furthermore, neither element is descended into.
-        This behavior could change where a new `ref_acc` type will be available, in which case we could start descending in these cases.
-        All other elements will have a non-`None` `ref_acc` argument indicating the path at which `elem` was created in the `AnnData`.
+        """Accumulate a value starting from init by iterating over the parent "elems"of the AnnData object i.e., raw, obs, varp etc.
 
         Parameters
         ----------
@@ -1456,13 +1448,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             The function that performs the accumulation.
         init
             The starting value
-        order
-            How to visit the items in the reduce.
-            "DFS-pre" indicates that parent-elements like layers, obs, and varp get visited first.
-            "DFS-post" means they get visited afterwards.
-            The `AnnData` itself is not visited.
-
-
 
         Returns
         -------
