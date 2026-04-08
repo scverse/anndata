@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from contextlib import nullcontext
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
@@ -88,10 +89,19 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
         return func(elem)
 
     with (
-        zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-        if find_spec("zarrs")
-        else nullcontext()
+        (
+            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+            if find_spec("zarrs")
+            else nullcontext()
+        ),
+        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
     ):
+        if find_spec("zarrs"):
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*unsupported by ZarrsCodecPipeline.*",
+                category=UserWarning,
+            )
         f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
         adata = read_dispatched(f, callback=callback)
 
