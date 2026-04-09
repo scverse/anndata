@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
@@ -25,6 +25,25 @@ if TYPE_CHECKING:
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
+
+
+@contextmanager
+def zarrs_context():
+    with (
+        (
+            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+            if find_spec("zarrs")
+            else nullcontext()
+        ),
+        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+    ):
+        if find_spec("zarrs"):
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*unsupported by ZarrsCodecPipeline.*",
+                category=UserWarning,
+            )
+        yield
 
 
 @no_write_dataset_2d
@@ -53,20 +72,7 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with (
-        (
-            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-            if find_spec("zarrs")
-            else nullcontext()
-        ),
-        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
-    ):
-        if find_spec("zarrs"):
-            warnings.filterwarnings(
-                "ignore",
-                message=r".*unsupported by ZarrsCodecPipeline.*",
-                category=UserWarning,
-            )
+    with zarrs_context():
         # TODO: Use spec writing system for this
         f = open_write_group(store)
         f.attrs.setdefault("encoding-type", "anndata")
@@ -103,20 +109,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with (
-        (
-            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-            if find_spec("zarrs")
-            else nullcontext()
-        ),
-        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
-    ):
-        if find_spec("zarrs"):
-            warnings.filterwarnings(
-                "ignore",
-                message=r".*unsupported by ZarrsCodecPipeline.*",
-                category=UserWarning,
-            )
+    with zarrs_context():
         f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
         adata = read_dispatched(f, callback=callback)
 
