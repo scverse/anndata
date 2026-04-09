@@ -113,15 +113,15 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
         f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
         adata = read_dispatched(f, callback=callback)
 
-    # Backwards compat (should figure out which version)
-    if "raw.X" in f:
-        raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
-        raw.obs_names = adata.obs_names
-        adata.raw = raw
+        # Backwards compat (should figure out which version)
+        if "raw.X" in f:
+            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+            raw.obs_names = adata.obs_names
+            adata.raw = raw
 
-    # Backwards compat for <0.7
-    if isinstance(f["obs"], zarr.Array):
-        _clean_uns(adata)
+        # Backwards compat for <0.7
+        if isinstance(f["obs"], zarr.Array):
+            _clean_uns(adata)
 
     return adata
 
