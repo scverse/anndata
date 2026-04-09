@@ -105,7 +105,6 @@ test-min = [
     "pyarrow",
     "pooch",
     "anndata[dask]",
-    "zarrs",
 ]
 test-array-api = [
     { include-group = "test-min" },
