@@ -92,6 +92,7 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
 
    AnnData.write_h5ad
    AnnData.write_zarr
+   AnnData.can_write
 
 
 ..

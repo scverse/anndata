@@ -40,6 +40,7 @@ from ..utils import (
     deprecated,
     deprecation_msg,
     ensure_df_homogeneous,
+    iter_outer,
     raise_value_error_if_multiindex_columns,
     set_module,
     warn,
@@ -56,7 +57,7 @@ from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Iterable
     from os import PathLike
     from typing import Any, ClassVar, Literal
 
@@ -66,7 +67,6 @@ if TYPE_CHECKING:
     from anndata.types import ReduceFunc
     from anndata.typing import RWAble
 
-    from .._types import AnnDataElem
     from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
@@ -555,12 +555,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 print(f"Size of {attr_name}: {tqdm.format_sizeof(size, 'B')}")
             return accumulate
 
-        return sum(self.reduce(fold_size, init=defaultdict(int)).values())
+        return sum(self._reduce(fold_size, init=defaultdict(int)).values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
-        for attr_name, elem in self.iter():
+        for attr_name, elem in iter_outer(self):
             if attr_name not in {"raw", "X"}:
                 keys = elem.keys()
                 if len(keys) > 0:
@@ -1370,7 +1370,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
-        for attr_name, attr in self.iter():
+        for attr_name, attr in iter_outer(self):
             if attr is not None:
                 if attr is self.raw:
                     new["raw"] = {
@@ -1412,30 +1412,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
-    def iter(
-        self,
-    ) -> Generator[
-        tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
-    ]:
-        """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
-        for attr_name in [
-            "X",
-            "obs",
-            "var",
-            "obsm",
-            "varm",
-            "obsp",
-            "varp",
-            "layers",
-            "uns",
-            "raw",
-        ]:
-            was_closed = self.isbacked and not self.file.is_open
-            yield (attr_name, getattr(self, attr_name))
-            if was_closed:
-                self.file.close()
-
-    def reduce[T](
+    def _reduce[T](
         self,
         func: ReduceFunc[T],
         *,
@@ -1455,7 +1432,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             An accumulated value
         """
         accumulate = init
-        for attr_name, attr in self.iter():
+        for attr_name, attr in iter_outer(self):
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
@@ -1513,7 +1490,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 elem = elem._values
             return accumulate and type(elem) in writeable_elems
 
-        return self.reduce(predicate, init=True)
+        return self._reduce(predicate, init=True)
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too

@@ -41,7 +41,7 @@ from anndata.compat import (
 
 from ..._settings import settings
 from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE
-from ...utils import warn
+from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -286,7 +286,7 @@ def write_anndata(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    for sub_key, elem in adata.iter():
+    for sub_key, elem in iter_outer(adata):
         if not (sub_key == "X" and elem is None):
             _writer.write_elem(
                 g,

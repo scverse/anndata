@@ -24,7 +24,7 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
-from ..utils import warn
+from ..utils import iter_outer, warn
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
 from .utils import (
@@ -85,7 +85,7 @@ def write_h5ad(
         f = cast("h5py.Group", f["/"])
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
-        for k, elem in adata.iter():
+        for k, elem in iter_outer(adata):
             if k == "X":
                 _write_x(
                     f,
