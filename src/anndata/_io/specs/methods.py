@@ -287,12 +287,13 @@ def write_anndata(
 ):
     g = f.require_group(k)
     for sub_key, elem in adata.iter():
-        _writer.write_elem(
-            g,
-            sub_key,
-            dict(elem) if isinstance(elem, MutableMapping) else elem,
-            dataset_kwargs=dataset_kwargs,
-        )
+        if not (sub_key == "X" and elem is None):
+            _writer.write_elem(
+                g,
+                sub_key,
+                dict(elem) if isinstance(elem, MutableMapping) else elem,
+                dataset_kwargs=dataset_kwargs,
+            )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))
