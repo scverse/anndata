@@ -63,7 +63,7 @@ class ReduceFunc[T](Protocol):
         accumulate: T,
         attr_name: AnnDataElem | None,
     ) -> T:
-        """Function to be called on each visit within :meth:`anndata.AnnData.reduce`.
+        """Function to be called on each visit within `anndata.AnnData._reduce`.
 
         Parameters
         ----------
