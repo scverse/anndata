@@ -1472,7 +1472,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                     for e in [elem.var, elem.varm]
                     for attr in e
                 )
-            if attr_name in (
+            if attr_name in {
                 "obs",
                 "obsm",
                 "varm",
@@ -1481,7 +1481,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 "varp",
                 "obsp",
                 "uns",
-            ) or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
+            } or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
                 return accumulate and all(
                     predicate(elem[k], accumulate=accumulate) for k in elem
                 )
