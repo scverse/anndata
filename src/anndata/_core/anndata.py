@@ -64,9 +64,9 @@ if TYPE_CHECKING:
     from scipy import sparse
     from zarr.storage import StoreLike
 
-    from anndata.types import ReduceFunc
     from anndata.typing import RWAble
 
+    from .._types import ReduceFunc
     from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType

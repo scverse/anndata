@@ -265,13 +265,6 @@ Types used by the former:
    abc.CSCDataset
 ```
 
-```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   types.ReduceFunc
-```
-
 <!-- these are types, not classes, so don’t use the above template -->
 
 ```{eval-rst}
