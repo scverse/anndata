@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
-import zarr.convenience
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
