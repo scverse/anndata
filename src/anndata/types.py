@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from scverse_misc import ExtensionNamespace  # noqa: F401
-
 if TYPE_CHECKING:
     from enum import Enum
     from typing import Any, Literal
@@ -32,3 +30,23 @@ class SupportsArrayApi(Protocol):
         copy: bool | None = None,
     ) -> Any: ...
     def __dlpack_device__(self) -> tuple[int, int]: ...
+
+
+def __getattr__(key: str):
+    match key:
+        case "ExtensionNamespace":
+            from scverse_misc import ExtensionNamespace
+
+            from .utils import warn
+
+            msg = (
+                "Importing ExtensionNamespace from `types` is deprecated. "
+                "Please use scverse_misc instead."
+            )
+            warn(msg, FutureWarning)
+            return ExtensionNamespace
+        case "SupportsArrayApi":
+            return SupportsArrayApi
+        case _:
+            msg = f"types has no attribute {key!r}"
+            raise AttributeError(msg)
