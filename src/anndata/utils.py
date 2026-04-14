@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import sys
 import warnings
 from functools import partial, singledispatch
 from types import FunctionType, UnionType
@@ -365,16 +364,6 @@ def warn_once(msg: str, category: type[Warning]) -> None:
     warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
 
 
-if TYPE_CHECKING:
-    from warnings import deprecated
-else:
-    if sys.version_info >= (3, 13):
-        from warnings import deprecated as _deprecated
-    else:
-        from typing_extensions import deprecated as _deprecated
-    deprecated = partial(_deprecated, category=FutureWarning)
-
-
 def deprecation_msg(
     name: LiteralString, new_name: LiteralString, add_msg: LiteralString | None = None
 ) -> LiteralString:
@@ -385,28 +374,6 @@ def deprecation_msg(
     if add_msg is not None:
         msg += f" {add_msg}"
     return msg
-
-
-class DeprecationMixinMeta(type):
-    """\
-    Use this as superclass so deprecated methods and properties
-    do not appear in vars(MyClass)/dir(MyClass)
-    """
-
-    def __dir__(cls):
-        dont_hide = getattr(cls, "_DONT_HIDE_DEPRECATED", set())
-
-        def is_hidden(attr: object) -> bool:
-            if isinstance(attr, property):
-                attr = attr.fget
-            is_deprecated = bool(getattr(attr, "__deprecated__", None))
-            return is_deprecated and getattr(attr, "__name__", None) not in dont_hide
-
-        return [
-            item
-            for item in type.__dir__(cls)
-            if not is_hidden(getattr(cls, item, None))
-        ]
 
 
 def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
