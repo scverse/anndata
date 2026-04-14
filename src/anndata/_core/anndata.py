@@ -25,6 +25,7 @@ from anndata._warnings import ImplicitModificationWarning
 from .. import utils
 from .._settings import settings
 from ..compat import (
+    AwkArray,
     DaskArray,
     IndexManager,
     XDataset,
@@ -1469,13 +1470,20 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return accumulate and elem.can_write(store_type=store_type)
             if isinstance(elem, pd.Categorical):
                 return accumulate and predicate(elem.categories, accumulate=accumulate)
-            if isinstance(elem, pd.Series):
+            if isinstance(elem, pd.Series | pd.Index):
                 # matches behavior in methods.py
                 return accumulate and predicate(elem._values, accumulate=accumulate)
+            if isinstance(elem, AwkArray):
+                import awkward as ak
+
+                container = ak.to_buffers(ak.to_packed(elem))
+                return accumulate and all(
+                    predicate(v, accumulate=accumulate) for v in container[2].values()
+                )
             if attr_name == "raw":
                 accumulate = accumulate and type(elem.X) in writeable_elems
                 return accumulate and all(
-                    type(e[attr]) in writeable_elems
+                    predicate(e[attr], accumulate=accumulate)
                     for e in [elem.var, elem.varm]
                     for attr in e
                 )
