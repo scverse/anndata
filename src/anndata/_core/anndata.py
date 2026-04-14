@@ -1465,6 +1465,8 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         ):
             if elem is None:
                 return accumulate
+            if isinstance(elem, AnnData):
+                return accumulate and elem.can_write(store_type=store_type)
             if attr_name == "raw":
                 accumulate = accumulate and type(elem.X) in writeable_elems
                 return accumulate and all(
