@@ -1457,7 +1457,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if store_type is None or store_type in dest_type.__module__
         }
 
-        def predicate(
+        def predicate(  # noqa: PLR0911
             elem: RWAble,
             *,
             accumulate: bool,
@@ -1467,6 +1467,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return accumulate
             if isinstance(elem, AnnData):
                 return accumulate and elem.can_write(store_type=store_type)
+            if isinstance(elem, pd.Categorical):
+                return accumulate and predicate(elem.categories, accumulate=accumulate)
+            if isinstance(elem, pd.Series):
+                # matches behavior in methods.py
+                return accumulate and predicate(elem._values, accumulate=accumulate)
             if attr_name == "raw":
                 accumulate = accumulate and type(elem.X) in writeable_elems
                 return accumulate and all(
@@ -1487,9 +1492,6 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
                 return accumulate and all(
                     predicate(elem[k], accumulate=accumulate) for k in elem
                 )
-            if isinstance(elem, pd.Series):
-                # matches behavior in methods.py
-                elem = elem._values
             return accumulate and type(elem) in writeable_elems
 
         return self._reduce(predicate, init=True)

@@ -134,6 +134,19 @@ def test_can_write(
 
 
 @pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_not_write_bad_categorical(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+
+    adata, _ = rw
+    adata.var["arrow_categorical_array"] = pd.Categorical.from_codes(
+        [i % 2 for i in range(adata.shape[1])],
+        categories=pd.arrays.IntervalArray.from_tuples([(0, 10), (20, 30)]),
+    )
+    assert not adata.can_write(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
 @pytest.mark.parametrize("should_nest", [True, False], ids=["nest", "no_nest"])
 @pytest.mark.parametrize("parent_elem", ["var", "uns", "raw"])
 def test_can_not_write_with_custom_array(
