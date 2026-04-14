@@ -1283,8 +1283,7 @@ class AnnData:  # noqa: PLW1641
     )
     def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
+        Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance.
         Intentionally permissive about arguments, for easy iterative use.
@@ -1315,8 +1314,7 @@ class AnnData:  # noqa: PLW1641
     )
     def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
+        Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1768,6 +1766,7 @@ class AnnData:  # noqa: PLW1641
     @property
     @deprecated(Deprecation("0.7.2", deprecation_msg("isview", "is_view")))
     def isview(self) -> bool:
+        """Whether or not this object is a view."""
         return self.is_view
 
     def _clean_up_old_format(self, uns):
