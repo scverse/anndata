@@ -113,7 +113,7 @@ def test_missing_param() -> None:
     """Test that a namespace missing the second parameter is rejected."""
     with pytest.raises(
         TypeError,
-        match=r"Namespace initializer must accept a AnnData instance as the second parameter.",
+        match=r"Namespace initializer must accept a AnnData instance as the second parameter\.",
     ):
 
         @ad.register_anndata_namespace("missing_param")
@@ -126,7 +126,7 @@ def test_wrong_name() -> None:
     """Test that a namespace with wrong parameter name is rejected."""
     with pytest.raises(
         TypeError,
-        match=r"Namespace initializer's second parameter must be named 'adata', got 'notadata'.",
+        match=r"Namespace initializer's second parameter must be named 'adata', got 'notadata'\.",
     ):
 
         @ad.register_anndata_namespace("wrong_name")
@@ -139,7 +139,7 @@ def test_wrong_annotation() -> None:
     """Test that a namespace with wrong parameter annotation is rejected."""
     with pytest.raises(
         TypeError,
-        match=r"Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'.",
+        match=r"Namespace initializer's second parameter must be annotated as the 'AnnData' class, got 'int'\.",
     ):
 
         @ad.register_anndata_namespace("wrong_annotation")
@@ -163,8 +163,8 @@ def test_both_wrong() -> None:
     with pytest.raises(
         TypeError,
         match=(
-            r"Namespace initializer's second parameter must be named 'adata', got 'info'. "
-            r"And must be annotated as 'AnnData', got 'str'."
+            r"Namespace initializer's second parameter must be named 'adata', got 'info'\. "
+            r"And must be annotated as 'AnnData', got 'str'\."
         ),
     ):
 
