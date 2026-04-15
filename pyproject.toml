@@ -46,6 +46,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
+    "scverse-misc>=0.0.3",
 ]
 dynamic = [ "version" ]
 
@@ -65,7 +66,7 @@ doc = [
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
     "sphinxext.opengraph",
-    "myst-nb",
+    "myst-nb>=1.4",
     "scanpydoc[theme,typehints] >=0.17.1",
     "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks

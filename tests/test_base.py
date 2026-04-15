@@ -186,6 +186,31 @@ def test_df_warnings():
         adata.X = df
 
 
+@pytest.mark.parametrize("use_raw", [True, False], ids=["raw", "no_raw"])
+@pytest.mark.parametrize("use_uns", [True, False], ids=["uns", "no_uns"])
+def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
+    adata = gen_adata((10, 20))
+    if use_uns:
+        adata.uns = {"foo": np.arange(10), "nested": {"here": np.arange(10)}}
+    else:
+        adata.uns = {}
+    if use_raw:
+        adata.raw = adata.copy()
+    adata.__sizeof__(show_stratified=True)
+    captured = capsys.readouterr()
+    for attr in [
+        "X",
+        "layers",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+    ]:
+        assert attr in captured.out
+    assert use_uns == ("uns" in captured.out)
+    assert use_raw == ("raw" in captured.out)
+
+
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
 @pytest.mark.parametrize("when", ["init", "assign"])
 def test_convert_matrix(attr, when):
@@ -634,7 +659,7 @@ def test_to_df_dense():
     pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
-@pytest.mark.filterwarnings("ignore:Use anndata.acc.A instead of:FutureWarning")
+@pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning")
 def test_convenience(subtests: pytest.Subtests) -> None:
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2

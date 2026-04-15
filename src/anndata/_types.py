@@ -14,7 +14,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
+    from pandas import DataFrame
+
     from anndata._core.xarray import Dataset2D
+    from anndata.typing import AxisStorable, _XDataType
 
     from ._io.specs.registry import (
         IOSpec,
@@ -23,6 +26,9 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
+    from ._types import AnnDataElem
+    from .compat import XDataset
+
 else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
     type S = StorageType
     type RWAble = typing.RWAble
@@ -216,3 +222,29 @@ type AnnDataElem = Literal[
 ]
 
 type Join_T = Literal["inner", "outer"]
+
+
+class ReduceFunc[T](Protocol):
+    def __call__(
+        self,
+        elem: _XDataType | AxisStorable | DataFrame | XDataset,
+        *,
+        accumulate: T,
+        attr_name: AnnDataElem | None,
+    ) -> T:
+        """Function to be called on each visit within `anndata.AnnData._reduce`.
+
+        Parameters
+        ----------
+        elem
+            The current element.
+        accumulate
+            The value being accumulated.
+        ref_acc
+            A reference to help uses distinguish where they are in the `AnnData` object.
+
+        Returns
+        -------
+            An accumulated value
+        """
+        ...
