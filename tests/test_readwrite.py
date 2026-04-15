@@ -130,7 +130,7 @@ def test_can_write(
     rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
 ):
     adata, _ = rw
-    assert adata.can_write(store_type=store_type)
+    assert adata.unwriteable(store_type=store_type)
 
 
 @pytest.mark.parametrize("store_type", ["h5", "zarr", None])
@@ -143,7 +143,7 @@ def test_can_not_write_bad_categorical(
         [i % 2 for i in range(adata.shape[1])],
         categories=pd.arrays.IntervalArray.from_tuples([(0, 10), (20, 30)]),
     )
-    assert not adata.can_write(store_type=store_type)
+    assert not adata.unwriteable(store_type=store_type)
 
 
 @pytest.mark.parametrize("store_type", ["h5", "zarr", None])
@@ -169,7 +169,7 @@ def test_can_not_write_with_custom_array(
     getter(adata.uns["adata"] if should_nest else adata)["arrow_array"] = (
         pd.arrays.ArrowExtensionArray(pa.array([{"x": 1, "y": True}] * adata.shape[1]))
     )
-    assert not adata.can_write(store_type=store_type)
+    assert not adata.unwriteable(store_type=store_type)
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)

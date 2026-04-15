@@ -1437,7 +1437,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
-    def can_write(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
+    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
         Parameters
@@ -1447,7 +1447,10 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
 
         Returns
         -------
-            Whether or not this object is writable.
+            Whether or not this object is writeable.
+            While the return type may change to include richer output about which elements cannot be written,
+            this new type's evaluation as a boolean will not change from the current behavior i.e.,
+            `bool(adata.unwriteable())` will always evaluate the same.
         """
 
         from anndata._io.specs.registry import _REGISTRY
@@ -1467,7 +1470,7 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
             if elem is None:
                 return accumulate
             if isinstance(elem, AnnData):
-                return accumulate and elem.can_write(store_type=store_type)
+                return accumulate and elem.unwriteable(store_type=store_type)
             if isinstance(elem, pd.Categorical):
                 return accumulate and predicate(elem.categories, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
