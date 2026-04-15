@@ -19,6 +19,7 @@ from natsort import natsorted
 from numpy import ma
 from pandas.api.types import infer_dtype
 from scipy.sparse import issparse
+from scverse_misc import Deprecation, deprecated
 
 from anndata._warnings import ImplicitModificationWarning
 
@@ -38,7 +39,6 @@ from ..compat import (
 from ..logging import anndata_logger as logger
 from ..utils import (
     axis_len,
-    deprecated,
     deprecation_msg,
     ensure_df_homogeneous,
     iter_outer,
@@ -75,7 +75,7 @@ if TYPE_CHECKING:
 
 
 @set_module("anndata")
-class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
+class AnnData:  # noqa: PLW1641
     """\
     An annotated data matrix.
 
@@ -913,9 +913,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     """
 
     @deprecated(
-        deprecation_msg(
-            *("obs_keys", "obs"),
-            "(e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)",
+        Deprecation(
+            "0.12.3",
+            deprecation_msg(
+                *("obs_keys", "obs"),
+                "(e.g. `k in adata.obs` or `str(adata.obs.columns.tolist())`)",
+            ),
         )
     )
     def obs_keys(self) -> list[str]:
@@ -923,9 +926,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._obs.keys().tolist()
 
     @deprecated(
-        deprecation_msg(
-            *("var_keys", "var"),
-            "(e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)",
+        Deprecation(
+            "0.12.3",
+            deprecation_msg(
+                *("var_keys", "var"),
+                "(e.g. `k in adata.var` or `str(adata.var.columns.tolist())`)",
+            ),
         )
     )
     def var_keys(self) -> list[str]:
@@ -933,9 +939,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return self._var.keys().tolist()
 
     @deprecated(
-        deprecation_msg(
-            *("obsm_keys", "obsm"),
-            "(e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)",
+        Deprecation(
+            "0.12.3",
+            deprecation_msg(
+                *("obsm_keys", "obsm"),
+                "(e.g. `k in adata.obsm` or `adata.obsm.keys() | {'u'}`)",
+            ),
         )
     )
     def obsm_keys(self) -> list[str]:
@@ -943,9 +952,12 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return list(self.obsm.keys())
 
     @deprecated(
-        deprecation_msg(
-            *("varm_keys", "varm"),
-            "(e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)",
+        Deprecation(
+            "0.12.3",
+            deprecation_msg(
+                *("varm_keys", "varm"),
+                "(e.g. `k in adata.varm` or `adata.varm.keys() | {'u'}`)",
+            ),
         )
     )
     def varm_keys(self) -> list[str]:
@@ -953,8 +965,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return list(self.varm.keys())
 
     @deprecated(
-        deprecation_msg(
-            "uns_keys", "uns", "(e.g. `k in adata.uns` or `sorted(adata.uns)`)"
+        Deprecation(
+            "0.13",
+            deprecation_msg(
+                "uns_keys", "uns", "(e.g. `k in adata.uns` or `sorted(adata.uns)`)"
+            ),
         )
     )
     def uns_keys(self) -> list[str]:
@@ -1264,16 +1279,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
     @deprecated(
-        deprecation_msg(
-            "obs_vector",
-            "anndata.acc.A",
-            "E.g. `vec = adata[A.obs['foo']]` or `vec = adata[A.layers['l']['bar', :]]`",
+        Deprecation(
+            "0.13",
+            deprecation_msg(
+                "obs_vector",
+                "anndata.acc.A",
+                "E.g. `vec = adata[A.obs['foo']]` or `vec = adata[A.layers['l']['bar', :]]`",
+            ),
         )
     )
     def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
+        Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance.
         Intentionally permissive about arguments, for easy iterative use.
@@ -1293,16 +1310,18 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         return _get_vector_ambiguous(self, k, "obs", layer=layer)
 
     @deprecated(
-        deprecation_msg(
-            "var_vector",
-            "anndata.acc.A",
-            "E.g. `vec = adata[A.var['foo']]` or `vec = adata[A.layers['l'][:, 'bar']]`",
+        Deprecation(
+            "0.13",
+            deprecation_msg(
+                "var_vector",
+                "anndata.acc.A",
+                "E.g. `vec = adata[A.var['foo']]` or `vec = adata[A.layers['l'][:, 'bar']]`",
+            ),
         )
     )
     def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
         """\
-        Convenience function for returning a 1 dimensional ndarray of values
-        from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
+        Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
         Made for convenience, not performance. Intentionally permissive about
         arguments, for easy iterative use.
@@ -1693,8 +1712,11 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
         write_csvs(dirname, self, skip_data=skip_data, sep=sep)
 
     @deprecated(
-        "Deprecated in favor of other formats, e.g. `write_h5ad`. "
-        "Loom isn’t well-maintained and supports only a subset of anndata features."
+        Deprecation(
+            "0.13",
+            "Deprecated in favor of other formats, e.g. `write_h5ad`. "
+            "Loom isn’t well-maintained and supports only a subset of anndata features.",
+        )
     )
     @old_positionals("write_obsm_varm")
     def write_loom(
@@ -1832,8 +1854,9 @@ class AnnData(metaclass=utils.DeprecationMixinMeta):  # noqa: PLW1641
     # --------------------------------------------------------------------------
 
     @property
-    @deprecated(deprecation_msg("isview", "is_view"))
+    @deprecated(Deprecation("0.7.2", deprecation_msg("isview", "is_view")))
     def isview(self) -> bool:
+        """Whether or not this object is a view."""
         return self.is_view
 
     def _clean_up_old_format(self, uns):
