@@ -47,6 +47,7 @@ dependencies = [
     "array_api_compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=2.18.7, !=3.0.*",
+    "scverse-misc>=0.0.3",
 ]
 dynamic = [ "version" ]
 

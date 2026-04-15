@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
+from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
 from ..utils import (
     axis_len,
     convert_to_dict,
-    deprecated,
+    deprecation_msg,
     raise_value_error_if_multiindex_columns,
     warn_once,
 )
@@ -130,7 +131,7 @@ class AlignedMappingBase(MutableMapping[str, Value], ABC):
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated("dict(obj)")
+    @deprecated(Deprecation("0.10.2", deprecation_msg("as_dict", "dict(obj)")))
     def as_dict(self) -> dict:
         return dict(self)
 
