@@ -1667,7 +1667,7 @@ class AnnData:  # noqa: PLW1641
         ...     dict(obs_names=['s1', 's2'], anno2=['d3', 'd4']),
         ...     dict(var_names=['d', 'c', 'b'], annoA=[0, 2, 3], annoB=[0, 1, 2]),
         ... )
-        >>> adata = adata1.concatenate(adata2, adata3)
+        >>> adata = adata1.concatenate(adata2, adata3) # doctest: +IGNORE_EXCEPTION_DETAIL
         >>> adata
         AnnData object with n_obs × n_vars = 6 × 2
             obs: 'anno1', 'anno2', 'batch'
