@@ -40,7 +40,6 @@ If we split this object up by clusters of observations, then stack those subsets
     AnnData object with n_obs × n_vars = 700 × 765
         obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain'
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
-        uns: 'pca'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
 
