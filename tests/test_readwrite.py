@@ -98,7 +98,7 @@ def dataset_kwargs(request):
 
 
 @pytest.fixture
-def rw(backing_h5ad):
+def rw(backing_h5ad) -> tuple[ad.AnnData, ad.AnnData]:
     M, N = 100, 101
     orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
@@ -123,6 +123,53 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 # The test functions
 # ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_write(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+    adata, _ = rw
+    assert adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_not_write_bad_categorical(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+
+    adata, _ = rw
+    adata.var["arrow_categorical_array"] = pd.Categorical.from_codes(
+        [i % 2 for i in range(adata.shape[1])],
+        categories=pd.arrays.IntervalArray.from_tuples([(0, 10), (20, 30)]),
+    )
+    assert not adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+@pytest.mark.parametrize("should_nest", [True, False], ids=["nest", "no_nest"])
+@pytest.mark.parametrize("parent_elem", ["var", "uns", "raw"])
+def test_can_not_write_with_custom_array(
+    rw: tuple[ad.AnnData, ad.AnnData],
+    store_type: Literal["h5", "zarr"] | None,
+    parent_elem: Literal["obs", "uns", "raw"],
+    *,
+    should_nest: bool,
+):
+    import pyarrow as pa
+
+    adata, _ = rw
+    if parent_elem == "raw":
+        adata.raw = adata.copy()
+        getter = lambda adata: getattr(adata, parent_elem).var
+    else:
+        getter = lambda adata: getattr(adata, parent_elem)
+    if should_nest:
+        adata.uns["adata"] = adata.copy()
+    getter(adata.uns["adata"] if should_nest else adata)["arrow_array"] = (
+        pd.arrays.ArrowExtensionArray(pa.array([{"x": 1, "y": True}] * adata.shape[1]))
+    )
+    assert not adata.unwriteable(store_type=store_type)
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)

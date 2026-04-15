@@ -19,8 +19,12 @@ from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
     from typing import Any, LiteralString
+
+    from ._core.xarray import Dataset2D
+    from ._types import AnnDataElem
+    from .typing import AxisStorable, _XDataType
 
 logger = get_logger(__name__)
 
@@ -435,3 +439,27 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def iter_outer(
+    adata,
+) -> Generator[
+    tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+]:
+    """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
+    for attr_name in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "uns",
+        "raw",
+    ]:
+        was_closed = adata.isbacked and not adata.file.is_open
+        yield (attr_name, getattr(adata, attr_name))
+        if was_closed:
+            adata.file.close()

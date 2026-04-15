@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from copy import copy
 from functools import partial
 from itertools import product
@@ -41,7 +41,7 @@ from anndata.compat import (
 
 from ..._settings import settings
 from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE
-from ...utils import warn
+from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -286,17 +286,14 @@ def write_anndata(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
-    if adata.X is not None:
-        _writer.write_elem(g, "X", adata.X, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obs", adata.obs, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "var", adata.var, dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obsm", dict(adata.obsm), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "varm", dict(adata.varm), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "obsp", dict(adata.obsp), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "varp", dict(adata.varp), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "layers", dict(adata.layers), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "uns", dict(adata.uns), dataset_kwargs=dataset_kwargs)
-    _writer.write_elem(g, "raw", adata.raw, dataset_kwargs=dataset_kwargs)
+    for sub_key, elem in iter_outer(adata):
+        if not (sub_key == "X" and elem is None):
+            _writer.write_elem(
+                g,
+                sub_key,
+                dict(elem) if isinstance(elem, MutableMapping) else elem,
+                dataset_kwargs=dataset_kwargs,
+            )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))

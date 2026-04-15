@@ -4,7 +4,7 @@ Main class and helper functions.
 
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
 from functools import singledispatchmethod
@@ -26,8 +26,10 @@ from anndata._warnings import ImplicitModificationWarning
 from .. import utils
 from .._settings import settings
 from ..compat import (
+    AwkArray,
     DaskArray,
     IndexManager,
+    XDataset,
     ZarrArray,
     _move_adj_mtx,
     has_xp,
@@ -39,6 +41,7 @@ from ..utils import (
     axis_len,
     deprecation_msg,
     ensure_df_homogeneous,
+    iter_outer,
     raise_value_error_if_multiindex_columns,
     set_module,
     warn,
@@ -62,9 +65,12 @@ if TYPE_CHECKING:
     from scipy import sparse
     from zarr.storage import StoreLike
 
+    from anndata.typing import RWAble
+
+    from .._types import ReduceFunc
     from ..acc import AdRef, Array, MapAcc, RefAcc
-    from ..compat import XDataset
-    from ..typing import Index, Index1D, _Index1DNorm, _XDataType
+    from ..compat import CSArray, CSMatrix
+    from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -512,53 +518,54 @@ class AnnData:  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
-        def get_size(X) -> int:
-            def cs_to_bytes(X) -> int:
-                return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
+        def cs_to_bytes(X: CSArray | CSMatrix) -> int:
+            return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
+        def get_size(X: RWAble) -> int:
             if isinstance(X, h5py.Dataset) and with_disk:
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
                 return cs_to_bytes(X._to_backed())
             elif issparse(X):
                 return cs_to_bytes(X)
+            elif isinstance(X, dict | MutableMapping):
+                return sum(get_size(v) for v in X.values())
             else:
                 return X.__sizeof__()
 
-        sizes = {}
-        attrs = ["X", "_obs", "_var"]
-        attrs_multi = ["_uns", "_obsm", "_varm", "varp", "_obsp", "_layers"]
-        for attr in attrs + attrs_multi:
-            if attr in attrs_multi:
-                keys = getattr(self, attr).keys()
-                s = sum(get_size(getattr(self, attr)[k]) for k in keys)
+        def fold_size(
+            elem: _XDataType | AxisStorable | pd.DataFrame | XDataset,
+            *,
+            accumulate: dict[str, int],
+            attr_name: str | None,  # TODO: type
+        ):
+            if elem is None:
+                size = 0
+            elif elem is self.raw:
+                size = (
+                    get_size(elem.X)
+                    + get_size(elem.var)
+                    + sum(get_size(v) for v in elem.varm.values())
+                )
             else:
-                s = get_size(getattr(self, attr))
-            if s > 0 and show_stratified:
+                size = get_size(elem)
+            accumulate[attr_name] = size
+            if size > 0 and show_stratified:
                 from tqdm import tqdm
 
-                print(
-                    f"Size of {attr.replace('_', '.'):<7}: {tqdm.format_sizeof(s, 'B')}"
-                )
-            sizes[attr] = s
-        return sum(sizes.values())
+                print(f"Size of {attr_name}: {tqdm.format_sizeof(size, 'B')}")
+            return accumulate
+
+        return sum(self._reduce(fold_size, init=defaultdict(int)).values())
 
     def _gen_repr(self, n_obs, n_vars) -> str:
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
-        for attr in [
-            "obs",
-            "var",
-            "uns",
-            "obsm",
-            "varm",
-            "layers",
-            "obsp",
-            "varp",
-        ]:
-            keys = getattr(self, attr).keys()
-            if len(keys) > 0:
-                descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
+        for attr_name, elem in iter_outer(self):
+            if attr_name not in {"raw", "X"}:
+                keys = elem.keys()
+                if len(keys) > 0:
+                    descr += f"\n    {attr_name}: {str(list(keys))[1:-1]}"
         return descr
 
     def __repr__(self) -> str:
@@ -1383,27 +1390,16 @@ class AnnData:  # noqa: PLW1641
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
         new = {}
-        for attr_name in [
-            "X",
-            "obs",
-            "var",
-            "obsm",
-            "varm",
-            "obsp",
-            "varp",
-            "layers",
-            "uns",
-        ]:
-            attr = getattr(self, attr_name, None)
+        for attr_name, attr in iter_outer(self):
             if attr is not None:
-                new[attr_name] = to_memory(attr, copy=copy)
-
-        if self.raw is not None:
-            new["raw"] = {
-                "X": to_memory(self.raw.X, copy=copy),
-                "var": to_memory(self.raw.var, copy=copy),
-                "varm": to_memory(self.raw.varm, copy=copy),
-            }
+                if attr is self.raw:
+                    new["raw"] = {
+                        "X": to_memory(self.raw.X, copy=copy),
+                        "var": to_memory(self.raw.var, copy=copy),
+                        "varm": to_memory(self.raw.varm, copy=copy),
+                    }
+                else:
+                    new[attr_name] = to_memory(attr, copy=copy)
 
         if self.isbacked:
             self.file.close()
@@ -1435,6 +1431,100 @@ class AnnData:  # noqa: PLW1641
             mode = self.file._filemode
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
+
+    def _reduce[T](
+        self,
+        func: ReduceFunc[T],
+        *,
+        init: T,
+    ) -> T:
+        """Accumulate a value starting from init by iterating over the parent "elems"of the AnnData object i.e., raw, obs, varp etc.
+
+        Parameters
+        ----------
+        func
+            The function that performs the accumulation.
+        init
+            The starting value
+
+        Returns
+        -------
+            An accumulated value
+        """
+        accumulate = init
+        for attr_name, attr in iter_outer(self):
+            accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
+        return accumulate
+
+    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
+        """Whether or not an `AnnData` object can be written to disk for a given store type.
+
+        Parameters
+        ----------
+        store_type
+            Which backing store - `None` indicates that it can be writeable to either.
+
+        Returns
+        -------
+            Whether or not this object is writeable.
+            While the return type may change to include richer output about which elements cannot be written,
+            this new type's evaluation as a boolean will not change from the current behavior i.e.,
+            `bool(adata.unwriteable())` will always evaluate the same.
+        """
+
+        from anndata._io.specs.registry import _REGISTRY
+
+        writeable_elems = {
+            src_type
+            for (dest_type, src_type, __) in _REGISTRY.write
+            if store_type is None or store_type in dest_type.__module__
+        }
+
+        def predicate(  # noqa: PLR0911
+            elem: RWAble,
+            *,
+            accumulate: bool,
+            attr_name: str | None = None,  # TODO: type
+        ):
+            if elem is None:
+                return accumulate
+            if isinstance(elem, AnnData):
+                return accumulate and elem.unwriteable(store_type=store_type)
+            if isinstance(elem, pd.Categorical):
+                return accumulate and predicate(elem.categories, accumulate=accumulate)
+            if isinstance(elem, pd.Series | pd.Index):
+                # matches behavior in methods.py
+                return accumulate and predicate(elem._values, accumulate=accumulate)
+            if isinstance(elem, AwkArray):
+                import awkward as ak
+
+                container = ak.to_buffers(ak.to_packed(elem))
+                return accumulate and all(
+                    predicate(v, accumulate=accumulate) for v in container[2].values()
+                )
+            if attr_name == "raw":
+                accumulate = accumulate and type(elem.X) in writeable_elems
+                return accumulate and all(
+                    predicate(e[attr], accumulate=accumulate)
+                    for e in [elem.var, elem.varm]
+                    for attr in e
+                )
+            if attr_name in {
+                "obs",
+                "obsm",
+                "varm",
+                "var",
+                "layers",
+                "varp",
+                "obsp",
+                "uns",
+            } or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
+                return accumulate and all(
+                    predicate(elem[k], accumulate=accumulate) for k in elem
+                )
+            return accumulate and type(elem) in writeable_elems
+
+        return self._reduce(predicate, init=True)
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too

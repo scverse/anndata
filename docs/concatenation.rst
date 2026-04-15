@@ -26,7 +26,6 @@ Let's start off with an example:
     AnnData object with n_obs × n_vars = 700 × 765
         obs: 'bulk_labels', 'n_genes', 'percent_mito', 'n_counts', 'S_score', 'G2M_score', 'phase', 'louvain'
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
-        uns: 'bulk_labels_colors', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
         obsp: ...
@@ -165,9 +164,9 @@ First, our example case:
     >>> blobs
     AnnData object with n_obs × n_vars = 640 × 30
         obs: 'blobs'
-        uns: 'pca'
         obsm: 'X_pca'
         varm: 'PCs'
+        uns: 'pca'
 
 Now we will split this object by the categorical `"blobs"` and recombine it to illustrate different merge strategies.
 
@@ -181,9 +180,9 @@ Now we will split this object by the categorical `"blobs"` and recombine it to i
     >>> adatas[0]
     AnnData object with n_obs × n_vars = 128 × 30
         obs: 'blobs'
-        uns: 'pca'
         obsm: 'X_pca', 'qc'
         varm: 'PCs', '0_qc'
+        uns: 'pca'
 
 `adatas` is now a list of datasets with disjoint sets of observations and a common set of variables.
 Each object has had QC metrics computed, with observation-wise metrics stored under `"qc"` in `.obsm`, and variable-wise metrics stored with a unique key for each subset.
