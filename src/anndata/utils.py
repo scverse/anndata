@@ -448,12 +448,12 @@ def iter_outer(
         "X",
         "obs",
         "var",
+        "uns",
         "obsm",
         "varm",
         "obsp",
         "varp",
         "layers",
-        "uns",
         "raw",
     ]:
         was_closed = adata.isbacked and not adata.file.is_open
