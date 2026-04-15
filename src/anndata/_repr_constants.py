@@ -115,7 +115,7 @@ CSS_COLORS = "anndata-colors"
 CSS_COLORS_SWATCH = "anndata-colors__swatch"
 CSS_COLORS_SWATCH_INVALID = "anndata-colors__swatch--invalid"
 
-# Section names (canonical strings used for data-section attributes and keys)
+# Section name constants (canonical strings used for data-section attributes and dispatch)
 SECTION_X = "X"
 SECTION_OBS = "obs"
 SECTION_VAR = "var"
@@ -127,32 +127,34 @@ SECTION_OBSP = "obsp"
 SECTION_VARP = "varp"
 SECTION_RAW = "raw"
 
+# Canonical set of standard section names.
+# Mirrors the list iterated by `anndata.utils.iter_outer`. Kept as a constant
+# (rather than calling iter_outer with values discarded) because iter_outer
+# performs a file-open/close cycle per attribute on backed AnnData objects.
+# Use this for name-only membership checks; use iter_outer when you need values.
+STANDARD_SECTIONS = frozenset({
+    SECTION_X,
+    SECTION_OBS,
+    SECTION_VAR,
+    SECTION_UNS,
+    SECTION_OBSM,
+    SECTION_VARM,
+    SECTION_LAYERS,
+    SECTION_OBSP,
+    SECTION_VARP,
+    SECTION_RAW,
+})
+
 # Internal AnnData attributes to skip when detecting unknown sections.
 #
-# Why explicit list instead of introspection?
-# -------------------------------------------
-# We intentionally maintain this list manually rather than using introspection
-# (e.g., inspect.getmembers(AnnData, property)) because:
+# Standard data sections (obs, var, uns, obsm, etc.) are discovered via
+# `anndata.utils.iter_outer`. Custom sections come from registered
+# SectionFormatter extensions. This frozenset lists non-data attributes
+# that would otherwise appear as "unknown sections" — shape/size metadata,
+# index accessors, file/backing info, and the transpose accessor.
 #
-# 1. NEW data slots added to AnnData should appear in "unknown sections" until
-#    a proper renderer is implemented. Introspection would hide them.
-#
-# 2. This list contains only internal/meta attributes that are NOT data slots:
-#    - Shape/size metadata (shape, n_obs, n_vars)
-#    - Index accessors (obs_names, var_names)
-#    - File/backing info (filename, file, isbacked)
-#    - View status (is_view, isview)
-#    - Transpose accessor (T)
-#
-# What else is skipped (not in this list)?
-# ----------------------------------------
-# - Data sections (obs, var, uns, obsm, etc.) via SECTION_ORDER
-# - Custom sections registered via SectionFormatter (e.g., obst, vart from TreeData)
-# - Methods are filtered by `not callable()` at runtime
-#
-# When to update this list:
-# - Add entries when AnnData gains new internal/meta properties (not data slots)
-# - Do NOT add new data slots here - they should appear in "unknown" until rendered
+# Keep NEW data slots OUT of this list. They should surface as "unknown"
+# until a proper renderer is implemented.
 INTERNAL_ANNDATA_ATTRS = frozenset({
     # Shape/size metadata
     "shape",

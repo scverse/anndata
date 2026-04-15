@@ -33,12 +33,8 @@ from . import (
     DEFAULT_PREVIEW_ITEMS,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
-    SECTION_OBS,
-    SECTION_ORDER,
-    SECTION_RAW,
-    SECTION_VAR,
-    SECTION_X,
 )
+from ..utils import iter_outer
 from .components import (
     render_badge,
     render_search_box,
@@ -88,6 +84,7 @@ from .._repr_constants import (
     COPY_BUTTON_PADDING_PX,
     DEFAULT_FIELD_WIDTH_PX,
     MIN_FIELD_WIDTH_PX,
+    STANDARD_SECTIONS,
 )
 from . import formatters as _formatters  # noqa: F401
 
@@ -100,21 +97,14 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
     (uns, obsm, varm, layers, obsp, varp) plus any registered custom sections.
     """
     all_names: list[str] = []
-    skip_sections = {SECTION_X, SECTION_RAW}  # Single items, not collections
 
-    # Standard sections from SECTION_ORDER
-    for section in SECTION_ORDER:
-        if section in skip_sections:
+    for section, attr in iter_outer(adata):
+        if section in {"X", "raw"} or attr is None:
             continue
         try:
-            attr = getattr(adata, section, None)
-            if attr is None:
-                continue
-            # obs/var are DataFrames - use column names
-            if section in (SECTION_OBS, SECTION_VAR):
+            if section in {"obs", "var"}:
                 if hasattr(attr, "columns"):
                     all_names.extend(attr.columns.tolist())
-            # Other sections are mappings - use keys
             elif hasattr(attr, "keys"):
                 all_names.extend(attr.keys())
         except Exception:  # noqa: BLE001
@@ -122,8 +112,8 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
 
     # Registered custom sections (e.g., TreeData's obst/vart)
     for section_name in formatter_registry.get_registered_sections():
-        if section_name in SECTION_ORDER:
-            continue  # Already handled
+        if section_name in STANDARD_SECTIONS:
+            continue
         try:
             attr = getattr(adata, section_name, None)
             if attr is not None and hasattr(attr, "keys"):
@@ -357,8 +347,8 @@ def _render_all_sections(
     parts: list[str] = []
     custom_sections_after = _get_custom_sections_by_position(adata)
 
-    for section in SECTION_ORDER:
-        parts.append(_render_section(adata, section, context))
+    for section, elem in iter_outer(adata):
+        parts.append(_render_section(adata, section, elem, context))
 
         # Render custom sections after this section
         if section in custom_sections_after:
@@ -374,7 +364,7 @@ def _render_all_sections(
             for section_formatter in custom_sections_after[None]
         )
 
-    # Detect and show unknown sections (mapping-like attributes not in SECTION_ORDER)
+    # Detect and show unknown sections (mapping-like attributes not surfaced by iter_outer)
     unknown_sections = _detect_unknown_sections(adata)
     if unknown_sections:
         parts.append(_render_unknown_sections(unknown_sections))
@@ -385,21 +375,26 @@ def _render_all_sections(
 def _render_section(
     adata: AnnData,
     section: str,
+    elem: object,
     context: FormatterContext,
 ) -> str:
-    """Render a single standard section."""
-    from .._repr_constants import SECTION_RAW, SECTION_UNS
+    """Render a single standard section.
 
+    ``elem`` is the value yielded by ``iter_outer`` for this section. We pass it
+    through to the per-section renderers so they don't need a second ``getattr``
+    (which would re-open the backing file on backed AnnData, since ``iter_outer``
+    closes it after each yield).
+    """
     try:
-        if section == SECTION_X:
+        if section == "X":
             return render_x_entry(adata, context)
-        if section == SECTION_RAW:
-            return _render_raw_section(adata, context)
-        if section in (SECTION_OBS, SECTION_VAR):
-            return _render_dataframe_section(adata, section, context)
-        if section == SECTION_UNS:
-            return _render_uns_section(adata, context)
-        return _render_mapping_section(adata, section, context)
+        if section == "raw":
+            return _render_raw_section(elem, context)
+        if section in ("obs", "var"):
+            return _render_dataframe_section(section, elem, context)
+        if section == "uns":
+            return _render_uns_section(elem, context)
+        return _render_mapping_section(section, elem, context)
     except Exception as e:  # noqa: BLE001
         # Show error instead of hiding the section
         return _render_error_entry(section, str(e))
@@ -424,7 +419,7 @@ def _get_custom_sections_by_position(
             continue
 
         # Skip standard sections (they're handled separately)
-        if section_name in SECTION_ORDER:
+        if section_name in STANDARD_SECTIONS:
             continue
 
         # Check if this section should be shown for this object

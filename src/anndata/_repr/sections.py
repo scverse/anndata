@@ -111,12 +111,11 @@ def _render_entry_row(
 
 
 def _render_dataframe_section(
-    adata: AnnData,
     section: str,
+    df: pd.DataFrame,
     context: FormatterContext,
 ) -> str:
     """Render obs or var section."""
-    df: pd.DataFrame = getattr(adata, section)
     n_cols = len(df.columns)
 
     # Doc URL and tooltip for this section
@@ -157,12 +156,11 @@ def _render_dataframe_section(
 
 
 def _render_mapping_section(
-    adata: AnnData,
     section: str,
+    mapping: object,
     context: FormatterContext,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
-    mapping = getattr(adata, section, None)
     if mapping is None:
         return ""
 
@@ -206,11 +204,10 @@ def _render_mapping_section(
 
 
 def _render_uns_section(
-    adata: AnnData,
+    uns: object,
     context: FormatterContext,
 ) -> str:
     """Render the uns section with special handling."""
-    uns = adata.uns
     # Get count without creating full list (O(1) for dict)
     n_items = len(uns)
 
@@ -228,7 +225,7 @@ def _render_uns_section(
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
         value = uns[key]
-        rows.append(_render_uns_entry(adata, key, value, context))
+        rows.append(_render_uns_entry(key, value, context))
 
     return render_section(
         "uns",
@@ -241,7 +238,6 @@ def _render_uns_section(
 
 
 def _render_uns_entry(
-    adata: AnnData,
     key: str,
     value: object,
     context: FormatterContext,
@@ -285,20 +281,21 @@ def _render_uns_entry(
 
 
 def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
-    """Detect mapping-like attributes that aren't in SECTION_ORDER.
+    """Detect mapping-like attributes not surfaced by ``iter_outer``.
 
     Returns list of (attr_name, type_description) tuples for unknown sections.
     """
     from collections.abc import Mapping
 
-    from . import SECTION_ORDER
+    from .._repr_constants import STANDARD_SECTIONS
 
-    # Skip sections we render + internal/meta attributes (not data slots)
-    # See INTERNAL_ANNDATA_ATTRS docstring for why this is explicit, not introspected
-    known = set(SECTION_ORDER) | INTERNAL_ANNDATA_ATTRS
+    # Skip standard sections + internal/meta attributes.
+    # STANDARD_SECTIONS mirrors iter_outer's names without triggering its file I/O.
+    # See INTERNAL_ANNDATA_ATTRS docstring for why the internal list is explicit.
+    known = STANDARD_SECTIONS | INTERNAL_ANNDATA_ATTRS
 
-    # Also exclude sections that have registered custom formatters
-    # (including those with should_show=False that suppress display)
+    # Also exclude sections with registered custom formatters
+    # (including should_show=False ones that suppress display).
     known |= set(formatter_registry.get_registered_sections())
 
     unknown = []
@@ -440,7 +437,7 @@ def _get_raw_meta_parts(raw: object) -> list[str]:
 
 
 def _render_raw_section(
-    adata: AnnData,
+    raw: object,
     context: FormatterContext,
 ) -> str:
     """Render the raw section as a single expandable row.
@@ -456,7 +453,6 @@ def _render_raw_section(
     When expanded, shows a full AnnData-like repr for Raw contents (X, var, varm).
     The depth parameter prevents infinite recursion.
     """
-    raw = getattr(adata, "raw", None)
     if raw is None:
         return ""
 
@@ -571,12 +567,11 @@ def _generate_raw_repr_html(
         parts.append(_render_error_entry("X", str(e)))
 
     # var section (like AnnData's var)
-    # _render_dataframe_section expects an object with a .var attribute
     try:
         if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
             # Raw doesn't have the same structure as AnnData, so clear adata_ref
             var_context = replace(context, adata_ref=None, section="var")
-            parts.append(_render_dataframe_section(raw, "var", var_context))
+            parts.append(_render_dataframe_section("var", raw.var, var_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("var", str(e)))
 
@@ -584,7 +579,7 @@ def _generate_raw_repr_html(
     try:
         if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
             varm_context = replace(context, adata_ref=None, section="varm")
-            parts.append(_render_mapping_section(raw, "varm", varm_context))
+            parts.append(_render_mapping_section("varm", raw.varm, varm_context))
     except Exception as e:  # noqa: BLE001
         parts.append(_render_error_entry("varm", str(e)))
 

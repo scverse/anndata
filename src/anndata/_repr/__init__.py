@@ -322,16 +322,6 @@ from .._repr_constants import (
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
     NOT_SERIALIZABLE_MSG,
-    SECTION_LAYERS,
-    SECTION_OBS,
-    SECTION_OBSM,
-    SECTION_OBSP,
-    SECTION_RAW,
-    SECTION_UNS,
-    SECTION_VAR,
-    SECTION_VARM,
-    SECTION_VARP,
-    SECTION_X,
 )
 
 # Documentation base URL
@@ -355,20 +345,6 @@ def get_section_doc_url(section: str) -> str:
     """
     return f"{DOCS_BASE_URL}generated/anndata.AnnData.{section}.html"
 
-
-# Section order for display
-SECTION_ORDER = (
-    SECTION_X,
-    SECTION_OBS,
-    SECTION_VAR,
-    SECTION_UNS,
-    SECTION_OBSM,
-    SECTION_VARM,
-    SECTION_LAYERS,
-    SECTION_OBSP,
-    SECTION_VARP,
-    SECTION_RAW,
-)
 
 # Import main functionality
 # Inline styles for graceful degradation (from single source of truth)
@@ -428,7 +404,6 @@ __all__ = [  # noqa: RUF022  # organized by category, not alphabetically
     "DEFAULT_TYPE_WIDTH",
     "DOCS_BASE_URL",
     "get_section_doc_url",
-    "SECTION_ORDER",
     "NOT_SERIALIZABLE_MSG",
     # CSS dtype constants for custom formatters
     "CSS_DTYPE_NDARRAY",
