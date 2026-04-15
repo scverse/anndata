@@ -280,19 +280,21 @@ def _render_uns_entry(
 # -----------------------------------------------------------------------------
 
 
-def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
+def _detect_unknown_sections(
+    adata: AnnData, standard_section_names: set[str]
+) -> list[tuple[str, str]]:
     """Detect mapping-like attributes not surfaced by ``iter_outer``.
+
+    ``standard_section_names`` is the set of names already yielded by
+    ``iter_outer`` for this AnnData (collected by the caller so we don't
+    re-iterate it here, since each yield reopens the backing file).
 
     Returns list of (attr_name, type_description) tuples for unknown sections.
     """
     from collections.abc import Mapping
 
-    from .._repr_constants import STANDARD_SECTIONS
-
-    # Skip standard sections + internal/meta attributes.
-    # STANDARD_SECTIONS mirrors iter_outer's names without triggering its file I/O.
     # See INTERNAL_ANNDATA_ATTRS docstring for why the internal list is explicit.
-    known = STANDARD_SECTIONS | INTERNAL_ANNDATA_ATTRS
+    known = standard_section_names | INTERNAL_ANNDATA_ATTRS
 
     # Also exclude sections with registered custom formatters
     # (including should_show=False ones that suppress display).

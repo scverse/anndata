@@ -841,19 +841,23 @@ class TestUnknownSectionsAndErrorHandling:
     def test_detect_unknown_sections_empty(self):
         """Test _detect_unknown_sections returns empty for standard AnnData."""
         from anndata._repr.sections import _detect_unknown_sections
+        from anndata.utils import iter_outer
 
         adata = AnnData(np.zeros((5, 3)))
-        unknown = _detect_unknown_sections(adata)
+        names = {name for name, _ in iter_outer(adata)}
+        unknown = _detect_unknown_sections(adata, names)
         assert unknown == []
 
     def test_detect_unknown_sections_with_custom_attr(self):
         """Test _detect_unknown_sections detects custom attributes."""
         from anndata._repr.sections import _detect_unknown_sections
+        from anndata.utils import iter_outer
 
         adata = AnnData(np.zeros((5, 3)))
         # Add a custom public attribute (not starting with _)
         object.__setattr__(adata, "custom_data", [1, 2, 3])
-        unknown = _detect_unknown_sections(adata)
+        names = {name for name, _ in iter_outer(adata)}
+        unknown = _detect_unknown_sections(adata, names)
         # May or may not detect depending on implementation
         assert isinstance(unknown, list)
 

@@ -127,24 +127,6 @@ SECTION_OBSP = "obsp"
 SECTION_VARP = "varp"
 SECTION_RAW = "raw"
 
-# Canonical set of standard section names.
-# Mirrors the list iterated by `anndata.utils.iter_outer`. Kept as a constant
-# (rather than calling iter_outer with values discarded) because iter_outer
-# performs a file-open/close cycle per attribute on backed AnnData objects.
-# Use this for name-only membership checks; use iter_outer when you need values.
-STANDARD_SECTIONS = frozenset({
-    SECTION_X,
-    SECTION_OBS,
-    SECTION_VAR,
-    SECTION_UNS,
-    SECTION_OBSM,
-    SECTION_VARM,
-    SECTION_LAYERS,
-    SECTION_OBSP,
-    SECTION_VARP,
-    SECTION_RAW,
-})
-
 # Internal AnnData attributes to skip when detecting unknown sections.
 #
 # Standard data sections (obs, var, uns, obsm, etc.) are discovered via

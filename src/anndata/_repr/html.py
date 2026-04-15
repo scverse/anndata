@@ -22,6 +22,7 @@ from .._repr_constants import (
     DEFAULT_MAX_README_SIZE,
     TOOLTIP_TRUNCATE_LENGTH,
 )
+from ..utils import iter_outer
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -34,7 +35,6 @@ from . import (
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
 )
-from ..utils import iter_outer
 from .components import (
     render_badge,
     render_search_box,
@@ -84,7 +84,6 @@ from .._repr_constants import (
     COPY_BUTTON_PADDING_PX,
     DEFAULT_FIELD_WIDTH_PX,
     MIN_FIELD_WIDTH_PX,
-    STANDARD_SECTIONS,
 )
 from . import formatters as _formatters  # noqa: F401
 
@@ -97,8 +96,10 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
     (uns, obsm, varm, layers, obsp, varp) plus any registered custom sections.
     """
     all_names: list[str] = []
+    standard_sections: set[str] = set()
 
     for section, attr in iter_outer(adata):
+        standard_sections.add(section)
         if section in {"X", "raw"} or attr is None:
             continue
         try:
@@ -112,7 +113,7 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
 
     # Registered custom sections (e.g., TreeData's obst/vart)
     for section_name in formatter_registry.get_registered_sections():
-        if section_name in STANDARD_SECTIONS:
+        if section_name in standard_sections:
             continue
         try:
             attr = getattr(adata, section_name, None)
@@ -345,9 +346,16 @@ def _render_all_sections(
 ) -> list[str]:
     """Render all standard and custom sections."""
     parts: list[str] = []
-    custom_sections_after = _get_custom_sections_by_position(adata)
+    # Materialize iter_outer once. On backed AnnData each yield reopens/closes
+    # the backing file, so we pay that cost once and reuse the names downstream.
+    sections = list(iter_outer(adata))
+    standard_section_names = {name for name, _ in sections}
 
-    for section, elem in iter_outer(adata):
+    custom_sections_after = _get_custom_sections_by_position(
+        adata, standard_section_names
+    )
+
+    for section, elem in sections:
         parts.append(_render_section(adata, section, elem, context))
 
         # Render custom sections after this section
@@ -365,7 +373,7 @@ def _render_all_sections(
         )
 
     # Detect and show unknown sections (mapping-like attributes not surfaced by iter_outer)
-    unknown_sections = _detect_unknown_sections(adata)
+    unknown_sections = _detect_unknown_sections(adata, standard_section_names)
     if unknown_sections:
         parts.append(_render_unknown_sections(unknown_sections))
 
@@ -402,6 +410,7 @@ def _render_section(
 
 def _get_custom_sections_by_position(
     adata: object,
+    standard_section_names: set[str],
 ) -> dict[str | None, list[SectionFormatter]]:
     """
     Get registered custom section formatters grouped by their position.
@@ -419,7 +428,7 @@ def _get_custom_sections_by_position(
             continue
 
         # Skip standard sections (they're handled separately)
-        if section_name in STANDARD_SECTIONS:
+        if section_name in standard_section_names:
             continue
 
         # Check if this section should be shown for this object
