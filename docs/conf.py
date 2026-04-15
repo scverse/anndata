@@ -141,6 +141,7 @@ intersphinx_mapping = dict(
     xarray=("https://docs.xarray.dev/en/stable", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
+    scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
 )
 
 qualname_overrides = {
