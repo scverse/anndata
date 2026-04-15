@@ -371,10 +371,7 @@ def warn_once(msg: str, category: type[Warning]) -> None:
 def deprecation_msg(
     name: LiteralString, new_name: LiteralString, add_msg: LiteralString | None = None
 ) -> LiteralString:
-    msg = (
-        f"Use {new_name} instead of {name}, "
-        f"{name} is deprecated and will be removed in the future."
-    )
+    msg = f"Use {new_name} instead of {name}."
     if add_msg is not None:
         msg += f" {add_msg}"
     return msg
