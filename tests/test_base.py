@@ -634,7 +634,7 @@ def test_to_df_dense():
     pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
-@pytest.mark.filterwarnings("ignore:Use anndata.acc.A instead of:FutureWarning")
+@pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning")
 def test_convenience(subtests: pytest.Subtests) -> None:
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
