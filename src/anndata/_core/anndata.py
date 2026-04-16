@@ -24,6 +24,7 @@ from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
 from anndata._warnings import ImplicitModificationWarning
+from testing.anndata._doctest import doctest_filterwarnings
 
 from .. import utils
 from .._settings import settings
@@ -1579,6 +1580,7 @@ class AnnData:  # noqa: PLW1641
             ),
         )
     )
+    @doctest_filterwarnings("ignore", r"The method concatenate.*", FutureWarning)
     def concatenate(
         self,
         *adatas: AnnData,
