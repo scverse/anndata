@@ -68,3 +68,9 @@ class CSRDataset(_AbstractCSDataset, ABC):
 class CSCDataset(_AbstractCSDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
+
+
+for cls in (CSRDataset, CSCDataset):
+    # So that Sphinx doesn’t interpret these as inherited
+    cls.__getitem__ = _AbstractCSDataset.__getitem__
+    cls.to_memory = _AbstractCSDataset.to_memory
