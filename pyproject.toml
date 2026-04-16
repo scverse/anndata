@@ -64,17 +64,16 @@ dev = [
 doc = [
     "sphinx>=9.1",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=2.2.0",
+    "sphinx-autodoc-typehints>=3.6.2",
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
-    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
     "myst-nb",
-    "scanpydoc[theme,typehints] >=0.15.3",
-    "awkward>=2.3",
+    "scanpydoc[theme,typehints] >=0.17.1",
+    "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks
-    "myst_parser",
-    "sphinx_design>=0.5.0",
+    "myst-parser",
+    "sphinx-design",
     # for unreleased changes
     "anndata[dev-doc,dask]",
 ]
