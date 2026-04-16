@@ -19,8 +19,10 @@ import pytest
 import anndata
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Sequence
     from pathlib import Path
+
+    from testing.anndata._doctest import WarningFilter
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +57,10 @@ def _doctest_env(
             mod
         ):
             request.applymarker(pytest.skip(reason=f"doctest needs {mod} to run"))
+        for filter in cast(
+            "Sequence[WarningFilter]", getattr(func, "_doctest_warning_filter", ())
+        ):
+            warnings.filterwarnings(*filter)
     old_dd, settings.datasetdir = settings.datasetdir, cache.mkdir("scanpy-data")
     with chdir(tmp_path):
         yield

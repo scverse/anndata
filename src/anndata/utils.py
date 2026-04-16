@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from functools import singledispatch, wraps
+from functools import singledispatch
 from typing import TYPE_CHECKING
 
 import h5py
@@ -18,7 +18,7 @@ from .logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
-    from typing import Any, Literal
+    from typing import Any, Literal, LiteralString
 
 logger = get_logger(__name__)
 
@@ -365,57 +365,13 @@ def warn_once(msg: str, category: type[Warning], stacklevel: int = 1):
     warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
 
 
-def deprecated(
-    new_name: str,
-    category: type[Warning] = FutureWarning,
-    add_msg: str = "",
-    *,
-    hide: bool = True,
-):
-    """\
-    This is a decorator which can be used to mark functions
-    as deprecated with a FutureWarning. It will result in a warning being emitted
-    when the function is used.
-    """
-
-    def decorator(func):
-        name = func.__qualname__
-        msg = (
-            f"Use {new_name} instead of {name}, "
-            f"{name} is deprecated and will be removed in the future."
-        )
-        if add_msg:
-            msg += f" {add_msg}"
-
-        @wraps(func)
-        def new_func(*args, **kwargs):
-            warnings.warn(msg, category=category, stacklevel=2)
-            return func(*args, **kwargs)
-
-        setattr(new_func, "__deprecated", (category, msg, hide))
-        return new_func
-
-    return decorator
-
-
-class DeprecationMixinMeta(type):
-    """\
-    Use this as superclass so deprecated methods and properties
-    do not appear in vars(MyClass)/dir(MyClass)
-    """
-
-    def __dir__(cls):
-        def is_hidden(attr) -> bool:
-            if isinstance(attr, property):
-                attr = attr.fget
-            _, _, hide = getattr(attr, "__deprecated", (None, None, False))
-            return hide
-
-        return [
-            item
-            for item in type.__dir__(cls)
-            if not is_hidden(getattr(cls, item, None))
-        ]
+def deprecation_msg(
+    name: LiteralString, new_name: LiteralString, add_msg: LiteralString | None = None
+) -> LiteralString:
+    msg = f"Use {new_name} instead of {name}."
+    if add_msg is not None:
+        msg += f" {add_msg}"
+    return msg
 
 
 def raise_value_error_if_multiindex_columns(df: pd.DataFrame, attr: str):
