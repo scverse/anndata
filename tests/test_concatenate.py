@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
 mark_legacy_concatenate = pytest.mark.filterwarnings(
-    r"ignore:.*AnnData\.concatenate is deprecated:FutureWarning"
+    r"ignore:.*concatenate is deprecated:FutureWarning"
 )
 
 

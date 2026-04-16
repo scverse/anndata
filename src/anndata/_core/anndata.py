@@ -1573,7 +1573,7 @@ class AnnData:  # noqa: PLW1641
             "0.10.3",
             deprecation_msg(
                 "AnnData.concatenate",
-                "anndata.concat"
+                "anndata.concat",
                 "See the tutorial for concat at: "
                 "https://anndata.readthedocs.io/en/latest/concatenation.html",
             ),
