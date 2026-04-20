@@ -671,10 +671,10 @@ def _load_css_colors() -> frozenset[str]:
     -------
     frozenset of lowercase color names
     """
-    from functools import lru_cache
+    from functools import cache
     from importlib.resources import files
 
-    @lru_cache(maxsize=1)
+    @cache
     def _load() -> frozenset[str]:
         content = (
             files("anndata._repr.static")

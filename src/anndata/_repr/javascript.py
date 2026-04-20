@@ -14,11 +14,11 @@ that scopes it to a specific container element.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from importlib.resources import files
 
 
-@lru_cache(maxsize=1)
+@cache
 def _load_js_content() -> str:
     """Load main JS content from static file (cached)."""
     return files("anndata._repr.static").joinpath("repr.js").read_text(encoding="utf-8")

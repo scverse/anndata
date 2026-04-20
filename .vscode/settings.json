@@ -1,5 +1,5 @@
 {
-    "[python][toml][json][jsonc]": {
+    "[python][javascript][toml][json][jsonc]": {
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit",
@@ -12,7 +12,7 @@
     "[toml]": {
         "editor.defaultFormatter": "tamasfe.even-better-toml",
     },
-    "[json][jsonc]": {
+    "[javascript][json][jsonc]": {
         "editor.defaultFormatter": "biomejs.biome",
     },
     "python.analysis.typeCheckingMode": "basic",
@@ -25,4 +25,6 @@
     ],
     "python.terminal.activateEnvironment": true,
     "python.analysis.include": ["src/**/*", "ci/scripts/**/*", "tests/**/*"],
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
 }

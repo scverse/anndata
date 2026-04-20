@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from importlib.resources import files
 
 
-@lru_cache(maxsize=1)
+@cache
 def get_css() -> str:
     """Get the complete CSS for the HTML representation.
 
