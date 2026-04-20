@@ -584,16 +584,18 @@ class Reindexer:
         import dask.array as da
 
         indexer = self.idx
-        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked
-        if is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix):
-            minor_axis = 0 if el._meta.format == "csc" else 1
-            if el.chunksize[minor_axis] == el.shape[minor_axis]:
-                return el.map_blocks(
-                    partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
-                    chunks=(el.chunks[0], len(self.new_idx)),
-                    meta=el._meta,
-                )
-
+        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked and whose major axis is the concat axis.
+        if (
+            is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
+            and el._meta.format == "csr"
+            and el.chunksize[1] == el.shape[1]
+            and axis == 1
+        ):
+            return el.map_blocks(
+                partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
+                chunks=(el.chunks[0], len(self.new_idx)),
+                meta=el._meta,
+            )
         if fill_value is None:
             fill_value = default_fill_value([el])
         shape = list(el.shape)
@@ -740,7 +742,6 @@ class Reindexer:
 
         if fill_idxer is not None:
             out[fill_idxer] = fill_value
-
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
