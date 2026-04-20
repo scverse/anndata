@@ -583,6 +583,17 @@ class Reindexer:
     def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
         import dask.array as da
 
+        indexer = self.idx
+        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked
+        if is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix):
+            minor_axis = 0 if el._meta.format == "csc" else 1
+            if el.chunksize[minor_axis] == el.shape[minor_axis]:
+                return el.map_blocks(
+                    partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
+                    chunks=(el.chunks[0], len(self.new_idx)),
+                    meta=el._meta,
+                )
+
         if fill_value is None:
             fill_value = default_fill_value([el])
         shape = list(el.shape)
@@ -591,12 +602,11 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return da.broadcast_to(fill_value, tuple(shape))
 
-        indexer = self.idx
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
         if any(indexer == -1):
             # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
-            if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
+            if is_sparse_sub and np.isscalar(fill_value):
                 fill_value = np.array([[fill_value]])
             sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
