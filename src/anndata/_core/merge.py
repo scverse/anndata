@@ -584,7 +584,7 @@ class Reindexer:
         import dask.array as da
 
         indexer = self.idx
-        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked and whose major axis is the concat axis.
+        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked and being reindexed.
         if (
             is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
             and el._meta.format == "csr"
