@@ -589,14 +589,16 @@ class Reindexer:
         # This prevents 0's from being stored explicitly in the sparse matrices when outer joining.
         if (
             is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
-            and el._meta.format == "csr"
-            and el.chunksize[1] == el.shape[1]
-            and axis == 1
+            and el.chunksize[minor_axis := int(el._meta.format == "csr")]
+            == el.shape[minor_axis]
+            and axis == minor_axis
             and is_outer
         ):
             return el.map_blocks(
                 partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
-                chunks=(el.chunks[0], len(self.new_idx)),
+                chunks=(el.chunks[0], len(self.new_idx))
+                if minor_axis == 1
+                else (len(self.new_idx), el.chunks[1]),
                 meta=el._meta,
             )
         if fill_value is None:

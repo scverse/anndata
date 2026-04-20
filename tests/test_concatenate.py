@@ -1814,22 +1814,53 @@ def test_concat_on_var_outer_join(array_type):
     _ = concat([a, b], join="outer", axis=1)
 
 
-def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+@pytest.mark.parametrize("format", ["csr", "csc"])
+@pytest.mark.parametrize(
+    "unchunked_minor_axis", [True, False], ids=["unchunked_minor", "chunked_minor"]
+)
+def test_concat_dask_sparse_matches_memory(
+    join_type,
+    merge_strategy,
+    format: Literal["csr", "csc"],
+    *,
+    unchunked_minor_axis: bool,
+    axis_name: Literal["obs", "var"],
+):
     import dask.array as da
 
-    X = sparse.random(50, 20, density=0.5, format="csr")
-    X_dask = da.from_array(X, chunks=(5, 20))
-    var_names_1 = [f"gene_{i}" for i in range(20)]
-    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20)]
+    X = sparse.random(50, 20, density=0.5, format=format)
+    X_dask = da.from_array(
+        X,
+        chunks=(
+            X.shape[0] if format == "csc" else 10,
+            X.shape[1] if format == "csr" else 5,
+        )
+        if unchunked_minor_axis
+        else (5, 10),
+    )
+    off_axis_idx = int(axis_name == "obs")
+    concat_axis_idx = int(axis_name == "var")
+    off_axis = "var" if axis_name == "obs" else "obs"
+    axis_names_1 = [f"off_axis_{i}" for i in range(X.shape[off_axis_idx])]
+    axis_names_2 = [
+        f"off_axis_{i}{'_foo' if (i % 2) else ''}" for i in range(X.shape[off_axis_idx])
+    ]
 
-    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
-    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+    ad1 = AnnData(X=X, **{off_axis: pd.DataFrame(index=axis_names_1)})
+    ad2 = AnnData(X=X, **{off_axis: pd.DataFrame(index=axis_names_2)})
 
-    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
-    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+    ad1_dask = AnnData(X=X_dask, **{off_axis: pd.DataFrame(index=axis_names_1)})
+    ad2_dask = AnnData(X=X_dask, **{off_axis: pd.DataFrame(index=axis_names_2)})
 
-    res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
-    res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+    res_in_memory = concat(
+        [ad1, ad2], join=join_type, merge=merge_strategy, axis=concat_axis_idx
+    )
+    res_dask = concat(
+        [ad1_dask, ad2_dask],
+        join=join_type,
+        merge=merge_strategy,
+        axis=concat_axis_idx,
+    )
     assert_equal(res_in_memory, res_dask)
 
 
