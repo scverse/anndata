@@ -585,8 +585,8 @@ class Reindexer:
 
         indexer = self.idx
         is_outer = any(indexer == -1)
-        # Fast path for the majority of sparse matrixes whose minor-axis is unchunked and being reindexed.
-        # This prevents 0's from being stored explicitly in the sparse matrices when outer joining.
+        # Fast path for the majority of sparse matrices whose minor-axis is unchunked and is being reindexed.
+        # This prevents 0's from being stored explicitly in the sparse matrices when outer joining, for example (see below).
         if (
             is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
             and el.chunksize[minor_axis := int(el._meta.format == "csr")]
