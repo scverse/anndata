@@ -584,12 +584,15 @@ class Reindexer:
         import dask.array as da
 
         indexer = self.idx
+        is_outer = any(indexer == -1)
         # Fast path for the majority of sparse matrixes whose minor-axis is unchunked and being reindexed.
+        # This prevents 0's from being stored explicitly in the sparse matrices when outer joining.
         if (
             is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
             and el._meta.format == "csr"
             and el.chunksize[1] == el.shape[1]
             and axis == 1
+            and is_outer
         ):
             return el.map_blocks(
                 partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
@@ -606,7 +609,7 @@ class Reindexer:
 
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
-        if any(indexer == -1):
+        if is_outer:
             # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
             if is_sparse_sub and np.isscalar(fill_value):
                 fill_value = np.array([[fill_value]])
