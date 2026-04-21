@@ -418,7 +418,11 @@ if (readmeIcon) {
         // Header
         const header = document.createElement("div")
         header.className = "anndata-readme__header"
-        header.innerHTML = `<h3 id="${modalTitleId}">README</h3>`
+
+        const title = document.createElement("h3")
+        title.id = modalTitleId
+        title.textContent = "README"
+        header.appendChild(title)
 
         const closeBtn = document.createElement("button")
         closeBtn.className = "anndata-readme__close"
