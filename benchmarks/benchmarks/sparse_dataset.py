@@ -87,8 +87,8 @@ class SparseCSRContiguousSlice:
 class SparseCSRDaskConcat:
     filepath = "data.zarr"
 
-    params = (["inner", "outer"],)
-    param_names = ("join",)
+    params = (["inner", "outer"], [0, -1])
+    param_names = ("join", "fill_value")
 
     def setup_cache(self):
         X = sparse.random(
@@ -116,17 +116,23 @@ class SparseCSRDaskConcat:
             for i in range(20)
         ]
 
-    def time_concat(self, join: Literal["inner", "outer"]):
-        concat(self.adatas, join=join)
+    def time_concat(self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]):
+        concat(self.adatas, join=join, fill_value=fill_value)
 
-    def peakmem_concat(self, join: Literal["inner", "outer"]):
-        concat(self.adatas, join=join)
+    def peakmem_concat(
+        self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]
+    ):
+        concat(self.adatas, join=join, fill_value=fill_value)
 
-    def time_concat_with_mem(self, join: Literal["inner", "outer"]):
-        concat(self.adatas, join=join).to_memory()
+    def time_concat_with_mem(
+        self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]
+    ):
+        concat(self.adatas, join=join, fill_value=fill_value).to_memory()
 
-    def peakmem_concat_with_mem(self, join: Literal["inner", "outer"]):
-        concat(self.adatas, join=join).to_memory()
+    def peakmem_concat_with_mem(
+        self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]
+    ):
+        concat(self.adatas, join=join, fill_value=fill_value).to_memory()
 
 
 class SparseCSRDask:

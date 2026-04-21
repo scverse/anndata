@@ -1818,13 +1818,15 @@ def test_concat_on_var_outer_join(array_type):
 @pytest.mark.parametrize(
     "unchunked_minor_axis", [True, False], ids=["unchunked_minor", "chunked_minor"]
 )
+@pytest.mark.parametrize("fill_value", [0, -1])
 def test_concat_dask_sparse_matches_memory(
     join_type,
     merge_strategy,
     format: Literal["csr", "csc"],
+    axis_name: Literal["obs", "var"],
+    fill_value: Literal[-1, 0],
     *,
     unchunked_minor_axis: bool,
-    axis_name: Literal["obs", "var"],
 ):
     import dask.array as da
 
@@ -1853,13 +1855,18 @@ def test_concat_dask_sparse_matches_memory(
     ad2_dask = AnnData(X=X_dask, **{off_axis: pd.DataFrame(index=axis_names_2)})
 
     res_in_memory = concat(
-        [ad1, ad2], join=join_type, merge=merge_strategy, axis=concat_axis_idx
+        [ad1, ad2],
+        join=join_type,
+        merge=merge_strategy,
+        axis=concat_axis_idx,
+        fill_value=fill_value,
     )
     res_dask = concat(
         [ad1_dask, ad2_dask],
         join=join_type,
         merge=merge_strategy,
         axis=concat_axis_idx,
+        fill_value=fill_value,
     )
     assert_equal(res_in_memory, res_dask)
 

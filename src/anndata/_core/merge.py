@@ -595,7 +595,12 @@ class Reindexer:
             and is_outer
         ):
             return el.map_blocks(
-                partial(self._apply_to_sparse, axis=axis, fill_value=fill_value),
+                partial(
+                    self._apply_to_sparse,
+                    axis=axis,
+                    fill_value=fill_value,
+                    keep_format=True,
+                ),
                 chunks=(el.chunks[0], len(self.new_idx))
                 if minor_axis == 1
                 else (len(self.new_idx), el.chunks[1]),
@@ -675,7 +680,7 @@ class Reindexer:
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
-        self, el: CSMatrix | CSArray, *, axis, fill_value=None
+        self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
     ) -> CSMatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
@@ -747,6 +752,8 @@ class Reindexer:
 
         if fill_idxer is not None:
             out[fill_idxer] = fill_value
+        if keep_format:
+            out = out.tocsr() if el.format == "csr" else out.tocsc()
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
