@@ -558,10 +558,20 @@
         &.error {
             background: var(--anndata-error-bg) !important;
         }
+    }
 
-        &:hover .anndata-entry__copy {
-            opacity: 1;
-        }
+    /* Copy button visibility on hover.
+       Using `.anndata-entry:hover` would propagate from any nested child row
+       up through every ancestor entry, revealing every ancestor's copy button
+       when a deeply-nested row is hovered. Scope the trigger to:
+         - the entry itself for plain (non-expandable) rows, and
+         - the <summary> for expandable rows, which doesn't contain nested
+           child entries (those live in `.anndata-entry__nested-content`). */
+    div.anndata-entry:hover > .anndata-entry__name .anndata-entry__copy,
+    details.anndata-entry
+        > summary.anndata-entry__summary:hover
+        .anndata-entry__copy {
+        opacity: 1;
     }
 
     /* Regular (non-expandable) entries use subgrid for column alignment */

@@ -32,6 +32,8 @@ from .._repr_constants import (
     ERROR_TRUNCATE_LENGTH,
     INTERNAL_ANNDATA_ATTRS,
 )
+from .._types import AnnDataElem
+from ..utils import get_literal_members
 from . import (
     get_section_doc_url,
 )
@@ -280,21 +282,15 @@ def _render_uns_entry(
 # -----------------------------------------------------------------------------
 
 
-def _detect_unknown_sections(
-    adata: AnnData, standard_section_names: set[str]
-) -> list[tuple[str, str]]:
-    """Detect mapping-like attributes not surfaced by ``iter_outer``.
-
-    ``standard_section_names`` is the set of names already yielded by
-    ``iter_outer`` for this AnnData (collected by the caller so we don't
-    re-iterate it here, since each yield reopens the backing file).
+def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
+    """Detect mapping-like attributes not surfaced by the standard section list.
 
     Returns list of (attr_name, type_description) tuples for unknown sections.
     """
     from collections.abc import Mapping
 
     # See INTERNAL_ANNDATA_ATTRS docstring for why the internal list is explicit.
-    known = standard_section_names | INTERNAL_ANNDATA_ATTRS
+    known = set(get_literal_members(AnnDataElem)) | INTERNAL_ANNDATA_ATTRS
 
     # Also exclude sections with registered custom formatters
     # (including should_show=False ones that suppress display).

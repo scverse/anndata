@@ -22,7 +22,8 @@ from .._repr_constants import (
     DEFAULT_MAX_README_SIZE,
     TOOLTIP_TRUNCATE_LENGTH,
 )
-from ..utils import iter_outer
+from .._types import AnnDataElem
+from ..utils import get_literal_members
 from . import (
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -96,19 +97,23 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
     (uns, obsm, varm, layers, obsp, varp) plus any registered custom sections.
     """
     all_names: list[str] = []
-    standard_sections: set[str] = set()
+    standard_sections = set(get_literal_members(AnnDataElem))
 
-    for section, attr in iter_outer(adata):
-        standard_sections.add(section)
-        if section in {"X", "raw"} or attr is None:
+    for section in get_literal_members(AnnDataElem):
+        if section in {"X", "raw"}:
             continue
         try:
+            attr = getattr(adata, section)
+            if attr is None:
+                continue
             if section in {"obs", "var"}:
                 if hasattr(attr, "columns"):
                     all_names.extend(attr.columns.tolist())
             elif hasattr(attr, "keys"):
                 all_names.extend(attr.keys())
         except Exception:  # noqa: BLE001
+            # Broken section — skip for width calculation, error placeholder is
+            # rendered separately by _render_section.
             pass
 
     # Registered custom sections (e.g., TreeData's obst/vart)
@@ -346,17 +351,10 @@ def _render_all_sections(
 ) -> list[str]:
     """Render all standard and custom sections."""
     parts: list[str] = []
-    # Materialize iter_outer once. On backed AnnData each yield reopens/closes
-    # the backing file, so we pay that cost once and reuse the names downstream.
-    sections = list(iter_outer(adata))
-    standard_section_names = {name for name, _ in sections}
+    custom_sections_after = _get_custom_sections_by_position(adata)
 
-    custom_sections_after = _get_custom_sections_by_position(
-        adata, standard_section_names
-    )
-
-    for section, elem in sections:
-        parts.append(_render_section(adata, section, elem, context))
+    for section in get_literal_members(AnnDataElem):
+        parts.append(_render_section(adata, section, context))
 
         # Render custom sections after this section
         if section in custom_sections_after:
@@ -372,8 +370,8 @@ def _render_all_sections(
             for section_formatter in custom_sections_after[None]
         )
 
-    # Detect and show unknown sections (mapping-like attributes not surfaced by iter_outer)
-    unknown_sections = _detect_unknown_sections(adata, standard_section_names)
+    # Detect and show unknown sections (attributes not in AnnDataElem)
+    unknown_sections = _detect_unknown_sections(adata)
     if unknown_sections:
         parts.append(_render_unknown_sections(unknown_sections))
 
@@ -383,19 +381,21 @@ def _render_all_sections(
 def _render_section(
     adata: AnnData,
     section: str,
-    elem: object,
     context: FormatterContext,
 ) -> str:
     """Render a single standard section.
 
-    ``elem`` is the value yielded by ``iter_outer`` for this section. We pass it
-    through to the per-section renderers so they don't need a second ``getattr``
-    (which would re-open the backing file on backed AnnData, since ``iter_outer``
-    closes it after each yield).
+    Attribute access happens inside the try/except so a broken section (one
+    whose ``getattr`` raises — e.g. a corrupt aligned mapping or a subclass
+    with a crashing property) renders as an error placeholder instead of
+    aborting the whole repr. This is why we iterate section names directly
+    via ``get_literal_members(AnnDataElem)`` rather than delegating to
+    ``iter_outer``, which propagates the first exception it hits.
     """
     try:
         if section == "X":
             return render_x_entry(adata, context)
+        elem = getattr(adata, section)
         if section == "raw":
             return _render_raw_section(elem, context)
         if section in ("obs", "var"):
@@ -405,12 +405,11 @@ def _render_section(
         return _render_mapping_section(section, elem, context)
     except Exception as e:  # noqa: BLE001
         # Show error instead of hiding the section
-        return _render_error_entry(section, str(e))
+        return _render_error_entry(section, f"{type(e).__name__}: {e}")
 
 
 def _get_custom_sections_by_position(
     adata: object,
-    standard_section_names: set[str],
 ) -> dict[str | None, list[SectionFormatter]]:
     """
     Get registered custom section formatters grouped by their position.
@@ -421,6 +420,7 @@ def _get_custom_sections_by_position(
     from collections import defaultdict
 
     result = defaultdict(list)
+    standard_section_names = set(get_literal_members(AnnDataElem))
 
     for section_name in formatter_registry.get_registered_sections():
         formatter = formatter_registry.get_section_formatter(section_name)
