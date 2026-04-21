@@ -283,12 +283,6 @@ class AnnData:  # noqa: PLW1641
         oidx: _Index1DNorm | int | np.integer,
         vidx: _Index1DNorm | int | np.integer,
     ):
-        if adata_ref.isbacked and adata_ref.is_view:
-            msg = (
-                "Currently, you cannot index repeatedly into a backed AnnData, "
-                "that is, you cannot make a view of a view."
-            )
-            raise ValueError(msg)
         self._is_view = True
         if isinstance(oidx, int | np.integer):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
