@@ -113,7 +113,7 @@ class SparseCSRDaskConcat:
                 ),
                 X=read_elem_lazy(self.group["X"]),
             )
-            for i in range(20)
+            for i in range(10)
         ]
 
     def time_concat(self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]):
