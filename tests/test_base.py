@@ -6,9 +6,11 @@ from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
@@ -16,6 +18,7 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._core.raw import Raw
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata._settings import settings
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -768,3 +771,23 @@ def test_create_adata_from_single_axis_elem(
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
     assert_equal(from_disk, in_memory)
+
+
+@pytest.mark.parametrize("in_x", [True, False], ids=["X", "layers"])
+@pytest.mark.parametrize("is_sparse", [True, False], ids=["sparse", "dense"])
+@pytest.mark.parametrize("storage", ["h5ad", "zarr"])
+def test_transpose_errors_with_backed_arrays(
+    tmp_path: Path, storage: str, *, is_sparse: bool, in_x: bool
+):
+    adata = AnnData(X=csr_matrix(np.ones((3, 4))) if is_sparse else np.ones((3, 4)))
+    path = tmp_path / f"test.{storage}"
+    getattr(adata, f"write_{storage}")(path)
+    f = (h5py.File if storage == "h5ad" else zarr.open)(path)
+    raw_array = sparse_dataset(f["X"]) if is_sparse else f["X"]
+
+    adata = AnnData(**({"X": raw_array} if in_x else {"layers": {"test": raw_array}}))
+
+    with pytest.raises(ValueError, match=r"Cannot transpose anndata object"):
+        adata.transpose()
+    if storage == "h5ad":
+        f.close()
