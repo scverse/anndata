@@ -438,24 +438,38 @@ def module_get_attr_redirect(
     raise AttributeError(msg)
 
 
+#: Canonical order of the standard ``AnnData`` section attributes as used
+#: by :func:`iter_outer`, the text repr and the HTML repr. Exposed as a
+#: public constant so consumers that only need the names (e.g. membership
+#: checks, ordering decisions, introspecting layout without accessing the
+#: data) can reference it directly without driving :func:`iter_outer`,
+#: which reconstructs aligned mappings and reopens the backing file per
+#: yield.
+STANDARD_SECTIONS: tuple[AnnDataElem, ...] = (
+    "X",
+    "obs",
+    "var",
+    "uns",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "raw",
+)
+
+
 def iter_outer(
     adata,
 ) -> Generator[
     tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
 ]:
-    """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
-    for attr_name in [
-        "X",
-        "obs",
-        "var",
-        "uns",
-        "obsm",
-        "varm",
-        "obsp",
-        "varp",
-        "layers",
-        "raw",
-    ]:
+    """Iterate over key-value pairs of the parent "elems" like ``X``, ``obs``,
+    ``varp`` etc.
+
+    The section order is :data:`STANDARD_SECTIONS`.
+    """
+    for attr_name in STANDARD_SECTIONS:
         was_closed = adata.isbacked and not adata.file.is_open
         yield (attr_name, getattr(adata, attr_name))
         if was_closed:

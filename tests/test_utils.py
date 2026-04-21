@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from itertools import repeat
 
+import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
 
 import anndata as ad
 from anndata.tests.helpers import gen_typed_df
-from anndata.utils import make_index_unique
+from anndata.utils import STANDARD_SECTIONS, iter_outer, make_index_unique
 
 
 def test_make_index_unique() -> None:
@@ -59,3 +60,23 @@ def test_adata_unique_indices() -> None:
 
     pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
     pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
+
+
+def test_standard_sections_is_iter_outer_order() -> None:
+    """``STANDARD_SECTIONS`` must match the section order ``iter_outer`` yields.
+
+    Consumers that need only names (membership tests, layout introspection)
+    rely on this equivalence to avoid the extra cost of actually driving the
+    generator.
+    """
+    adata = ad.AnnData(np.zeros((3, 4)))
+    assert tuple(name for name, _ in iter_outer(adata)) == STANDARD_SECTIONS
+
+
+def test_standard_sections_contents() -> None:
+    """Every name in ``STANDARD_SECTIONS`` is accessible on a plain AnnData."""
+    adata = ad.AnnData(np.zeros((3, 4)))
+    for name in STANDARD_SECTIONS:
+        assert hasattr(adata, name), (
+            f"STANDARD_SECTIONS contains {name!r} but AnnData has no such attribute"
+        )
