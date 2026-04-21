@@ -395,10 +395,9 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    # Three hits for metadata in zarr v3:
-    # see https://github.com/zarr-developers/zarr-python/discussions/2760 for more info on the difference.
+    # 1 hit for metadata in zarr v3 for zarr.json:
     # Then there is actual data access, 1 more when cached, 4 more otherwise.
-    c_expected = 4 if should_cache_indptr else 7
+    c_expected = 2 if should_cache_indptr else 5
     assert store.get_access_count("X/indptr") == c_expected
     for elem_not_indptr in elems - {"indptr"}:
         assert (

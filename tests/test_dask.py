@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -25,7 +26,7 @@ from anndata.tests.helpers import (
     as_sparse_dask_array,
     as_sparse_dask_matrix,
     assert_equal,
-    check_all_sharded,
+    check_all_sharded_v3,
     gen_adata,
 )
 
@@ -127,8 +128,6 @@ def test_dask_distributed_write(
     *,
     auto_shard_zarr_v3: bool,
 ) -> None:
-    if auto_shard_zarr_v3 and ad.settings.zarr_write_format == 2:
-        pytest.skip(reason="Cannot shard v2 data")
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
@@ -144,8 +143,12 @@ def test_dask_distributed_write(
             ad.io.write_elem(g, "", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
-            if auto_shard_zarr_v3:
-                check_all_sharded(g)
+            if (
+                auto_shard_zarr_v3
+                and ad.settings.zarr_write_format == 3
+                and isinstance(g, zarr.Group)
+            ):
+                check_all_sharded_v3(g)
             curr = ad.io.read_elem(g)
 
     with pytest.raises(AssertionError):

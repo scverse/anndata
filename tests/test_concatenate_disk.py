@@ -16,7 +16,7 @@ from anndata._core import merge
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
+from anndata.tests.helpers import assert_equal, check_all_sharded_v3, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -269,7 +269,7 @@ def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
     g = zarr.open(tmp_path)
     assert g.metadata.zarr_format == 3
 
-    check_all_sharded(g)
+    check_all_sharded_v3(g)
 
 
 def test_singleton(xxxm_adatas, tmp_path, file_format):

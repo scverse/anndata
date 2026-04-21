@@ -28,9 +28,11 @@ from anndata.compat import (
     _read_attr,
 )
 from anndata.tests.helpers import (
+    DEFAULT_KEY_TYPES,
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
+    check_all_sharded_v3,
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
@@ -456,6 +458,8 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
+    if zarr_write_format == 2:
+        ad.settings.auto_shard_zarr_v3 = False
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
@@ -948,6 +952,17 @@ def test_io_dtype(tmp_path, diskfmt, dtype, roundtrip):
     assert curr.X.dtype == dtype
 
 
+def test_zarr_v3_sharded_default(tmp_path):
+    pth = tmp_path / "adata.zarr"
+
+    orig = gen_adata(
+        (10, 20), obsm_types=DEFAULT_KEY_TYPES, varm_types=DEFAULT_KEY_TYPES
+    )
+    orig.write_zarr(pth)
+
+    check_all_sharded_v3(zarr.open(pth))
+
+
 def test_h5py_attr_limit(tmp_path):
     N = 10_000
     a = ad.AnnData(np.ones((5, 10)))
@@ -1018,7 +1033,7 @@ def test_write_elem_version_mismatch(tmp_path: Path):
     g = zarr.open_group(
         zarr_path,
         mode="w",
-        zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
+        zarr_format=2,
     )
     ad.io.write_elem(g, "/", adata)
     adata_roundtripped = ad.read_zarr(g)
