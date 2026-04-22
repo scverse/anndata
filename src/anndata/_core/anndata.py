@@ -1225,6 +1225,12 @@ class AnnData:  # noqa: PLW1641
                 "which is currently not implemented. Call `.copy()` before transposing."
             )
             raise ValueError(msg)
+        if any(
+            isinstance(elem, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset)
+            for elem in (self.X, *self.layers.values())
+        ):
+            msg = "Cannot transpose anndata object that has raw zarr arrays or h5py arrays backing X or layers"
+            raise ValueError(msg)
 
         return AnnData(
             X=_safe_transpose(X) if X is not None else None,
