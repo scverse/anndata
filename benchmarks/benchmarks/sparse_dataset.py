@@ -107,7 +107,7 @@ class SparseCSRDaskConcat:
             AnnData(
                 var=pd.DataFrame(
                     index=[
-                        f"gene_{j}{f'_{i}' if (j % 100 == 0) else ''}"
+                        f"gene_{j}{f'_{i}' if (j % 500 == 0) else ''}"
                         for j in range(10_000)
                     ]
                 ),
