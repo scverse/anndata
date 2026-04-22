@@ -159,7 +159,7 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
     "default:anndata will no longer support zarr v2:DeprecationWarning",
     "default:Consolidated metadata is:UserWarning",
-    "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
     "default:Writing zarr v2:UserWarning",
