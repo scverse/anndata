@@ -107,13 +107,13 @@ class SparseCSRDaskConcat:
             AnnData(
                 var=pd.DataFrame(
                     index=[
-                        f"gene_{j}{f'_{i}' if (j % 100 == 0) else ''}"
+                        f"gene_{j}{f'_{i}' if (j % 500 == 0) else ''}"
                         for j in range(10_000)
                     ]
                 ),
                 X=read_elem_lazy(self.group["X"]),
             )
-            for i in range(10)
+            for i in range(5)
         ]
 
     def time_concat(self, join: Literal["inner", "outer"], fill_value: Literal[0, -1]):
