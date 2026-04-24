@@ -74,13 +74,19 @@ def test_create_delete(
         del getattr(adata, attr)["a"]
 
 
-def test_assign_x_subset(file: h5py.File | zarr.Group):
+@pytest.mark.parametrize(
+    "num_indexing_ops", [1, 2], ids=["single_index", "double_index"]
+)
+def test_assign_x_subset(file: h5py.File | zarr.Group, num_indexing_ops: Literal[1, 2]):
     x = np.ones((10, 10))
     write_elem(file, "a", x)
 
     adata = AnnData(file["a"])
-
-    view = adata[3:7, 6:8]
+    if num_indexing_ops == 1:
+        view = adata[3:7, 6:8]
+    else:
+        view = adata[0:8, 0:8]
+        view = view[3:7, 6:8]
     view.X = np.zeros((4, 2))
 
     expected = x.copy()
