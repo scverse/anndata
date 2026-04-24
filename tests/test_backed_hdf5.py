@@ -290,10 +290,10 @@ def test_to_memory_full(
 
 
 def test_double_index(adata: ad.AnnData, backing_h5ad: Path):
+    adata_mem = adata.to_memory(copy=True)
+    adata_mem.strings_to_categoricals()
     adata.filename = backing_h5ad
-    with pytest.raises(ValueError, match=r"cannot make a view of a view"):
-        # no view of view of backed object currently
-        adata[:2][:, 0]
+    assert_equal(adata[:2][:, [0, 2]].to_memory(), adata_mem[:2][:, [0, 2]])
 
     # close backing file
     adata.write()
