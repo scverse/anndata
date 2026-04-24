@@ -42,6 +42,47 @@ adata_sparse = AnnData(
 )
 
 
+@pytest.fixture(params=["zarr", "h5ad"], scope="session")
+def diskfmt(request) -> Literal["zarr", "h5ad"]:
+    return request.param
+
+
+@pytest.fixture(
+    params=[adata_sparse, adata_dense], ids=["sparse", "dense"], scope="session"
+)
+def adata(request) -> AnnData:
+    return request.param
+
+
+@pytest.fixture(scope="session")
+def adata_on_disk(
+    diskfmt: Literal["h5ad", "zarr"],
+    adata: AnnData,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    path = (
+        tmp_path_factory.mktemp("disk_backed")
+        / f"{'sparse' if adata is adata_sparse else 'dense'}.{diskfmt}"
+    )
+    getattr(adata, f"write_{diskfmt}")(path)
+    return path
+
+
+@pytest.mark.parametrize("elem_name", ["X", "obsm", "layers"])
+def test_cant_copy_disk_backed(
+    adata_on_disk: Path, elem_name: Literal["X", "obsm", "layers"]
+):
+    is_sparse = "sparse" in str(adata_on_disk)
+    is_zarr = adata_on_disk.suffix == ".zarr"
+    root = (zarr.open if is_zarr else h5py.File)(adata_on_disk)
+    X = ad.io.sparse_dataset(root["X"]) if is_sparse else root["X"]
+    adata = AnnData(**{elem_name: (X if elem_name == "X" else {"X": X})})
+    with pytest.raises(NotImplementedError, match=r"Copy is not implemented"):
+        adata.copy()
+    if not is_zarr:
+        root.close()
+
+
 def test_creation():
     AnnData(np.array([[1, 2], [3, 4]]))
     AnnData(np.array([[1, 2], [3, 4]]), {}, {})
