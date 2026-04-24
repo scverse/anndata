@@ -83,10 +83,10 @@ def test_assign_x_subset(file: h5py.File | zarr.Group, num_indexing_ops: Literal
 
     adata = AnnData(file["a"])
     if num_indexing_ops == 1:
-        view = adata[3:7, 6:8]
+        view = adata[3:7, 6:8]  # (3 : 7-3=4), (6 : 8-6=2)
     else:
-        view = adata[0:8, 0:8]
-        view = view[3:7, 6:8]
+        view = adata[2:8, 1:8]  # first a wider window …
+        view = view[1:5, 5:7]  # (2+1=3 : 5-1=4), (1+5=6 : 7-5=2)
     view.X = np.zeros((4, 2))
 
     expected = x.copy()
