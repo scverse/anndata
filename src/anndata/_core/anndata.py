@@ -642,9 +642,7 @@ class AnnData:  # noqa: PLW1641
     def X(self):
         self.X = None
 
-    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(
-        "layers", Layers
-    )
+    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(Layers)
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -860,7 +858,7 @@ class AnnData:  # noqa: PLW1641
         self.uns = OrderedDict()
 
     obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "obsm", AxisArrays, 0
+        AxisArrays, 0
     )
     """\
     Multi-dimensional annotation of observations
@@ -872,7 +870,7 @@ class AnnData:  # noqa: PLW1641
     """
 
     varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "varm", AxisArrays, 1
+        AxisArrays, 1
     )
     """\
     Multi-dimensional annotation of variables/features
@@ -884,7 +882,7 @@ class AnnData:  # noqa: PLW1641
     """
 
     obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
-        AlignedMappingProperty("obsp", PairwiseArrays, 0)
+        AlignedMappingProperty(PairwiseArrays, 0)
     )
     """\
     Pairwise annotation of observations,
@@ -896,7 +894,7 @@ class AnnData:  # noqa: PLW1641
     """
 
     varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
-        AlignedMappingProperty("varp", PairwiseArrays, 1)
+        AlignedMappingProperty(PairwiseArrays, 1)
     )
     """\
     Pairwise annotation of variables/features,
