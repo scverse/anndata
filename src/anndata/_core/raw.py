@@ -114,7 +114,7 @@ class Raw:
         return self._n_obs
 
     varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "varm", AxisArrays, 1
+        AxisArrays, 1
     )
 
     @property
