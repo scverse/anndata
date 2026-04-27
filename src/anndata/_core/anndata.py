@@ -1332,12 +1332,6 @@ class AnnData:  # noqa: PLW1641
     ) -> AnnData:
         from ..typing import _XDataType
 
-        if self.isbacked and self.raw is not None:
-            msg = (
-                "This function does not currently handle backed objects "
-                "internally, this should be dealt with before."
-            )
-            raise NotImplementedError(msg)
         new = {}
         for key, elem in iter_outer(self):
             new[key] = elem.copy()
