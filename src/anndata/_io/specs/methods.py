@@ -289,6 +289,13 @@ def write_anndata(
     for sub_key, elem in iter_outer(adata):
         if not (sub_key == "X" and elem is None):
             if sub_key == "layers":
+                if None in elem:
+                    _writer.write_elem(
+                        g,
+                        "X",
+                        elem[None],
+                        dataset_kwargs=dataset_kwargs,
+                    )
                 elem = {k: v for k, v in elem.items() if k is not None}
             _writer.write_elem(
                 g,

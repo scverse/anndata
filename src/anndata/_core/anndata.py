@@ -1380,10 +1380,6 @@ class AnnData:  # noqa: PLW1641
                 else:
                     new[attr_name] = to_memory(attr, copy=copy)
 
-        if self.isbacked:
-            new["layers"][None] = self.X[...]
-            self.file.close()
-
         return AnnData(**new)
 
     def _has_raw_zarr_or_h5_array(self) -> bool:

@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 
 @no_write_dataset_2d
-def write_h5ad(
+def write_h5ad(  # noqa: PLR0912
     filepath: PathLike[str] | str,
     adata: AnnData,
     *,
@@ -100,7 +100,15 @@ def write_h5ad(
                 )
             else:
                 if k == "layers":
+                    if None in elem:
+                        write_elem(
+                            f,
+                            "X",
+                            elem[None],
+                            dataset_kwargs=dataset_kwargs,
+                        )
                     elem = {k: v for k, v in elem.items() if k is not None}
+
                 write_elem(
                     f,
                     k,
