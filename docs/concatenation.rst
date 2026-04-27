@@ -29,8 +29,8 @@ Let's start off with an example:
         uns: 'bulk_labels_colors', 'louvain', 'louvain_colors', 'neighbors', 'pca', 'rank_genes_groups'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
+        obsp: 'connectivities', 'distances'
         layers: None
-        obsp: ...
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
