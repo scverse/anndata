@@ -583,6 +583,29 @@ class Reindexer:
     def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
         import dask.array as da
 
+        indexer = self.idx
+        is_outer = any(indexer == -1)
+        # Fast path for the majority of sparse matrices whose minor-axis is unchunked and is being reindexed.
+        # This prevents 0's from being stored explicitly in the sparse matrices when outer joining, for example (see below).
+        if (
+            is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
+            and el.chunksize[minor_axis := int(el._meta.format == "csr")]
+            == el.shape[minor_axis]
+            and axis == minor_axis
+            and is_outer
+        ):
+            return el.map_blocks(
+                partial(
+                    self._apply_to_sparse,
+                    axis=axis,
+                    fill_value=fill_value,
+                    keep_format=True,
+                ),
+                chunks=(el.chunks[0], len(self.new_idx))
+                if minor_axis == 1
+                else (len(self.new_idx), el.chunks[1]),
+                meta=el._meta,
+            )
         if fill_value is None:
             fill_value = default_fill_value([el])
         shape = list(el.shape)
@@ -591,12 +614,11 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return da.broadcast_to(fill_value, tuple(shape))
 
-        indexer = self.idx
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
-        if any(indexer == -1):
+        if is_outer:
             # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
-            if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
+            if is_sparse_sub and np.isscalar(fill_value):
                 fill_value = np.array([[fill_value]])
             sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
@@ -658,7 +680,7 @@ class Reindexer:
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
-        self, el: CSMatrix | CSArray, *, axis, fill_value=None
+        self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
     ) -> CSMatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
@@ -730,7 +752,8 @@ class Reindexer:
 
         if fill_idxer is not None:
             out[fill_idxer] = fill_value
-
+        if keep_format:
+            out = out.tocsr() if el.format == "csr" else out.tocsc()
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
@@ -1289,7 +1312,8 @@ def make_xarray_extension_dtypes_dask(
         )
 
 
-DS_CONCAT_DUMMY_INDEX_NAME = "concat_index"
+DS_CONCAT_DUMMY_INDEX_NAME = "_anndata_concat_index"
+DS_MERGE_DUMMY_INDEX_NAME = "_anndata_merge_index"
 
 
 def concat_dataset2d_on_annot_axis(
@@ -1707,7 +1731,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             if a.true_index_dim != a.index_dim:
                 a.index = a.true_index
         annotations_with_only_dask = [
-            a.ds.rename({a.true_index_dim: "merge_index"})
+            a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
             for a in annotations_with_only_dask
         ]
         alt_annot = Dataset2D(

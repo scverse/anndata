@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
 from ..utils import (
     axis_len,
     convert_to_dict,
-    deprecated,
     deprecation_msg,
     raise_value_error_if_multiindex_columns,
     warn,
@@ -130,7 +130,7 @@ class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
-    @deprecated(deprecation_msg("as_dict", "dict(obj)"))
+    @deprecated(Deprecation("0.10.2", deprecation_msg("as_dict", "dict(obj)")))
     def as_dict(self) -> dict:
         return dict(self)
 
@@ -419,12 +419,12 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     The actual data is stored as `f'_{self.name}'` in the parent object.
     """
 
-    name: str
-    """Name of the attribute in the parent object."""
     cls: type[T]
     """Concrete type that will be constructed."""
     axis: Literal[0, 1] | None = None
     """Axis of the parent to align to."""
+    name: str | None = None
+    """Name of the attribute in the parent object."""
 
     def construct(self, obj: AnnData, *, store: MutableMapping[K, Value]) -> T:
         if self.axis is None:
@@ -439,6 +439,9 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
 
         fake.__annotations__ = {"return": self.cls._actual_class | self.cls._view_class}
         return fake
+
+    def __set_name__(self, owner: AnnData, name: str):
+        self.name = name
 
     def __get__(self, obj: None | AnnData, objtype: type | None = None) -> T:
         if obj is None:

@@ -46,6 +46,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
+    "scverse-misc>=0.0.3",
 ]
 dynamic = [ "version" ]
 
@@ -65,7 +66,7 @@ doc = [
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
     "sphinxext.opengraph",
-    "myst-nb",
+    "myst-nb>=1.4",
     "scanpydoc[theme,typehints] >=0.17.1",
     "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks
@@ -173,7 +174,7 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
     "default:anndata will no longer support zarr v2:DeprecationWarning",
     "default:Consolidated metadata is:UserWarning",
-    "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Automatic shard shape inference is experimental",
     "default:Writing zarr v2:UserWarning",

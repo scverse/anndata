@@ -75,6 +75,13 @@ def test_warn_on_deprecated__io_module():
         from anndata._io import read_h5ad  # noqa
 
 
+def test_warn_on_deprecated_extension_namespace():
+    with pytest.warns(
+        FutureWarning, match=r"Importing ExtensionNamespace from `types`"
+    ):
+        from anndata.types import ExtensionNamespace  # noqa
+
+
 @pytest.mark.parametrize("name", ["obs", "var", "obsm", "varm", "uns"])
 def test_keys_function_warns(adata: AnnData, name) -> None:
     with pytest.warns(FutureWarning, match=rf"{name}_keys is deprecated"):

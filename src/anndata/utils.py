@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import sys
 import warnings
 from functools import partial, singledispatch
 from types import FunctionType, UnionType
@@ -20,8 +19,12 @@ from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
     from typing import Any, LiteralString
+
+    from ._core.xarray import Dataset2D
+    from ._types import AnnDataElem
+    from .typing import AxisStorable, _XDataType
 
 logger = get_logger(__name__)
 
@@ -365,48 +368,13 @@ def warn_once(msg: str, category: type[Warning]) -> None:
     warnings.filterwarnings("ignore", category=category, message=re.escape(msg))
 
 
-if TYPE_CHECKING:
-    from warnings import deprecated
-else:
-    if sys.version_info >= (3, 13):
-        from warnings import deprecated as _deprecated
-    else:
-        from typing_extensions import deprecated as _deprecated
-    deprecated = partial(_deprecated, category=FutureWarning)
-
-
 def deprecation_msg(
     name: LiteralString, new_name: LiteralString, add_msg: LiteralString | None = None
 ) -> LiteralString:
-    msg = (
-        f"Use {new_name} instead of {name}, "
-        f"{name} is deprecated and will be removed in the future."
-    )
+    msg = f"Use {new_name} instead of {name}."
     if add_msg is not None:
         msg += f" {add_msg}"
     return msg
-
-
-class DeprecationMixinMeta(type):
-    """\
-    Use this as superclass so deprecated methods and properties
-    do not appear in vars(MyClass)/dir(MyClass)
-    """
-
-    def __dir__(cls):
-        dont_hide = getattr(cls, "_DONT_HIDE_DEPRECATED", set())
-
-        def is_hidden(attr: object) -> bool:
-            if isinstance(attr, property):
-                attr = attr.fget
-            is_deprecated = bool(getattr(attr, "__deprecated__", None))
-            return is_deprecated and getattr(attr, "__name__", None) not in dont_hide
-
-        return [
-            item
-            for item in type.__dir__(cls)
-            if not is_hidden(getattr(cls, item, None))
-        ]
 
 
 def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
@@ -468,3 +436,27 @@ def module_get_attr_redirect(
         return getattr(mod, new_path)
     msg = f"module {full_old_module_path} has no attribute {attr_name!r}"
     raise AttributeError(msg)
+
+
+def iter_outer(
+    adata,
+) -> Generator[
+    tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+]:
+    """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
+    for attr_name in [
+        "X",
+        "obs",
+        "var",
+        "uns",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "raw",
+    ]:
+        was_closed = adata.isbacked and not adata.file.is_open
+        yield (attr_name, getattr(adata, attr_name))
+        if was_closed:
+            adata.file.close()
