@@ -65,6 +65,7 @@ if TYPE_CHECKING:
     from scipy import sparse
     from zarr.storage import StoreLike
 
+    from anndata._types import AnnDataElem
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
@@ -283,12 +284,6 @@ class AnnData:  # noqa: PLW1641
         oidx: _Index1DNorm | int | np.integer,
         vidx: _Index1DNorm | int | np.integer,
     ):
-        if adata_ref.isbacked and adata_ref.is_view:
-            msg = (
-                "Currently, you cannot index repeatedly into a backed AnnData, "
-                "that is, you cannot make a view of a view."
-            )
-            raise ValueError(msg)
         self._is_view = True
         if isinstance(oidx, int | np.integer):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
@@ -1410,9 +1405,32 @@ class AnnData:  # noqa: PLW1641
 
         return AnnData(**new)
 
+    def _has_raw_zarr_or_h5_array(self) -> bool:
+        def predicate(
+            elem: RWAble,
+            *,
+            accumulate: bool,
+            attr_name: AnnDataElem | None = None,
+        ):
+            if isinstance(elem, MutableMapping):
+                return accumulate or any(
+                    isinstance(
+                        v, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset
+                    )
+                    for v in elem.values()
+                )
+            return accumulate or isinstance(
+                elem, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset
+            )
+
+        return self._reduce(predicate, init=False)
+
     def copy(self, filename: PathLike[str] | str | None = None) -> AnnData:
         """Full copy, optionally on disk."""
         if not self.isbacked:
+            if self._has_raw_zarr_or_h5_array():
+                msg = "Copy is not implemented for anndatas which have backing raw h5 (not in backed mode) or zarr arrays"
+                raise NotImplementedError(msg)
             if self.is_view and self._has_X():
                 # TODO: How do I unambiguously check if this is a copy?
                 # Subsetting this way means we don’t have to have a view type
@@ -1488,7 +1506,7 @@ class AnnData:  # noqa: PLW1641
             elem: RWAble,
             *,
             accumulate: bool,
-            attr_name: str | None = None,  # TODO: type
+            attr_name: AnnDataElem | None = None,
         ):
             if elem is None:
                 return accumulate
