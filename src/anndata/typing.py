@@ -86,6 +86,7 @@ type InMemoryArray = (
     | DaskArray
     | CupyArray
     | CupySparseMatrix
+    | SupportsArrayApi
 )
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
 
