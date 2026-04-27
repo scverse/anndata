@@ -349,7 +349,7 @@ class Layers(AlignedActual[str | None], LayersBase):
 
     def __getitem__(self, key: str) -> Value:
         res = super().__getitem__(key)
-        if res is None and key is None and self.parent.file is not None:
+        if res is None and key is None and self.parent.filename is not None:
             if not self.parent.file.is_open:
                 self.parent.file.open()
             X = self.parent.file["X"]
