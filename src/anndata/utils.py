@@ -456,10 +456,6 @@ def iter_outer(
         "raw",
     ]:
         was_closed = adata.isbacked and not adata.file.is_open
-        yield (
-            attr_name,
-            getattr(adata, attr_name),
-        )
-
+        yield (attr_name, getattr(adata, attr_name))
         if was_closed:
             adata.file.close()

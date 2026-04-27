@@ -529,8 +529,7 @@ def test_data_access(
     store = AccessTrackingStore(path, read_only=True)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store, mode="r")
-    dataset = open_func(f["X"])
-    a_disk = AnnData(X=dataset)
+    a_disk = AnnData(X=open_func(f["X"]))
     subset = (
         a_disk[idx_maj, :][:, idx_min]
         if a.format == "csr"
