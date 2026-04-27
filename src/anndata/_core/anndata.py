@@ -1334,7 +1334,9 @@ class AnnData:  # noqa: PLW1641
 
         new = {}
         for key, elem in iter_outer(self):
-            new[key] = elem.copy()
+            if elem is not None:
+                elem = elem.copy()
+            new[key] = elem
             if key == "layers" and isinstance(
                 X, (*get_union_members(_XDataType), type(None))
             ):
