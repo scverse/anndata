@@ -1339,8 +1339,8 @@ class AnnData:  # noqa: PLW1641
             )
             raise NotImplementedError(msg)
         new = {}
-        for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
-            new[key] = getattr(self, key).copy()
+        for key, elem in iter_outer(self):
+            new[key] = elem.copy()
             if key == "layers" and isinstance(
                 X, (*get_union_members(_XDataType), type(None))
             ):
@@ -1379,7 +1379,6 @@ class AnnData:  # noqa: PLW1641
                     }
                 else:
                     new[attr_name] = to_memory(attr, copy=copy)
-
         return AnnData(**new)
 
     def _has_raw_zarr_or_h5_array(self) -> bool:

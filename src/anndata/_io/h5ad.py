@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 
 @no_write_dataset_2d
-def write_h5ad(  # noqa: PLR0912
+def write_h5ad(
     filepath: PathLike[str] | str,
     adata: AnnData,
     *,
@@ -86,25 +86,18 @@ def write_h5ad(  # noqa: PLR0912
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
-            if k == "X":
-                _write_x(
-                    f,
-                    adata,  # accessing adata.X reopens adata.file if it’s backed
-                    is_backed=adata.isbacked and adata.filename == filepath,
-                    as_dense=as_dense,
-                    dataset_kwargs=dataset_kwargs,
-                )
-            elif k == "raw":
+            if k == "raw":
                 _write_raw(
                     f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
                 )
             else:
                 if k == "layers":
                     if None in elem:
-                        write_elem(
+                        _write_x(
                             f,
-                            "X",
-                            elem[None],
+                            adata,  # accessing adata.X reopens adata.file if it’s backed
+                            is_backed=adata.isbacked and adata.filename == filepath,
+                            as_dense=as_dense,
                             dataset_kwargs=dataset_kwargs,
                         )
                     elem = {k: v for k, v in elem.items() if k is not None}
