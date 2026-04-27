@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from types import NoneType
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 from scverse_misc import Deprecation, deprecated
@@ -340,7 +341,24 @@ class LayersBase(AlignedMappingBase[str | None]):
 
 
 class Layers(AlignedActual[str | None], LayersBase):
-    pass
+    def __init__(self, parent: AnnData | Raw, *, store: MutableMapping[str, Value]):
+        super().__init__(parent, store=store)
+        if None not in self._data:
+            self._data[None] = None
+        self._is_x_none = self._data[None] is None
+
+    def __getitem__(self, key: str) -> Value:
+        res = super().__getitem__(key)
+        if res is None and key is None and self.parent.file is not None:
+            if not self.parent.file.is_open:
+                self.parent.file.open()
+            X = self.parent.file["X"]
+            if isinstance(X, h5py.Group):
+                from ..io import sparse_dataset
+
+                X = sparse_dataset(X)
+            return X
+        return res
 
 
 class LayersView(AlignedView[str | None, LayersBase, TwoDIdx], LayersBase):
