@@ -963,7 +963,7 @@ class AnnData:  # noqa: PLW1641
         is_filename_none = self.filename is not None
         is_x_none = (
             self._adata_ref.layers if self._is_view else self.layers
-        )._is_x_none
+        ).is_none_backed
         return is_filename_none and is_x_none
 
     @property

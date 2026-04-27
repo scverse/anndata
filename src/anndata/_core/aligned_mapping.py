@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
 from dataclasses import dataclass
+from itertools import chain
 from types import NoneType
 from typing import TYPE_CHECKING
 
@@ -340,16 +341,16 @@ class LayersBase(AlignedMappingBase[str | None]):
         return not self.keys() <= {None}
 
 
-class Layers(AlignedActual[str | None], LayersBase):
+class Layers[K: str | None](AlignedActual[K], LayersBase):
     def __init__(self, parent: AnnData | Raw, *, store: MutableMapping[str, Value]):
         super().__init__(parent, store=store)
-        if None not in self._data:
-            self._data[None] = None
-        self._is_x_none = self._data[None] is None
+        if None not in self._data and self.parent.filename is not None:
+            self.is_none_backed = True
+        else:
+            self.is_none_backed = False
 
-    def __getitem__(self, key: str) -> Value:
-        res = super().__getitem__(key)
-        if res is None and key is None and self.parent.filename is not None:
+    def __getitem__(self, key: K) -> Value:
+        if key is None and self.is_none_backed:
             if not self.parent.file.is_open:
                 self.parent.file.open()
             X = self.parent.file["X"]
@@ -358,7 +359,24 @@ class Layers(AlignedActual[str | None], LayersBase):
 
                 X = sparse_dataset(X)
             return X
-        return res
+        return super().__getitem__(key)
+
+    def __iter__(self) -> K:
+        keys_iter = super().__iter__()
+        if self.is_none_backed:
+            yield from chain([None], keys_iter)
+        yield from keys_iter
+
+    def __len__(self) -> int:
+        data_length = super().__len__()
+        if self.is_none_backed:
+            return data_length + 1
+        return data_length
+
+    def __contains__(self, key: K) -> bool:
+        if key is None and self.is_none_backed:
+            return True
+        return super().__contains__(key)
 
 
 class LayersView(AlignedView[str | None, LayersBase, TwoDIdx], LayersBase):
