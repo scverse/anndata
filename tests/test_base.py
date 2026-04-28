@@ -5,9 +5,11 @@ import warnings
 from itertools import product
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
@@ -15,6 +17,7 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._core.raw import Raw
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata._settings import settings
 from anndata.acc import A
 from anndata.tests.helpers import (
@@ -37,6 +40,47 @@ adata_sparse = AnnData(
     dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
     dict(var_names=["a", "b", "c"]),
 )
+
+
+@pytest.fixture(params=["zarr", "h5ad"], scope="session")
+def diskfmt(request) -> Literal["zarr", "h5ad"]:
+    return request.param
+
+
+@pytest.fixture(
+    params=[adata_sparse, adata_dense], ids=["sparse", "dense"], scope="session"
+)
+def adata(request) -> AnnData:
+    return request.param
+
+
+@pytest.fixture(scope="session")
+def adata_on_disk(
+    diskfmt: Literal["h5ad", "zarr"],
+    adata: AnnData,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    path = (
+        tmp_path_factory.mktemp("disk_backed")
+        / f"{'sparse' if adata is adata_sparse else 'dense'}.{diskfmt}"
+    )
+    getattr(adata, f"write_{diskfmt}")(path)
+    return path
+
+
+@pytest.mark.parametrize("elem_name", ["X", "obsm", "layers"])
+def test_cant_copy_disk_backed(
+    adata_on_disk: Path, elem_name: Literal["X", "obsm", "layers"]
+):
+    is_sparse = "sparse" in str(adata_on_disk)
+    is_zarr = adata_on_disk.suffix == ".zarr"
+    root = (zarr.open if is_zarr else h5py.File)(adata_on_disk)
+    X = ad.io.sparse_dataset(root["X"]) if is_sparse else root["X"]
+    adata = AnnData(**{elem_name: (X if elem_name == "X" else {"X": X})})
+    with pytest.raises(NotImplementedError, match=r"Copy is not implemented"):
+        adata.copy()
+    if not is_zarr:
+        root.close()
 
 
 def test_creation():
@@ -834,3 +878,23 @@ def test_create_adata_from_single_axis_elem(
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
     assert_equal(from_disk, in_memory)
+
+
+@pytest.mark.parametrize("in_x", [True, False], ids=["X", "layers"])
+@pytest.mark.parametrize("is_sparse", [True, False], ids=["sparse", "dense"])
+@pytest.mark.parametrize("storage", ["h5ad", "zarr"])
+def test_transpose_errors_with_backed_arrays(
+    tmp_path: Path, storage: str, *, is_sparse: bool, in_x: bool
+):
+    adata = AnnData(X=csr_matrix(np.ones((3, 4))) if is_sparse else np.ones((3, 4)))
+    path = tmp_path / f"test.{storage}"
+    getattr(adata, f"write_{storage}")(path)
+    f = (h5py.File if storage == "h5ad" else zarr.open)(path)
+    raw_array = sparse_dataset(f["X"]) if is_sparse else f["X"]
+
+    adata = AnnData(**({"X": raw_array} if in_x else {"layers": {"test": raw_array}}))
+
+    with pytest.raises(ValueError, match=r"Cannot transpose anndata object"):
+        adata.transpose()
+    if storage == "h5ad":
+        f.close()
