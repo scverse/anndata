@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from typing import ClassVar, Literal, Self
 
     from .anndata import AnnData
-    from .raw import Raw
 
 
 OneDIdx = Sequence[int] | Sequence[bool] | slice
@@ -43,8 +42,8 @@ TwoDIdx = tuple[OneDIdx, OneDIdx]
 Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
 
 
-class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
-    MutableMapping[str, Value], ABC
+class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
+    MutableMapping[K, Value], ABC
 ):
     """\
     An abstract base class for Mappings containing array-like values aligned
@@ -60,7 +59,7 @@ class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
     _actual_class: ClassVar[type[AlignedActual]]
     """The actual class (which has it’s own data) for this aligned mapping."""
 
-    _parent: AnnData | Raw
+    _parent: AnnData  # technically also can be Raw for .varm
     """The parent object that this mapping is aligned to."""
 
     def __repr__(self) -> str:
@@ -118,7 +117,7 @@ class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
     def is_view(self) -> bool: ...
 
     @property
-    def parent(self) -> AnnData | Raw:
+    def parent(self) -> AnnData:
         return self._parent
 
     def copy(self) -> dict[K, Value]:
@@ -128,7 +127,7 @@ class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
             for k, v in self.items()
         }
 
-    def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[K, Self, I]:
+    def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[Self, I, K]:
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
@@ -138,7 +137,7 @@ class AlignedMappingBase[I: OneDIdx, K: (str, str | None)](
 
 
 class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | None)](
-    AlignedMappingBase
+    AlignedMappingBase[I, K]
 ):
     is_view: ClassVar[Literal[True]] = True
 
@@ -207,13 +206,15 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         return len(self.parent_mapping)
 
 
-class AlignedActual[K: (str, str | None)](AlignedMappingBase[K]):
+class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
+    AlignedMappingBase[I, K]
+):
     is_view: ClassVar[Literal[False]] = False
 
     _data: MutableMapping[K, Value]
     """Underlying mapping to the data"""
 
-    def __init__(self, parent: AnnData | Raw, *, store: MutableMapping[K, Value]):
+    def __init__(self, parent: AnnData, *, store: MutableMapping[K, Value]):
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
@@ -248,7 +249,7 @@ class AlignedActual[K: (str, str | None)](AlignedMappingBase[K]):
         return len(self._data)
 
 
-class AxisArraysBase(AlignedMappingBase[str]):
+class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
     """\
     Mapping of key→array-like,
     where array-like is aligned to an axis of parent AnnData.
@@ -305,10 +306,10 @@ class AxisArraysBase(AlignedMappingBase[str]):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
-class AxisArrays(AlignedActual[str], AxisArraysBase):
+class AxisArrays(AlignedActual[OneDIdx, str], AxisArraysBase):
     def __init__(
         self,
-        parent: AnnData | Raw,
+        parent: AnnData,
         *,
         axis: Literal[0, 1],
         store: MutableMapping[str, Value] | AxisArraysBase,
@@ -319,7 +320,7 @@ class AxisArrays(AlignedActual[str], AxisArraysBase):
         super().__init__(parent, store=store)
 
 
-class AxisArraysView(AlignedView[str, AxisArraysBase, OneDIdx], AxisArraysBase):
+class AxisArraysView(AlignedView[AxisArraysBase, OneDIdx, str], AxisArraysBase):
     pass
 
 
@@ -327,7 +328,7 @@ AxisArraysBase._view_class = AxisArraysView
 AxisArraysBase._actual_class = AxisArrays
 
 
-class LayersBase(AlignedMappingBase[str | None]):
+class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     """\
     Mapping of key: array-like, where array-like is aligned to both axes of the
     parent anndata.
@@ -341,15 +342,14 @@ class LayersBase(AlignedMappingBase[str | None]):
         return not self.keys() <= {None}
 
 
-class Layers[K: str | None](AlignedActual[K], LayersBase):
-    def __init__(self, parent: AnnData | Raw, *, store: MutableMapping[str, Value]):
+class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
+    def __init__(self, parent: AnnData, *, store: MutableMapping[str | None, Value]):
         super().__init__(parent, store=store)
-        if None not in self._data and self.parent.filename is not None:
-            self.is_none_backed = True
-        else:
-            self.is_none_backed = False
+        self.is_none_backed = (
+            None not in self._data and self.parent.filename is not None
+        )
 
-    def __getitem__(self, key: K) -> Value:
+    def __getitem__(self, key: str | None) -> Value:
         if key is None and self.is_none_backed:
             if not self.parent.file.is_open:
                 self.parent.file.open()
@@ -361,7 +361,7 @@ class Layers[K: str | None](AlignedActual[K], LayersBase):
             return X
         return super().__getitem__(key)
 
-    def __iter__(self) -> K:
+    def __iter__(self) -> str | None:
         keys_iter = super().__iter__()
         if self.is_none_backed:
             yield from chain([None], keys_iter)
@@ -373,13 +373,13 @@ class Layers[K: str | None](AlignedActual[K], LayersBase):
             return data_length + 1
         return data_length
 
-    def __contains__(self, key: K) -> bool:
+    def __contains__(self, key: str | None) -> bool:
         if key is None and self.is_none_backed:
             return True
         return super().__contains__(key)
 
 
-class LayersView(AlignedView[str | None, LayersBase, TwoDIdx], LayersBase):
+class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
     pass
 
 
@@ -387,7 +387,7 @@ LayersBase._view_class = LayersView
 LayersBase._actual_class = Layers
 
 
-class PairwiseArraysBase(AlignedMappingBase[str]):
+class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
     """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
@@ -413,7 +413,7 @@ class PairwiseArraysBase(AlignedMappingBase[str]):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActual[str], PairwiseArraysBase):
+class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -428,7 +428,7 @@ class PairwiseArrays(AlignedActual[str], PairwiseArraysBase):
 
 
 class PairwiseArraysView(
-    AlignedView[str, PairwiseArraysBase, OneDIdx], PairwiseArraysBase
+    AlignedView[PairwiseArraysBase, OneDIdx, str], PairwiseArraysBase
 ):
     pass
 

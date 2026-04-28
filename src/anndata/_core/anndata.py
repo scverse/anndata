@@ -630,7 +630,9 @@ class AnnData:  # noqa: PLW1641
     def X(self) -> None:
         self.X = None
 
-    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(Layers)
+    layers: AlignedMappingProperty[Layers | LayersView, str | None] = (
+        AlignedMappingProperty(Layers)
+    )
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -845,8 +847,8 @@ class AnnData:  # noqa: PLW1641
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        AxisArrays, 0
+    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+        AlignedMappingProperty(AxisArrays, 0)
     )
     """\
     Multi-dimensional annotation of observations
@@ -857,8 +859,8 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        AxisArrays, 1
+    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+        AlignedMappingProperty(AxisArrays, 1)
     )
     """\
     Multi-dimensional annotation of variables/features
@@ -869,7 +871,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 0)
     )
     """\
@@ -881,7 +883,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 1)
     )
     """\
