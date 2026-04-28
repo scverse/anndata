@@ -619,12 +619,11 @@ class AnnData:  # noqa: PLW1641
             msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
             self._init_as_actual(self._copy(X=value))
-            return None
+            return
         if value is not None:
             self.layers[None] = value
         else:
-            self.layers.pop(None)
-        return None
+            self.layers.pop(None, None)
 
     @X.deleter
     def X(self) -> None:
@@ -1014,10 +1013,9 @@ class AnnData:  # noqa: PLW1641
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # As the data is stored on disk, we can safely set remove if it previously was
-            # in layers. Setting `X` to `None` now would raise an error because `self.isbacked`.
-            if None in self.layers:
-                self.layers.pop(None)
+            # As the data is stored on disk, we can safely set remove it.
+            # Setting `X` to `None` now would raise an error because `self.isbacked`.
+            self.layers.pop(None, None)
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
