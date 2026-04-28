@@ -90,24 +90,25 @@ def write_h5ad(
                 _write_raw(
                     f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
                 )
-            else:
-                if k == "layers":
-                    if None in elem:
-                        _write_x(
-                            f,
-                            adata,  # accessing adata.X reopens adata.file if it’s backed
-                            is_backed=adata.isbacked and adata.filename == filepath,
-                            as_dense=as_dense,
-                            dataset_kwargs=dataset_kwargs,
-                        )
-                    elem = {k: v for k, v in elem.items() if k is not None}
+                continue
 
-                write_elem(
-                    f,
-                    k,
-                    dict(elem) if isinstance(elem, MutableMapping) else elem,
-                    dataset_kwargs=dataset_kwargs,
-                )
+            if k == "layers":
+                if None in elem:
+                    _write_x(
+                        f,
+                        adata,  # accessing adata.X reopens adata.file if it’s backed
+                        is_backed=adata.isbacked and adata.filename == filepath,
+                        as_dense=as_dense,
+                        dataset_kwargs=dataset_kwargs,
+                    )
+                elem = {k: v for k, v in elem.items() if k is not None}
+
+            write_elem(
+                f,
+                k,
+                dict(elem) if isinstance(elem, MutableMapping) else elem,
+                dataset_kwargs=dataset_kwargs,
+            )
 
 
 def _write_x(
