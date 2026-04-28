@@ -18,6 +18,7 @@ concurrency:
 jobs:
   get-environments:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
@@ -25,6 +26,7 @@ jobs:
         with:
           filter: blob:none
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
@@ -57,6 +59,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Install system dependencies
         run: sudo apt install -y hdf5-tools
@@ -99,11 +102,14 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -130,6 +136,8 @@ jobs:
       - get-environments
       - test
       - build
+    permissions:
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

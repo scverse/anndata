@@ -15,10 +15,10 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-          cache: "pip"
       - run: pip install build
       - run: python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1

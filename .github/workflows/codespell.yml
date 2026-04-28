@@ -20,4 +20,5 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
       - uses: codespell-project/actions-codespell@v2
