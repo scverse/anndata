@@ -338,6 +338,8 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     attrname: ClassVar[Literal["layers"]] = "layers"
     axes: ClassVar[tuple[Literal[0], Literal[1]]] = (0, 1)
 
+    is_none_backed: bool
+
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
@@ -380,7 +382,11 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
 
 
 class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
-    pass
+    def __init__(
+        self, parent_mapping: LayersBase, parent_view: AnnData, subset_idx: TwoDIdx
+    ) -> None:
+        super().__init__(parent_mapping, parent_view, subset_idx)
+        self.is_none_backed = parent_mapping.is_none_backed
 
 
 LayersBase._view_class = LayersView

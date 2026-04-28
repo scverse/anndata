@@ -961,11 +961,7 @@ class AnnData:  # noqa: PLW1641
     @property
     def isbacked(self) -> bool:
         """`True` if object is backed on disk, `False` otherwise."""
-        is_filename_none = self.filename is not None
-        is_x_none = (
-            self._adata_ref.layers if self._is_view else self.layers
-        ).is_none_backed
-        return is_filename_none and is_x_none
+        return self.filename is not None and self.layers.is_none_backed
 
     @property
     def is_view(self) -> bool:
