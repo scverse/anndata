@@ -48,6 +48,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
