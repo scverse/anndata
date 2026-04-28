@@ -767,7 +767,7 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a) == set(b), format_msg(elem_name) + f" {a.keys()} != {b.keys()}"
+    assert set(a) == set(b), f"{format_msg(elem_name)} {a.keys()} != {b.keys()}"
     for k in a:
         if elem_name is None:
             elem_name = ""
