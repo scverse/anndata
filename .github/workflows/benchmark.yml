@@ -18,6 +18,7 @@ defaults:
 
 jobs:
   benchmark:
+    permissions: {}
     runs-on: ${{ matrix.os }}
 
     strategy:

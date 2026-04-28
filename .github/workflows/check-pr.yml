@@ -27,6 +27,8 @@ jobs:
   # This job verifies that the milestone is present or not necessary
   # and determines if “check-relnotes” needs to be run.
   check-milestone:
+    permissions:
+      pull-requests: read
     name: "Triage: Check PR title, milestone, and labels"
     runs-on: ubuntu-latest
     steps:
@@ -51,6 +53,8 @@ jobs:
       type: ${{ steps.check-title.outputs.type }}
   # This job verifies that the relevant release notes file has been modified.
   check-relnotes:
+    permissions:
+      pull-requests: read
     name: Check for release notes
     runs-on: ubuntu-latest
     needs: check-milestone
