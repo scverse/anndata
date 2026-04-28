@@ -878,10 +878,10 @@ def assert_adata_equal(
         idx = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False
-        if not np.all(a.obs_names == b.obs_names):
+        if not (a.obs_names == b.obs_names).all():
             idx[0] = a.obs_names
             change_flag = True
-        if not np.all(a.var_names == b.var_names):
+        if not (a.var_names == b.var_names).all():
             idx[1] = a.var_names
             change_flag = True
         if change_flag:
