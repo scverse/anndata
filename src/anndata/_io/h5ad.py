@@ -86,25 +86,29 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
-            if k == "X":
-                _write_x(
-                    f,
-                    adata,  # accessing adata.X reopens adata.file if it’s backed
-                    is_backed=adata.isbacked and adata.filename == filepath,
-                    as_dense=as_dense,
-                    dataset_kwargs=dataset_kwargs,
-                )
-            elif k == "raw":
+            if k == "raw":
                 _write_raw(
                     f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
                 )
-            else:
-                write_elem(
-                    f,
-                    k,
-                    dict(elem) if isinstance(elem, MutableMapping) else elem,
-                    dataset_kwargs=dataset_kwargs,
-                )
+                continue
+
+            if k == "layers":
+                if None in elem:
+                    _write_x(
+                        f,
+                        adata,  # accessing adata.X reopens adata.file if it’s backed
+                        is_backed=adata.isbacked and adata.filename == filepath,
+                        as_dense=as_dense,
+                        dataset_kwargs=dataset_kwargs,
+                    )
+                elem = {k: v for k, v in elem.items() if k is not None}
+
+            write_elem(
+                f,
+                k,
+                dict(elem) if isinstance(elem, MutableMapping) else elem,
+                dataset_kwargs=dataset_kwargs,
+            )
 
 
 def _write_x(

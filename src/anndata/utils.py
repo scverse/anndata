@@ -445,7 +445,6 @@ def iter_outer(
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
     for attr_name in [
-        "X",
         "obs",
         "var",
         "uns",
