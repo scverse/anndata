@@ -22,9 +22,7 @@ jobs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          filter: blob:none
-          fetch-depth: 0
+        with: { fetch-depth: 0, filter: "blob:none" }
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
@@ -54,9 +52,7 @@ jobs:
       IO_MARK: ${{ matrix.io_mark }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: blob:none
+        with: { fetch-depth: 0, filter: "blob:none" }
 
       - name: Install system dependencies
         run: sudo apt install -y hdf5-tools
@@ -84,7 +80,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           report_type: test_results
-          env_vars: ENV_NAME,IO_MARK
+          flags: ${{ matrix.env.name }},${{ matrix.io_mark }}
           files: test-data/test-results.xml
           use_oidc: true
           fail_ci_if_error: true
@@ -92,7 +88,7 @@ jobs:
       - name: Upload coverage data
         uses: codecov/codecov-action@v5
         with:
-          env_vars: ENV_NAME,IO_MARK
+          flags: ${{ matrix.env.name }},${{ matrix.io_mark }}
           files: test-data/coverage.xml
           use_oidc: true
           fail_ci_if_error: true
@@ -101,9 +97,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: blob:none
+        with: { fetch-depth: 0, filter: "blob:none" }
 
       - name: Set up Python
         uses: actions/setup-python@v6
