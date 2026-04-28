@@ -47,5 +47,16 @@ class _AnnDataSettingsManager(SettingsManager):
     disallow_forward_slash_in_h5ad: bool = False
     write_csr_csc_indices_with_min_possible_dtype: bool = False
     auto_shard_zarr_v3: bool = False
+    repr_html_enabled: bool = True
+    repr_html_fold_threshold: int = 5
+    repr_html_max_depth: int = 3
+    repr_html_max_items: int = 200
+    repr_html_max_categories: int = 20
+    repr_html_unique_limit: int = 1_000_000
+    repr_html_dataframe_expand: bool = False
+    repr_html_max_field_width: int = 400
+    repr_html_type_width: int = 220
+    repr_html_max_lazy_categories: int = 100
+    repr_html_max_readme_size: int = 100_000
 
 settings: _AnnDataSettingsManager
