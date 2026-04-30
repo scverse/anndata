@@ -11,7 +11,7 @@ jobs:
       issues: write
     steps:
       - name: Label stale issues
-        uses: actions/stale@v10
+        uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
         with:
           days-before-issue-stale: 60
           days-before-pr-stale: -1 # We don't want to mark PRs as stale
@@ -24,7 +24,7 @@ jobs:
             Please add a comment if you want to keep the issue open. Thank you for your contributions!
           debug-only: false # set to `true` to enable dry-run
       - name: Close stale issues
-        uses: actions/stale@v10
+        uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
         with:
           days-before-issue-stale: -1 # We don't want to mark issues as stale in this action
           days-before-issue-close: 14
