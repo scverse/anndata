@@ -1773,7 +1773,9 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     of `None` falls back to `join`, preserving existing behaviour. To keep
     the union of `var` indices but the intersection of obs columns:
 
-    >>> ad.concat([a, b], join="outer", aligned_axis_key_join="inner").obs.columns.tolist()
+    >>> ad.concat(
+    ...     [a, b], join="outer", aligned_axis_key_join="inner"
+    ... ).obs.columns.tolist()
     ['group']
     >>> ad.concat([a, b], join="outer").obs.columns.tolist()
     ['group', 'measure']
