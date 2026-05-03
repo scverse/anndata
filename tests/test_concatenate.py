@@ -2045,6 +2045,32 @@ def test_aligned_axis_key_join_does_not_affect_alt_axis_mappings():
         )
 
 
+def test_aligned_axis_key_join_awkward_inner_missing_key_raises():
+    """Awkward arrays with inner content-join + missing keys raises NotImplementedError."""
+    import awkward as ak
+
+    a = AnnData(
+        X=np.eye(2, dtype=np.float64),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "shared_awk": ak.Array([[1, 2], [3]]),
+            "only_a_awk": ak.Array([[4], [5, 6]]),
+        },
+    )
+    b = AnnData(
+        X=np.eye(2, dtype=np.float64),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={"shared_awk": ak.Array([[7, 8], [9]])},
+    )
+    # join="inner" forces inner content-join; aligned_axis_key_join="outer"
+    # forces outer key set, so `only_a_awk` is missing from `b`. The combo of
+    # awkward + missing + inner content is the unimplemented branch.
+    with pytest.raises(NotImplementedError, match="awkward"):
+        concat([a, b], join="inner", aligned_axis_key_join="outer")
+
+
 def test_aligned_axis_key_join_obsp_pairwise():
     """Pairwise on-axis (obsp) key joining responds to `aligned_axis_key_join`."""
     a = AnnData(
