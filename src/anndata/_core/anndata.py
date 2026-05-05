@@ -1478,7 +1478,7 @@ class AnnData:  # noqa: PLW1641
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
-    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None) -> bool:
+    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None = None) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
         Parameters
@@ -1511,25 +1511,28 @@ class AnnData:  # noqa: PLW1641
             if elem is None:
                 return accumulate
             if isinstance(elem, AnnData):
-                return accumulate and elem.unwriteable(store_type=store_type)
+                return accumulate or elem.unwriteable(store_type=store_type)
             if isinstance(elem, pd.Categorical):
-                return accumulate and predicate(elem.categories, accumulate=accumulate)
+                return accumulate or predicate(elem.categories, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
                 # matches behavior in methods.py
-                return accumulate and predicate(elem._values, accumulate=accumulate)
+                return accumulate or predicate(elem._values, accumulate=accumulate)
             if isinstance(elem, AwkArray):
                 import awkward as ak
 
                 container = ak.to_buffers(ak.to_packed(elem))
-                return accumulate and all(
+                return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in container[2].values()
                 )
             if attr_name == "raw":
-                accumulate = accumulate and type(elem.X) in writeable_elems
-                return accumulate and all(
-                    predicate(e[attr], accumulate=accumulate)
-                    for e in [elem.var, elem.varm]
-                    for attr in e
+                return (
+                    accumulate
+                    or any(
+                        predicate(e[attr], accumulate=accumulate)
+                        for e in [elem.var, elem.varm]
+                        for attr in e
+                    )
+                    or predicate(elem.X, accumulate=accumulate)
                 )
             if attr_name in {
                 "obs",
@@ -1541,12 +1544,16 @@ class AnnData:  # noqa: PLW1641
                 "obsp",
                 "uns",
             } or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
-                return accumulate and all(
+                accumulate = accumulate or any(
                     predicate(elem[k], accumulate=accumulate) for k in elem
                 )
-            return accumulate and type(elem) in writeable_elems
+                if isinstance(elem, pd.DataFrame):
+                    return accumulate or predicate(elem.index, accumulate=accumulate)
+                return accumulate
 
-        return self._reduce(predicate, init=True)
+            return accumulate or type(elem) not in writeable_elems
+
+        return self._reduce(predicate, init=False)
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
