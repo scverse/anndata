@@ -948,7 +948,7 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
 
 
-def inner_concat_aligned_mapping(
+def inner_concat_aligned_mapping(  # noqa: PLR0913
     mappings,
     *,
     reindexers=None,
@@ -956,22 +956,126 @@ def inner_concat_aligned_mapping(
     axis=0,
     concat_axis=None,
     force_lazy: bool = False,
+    keys=None,
+    fill_value=None,
 ):
+    """Inner-content concat of aligned mappings.
+
+    By default iterates ``intersect_keys(mappings)``. Pass ``keys`` to override
+    the iterated key set (e.g. ``union_keys(mappings)`` for an outer key join
+    paired with inner content alignment); missing entries are then filled
+    with ``fill_value``.
+    """
     if concat_axis is None:
         concat_axis = axis
-    result = {}
+    if keys is None:
+        keys = intersect_keys(mappings)
 
-    for k in intersect_keys(mappings):
-        els = [m[k] for m in mappings]
-        if reindexers is None:
-            cur_reindexers = gen_inner_reindexers(
-                els, new_index=index, axis=concat_axis
+    result = {}
+    ns = [m.parent.shape[axis] for m in mappings]
+
+    for k in keys:
+        els = [m.get(k, MissingVal) for m in mappings]
+        any_missing = any(is_missing(el) for el in els)
+
+        if not any_missing:
+            # All keys present in all mappings — the default
+            # ``intersect_keys`` path. No fill_value handling needed.
+            if reindexers is None:
+                cur_reindexers = gen_inner_reindexers(
+                    els, new_index=index, axis=concat_axis
+                )
+            else:
+                cur_reindexers = reindexers
+            result[k] = concat_arrays(
+                els,
+                cur_reindexers,
+                index=index,
+                axis=concat_axis,
+                force_lazy=force_lazy,
             )
+            continue
+
+        # Missing-key path: only reachable when caller passes an explicit
+        # ``keys`` set wider than ``intersect_keys`` (the outer-key + inner-
+        # content combination from ``concat(aligned_axis_key_join=...)``).
+        present_els = [el for el in els if not_missing(el)]
+
+        if any(isinstance(el, AwkArray) for el in present_els):
+            msg = (
+                "Combining `aligned_axis_key_join` with `join='inner'` is "
+                "not yet implemented for awkward arrays in `obsm`/`varm` "
+                "when the key is missing from at least one input. Use the "
+                "same value for `join` and `aligned_axis_key_join`, or "
+                "drop the affected awkward entries before concatenating."
+            )
+            raise NotImplementedError(msg)
+
+        if reindexers is not None:
+            # Caller-provided reindexers already encode the alt-axis alignment
+            # across *all* mappings (e.g. the gene-axis intersection for
+            # ``layers`` when ``join="inner"``). The present-only reindexers
+            # below would intersect over the present subset only, which is
+            # wrong for layers because their alt-axis must match X's. Honour
+            # the caller's reindexers and drop in an identity reindexer for
+            # missing entries; the filler created by ``missing_element``
+            # below uses the matching alt-axis size.
+            target_idx = reindexers[0].new_idx
+            cur_reindexers = [
+                reindexers[i] if not_missing(el) else Reindexer(target_idx, target_idx)
+                for i, el in enumerate(els)
+            ]
+            off_axis_size = len(target_idx)
+        elif all(isinstance(el, pd.DataFrame) for el in present_els):
+            common_cols = reduce(
+                lambda x, y: x.intersection(y),
+                (el.columns for el in present_els),
+            )
+            cur_reindexers = [
+                Reindexer(el.columns, common_cols)
+                if not_missing(el)
+                else (
+                    lambda _, n=n, cols=common_cols, fv=fill_value: pd.DataFrame(
+                        np.nan if fv is None else fv,
+                        index=range(n),
+                        columns=cols,
+                    )
+                )
+                for el, n in zip(els, ns, strict=True)
+            ]
+            off_axis_size = 0
         else:
-            cur_reindexers = reindexers
+            inner_present = gen_inner_reindexers(
+                present_els, new_index=index, axis=concat_axis
+            )
+            target_idx = inner_present[0].new_idx
+            present_iter = iter(inner_present)
+            cur_reindexers = [
+                next(present_iter)
+                if not_missing(el)
+                else Reindexer(target_idx, target_idx)
+                for el in els
+            ]
+            off_axis_size = len(target_idx)
 
         result[k] = concat_arrays(
-            els, cur_reindexers, index=index, axis=concat_axis, force_lazy=force_lazy
+            [
+                el
+                if not_missing(el)
+                else missing_element(
+                    n,
+                    axis=concat_axis,
+                    els=els,
+                    fill_value=fill_value,
+                    off_axis_size=off_axis_size,
+                )
+                for el, n in zip(els, ns, strict=True)
+            ],
+            cur_reindexers,
+            axis=concat_axis,
+            index=index,
+            fill_value=fill_value,
+            force_lazy=force_lazy,
         )
     return result
 
@@ -1081,7 +1185,7 @@ def missing_element(
     return xp.zeros(shape, dtype=bool)
 
 
-def outer_concat_aligned_mapping(
+def outer_concat_aligned_mapping(  # noqa: PLR0913
     mappings,
     *,
     reindexers=None,
@@ -1090,13 +1194,23 @@ def outer_concat_aligned_mapping(
     concat_axis=None,
     fill_value=None,
     force_lazy: bool = False,
+    keys=None,
 ):
+    """Outer-content concat of aligned mappings.
+
+    By default iterates ``union_keys(mappings)``. Pass ``keys`` to override
+    the iterated key set (e.g. ``intersect_keys(mappings)`` for an inner key
+    join paired with outer content alignment).
+    """
     if concat_axis is None:
         concat_axis = axis
+    if keys is None:
+        keys = union_keys(mappings)
+
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
 
-    for k in union_keys(mappings):
+    for k in keys:
         els = [m.get(k, MissingVal) for m in mappings]
         if reindexers is None:
             cur_reindexers = gen_outer_reindexers(
@@ -1131,115 +1245,6 @@ def outer_concat_aligned_mapping(
             axis=concat_axis,
             index=index,
             fill_value=fill_value,
-            force_lazy=force_lazy,
-        )
-    return result
-
-
-def _concat_aligned_mapping_split_join(  # noqa: PLR0913
-    mappings,
-    *,
-    key_join: Join_T,
-    content_join: Join_T,
-    fill_value=None,
-    axis=0,
-    concat_axis=None,
-    index=None,
-    force_lazy: bool = False,
-):
-    """Concatenate aligned mappings (obsm/varm style) with separate key and
-    content joins. ``key_join`` selects which keys appear in the result;
-    ``content_join`` selects how shared keys' values are aligned along the
-    off-axis dimension (e.g. inner intersects DataFrame columns, outer unions
-    them). Used for ``concat(aligned_axis_key_join=...)`` when the on-axis key
-    join differs from the off-axis ``join``.
-    """
-    if concat_axis is None:
-        concat_axis = axis
-    keys = union_keys(mappings) if key_join == "outer" else intersect_keys(mappings)
-    ns = [m.parent.shape[axis] for m in mappings]
-
-    result = {}
-    for k in keys:
-        els = [m.get(k, MissingVal) for m in mappings]
-        any_missing = any(is_missing(el) for el in els)
-        present_els = [el for el in els if not_missing(el)]
-
-        if content_join == "inner":
-            # Inner content alignment: intersect the off-axis dimension among
-            # values that are actually present, then reindex everything to that
-            # intersection. Missing entries get a filler matching the shape so
-            # the downstream concat can stack them.
-            if any_missing and any(isinstance(el, AwkArray) for el in present_els):
-                msg = (
-                    "Combining `aligned_axis_key_join` with `join='inner'` is "
-                    "not yet implemented for awkward arrays in `obsm`/`varm` "
-                    "when the key is missing from at least one input. Use the "
-                    "same value for `join` and `aligned_axis_key_join`, or "
-                    "drop the affected awkward entries before concatenating."
-                )
-                raise NotImplementedError(msg)
-            if all(isinstance(el, pd.DataFrame) for el in present_els):
-                common_cols = reduce(
-                    lambda x, y: x.intersection(y),
-                    (el.columns for el in present_els),
-                )
-                cur_reindexers = [
-                    Reindexer(el.columns, common_cols)
-                    if not_missing(el)
-                    else (
-                        lambda _, n=n, cols=common_cols, fv=fill_value: pd.DataFrame(
-                            np.nan if fv is None else fv,
-                            index=range(n),
-                            columns=cols,
-                        )
-                    )
-                    for el, n in zip(els, ns, strict=True)
-                ]
-                # Use an empty filler so concat_arrays' DataFrame check passes;
-                # the lambda reindexers above replace these with proper DataFrames.
-                off_axis_size = 0
-            else:
-                inner_present = gen_inner_reindexers(
-                    present_els, new_index=index, axis=concat_axis
-                )
-                target_idx = inner_present[0].new_idx
-                present_iter = iter(inner_present)
-                cur_reindexers = [
-                    next(present_iter)
-                    if not_missing(el)
-                    else Reindexer(target_idx, target_idx)
-                    for el in els
-                ]
-                off_axis_size = len(target_idx)
-        else:
-            cur_reindexers = gen_outer_reindexers(
-                els, ns, new_index=index, axis=concat_axis
-            )
-            off_axis_size = 0
-            if any(isinstance(e, DaskArray) for e in els if not_missing(e)):
-                if not isinstance(cur_reindexers[0], Reindexer):  # pragma: no cover
-                    msg = "Cannot re-index a dask array without a Reindexer"
-                    raise ValueError(msg)
-                off_axis_size = cur_reindexers[0].idx.shape[0]
-
-        result[k] = concat_arrays(
-            [
-                el
-                if not_missing(el)
-                else missing_element(
-                    n,
-                    axis=concat_axis,
-                    els=els,
-                    fill_value=fill_value,
-                    off_axis_size=off_axis_size,
-                )
-                for el, n in zip(els, ns, strict=True)
-            ],
-            cur_reindexers,
-            axis=concat_axis,
-            index=index,
-            fill_value=fill_value if any_missing else None,
             force_lazy=force_lazy,
         )
     return result
@@ -1583,10 +1588,13 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         for more.
     aligned_axis_key_join
         How to join keys on the *concatenation axis* itself: columns of `obs`/`var`,
-        and keys of `obsm`/`obsp` (or `varm`/`varp` when concatenating along `axis="var"`).
-        Use "outer" to take the union of these keys, "inner" to take the intersection.
-        Defaults to `None`, in which case `join` is used for both the off-axis index
-        alignment and the on-axis key join (the historical behaviour).
+        keys of `obsm`/`obsp` (or `varm`/`varp` when concatenating along `axis="var"`),
+        and keys of `layers`. Use "outer" to take the union of these keys, "inner"
+        to take the intersection. The off-axis content of each value (e.g. the var
+        index of an obsm DataFrame, or the gene axis of a layer) still follows
+        `join`. Defaults to `None`, in which case `join` is used for both the
+        off-axis index alignment and the on-axis key join (the historical
+        behaviour).
     merge
         How elements not aligned to the axis being concatenated along are selected.
         Currently implemented strategies include:
@@ -1903,7 +1911,12 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
 
     X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
 
-    # Helper bindings for off-axis-shaped objects (layers): keep using `join`.
+    # `join` controls the *off-axis* content alignment shared by X, layers,
+    # and obsm-style values within each shared key. `aligned_join` controls
+    # which keys appear on the on-axis side (obs/var columns, obsm/obsp
+    # keys, layers keys). The two settings are independent; when
+    # `aligned_axis_key_join=None`, `aligned_join == join` and behaviour
+    # reduces to the historical single-knob path.
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
     elif join == "outer":
@@ -1925,34 +1938,30 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         msg = f"{aligned_join=} should have been validated"
         raise AssertionError(msg)
 
+    # Layers: `aligned_join` selects which layer keys appear; `reindexers`
+    # carries the off-axis alignment from X so each kept layer is aligned to
+    # the same alt-axis as X.
+    layer_mappings = [a.layers for a in adatas]
     layers = concat_aligned_mapping(
-        [a.layers for a in adatas], axis=axis, reindexers=reindexers
+        layer_mappings,
+        axis=axis,
+        reindexers=reindexers,
+        keys=aligned_join_keys(layer_mappings),
     )
 
-    # obsm/varm: aligned_axis_key_join controls which keys appear, while the
-    # content alignment (e.g. DataFrame columns within a shared key) follows
-    # `join`. When the two settings agree we can use the existing helpers;
-    # when they diverge we use a split-join helper.
+    # obsm/varm: aligned_axis_key_join controls which keys appear; the content
+    # alignment within a shared key follows `join`. The pre-computed
+    # `aligned_join_keys` selects the on-axis key set; the inner/outer helper
+    # selected above performs the off-axis content alignment.
     obsm_mappings = [getattr(a, f"{axis_name}m") for a in adatas]
-    if aligned_join == join:
-        concat_mapping = concat_aligned_mapping(
-            obsm_mappings,
-            axis=axis,
-            concat_axis=0,
-            index=concat_indices,
-            force_lazy=force_lazy,
-        )
-    else:
-        concat_mapping = _concat_aligned_mapping_split_join(
-            obsm_mappings,
-            key_join=aligned_join,
-            content_join=join,
-            fill_value=fill_value,
-            axis=axis,
-            concat_axis=0,
-            index=concat_indices,
-            force_lazy=force_lazy,
-        )
+    concat_mapping = concat_aligned_mapping(
+        obsm_mappings,
+        axis=axis,
+        concat_axis=0,
+        index=concat_indices,
+        force_lazy=force_lazy,
+        keys=aligned_join_keys(obsm_mappings),
+    )
     if pairwise:
         concat_pairwise = concat_pairwise_mapping(
             mappings=[getattr(a, f"{axis_name}p") for a in adatas],

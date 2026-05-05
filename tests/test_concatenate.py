@@ -1973,38 +1973,100 @@ def test_aligned_axis_key_join_inner_with_outer_join(axis_name):
     assert keys == ["shared_m"]
 
 
-def test_aligned_axis_key_join_does_not_affect_layers():
-    """Layers key-joining follows `join`, not `aligned_axis_key_join`."""
+def test_aligned_axis_key_join_layer_keys_unioned_with_inner_content():
+    """`aligned_axis_key_join="outer"` + `join="inner"` unions layer keys
+    while aligning each layer's off-axis (var) to the inner intersection.
+
+    Mirrors the obsm contract: which keys appear is on-axis (controlled by
+    `aligned_axis_key_join`); how each kept value aligns along the alt-axis
+    is off-axis (controlled by `join`).
+    """
     a = AnnData(
-        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        X=np.ones((2, 3), dtype=np.float64),
         obs=pd.DataFrame(index=["s1", "s2"]),
-        var=pd.DataFrame(index=["v1", "v2"]),
+        var=pd.DataFrame(index=["v1", "v2", "v3"]),
         layers={
-            "shared_layer": np.ones((2, 2)),
-            "only_a_layer": np.zeros((2, 2)),
+            "shared_layer": np.full((2, 3), 1.0),
+            "only_a_layer": np.full((2, 3), 7.0),
         },
     )
     b = AnnData(
-        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        X=np.ones((2, 2), dtype=np.float64),
         obs=pd.DataFrame(index=["s3", "s4"]),
         var=pd.DataFrame(index=["v1", "v2"]),
         layers={
-            "shared_layer": 2 * np.ones((2, 2)),
-            "only_b_layer": np.ones((2, 2)),
+            "shared_layer": np.full((2, 2), 2.0),
+            "only_b_layer": np.full((2, 2), 9.0),
         },
     )
 
-    # join="inner" + aligned="outer": layers stay intersection.
     res = concat([a, b], join="inner", aligned_axis_key_join="outer")
-    assert sorted(res.layers.keys()) == ["shared_layer"]
 
-    # join="outer" + aligned="inner": layers go union.
-    res = concat([a, b], join="outer", aligned_axis_key_join="inner")
+    # Outer key join: every layer name appears.
     assert sorted(res.layers.keys()) == [
         "only_a_layer",
         "only_b_layer",
         "shared_layer",
     ]
+
+    # Inner content join: alt-axis (var) is the intersection {v1, v2}.
+    n_total_cells = 4
+    n_inner_genes = 2
+    assert res.shape == (n_total_cells, n_inner_genes)
+    for k in ("shared_layer", "only_a_layer", "only_b_layer"):
+        assert res.layers[k].shape == (n_total_cells, n_inner_genes), (
+            f"layer {k!r} should be aligned to inner alt-axis, "
+            f"got shape {res.layers[k].shape}"
+        )
+
+    # Spot-check content. shared_layer is present in both; values 1.0 from a
+    # and 2.0 from b stack into the inner gene set.
+    np.testing.assert_array_equal(
+        np.asarray(res.layers["shared_layer"]),
+        np.array([[1.0, 1.0], [1.0, 1.0], [2.0, 2.0], [2.0, 2.0]]),
+    )
+    # only_a_layer is filled (with the missing-element default) for b's rows.
+    only_a = np.asarray(res.layers["only_a_layer"])
+    np.testing.assert_array_equal(only_a[:2], np.array([[7.0, 7.0], [7.0, 7.0]]))
+    # only_b_layer is filled for a's rows; b's rows carry 9.0.
+    only_b = np.asarray(res.layers["only_b_layer"])
+    np.testing.assert_array_equal(only_b[2:], np.array([[9.0, 9.0], [9.0, 9.0]]))
+
+
+def test_aligned_axis_key_join_layer_keys_intersected_with_outer_content():
+    """`aligned_axis_key_join="inner"` + `join="outer"` intersects layer
+    keys while aligning each kept layer's off-axis (var) to the outer
+    union.
+    """
+    a = AnnData(
+        X=np.ones((2, 3), dtype=np.float64),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2", "v3"]),
+        layers={
+            "shared_layer": np.full((2, 3), 1.0),
+            "only_a_layer": np.full((2, 3), 7.0),
+        },
+    )
+    b = AnnData(
+        X=np.ones((2, 2), dtype=np.float64),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        layers={
+            "shared_layer": np.full((2, 2), 2.0),
+            "only_b_layer": np.full((2, 2), 9.0),
+        },
+    )
+
+    res = concat([a, b], join="outer", aligned_axis_key_join="inner")
+
+    # Inner key join: only the layer present in every input survives.
+    assert sorted(res.layers.keys()) == ["shared_layer"]
+
+    # Outer content join: alt-axis (var) is the union {v1, v2, v3}.
+    n_total_cells = 4
+    n_outer_genes = 3
+    assert res.shape == (n_total_cells, n_outer_genes)
+    assert res.layers["shared_layer"].shape == (n_total_cells, n_outer_genes)
 
 
 def test_aligned_axis_key_join_does_not_affect_alt_axis_mappings():
