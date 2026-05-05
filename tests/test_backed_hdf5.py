@@ -246,6 +246,7 @@ def test_backed_raw_subset(
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
+    assert backed_v.isbacked
     mem_v = mem_adata[obs_idx, var_idx]
 
     # Value equivalent

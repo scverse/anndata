@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from importlib.metadata import version
@@ -1599,7 +1600,8 @@ def test_concatenate_size_0_axis():
     assert concat([a, b]).shape == (10, 0)
 
 
-def test_concat_null_X(use_xdataset):
+@pytest.mark.parametrize("all_none", [True, False], ids=["all_none", "some_none"])
+def test_concat_null_X(*, use_xdataset: bool, all_none: bool):
     adatas_orig = {
         k: gen_adata((20, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
         for k in list("abc")
@@ -1607,11 +1609,17 @@ def test_concat_null_X(use_xdataset):
     adatas_no_X = {}
     for k, v in adatas_orig.items():
         v = v.copy()
-        del v.X
+        if k == "a" or all_none:
+            del v.X
         adatas_no_X[k] = v
 
     orig = concat(adatas_orig, index_unique="-")
-    no_X = concat(adatas_no_X, index_unique="-")
+    with (
+        pytest.warns(UserWarning, match=r"Some Xs are None")
+        if not all_none
+        else nullcontext()
+    ):
+        no_X = concat(adatas_no_X, index_unique="-")
     del orig.X
 
     assert_equal(no_X, orig)

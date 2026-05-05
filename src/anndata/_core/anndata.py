@@ -16,18 +16,19 @@ import h5py
 import numpy as np
 import pandas as pd
 from natsort import natsorted
-from numpy import ma
 from pandas.api.types import infer_dtype
 from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
-from anndata._warnings import ImplicitModificationWarning
+from anndata._core.access import ElementRef
+from anndata._core.sparse_dataset import sparse_dataset
 
 from .. import utils
 from .._settings import settings
+from .._warnings import ImplicitModificationWarning
 from ..compat import (
     AwkArray,
-    DaskArray,
+    CSArray,
     IndexManager,
     XDataset,
     ZarrArray,
@@ -41,18 +42,18 @@ from ..utils import (
     axis_len,
     deprecation_msg,
     ensure_df_homogeneous,
+    get_union_members,
     iter_outer,
     raise_value_error_if_multiindex_columns,
     set_module,
     warn,
 )
-from .access import ElementRef
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
-from .sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
+from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
@@ -239,7 +240,6 @@ class AnnData:  # noqa: PLW1641
         varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
         layers: Mapping[str, _XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
-        dtype: np.dtype | type | str | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
@@ -270,7 +270,6 @@ class AnnData:  # noqa: PLW1641
                 varm=varm,
                 raw=raw,
                 layers=layers,
-                dtype=dtype,
                 shape=shape,
                 obsp=obsp,
                 varp=varp,
@@ -333,10 +332,6 @@ class AnnData:  # noqa: PLW1641
         self._var = as_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
-        # set data
-        if self.isbacked:
-            self._X = None
-
         # set raw, easy, as it’s immutable anyways...
         if adata_ref._raw is not None:
             # slicing along variables axis is ignored
@@ -357,7 +352,6 @@ class AnnData:  # noqa: PLW1641
         obsp=None,
         raw=None,
         layers=None,
-        dtype=None,
         shape=None,
         filename=None,
         filemode=None,
@@ -391,8 +385,7 @@ class AnnData:  # noqa: PLW1641
                 if any((obs, var, uns, obsm, varm, obsp, varp)):
                     msg = "If `X` is a dict no further arguments must be provided."
                     raise ValueError(msg)
-                X, obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
-                    X._X,
+                obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
                     X.obs,
                     X.var,
                     X.uns,
@@ -403,6 +396,15 @@ class AnnData:  # noqa: PLW1641
                     X.layers,
                     X.raw,
                 )
+                X = X.layers.get(None)
+
+            if layers is not None and None in layers:
+                if X is not None and X is not layers[None]:
+                    msg = (
+                        "If you provide `layers[None]` and `X`, they must be identical."
+                    )
+                    raise ValueError(msg)
+                X = layers[None]
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
@@ -427,28 +429,10 @@ class AnnData:  # noqa: PLW1641
             if shape is not None:
                 msg = "`shape` needs to be `None` if `X` is not `None`."
                 raise ValueError(msg)
-            _check_2d_shape(X)
-            # if type doesn’t match, a copy is made, otherwise, use a view
-            if dtype is not None:
-                msg = (
-                    "The dtype argument is deprecated and will be removed in late 2024."
-                )
-                warn(msg, FutureWarning)
-                if issparse(X) or isinstance(X, ma.MaskedArray):
-                    # TODO: maybe use view on data attribute of sparse matrix
-                    #       as in readwrite.read_10x_h5
-                    if X.dtype != np.dtype(dtype):
-                        X = X.astype(dtype)
-                elif isinstance(X, ZarrArray | DaskArray):
-                    X = X.astype(dtype)
-                else:  # is np.ndarray or a subclass, convert to true np.ndarray
-                    X = np.asarray(X, dtype)
             # data matrix and shape
-            self._X = X
             n_obs, n_vars = X.shape
             source = "X"
         else:
-            self._X = None
             n_obs, n_vars = (
                 shape
                 if shape is not None
@@ -496,18 +480,20 @@ class AnnData:  # noqa: PLW1641
             )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **raw)
-        if not raw:
-            self._raw = None
-        elif isinstance(raw, Mapping):
-            self._raw = Raw(self, **raw)
-        else:  # is a Raw from another AnnData
-            self._raw = Raw(self, raw._X, raw.var, raw.varm)
 
         # clean up old formats
         self._clean_up_old_format(uns)
 
         # layers
         self.layers = layers
+        if X is not None:
+            self.X = X
+        if not raw:
+            self._raw = None
+        elif isinstance(raw, Mapping):
+            self._raw = Raw(self, **raw)
+        else:  # is a Raw from another AnnData
+            self._raw = Raw(self, raw.X, raw.var, raw.varm)
 
     @old_positionals("show_stratified", "with_disk")
     def __sizeof__(
@@ -594,20 +580,19 @@ class AnnData:  # noqa: PLW1641
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
             if self.is_view:
-                X = _subset(X, (self._oidx, self._vidx))
+                return _subset(X, (self._oidx, self._vidx))
+            return X
         elif self.is_view and self._adata_ref.X is None:
-            X = None
+            return None
         elif self.is_view:
-            X = as_view(
+            return as_view(
                 _subset(self._adata_ref.X, (self._oidx, self._vidx)),
                 ElementRef(self, "X"),
             )
-        else:
-            X = self._X
-        return X
+        return self.layers.get(None)
 
     @X.setter
-    def X(self, value: _XDataType | None):
+    def X(self, value: _XDataType | None) -> None:
         value = (
             coerce_array(value, name="X", allow_array_like=True)
             if value is not None
@@ -621,8 +606,8 @@ class AnnData:  # noqa: PLW1641
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
-        can_set_direct_if_not_none = value is None or (
-            np.isscalar(value)
+        can_set_direct_if_not_none = (
+            value is None
             or (hasattr(value, "shape") and (self.shape == value.shape))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
@@ -633,16 +618,20 @@ class AnnData:  # noqa: PLW1641
         if self.is_view:
             msg = "Setting element `.X` of view, initializing view as actual."
             warn(msg, ImplicitModificationWarning)
-            new = self._mutated_copy(X=value)
-            self._init_as_actual(new)
+            self._init_as_actual(self._copy(X=value))
             return
-        self._X = value
+        if value is not None:
+            self.layers[None] = value
+        else:
+            self.layers.pop(None, None)
 
     @X.deleter
-    def X(self):
+    def X(self) -> None:
         self.X = None
 
-    layers: AlignedMappingProperty[Layers | LayersView] = AlignedMappingProperty(Layers)
+    layers: AlignedMappingProperty[Layers | LayersView, str | None] = (
+        AlignedMappingProperty(Layers)
+    )
     """\
     Dictionary-like object with values of the same dimensions as :attr:`X`.
 
@@ -857,8 +846,8 @@ class AnnData:  # noqa: PLW1641
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        AxisArrays, 0
+    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+        AlignedMappingProperty(AxisArrays, 0)
     )
     """\
     Multi-dimensional annotation of observations
@@ -869,8 +858,8 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        AxisArrays, 1
+    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+        AlignedMappingProperty(AxisArrays, 1)
     )
     """\
     Multi-dimensional annotation of variables/features
@@ -881,7 +870,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 0)
     )
     """\
@@ -893,7 +882,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView] = (
+    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 1)
     )
     """\
@@ -972,11 +961,7 @@ class AnnData:  # noqa: PLW1641
     @property
     def isbacked(self) -> bool:
         """`True` if object is backed on disk, `False` otherwise."""
-        is_filename_none = self.filename is not None
-        is_x_none = (
-            getattr(self._adata_ref if self._is_view else self, "_X", None) is None
-        )
-        return is_filename_none and is_x_none
+        return self.filename is not None and self.layers.is_none_backed
 
     @property
     def is_view(self) -> bool:
@@ -1024,8 +1009,9 @@ class AnnData:  # noqa: PLW1641
                 self.write(filename, as_dense=as_dense)
             # open new file for accessing
             self.file.open(filename, "r+")
-            # as the data is stored on disk, we can safely set self._X to None
-            self._X = None
+            # As the data is stored on disk, we can safely set remove it.
+            # Setting `X` to `None` now would raise an error because `self.isbacked`.
+            self.layers.pop(None, None)
 
     def _set_backed(self, attr, value):
         from .._io.utils import write_attribute
@@ -1217,7 +1203,6 @@ class AnnData:  # noqa: PLW1641
         """
         from anndata.compat import _safe_transpose
 
-        X = self.X if not self.isbacked else self.file["X"]
         if self.is_view:
             msg = (
                 "You’re trying to transpose a view of an `AnnData`, "
@@ -1232,7 +1217,6 @@ class AnnData:  # noqa: PLW1641
             raise ValueError(msg)
 
         return AnnData(
-            X=_safe_transpose(X) if X is not None else None,
             layers={k: _safe_transpose(v) for k, v in self.layers.items()},
             obs=self.var,
             var=self.obs,
@@ -1339,34 +1323,22 @@ class AnnData:  # noqa: PLW1641
         """
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    def _mutated_copy(self, **kwargs) -> AnnData:
-        """Creating AnnData with attributes optionally specified via kwargs."""
-        if self.isbacked and (
-            "X" not in kwargs or (self.raw is not None and "raw" not in kwargs)
-        ):
-            msg = (
-                "This function does not currently handle backed objects "
-                "internally, this should be dealt with before."
-            )
-            raise NotImplementedError(msg)
-        new = {}
+    def _copy(
+        self, *, X: _XDataType | None | Literal["no_set_X"] = "no_set_X"
+    ) -> AnnData:
+        from ..typing import _XDataType
 
-        for key in ["obs", "var", "obsm", "varm", "obsp", "varp", "layers"]:
-            if key in kwargs:
-                new[key] = kwargs[key]
-            else:
-                new[key] = getattr(self, key).copy()
-        if "X" in kwargs:
-            new["X"] = kwargs["X"]
-        elif self._has_X():
-            new["X"] = self.X.copy()
-        if "uns" in kwargs:
-            new["uns"] = kwargs["uns"]
-        else:
-            new["uns"] = deepcopy(self._uns)
-        if "raw" in kwargs:
-            new["raw"] = kwargs["raw"]
-        elif self.raw is not None:
+        new = {}
+        for key, elem in iter_outer(self):
+            if elem is not None:
+                elem = elem.copy()
+            new[key] = elem
+            if key == "layers" and isinstance(
+                X, (*get_union_members(_XDataType), type(None))
+            ):
+                new[key][None] = X
+        new["uns"] = deepcopy(self._uns)
+        if self.raw is not None:
             new["raw"] = self.raw.copy()
         return AnnData(**new)
 
@@ -1399,10 +1371,6 @@ class AnnData:  # noqa: PLW1641
                     }
                 else:
                     new[attr_name] = to_memory(attr, copy=copy)
-
-        if self.isbacked:
-            self.file.close()
-
         return AnnData(**new)
 
     def _has_raw_zarr_or_h5_array(self) -> bool:
@@ -1431,15 +1399,7 @@ class AnnData:  # noqa: PLW1641
             if self._has_raw_zarr_or_h5_array():
                 msg = "Copy is not implemented for anndatas which have backing raw h5 (not in backed mode) or zarr arrays"
                 raise NotImplementedError(msg)
-            if self.is_view and self._has_X():
-                # TODO: How do I unambiguously check if this is a copy?
-                # Subsetting this way means we don’t have to have a view type
-                # defined for the matrix, which is needed for some of the
-                # current distributed backend. Specifically Dask.
-                return self._mutated_copy(
-                    X=_subset(self._adata_ref.X, (self._oidx, self._vidx)).copy()
-                )
-            return self._mutated_copy()
+            return self._copy()
         else:
             from ..io import read_h5ad, write_h5ad
 
