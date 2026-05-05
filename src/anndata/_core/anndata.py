@@ -22,6 +22,7 @@ from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
 from anndata._warnings import ImplicitModificationWarning
+from anndata.types import SupportsArrayApi
 
 from .. import utils
 from .._settings import settings
@@ -1550,8 +1551,11 @@ class AnnData:  # noqa: PLW1641
                 if isinstance(elem, pd.DataFrame):
                     return accumulate or predicate(elem.index, accumulate=accumulate)
                 return accumulate
-
-            return accumulate or type(elem) not in writeable_elems
+            return (
+                (accumulate or type(elem) not in writeable_elems)
+                if not isinstance(elem, SupportsArrayApi)
+                else accumulate
+            )
 
         return self._reduce(predicate, init=False)
 
