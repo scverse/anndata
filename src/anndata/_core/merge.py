@@ -30,7 +30,7 @@ from ..compat import (
     DaskArray,
     has_xp,
 )
-from ..utils import asarray, axis_len, warn, warn_once
+from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -1422,7 +1422,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
-    join: Join_T = "inner",
+    join: Join_T | Default = Default("inner"),  # noqa: B008
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
@@ -1652,6 +1652,18 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         keys, adatas = list(adatas.keys()), list(adatas.values())
     else:
         adatas = list(adatas)
+
+    if isinstance(join, Default):
+        join = join.val
+        if (num_xs := sum(a.X is not None for a in adatas)) > 0 and num_xs < len(
+            adatas
+        ):
+            msg = (
+                "Some Xs are None and non-explicit join found - Xs will be dropped, which matches the behavior of `layers`."
+                "This warning will be removed in the next minor release, 0.14."
+                "To silence this warning pass in an explicit `join` parameter."
+            )
+            warn(msg, UserWarning)
 
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)

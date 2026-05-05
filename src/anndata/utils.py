@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+from dataclasses import dataclass
 from functools import partial, singledispatch
 from types import FunctionType, UnionType
 from typing import TYPE_CHECKING, Literal, TypeAliasType, get_args, get_origin
@@ -459,3 +460,11 @@ def iter_outer(
         yield (attr_name, getattr(adata, attr_name))
         if was_closed:
             adata.file.close()
+
+
+@dataclass
+class Default[T]:
+    val: T
+
+    def __repr__(self) -> str:
+        return repr(self.val)

@@ -181,6 +181,7 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata.acc.GenericAlias"),
     ("py:obj", "typing.R"),
     ("py:class", "_M"),
+    ("py:class", "anndata.utils.Default"),
 ]
 
 # -- Social cards ---------------------------------------------------------
