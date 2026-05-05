@@ -18,14 +18,16 @@ concurrency:
 jobs:
   get-environments:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           filter: blob:none
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: false
       - id: get-envs
@@ -53,16 +55,17 @@ jobs:
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Install system dependencies
         run: sudo apt install -y hdf5-tools
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           python-version: ${{ matrix.env.python }}
@@ -81,7 +84,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           report_type: test_results
           env_vars: ENV_NAME,IO_MARK
@@ -90,7 +93,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload coverage data
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           env_vars: ENV_NAME,IO_MARK
           files: test-data/coverage.xml
@@ -99,14 +102,17 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.x'
           cache: pip
@@ -130,8 +136,10 @@ jobs:
       - get-environments
       - test
       - build
+    permissions:
+      actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: re-actors/alls-green@release/v1
+      - uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
         with:
           jobs: ${{ toJSON(needs) }}
