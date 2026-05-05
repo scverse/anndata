@@ -47,5 +47,6 @@ class _AnnDataSettingsManager(SettingsManager):
     disallow_forward_slash_in_h5ad: bool = False
     write_csr_csc_indices_with_min_possible_dtype: bool = False
     auto_shard_zarr_v3: bool = False
+    restrict_index_types: bool = True
 
 settings: _AnnDataSettingsManager

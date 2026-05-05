@@ -536,6 +536,17 @@ settings.register(
     get_from_env=check_and_get_bool,
 )
 
+settings.register(
+    "restrict_index_types",
+    default_value=True,
+    description=(
+        "Whether to force coercion to a string index upon declaration of the `AnnData` object or setting `obs`/`var`. "
+        "Setting this to `False` will also allow `MultiIndex` indexes upon declaration/setting."
+    ),
+    validate=validate_bool,
+    get_from_env=check_and_get_bool,
+)
+
 
 ##################################################################################
 ##################################################################################
