@@ -34,7 +34,7 @@ class Dataset2D:
         for k, v in array_types.items():
             for store in [
                 h5py.File(f"data_{k}.h5ad", mode="w"),
-                zarr.open(f"data_{k}.zarr", mode="w", zarr_version=2),
+                zarr.open(f"data_{k}.zarr", mode="w", zarr_format=2),
             ]:
                 df = pd.DataFrame({"a": v}, index=[f"cell{i}" for i in range(n_obs)])
                 if writing_string_array_on_disk := (
