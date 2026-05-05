@@ -48,7 +48,7 @@ class Dataset2D:
                     assert store["df"]["a"].attrs["encoding-type"] == "string-array"
         for store in [
             h5py.File("data_all.h5ad", mode="w"),
-            zarr.open("data_all.zarr", mode="w", zarr_version=2),
+            zarr.open("data_all.zarr", mode="w", zarr_format=2),
         ]:
             df = pd.DataFrame(array_types, index=[f"cell{i}" for i in range(n_obs)])
             # write a string array by triggering:
