@@ -22,6 +22,7 @@ from anndata.compat import (
     XVariable,
     ZarrArray,
     ZarrGroup,
+    pandas_as_str,
 )
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -289,7 +290,7 @@ def read_dataframe(
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
         if (use_range_index and k == elem.attrs["_index"]) or k != elem.attrs["_index"]
-        else ad.io.read_elem(elem[k])
+        else pandas_as_str(pd.Index(ad.io.read_elem(elem[k])))
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     # If we use a range index, the coord axis needs to have the special dim name
