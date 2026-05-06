@@ -446,7 +446,7 @@ def gen_adata(  # noqa: PLR0913
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
-        df=gen_typed_df(10),
+        df=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
         df_int_index=gen_typed_df(10, index=pd.Index(list(range(10)))),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
