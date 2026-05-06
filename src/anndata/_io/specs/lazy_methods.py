@@ -292,8 +292,8 @@ def read_dataframe(
         else pd.Index(ad.io.read_elem(elem[k]))
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
-    if is_string_dtype(elem_dict[elem.attrs["_index"]]) and not use_range_index:
-        elem_dict[elem.attrs["_index"]] = pandas.api.types.pandas_as_str(
+    if pd.api.types.is_string_dtype(elem_dict[elem.attrs["_index"]]) and not use_range_index:
+        elem_dict[elem.attrs["_index"]] = pandas_as_str(
             elem_dict[elem.attrs["_index"]]
         )
     # If we use a range index, the coord axis needs to have the special dim name
