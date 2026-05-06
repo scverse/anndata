@@ -24,6 +24,7 @@ from anndata.compat import (
     XVariable,
     ZarrArray,
     ZarrGroup,
+    pandas_as_str,
 )
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -292,12 +293,11 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int] | None = None,
 ) -> Dataset2D:
-    from xarray.core.indexing import BasicIndexer
-
-    from ...experimental.backed._lazy_arrays import MaskedArray
-
+    # going through dask for reading into memory the index doesn't make sense, hence the ternary.
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
+        if (use_range_index and k == elem.attrs["_index"]) or k != elem.attrs["_index"]
+        else pandas_as_str(pd.Index(ad.io.read_elem(elem[k])))
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
     # If we use a range index, the coord axis needs to have the special dim name
@@ -305,12 +305,7 @@ def read_dataframe(
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
-        if isinstance(elem_dict[dim_name], DaskArray):
-            index = elem_dict[dim_name].compute()
-        elif isinstance(elem_dict[dim_name], MaskedArray):
-            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
-        else:
-            raise NotImplementedError()
+        index = elem_dict[dim_name]
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
