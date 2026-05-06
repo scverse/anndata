@@ -488,7 +488,6 @@ class AnnData:  # noqa: PLW1641
         _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
         self._check_dimensions()
         if settings.check_uniqueness:
-            raise ValueError()
             self._check_uniqueness()
 
         if self.filename:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -159,7 +160,11 @@ def read_lazy(
             }
         return func(elem)
 
-    with settings.override(check_uniqueness=load_annotation_index):
+    with (
+        settings.override(check_uniqueness=False)
+        if not load_annotation_index
+        else nullcontext()
+    ):
         adata: AnnData = read_dispatched(f, callback=callback)
     if is_store_arg_h5_path and not is_store_arg_h5_store:
         adata.file = AnnDataFileManager(adata, file_obj=f)
