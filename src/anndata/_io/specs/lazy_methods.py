@@ -22,6 +22,7 @@ from anndata.compat import (
     XVariable,
     ZarrArray,
     ZarrGroup,
+    pandas_as_str,
 )
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
