@@ -40,7 +40,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES, PANDAS_SUPPORTS_NA_VALUE
+from ...compat import PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
@@ -1247,14 +1247,10 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
-    dtype = (
-        pd.StringDtype(
-            na_value=np.nan
-            if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
-            else pd.NA
-        )
-        if PANDAS_SUPPORTS_NA_VALUE
-        else pd.StringDtype()
+    dtype = pd.StringDtype(
+        na_value=np.nan
+        if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
+        else pd.NA
     )
 
     arr = pd.array(
