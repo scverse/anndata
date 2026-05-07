@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
-import zarr.convenience
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
@@ -411,6 +410,7 @@ def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
     ad.settings.zarr_write_format = zarr_write_format
+    ad.settings.auto_shard_zarr_v3 = True
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if not use_compression:
@@ -969,6 +969,7 @@ def test_write_elem_consolidated(tmp_path: Path):
 def test_write_elem_version_mismatch(tmp_path: Path):
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))
+    ad.settings.auto_shard_zarr_v3 = True
     g = zarr.open_group(
         zarr_path,
         mode="w",

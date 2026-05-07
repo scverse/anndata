@@ -455,16 +455,6 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
     if format not in {2, 3}:
         msg = "non-v2 zarr on-disk format not supported"
         raise ValueError(msg)
-    if format == 2 and getattr(settings, "auto_shard_zarr_v3", False):
-        msg = "Cannot set `zarr_write_format` to 2 with autosharding on.  Please set to `False` `anndata.settings.auto_shard_zarr_v3`"
-        raise ValueError(msg)
-
-
-def validate_zarr_sharding(auto_shard: bool, settings: SettingsManager):  # noqa: FBT001
-    validate_bool(auto_shard, settings)
-    if auto_shard and settings.zarr_write_format == 2:
-        msg = "Cannot shard v2 format data. Please set `anndata.settings.zarr_write_format` to 3."
-        raise ValueError(msg)
 
 
 settings.register(
@@ -518,7 +508,7 @@ settings.register(
     "auto_shard_zarr_v3",
     default_value=False,
     description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
-    validate=validate_zarr_sharding,
+    validate=validate_bool,
     get_from_env=check_and_get_bool,
 )
 
