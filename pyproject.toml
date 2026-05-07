@@ -36,9 +36,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.2.2",
-    "numpy>=2",
-    "scipy >=1.13,!=1.17.0",
+    "pandas >=2.3",
+    "numpy>=2.1",
+    "scipy >=1.14,!=1.17.0",
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
