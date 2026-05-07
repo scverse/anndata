@@ -35,7 +35,11 @@ class Raw:
         X: np.ndarray | CSMatrix | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
-    ):
+    ) -> None:
+        if X is not None and X.shape[0] != adata.n_obs:
+            msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"
+            raise ValueError(msg)
+
         self._adata = adata
         self._n_obs = adata.n_obs
         # construct manually
@@ -52,7 +56,9 @@ class Raw:
             self.varm = varm
         elif X is None:  # construct from adata
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(adata.X, CupyArray | CupySparseMatrix):
+            if adata.X is None:
+                self._X = None
+            elif isinstance(adata.X, CupyArray | CupySparseMatrix):
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
@@ -111,8 +117,8 @@ class Raw:
     def n_obs(self) -> int:
         return self._n_obs
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView] = AlignedMappingProperty(
-        "varm", AxisArrays, 1
+    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+        AlignedMappingProperty(AxisArrays, 1)
     )
 
     @property
@@ -126,14 +132,26 @@ class Raw:
     @overload
     def __getitem__(self, index: AdRef) -> InMemoryArray: ...
     @overload
-    def __getitem__(self, index: Index) -> Raw: ...
-    def __getitem__(self, index: Index | AdRef) -> Raw | InMemoryArray:
+    def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw: ...
+    def __getitem__(
+        self, index: Index | tuple[AnnData, Index] | AdRef
+    ) -> Raw | InMemoryArray:
         from ..acc import AdRef
+        from .anndata import AnnData
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
 
-        oidx, vidx = self._normalize_indices(index)
+        if (
+            isinstance(index, tuple)
+            and len(index) == 2
+            and isinstance(index[0], AnnData)
+        ):
+            adata, index = index
+            oidx, vidx = self._normalize_indices(index)
+        else:
+            oidx, vidx = self._normalize_indices(index)
+            adata = self._adata[oidx]
 
         # To preserve two dimensional shape
         if isinstance(vidx, int | np.integer):
@@ -144,7 +162,7 @@ class Raw:
         X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
         var = self._var.iloc[vidx]
-        new = Raw(self._adata, X=X, var=var)
+        new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
             new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
@@ -171,7 +189,7 @@ class Raw:
         from anndata import AnnData
 
         return AnnData(
-            X=self.X.copy(),
+            X=None if self.X is None else self.X.copy(),
             var=self.var.copy(),
             varm=None if self._varm is None else self._varm.copy(),
             obs=self._adata.obs.copy(),

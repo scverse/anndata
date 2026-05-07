@@ -8,7 +8,7 @@ from scipy import sparse
 import anndata as ad
 
 pytestmark = [
-    pytest.mark.filterwarnings("ignore:Use anndata.acc.A instead of:FutureWarning"),
+    pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning"),
 ]
 
 OBS_KEYS = [

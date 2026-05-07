@@ -71,6 +71,11 @@ def test_raw_set_as_none(adata_raw: ad.AnnData):
     assert_equal(a, b)
 
 
+def test_raw_set_error(adata_raw: ad.AnnData) -> None:
+    with pytest.raises(ValueError, match=r"X has 2 rows, but n_obs is 3"):
+        adata_raw.raw = adata_raw[:2].copy()
+
+
 def test_raw_of_view(adata_raw: ad.AnnData):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
     assert adata_view.raw.X.tolist() == [

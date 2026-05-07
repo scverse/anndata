@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING, Literal
@@ -236,13 +237,13 @@ def test_consecutive_bool(
         assert (
             spy.call_count == 2 if should_trigger_optimization else not spy.call_count
         )
-    assert_equal(csr_disk[mask, :], csr_disk[np.where(mask)])
+    assert_equal(csr_disk[mask, :].X, csr_disk[np.where(mask)].X)
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 3 if should_trigger_optimization else not spy.call_count
         )
     subset = csc_disk[:, mask]
-    assert_equal(subset, csc_disk[:, np.where(mask)[0]])
+    assert_equal(subset.X, csc_disk[:, np.where(mask)[0]].X)
     if should_trigger_optimization is not None:
         assert (
             spy.call_count == 4 if should_trigger_optimization else not spy.call_count
@@ -255,7 +256,8 @@ def test_consecutive_bool(
         else:
             subset_subset_mask = make_one_elem_mask(size)
         assert_equal(
-            subset[:, subset_subset_mask], subset[:, np.where(subset_subset_mask)[0]]
+            subset[:, subset_subset_mask].X,
+            subset[:, np.where(subset_subset_mask)[0]].X,
         )
         assert (
             spy.call_count == 5 if should_trigger_optimization else not spy.call_count
@@ -488,6 +490,7 @@ def width_idx_kinds(
     ],
     ids=["sparse_dataset", "read_elem_lazy"],
 )
+@pytest.mark.parametrize("read_data", [True, False], ids=["read", "no_read"])
 def test_data_access(
     tmp_path: Path,
     sparse_format: Callable[[ArrayLike], CSMatrix],
@@ -495,12 +498,20 @@ def test_data_access(
     idx_min: Idx,
     exp: list[str],
     open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
-    zarr_metadata_key,
-    zarr_separator,
+    zarr_metadata_key: str,
+    zarr_separator: str,
+    *,
+    read_data: bool,
 ):
+    # sparse_dataset without reading doesn't even read in metadata, but dask does for dtype resolution.
     exp = [
         e.format(zarr_metadata_key=zarr_metadata_key, zarr_separator=zarr_separator)
         for e in exp
+        if (
+            ((is_data := (len(re.findall(r"/\d(?!\d)", e)) == 1)) and read_data)
+            or (not is_data)
+        )
+        and not (open_func is sparse_dataset and not read_data)
     ]
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
@@ -519,12 +530,19 @@ def test_data_access(
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store, mode="r")
     a_disk = AnnData(X=open_func(f["X"]))
-    subset = a_disk[idx_maj, idx_min] if a.format == "csr" else a_disk[idx_min, idx_maj]
-    if isinstance(subset.X, DaskArray):
+    subset = (
+        a_disk[idx_maj, :][:, idx_min]
+        if a.format == "csr"
+        else a_disk[idx_min, :][:, idx_maj]
+    )
+    # Accessing X reads data if backed, otherwise call compute
+    if read_data and isinstance(subset.X, DaskArray):
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
-    if ad.settings.zarr_write_format == 2:
+    if (
+        ad.settings.zarr_write_format == 2 and read_data
+    ) or open_func is not sparse_dataset:
         exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(

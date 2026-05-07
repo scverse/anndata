@@ -12,10 +12,11 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from scverse_misc import Deprecation, deprecated
 
 from .. import AnnData
 from ..compat import old_positionals, pandas_as_str
-from ..utils import deprecated, warn
+from ..utils import warn
 from .utils import is_float
 
 if TYPE_CHECKING:
@@ -157,8 +158,11 @@ def _fmt_loom_axis_attrs(
 
 
 @deprecated(
-    "Deprecated in favor of other formats, e.g. (`write_h5ad` and then) `read_h5ad`. "
-    "Loom isn’t well-maintained and supports only a subset of anndata features.",
+    Deprecation(
+        "0.13",
+        "Deprecated in favor of other formats, e.g. (`write_h5ad` and then) `read_h5ad`. "
+        "Loom isn’t well-maintained and supports only a subset of anndata features.",
+    )
 )
 @old_positionals(
     "sparse",

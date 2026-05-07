@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import warnings
+from contextlib import contextmanager, nullcontext
+from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -24,6 +27,25 @@ if TYPE_CHECKING:
     from zarr.storage import StoreLike
 
 
+@contextmanager
+def zarrs_context():
+    with (
+        (
+            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+            if find_spec("zarrs")
+            else nullcontext()
+        ),
+        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+    ):
+        if find_spec("zarrs"):
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*unsupported by ZarrsCodecPipeline.*",
+                category=UserWarning,
+            )
+        yield
+
+
 @no_write_dataset_2d
 def write_zarr(
     store: StoreLike,
@@ -38,10 +60,6 @@ def write_zarr(
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
-    # TODO: Use spec writing system for this
-    f = open_write_group(store)
-    f.attrs.setdefault("encoding-type", "anndata")
-    f.attrs.setdefault("encoding-version", "0.1.0")
 
     def callback(
         write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
@@ -54,8 +72,14 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-    zarr.consolidate_metadata(f.store)
+    with zarrs_context():
+        # TODO: Use spec writing system for this
+        f = open_write_group(store)
+        f.attrs.setdefault("encoding-type", "anndata")
+        f.attrs.setdefault("encoding-version", "0.1.0")
+
+        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+        zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
@@ -67,10 +91,9 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
-    # Read with handling for backwards compat
     def callback(func, elem_name: str, elem, iospec):
+        """Read with handling for backwards compat"""
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
             return AnnData(**{
                 k: read_dispatched(v, callback)
@@ -86,17 +109,19 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    adata = read_dispatched(f, callback=callback)
+    with zarrs_context():
+        f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+        adata = read_dispatched(f, callback=callback)
 
-    # Backwards compat (should figure out which version)
-    if "raw.X" in f:
-        raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
-        raw.obs_names = adata.obs_names
-        adata.raw = raw
+        # Backwards compat (should figure out which version)
+        if "raw.X" in f:
+            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+            raw.obs_names = adata.obs_names
+            adata.raw = raw
 
-    # Backwards compat for <0.7
-    if isinstance(f["obs"], zarr.Array):
-        _clean_uns(adata)
+        # Backwards compat for <0.7
+        if isinstance(f["obs"], zarr.Array):
+            _clean_uns(adata)
 
     return adata
 

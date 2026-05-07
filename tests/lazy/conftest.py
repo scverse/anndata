@@ -124,7 +124,8 @@ def adata_remote_with_store_tall_skinny_path(
     orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
     M = 1000
     N = 5
-    obs_names = pd.Index(f"cell{i}" for i in range(M))
+    # One named, one unnamed
+    obs_names = pd.Index((f"cell{i}" for i in range(M)), name="obs_names")
     var_names = pd.Index(f"gene{i}" for i in range(N))
     obs = gen_typed_df(M, obs_names)
     var = gen_typed_df(N, var_names)

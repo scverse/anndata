@@ -549,12 +549,24 @@ def test_view_delattr(attr, subset_func):
     orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
-
-    delattr(subset, attr)
+    with pytest.warns(ad.ImplicitModificationWarning) if attr == "X" else nullcontext():
+        delattr(subset, attr)
 
     assert not subset.is_view
-    # Should now have same value as default
-    assert_equal(getattr(subset, attr), getattr(empty, attr))
+    # Should now have same value as default, except for `layers`, which still has the `None` key for `subset`
+    if attr == "layers":
+        assert_equal(
+            {k: v for k, v in getattr(subset, attr).items() if k is not None},
+            getattr(empty, attr),
+        )
+    else:
+        assert_equal(getattr(subset, attr), getattr(empty, attr))
+
+    if attr in {"obs", "var"}:
+        assert getattr(subset, attr).empty
+    else:
+        assert not getattr(subset, attr), "should be falsy"
+
     assert orig_hash == tokenize(base)  # Original should not be modified
 
 
