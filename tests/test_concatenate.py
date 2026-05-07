@@ -1600,8 +1600,12 @@ def test_concatenate_size_0_axis():
     assert concat([a, b]).shape == (10, 0)
 
 
-@pytest.mark.parametrize("all_none", [True, False], ids=["all_none", "some_none"])
-def test_concat_null_X(*, use_xdataset: bool, all_none: bool):
+@pytest.mark.parametrize(
+    ("all_none", "implicit_join"),
+    [(True, False), (False, False), (False, True)],
+    ids=["all_none", "some_none", "some_none-warn"],
+)
+def test_concat_null_X(*, use_xdataset: bool, all_none: bool, implicit_join: bool):
     adatas_orig = {
         k: gen_adata((20, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
         for k in list("abc")
@@ -1616,10 +1620,14 @@ def test_concat_null_X(*, use_xdataset: bool, all_none: bool):
     orig = concat(adatas_orig, index_unique="-")
     with (
         pytest.warns(UserWarning, match=r"Some Xs are None")
-        if not all_none
+        if not all_none and implicit_join
         else nullcontext()
     ):
-        no_X = concat(adatas_no_X, index_unique="-")
+        no_X = (
+            concat(adatas_no_X, index_unique="-")
+            if implicit_join
+            else concat(adatas_no_X, index_unique="-", join="inner")
+        )
     del orig.X
 
     assert_equal(no_X, orig)
