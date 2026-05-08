@@ -781,8 +781,10 @@ def write_sparse_compressed(
             arr[...] = attr[...]
 
 
-write_csr = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csr"))
-write_csc = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csc"))
+write_csr, write_csc = (
+    suppress_autoshard_warning(partial(write_sparse_compressed, fmt=fmt))
+    for fmt in ["csr", "csc"]
+)
 
 for store_type, (cls, spec, func) in product(
     (H5Group, ZarrGroup),
