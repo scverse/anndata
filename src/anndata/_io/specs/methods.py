@@ -156,6 +156,8 @@ def zarr_v3_autoshard_decorator(func):
         *args, _writer: Writer, dataset_kwargs: Mapping[str, Any] = MappingProxyType({})
     ):
         with warnings.catch_warnings():
+            # Suppress warnings only if the user has opted into autosharding at the top level.
+            # If someone provides `shards` explicitly, then they should get the warning.
             if ad.settings.auto_shard_zarr_v3 and "shards" not in dataset_kwargs:
                 warnings.filterwarnings(
                     "ignore",
