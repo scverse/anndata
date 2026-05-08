@@ -150,7 +150,7 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-def zarr_v3_autoshard_decorator(func):
+def suppress_autoshard_warning(func):
     @wraps(func)
     def wrapper(
         *args, _writer: Writer, dataset_kwargs: Mapping[str, Any] = MappingProxyType({})
@@ -158,6 +158,7 @@ def zarr_v3_autoshard_decorator(func):
         with warnings.catch_warnings():
             # Suppress warnings only if the user has opted into autosharding at the top level.
             # If someone provides `shards` explicitly, then they should get the warning.
+            print(ad.settings.auto_shard_zarr_v3, dataset_kwargs)
             if ad.settings.auto_shard_zarr_v3 and "shards" not in dataset_kwargs:
                 warnings.filterwarnings(
                     "ignore",
@@ -306,7 +307,7 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
 
 @_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_anndata(
     f: _GroupStorageType,
     k: str,
@@ -362,7 +363,7 @@ def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnDat
 
 @_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_raw(
     f: _GroupStorageType,
     k: str,
@@ -395,7 +396,7 @@ def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 
 
 @_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     # zarr has no first-class null dataset
@@ -419,7 +420,7 @@ def read_mapping(
 
 @_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_mapping(
     f: _GroupStorageType,
     k: str,
@@ -440,7 +441,7 @@ def write_mapping(
 
 @_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_list(
     f: _GroupStorageType,
     k: str,
@@ -462,7 +463,7 @@ def write_list(
 @_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 @zero_dim_array_as_scalar
 def write_basic(
     f: _GroupStorageType,
@@ -537,7 +538,7 @@ _REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
     _to_cpu_mem_wrapper(write_basic)
 )
 _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
-    zarr_v3_autoshard_decorator(_to_cpu_mem_wrapper(write_basic))
+    suppress_autoshard_warning(_to_cpu_mem_wrapper(write_basic))
 )
 
 
@@ -545,7 +546,7 @@ _REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
 @_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_basic_dask_dask_dense(
     f: ZarrGroup | H5Group,
     k: str,
@@ -629,7 +630,7 @@ def write_vlen_string_array(
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 @zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
     f: ZarrGroup,
@@ -780,8 +781,8 @@ def write_sparse_compressed(
             arr[...] = attr[...]
 
 
-write_csr = partial(write_sparse_compressed, fmt="csr")
-write_csc = partial(write_sparse_compressed, fmt="csc")
+write_csr = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csr"))
+write_csc = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csc"))
 
 for store_type, (cls, spec, func) in product(
     (H5Group, ZarrGroup),
@@ -818,7 +819,7 @@ for store_type, (cls, spec, func) in product(
 @_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_sparse_dataset(
     f: _GroupStorageType,
     k: str,
@@ -945,7 +946,7 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 @_REGISTRY.register_write(
     ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_awkward(
     f: _GroupStorageType,
     k: str,
@@ -989,7 +990,7 @@ def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
 @_REGISTRY.register_write(H5Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_dataframe(
     f: _GroupStorageType,
     key: str,
@@ -1131,7 +1132,7 @@ def read_partial_dataframe_0_1_0(
 
 @_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
-@zarr_v3_autoshard_decorator
+@suppress_autoshard_warning
 def write_categorical(
     f: _GroupStorageType,
     k: str,
