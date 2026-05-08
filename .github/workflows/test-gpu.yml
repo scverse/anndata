@@ -35,6 +35,7 @@ jobs:
     permissions:
       pull-requests: read
     steps:
+      # TODO: upgrade once cirun image supports node 24
       - uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
