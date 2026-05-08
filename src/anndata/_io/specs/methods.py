@@ -158,7 +158,6 @@ def suppress_autoshard_warning(func):
         with warnings.catch_warnings():
             # Suppress warnings only if the user has opted into autosharding at the top level.
             # If someone provides `shards` explicitly, then they should get the warning.
-            print(ad.settings.auto_shard_zarr_v3, dataset_kwargs)
             if ad.settings.auto_shard_zarr_v3 and "shards" not in dataset_kwargs:
                 warnings.filterwarnings(
                     "ignore",

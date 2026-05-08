@@ -683,6 +683,7 @@ def test_backed_sizeof(
     ],
 )
 def test_append_overflow_check(group_fn, sparse_class, tmp_path):
+    ad.settings.auto_shard_zarr_v3 = True
     group = group_fn(tmp_path)
     typemax_int32 = np.iinfo(np.int32).max
     orig_mtx = sparse_class(np.ones((1, 1), dtype=bool))
