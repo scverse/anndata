@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, MutableMapping
 from copy import copy
 from functools import partial, wraps
@@ -113,7 +114,7 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
 
 
 def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> dict:
-    if not ad.settings.auto_shard_zarr_v3 and format == 3:
+    if ad.settings.auto_shard_zarr_v3 is None and format == 3:
         warn(
             "zarr v3 autosharding will be the default in the next minor release.",
             UserWarning,
