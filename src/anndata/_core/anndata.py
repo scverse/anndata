@@ -431,7 +431,7 @@ class AnnData:  # noqa: PLW1641
                 msg = "`shape` needs to be `None` if `X` is not `None`."
                 raise ValueError(msg)
             # data matrix and shape
-            n_obs, n_vars = X.shape
+            n_obs, n_vars = X.shape[:2]
             source = "X"
         else:
             n_obs, n_vars = (
@@ -603,13 +603,13 @@ class AnnData:  # noqa: PLW1641
             msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
             warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
-        if hasattr(value, "shape") and value.shape != self.shape:
+        if hasattr(value, "shape") and value.shape[:2] != self.shape:
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
         can_set_direct_if_not_none = (
             value is None
-            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (hasattr(value, "shape") and (self.shape == value.shape[:2]))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         )
