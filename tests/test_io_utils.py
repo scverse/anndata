@@ -97,7 +97,6 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
         pass
 
     group = group_fn(tmp_path)
-    ad.settings.auto_shard_zarr_v3 = True
 
     # This regex checks that the pattern inside the (?!...) group does not exist in the string
     # (?!...) is a negative lookahead

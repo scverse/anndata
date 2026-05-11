@@ -913,21 +913,25 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-@pytest.mark.parametrize(
-    "override",
-    [
-        {"auto_shard_zarr_v3": True, "zarr_write_format": 3},
-        {"zarr_write_format": 3, "auto_shard_zarr_v3": True},
-    ],
-    ids=["shard_first", "write_format_first"],
-)
-def test_write_auto_sharded(tmp_path: Path, override: dict):
+def test_write_auto_sharded(tmp_path: Path):
     path = tmp_path / "check.zarr"
-    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(**override):
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
         adata.write_zarr(path)
 
     check_all_sharded(zarr.open(path))
+
+
+@pytest.mark.zarr_io
+def test_write_auto_sharded_default_warns(tmp_path: Path):
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    ad.settings.reset("auto_shard_zarr_v3")
+    with (
+        ad.settings.override(zarr_write_format=3),
+        pytest.warns(UserWarning, match=r"zarr v3 autosharding will be the default"),
+    ):
+        adata.write_zarr(path)
 
 
 @pytest.mark.zarr_io
