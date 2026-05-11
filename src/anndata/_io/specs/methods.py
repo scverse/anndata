@@ -5,6 +5,7 @@ from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager, nullcontext
 from copy import copy
 from functools import partial, wraps
+from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
@@ -14,6 +15,7 @@ import numpy as np
 import pandas as pd
 import zarr
 from numcodecs import VLenUTF8
+from packaging.version import Version
 from scipy import sparse
 from zarr.core.dtype import VariableLengthUTF8
 
@@ -131,7 +133,7 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
     elif auto_sharding:
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
     # Auto shard sizes are a relatively recent feature
-    supports_auto_shard_size = "array.target_shard_size_bytes" in zarr.config
+    supports_auto_shard_size = Version(version("zarr")) >= Version("3.1.4")
     has_auto_shard_size = supports_auto_shard_size and isinstance(
         zarr.config.get("array.target_shard_size_bytes"), int
     )
