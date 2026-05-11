@@ -114,7 +114,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
     def register_write[S: StorageType, T: RWAble](
         self,
-        dest_type: type[D],
+        dest_type: type[S],
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
