@@ -49,7 +49,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterator
+    from collections.abc import Generator, Iterator
     from os import PathLike
     from typing import Any, Literal
 
