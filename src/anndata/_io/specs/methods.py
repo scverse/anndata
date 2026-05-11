@@ -438,7 +438,7 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dtype = dataset_kwargs.pop("dtype", elem.dtype)
     if isinstance(f, H5Group):
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
@@ -520,7 +520,7 @@ def write_basic_dask_dask_dense(
 ):
     import dask.array as da
 
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     is_h5 = isinstance(f, H5Group)
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
@@ -602,7 +602,7 @@ def write_vlen_string_array_zarr(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     dtype = VariableLengthUTF8()
     filters, fill_value = None, None
@@ -674,7 +674,7 @@ def write_recarray_zarr(
     from anndata.compat import _to_fixed_length_strings
 
     elem = _to_fixed_length_strings(elem)
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     # https://github.com/zarr-developers/zarr-python/issues/3546
     # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
@@ -1377,7 +1377,7 @@ def write_string(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any],
 ):
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs.pop("compression", None)
     dataset_kwargs.pop("compression_opts", None)
     f.create_dataset(
