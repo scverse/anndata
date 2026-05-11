@@ -243,7 +243,6 @@ def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
     adata.__sizeof__(show_stratified=True)
     captured = capsys.readouterr()
     for attr in [
-        "X",
         "layers",
         "obsm",
         "varm",

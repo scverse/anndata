@@ -4,7 +4,6 @@ from codecs import decode
 from collections.abc import Mapping
 from enum import Enum, auto
 from functools import partial, singledispatch
-from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, overload
 
@@ -13,7 +12,6 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 from legacy_api_wrap import legacy_api  # noqa: TID251
-from packaging.version import Version
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
@@ -212,9 +210,6 @@ old_positionals = partial(legacy_api, category=FutureWarning)
 #############################
 
 
-PANDAS_SUPPORTS_NA_VALUE = Version(version("pandas")) >= Version("2.3")
-
-
 PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
     pd.arrays.StringArray,
     pd.arrays.ArrowStringArray,
@@ -248,20 +243,7 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
     if a.array.dtype == "string":  # any `pd.StringDtype`
         return a
 
-    if PANDAS_SUPPORTS_NA_VALUE:
-        dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
-    elif a.array.dtype.na_value is pd.NA:
-        dtype = pd.StringDtype()  # NA semantics
-    elif a.array.dtype.na_value is np.nan and find_spec("pyarrow"):  # noqa: PLW0177
-        # on pandas 2.2, this is the only way to get `np.nan` semantics
-        dtype = pd.StringDtype("pyarrow_numpy")
-    else:
-        msg = (
-            f"Converting an array with `dtype.na_value={a.array.dtype.na_value}` to a string array requires pyarrow or pandas>=2.3. "
-            "Converting to `pd.NA` semantics instead."
-        )
-        warn(msg, UserWarning)
-        dtype = pd.StringDtype()  # NA semantics
+    dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
     a = a.astype(dtype)
     return a if pd.options.future.infer_string else a.astype(object)
 
