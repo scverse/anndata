@@ -2018,12 +2018,14 @@ def test_aligned_axis_key_join_layer_keys_unioned_with_inner_content():
 
     res = concat([a, b], join="inner", aligned_axis_key_join="outer")
 
-    # Outer key join: every layer name appears.
-    assert sorted(res.layers.keys()) == [
+    # Outer key join: every layer name appears. Post #1707, X is stored
+    # under the `None` layer key, so it shows up here too.
+    assert set(res.layers.keys()) == {
+        None,
         "only_a_layer",
         "only_b_layer",
         "shared_layer",
-    ]
+    }
 
     # Inner content join: alt-axis (var) is the intersection {v1, v2}.
     n_total_cells = 4
@@ -2075,8 +2077,10 @@ def test_aligned_axis_key_join_layer_keys_intersected_with_outer_content():
 
     res = concat([a, b], join="outer", aligned_axis_key_join="inner")
 
-    # Inner key join: only the layer present in every input survives.
-    assert sorted(res.layers.keys()) == ["shared_layer"]
+    # Inner key join: only the layer keys present in every input survive.
+    # Post #1707, X is stored under the `None` layer key and is present in
+    # both inputs, so it survives the intersection alongside "shared_layer".
+    assert set(res.layers.keys()) == {None, "shared_layer"}
 
     # Outer content join: alt-axis (var) is the union {v1, v2, v3}.
     n_total_cells = 4
