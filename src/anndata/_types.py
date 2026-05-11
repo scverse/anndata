@@ -104,10 +104,10 @@ class ReadLazy[S](Protocol):
         ...
 
 
-class _WriteInternal[RWAble: typing.RWAble](Protocol):
+class _WriteInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        f: StorageType,
+        f: S,
         k: str,
         v: RWAble,
         *,

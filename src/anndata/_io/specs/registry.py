@@ -112,13 +112,13 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         self.write = {}
         self.write_specs = {}
 
-    def register_write[T](
+    def register_write[T: RWAble, D: StorageType](
         self,
-        dest_type: type,
+        dest_type: type[D],
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_WriteInternal[T]], _WriteInternal[T]]:
+    ) -> Callable[[_WriteInternal[D, T]], _WriteInternal[D, T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -134,7 +134,9 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func: _WriteInternal[T]) -> _WriteInternal[T]:
+        def _register[T: RWAble, D: StorageType](
+            func: _WriteInternal[D, T],
+        ) -> _WriteInternal[D, T]:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 

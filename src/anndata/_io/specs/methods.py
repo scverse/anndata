@@ -22,6 +22,7 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._types import StorageType
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -150,10 +151,12 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-def suppress_autoshard_warning[T: RWAble](func: _WriteInternal[T]) -> _WriteInternal[T]:
+def suppress_autoshard_warning[T: RWAble, S: StorageType](
+    func: _WriteInternal[S, T],
+) -> _WriteInternal[S, T]:
     @wraps(func)
     def wrapper(
-        f: _GroupStorageType,
+        f: S,
         k: str,
         val: T,
         *,
