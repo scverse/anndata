@@ -5,7 +5,7 @@ from copy import copy
 from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import h5py
 import numpy as np
@@ -45,7 +45,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -1210,14 +1210,14 @@ for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_
     )(write_nullable)
 
 
+class _BaseMaskedArray(Protocol):
+    def __call__(
+        self, values: NDArray[np.number], /, *, mask: NDArray[np.bool_]
+    ) -> pd.api.extensions.ExtensionArray: ...
+
+
 def _read_nullable(
-    elem: _GroupStorageType,
-    *,
-    _reader: Reader,
-    # BaseMaskedArray
-    array_type: Callable[
-        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
-    ],
+    elem: _GroupStorageType, *, _reader: Reader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
     return array_type(
         _reader.read_elem(elem["values"]),
