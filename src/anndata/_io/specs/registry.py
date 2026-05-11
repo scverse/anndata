@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
     from ..._core.xarray import Dataset2D
 
+    S = TypeVar("S")
     T = TypeVar("T")
     W = TypeVar("W", bound=_WriteInternal)
     LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
@@ -103,7 +104,7 @@ class IORegistry(Generic[_R, R]):
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_WriteInternal[T]], _WriteInternal[T]]:
+    ) -> Callable[[_WriteInternal[S, T]], _WriteInternal[S, T]]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -119,7 +120,7 @@ class IORegistry(Generic[_R, R]):
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func):
+        def _register(func: _WriteInternal[S, T]) -> _WriteInternal[S, T]:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
@@ -351,7 +352,7 @@ class Writer:
 
         # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
         is_zarr_group = isinstance(store, ZarrGroup)
-        if "/" in k.split(store.name)[-1][1:]:
+        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
             if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)

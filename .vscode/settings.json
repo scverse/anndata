@@ -24,4 +24,7 @@
         //"-nauto",
     ],
     "python.terminal.activateEnvironment": true,
+    "python.analysis.include": ["src/**/*", "ci/scripts/**/*", "tests/**/*"],
+    "python-envs.defaultEnvManager": "pypa.hatch:hatch",
+    "python-envs.defaultPackageManager": "pypa.hatch:hatch",
 }

@@ -25,9 +25,16 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "AnnDataElem",
     "ArrayStorageType",
+    "Dataset2DIlocIndexer",
     "GroupStorageType",
+    "Read",
+    "ReadCallback",
+    "ReadLazy",
     "StorageType",
+    "Write",
+    "WriteCallback",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
@@ -47,17 +54,18 @@ S_contra = TypeVar("S_contra", contravariant=True, bound=StorageType)
 
 
 class Dataset2DIlocIndexer(Protocol):
-    def __getitem__(self, idx: Any) -> Dataset2D: ...
+    def __getitem__(self, idx: Any, /) -> Dataset2D: ...
 
 
 class _ReadInternal(Protocol[S_contra, RWAble_co]):
-    def __call__(self, elem: S_contra, *, _reader: Reader) -> RWAble_co: ...
+    def __call__(self, elem: S_contra, /, *, _reader: Reader) -> RWAble_co: ...
 
 
 class _ReadLazyInternal(Protocol[S_contra]):
     def __call__(
         self,
         elem: S_contra,
+        /,
         *,
         _reader: LazyReader,
         chunks: tuple[int, ...] | None = None,
@@ -65,7 +73,7 @@ class _ReadLazyInternal(Protocol[S_contra]):
 
 
 class Read(Protocol[S_contra, RWAble_co]):
-    def __call__(self, elem: S_contra) -> RWAble_co:
+    def __call__(self, elem: S_contra, /) -> RWAble_co:
         """Low-level reading function for an element.
 
         Parameters
@@ -81,7 +89,7 @@ class Read(Protocol[S_contra, RWAble_co]):
 
 class ReadLazy(Protocol[S_contra]):
     def __call__(
-        self, elem: S_contra, *, chunks: tuple[int, ...] | None = None
+        self, elem: S_contra, /, *, chunks: tuple[int, ...] | None = None
     ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 
@@ -98,12 +106,13 @@ class ReadLazy(Protocol[S_contra]):
         ...
 
 
-class _WriteInternal(Protocol[RWAble_contra]):
+class _WriteInternal(Protocol[S_contra, RWAble_contra]):
     def __call__(
         self,
-        f: StorageType,
+        f: S_contra,
         k: str,
         v: RWAble_contra,
+        /,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
@@ -116,6 +125,7 @@ class Write(Protocol[RWAble_contra]):
         f: StorageType,
         k: str,
         v: RWAble_contra,
+        /,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:

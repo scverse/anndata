@@ -7,7 +7,7 @@ from functools import partial
 from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 from warnings import warn
 
 import h5py
@@ -46,7 +46,7 @@ from ...compat import NULLABLE_NUMPY_STRING_TYPE, PANDAS_STRING_ARRAY_TYPES, is_
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -443,7 +443,7 @@ def write_basic(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dtype = dataset_kwargs.pop("dtype", elem.dtype)
     if isinstance(f, H5Group) or is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
@@ -525,7 +525,7 @@ def write_basic_dask_dask_dense(
 ):
     import dask.array as da
 
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     is_h5 = isinstance(f, H5Group)
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
@@ -629,7 +629,7 @@ def write_vlen_string_array_zarr(
         from numcodecs import VLenUTF8
         from zarr.core.dtype import VariableLengthUTF8
 
-        dataset_kwargs = dataset_kwargs.copy()
+        dataset_kwargs = dict(dataset_kwargs)
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         dtype = VariableLengthUTF8()
         filters, fill_value = None, None
@@ -702,7 +702,7 @@ def write_recarray_zarr(
     if is_zarr_v2():
         f.create_dataset(k, data=elem, shape=elem.shape, **dataset_kwargs)
     else:
-        dataset_kwargs = dataset_kwargs.copy()
+        dataset_kwargs = dict(dataset_kwargs)
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
         # https://github.com/zarr-developers/zarr-python/issues/3546
         # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
@@ -1210,14 +1210,14 @@ for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_
     )(write_nullable)
 
 
+class _BaseMaskedArray(Protocol):
+    def __call__(
+        self, values: NDArray[np.number], /, *, mask: NDArray[np.bool_]
+    ) -> pd.api.extensions.ExtensionArray: ...
+
+
 def _read_nullable(
-    elem: GroupStorageType,
-    *,
-    _reader: Reader,
-    # BaseMaskedArray
-    array_type: Callable[
-        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
-    ],
+    elem: GroupStorageType, *, _reader: Reader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
     return array_type(
         _reader.read_elem(elem["values"]),
@@ -1378,7 +1378,7 @@ def write_string(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any],
 ):
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs.pop("compression", None)
     dataset_kwargs.pop("compression_opts", None)
     f.create_dataset(
