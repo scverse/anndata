@@ -22,7 +22,6 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._io.utils import check_key, zero_dim_array_as_scalar
-from anndata._types import _WriteInternal
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -54,9 +53,9 @@ if TYPE_CHECKING:
     from numpy import typing as npt
     from numpy.typing import NDArray
 
-    from anndata._types import _ArrayStorageType, _GroupStorageType
+    from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
-    from anndata.typing import AxisStorable, _InMemoryArrayOrScalarType
+    from anndata.typing import AxisStorable, RWAble, _InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
 
@@ -151,10 +150,15 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-def suppress_autoshard_warning[Meth: _WriteInternal](func: Meth) -> Meth:
+def suppress_autoshard_warning[T: RWAble](func: _WriteInternal[T]) -> _WriteInternal[T]:
     @wraps(func)
     def wrapper(
-        *args, _writer: Writer, dataset_kwargs: Mapping[str, Any] = MappingProxyType({})
+        f: _GroupStorageType,
+        k: str,
+        val: T,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         with warnings.catch_warnings():
             # Suppress warnings only if the user has opted into autosharding at the top level.
@@ -165,7 +169,7 @@ def suppress_autoshard_warning[Meth: _WriteInternal](func: Meth) -> Meth:
                     r"Automatic shard shape inference is experimental",
                     UserWarning,
                 )
-            return func(*args, _writer=_writer, dataset_kwargs=dataset_kwargs)
+            return func(f, k, val, _writer=_writer, dataset_kwargs=dataset_kwargs)
 
     return wrapper
 
