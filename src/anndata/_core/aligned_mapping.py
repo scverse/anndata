@@ -338,7 +338,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     attrname: ClassVar[Literal["layers"]] = "layers"
     axes: ClassVar[tuple[Literal[0], Literal[1]]] = (0, 1)
 
-    is_none_backed: bool
+    isbacked: bool
 
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
@@ -347,12 +347,10 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
 class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
     def __init__(self, parent: AnnData, *, store: MutableMapping[str | None, Value]):
         super().__init__(parent, store=store)
-        self.is_none_backed = (
-            None not in self._data and self.parent.filename is not None
-        )
+        self.isbacked = None not in self._data and self.parent.filename is not None
 
     def __getitem__(self, key: str | None) -> Value:
-        if key is None and self.is_none_backed:
+        if key is None and self.isbacked:
             if not self.parent.file.is_open:
                 self.parent.file.open()
             X = self.parent.file["X"]
@@ -365,18 +363,18 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
 
     def __iter__(self) -> str | None:
         keys_iter = super().__iter__()
-        if self.is_none_backed:
+        if self.isbacked:
             yield from chain([None], keys_iter)
         yield from keys_iter
 
     def __len__(self) -> int:
         data_length = super().__len__()
-        if self.is_none_backed:
+        if self.isbacked:
             return data_length + 1
         return data_length
 
     def __contains__(self, key: str | None) -> bool:
-        if key is None and self.is_none_backed:
+        if key is None and self.isbacked:
             return True
         return super().__contains__(key)
 
@@ -386,7 +384,7 @@ class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
         self, parent_mapping: LayersBase, parent_view: AnnData, subset_idx: TwoDIdx
     ) -> None:
         super().__init__(parent_mapping, parent_view, subset_idx)
-        self.is_none_backed = parent_mapping.is_none_backed
+        self.isbacked = parent_mapping.isbacked
 
 
 LayersBase._view_class = LayersView
