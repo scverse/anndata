@@ -129,14 +129,15 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         and format == 3
     ):
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
-
-    has_auto_shard_size = isinstance(
+    # Auto shard sizes are a relatively recent feature
+    supports_auto_shard_size = "array.target_shard_size_bytes" in zarr.config
+    has_auto_shard_size = supports_auto_shard_size and isinstance(
         zarr.config.get("array.target_shard_size_bytes"), int
     )
     # 1GB uncompressed shard size seems reasonable.
     with (
         zarr.config.set({"array.target_shard_size_bytes": 1000000000})
-        if has_auto_shard_size and auto_sharding
+        if supports_auto_shard_size and not has_auto_shard_size and auto_sharding
         else nullcontext()
     ):
         yield dataset_kwargs

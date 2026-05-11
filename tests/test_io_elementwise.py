@@ -923,6 +923,16 @@ def test_write_auto_sharded(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
+def test_write_auto_sharded_size(tmp_path: Path):
+    path = tmp_path / "check_shards.zarr"
+    z = zarr.open(path)
+    ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    assert (z["two_shards"].shape[0] / z["two_shards"].shards[0]) < 2
+
+
+@pytest.mark.zarr_io
 def test_write_auto_sharded_default_warns(tmp_path: Path):
     path = tmp_path / "check.zarr"
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
