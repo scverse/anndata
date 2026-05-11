@@ -22,6 +22,7 @@ from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._types import _WriteInternal
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -150,7 +151,7 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-def suppress_autoshard_warning(func):
+def suppress_autoshard_warning[Meth: _WriteInternal](func: Meth) -> Meth:
     @wraps(func)
     def wrapper(
         *args, _writer: Writer, dataset_kwargs: Mapping[str, Any] = MappingProxyType({})
