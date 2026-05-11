@@ -312,7 +312,7 @@ def _read_legacy_raw(
     return raw
 
 
-def zero_dim_array_as_scalar(func: _WriteInternal):
+def zero_dim_array_as_scalar(func: _WriteInternal) -> _WriteInternal:
     """\
     A decorator for write_elem implementations of arrays where zero-dimensional arrays need special handling.
     """
