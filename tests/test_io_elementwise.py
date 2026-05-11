@@ -924,7 +924,7 @@ def test_write_auto_sharded(tmp_path: Path):
 
 # https://zarr.readthedocs.io/en/stable/release-notes/#314-2025-11-20 for version constraint
 @pytest.mark.zarr_io
-@pytest.mark.skipif(version("zarr") < Version("3.1.4"))
+@pytest.mark.skipif(Version(version("zarr")) < Version("3.1.4"))
 def test_write_auto_sharded_size(tmp_path: Path):
     path = tmp_path / "check_shards.zarr"
     z = zarr.open(path)
