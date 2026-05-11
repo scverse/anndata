@@ -166,7 +166,7 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
-def suppress_autoshard_warning[T: RWAble, S: StorageType](
+def suppress_autoshard_warning[S: StorageType, T: RWAble](
     func: _WriteInternal[S, T],
 ) -> _WriteInternal[S, T]:
     @wraps(func)
