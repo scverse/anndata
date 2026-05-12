@@ -75,7 +75,7 @@ def test_set_x_is_none():
     assert adata.X is None
 
 
-def test_del_set_equiv_X():
+def test_del_set_equiv_x() -> None:
     """Tests that `del adata.X` is equivalent to `adata.X = None`"""
     # test setter and deleter
     orig = gen_adata((10, 10))
