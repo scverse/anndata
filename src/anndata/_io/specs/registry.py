@@ -100,7 +100,7 @@ class IORegistry(Generic[_R, R]):
 
     def register_write(
         self,
-        dest_type: type,
+        dest_type: type[S],
         src_type: type | tuple[type, str],
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
