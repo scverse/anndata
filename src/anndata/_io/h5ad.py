@@ -139,9 +139,10 @@ def _write_raw(
     if "raw/X" in as_dense and isinstance(
         raw.X, CSMatrix | BaseCompressedSparseDataset
     ):
-        write_sparse_as_dense(f, "raw/X", raw.X, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "raw/var", raw.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "raw/varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+        g = f.require_group("raw")
+        write_sparse_as_dense(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
+        write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
+        write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
     elif raw is not None:
         write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs)
 

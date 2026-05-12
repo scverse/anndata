@@ -364,16 +364,18 @@ class Writer:
 
         from anndata._io.zarr import is_group_consolidated
 
-        # Normalize k to absolute path
-        if not k.startswith("/"):
-            k = str(PurePosixPath("/") / store.name / k)
+        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        if k.startswith(store.name) and k != "/":
+            k = str(PurePosixPath(k).relative_to(store.name))
 
-        # len() may be 0 (`.`) or 1 (`some-key`)
-        if len(PurePosixPath(k).relative_to(store.name).parts) > 1:
+        if "/" in k and k != "/":
             if settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
-            pass  # TODO: escape forward slashes  # noqa: PIE790
+            warn(
+                "Forward slashes will be written differently in a future anndata version",
+                UserWarning,
+            )
 
         if isinstance(store, h5py.File):
             store = store["/"]
