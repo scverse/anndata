@@ -957,6 +957,7 @@ def test_write_auto_sharded_size(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
+@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 needed for sharding")
 def test_write_auto_sharded_default_warns(tmp_path: Path):
     path = tmp_path / "check.zarr"
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
