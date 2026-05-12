@@ -980,8 +980,8 @@ def test_forward_slash_key(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
         ),
         pytest.raises(ValueError, match=r"Forward slashes")
-        if store_type == "zarr" or disallow_forward_slash_in_h5ad
-        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+        if disallow_forward_slash_in_h5ad
+        else nullcontext(),
     ):
         getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
 

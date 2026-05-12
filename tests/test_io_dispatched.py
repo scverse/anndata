@@ -194,31 +194,23 @@ def test_io_dispatched_keys(tmp_path: Path):
     h5ad_path = tmp_path / "test.h5ad"
     zarr_path = tmp_path / "test.zarr"
 
-    def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
-        h5ad_write_keys.append(k.strip("/"))
+    def writer(func, store, k, elem, dataset_kwargs, iospec):
+        h5ad_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
-        zarr_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
-        func(store, k, elem, dataset_kwargs=dataset_kwargs)
-
-    def h5ad_reader(func, elem_name: str, elem, iospec):
+    def reader(func, elem_name: str, elem, iospec):
         h5ad_read_keys.append(elem_name.strip("/"))
-        return func(elem)
-
-    def zarr_reader(func, elem_name: str, elem, iospec):
-        zarr_read_keys.append(elem_name.strip("/"))
         return func(elem)
 
     adata = gen_adata((50, 100), **GEN_ADATA_NO_XARRAY_ARGS)
 
     with h5py.File(h5ad_path, "w") as f:
-        write_dispatched(f, "/", adata, callback=h5ad_writer)
-        _ = read_dispatched(f, h5ad_reader)
+        write_dispatched(f, "/", adata, callback=writer)
+        _ = read_dispatched(f, reader)
 
     f = open_write_group(zarr_path)
-    write_dispatched(f, "/", adata, callback=zarr_writer)
-    _ = read_dispatched(f, zarr_reader)
+    write_dispatched(f, "/", adata, callback=writer)
+    _ = read_dispatched(f, reader)
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
     assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)
