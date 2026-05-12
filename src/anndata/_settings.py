@@ -460,7 +460,7 @@ def validate_zarr_write_format(format: int, settings: SettingsManager):
 
 settings.register(
     "zarr_write_format",
-    default_value=2,
+    default_value=3,
     description="Which version of zarr to write to when anndata must internally open a write-able zarr group.",
     validate=validate_zarr_write_format,
     get_from_env=lambda name, default: check_and_get_environ_var(
@@ -507,11 +507,11 @@ settings.register(
 
 settings.register(
     "auto_shard_zarr_v3",
-    default_value=None,
+    default_value=True,
     description="Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards.",
-    validate=gen_validator((bool, NoneType)),
+    validate=validate_bool,
     option_type=bool | None,
-    get_from_env=check_and_get_bool_or_none,
+    get_from_env=check_and_get_bool,
 )
 
 

@@ -11,7 +11,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
-from anndata import AnnData, concat, settings
+from anndata import AnnData, concat
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
@@ -261,11 +261,10 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
-def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
+def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
     import zarr
 
-    with settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
+    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
     g = zarr.open(tmp_path)
     assert g.metadata.zarr_format == 3
 
