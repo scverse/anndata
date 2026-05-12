@@ -757,7 +757,9 @@ def test_write_to_root(store: _GroupStorageType, value):
     assert_equal(result, value)
 
 
-@pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.parametrize(
+    "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
+)
 @pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
