@@ -358,18 +358,13 @@ class Writer:
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
     ):
-        from pathlib import PurePosixPath
 
         import h5py
 
         from anndata._io.zarr import is_group_consolidated
 
-        # Normalize k to absolute path
-        if isinstance(store, h5py.Group) and not k.startswith("/"):
-            k = str(PurePosixPath(store.name) / k)
-
-        parts = PurePosixPath(k).relative_to(store.name).parts
-        if len(parts) > 1:
+        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
             if settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
