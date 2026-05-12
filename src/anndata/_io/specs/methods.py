@@ -138,8 +138,11 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         zarr.config.get("array.target_shard_size_bytes"), int
     )
     # 1GB uncompressed shard size seems reasonable.
+    # Shards need to generally held completely in memory before writing.
+    # Even at a compression ration of 6x, that's still a ~20x improvement on number of files.
+    # Users can ovetrride this nonetheless, hence the above checks.
     with (
-        zarr.config.set({"array.target_shard_size_bytes": 1000000000})
+        zarr.config.set({"array.target_shard_size_bytes": 1_000_000_000})
         if supports_auto_shard_size and not has_auto_shard_size and auto_sharding
         else nullcontext()
     ):
