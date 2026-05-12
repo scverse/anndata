@@ -372,10 +372,8 @@ class Writer:
             if settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
-            warn(
-                "Forward slashes will be written differently in a future anndata version",
-                UserWarning,
-            )
+            msg = "Forward slashes will be written differently in a future anndata version"
+            warn(msg, FutureWarning)
 
         if isinstance(store, h5py.File):
             store = store["/"]

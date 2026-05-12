@@ -975,15 +975,26 @@ def test_forward_slash_key(
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
+    path = tmp_path / f"test.{store_type}"
+
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
         ),
         pytest.raises(ValueError, match=r"Forward slashes")
         if disallow_forward_slash_in_h5ad
-        else pytest.warns(UserWarning, match=r"Forward slashes"),
+        else pytest.warns(FutureWarning, match=r"Forward slashes"),
     ):
-        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
+        getattr(a, f"write_{store_type}")(path)
+
+    if not disallow_forward_slash_in_h5ad:
+        adata = getattr(ad, f"read_{store_type}")(path)
+        if elem_key in {"obs", "var"}:
+            assert "bad/key" in getattr(adata, elem_key)
+        elif elem_key == "uns":
+            assert "bad" in getattr(adata, elem_key)
+        else:
+            assert not getattr(adata, elem_key).keys()
 
 
 @pytest.mark.skipif(
