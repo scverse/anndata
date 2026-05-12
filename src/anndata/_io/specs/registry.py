@@ -364,11 +364,12 @@ class Writer:
 
         from anndata._io.zarr import is_group_consolidated
 
-        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
-        if k.startswith(store.name) and k != "/":
-            k = str(PurePosixPath(k).relative_to(store.name))
+        # Normalize k to absolute path
+        if not k.startswith(store.name):
+            k = str(PurePosixPath(store.name) / k)
 
-        if "/" in k and k != "/":
+        # len() may be 0 (`.`) or 1 (`some-key`)
+        if len(PurePosixPath(k).relative_to(store.name).parts) > 1:
             if settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)

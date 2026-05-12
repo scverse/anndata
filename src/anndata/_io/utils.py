@@ -257,6 +257,7 @@ def report_write_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
+        __tracebackhide__ = True
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
