@@ -365,8 +365,8 @@ class Writer:
         from anndata._io.zarr import is_group_consolidated
 
         # Normalize k to absolute path
-        if not k.startswith(store.name):
-            k = str(PurePosixPath(store.name) / k)
+        if not k.startswith("/"):
+            k = str(PurePosixPath("/") / store.name / k)
 
         # len() may be 0 (`.`) or 1 (`some-key`)
         if len(PurePosixPath(k).relative_to(store.name).parts) > 1:

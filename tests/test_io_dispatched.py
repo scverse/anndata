@@ -195,7 +195,8 @@ def test_io_dispatched_keys(tmp_path: Path):
     zarr_path = tmp_path / "test.zarr"
 
     def writer(func, store, k, elem, dataset_kwargs, iospec):
-        h5ad_write_keys.append(f"{store.name.strip('/')}/{k.strip('/')}".strip("/"))
+        assert k.startswith(store.name)
+        h5ad_write_keys.append(k.strip("/"))
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
     def reader(func, elem_name: str, elem, iospec):
