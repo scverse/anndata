@@ -505,11 +505,11 @@ def write_basic(
             dataset_kwargs, format=f.metadata.zarr_format
         ) as dataset_kwargs:
             f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
-            # see https://github.com/zarr-developers/zarr-python/discussions/2712
-            if isinstance(elem, ZarrArray | H5Array):
-                f[k][...] = elem[...]
-            else:
-                f[k][...] = elem
+        # see https://github.com/zarr-developers/zarr-python/discussions/2712
+        if isinstance(elem, ZarrArray | H5Array):
+            f[k][...] = elem[...]
+        else:
+            f[k][...] = elem
 
 
 def _iter_chunks_for_copy(
@@ -742,8 +742,9 @@ def write_recarray_zarr(
     dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     # https://github.com/zarr-developers/zarr-python/issues/3546
-    # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
-    #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
+    # with zarr_v3_sharding(
+    #     dataset_kwargs, format=f.metadata.zarr_format
+    # ) as dataset_kwargs:
     f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     f[k][...] = elem
 
