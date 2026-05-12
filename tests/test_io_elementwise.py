@@ -55,7 +55,9 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 
 
 @pytest.fixture
-def store(diskfmt, tmp_path) -> Generator[H5Group | ZarrGroup, None, None]:
+def store(
+    diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
+) -> Generator[H5Group | ZarrGroup, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("H5Group", file["/"])

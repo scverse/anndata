@@ -987,7 +987,7 @@ def test_forward_slash_key(
 
 
 @pytest.mark.skipif(
-    find_spec("xarray"),
+    bool(find_spec("xarray")),
     reason="Xarray is installed so `read_{elem_}lazy` will not error",
 )
 @pytest.mark.parametrize(

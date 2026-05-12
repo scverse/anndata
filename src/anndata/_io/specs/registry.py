@@ -364,26 +364,23 @@ class Writer:
 
         from anndata._io.zarr import is_group_consolidated
 
-        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
-        is_zarr_group = isinstance(store, ZarrGroup)
-        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
-            if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
+        # Normalize k to absolute path
+        if isinstance(store, h5py.Group) and not k.startswith("/"):
+            k = str(PurePosixPath(store.name) / k)
+
+        parts = PurePosixPath(k).relative_to(store.name).parts
+        if len(parts) > 1:
+            if settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
-            else:
-                msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
-                warn(msg, FutureWarning)
+            pass  # TODO: escape forward slashes  # noqa: PIE790
 
         if isinstance(store, h5py.File):
             store = store["/"]
 
         dest_type = type(store)
 
-        # Normalize k to absolute path
-        if isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute():
-            k = str(PurePosixPath(store.name) / k)
-        is_consolidated = is_group_consolidated(store) if is_zarr_group else False
-        if is_consolidated:
+        if is_group_consolidated(store, strict=False):
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
         if k == "/":
