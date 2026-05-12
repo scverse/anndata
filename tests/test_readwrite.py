@@ -981,7 +981,7 @@ def test_forward_slash_key(
         ),
         pytest.raises(ValueError, match=r"Forward slashes")
         if disallow_forward_slash_in_h5ad
-        else nullcontext(),
+        else pytest.warns(UserWarning, match=r"Forward slashes"),
     ):
         getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
 

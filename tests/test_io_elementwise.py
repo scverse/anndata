@@ -765,7 +765,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     z = open_write_group(pth)
-    write_elem(z, "table/table", adata)
+    write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
         zarr.consolidate_metadata(z.store)
