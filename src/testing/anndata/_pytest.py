@@ -38,7 +38,7 @@ _RST_FILTERS: Sequence[WarningFilter] = (
 def setup_env() -> None:
     import anndata
 
-    anndata.settings.reset(anndata.settings._registered_options.keys())
+    anndata.settings.reset(*list(anndata.settings.model_fields_set))
 
     if IS_PRE:
         # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0

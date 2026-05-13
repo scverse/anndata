@@ -46,7 +46,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
-    "scverse-misc>=0.0.3",
+    "scverse-misc[settings]@git+https://github.com/scverse/scverse-misc@pa/reset",
 ]
 dynamic = [ "version" ]
 
@@ -130,6 +130,8 @@ dask = [
 [tool.hatch.version]
 source = "vcs"
 raw-options.version_scheme = "release-branch-semver"
+[tool.hatch.metadata]
+allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = [ "src/anndata", "src/testing" ]
 
@@ -259,6 +261,7 @@ extend-immutable-calls = [ "slice" ]
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
+runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
 strict = true
 [tool.ruff.lint.pylint]
 max-args = 7
