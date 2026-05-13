@@ -947,6 +947,21 @@ def test_write_auto_sharded_default_warns(tmp_path: Path):
     ):
         adata.write_zarr(path)
 
+@pytest.mark.zarr_io
+@pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.4"),
+    reason="autosharding with chosen size was not available",
+)
+def test_write_auto_sharded_size_sparse(tmp_path: Path):
+    path = "memory://check_shards.zarr"
+    z = zarr.open(path)
+    mat = sparse.random(1000, 1000, density=.5, format="csr", random_state=np.random.default_rng(42))
+    ad.io.write_elem(z, "two_shards_per_sub_element", mat)
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    for sub_element in ["indices", "data", "indptr"]:
+        assert (z["two_shards_per_sub_element"][sub_element].shape[0] / z["two_shards_per_sub_element"][sub_element].shards[0]) < 2, sub_element
+
 
 @pytest.mark.zarr_io
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
