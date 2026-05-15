@@ -521,8 +521,9 @@ def write_elem(
     store
         The group to write to.
     k
-        The key to write to in the group. Note that absolute paths will be written
-        from the root.
+        The key to write into the group.
+        If the group is the root, set `k` to `"/"` to write directly into it.
+        Passing an absolute path referring to a direct child of the group is also allowed.
     elem
         The element to write. Typically an in-memory object, e.g. an AnnData, pandas
         dataframe, scipy sparse matrix, etc.
