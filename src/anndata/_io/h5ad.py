@@ -28,6 +28,7 @@ from ..utils import iter_outer, warn
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
 from .utils import (
+    _check_has_no_slash_key,
     _read_legacy_raw,
     idx_chunks_along_axis,
     no_write_dataset_2d,
@@ -86,6 +87,8 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
+            _check_has_no_slash_key(k, elem)
+
             if k == "raw":
                 _write_raw(
                     f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
@@ -139,9 +142,10 @@ def _write_raw(
     if "raw/X" in as_dense and isinstance(
         raw.X, CSMatrix | BaseCompressedSparseDataset
     ):
-        write_sparse_as_dense(f, "raw/X", raw.X, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "raw/var", raw.var, dataset_kwargs=dataset_kwargs)
-        write_elem(f, "raw/varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+        g = f.require_group("raw")
+        write_sparse_as_dense(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
+        write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
+        write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
     elif raw is not None:
         write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs)
 

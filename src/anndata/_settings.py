@@ -491,7 +491,7 @@ settings.register(
 
 settings.register(
     "disallow_forward_slash_in_h5ad",
-    default_value=False,
+    default_value=True,
     description="Whether or not to disallow the `/` character in keys for h5ad files",
     validate=validate_bool,
     get_from_env=check_and_get_bool,

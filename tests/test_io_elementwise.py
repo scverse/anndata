@@ -55,7 +55,9 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 
 
 @pytest.fixture
-def store(diskfmt, tmp_path) -> Generator[H5Group | ZarrGroup, None, None]:
+def store(
+    diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
+) -> Generator[H5Group | ZarrGroup, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("H5Group", file["/"])
@@ -688,9 +690,7 @@ def test_categorical_order_type(store):
 
 
 def test_override_specification():
-    """
-    Test that trying to overwrite an existing encoding raises an error.
-    """
+    """Test that trying to overwrite an existing encoding raises an error."""
     from copy import deepcopy
 
     registry = deepcopy(_REGISTRY)
@@ -755,7 +755,9 @@ def test_write_to_root(store: _GroupStorageType, value):
     assert_equal(result, value)
 
 
-@pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.parametrize(
+    "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
+)
 @pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
@@ -763,7 +765,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     z = open_write_group(pth)
-    write_elem(z, "table/table", adata)
+    write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
         zarr.consolidate_metadata(z.store)

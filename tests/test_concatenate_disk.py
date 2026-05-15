@@ -20,6 +20,7 @@ from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
     from typing import Literal
 
@@ -70,31 +71,23 @@ def max_loaded_elems(request) -> int:
     return request.param
 
 
-def _adatas_to_paths(adatas, tmp_path, file_format):
-    """
-    Gets list of adatas, writes them and returns their paths as zarr
-    """
-    paths = None
-
-    if isinstance(adatas, Mapping):
-        paths = {}
-        for k, v in adatas.items():
-            p = tmp_path / (f"{k}." + file_format)
-            with as_group(p, mode="a") as f:
-                write_elem(f, "", v)
-            paths[k] = p
-    else:
-        paths = []
-        for i, a in enumerate(adatas):
-            p = tmp_path / (f"{i}." + file_format)
-            with as_group(p, mode="a") as f:
-                write_elem(f, "", a)
-            paths += [p]
-    return paths
+def _adatas_to_paths(
+    adatas: Mapping[str, AnnData] | Collection[AnnData],
+    tmp_path: Path,
+    file_format: str,
+) -> dict[str, Path] | list[Path]:
+    """Gets list of adatas, writes them and returns their paths as zarr."""
+    paths = {}
+    for k, v in adatas.items() if isinstance(adatas, Mapping) else enumerate(adatas):
+        p = tmp_path / f"{k}.{file_format}"
+        with as_group(p, mode="a") as f:
+            write_elem(f, "/", v)
+        paths[k] = p
+    return paths if isinstance(adatas, Mapping) else list(paths.values())
 
 
 def assert_eq_concat_on_disk(
-    adatas,
+    adatas: Mapping[str, AnnData] | Collection[AnnData],
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
     max_loaded_elems: int | None = None,
