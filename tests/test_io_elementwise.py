@@ -857,7 +857,7 @@ def test_chunking_1d_array(
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
-    write_elem(store, "foo", arr, dataset_kwargs={"chunks": 25})
+    write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
     arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert arr.chunksize == expected_chunks
 
@@ -913,38 +913,60 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-@pytest.mark.parametrize(
-    "override",
-    [
-        {"auto_shard_zarr_v3": True, "zarr_write_format": 3},
-        {"zarr_write_format": 3, "auto_shard_zarr_v3": True},
-    ],
-    ids=["shard_first", "write_format_first"],
-)
-def test_write_auto_sharded(tmp_path: Path, override: dict):
+def test_write_auto_sharded(tmp_path: Path):
     path = tmp_path / "check.zarr"
-    adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(**override):
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
         adata.write_zarr(path)
 
     check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_against_v2_format():
-    with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_write_format=2):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                pass
+@pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.4"),
+    reason="autosharding with chosen size was not available",
+)
+def test_write_auto_sharded_size(tmp_path: Path):
+    path = tmp_path / "check_shards.zarr"
+    z = zarr.open(path)
+    ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    assert (z["two_shards"].shape[0] / z["two_shards"].shards[0]) < 2
 
 
 @pytest.mark.zarr_io
-def test_write_auto_cannot_set_v2_format_after_sharding():
-    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_write_format=3):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                with ad.settings.override(zarr_write_format=2):
-                    pass
+def test_write_auto_sharded_default_warns(tmp_path: Path):
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    ad.settings.reset("auto_shard_zarr_v3")
+    with (
+        ad.settings.override(zarr_write_format=3),
+        pytest.warns(UserWarning, match=r"zarr v3 autosharding will be the default"),
+    ):
+        adata.write_zarr(path)
+
+
+@pytest.mark.zarr_io
+@pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.4"),
+    reason="autosharding with chosen size was not available",
+)
+def test_write_auto_sharded_size_sparse(tmp_path: Path):
+    path = "memory://check_shards.zarr"
+    z = zarr.open(path)
+    mat = sparse.random(
+        1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)
+    )
+    ad.io.write_elem(z, "two_shards_per_sub_element", mat)
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    for sub_element in ["indices", "data", "indptr"]:
+        assert (
+            z["two_shards_per_sub_element"][sub_element].shape[0]
+            / z["two_shards_per_sub_element"][sub_element].shards[0]
+        ) < 2, sub_element
 
 
 @pytest.mark.zarr_io
