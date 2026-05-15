@@ -690,9 +690,7 @@ def test_categorical_order_type(store):
 
 
 def test_override_specification():
-    """
-    Test that trying to overwrite an existing encoding raises an error.
-    """
+    """Test that trying to overwrite an existing encoding raises an error."""
     from copy import deepcopy
 
     registry = deepcopy(_REGISTRY)

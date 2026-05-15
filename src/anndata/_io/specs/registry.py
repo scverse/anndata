@@ -364,41 +364,47 @@ class Writer:
 
         from anndata._io.zarr import is_group_consolidated
 
-        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
-        if k.startswith(store.name) and k != "/":
-            k = str(PurePosixPath(k).relative_to(store.name))
-
-        # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
-        # for AnnData elements other than `obs`, `var`, and `uns`.
-        if "/" in k and k != "/":
-            if isinstance(store, ZarrGroup) or settings.disallow_forward_slash_in_h5ad:
-                msg = f"Forward slashes are not allowed in keys in {type(store)}"
-                raise ValueError(msg)
-            msg = "Forward slashes will be written differently in a future anndata version"
-            warn(msg, FutureWarning)
-
         if isinstance(store, h5py.File):
             store = store["/"]
-
-        dest_type = type(store)
-
-        if is_group_consolidated(store, strict=False):
+        elif is_group_consolidated(store, strict=False):
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
+
         if k == "/":
+            if store.name != "/":
+                msg = f"'/' is not in the subpath of {store.name!r}"
+                raise ValueError(msg)
+
             if isinstance(store, ZarrGroup):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())
             else:
                 store.clear()
-        elif k in store:
-            del store[k]
+        else:
+            # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+            if k.startswith("/"):
+                k = str(PurePosixPath(k).relative_to(store.name, walk_up=False))
+
+            # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+            # for AnnData elements other than `obs`, `var`, and `uns`.
+            if "/" in k:
+                if (
+                    isinstance(store, ZarrGroup)
+                    or settings.disallow_forward_slash_in_h5ad
+                ):
+                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                    raise ValueError(msg)
+                msg = "Forward slashes will be written differently in a future anndata version"
+                warn(msg, FutureWarning)
+
+            if k in store:
+                del store[k]
 
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func = self.find_write_func(dest_type, elem, modifiers)
+        write_func = self.find_write_func(type(store), elem, modifiers)
 
         if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
