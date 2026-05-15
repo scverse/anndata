@@ -963,7 +963,9 @@ def test_h5py_attr_limit(tmp_path):
     "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
-@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+@pytest.mark.parametrize(
+    "disallow_forward_slash_in_h5ad", [True, False], ids=["ban_slash", "allow_slash"]
+)
 def test_forward_slash_key(
     elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
     tmp_path: Path,
@@ -976,25 +978,34 @@ def test_forward_slash_key(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
     path = tmp_path / f"test.{store_type}"
+    can_write_slash_key = (
+        elem_key in {"uns", "obs", "var"}
+        and store_type == "h5ad"
+        and not disallow_forward_slash_in_h5ad
+    )
 
+    # try to write bad key and make sure we warn or throw an error
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
         ),
-        pytest.raises(ValueError, match=r"Forward slashes")
-        if disallow_forward_slash_in_h5ad
-        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+        pytest.warns(FutureWarning, match=r"Forward slashes")
+        if can_write_slash_key
+        else pytest.raises(ValueError, match=r"Forward slashes"),
     ):
         getattr(a, f"write_{store_type}")(path)
 
-    if not disallow_forward_slash_in_h5ad:
-        adata = getattr(ad, f"read_{store_type}")(path)
+    # read and check that bad keys were only written if allowed
+    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    if can_write_slash_key:
         if elem_key in {"obs", "var"}:
-            assert "bad/key" in getattr(adata, elem_key)
-        elif elem_key == "uns":
-            assert "bad" in getattr(adata, elem_key)
+            assert "bad/key" in elem
         else:
-            assert not getattr(adata, elem_key).keys()
+            assert "bad" in elem
+    elif elem_key in {"obs", "var"}:
+        assert set(elem.columns) == {"_index"}
+    else:
+        assert not elem.keys()
 
 
 @pytest.mark.skipif(

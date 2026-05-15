@@ -20,7 +20,11 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._io.utils import (
+    _check_has_no_slash_key,
+    check_key,
+    zero_dim_array_as_scalar,
+)
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -287,19 +291,19 @@ def write_anndata(
 ):
     g = f.require_group(k)
     for sub_key, elem in iter_outer(adata):
-        if not (sub_key == "X" and elem is None):
-            if sub_key == "layers":
-                if None in elem:
-                    _writer.write_elem(
-                        g, "X", elem[None], dataset_kwargs=dataset_kwargs
-                    )
-                elem = {k: v for k, v in elem.items() if k is not None}
-            _writer.write_elem(
-                g,
-                sub_key,
-                dict(elem) if isinstance(elem, MutableMapping) else elem,
-                dataset_kwargs=dataset_kwargs,
-            )
+        if sub_key == "X" and elem is None:
+            continue
+        _check_has_no_slash_key(sub_key, elem)
+        if sub_key == "layers":
+            if None in elem:
+                _writer.write_elem(g, "X", elem[None], dataset_kwargs=dataset_kwargs)
+            elem = {k: v for k, v in elem.items() if k is not None}
+        _writer.write_elem(
+            g,
+            sub_key,
+            dict(elem) if isinstance(elem, MutableMapping) else elem,
+            dataset_kwargs=dataset_kwargs,
+        )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))

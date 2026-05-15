@@ -368,8 +368,10 @@ class Writer:
         if k.startswith(store.name) and k != "/":
             k = str(PurePosixPath(k).relative_to(store.name))
 
+        # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+        # for AnnData elements other than `obs`, `var`, and `uns`.
         if "/" in k and k != "/":
-            if settings.disallow_forward_slash_in_h5ad:
+            if isinstance(store, ZarrGroup) or settings.disallow_forward_slash_in_h5ad:
                 msg = f"Forward slashes are not allowed in keys in {type(store)}"
                 raise ValueError(msg)
             msg = "Forward slashes will be written differently in a future anndata version"
