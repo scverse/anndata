@@ -838,9 +838,9 @@ def write_sparse_compressed(
         else:
             with zarr_v3_sharding(
                 dataset_kwargs, format=f.metadata.zarr_format
-            ) as dataset_kwargs:
+            ) as dataset_kwargs_local:
                 arr = g.create_array(
-                    attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
+                    attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs_local
                 )
             # see https://github.com/zarr-developers/zarr-python/discussions/2712
             arr[...] = attr[...]
