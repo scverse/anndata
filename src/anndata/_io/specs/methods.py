@@ -125,12 +125,7 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         and ad.settings.auto_shard_zarr_v3
         and format == 3
     )
-    if ad.settings.auto_shard_zarr_v3 is None and format == 3:
-        warn(
-            "zarr v3 autosharding will be the default in the next minor release.",
-            UserWarning,
-        )
-    elif auto_sharding:
+    if auto_sharding:
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
     # Auto shard sizes are a relatively recent feature
     supports_auto_shard_size = Version(version("zarr")) >= Version("3.1.4")

@@ -483,8 +483,11 @@ def read_elem_lazy(
 
     Reading a dense matrix from a zarr store lazily:
 
+    ..
+        TODO: remove “SKIP” once https://github.com/zarr-developers/zarr-python/issues/3602 becomes minimum zarr (3.1.6)
+
     >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
-    >>> adata.layers["dense"]
+    >>> adata.layers["dense"]  # doctest: +SKIP
     dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
 
     Making a new anndata object from on-disk, with custom chunks:
