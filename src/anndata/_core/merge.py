@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, cast, get_args
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,7 @@ from natsort import natsorted
 from scipy import sparse
 
 from anndata._core.file_backing import to_memory
+from anndata._types import Join_T
 from anndata._warnings import ExperimentalFeatureWarning
 
 from ..compat import (
@@ -35,14 +36,14 @@ from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
 
+JOIN_OPTIONS = get_args(Join_T.__value__)
+
 if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
-
-    from anndata._types import Join_T
 
     from ..compat import XDataArray
     from ..types import SupportsArrayApi
@@ -951,25 +952,17 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
 def inner_concat_aligned_mapping(  # noqa: PLR0913
     mappings,
     *,
+    keys,
     reindexers=None,
     index=None,
     axis=0,
     concat_axis=None,
     force_lazy: bool = False,
-    keys=None,
     fill_value=None,
 ):
-    """Inner-content concat of aligned mappings.
-
-    By default iterates ``intersect_keys(mappings)``. Pass ``keys`` to override
-    the iterated key set (e.g. ``union_keys(mappings)`` for an outer key join
-    paired with inner content alignment); missing entries are then filled
-    with ``fill_value``.
-    """
+    """Inner-content concat of aligned mappings over an explicit key set."""
     if concat_axis is None:
         concat_axis = axis
-    if keys is None:
-        keys = intersect_keys(mappings)
 
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
@@ -1188,24 +1181,17 @@ def missing_element(
 def outer_concat_aligned_mapping(  # noqa: PLR0913
     mappings,
     *,
+    keys,
     reindexers=None,
     index=None,
     axis=0,
     concat_axis=None,
     fill_value=None,
     force_lazy: bool = False,
-    keys=None,
 ):
-    """Outer-content concat of aligned mappings.
-
-    By default iterates ``union_keys(mappings)``. Pass ``keys`` to override
-    the iterated key set (e.g. ``intersect_keys(mappings)`` for an inner key
-    join paired with outer content alignment).
-    """
+    """Outer-content concat of aligned mappings over an explicit key set."""
     if concat_axis is None:
         concat_axis = axis
-    if keys is None:
-        keys = union_keys(mappings)
 
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
@@ -1778,10 +1764,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    if aligned_axis_key_join is not None and aligned_axis_key_join not in (
-        "inner",
-        "outer",
-    ):
+    if aligned_axis_key_join is not None and aligned_axis_key_join not in JOIN_OPTIONS:
         msg = (
             f"`aligned_axis_key_join` must be one of 'inner', 'outer', or None, "
             f"got {aligned_axis_key_join!r}"
@@ -1906,14 +1889,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             xr.merge(annotations_with_only_dask, join=join, compat="override")
         )
 
-    # `join` controls the *off-axis* content alignment shared by layers
-    # and obsm-style values within each shared key. `aligned_join` controls
-    # which keys appear on the on-axis side (obs/var columns, obsm/obsp
-    # keys, layers keys). The two settings are independent; when
-    # `aligned_axis_key_join=None`, `aligned_join == join` and behaviour
-    # reduces to the historical single-knob path. Post #1707, X is a
-    # layer entry rather than a separate field, so the layers mapping
-    # implicitly carries X through the same `aligned_join` path.
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
     elif join == "outer":
@@ -1924,9 +1899,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         msg = f"{join=} should have been validated above by pd.concat"
         raise AssertionError(msg)
 
-    # Pairwise key joining (obsp/varp) is purely about which keys appear in
-    # the result; the per-key block-diagonal does not have a content-alignment
-    # axis, so a single setting is sufficient here.
     if aligned_join == "inner":
         aligned_join_keys = intersect_keys
     elif aligned_join == "outer":
@@ -1935,9 +1907,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         msg = f"{aligned_join=} should have been validated"
         raise AssertionError(msg)
 
-    # Layers: `aligned_join` selects which layer keys appear; `reindexers`
-    # carries the off-axis alignment from X so each kept layer is aligned to
-    # the same alt-axis as X.
     layer_mappings = [a.layers for a in adatas]
     layers = concat_aligned_mapping(
         layer_mappings,
@@ -1946,10 +1915,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         keys=aligned_join_keys(layer_mappings),
     )
 
-    # obsm/varm: aligned_axis_key_join controls which keys appear; the content
-    # alignment within a shared key follows `join`. The pre-computed
-    # `aligned_join_keys` selects the on-axis key set; the inner/outer helper
-    # selected above performs the off-axis content alignment.
     obsm_mappings = [getattr(a, f"{axis_name}m") for a in adatas]
     concat_mapping = concat_aligned_mapping(
         obsm_mappings,
