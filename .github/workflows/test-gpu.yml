@@ -32,10 +32,8 @@ jobs:
     name: "Triage: Check if GPU tests are allowed to run"
     if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
+    permissions: {}
     steps:
-      # TODO: upgrade once cirun image supports node 24
       - uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
@@ -51,6 +49,7 @@ jobs:
       pull-requests: write
 
     steps:
+      # TODO: upgrade once cirun image supports node 24
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
