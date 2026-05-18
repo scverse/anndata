@@ -11,6 +11,7 @@ import pytest
 from natsort import natsorted
 
 import anndata as ad
+from anndata._io.specs.registry import IORegistryError
 from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import assert_equal, get_multiindex_columns_df
 
@@ -154,6 +155,31 @@ def test_arrow_index(restrict_index_types):
             adata[pd.Index(pd.arrays.ArrowExtensionArray(arr))[0:2]],
             adata[0:2],
         )
+
+
+def test_arrow_index_write():
+    ad.settings.restrict_index_types = False
+    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists
+    arr = pa.array(
+        [
+            1_700_000_000_000_000_000,
+            1_700_000_100_000_000_000,
+            1_700_000_200_000_000_000,
+            1_700_000_300_000_000_000,
+        ],
+        type=pa.timestamp("ns"),
+    )
+
+    df = pd.DataFrame(
+        {"x": [1, 2, 3, 4]},
+        index=pd.Index(pd.arrays.ArrowExtensionArray(arr)),
+    )
+    adata = ad.AnnData(np.random.rand(4, 10), obs=df)
+    with pytest.raises(
+        IORegistryError,
+        match=r"No method registered for writing <class 'pandas.arrays.ArrowExtensionArray'>",
+    ):
+        adata.write_zarr("foo.zarr")
 
 
 @pytest.mark.parametrize(
