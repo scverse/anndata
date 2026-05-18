@@ -1,0 +1,27 @@
+name: mypy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Extract max Python version from classifiers
+        run: |
+          classifiers=$(yq .project.classifiers pyproject.toml -oy  | grep --only-matching --perl-regexp '(?<=Python :: )(\d\.\d+)')
+          max_version=$(echo "$classifiers" | sort -V | tail -1)
+          echo "max_python_version=$max_version" >> $GITHUB_ENV
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.max_python_version }}
+      - name: Install mypy
+        run: |
+          pip install 'mypy @ git+https://github.com/python/mypy.git'
+      - name: Run mypy
+        run: |
+          mypy --show-traceback src
