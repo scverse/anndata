@@ -22,6 +22,66 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from typing import Any
 
+    from .._core.anndata import AnnData
+
+
+def _spec_violation_message(value: Any, *, name: str) -> str | None:
+    """Return a spec-violation message for higher-than-2D ``X``/``layers`` values.
+
+    AnnData's on-disk specification requires ``X`` and every entry of
+    ``layers`` to be two-dimensional. Returns ``None`` for conforming values
+    (no ``shape`` attribute, ``None``, or ``ndim <= 2``).
+    """
+    if value is None:
+        return None
+    shape = getattr(value, "shape", None)
+    if shape is None:
+        return None
+    ndim = len(shape)
+    if ndim <= 2:
+        return None
+    return (
+        f"{name} must be 2-dimensional, but got an array with shape "
+        f"{tuple(shape)} (ndim={ndim}). Storing higher-dimensional arrays "
+        f"in `X` or `layers` violates the AnnData specification."
+    )
+
+
+def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
+    """Reject writing AnnData objects whose ``X`` or ``layers`` are not 2D.
+
+    AnnData's spec requires ``X`` and ``layers`` entries on disk to be
+    2-dimensional. In-memory we do not block higher-dimensional values, but
+    a 3D+ array would propagate the spec violation onto disk, so we hard-fail
+    at the IO boundary.
+    """
+    if (X := adata.layers.get(None)) is not None:
+        msg = _spec_violation_message(X, name="X")
+        if msg is not None:
+            raise ValueError(msg)
+    for key, value in adata.layers.items():
+        if key is None:
+            continue
+        msg = _spec_violation_message(value, name=f"Layer {key!r}")
+        if msg is not None:
+            raise ValueError(msg)
+
+
+def _warn_if_x_or_layers_3d_kwargs(d: dict[str, Any]) -> None:
+    """Warn for 3D ``X``/``layers`` entries in the AnnData-constructor kwargs.
+
+    Used by the readers to flag legacy / non-spec-conforming on-disk files
+    without rejecting them.
+    """
+    if (X := d.get("X")) is not None:
+        msg = _spec_violation_message(X, name="X")
+        if msg is not None:
+            warn(msg, UserWarning)
+    for key, value in (d.get("layers") or {}).items():
+        msg = _spec_violation_message(value, name=f"Layer {key!r}")
+        if msg is not None:
+            warn(msg, UserWarning)
+
 
 def coerce_array(
     value: Any,
