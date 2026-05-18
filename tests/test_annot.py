@@ -154,3 +154,18 @@ def test_arrow_index(restrict_index_types):
             adata[pd.Index(pd.arrays.ArrowExtensionArray(arr))[0:2]],
             adata[0:2],
         )
+
+
+@pytest.mark.parametrize(
+    "restrict_index_types", [True, False], ids=["restrict", "unrestricted"]
+)
+def test_arrow_int_index(restrict_index_types):
+    ad.settings.restrict_index_types = restrict_index_types
+
+    df = pd.DataFrame(
+        {"x": [1, 2, 3, 4]},
+        index=pd.Index(pd.array([1, 2, 3, 4], dtype="int8[pyarrow]")),
+    )
+    with pytest.warns(ImplicitModificationWarning, match=r"Transforming to str index."):
+        adata = ad.AnnData(np.random.rand(4, 10), obs=df)
+    assert pd.api.types.is_string_dtype(adata.obs_names)

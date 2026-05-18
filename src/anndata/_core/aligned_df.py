@@ -87,9 +87,10 @@ def _gen_dataframe_df(
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
-    if settings.restrict_index_types and not is_string_dtype(
-        anno.index[~anno.index.isna()]
-    ):
+    if (
+        settings.restrict_index_types
+        and not is_string_dtype(anno.index[~anno.index.isna()])
+    ) or pd.api.types.is_integer_dtype(anno.index):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)
         anno.index = pandas_as_str(anno.index)
