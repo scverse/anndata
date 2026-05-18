@@ -1017,4 +1017,3 @@ def test_write_auto_sharded_does_not_override(tmp_path: Path):
         assert array.shards == (new_shards,)
 
     visititems_zarr(z["X_manually_set"], visitor)
-    raise ValueError()
