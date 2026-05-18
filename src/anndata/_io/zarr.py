@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
+    from .._types import _GroupStorageType
+
 
 @contextmanager
 def zarrs_context():
@@ -175,8 +177,10 @@ def open_write_group(
     return zarr.open_group(store, mode=mode, **kwargs)
 
 
-def is_group_consolidated(group: zarr.Group) -> bool:
+def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:
     if not isinstance(group, zarr.Group):
-        msg = f"Expected zarr.Group, got {type(group)}"
-        raise TypeError(msg)
+        if strict:
+            msg = f"Expected zarr.Group, got {type(group)}"
+            raise TypeError(msg)
+        return False
     return group.metadata.consolidated_metadata is not None

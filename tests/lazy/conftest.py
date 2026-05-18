@@ -141,7 +141,8 @@ def adata_remote_with_store_tall_skinny_path(
         g,
         "obs",
         obs,
-        dataset_kwargs=dict(chunks=(250,)),
+        # No shards so we can track chunking exactly.
+        dataset_kwargs=dict(chunks=(250,), shards=None),
     )
     zarr.consolidate_metadata(g.store)
     return orig_path
