@@ -120,18 +120,17 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
 
 @contextmanager
 def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[dict]:
-    auto_sharding = (
-        "shards" not in dataset_kwargs
-        and ad.settings.auto_shard_zarr_v3
-        and format == 3
+    has_no_shards_kwarg = "shards" not in dataset_kwargs
+    use_auto_sharding = (
+        has_no_shards_kwarg and ad.settings.auto_shard_zarr_v3 and format == 3
     )
-    if ad.settings.auto_shard_zarr_v3 is None and format == 3:
+    if has_no_shards_kwarg and ad.settings.auto_shard_zarr_v3 is None and format == 3:
         warnings.warn(
             "zarr v3 autosharding will be the default in the next minor release.",
             UserWarning,
             stacklevel=2,
         )
-    elif auto_sharding:
+    elif use_auto_sharding:
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
     # Auto shard sizes are a relatively recent feature
     supports_auto_shard_size = Version(version("zarr")) >= Version("3.1.4")
@@ -144,7 +143,7 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
     # Users can ovetrride this nonetheless, hence the above checks.
     with (
         zarr.config.set({"array.target_shard_size_bytes": 1_000_000_000})
-        if supports_auto_shard_size and not has_auto_shard_size and auto_sharding
+        if supports_auto_shard_size and not has_auto_shard_size and use_auto_sharding
         else nullcontext()
     ):
         yield dataset_kwargs

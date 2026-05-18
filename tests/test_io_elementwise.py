@@ -997,22 +997,24 @@ def test_write_auto_sharded_does_not_override(tmp_path: Path):
     X = sparse.random(
         100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
     )
+    ad.settings.reset("auto_shard_zarr_v3")
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
         ad.io.write_elem(z, "X_default", X)
-        shards_default = z["X_default"]["indices"].shards
-        new_shards = shards_default[0] // 2
-        new_shards = int(new_shards - new_shards % 2)
-        ad.io.write_elem(
-            z,
-            "X_manually_set",
-            X,
-            dataset_kwargs={
-                "shards": (new_shards,),
-                "chunks": (int(new_shards / 2),),
-            },
-        )
+    shards_default = z["X_default"]["indices"].shards
+    new_shards = shards_default[0] // 2
+    new_shards = int(new_shards - new_shards % 2)
+    ad.io.write_elem(
+        z,
+        "X_manually_set",
+        X,
+        dataset_kwargs={
+            "shards": (new_shards,),
+            "chunks": (int(new_shards / 2),),
+        },
+    )
 
     def visitor(key: str, array: zarr.Array):
         assert array.shards == (new_shards,)
 
     visititems_zarr(z["X_manually_set"], visitor)
+    raise ValueError()

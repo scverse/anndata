@@ -269,10 +269,6 @@ def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
     g = zarr.open(tmp_path)
     assert g.metadata.zarr_format == 3
 
-    def visit(key: str, arr: zarr.Array | zarr.Group):
-        if isinstance(arr, zarr.Array) and arr.shape != ():
-            assert arr.shards is not None
-
     check_all_sharded(g)
 
 
