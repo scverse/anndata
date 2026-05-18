@@ -446,6 +446,8 @@ def gen_adata(  # noqa: PLR0913
         ),
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
+        df=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
+        df_int_index=gen_typed_df(10, index=pd.Index(list(range(10)))),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     with warnings.catch_warnings():
@@ -767,7 +769,7 @@ def assert_equal_mapping(
     a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
     assert isinstance(b, Mapping)
-    assert set(a) == set(b), format_msg(elem_name)
+    assert set(a) == set(b), f"{format_msg(elem_name)} {a.keys()} != {b.keys()}"
     for k in a:
         if elem_name is None:
             elem_name = ""
@@ -898,9 +900,17 @@ def assert_adata_equal(
         "varp",
         "raw",
     ]:
+        a_elem, b_elem = getattr(a, attr), getattr(b, attr)
+        # TODO: This is helpful in backed mode where `X is not None` but `None not in layers`.
+        # Does this filter make sense in general? Is there a case where we explicitly want to check `None in layers`?
+        if attr == "layers" and any(adata.isbacked for adata in [a, b]):
+            a_elem, b_elem = [
+                {k: v for k, v in elem.items() if k is not None}
+                for elem in [a_elem, b_elem]
+            ]
         assert_equal(
-            getattr(a, attr),
-            getattr(b, attr),
+            a_elem,
+            b_elem,
             exact=exact,
             elem_name=fmt_name(attr),
         )

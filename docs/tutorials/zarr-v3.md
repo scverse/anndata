@@ -54,7 +54,7 @@ import anndata as ad
 from collections.abc import Mapping
 from typing import Any
 
-g = zarr.open_group(orig_path, mode="a", use_consolidated=False, zarr_version=3) # zarr_version 3 is default but note that sharding only works with v3!
+g = zarr.open_group(orig_path, mode="a", use_consolidated=False, zarr_format=3) # zarr_format 3 is default but note that sharding only works with v3!
 
 def write_sharded(group: zarr.Group, adata: ad.AnnData):
     def callback(

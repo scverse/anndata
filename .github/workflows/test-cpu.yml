@@ -41,6 +41,7 @@ jobs:
     needs: get-environments
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
         io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes

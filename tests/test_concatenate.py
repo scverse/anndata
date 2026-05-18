@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import partial, singledispatch
 from importlib.metadata import version
@@ -1599,7 +1600,12 @@ def test_concatenate_size_0_axis():
     assert concat([a, b]).shape == (10, 0)
 
 
-def test_concat_null_X(use_xdataset):
+@pytest.mark.parametrize(
+    ("all_none", "implicit_join"),
+    [(True, False), (False, False), (False, True)],
+    ids=["all_none", "some_none", "some_none-warn"],
+)
+def test_concat_null_X(*, use_xdataset: bool, all_none: bool, implicit_join: bool):
     adatas_orig = {
         k: gen_adata((20, 10), obs_xdataset=use_xdataset, var_xdataset=use_xdataset)
         for k in list("abc")
@@ -1607,11 +1613,21 @@ def test_concat_null_X(use_xdataset):
     adatas_no_X = {}
     for k, v in adatas_orig.items():
         v = v.copy()
-        del v.X
+        if k == "a" or all_none:
+            del v.X
         adatas_no_X[k] = v
 
     orig = concat(adatas_orig, index_unique="-")
-    no_X = concat(adatas_no_X, index_unique="-")
+    with (
+        pytest.warns(UserWarning, match=r"Some Xs are None")
+        if not all_none and implicit_join
+        else nullcontext()
+    ):
+        no_X = (
+            concat(adatas_no_X, index_unique="-")
+            if implicit_join
+            else concat(adatas_no_X, index_unique="-", join="inner")
+        )
     del orig.X
 
     assert_equal(no_X, orig)
@@ -1814,22 +1830,60 @@ def test_concat_on_var_outer_join(array_type):
     _ = concat([a, b], join="outer", axis=1)
 
 
-def test_concat_dask_sparse_matches_memory(join_type, merge_strategy):
+@pytest.mark.parametrize("format", ["csr", "csc"])
+@pytest.mark.parametrize(
+    "unchunked_minor_axis", [True, False], ids=["unchunked_minor", "chunked_minor"]
+)
+@pytest.mark.parametrize("fill_value", [0, -1])
+def test_concat_dask_sparse_matches_memory(
+    join_type,
+    merge_strategy,
+    format: Literal["csr", "csc"],
+    axis_name: Literal["obs", "var"],
+    fill_value: Literal[-1, 0],
+    *,
+    unchunked_minor_axis: bool,
+):
     import dask.array as da
 
-    X = sparse.random(50, 20, density=0.5, format="csr")
-    X_dask = da.from_array(X, chunks=(5, 20))
-    var_names_1 = [f"gene_{i}" for i in range(20)]
-    var_names_2 = [f"gene_{i}{'_foo' if (i % 2) else ''}" for i in range(20)]
+    X = sparse.random(50, 20, density=0.5, format=format)
+    X_dask = da.from_array(
+        X,
+        chunks=(
+            X.shape[0] if format == "csc" else 10,
+            X.shape[1] if format == "csr" else 5,
+        )
+        if unchunked_minor_axis
+        else (5, 10),
+    )
+    off_axis_idx = int(axis_name == "obs")
+    concat_axis_idx = int(axis_name == "var")
+    off_axis = "var" if axis_name == "obs" else "obs"
+    axis_names_1 = [f"off_axis_{i}" for i in range(X.shape[off_axis_idx])]
+    axis_names_2 = [
+        f"off_axis_{i}{'_foo' if (i % 2) else ''}" for i in range(X.shape[off_axis_idx])
+    ]
 
-    ad1 = AnnData(X=X, var=pd.DataFrame(index=var_names_1))
-    ad2 = AnnData(X=X, var=pd.DataFrame(index=var_names_2))
+    ad1 = AnnData(X=X, **{off_axis: pd.DataFrame(index=axis_names_1)})
+    ad2 = AnnData(X=X, **{off_axis: pd.DataFrame(index=axis_names_2)})
 
-    ad1_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_1))
-    ad2_dask = AnnData(X=X_dask, var=pd.DataFrame(index=var_names_2))
+    ad1_dask = AnnData(X=X_dask, **{off_axis: pd.DataFrame(index=axis_names_1)})
+    ad2_dask = AnnData(X=X_dask, **{off_axis: pd.DataFrame(index=axis_names_2)})
 
-    res_in_memory = concat([ad1, ad2], join=join_type, merge=merge_strategy)
-    res_dask = concat([ad1_dask, ad2_dask], join=join_type, merge=merge_strategy)
+    res_in_memory = concat(
+        [ad1, ad2],
+        join=join_type,
+        merge=merge_strategy,
+        axis=concat_axis_idx,
+        fill_value=fill_value,
+    )
+    res_dask = concat(
+        [ad1_dask, ad2_dask],
+        join=join_type,
+        merge=merge_strategy,
+        axis=concat_axis_idx,
+        fill_value=fill_value,
+    )
     assert_equal(res_in_memory, res_dask)
 
 

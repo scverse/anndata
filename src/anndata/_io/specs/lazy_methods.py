@@ -22,6 +22,7 @@ from anndata.compat import (
     XVariable,
     ZarrArray,
     ZarrGroup,
+    pandas_as_str,
 )
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -195,10 +196,7 @@ def resolve_chunks(
 # In the long run, it might be good to figure out what exactly is going on here but for now, this will do.
 @_LAZY_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
 def read_h5_string_array(
-    elem: H5Array,
-    *,
-    _reader: LazyReader,
-    chunks: tuple[int] | None = None,
+    elem: H5Array, *, _reader: LazyReader, chunks: tuple[int, ...] | None = None
 ) -> DaskArray:
     import dask.array as da
 
@@ -242,7 +240,7 @@ def read_zarr_array(
 def _gen_xarray_dict_iterator_from_elems(
     elem_dict: dict[str, LazyDataStructures],
     dim_name: str,
-    index: np.NDArray,
+    index: np.typing.NDArray,
 ) -> Generator[tuple[str, XVariable], None, None]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
@@ -283,27 +281,26 @@ def read_dataframe(
     *,
     _reader: LazyReader,
     use_range_index: bool = False,
-    chunks: tuple[int] | None = None,
+    chunks: tuple[int, ...] | None = None,
 ) -> Dataset2D:
-    from xarray.core.indexing import BasicIndexer
-
-    from ...experimental.backed._lazy_arrays import MaskedArray
-
+    # going through dask for reading into memory the index doesn't make sense, hence the ternary.
     elem_dict = {
         k: _reader.read_elem(elem[k], chunks=chunks)
+        if (use_range_index and k == elem.attrs["_index"]) or k != elem.attrs["_index"]
+        else pd.Index(ad.io.read_elem(elem[k]))
         for k in [*elem.attrs["column-order"], elem.attrs["_index"]]
     }
+    if (
+        pd.api.types.is_string_dtype(elem_dict[elem.attrs["_index"]])
+        and not use_range_index
+    ):
+        elem_dict[elem.attrs["_index"]] = pandas_as_str(elem_dict[elem.attrs["_index"]])
     # If we use a range index, the coord axis needs to have the special dim name
     # which is used below as well.
     if not use_range_index:
         dim_name = elem.attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
-        if isinstance(elem_dict[dim_name], DaskArray):
-            index = elem_dict[dim_name].compute()
-        elif isinstance(elem_dict[dim_name], MaskedArray):
-            index = elem_dict[dim_name][BasicIndexer((slice(None),))]
-        else:
-            raise NotImplementedError()
+        index = elem_dict[dim_name]
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
         index = pd.RangeIndex(len(elem_dict[elem.attrs["_index"]])).astype("str")
@@ -330,8 +327,11 @@ def read_categorical(
     elem: H5Group | ZarrGroup,
     *,
     _reader: LazyReader,
+    chunks: tuple[int, ...] | None = None,
 ) -> CategoricalArray:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray
+
+    del chunks  # ignored when reading groups
 
     base_path_or_zarr_group = (
         Path(filename(elem)) if isinstance(elem, H5Group) else elem
@@ -354,8 +354,11 @@ def read_nullable(
         "nullable-integer", "nullable-boolean", "nullable-string-array"
     ],
     _reader: LazyReader,
+    chunks: tuple[int, ...] | None = None,
 ) -> MaskedArray:
     from anndata.experimental.backed._lazy_arrays import MaskedArray
+
+    del chunks  # ignored when reading groups
 
     base_path_or_zarr_group = (
         Path(filename(elem)) if isinstance(elem, H5Group) else elem

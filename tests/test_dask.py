@@ -141,7 +141,7 @@ def test_dask_distributed_write(
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
         with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
-            ad.io.write_elem(g, "", orig)
+            ad.io.write_elem(g, "/", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
             if auto_shard_zarr_v3:

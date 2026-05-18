@@ -30,7 +30,7 @@ from ..compat import (
     DaskArray,
     has_xp,
 )
-from ..utils import asarray, axis_len, warn, warn_once
+from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -583,6 +583,29 @@ class Reindexer:
     def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
         import dask.array as da
 
+        indexer = self.idx
+        is_outer = any(indexer == -1)
+        # Fast path for the majority of sparse matrices whose minor-axis is unchunked and is being reindexed.
+        # This prevents 0's from being stored explicitly in the sparse matrices when outer joining, for example (see below).
+        if (
+            is_sparse_sub := isinstance(el._meta, CSArray | CSMatrix)
+            and el.chunksize[minor_axis := int(el._meta.format == "csr")]
+            == el.shape[minor_axis]
+            and axis == minor_axis
+            and is_outer
+        ):
+            return el.map_blocks(
+                partial(
+                    self._apply_to_sparse,
+                    axis=axis,
+                    fill_value=fill_value,
+                    keep_format=True,
+                ),
+                chunks=(el.chunks[0], len(self.new_idx))
+                if minor_axis == 1
+                else (len(self.new_idx), el.chunks[1]),
+                meta=el._meta,
+            )
         if fill_value is None:
             fill_value = default_fill_value([el])
         shape = list(el.shape)
@@ -591,12 +614,11 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return da.broadcast_to(fill_value, tuple(shape))
 
-        indexer = self.idx
         sub_el = _subset(el, make_slice(indexer, axis, len(shape)))
 
-        if any(indexer == -1):
+        if is_outer:
             # TODO: Remove this condition once https://github.com/dask/dask/pull/12078 is released
-            if isinstance(sub_el._meta, CSArray | CSMatrix) and np.isscalar(fill_value):
+            if is_sparse_sub and np.isscalar(fill_value):
                 fill_value = np.array([[fill_value]])
             sub_el[make_slice(indexer == -1, axis, len(shape))] = fill_value
 
@@ -658,7 +680,7 @@ class Reindexer:
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
-        self, el: CSMatrix | CSArray, *, axis, fill_value=None
+        self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
     ) -> CSMatrix:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
@@ -730,7 +752,8 @@ class Reindexer:
 
         if fill_idxer is not None:
             out[fill_idxer] = fill_value
-
+        if keep_format:
+            out = out.tocsr() if el.format == "csr" else out.tocsc()
         return out
 
     def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
@@ -1182,30 +1205,6 @@ def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
         return attr.index
 
 
-# TODO: Resolve https://github.com/scverse/anndata/issues/678 and remove this function
-def concat_Xs(adatas, reindexers, axis, fill_value):
-    """
-    Shimy until support for some missing X's is implemented.
-
-    Basically just checks if it's one of the two supported cases, or throws an error.
-
-    This is not done inline in `concat` because we don't want to maintain references
-    to the values of a.X.
-    """
-    Xs = [a.X for a in adatas]
-    if all(X is None for X in Xs):
-        return None
-    elif any(X is None for X in Xs):
-        msg = (
-            "Some (but not all) of the AnnData's to be concatenated had no .X value. "
-            "Concatenation is currently only implemented for cases where all or none of"
-            " the AnnData's have .X assigned."
-        )
-        raise NotImplementedError(msg)
-    else:
-        return concat_arrays(Xs, reindexers, axis=axis, fill_value=fill_value)
-
-
 def make_dask_col_from_extension_dtype(
     col: XDataArray, *, use_only_object_dtype: bool = False
 ) -> DaskArray:
@@ -1423,7 +1422,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
-    join: Join_T = "inner",
+    join: Join_T | Default = Default("inner"),  # noqa: B008
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
@@ -1546,6 +1545,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> inner
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
+        layers: None
     >>> (
     ...     inner.obs_names.astype("string"),
     ...     inner.var_names.astype("string"),
@@ -1556,6 +1556,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
+        layers: None
     >>> outer.var_names.astype("string")
     Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
@@ -1605,18 +1606,22 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones'
+        layers: None
     >>> ad.concat([a, b], merge="unique")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'zeros'
+        layers: None
     >>> ad.concat([a, b], merge="first")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'rand', 'zeros'
+        layers: None
     >>> ad.concat([a, b], merge="only")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'zeros'
+        layers: None
 
     The same merge strategies can be used for elements in `.uns`
 
@@ -1647,6 +1652,18 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         keys, adatas = list(adatas.keys()), list(adatas.values())
     else:
         adatas = list(adatas)
+
+    if isinstance(join, Default):
+        join = join.val
+        if (num_xs := sum(a.X is not None for a in adatas)) > 0 and num_xs < len(
+            adatas
+        ):
+            msg = (
+                "Some Xs are None and non-explicit join found - Xs will be dropped, which matches the behavior of `layers`."
+                "This warning will be removed in the next minor release, 0.14."
+                "To silence this warning pass in an explicit `join` parameter."
+            )
+            warn(msg, UserWarning)
 
     if keys is None:
         keys = np.arange(len(adatas)).astype(str)
@@ -1733,8 +1750,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             xr.merge(annotations_with_only_dask, join=join, compat="override")
         )
 
-    X = concat_Xs(adatas, reindexers, axis=axis, fill_value=fill_value)
-
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
         join_keys = intersect_keys
@@ -1806,7 +1821,6 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
         warn(msg, UserWarning)
     return AnnData(**{
-        "X": X,
         "layers": layers,
         axis_name: concat_annot,
         alt_axis_name: alt_annot,
