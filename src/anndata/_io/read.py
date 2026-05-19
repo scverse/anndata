@@ -76,11 +76,13 @@ def read_excel(
 
     df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
-    row = (
-        pandas_as_str(df.iloc[:, 0]) if settings.restrict_index_types else df.iloc[:, 0]
+    row = dict(
+        row_names=pandas_as_str(df.iloc[:, 0])
+        if settings.restrict_index_types
+        else df.iloc[:, 0]
     )
-    col = (
-        pandas_as_str(df.columns[1:])
+    col = dict(
+        col_names=pandas_as_str(df.columns[1:])
         if settings.restrict_index_types
         else df.columns[1:]
     )
