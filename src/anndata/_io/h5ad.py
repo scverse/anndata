@@ -17,6 +17,10 @@ from anndata._warnings import OldFormatWarning
 from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._core.storage import (
+    _check_x_and_layers_are_2d_on_write,
+    _warn_if_x_or_layers_3d_kwargs,
+)
 from ..compat import (
     CSMatrix,
     _clean_uns,
@@ -57,6 +61,7 @@ def write_h5ad(
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
+    _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -199,6 +204,7 @@ def read_h5ad_backed(
 
     d["raw"] = _read_raw(f, attrs={"var", "varm"})
 
+    _warn_if_x_or_layers_3d_kwargs(d)
     adata = AnnData(**d)
     assert adata.file._file is f
 
@@ -274,13 +280,15 @@ def read_h5ad(
 
         def callback(read_func, elem_name: str, elem: StorageType, iospec: IOSpec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(**{
+                kwargs = {
                     # This is covering up backwards compat in the anndata initializer
                     # In most cases we should be able to call `func(elen[k])` instead
                     k: read_dispatched(elem[k], callback)
                     for k in elem
                     if not k.startswith("raw.")
-                })
+                }
+                _warn_if_x_or_layers_3d_kwargs(kwargs)
+                return AnnData(**kwargs)
             elif elem_name.startswith("/raw."):
                 return None
             elif elem_name == "/X" and "X" in as_sparse:
@@ -296,7 +304,9 @@ def read_h5ad(
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**_read_raw(f, as_sparse, rdasp))
+            raw_kwargs = _read_raw(f, as_sparse, rdasp)
+            _warn_if_x_or_layers_3d_kwargs(raw_kwargs)
+            raw = AnnData(**raw_kwargs)
             raw.obs_names = adata.obs_names
             adata.raw = raw
 

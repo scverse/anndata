@@ -25,6 +25,10 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
+from anndata._core.storage import (
+    _check_x_and_layers_are_2d_on_write,
+    _warn_if_x_or_layers_3d_kwargs,
+)
 from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,
@@ -342,6 +346,7 @@ def write_anndata(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    _check_x_and_layers_are_2d_on_write(adata)
     g = f.require_group(k)
     for sub_key, elem in iter_outer(adata):
         if sub_key == "X" and elem is None:
@@ -381,6 +386,10 @@ def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnDat
     ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
+    # Older / non-conforming files may contain higher-dimensional `X` or
+    # `layers`. The on-disk spec forbids that; surface it as a warning so
+    # the user knows, but still construct the AnnData with what's there.
+    _warn_if_x_or_layers_3d_kwargs(d)
     return AnnData(**d)
 
 
