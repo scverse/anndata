@@ -218,10 +218,6 @@ def _from_array(
 def _normalize_index(
     indexer: Index1D[IndexManager], index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApi | pd.MultiIndex:
-    # TODO: why is this here? All tests pass without it and it seems at the minimum not strict enough.
-    if not isinstance(index, pd.RangeIndex) and index.dtype in (np.float64, np.int64):
-        msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
-        raise TypeError(msg)
 
     if isinstance(indexer, pd.Index | pd.Series) and (
         not isinstance(indexer, pd.MultiIndex) or settings.restrict_index_types
