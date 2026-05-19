@@ -222,7 +222,6 @@ def _normalize_index(
         msg = f"Don’t call _normalize_index with non-categorical/string names and non-range index {index}"
         raise TypeError(msg)
 
-    # MultiIndex raises a ValueError here
     if isinstance(indexer, pd.Index | pd.Series) and (
         not isinstance(indexer, pd.MultiIndex) or settings.restrict_index_types
     ):
