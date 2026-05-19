@@ -124,7 +124,6 @@ def convert_ndarrays(
             v = v.toarray()
         return array_conv(v)
 
-    adata.X = conv(adata.X)
     for k, v in adata.layers.items():
         adata.layers[k] = conv(v)
     for k, v in adata.varm.items():
