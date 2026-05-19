@@ -533,6 +533,7 @@ settings.register(
     description=(
         "Whether to force coercion to a string index upon declaration of the `AnnData` object or setting `obs`/`var`. "
         "Setting this to `False` will also allow `MultiIndex` indexes upon declaration/setting."
+        "Integer indices i.e., those caught by :func:`pandas.api.types.is_integer_dtype` will still be converted to strings."
     ),
     validate=validate_bool,
     get_from_env=check_and_get_bool,
