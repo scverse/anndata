@@ -30,7 +30,7 @@ class Settings(
     min_rows_for_chunked_h5_copy: Annotated[int, Field(gt=0)] = 1000
     """Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location"""
 
-    disallow_forward_slash_in_h5ad: bool = False
+    disallow_forward_slash_in_h5ad: bool = True
     """Whether or not to disallow the `/` character in keys for h5ad files"""
 
     write_csr_csc_indices_with_min_possible_dtype: bool = False

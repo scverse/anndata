@@ -966,7 +966,9 @@ def test_h5py_attr_limit(tmp_path):
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
 @pytest.mark.parametrize(
-    "disallow_forward_slash_in_h5ad", [True, False], ids=["ban_slash", "allow_slash"]
+    "disallow_forward_slash_in_h5ad",
+    [True, False, None],
+    ids=["ban_slash", "allow_slash", "default"],
 )
 def test_forward_slash_key(
     *,
@@ -980,13 +982,19 @@ def test_forward_slash_key(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
     path = tmp_path / f"test.{store_type}"
+    is_default = disallow_forward_slash_in_h5ad is None
+    # default case of unset parameter is to not allow writing of they as of anndata 0.13
     can_write_slash_key = (
         elem_key in {"uns", "obs", "var"}
         and store_type == "h5ad"
-        and not disallow_forward_slash_in_h5ad
+        and (not disallow_forward_slash_in_h5ad and not is_default)
     )
-
     # try to write bad key and make sure we warn or throw an error
+    disallow_forward_slash_in_h5ad = (
+        ad.settings.disallow_forward_slash_in_h5ad
+        if is_default
+        else disallow_forward_slash_in_h5ad
+    )
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
