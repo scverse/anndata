@@ -124,7 +124,7 @@ def test_row_multiindex_setter(restrict_index_types):
 )
 def test_arrow_index(restrict_index_types):
     ad.settings.restrict_index_types = restrict_index_types
-    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists
+    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists in the arrow extension array
     arr = pa.array(
         [
             1_700_000_000_000_000_000,
@@ -159,7 +159,7 @@ def test_arrow_index(restrict_index_types):
 
 def test_arrow_index_write():
     ad.settings.restrict_index_types = False
-    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists
+    # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists in the arrow extension array
     arr = pa.array(
         [
             1_700_000_000_000_000_000,
