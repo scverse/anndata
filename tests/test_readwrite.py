@@ -983,7 +983,7 @@ def test_forward_slash_key(
     )
     path = tmp_path / f"test.{store_type}"
     is_default = disallow_forward_slash_in_h5ad is None
-    # default case of unset parameter is to not allow writing of they as of anndata 0.13
+    # default case of unset parameter is to not allow writing of forward slashes as of anndata 0.13
     can_write_slash_key = (
         elem_key in {"uns", "obs", "var"}
         and store_type == "h5ad"
