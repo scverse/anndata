@@ -46,7 +46,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
-    "scverse-misc>=0.0.3",
+    "scverse-misc[settings]>=0.0.7",
 ]
 dynamic = [ "version" ]
 
@@ -258,6 +258,7 @@ extend-immutable-calls = [ "slice" ]
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
+runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
 strict = true
 [tool.ruff.lint.pylint]
 max-args = 7
