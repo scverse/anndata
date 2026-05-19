@@ -417,7 +417,7 @@ class AnnData:  # noqa: PLW1641
                         "obs",
                         "index",
                         pandas_as_str(X.index)
-                        if settings.force_str_index_when_non_numeric
+                        if settings.restrict_index_types
                         else X.index,
                     ))
                 if var is None:

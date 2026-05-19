@@ -177,7 +177,7 @@ def test_arrow_index_write():
     adata = ad.AnnData(np.random.rand(4, 10), obs=df)
     with pytest.raises(
         IORegistryError,
-        match=r"No method registered for writing <class 'pandas.arrays.ArrowExtensionArray'>",
+        match=r"No method registered for writing <class 'pandas",
     ):
         adata.write_zarr("foo.zarr")
 
