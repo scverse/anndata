@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from typing import TYPE_CHECKING, Literal, cast
@@ -12,7 +12,7 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from typing import Any, Literal
 
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
@@ -257,6 +257,7 @@ def report_write_key_on_error(func):
 
     @wraps(func)
     def func_wrapper(*args, **kwargs):
+        __tracebackhide__ = True
         from anndata._io.specs import Writer
 
         # Figure out signature (method vs function) by going through args
@@ -276,6 +277,16 @@ def report_write_key_on_error(func):
             raise
 
     return func_wrapper
+
+
+def _check_has_no_slash_key(attr: str, elem: object) -> None:
+    """Only attempt to write slash keys where people rely on it for backwards compatibility."""
+    if attr in {"obs", "var", "uns", "raw"}:
+        return  # separate check for `settings.disallow_forward_slash_in_h5ad` is done in `write_elem`
+    assert isinstance(elem, Mapping)
+    if any("/" in k for k in elem if k not in {"/", None}):
+        msg = f"Forward slashes are not allowed in keys in {attr}"
+        raise ValueError(msg)
 
 
 # -------------------------------------------------------------------------------

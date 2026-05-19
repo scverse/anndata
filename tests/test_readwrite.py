@@ -19,6 +19,7 @@ from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
+from anndata._types import AnnDataElem
 from anndata.compat import (
     CSArray,
     CSMatrix,
@@ -35,6 +36,7 @@ from anndata.tests.helpers import (
     jnp,
     jnp_array_or_idempotent,
 )
+from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -960,34 +962,86 @@ def test_h5py_attr_limit(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
+    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
-@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+@pytest.mark.parametrize(
+    "disallow_forward_slash_in_h5ad", [True, False], ids=["ban_slash", "allow_slash"]
+)
 def test_forward_slash_key(
-    elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
-    tmp_path: Path,
-    store_type: Literal["zarr", "h5ad"],
     *,
+    tmp_path: Path,
+    elem_key: AnnDataElem,
+    store_type: Literal["zarr", "h5ad"],
     disallow_forward_slash_in_h5ad: bool,
-):
-    a = ad.AnnData(np.ones((10, 10)))
+) -> None:
+    a = ad.AnnData(shape=(10, 10))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
+    path = tmp_path / f"test.{store_type}"
+    can_write_slash_key = (
+        elem_key in {"uns", "obs", "var"}
+        and store_type == "h5ad"
+        and not disallow_forward_slash_in_h5ad
+    )
+
+    # try to write bad key and make sure we warn or throw an error
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
         ),
-        pytest.raises(ValueError, match=r"Forward slashes")
-        if store_type == "zarr" or disallow_forward_slash_in_h5ad
-        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+        pytest.warns(FutureWarning, match=r"Forward slashes")
+        if can_write_slash_key
+        else pytest.raises(ValueError, match=r"Forward slashes"),
     ):
-        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
+        getattr(a, f"write_{store_type}")(path)
+
+    # read and check that bad keys were only written if allowed
+    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    if can_write_slash_key:
+        if elem_key in {"obs", "var"}:
+            assert "bad/key" in elem
+        else:
+            assert "bad" in elem
+    elif elem_key in {"obs", "var"}:
+        assert set(elem.columns) == {"_index"}
+    else:
+        assert not elem.keys()
+
+
+@pytest.mark.parametrize(
+    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+)
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("key", ["/", "/y"])
+def test_leading_slash_error(
+    *,
+    tmp_path: Path,
+    elem_key: AnnDataElem,
+    store_type: Literal["zarr", "h5ad"],
+    key: str,
+) -> None:
+    a = ad.AnnData(shape=(10, 10))
+    getattr(a, elem_key)[key] = np.ones(
+        (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    path = tmp_path / f"test.{store_type}"
+
+    # “not in the subpath” is raised by e.g. `write_elem(g["z"], "/y", ...)`,
+    # while “Forward slashes” is raised earlier by `write_anndata`/`write_h5ad`
+    with pytest.raises(ValueError, match=r"not in the subpath|Forward slashes"):
+        getattr(a, f"write_{store_type}")(path)
+
+    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    if elem_key in {"obs", "var"}:
+        assert set(elem.columns) == {"_index"}
+    else:
+        assert not elem.keys()
 
 
 @pytest.mark.skipif(
-    find_spec("xarray"),
+    bool(find_spec("xarray")),
     reason="Xarray is installed so `read_{elem_}lazy` will not error",
 )
 @pytest.mark.parametrize(
