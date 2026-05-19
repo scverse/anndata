@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 import scverse_misc
+from pydantic import Field
 
 
 class Settings(
@@ -26,7 +27,7 @@ class Settings(
     use_sparse_array_on_read: bool = False
     """Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data"""
 
-    min_rows_for_chunked_h5_copy: int = 1000
+    min_rows_for_chunked_h5_copy: Annotated[int, Field(gt=0)] = 1000
     """Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location"""
 
     disallow_forward_slash_in_h5ad: bool = False
