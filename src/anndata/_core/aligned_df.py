@@ -80,9 +80,11 @@ def _gen_dataframe_df(
     length: int | None = None,
 ):
     if isinstance(anno.index, pd.MultiIndex) and settings.restrict_index_types:
-        msg = "pandas.MultiIndex not supported as index for obs or var on declaration.\n\
-            You can set `obs_names` manually although most operations after will error or convert to str.\n\
-            You can also opt out of `settings.restrict_index_types` which will allow pandas.MultiIndex."
+        msg = (
+            "pandas.MultiIndex not supported as index for obs or var on declaration.\n"
+            "You can set `obs_names` manually although most operations after will error or convert to str.\n"
+            "You can also opt out of `settings.restrict_index_types` which will allow pandas.MultiIndex."
+        )
         raise ValueError(msg)
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
