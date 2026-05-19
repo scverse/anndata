@@ -47,8 +47,8 @@ class Settings(
     restrict_index_types: bool = True
     """
     Whether to force coercion to a string index upon declaration of the `AnnData` object or setting `obs`/`var`.
-    "Setting this to `False` will also allow `MultiIndex` indexes upon declaration/setting.
-    "Integer indices i.e., those caught by :func:`pandas.api.types.is_integer_dtype` will still be converted to strings.
+    "Setting this to `False` will e.g. also allow `MultiIndex` indexes upon declaration/setting.
+    "Only integer indices i.e., those caught by :func:`pandas.api.types.is_integer_dtype` will always be converted to strings.
     """
 
 
