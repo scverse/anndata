@@ -44,5 +44,12 @@ class Settings(
     auto_shard_zarr_v3: bool | None = True
     """Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards."""
 
+    restrict_index_types: bool = True
+    """
+    Whether to force coercion to a string index upon declaration of the `AnnData` object or setting `obs`/`var`.
+    "Setting this to `False` will e.g. also allow `MultiIndex` indexes upon declaration/setting.
+    "Only integer indices i.e., those caught by :func:`pandas.api.types.is_integer_dtype` will always be converted to strings.
+    """
+
 
 settings = Settings()
