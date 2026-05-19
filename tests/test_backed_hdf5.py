@@ -318,6 +318,19 @@ def test_return_to_memory_mode(adata: ad.AnnData, backing_h5ad: Path):
     bdata.filename = None
 
 
+def test_return_to_memory_mode_loads_raw_X(adata: ad.AnnData, backing_h5ad: Path):
+    adata.raw = adata.copy()
+    expected_raw_X = asarray(adata.raw.X)
+    adata.write_h5ad(backing_h5ad)
+    backed = ad.read_h5ad(backing_h5ad, backed="r")
+    assert backed.isbacked
+
+    backed.filename = None
+    assert not backed.isbacked
+    assert backed.raw.X is not None
+    assert np.array_equal(asarray(backed.raw.X), expected_raw_X)
+
+
 def test_backed_modification(adata: ad.AnnData, backing_h5ad: Path):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse.csr_matrix(adata.X)
