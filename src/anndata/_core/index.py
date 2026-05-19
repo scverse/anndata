@@ -171,6 +171,7 @@ def _from_array(
     # convert to the 1D if it's accidentally 2D column/row vector
     # convert sparse into dense arrays if needed
     use_xp = has_xp(indexer)
+    # MultiIndex objects are not turned into arrays in _normalize_index
     is_pandas = isinstance(
         indexer,
         pd.api.extensions.ExtensionArray | pd.MultiIndex,
