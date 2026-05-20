@@ -156,10 +156,10 @@ class Write[RWAble: typing.RWAble](Protocol):
 class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        /,
         read_func: Read[S, RWAble],
         elem_name: str,
         elem: StorageType,
+        /,
         *,
         iospec: IOSpec,
     ) -> RWAble:
@@ -188,11 +188,11 @@ class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
 class WriteCallback[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        /,
         write_func: Write[RWAble],
         store: StorageType,
         elem_name: str,
         elem: RWAble,
+        /,
         *,
         iospec: IOSpec,
         dataset_kwargs: Mapping[str, Any],
@@ -207,7 +207,7 @@ class WriteCallback[RWAble: typing.RWAble](Protocol):
         store
             The store to which `elem` should be written.
         elem_name
-            The key to read in from the group.
+            The key to write out to the group.
         elem
             The element to write out.
         iospec

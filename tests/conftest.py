@@ -33,12 +33,6 @@ def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 
-@pytest.fixture(autouse=True)
-def zarr_shard(request: pytest.FixtureRequest):
-    with ad.settings.override(auto_shard_zarr_v3=True):
-        yield
-
-
 @pytest.fixture(
     params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
     ids=["h5ad", "zarr2", "zarr3"],

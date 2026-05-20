@@ -46,7 +46,7 @@ dependencies = [
     "legacy-api-wrap",
     "zarr >=3.1",
     "typing-extensions; python_version<'3.13'",
-    "scverse-misc>=0.0.3",
+    "scverse-misc[settings]>=0.0.7",
 ]
 dynamic = [ "version" ]
 
@@ -175,10 +175,9 @@ filterwarnings_when_strict = [
     "default:anndata will no longer support zarr v2:DeprecationWarning",
     "default:Consolidated metadata is:UserWarning",
     "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
+    # Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Writing zarr v2:UserWarning",
-    # TODO: Remove in conjunction with or before https://github.com/scverse/anndata/pull/1707
-    "default:.*will obey copy-on-write semantics:FutureWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
@@ -259,6 +258,7 @@ extend-immutable-calls = [ "slice" ]
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
+runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
 strict = true
 [tool.ruff.lint.pylint]
 max-args = 7

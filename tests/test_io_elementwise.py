@@ -55,7 +55,9 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 
 
 @pytest.fixture
-def store(diskfmt, tmp_path) -> Generator[H5Group | ZarrGroup, None, None]:
+def store(
+    diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
+) -> Generator[H5Group | ZarrGroup, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("H5Group", file["/"])
@@ -688,9 +690,7 @@ def test_categorical_order_type(store):
 
 
 def test_override_specification():
-    """
-    Test that trying to overwrite an existing encoding raises an error.
-    """
+    """Test that trying to overwrite an existing encoding raises an error."""
     from copy import deepcopy
 
     registry = deepcopy(_REGISTRY)
@@ -755,7 +755,9 @@ def test_write_to_root(store: _GroupStorageType, value):
     assert_equal(result, value)
 
 
-@pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.parametrize(
+    "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
+)
 @pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
@@ -763,7 +765,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     z = open_write_group(pth)
-    write_elem(z, "table/table", adata)
+    write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
         zarr.consolidate_metadata(z.store)
@@ -937,15 +939,12 @@ def test_write_auto_sharded_size(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_default_warns(tmp_path: Path):
+def test_write_shards_by_default(tmp_path: Path):
     path = tmp_path / "check.zarr"
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     ad.settings.reset("auto_shard_zarr_v3")
-    with (
-        ad.settings.override(zarr_write_format=3),
-        pytest.warns(UserWarning, match=r"zarr v3 autosharding will be the default"),
-    ):
-        adata.write_zarr(path)
+    adata.write_zarr(path)
+    check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
@@ -975,20 +974,19 @@ def test_write_auto_sharded_does_not_override(tmp_path: Path):
     X = sparse.random(
         100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        ad.io.write_elem(z, "X_default", X)
-        shards_default = z["X_default"]["indices"].shards
-        new_shards = shards_default[0] // 2
-        new_shards = int(new_shards - new_shards % 2)
-        ad.io.write_elem(
-            z,
-            "X_manually_set",
-            X,
-            dataset_kwargs={
-                "shards": (new_shards,),
-                "chunks": (int(new_shards / 2),),
-            },
-        )
+    ad.io.write_elem(z, "X_default", X)
+    shards_default = z["X_default"]["indices"].shards
+    new_shards = shards_default[0] // 2
+    new_shards = int(new_shards - new_shards % 2)
+    ad.io.write_elem(
+        z,
+        "X_manually_set",
+        X,
+        dataset_kwargs={
+            "shards": (new_shards,),
+            "chunks": (int(new_shards / 2),),
+        },
+    )
 
     def visitor(key: str, array: zarr.Array):
         assert array.shards == (new_shards,)
