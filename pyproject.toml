@@ -45,6 +45,7 @@ dependencies = [
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=3.1",
+    "numcodecs>=0.14",
     "typing-extensions; python_version<'3.13'",
     "scverse-misc[settings]>=0.0.7",
 ]
@@ -105,6 +106,7 @@ test-min = [
     "awkward>=2.6.3",
     "pyarrow",
     "pooch",
+    "hdf5plugin",           # registers HDF5 zstd/blosc filters for parallel-read tests
     "anndata[dask]",
 ]
 test-array-api = [

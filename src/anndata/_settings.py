@@ -51,5 +51,31 @@ class Settings(
     "Only integer indices i.e., those caught by :func:`pandas.api.types.is_integer_dtype` will always be converted to strings.
     """
 
+    parallel_h5_read: bool = True
+    """
+    Enables substantially faster reads of h5ad files via multi-threading. Currently supports
+    these compression codecs: HDF5's gzip (zlib), zstd, and blosc with any inner codec. Will
+    fall back to standard single-threading with a warning if h5ad file compression method
+    is not supported or an error occurs. Set this parameter to False to restrict h5ad file reads
+    to a single thread.
+    """
+
+    parallel_h5_read_min_mb: Annotated[int, Field(ge=0)] = 64
+    """
+    Minimum uncompressed array size (MiB) below which the serial HDF5 read
+    path is used. Default 64 MiB: avoids thread-pool overhead on the many
+    small ``obs``/``var`` arrays a normal ``read_h5ad`` traverses; gains from
+    multi-threaded decompression come from ``X``/``layers`` arrays, which are
+    typically far above this threshold.
+    """
+
+    parallel_h5_read_workers: Annotated[int | None, Field(ge=1)] = None
+    """
+    Thread-pool size for parallel HDF5 reads. ``None`` (default) chooses
+    ``min(os.cpu_count(), 16)``. For long-running jobs on machines with
+    more than 16 logical cores and high disk bandwidth, consider raising this
+    to the logical core count and reducing until performance peaks.
+    """
+
 
 settings = Settings()
