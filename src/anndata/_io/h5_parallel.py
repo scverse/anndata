@@ -18,7 +18,7 @@ uses multi-threading to read HDF5 data into memory, in 3 steps:
 
 Note that numcodecs (Zarr's codec package is reused here; any codec from
 that package can be added here with a few lines of code.
-   
+
 Falls back silently to the caller's serial path if any issues occur.
 """
 
@@ -88,7 +88,7 @@ class _ChunkIterUnavailable(RuntimeError):
 
 
 _FILTER_TO_DECODER: dict[int, Callable[[bytes], bytes]] = {
-    _FILTER_DEFLATE: numcodecs.Zlib().decode, # Note that HDF5 'gzip' is actually zlib
+    _FILTER_DEFLATE: numcodecs.Zlib().decode,  # Note that HDF5 'gzip' is actually zlib
     _FILTER_BLOSC: numcodecs.Blosc().decode,  # inner codec self-described in payload
     _FILTER_ZSTD: numcodecs.Zstd().decode,
 }
@@ -111,6 +111,7 @@ def _ensure_blosc_single_threaded() -> None:
 # -------------------------------------------------------------------------------
 # Eligibility gating
 # -------------------------------------------------------------------------------
+
 
 def _supported_filter(dset: h5py.Dataset) -> Callable[[bytes], bytes] | None:
     # AnnData does not generally deal with HDF5 files with multiple filter
@@ -139,8 +140,7 @@ def _eligible_for_multithreading(
 
     # Reject datasets with initialized but unfilled chunks
     expected = math.prod(
-        math.ceil(s / c)
-        for s, c in zip(dset.shape, dset.chunks, strict=True)
+        math.ceil(s / c) for s, c in zip(dset.shape, dset.chunks, strict=True)
     )
     if n_chunks != expected:
         return None
@@ -355,9 +355,9 @@ def _process_extent(
         decoded = raw_chunk if chunk_info.filter_mask else decoder(raw_chunk)
 
         # Restore it to it's original shape (C row-major order, same as numpy)
-        chunk_array = np.frombuffer(
-            decoded, dtype=dtype, count=chunk_elems
-        ).reshape(chunk_shape)
+        chunk_array = np.frombuffer(decoded, dtype=dtype, count=chunk_elems).reshape(
+            chunk_shape
+        )
 
         # Put it in the correct position of 'out' (noted in the chunk's metadata)
         array_region, chunk_region = _chunk_assignment(
@@ -439,7 +439,9 @@ def parallel_read_full(dset: h5py.Dataset) -> np.ndarray | None:
     if not settings.parallel_h5_read:
         return None
     try:
-        info = _eligible_for_multithreading(dset, min_mb=settings.parallel_h5_read_min_mb)
+        info = _eligible_for_multithreading(
+            dset, min_mb=settings.parallel_h5_read_min_mb
+        )
         if info is None:
             return None
         decoder, n_chunks = info
