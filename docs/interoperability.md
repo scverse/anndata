@@ -8,7 +8,7 @@ language of choice:
 
 - [anndataR](https://anndatar.scverse.org/) allows reading and writing `AnnData` objects stored in HDF5 and Zarr (v2 and v3) formats. Conversion functions to `Seurat` and `SingleCellExperiment` are also provided.
 - [zellkonverter](https://bioconductor.org/packages/release/bioc/html/zellkonverter.html) zellkonverter provides basilisk based tooling for loading from `h5ad` files to `SingleCellExperiment`
-- [anndata](https://anndata.dynverse.org) provides an R implementation of `AnnData` as well as IO for the HDF5 format.
+- [anndata for R](https://anndata.dynverse.org) provides an R implementation of `AnnData` as well as IO for the HDF5 format. **Superseded by anndataR**!
 - [MuData](https://bioconductor.org/packages/release/bioc/html/MuData.html) provides IO for `AnnData` and `MuData` stored in HDF5 to Bioconductor's `SingleCellExperiment` and `MultiAssayExperiment` objects.
 - [MuDataSeurat](https://pmbio.github.io/MuDataSeurat/) provides IO from `AnnData` and `MuData` stored in HDF5 to `Seurat` objects.
 
