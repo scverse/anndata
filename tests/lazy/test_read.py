@@ -128,6 +128,22 @@ def test_uns_uses_dask(adata_remote: AnnData):
     assert isinstance(adata_remote.uns["nested"]["nested_further"]["array"], DaskArray)
 
 
+def test_read_lazy_empty_uns_array(tmp_path: Path):
+    # Regression test for #2469: an empty array in ``uns`` is stored unchunked,
+    # so the lazy chunk layout used to be an empty tuple, which dask rejects
+    # ("Empty tuples are not allowed in chunks"). It must read lazily instead.
+    path = tmp_path / "empty_uns.h5ad"
+    adata = AnnData()
+    adata.uns["uns_name"] = {"key_name": []}
+    adata.write_h5ad(path)
+
+    remote = read_lazy(path)
+    arr = remote.uns["uns_name"]["key_name"]
+    assert isinstance(arr, DaskArray)
+    assert arr.shape == (0,)
+    assert np.asarray(arr).shape == (0,)
+
+
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
