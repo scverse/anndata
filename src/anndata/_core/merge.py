@@ -5,6 +5,7 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 import uuid
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
@@ -1155,7 +1156,20 @@ def concat_pairwise_mapping(
         elif all(isinstance(el, DaskArray) for el in els):
             result[k] = _dask_block_diag(els)
         else:
-            result[k] = sparse.block_diag(els, format="csr")
+            # TODO: Remove the warning catch some time around scipy 1.2 (stated in the warning)
+            # https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html#existing-functions-that-need-careful-migration
+            with warnings.catch_warnings():
+                if any(isinstance(v, np.ndarray) for v in els):
+                    warnings.filterwarnings(
+                        "ignore",
+                        r"`block_diag` is switching to the sparse array interface.",
+                        DeprecationWarning,
+                    )
+
+            diag = sparse.block_diag(els, format="csr")
+            # TODO: Remove once we migrate internally to xxx_array
+            if isinstance(diag, CSArray):
+                result[k] = sparse.csr_matrix(diag)
     return result
 
 
