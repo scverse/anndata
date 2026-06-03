@@ -1166,7 +1166,7 @@ def concat_pairwise_mapping(
                         DeprecationWarning,
                     )
 
-            diag = sparse.block_diag(els, format="csr")
+                diag = sparse.block_diag(els, format="csr")
             # TODO: Remove once we migrate internally to xxx_array
             if isinstance(diag, CSArray):
                 result[k] = sparse.csr_matrix(diag)
