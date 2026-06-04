@@ -55,7 +55,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import coerce_array
+from .storage import _spec_violation_message, coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -604,9 +604,21 @@ class AnnData:  # noqa: PLW1641
             warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
         if hasattr(value, "shape") and value.shape[:2] != self.shape:
+            if len(value.shape) > 2:
+                msg = (
+                    f"Cannot set `X` from an array of shape {tuple(value.shape)}: "
+                    f"its leading two dimensions {tuple(value.shape[:2])} do not "
+                    f"match the AnnData shape {tuple(self.shape)}. Automatic "
+                    f"reshaping is only supported for 2-D inputs."
+                )
+                raise ValueError(msg)
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
+        if (spec_msg := _spec_violation_message(value, name="X")) is not None:
+            # In-memory higher-than-2-D `X` is allowed, but the on-disk
+            # AnnData spec is strict; flag it so users know early.
+            warn(spec_msg, UserWarning)
         can_set_direct_if_not_none = (
             value is None
             or (hasattr(value, "shape") and (self.shape == value.shape[:2]))

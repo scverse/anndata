@@ -20,18 +20,7 @@ if TYPE_CHECKING:
 
 MSG_PATTERN = r"must be 2-dimensional"
 
-# Where to put the non-2-D array on disk for the read tests, and which attribute
-# to make non-2-D in memory for the write tests.
 WhichAttr = Literal["X", "layers"]
-
-DISK_FORMATS = [
-    pytest.param("h5ad", id="h5ad"),
-    pytest.param("zarr", id="zarr"),
-]
-WHICH_ATTRS = [
-    pytest.param("X", id="X"),
-    pytest.param("layers", id="layers"),
-]
 
 
 @pytest.fixture
@@ -44,34 +33,62 @@ def arr3d() -> np.ndarray:
     return np.arange(3 * 4 * 5).reshape((3, 4, 5))
 
 
-def test_in_memory_non_2d_x_and_layers_allowed(
+@pytest.fixture(params=["X", "layers"])
+def which(request: pytest.FixtureRequest) -> WhichAttr:
+    """Which of ``X`` / ``layers`` should hold the non-2-D payload."""
+    return request.param
+
+
+# ``diskfmt`` is provided by ``tests/conftest.py`` and already parametrizes
+# over h5ad / zarr2 / zarr3, so we just consume it here.
+
+
+def test_in_memory_non_2d_x_and_layers_warn_but_succeed(
     arr2d: np.ndarray, arr3d: np.ndarray
 ) -> None:
     """All in-memory mutation paths accept non-2-D arrays for ``X`` / ``layers``.
 
-    Only the IO layer enforces the 2-D spec, so users can freely hold
-    higher-dimensional intermediates in memory.
+    Only the IO layer hard-fails on 3-D data, so users can hold
+    higher-dimensional intermediates in memory. Construction / setter
+    paths nonetheless emit a ``UserWarning`` so people learn that their
+    object is technically unwritable.
     """
-    # via constructor
-    adata = ad.AnnData(X=arr3d)
+    with pytest.warns(UserWarning, match=MSG_PATTERN):
+        adata = ad.AnnData(X=arr3d)
     assert adata.X.shape == arr3d.shape
 
-    adata = ad.AnnData(X=arr2d, layers={"L": arr3d})
+    with pytest.warns(UserWarning, match=r"Layer 'L'"):
+        adata = ad.AnnData(X=arr2d, layers={"L": arr3d})
     assert adata.layers["L"].shape == arr3d.shape
 
-    # via attribute setter
     adata = ad.AnnData(X=arr2d)
-    adata.X = arr3d
+    with pytest.warns(UserWarning, match=MSG_PATTERN):
+        adata.X = arr3d
     assert adata.X.shape == arr3d.shape
 
-    # via item assignment
     adata = ad.AnnData(X=arr2d)
-    adata.layers["L"] = arr3d
+    with pytest.warns(UserWarning, match=r"Layer 'L'"):
+        adata.layers["L"] = arr3d
     assert adata.layers["L"].shape == arr3d.shape
 
-    # via full mapping reassignment
-    adata.layers = {"M": arr3d}
+    with pytest.warns(UserWarning, match=r"Layer 'M'"):
+        adata.layers = {"M": arr3d}
     assert adata.layers["M"].shape == arr3d.shape
+
+
+def test_x_setter_higher_dim_shape_mismatch_raises(
+    arr2d: np.ndarray,
+) -> None:
+    """A higher-D ``X`` whose leading two dims don't match raises a clear error.
+
+    The legacy "automatic reshape" path can't handle ``ndim > 2`` inputs,
+    so we surface a dedicated error instead of letting numpy raise an
+    opaque "cannot reshape array of size N into shape (n, m)".
+    """
+    adata = ad.AnnData(X=arr2d)
+    bad = np.zeros((arr2d.shape[0] + 1, arr2d.shape[1], 2))
+    with pytest.raises(ValueError, match=r"Automatic reshaping is only supported"):
+        adata.X = bad
 
 
 def _make_non_conforming(
@@ -140,8 +157,6 @@ def _write(adata: ad.AnnData, pth: Path, diskfmt: Literal["h5ad", "zarr"]) -> No
         adata.write_zarr(pth)
 
 
-@pytest.mark.parametrize("diskfmt", DISK_FORMATS)
-@pytest.mark.parametrize("which", WHICH_ATTRS)
 def test_read_with_non_2d_warns(
     tmp_path: Path,
     arr2d: np.ndarray,
@@ -170,8 +185,6 @@ def test_read_with_non_2d_warns(
         assert not any("X must be" in str(w.message) for w in record)
 
 
-@pytest.mark.parametrize("diskfmt", DISK_FORMATS)
-@pytest.mark.parametrize("which", WHICH_ATTRS)
 def test_write_with_non_2d_raises(
     tmp_path: Path,
     arr2d: np.ndarray,
@@ -181,10 +194,17 @@ def test_write_with_non_2d_raises(
 ) -> None:
     """Writing an AnnData with a non-2-D ``X`` or layer raises a ``ValueError``."""
     adata = ad.AnnData(X=arr2d)
-    if which == "X":
-        adata.X = arr3d  # allowed in memory
-    else:
-        adata.layers["L"] = arr3d  # allowed in memory
+    # Setting a 3-D value is allowed in memory but emits the spec warning;
+    # we're only interested in the write-side raise here.
+    with pytest.warns(UserWarning, match=MSG_PATTERN):
+        _set_non_2d(adata, which, arr3d)
     out = tmp_path / f"out.{diskfmt}"
     with pytest.raises(ValueError, match=MSG_PATTERN):
         _write(adata, out, diskfmt)
+
+
+def _set_non_2d(adata: ad.AnnData, which: WhichAttr, value: np.ndarray) -> None:
+    if which == "X":
+        adata.X = value
+    else:
+        adata.layers["L"] = value

@@ -43,7 +43,7 @@ def _spec_violation_message(value: Any, *, name: str) -> str | None:
     return (
         f"{name} must be 2-dimensional, but got an array with shape "
         f"{tuple(shape)} (ndim={ndim}). Storing higher-dimensional arrays "
-        f"in `X` or `layers` violates the AnnData specification."
+        f"in `X` or `layers` violates the AnnData specification, and cannot be written to disk."
     )
 
 
@@ -65,22 +65,6 @@ def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
         msg = _spec_violation_message(value, name=f"Layer {key!r}")
         if msg is not None:
             raise ValueError(msg)
-
-
-def _warn_if_x_or_layers_3d_kwargs(d: dict[str, Any]) -> None:
-    """Warn for 3D ``X``/``layers`` entries in the AnnData-constructor kwargs.
-
-    Used by the readers to flag legacy / non-spec-conforming on-disk files
-    without rejecting them.
-    """
-    if (X := d.get("X")) is not None:
-        msg = _spec_violation_message(X, name="X")
-        if msg is not None:
-            warn(msg, UserWarning)
-    for key, value in (d.get("layers") or {}).items():
-        msg = _spec_violation_message(value, name=f"Layer {key!r}")
-        if msg is not None:
-            warn(msg, UserWarning)
 
 
 def coerce_array(

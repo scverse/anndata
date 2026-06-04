@@ -25,7 +25,7 @@ from ..utils import (
 )
 from .access import ElementRef
 from .index import _subset
-from .storage import coerce_array
+from .storage import _spec_violation_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
@@ -343,11 +343,32 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
+    def _warn_if_spec_violation(self, key: str | None, val: Value) -> None:
+        """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
+
+        Called from the explicit write paths (``__setitem__`` and the
+        :class:`AlignedMappingProperty` full-reassign hook) only; we do
+        *not* warn from :meth:`_validate_value` because that runs on
+        every property access via :meth:`AlignedActual.__init__`.
+
+        The ``key=None`` slot mirrors ``AnnData.X`` and is reported by
+        the ``X`` setter itself (with the better name "X").
+        """
+        if key is None:
+            return
+        if msg := _spec_violation_message(val, name=f"Layer {key!r}"):
+            warn(msg, UserWarning)
+
 
 class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
     def __init__(self, parent: AnnData, *, store: MutableMapping[str | None, Value]):
         super().__init__(parent, store=store)
         self.isbacked = None not in self._data and self.parent.filename is not None
+
+    def __setitem__(self, key: str | None, value: Value) -> None:
+        super().__setitem__(key, value)
+        if key in self._data:
+            self._warn_if_spec_violation(key, self._data[key])
 
     def __getitem__(self, key: str | None) -> Value:
         if key is None and self.isbacked:
@@ -385,6 +406,10 @@ class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
     ) -> None:
         super().__init__(parent_mapping, parent_view, subset_idx)
         self.isbacked = parent_mapping.isbacked
+
+    def __setitem__(self, key: str | None, value: Value) -> None:
+        super().__setitem__(key, value)
+        self._warn_if_spec_violation(key, value)
 
 
 LayersBase._view_class = LayersView
@@ -499,10 +524,15 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         self, obj: AnnData, value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None
     ) -> None:
         value = convert_to_dict(value)
-        _ = self.construct(obj, store=value)  # Validate
+        mapping = self.construct(obj, store=value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, f"_{self.name}", value)
+        # Surface on-disk spec violations (only meaningful for `layers`).
+        if isinstance(mapping, LayersBase):
+            for k, v in value.items():
+                if v is not None:
+                    mapping._warn_if_spec_violation(k, v)
 
     def __delete__(self, obj: AnnData) -> None:
         new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}

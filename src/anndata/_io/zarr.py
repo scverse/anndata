@@ -11,7 +11,6 @@ import zarr
 from scipy import sparse
 
 from .._core.anndata import AnnData
-from .._core.storage import _warn_if_x_or_layers_3d_kwargs
 from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
@@ -103,7 +102,6 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
                 for k, v in dict(elem).items()
                 if not k.startswith("raw.")
             }
-            _warn_if_x_or_layers_3d_kwargs(kwargs)
             return AnnData(**kwargs)
         elif elem_name.startswith("/raw."):
             return None
@@ -121,7 +119,6 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
             raw_kwargs = _read_legacy_raw(f, adata.raw, read_dataframe, read_elem)
-            _warn_if_x_or_layers_3d_kwargs(raw_kwargs)
             raw = AnnData(**raw_kwargs)
             raw.obs_names = adata.obs_names
             adata.raw = raw
