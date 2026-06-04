@@ -39,10 +39,6 @@ def which(request: pytest.FixtureRequest) -> WhichAttr:
     return request.param
 
 
-# ``diskfmt`` is provided by ``tests/conftest.py`` and already parametrizes
-# over h5ad / zarr2 / zarr3, so we just consume it here.
-
-
 def test_in_memory_non_2d_x_and_layers_warn_but_succeed(
     arr2d: np.ndarray, arr3d: np.ndarray
 ) -> None:
