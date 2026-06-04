@@ -207,7 +207,7 @@ class WriteCallback[RWAble: typing.RWAble](Protocol):
         store
             The store to which `elem` should be written.
         elem_name
-            The key to read in from the group.
+            The key to write out to the group.
         elem
             The element to write out.
         iospec
