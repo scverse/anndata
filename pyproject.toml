@@ -175,9 +175,11 @@ filterwarnings_when_strict = [
     "default:anndata will no longer support zarr v2:DeprecationWarning",
     "default:Consolidated metadata is:UserWarning",
     "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
-    # Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
+    # TODO: Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Writing zarr v2:UserWarning",
+    # TODO: remove when https://github.com/scikit-hep/awkward/issues/4078 is resolved
+    "default:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
