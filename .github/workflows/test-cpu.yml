@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           report_type: test_results
           env_vars: ENV_NAME,IO_MARK
@@ -91,7 +91,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload coverage data
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           env_vars: ENV_NAME,IO_MARK
           files: test-data/coverage.xml
