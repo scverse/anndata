@@ -80,7 +80,7 @@ jobs:
           uv run coverage combine
           uv run coverage xml
 
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
