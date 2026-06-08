@@ -18,6 +18,7 @@ defaults:
 
 jobs:
   benchmark:
+    permissions: {}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -32,16 +33,17 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
           # no blob filter so asv can checkout other commits
 
       - run: git fetch origin main:main
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
         with:
           environment-name: asv
           cache-environment: true
@@ -54,7 +56,7 @@ jobs:
             conda-build
 
       - name: Cache datasets
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cache
