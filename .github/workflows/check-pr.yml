@@ -37,6 +37,7 @@ jobs:
         with:
           success: ${{ github.event.pull_request.user.login == 'pre-commit-ci[bot]' || github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone') }}
       - name: Check if release notes are necessary
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         uses: kaisugi/action-regex-match@d67cd689755dc47c5362609e0a6e2e1c93fa721b # v1.0.2
         id: checked-relnotes
         with:
@@ -44,6 +45,7 @@ jobs:
           regex: '^\s*- \[x\].*Release note not necessary because:\s*(.*)$'
           flags: m
       - name: Check if PR title is valid
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         id: check-title
         uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env: # Needs repo options: “Squash and merge” with commit message set to “PR title”
