@@ -186,8 +186,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
 
 # -- Social cards ---------------------------------------------------------
 
-ogp_site_url = "https://anndata.readthedocs.io/"
-ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
+ogp_site_url = "https://anndata.scverse.org/"
+ogp_image = f"{ogp_site_url}page/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 
