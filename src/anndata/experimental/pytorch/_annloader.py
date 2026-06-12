@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.sparse import issparse
+from scverse_misc import Deprecation, deprecated
 
 from ..._core.anndata import AnnData
 from ...compat import old_positionals
@@ -127,6 +128,9 @@ class AnnLoader(DataLoader):
     :class:`~anndata.experimental.AnnCollection` object or from an `AnnCollectionView` object.
     Takes care of the required conversions.
 
+    .. deprecated:: 0.12.17
+        Use :class:`annbatch.Loader` instead.
+
     Parameters
     ----------
     adatas
@@ -148,6 +152,9 @@ class AnnLoader(DataLoader):
         arguments for `AnnCollection` initialization.
     """
 
+    @deprecated(
+        Deprecation("0.12.17", "Use {class}`annbatch.Loader` instead of `AnnLoader`")
+    )
     @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
     def __init__(
         self,
