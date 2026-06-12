@@ -141,6 +141,7 @@ intersphinx_mapping = dict(
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
     scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
+    annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
 )
 
 qualname_overrides = {
