@@ -126,6 +126,9 @@ class AnnLoader(DataLoader):
     :class:`~anndata.experimental.AnnCollection` object or from an `AnnCollectionView` object.
     Takes care of the required conversions.
 
+    .. deprecated:: 0.12.17
+        Use :class:`annbatch.Loader` instead.
+
     Parameters
     ----------
     adatas
