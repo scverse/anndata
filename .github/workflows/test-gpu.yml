@@ -50,7 +50,7 @@ jobs:
 
     steps:
       # TODO: upgrade once cirun image supports node 24
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           filter: blob:none
@@ -61,7 +61,7 @@ jobs:
 
       - name: Install UV
         # TODO: upgrade once cirun image supports node 24
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
 
@@ -95,8 +95,5 @@ jobs:
           files: test-data/coverage.xml
 
       - name: Remove 'run-gpu-ci' Label
-        if: always()
-        uses: actions-ecosystem/action-remove-labels@2ce5d41b4b6aa8503e285553f75ed56e0a40bae0 # v1.3.0
-        with:
-          labels: "run-gpu-ci"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        if: always() && github.event_name == 'pull_request'
+        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-gpu-ci
