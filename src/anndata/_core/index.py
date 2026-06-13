@@ -455,7 +455,7 @@ def _subset_dataset(
 ) -> np.ndarray:
     order: tuple[NDArray[np.integer] | slice, ...]
     inv_order: tuple[NDArray[np.integer] | slice, ...]
-    order, inv_order = zip(*map(_index_order_and_inverse, subset_idx), strict=True)
+    order, inv_order = zip(*map(_process_index_for_h5py, subset_idx), strict=True)
     # check for duplicates or multi-dimensional fancy indexing
     array_dims = [i for i in order if isinstance(i, np.ndarray)]
     has_duplicates = any(len(np.unique(i)) != len(i) for i in array_dims)
@@ -465,25 +465,7 @@ def _subset_dataset(
         # For multi-dimensional indexing, bypass the sorting logic and use original indices
         return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
-    return d[order][inv_order]
-
-
-@overload
-def _index_order_and_inverse(
-    axis_idx: NDArray[np.integer] | NDArray[np.bool_],
-) -> tuple[NDArray[np.integer], NDArray[np.integer]]: ...
-@overload
-def _index_order_and_inverse(axis_idx: slice) -> tuple[slice, slice]: ...
-def _index_order_and_inverse(
-    axis_idx: _Index1DNorm,
-) -> tuple[_Index1DNorm, NDArray[np.integer] | slice]:
-    """Order and get inverse index array."""
-    if not isinstance(axis_idx, np.ndarray):
-        return axis_idx, slice(None)
-    if axis_idx.dtype == bool:
-        axis_idx = np.flatnonzero(axis_idx)
-    order = np.argsort(axis_idx)
-    return axis_idx[order], np.argsort(order)
+    return d[order][tuple(slice(None) if i is None else i for i in inv_order)]
 
 
 @overload
@@ -503,16 +485,8 @@ def _process_index_for_h5py(
     if idx.dtype == bool:
         idx = np.flatnonzero(idx)
 
-    # For h5py fancy indexing, we need sorted indices
-    # But we also need to track how to reverse the sorting
     unique, inverse = np.unique(idx, return_inverse=True)
-    return (
-        # Has duplicates - use unique + inverse mapping approach
-        (unique, inverse)
-        if len(unique) != len(idx)
-        # No duplicates - just sort and track reverse mapping
-        else _index_order_and_inverse(idx)
-    )
+    return unique, inverse
 
 
 def _safe_fancy_index_h5py(
