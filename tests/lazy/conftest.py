@@ -144,7 +144,12 @@ def adata_remote_with_store_tall_skinny_path(
         # No shards so we can track chunking exactly.
         dataset_kwargs=dict(chunks=(250,), shards=None),
     )
-    zarr.consolidate_metadata(g.store)
+    # Catch the warning so we are alerted once it is no longer surfaced i.e., once consolidated metadata stabilizes.
+    with pytest.warns(
+        zarr.errors.ZarrUserWarning if hasattr(zarr, "errors") else UserWarning,
+        match=r"Consolidated metadata",
+    ):
+        zarr.consolidate_metadata(g.store)
     return orig_path
 
 

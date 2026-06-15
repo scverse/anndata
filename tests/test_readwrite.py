@@ -393,7 +393,14 @@ def test_read_full_io_error(tmp_path, name, read, write):
                 **dict(store["obs"].attrs),
                 "encoding-type": "invalid",
             })
-            zarr.consolidate_metadata(store.store)
+            # Catch the warning so we are alerted once it is no longer surfaced i.e., once consolidated metadata stabilizes.
+            with pytest.warns(
+                zarr.errors.ZarrUserWarning
+                if hasattr(zarr, "errors") and hasattr(zarr.errors, "ZarrUserWarning")
+                else UserWarning,
+                match=r"Consolidated metadata",
+            ):
+                zarr.consolidate_metadata(store.store)
         else:
             store["obs"].attrs["encoding-type"] = "invalid"
 
