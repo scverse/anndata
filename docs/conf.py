@@ -136,6 +136,7 @@ intersphinx_mapping = dict(
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
     annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
+    mudata=("https://mudata.readthedocs.io/stable/", None),
 )
 
 # Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
