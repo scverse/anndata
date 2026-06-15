@@ -768,7 +768,9 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
-        zarr.consolidate_metadata(z.store)
+        # Catch the warning so we are alerted once it is no longer surfaced i.e., once consolidated metadata stabilizes.
+        with pytest.warns(zarr.errors.ZarrUserWarning, match=r"Consolidated metadata"):
+            zarr.consolidate_metadata(z.store)
 
     read_func = zarr.open_consolidated if consolidated else zarr.open
 
