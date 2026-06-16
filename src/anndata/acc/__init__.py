@@ -252,7 +252,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, data: AnnData | MuData, idx: Idx2D | None = None) -> bool:
+    def isin(self, data: AnnData, idx: Idx2D | None = None) -> bool:
         if data.X is None if self.k is None else self.k not in data.layers:
             return False
         for i, dim in zip(idx or (), ("obs", "var"), strict=False):
@@ -260,7 +260,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D]):
                 return i in getattr(data, dim).index
         return True  # idx is None or [:, :]
 
-    def get(self, data: AnnData | MuData, idx: Idx2D, /) -> InMemoryArray:
+    def get(self, data: AnnData, idx: Idx2D, /) -> InMemoryArray:
         arr = data[idx].X if self.k is None else data[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
 
