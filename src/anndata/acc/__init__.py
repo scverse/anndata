@@ -284,7 +284,7 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 
 
 @dataclass(frozen=True)
-class MetaAcc[R: AdRef[str | None], D: MuData | AnnData](RefAcc[R, str | None, D]):
+class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
 
     Examples
@@ -337,14 +337,14 @@ class MetaAcc[R: AdRef[str | None], D: MuData | AnnData](RefAcc[R, str | None, D
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
 
-    def isin(self, data: D, idx: str | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
         if idx is None:
             return True  # obs and var index always exist
         attr: pd.DataFrame | Dataset2D = getattr(data, self.dim)
         return idx in attr
 
     def get(
-        self, data: D, k: str | None, /
+        self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable:
         match getattr(data, self.dim), k:
             case pd.DataFrame() as df, None:
@@ -361,7 +361,7 @@ class MetaAcc[R: AdRef[str | None], D: MuData | AnnData](RefAcc[R, str | None, D
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int], D: MuData | AnnData](RefAcc[R, int, D]):
+class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -417,13 +417,13 @@ class MultiAcc[R: AdRef[int], D: MuData | AnnData](RefAcc[R, int, D]):
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def isin(self, data: D, idx: int | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
         m: AxisArrays = getattr(data, f"{self.dim}m")
         if self.k not in m:
             return False
         return idx is None or idx in range(m[self.k].shape[1])
 
-    def get(self, data: D, i: int, /) -> InMemoryArray:
+    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray:
         # TODO: remove slicing when dropping scipy <1.14
         arr = getattr(data, f"{self.dim}m")[self.k][:, i : i + 1]
         return self._maybe_flatten(i, arr)
@@ -451,7 +451,7 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D], D: MuData | AnnData](RefAcc[R, Idx2D, D]):
+class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
 
     Examples
@@ -500,7 +500,7 @@ class GraphAcc[R: AdRef[Idx2D], D: MuData | AnnData](RefAcc[R, Idx2D, D]):
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, data: D, idx: Idx2D | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
         if self.k not in getattr(data, f"{self.dim}p"):
             return False
         if idx is None:
@@ -511,7 +511,7 @@ class GraphAcc[R: AdRef[Idx2D], D: MuData | AnnData](RefAcc[R, Idx2D, D]):
             case [i]:
                 return i in getattr(data, self.dim).index
 
-    def get(self, data: D, idx: Idx2D, /) -> InMemoryArray:
+    def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray:
         df = cast("pd.DataFrame", getattr(data, self.dim))
         # TODO: remove wrapping in [] when dropping scipy <1.14
         iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
