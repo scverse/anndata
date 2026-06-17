@@ -63,7 +63,7 @@ __all__ = [
 ]
 
 
-class AdRef[I: Hashable]:
+class AdRef[I: Hashable, D: MuData | AnnData]:
     r"""A reference to a 1D or 2D array along one or two dimensions of an AnnData object.
 
     Examples
@@ -86,7 +86,7 @@ class AdRef[I: Hashable]:
 
     """
 
-    acc: RefAcc[Self, I]
+    acc: RefAcc[Self, I, D]
     r"""The accessor containing information about this array.
 
     See :term:`reference accessor`\ s for all possible types this can assume.
@@ -100,7 +100,7 @@ class AdRef[I: Hashable]:
 
     __match_args__: ClassVar = ("acc", "idx")
 
-    def __init__(self, acc: RefAcc[Self, I], idx: I) -> None:
+    def __init__(self, acc: RefAcc[Self, I, D], idx: I) -> None:
         self.acc = acc
         self.idx = idx
 
@@ -754,5 +754,6 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
 
 
 if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    R = AdRef[Hashable]
+    R = AdRef[Hashable, MuData | AnnData]
     I = Hashable
+    D = MuData | AnnData
