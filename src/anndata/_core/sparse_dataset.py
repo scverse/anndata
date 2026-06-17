@@ -95,6 +95,18 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+def _contiguous_slices_from_sorted_indices(indices: np.ndarray) -> list[slice]:
+    if len(indices) == 0:
+        return []
+    split_points = np.flatnonzero(np.diff(indices) != 1) + 1
+    starts = np.concatenate(([0], split_points))
+    stops = np.concatenate((split_points, [len(indices)]))
+    return [
+        slice(indices[start], indices[stop - 1] + 1)
+        for start, stop in zip(starts, stops, strict=False)
+    ]
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -281,12 +293,54 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
                 if self.format == "csr"
                 else (self.minor_axis_size, 0)
             )
+        major_index = np.asarray(major_index)
         if major_index.dtype == bool:
-            major_index = np.where(major_index)
-        out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
-        return self.memory_format(
-            self.get_compressed_vectors(major_index), shape=out_shape
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+            major_index = np.flatnonzero(major_index)
+        if np.any(major_index < 0):
+            return self.memory_format(
+                (self.data[...], self.indices[...], self.indptr[...]),
+                shape=self.shape,
+            )[self._gen_maj_min_tuple(major_index, minor_index)]
+        if np.any(major_index >= self.shape[self.major_axis]):
+            max_index = major_index.max()
+            msg = f"index ({max_index}) out of range"
+            raise IndexError(msg)
+
+        unique_major_index = np.unique(major_index)
+        if len(unique_major_index) == 0:
+            out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
+            return self.memory_format(
+                self.get_compressed_vectors(major_index), shape=out_shape
+            )[self._gen_maj_min_tuple(slice(None), minor_index)]
+
+        run_count = 1 + np.count_nonzero(np.diff(unique_major_index) != 1)
+        mean_slice_length = len(unique_major_index) / run_count
+        if mean_slice_length <= 7:
+            out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
+            return self.memory_format(
+                self.get_compressed_vectors(major_index), shape=out_shape
+            )[self._gen_maj_min_tuple(slice(None), minor_index)]
+
+        original_major_index = np.asarray(major_index)
+        inverse = np.searchsorted(unique_major_index, original_major_index)
+        if run_count == 1:
+            compressed_vectors = self._get_contiguous_compressed_slice(
+                slice(unique_major_index[0], unique_major_index[-1] + 1)
+            )
+        else:
+            slices = _contiguous_slices_from_sorted_indices(unique_major_index)
+            compressed_vectors = self.get_compressed_vectors_for_slices(slices)
+        sub = self.memory_format(
+            compressed_vectors,
+            shape=self._gen_maj_min_tuple(
+                len(unique_major_index), self.minor_axis_size
+            ),
+        )
+        if len(unique_major_index) != len(original_major_index) or not np.array_equal(
+            unique_major_index, original_major_index
+        ):
+            sub = sub[self._gen_maj_min_tuple(inverse, slice(None))]
+        return sub[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
