@@ -1763,6 +1763,7 @@ class AnnData:  # noqa: PLW1641
         *,
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
+        consolidate_metadata: bool = True,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1775,6 +1776,8 @@ class AnnData:  # noqa: PLW1641
             Chunk shape.
         convert_strings_to_categoricals
             Convert string columns to categorical.
+        consolidate_metadata
+            Whether to consolidate the metadata of the store after writing.
         """
         from ..io import write_zarr
 
@@ -1790,6 +1793,7 @@ class AnnData:  # noqa: PLW1641
             self,
             chunks=chunks,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
+            consolidate_metadata=consolidate_metadata,
         )
 
     def chunked_X(self, chunk_size: int | None = None):

@@ -135,6 +135,8 @@ intersphinx_mapping = dict(
     xarray=("https://docs.xarray.dev/en/stable", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
+    annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
+    mudata=("https://mudata.readthedocs.io/stable/", None),
 )
 
 # Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
@@ -186,8 +188,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
 
 # -- Social cards ---------------------------------------------------------
 
-ogp_site_url = "https://anndata.readthedocs.io/"
-ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
+ogp_site_url = "https://anndata.scverse.org/"
+ogp_image = f"{ogp_site_url}page/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 

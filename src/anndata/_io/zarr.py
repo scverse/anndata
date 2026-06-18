@@ -55,6 +55,7 @@ def write_zarr(
     *,
     chunks: tuple[int, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
+    consolidate_metadata: bool = True,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -81,7 +82,17 @@ def write_zarr(
         f.attrs.setdefault("encoding-version", "0.1.0")
 
         write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-        zarr.consolidate_metadata(f.store)
+        if consolidate_metadata:
+            with warnings.catch_warnings():
+                # Consolidated metadata will soon be a zarr convention/spec and should be safe to write.
+                # There is no sense in spamming our users about this.
+                # See https://github.com/zarr-developers/zarr-specs/pull/373
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*[Cc]onsolidated metadata.*",
+                    category=UserWarning,
+                )
+                zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
