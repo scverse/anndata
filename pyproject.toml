@@ -74,6 +74,7 @@ doc = [
     "sphinx-design",
     "anndata[dask]",
     "pandas>=3",
+    "mudata",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
