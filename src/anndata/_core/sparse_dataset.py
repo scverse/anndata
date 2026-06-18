@@ -96,8 +96,6 @@ def slice_as_int(s: slice, l: int) -> int:
 
 
 def _contiguous_slices_from_sorted_indices(indices: np.ndarray) -> list[slice]:
-    if len(indices) == 0:
-        return []
     split_points = np.flatnonzero(np.diff(indices) != 1) + 1
     starts = np.concatenate(([0], split_points))
     stops = np.concatenate((split_points, [len(indices)]))
@@ -287,15 +285,15 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     def _get_arrayXslice(
         self, major_index: Sequence | np.ndarray, minor_index: slice
     ) -> SparseMatrixType:
+        major_index = np.asarray(major_index)
+        if major_index.dtype == bool:
+            major_index = np.flatnonzero(major_index)
         if len(major_index) == 0:
             return self.memory_format(
                 (0, self.minor_axis_size)
                 if self.format == "csr"
                 else (self.minor_axis_size, 0)
             )
-        major_index = np.asarray(major_index)
-        if major_index.dtype == bool:
-            major_index = np.flatnonzero(major_index)
         if np.any(major_index < 0):
             return self.memory_format(
                 (self.data[...], self.indices[...], self.indptr[...]),
@@ -307,12 +305,6 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
             raise IndexError(msg)
 
         unique_major_index = np.unique(major_index)
-        if len(unique_major_index) == 0:
-            out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
-            return self.memory_format(
-                self.get_compressed_vectors(major_index), shape=out_shape
-            )[self._gen_maj_min_tuple(slice(None), minor_index)]
-
         run_count = 1 + np.count_nonzero(np.diff(unique_major_index) != 1)
         mean_slice_length = len(unique_major_index) / run_count
         if mean_slice_length <= 7:

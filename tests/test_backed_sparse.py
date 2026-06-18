@@ -370,6 +370,16 @@ def test_backed_integer_indexing_out_of_bounds(
         csc_disk.X[:, indexer]
 
 
+def test_backed_sparse_matrix_bool_mask_direct(
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+    mask = make_one_group_mask(csr_mem.shape[0])
+
+    assert_equal(csr_mem.X[mask, :], csr_disk.X._to_backed()[mask, :])
+    assert_equal(csc_mem.X[:, mask], csc_disk.X._to_backed()[:, mask])
+
+
 def make_randomized_mask(size: int) -> np.ndarray:
     randomized_mask = np.zeros(size, dtype=bool)
     inds = np.random.choice(size, 20, replace=False)
