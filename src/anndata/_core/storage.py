@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from .._core.anndata import AnnData
 
 
-def _spec_violation_message(value: Any, *, name: str) -> str | None:
+def _non_2d_message(value: Any, *, name: str) -> str | None:
     """Return a spec-violation message for higher-than-2D ``X``/``layers`` values.
 
     AnnData's on-disk specification requires ``X`` and every entry of
@@ -56,13 +56,13 @@ def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
     at the IO boundary.
     """
     if (X := adata.layers.get(None)) is not None:
-        msg = _spec_violation_message(X, name="X")
+        msg = _non_2d_message(X, name="X")
         if msg is not None:
             raise ValueError(msg)
     for key, value in adata.layers.items():
         if key is None:
             continue
-        msg = _spec_violation_message(value, name=f"Layer {key!r}")
+        msg = _non_2d_message(value, name=f"Layer {key!r}")
         if msg is not None:
             raise ValueError(msg)
 

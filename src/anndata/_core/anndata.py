@@ -55,7 +55,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import _spec_violation_message, coerce_array
+from .storage import _non_2d_message, coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -621,7 +621,7 @@ class AnnData:  # noqa: PLW1641
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
-        if (spec_msg := _spec_violation_message(value, name="X")) is not None:
+        if (spec_msg := _non_2d_message(value, name="X")) is not None:
             # In-memory higher-than-2-D `X` is allowed, but the on-disk
             # AnnData spec is strict; flag it so users know early.
             warn(spec_msg, UserWarning)

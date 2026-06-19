@@ -25,7 +25,7 @@ from ..utils import (
 )
 from .access import ElementRef
 from .index import _subset
-from .storage import _spec_violation_message, coerce_array
+from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
@@ -343,7 +343,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
-    def _warn_if_spec_violation(self, key: str | None, val: Value) -> None:
+    def _warn_if_non_2d(self, key: str | None, val: Value) -> None:
         """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
 
         Called from the explicit write paths (``__setitem__`` and the
@@ -356,7 +356,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
         """
         if key is None:
             return
-        if msg := _spec_violation_message(val, name=f"Layer {key!r}"):
+        if msg := _non_2d_message(val, name=f"Layer {key!r}"):
             warn(msg, UserWarning)
 
 
@@ -367,8 +367,7 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
 
     def __setitem__(self, key: str | None, value: Value) -> None:
         super().__setitem__(key, value)
-        if key in self._data:
-            self._warn_if_spec_violation(key, self._data[key])
+        self._warn_if_non_2d(key, value)
 
     def __getitem__(self, key: str | None) -> Value:
         if key is None and self.isbacked:
@@ -409,7 +408,7 @@ class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
 
     def __setitem__(self, key: str | None, value: Value) -> None:
         super().__setitem__(key, value)
-        self._warn_if_spec_violation(key, value)
+        self._warn_if_non_2d(key, value)
 
 
 LayersBase._view_class = LayersView
@@ -532,7 +531,7 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         if isinstance(mapping, LayersBase):
             for k, v in value.items():
                 if v is not None:
-                    mapping._warn_if_spec_violation(k, v)
+                    mapping._warn_if_non_2d(k, v)
 
     def __delete__(self, obj: AnnData) -> None:
         new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}
