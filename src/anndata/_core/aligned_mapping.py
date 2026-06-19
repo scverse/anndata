@@ -529,7 +529,7 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         self, obj: AnnData, value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None
     ) -> None:
         value = convert_to_dict(value)
-        _ = self.construct(obj, store=value)  # Validate
+        _ = self.construct(obj, store=value)  # Validate and convert arrays in `value`
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, f"_{self.name}", value)
