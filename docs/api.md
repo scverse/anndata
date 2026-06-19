@@ -261,6 +261,7 @@ Types used by the former:
 
    settings
    settings.override
+   settings.reset
 ```
 
 (types-api)=
