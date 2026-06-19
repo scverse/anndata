@@ -214,13 +214,15 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     _data: MutableMapping[K, Value]
     """Underlying mapping to the data"""
 
-    def __init__(self, parent: AnnData, *, store: MutableMapping[K, Value]):
+    def __init__(
+        self, parent: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+    ):
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
             if v is None:
                 continue
-            self._data[k] = self._validate_value(v, k)
+            self._data[k] = self._validate_value(v, k) if validate else v
 
     def __getitem__(self, key: K) -> Value:
         return self._data[key]
@@ -313,11 +315,12 @@ class AxisArrays(AlignedActual[OneDIdx, str], AxisArraysBase):
         *,
         axis: Literal[0, 1],
         store: MutableMapping[str, Value] | AxisArraysBase,
+        validate: bool = True,
     ):
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        super().__init__(parent, store=store)
+        super().__init__(parent, store=store, validate=validate)
 
 
 class AxisArraysView(AlignedView[AxisArraysBase, OneDIdx, str], AxisArraysBase):
@@ -343,7 +346,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
-    def _warn_if_non_2d(self, key: str | None, val: Value) -> None:
+    def _validate_value(self, val: Value, key: str | None) -> Value:
         """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
 
         Called from the explicit write paths (``__setitem__`` and the
@@ -354,20 +357,21 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
         The ``key=None`` slot mirrors ``AnnData.X`` and is reported by
         the ``X`` setter itself (with the better name "X").
         """
-        if key is None:
-            return
-        if msg := _non_2d_message(val, name=f"Layer {key!r}"):
+        if key is not None and (msg := _non_2d_message(val, name=f"Layer {key!r}")):
             warn(msg, UserWarning)
+        return super()._validate_value(val, key)
 
 
 class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
-    def __init__(self, parent: AnnData, *, store: MutableMapping[str | None, Value]):
-        super().__init__(parent, store=store)
+    def __init__(
+        self,
+        parent: AnnData,
+        *,
+        store: MutableMapping[str | None, Value],
+        validate: bool = True,
+    ):
+        super().__init__(parent, store=store, validate=validate)
         self.isbacked = None not in self._data and self.parent.filename is not None
-
-    def __setitem__(self, key: str | None, value: Value) -> None:
-        super().__setitem__(key, value)
-        self._warn_if_non_2d(key, value)
 
     def __getitem__(self, key: str | None) -> Value:
         if key is None and self.isbacked:
@@ -405,10 +409,6 @@ class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
     ) -> None:
         super().__init__(parent_mapping, parent_view, subset_idx)
         self.isbacked = parent_mapping.isbacked
-
-    def __setitem__(self, key: str | None, value: Value) -> None:
-        super().__setitem__(key, value)
-        self._warn_if_non_2d(key, value)
 
 
 LayersBase._view_class = LayersView
@@ -448,11 +448,12 @@ class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
         *,
         axis: Literal[0, 1],
         store: MutableMapping[str, Value],
+        validate: bool = True,
     ):
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        super().__init__(parent, store=store)
+        super().__init__(parent, store=store, validate=validate)
 
 
 class PairwiseArraysView(
@@ -490,10 +491,12 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     name: str | None = None
     """Name of the attribute in the parent object."""
 
-    def construct(self, obj: AnnData, *, store: MutableMapping[K, Value]) -> T:
+    def construct(
+        self, obj: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+    ) -> T:
         if self.axis is None:
-            return self.cls(obj, store=store)
-        return self.cls(obj, axis=self.axis, store=store)
+            return self.cls(obj, store=store, validate=validate)
+        return self.cls(obj, axis=self.axis, store=store, validate=validate)
 
     @property
     def fget(self) -> Callable[[], None]:
@@ -513,7 +516,10 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
             # this needs to return a `property` instance, e.g. for Sphinx
             return self  # type: ignore
         if not obj.is_view:
-            return self.construct(obj, store=getattr(obj, f"_{self.name}"))
+            # all stores are created through `.__set__`, so no need to double-validate.
+            return self.construct(
+                obj, store=getattr(obj, f"_{self.name}"), validate=False
+            )
         parent_anndata = obj._adata_ref
         idxs = (obj._oidx, obj._vidx)
         parent: AlignedMapping = getattr(parent_anndata, self.name)
@@ -523,15 +529,10 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         self, obj: AnnData, value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None
     ) -> None:
         value = convert_to_dict(value)
-        mapping = self.construct(obj, store=value)  # Validate
+        _ = self.construct(obj, store=value)  # Validate
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         setattr(obj, f"_{self.name}", value)
-        # Surface on-disk spec violations (only meaningful for `layers`).
-        if isinstance(mapping, LayersBase):
-            for k, v in value.items():
-                if v is not None:
-                    mapping._warn_if_non_2d(k, v)
 
     def __delete__(self, obj: AnnData) -> None:
         new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}

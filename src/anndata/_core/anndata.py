@@ -469,6 +469,8 @@ class AnnData:  # noqa: PLW1641
         # unstructured annotations
         self.uns = uns or OrderedDict()
 
+        # aligned mappings go through `AlignedMappingProperty.__set__`, which validates and coerces
+        # (`layers` is done a bit farther down in the same way)
         self.obsm = obsm
         self.varm = varm
 
