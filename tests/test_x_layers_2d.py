@@ -15,6 +15,7 @@ import anndata as ad
 from anndata.io import write_elem
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -39,8 +40,47 @@ def which(request: pytest.FixtureRequest) -> WhichAttr:
     return request.param
 
 
-def test_in_memory_non_2d_x_and_layers_warn_but_succeed(
-    arr2d: np.ndarray, arr3d: np.ndarray
+def _construct_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
+    return ad.AnnData(X=arr3d).X
+
+
+def _construct_layer(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
+    return ad.AnnData(X=arr2d, layers={"L": arr3d}).layers["L"]
+
+
+def _set_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
+    adata = ad.AnnData(X=arr2d)
+    adata.X = arr3d
+    return adata.X
+
+
+def _set_layer_item(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
+    adata = ad.AnnData(X=arr2d)
+    adata.layers["L"] = arr3d
+    return adata.layers["L"]
+
+
+def _set_layers_bulk(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
+    adata = ad.AnnData(X=arr2d)
+    adata.layers = {"M": arr3d}
+    return adata.layers["M"]
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        pytest.param(_construct_x, MSG_PATTERN, id="construct-X"),
+        pytest.param(_construct_layer, r"Layer 'L'", id="construct-layer"),
+        pytest.param(_set_x, MSG_PATTERN, id="set-X"),
+        pytest.param(_set_layer_item, r"Layer 'L'", id="set-layer-item"),
+        pytest.param(_set_layers_bulk, r"Layer 'M'", id="set-layers-bulk"),
+    ],
+)
+def test_in_memory_non_2d_warns_but_succeeds(
+    arr2d: np.ndarray,
+    arr3d: np.ndarray,
+    mutate: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    match: str,
 ) -> None:
     """All in-memory mutation paths accept non-2-D arrays for ``X`` / ``layers``.
 
@@ -49,27 +89,9 @@ def test_in_memory_non_2d_x_and_layers_warn_but_succeed(
     paths nonetheless emit a ``UserWarning`` so people learn that their
     object is technically unwritable.
     """
-    with pytest.warns(UserWarning, match=MSG_PATTERN):
-        adata = ad.AnnData(X=arr3d)
-    assert adata.X.shape == arr3d.shape
-
-    with pytest.warns(UserWarning, match=r"Layer 'L'"):
-        adata = ad.AnnData(X=arr2d, layers={"L": arr3d})
-    assert adata.layers["L"].shape == arr3d.shape
-
-    adata = ad.AnnData(X=arr2d)
-    with pytest.warns(UserWarning, match=MSG_PATTERN):
-        adata.X = arr3d
-    assert adata.X.shape == arr3d.shape
-
-    adata = ad.AnnData(X=arr2d)
-    with pytest.warns(UserWarning, match=r"Layer 'L'"):
-        adata.layers["L"] = arr3d
-    assert adata.layers["L"].shape == arr3d.shape
-
-    with pytest.warns(UserWarning, match=r"Layer 'M'"):
-        adata.layers = {"M": arr3d}
-    assert adata.layers["M"].shape == arr3d.shape
+    with pytest.warns(UserWarning, match=match):
+        stored = mutate(arr2d, arr3d)
+    assert stored.shape == arr3d.shape
 
 
 def test_x_setter_higher_dim_shape_mismatch_raises(
