@@ -513,11 +513,11 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
     orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    orig.obs_names.name = "obs"
-    orig.var_names.name = "var"
+    orig.obs_names = orig.obs_names.rename("obs")
+    orig.var_names = orig.var_names.rename("var")
     modified = orig.copy()
-    modified.obs_names.name = "cells"
-    modified.var_names.name = "genes"
+    modified.obs_names = modified.obs_names.rename("cells")
+    modified.var_names = modified.var_names.rename("genes")
 
     getattr(orig, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)
