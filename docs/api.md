@@ -214,11 +214,6 @@ Types used by the former:
 Types used by the former:
 
 ```{eval-rst}
-.. autosummary::
-   :toctree: generated/
-
-   types.SupportsArrayApi
-
 .. toctree::
    :hidden:
 
