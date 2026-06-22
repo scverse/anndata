@@ -3,7 +3,7 @@ ci:
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.17
+    rev: v0.15.18
     hooks:
       - id: ruff-check
         args: ["--fix"]
@@ -40,6 +40,6 @@ repos:
         additional_dependencies:
           - tomli
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.25.2
+    rev: v1.26.1
     hooks:
       - id: zizmor
