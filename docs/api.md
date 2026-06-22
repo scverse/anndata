@@ -214,11 +214,13 @@ Types used by the former:
 Types used by the former:
 
 ```{eval-rst}
-.. autosummary::
-   :toctree: generated/
+.. toctree::
+   :hidden:
 
-   types.ExtensionNamespace
+   generated/anndata.types.ExtensionNamespace
 ```
+
+{class}`scverse_misc.ExtensionNamespace`
 
 (errors-api)=
 
@@ -241,6 +243,7 @@ Types used by the former:
 
    settings
    settings.override
+   settings.reset
 ```
 
 (types-api)=

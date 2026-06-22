@@ -58,6 +58,7 @@ extensions = [
     "sphinx_design",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
+    "scverse_misc.sphinx_ext",
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
     *(p.stem for p in _extension_dir.glob("*.py")),
@@ -136,11 +137,11 @@ intersphinx_mapping = dict(
     pandas=("https://pandas.pydata.org/pandas-docs/version/2.3", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
+    scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
-    scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
     annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
 )
 
@@ -175,6 +176,10 @@ qualname_overrides = {
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
+    # For some reason after https://github.com/numpy/numpy/commit/cc5aaf2cc744dfbc0a16c1d20607853874307333
+    # sphinx is still looking for this type here even though our min bound is 1.26
+    "numpy._typing._array_like.GenericAlias": ("py:class", "types.GenericAlias"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
     "pandas.core.series.Series": "pandas.Series",
