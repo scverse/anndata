@@ -179,7 +179,7 @@ qualname_overrides = {
     "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
     # For some reason after https://github.com/numpy/numpy/commit/cc5aaf2cc744dfbc0a16c1d20607853874307333
     # sphinx is still looking for this type here even though our min bound is 1.26
-    "numpy._typing._array_like.GenericAlias": ("py:data", "types.GenericAlias"),
+    "numpy._typing._array_like.GenericAlias": ("py:class", "types.GenericAlias"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
     "pandas.core.series.Series": "pandas.Series",
