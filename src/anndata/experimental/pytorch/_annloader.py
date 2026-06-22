@@ -118,6 +118,9 @@ def _convert_on_top(
 
 
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
+@deprecated(
+    Deprecation("0.12.17", "Use :class:`annbatch.Loader` instead of `AnnLoader`")
+)
 class AnnLoader(DataLoader):
     """\
     PyTorch DataLoader for AnnData objects.
@@ -125,9 +128,6 @@ class AnnLoader(DataLoader):
     Builds DataLoader from a sequence of AnnData objects, from an
     :class:`~anndata.experimental.AnnCollection` object or from an `AnnCollectionView` object.
     Takes care of the required conversions.
-
-    .. deprecated:: 0.12.17
-        Use :class:`annbatch.Loader` instead.
 
     Parameters
     ----------
@@ -150,9 +150,6 @@ class AnnLoader(DataLoader):
         arguments for `AnnCollection` initialization.
     """
 
-    @deprecated(
-        Deprecation("0.12.17", "Use {class}`annbatch.Loader` instead of `AnnLoader`")
-    )
     @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
     def __init__(
         self,

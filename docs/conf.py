@@ -60,6 +60,7 @@ extensions = [
     "sphinx_design",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
+    "scverse_misc.sphinx_ext",
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
     *(p.stem for p in _extension_dir.glob("*.py")),
@@ -131,6 +132,7 @@ intersphinx_mapping = dict(
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
+    scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
@@ -165,6 +167,7 @@ qualname_overrides = {
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
 }

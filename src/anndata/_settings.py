@@ -6,9 +6,7 @@ import scverse_misc
 from pydantic import Field
 
 
-class Settings(
-    scverse_misc.Settings, exported_object_name="settings", docstring_style="scverse"
-):
+class Settings(scverse_misc.Settings):
     remove_unused_categories: bool = True
     """Whether or not to remove unused categories with :class:`~pandas.Categorical`."""
 
