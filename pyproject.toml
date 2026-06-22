@@ -47,7 +47,7 @@ dependencies = [
     "array_api_compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=2.18.7, !=3.0.*",
-    "scverse-misc>=0.0.3",
+    "scverse-misc>=0.1.0",
 ]
 dynamic = [ "version" ]
 
@@ -70,6 +70,7 @@ doc = [
     "sphinxext.opengraph",
     "myst-nb",
     "scanpydoc[theme,typehints] >=0.17.1",
+    "scverse-misc[sphinx]",
     "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks
     "myst-parser",
