@@ -167,6 +167,7 @@ qualname_overrides = {
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
 }
