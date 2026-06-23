@@ -24,22 +24,6 @@ MSG_PATTERN = r"must be 2-dimensional"
 WhichAttr = Literal["X", "layers"]
 
 
-@pytest.fixture
-def arr2d() -> np.ndarray:
-    return np.zeros((3, 4))
-
-
-@pytest.fixture
-def arr3d() -> np.ndarray:
-    return np.arange(3 * 4 * 5).reshape((3, 4, 5))
-
-
-@pytest.fixture(params=["X", "layers"])
-def which(request: pytest.FixtureRequest) -> WhichAttr:
-    """Which of ``X`` / ``layers`` should hold the non-2-D payload."""
-    return request.param
-
-
 def _construct_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
     return ad.AnnData(X=arr3d).X
 

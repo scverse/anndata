@@ -1480,6 +1480,12 @@ class AnnData:  # noqa: PLW1641
             `bool(adata.unwriteable())` will always evaluate the same.
         """
 
+        if _non_2d_message(self.X, name="X") is not None:
+            return True
+        for value in self.layers.values():
+            if _non_2d_message(value, name="layer") is not None:
+                return True
+
         from anndata._io.specs.registry import _REGISTRY
 
         writeable_elems = {
