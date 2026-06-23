@@ -25,9 +25,7 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._core.storage import (
-    _check_x_and_layers_are_2d_on_write,
-)
+from anndata._core.storage import _check_x_and_layers_are_2d_on_write
 from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,

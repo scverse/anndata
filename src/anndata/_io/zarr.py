@@ -108,12 +108,11 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     def callback(func, elem_name: str, elem, iospec):
         """Read with handling for backwards compat"""
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            kwargs = {
+            return AnnData(**{
                 k: read_dispatched(v, callback)
                 for k, v in dict(elem).items()
                 if not k.startswith("raw.")
-            }
-            return AnnData(**kwargs)
+            })
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:
@@ -129,8 +128,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw_kwargs = _read_legacy_raw(f, adata.raw, read_dataframe, read_elem)
-            raw = AnnData(**raw_kwargs)
+            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
             raw.obs_names = adata.obs_names
             adata.raw = raw
 

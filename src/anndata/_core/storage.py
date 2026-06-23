@@ -22,7 +22,7 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from typing import Any
 
-    from .._core.anndata import AnnData
+    from .anndata import AnnData
 
 
 def _non_2d_message(value: Any, *, name: str) -> str | None:
