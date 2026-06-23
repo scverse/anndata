@@ -6,7 +6,6 @@ import abc
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, ClassVar, cast, overload
 
 import pandas as pd
@@ -17,7 +16,7 @@ from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
 from ..compat import CupySparseMatrix, DaskArray, has_xp
 
-if TYPE_CHECKING or find_spec("mudata"):
+if TYPE_CHECKING:
     from mudata import MuData
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})

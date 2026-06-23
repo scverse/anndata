@@ -230,9 +230,15 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   types.ExtensionNamespace
    types.SupportsArrayApi
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.types.ExtensionNamespace
 ```
+
+{class}`scverse_misc.ExtensionNamespace`
 
 (errors-api)=
 
@@ -255,6 +261,7 @@ Types used by the former:
 
    settings
    settings.override
+   settings.reset
 ```
 
 (types-api)=
