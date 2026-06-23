@@ -17,6 +17,7 @@ from anndata._warnings import OldFormatWarning
 from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._core.storage import _check_x_and_layers_are_2d_on_write
 from ..compat import (
     CSMatrix,
     _clean_uns,
@@ -57,6 +58,7 @@ def write_h5ad(
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
+    _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:

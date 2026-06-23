@@ -174,6 +174,28 @@ def test_can_not_write_with_custom_array(
     assert adata.unwriteable(store_type=store_type)
 
 
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_unwriteable_non_2d(
+    arr2d: np.ndarray,
+    arr3d: np.ndarray,
+    which: Literal["X", "layers"],
+    store_type: Literal["h5", "zarr"] | None,
+) -> None:
+
+    def _set_non_2d(
+        adata: ad.AnnData, which: Literal["X", "layers"], value: np.ndarray
+    ) -> None:
+        if which == "X":
+            adata.X = value
+        else:
+            adata.layers["L"] = value
+
+    adata = ad.AnnData(X=arr2d)
+    with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
+        _set_non_2d(adata, which, arr3d)
+    assert adata.unwriteable(store_type=store_type)
+
+
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
@@ -513,11 +535,11 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
     orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    orig.obs_names.name = "obs"
-    orig.var_names.name = "var"
+    orig.obs_names = orig.obs_names.rename("obs")
+    orig.var_names = orig.var_names.rename("var")
     modified = orig.copy()
-    modified.obs_names.name = "cells"
-    modified.var_names.name = "genes"
+    modified.obs_names = modified.obs_names.rename("cells")
+    modified.var_names = modified.var_names.rename("genes")
 
     getattr(orig, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)

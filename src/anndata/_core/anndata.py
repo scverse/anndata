@@ -55,7 +55,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import coerce_array
+from .storage import _non_2d_message, coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -437,7 +437,7 @@ class AnnData:  # noqa: PLW1641
                 msg = "`shape` needs to be `None` if `X` is not `None`."
                 raise ValueError(msg)
             # data matrix and shape
-            n_obs, n_vars = X.shape
+            n_obs, n_vars = X.shape[:2]
             source = "X"
         else:
             n_obs, n_vars = (
@@ -469,6 +469,8 @@ class AnnData:  # noqa: PLW1641
         # unstructured annotations
         self.uns = uns or OrderedDict()
 
+        # aligned mappings go through `AlignedMappingProperty.__set__`, which validates and coerces
+        # (`layers` is done a bit farther down in the same way)
         self.obsm = obsm
         self.varm = varm
 
@@ -609,13 +611,25 @@ class AnnData:  # noqa: PLW1641
             msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
             warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
-        if hasattr(value, "shape") and value.shape != self.shape:
+        if hasattr(value, "shape") and value.shape[:2] != self.shape:
+            if len(value.shape) > 2:
+                msg = (
+                    f"Cannot set `X` from an array of shape {tuple(value.shape)}: "
+                    f"its leading two dimensions {tuple(value.shape[:2])} do not "
+                    f"match the AnnData shape {tuple(self.shape)}. Automatic "
+                    f"reshaping is only supported for 2-D inputs."
+                )
+                raise ValueError(msg)
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
+        if (spec_msg := _non_2d_message(value, name="X")) is not None:
+            # In-memory higher-than-2-D `X` is allowed, but the on-disk
+            # AnnData spec is strict; flag it so users know early.
+            warn(spec_msg, UserWarning)
         can_set_direct_if_not_none = (
             value is None
-            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (hasattr(value, "shape") and (self.shape == value.shape[:2]))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         )
@@ -1465,6 +1479,12 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
+
+        if _non_2d_message(self.X, name="X") is not None:
+            return True
+        for value in self.layers.values():
+            if _non_2d_message(value, name="layer") is not None:
+                return True
 
         from anndata._io.specs.registry import _REGISTRY
 
