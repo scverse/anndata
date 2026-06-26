@@ -348,6 +348,24 @@ class Writer:
         # Raises IORegistryError
         return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
+    def _resolve_write_func(
+        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+    ) -> tuple[Write, Any]:
+        """Find the writer for ``elem``, coercing a frame from another backend on a miss.
+
+        On a dispatch miss, normalize a frame from another backend (polars/pyarrow/cuDF/...) to
+        pandas and retry. Returns ``(write_func, elem)`` -- ``elem`` may have been coerced. The
+        narwhals path runs only on the miss, so ordinary (array/mapping/...) writes are untouched.
+        """
+        try:
+            return self.find_write_func(dest_type, elem, modifiers), elem
+        except IORegistryError:
+            from anndata._core._dataframe_backend import try_from_backend
+
+            if (coerced := try_from_backend(elem)) is None:
+                raise
+            return self.find_write_func(dest_type, coerced, modifiers), coerced
+
     @report_write_key_on_error
     def write_elem(
         self,
@@ -404,7 +422,7 @@ class Writer:
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func = self.find_write_func(type(store), elem, modifiers)
+        write_func, elem = self._resolve_write_func(type(store), elem, modifiers)
 
         if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)

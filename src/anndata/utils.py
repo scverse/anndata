@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
     from typing import Any, LiteralString
 
-    from ._core.xarray import Dataset2D
+    from ._core._dataframe_backend import DataFrameLike
     from ._types import AnnDataElem
     from .typing import AxisStorable, _XDataType
 
@@ -442,7 +442,7 @@ def module_get_attr_redirect(
 def iter_outer(
     adata,
 ) -> Generator[
-    tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+    tuple[AnnDataElem, AxisStorable | _XDataType | DataFrameLike]
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
     for attr_name in [

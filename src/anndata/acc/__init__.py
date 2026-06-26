@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
+    from .._core._dataframe_backend import DataFrameLike
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
     from ..typing import InMemoryArray
@@ -339,7 +340,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
         if idx is None:
             return True  # obs and var index always exist
-        attr: pd.DataFrame | Dataset2D = getattr(data, self.dim)
+        attr: DataFrameLike = getattr(data, self.dim)
         return idx in attr
 
     def get(
