@@ -139,6 +139,7 @@ intersphinx_mapping = dict(
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
     annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
     mudata=("https://mudata.readthedocs.io/stable/", None),
+    narwhals=("https://narwhals-dev.github.io/narwhals/", None),
 )
 
 # Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
@@ -187,6 +188,13 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:obj", "typing.R"),
     ("py:class", "_M"),
     ("py:class", "anndata.utils.Default"),
+    # private storage contract for obs/var; intentionally not part of the public API
+    ("py:class", "anndata._core._dataframe_backend.DataFrameLike"),
+]
+nitpick_ignore_regex = [
+    # narwhals re-exports `Implementation` publicly, but autodoc renders its canonical
+    # private path (`narwhals._utils.Implementation[.MEMBER]`), absent from narwhals' inventory.
+    (r"py:.*", r"narwhals\._utils\..*"),
 ]
 
 # -- Social cards ---------------------------------------------------------
