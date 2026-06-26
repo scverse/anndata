@@ -441,9 +441,7 @@ def module_get_attr_redirect(
 
 def iter_outer(
     adata,
-) -> Generator[
-    tuple[AnnDataElem, AxisStorable | _XDataType | DataFrameLike]
-]:
+) -> Generator[tuple[AnnDataElem, AxisStorable | _XDataType | DataFrameLike]]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
     for attr_name in [
         "obs",
