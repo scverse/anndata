@@ -319,15 +319,15 @@ def test_return_to_memory_mode(adata: ad.AnnData, backing_h5ad: Path):
 
 
 @pytest.mark.parametrize(
-    ("x", "is_sparse"),
+    "x",
     [
-        pytest.param(np.arange(12).reshape(3, 4), False, id="dense"),
-        pytest.param(sparse.csr_matrix(np.arange(12).reshape(3, 4)), True, id="csr"),
-        pytest.param(sparse.csc_matrix(np.arange(12).reshape(3, 4)), True, id="csc"),
+        pytest.param(np.arange(12).reshape(3, 4), id="dense"),
+        pytest.param(sparse.csr_matrix(np.arange(12).reshape(3, 4)), id="csr"),
+        pytest.param(sparse.csc_matrix(np.arange(12).reshape(3, 4)), id="csc"),
     ],
 )
 def test_return_to_memory_mode_after_read_h5ad(
-    tmp_path: Path, x: np.ndarray | sparse.spmatrix, is_sparse: bool
+    tmp_path: Path, x: np.ndarray | sparse.spmatrix
 ):
     pth = tmp_path / "tmp.h5ad"
     expected = np.arange(12).reshape(3, 4)
@@ -340,7 +340,7 @@ def test_return_to_memory_mode_after_read_h5ad(
     assert not backed.isbacked
     assert backed.X is not None
 
-    got = backed.X.toarray() if is_sparse else backed.X
+    got = backed.X.toarray() if sparse.issparse(backed.X) else backed.X
     np.testing.assert_array_equal(got, expected)
 
 
