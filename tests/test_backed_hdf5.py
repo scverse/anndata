@@ -318,6 +318,32 @@ def test_return_to_memory_mode(adata: ad.AnnData, backing_h5ad: Path):
     bdata.filename = None
 
 
+@pytest.mark.parametrize(
+    ("x", "is_sparse"),
+    [
+        pytest.param(np.arange(12).reshape(3, 4), False, id="dense"),
+        pytest.param(sparse.csr_matrix(np.arange(12).reshape(3, 4)), True, id="csr"),
+        pytest.param(sparse.csc_matrix(np.arange(12).reshape(3, 4)), True, id="csc"),
+    ],
+)
+def test_return_to_memory_mode_after_read_h5ad(
+    tmp_path: Path, x: np.ndarray | sparse.spmatrix, is_sparse: bool
+):
+    pth = tmp_path / "tmp.h5ad"
+    expected = np.arange(12).reshape(3, 4)
+    ad.AnnData(X=x).write_h5ad(pth)
+
+    backed = ad.read_h5ad(pth, backed="r+")
+    assert backed.isbacked
+
+    backed.filename = None
+    assert not backed.isbacked
+    assert backed.X is not None
+
+    got = backed.X.toarray() if is_sparse else backed.X
+    np.testing.assert_array_equal(got, expected)
+
+
 def test_backed_modification(adata: ad.AnnData, backing_h5ad: Path):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse.csr_matrix(adata.X)
