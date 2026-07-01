@@ -606,6 +606,12 @@ def write_basic_dask_dask_dense(
 @_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
 def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
+    if isinstance(elem, H5Array):
+        from anndata._io.h5_parallel import parallel_read_full
+
+        out = parallel_read_full(elem)
+        if out is not None:
+            return out
     return elem[()]
 
 

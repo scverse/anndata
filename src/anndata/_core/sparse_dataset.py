@@ -330,6 +330,24 @@ def is_sparse_indexing_overridden(
     )
 
 
+def _read_1d_full(arr: h5py.Dataset | zarr.Array) -> np.ndarray:
+    """Materialise a 1-D backed array into memory.
+
+    For ``h5py.Dataset`` we attempt the parallel chunk-decompression path
+    (see :mod:`anndata._io.h5_parallel`); it silently returns ``None`` when
+    the dataset is ineligible (unsupported codec, too small, unchunked,
+    multi-dimensional, ...), in which case — and for zarr arrays — we fall
+    through to the existing serial read. Bit-identical to ``arr[...]``.
+    """
+    if isinstance(arr, h5py.Dataset):
+        from .._io.h5_parallel import parallel_read_full
+
+        out = parallel_read_full(arr)
+        if out is not None:
+            return out
+    return arr[...]
+
+
 class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStorageType](
     abc._AbstractCSDataset, ABC
 ):
@@ -580,8 +598,8 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStora
             shape=self.shape,
         )
         mtx = backed_class.memory_format(self.shape, dtype=self.dtype)
-        mtx.data = self._data[...]
-        mtx.indices = self._indices[...]
+        mtx.data = _read_1d_full(self._data)
+        mtx.indices = _read_1d_full(self._indices)
         mtx.indptr = self._indptr
         return mtx
 
