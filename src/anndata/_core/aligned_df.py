@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from functools import singledispatch
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -11,6 +10,7 @@ from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, pandas_as_str
 from ..utils import warn
+from ._dataframe_backend import DataFrameLike, try_from_backend
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
 
-@singledispatch
 def _gen_dataframe(
     anno: Any,
     index_names: Iterable[str],
@@ -26,26 +25,52 @@ def _gen_dataframe(
     source: Literal["X", "shape"],
     attr: Literal["obs", "var"],
     length: int | None = None,
-) -> pd.DataFrame:  # pragma: no cover
-    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
-    raise ValueError(msg)
+) -> DataFrameLike:
+    """Coerce ``anno`` to a stored ``obs``/``var`` frame (a :class:`DataFrameLike`).
+
+    Accepts ``None``/mappings (built into a pandas frame), an :class:`xarray.Dataset` /
+    :class:`Dataset2D`, any :class:`DataFrameLike` (pandas / ``Dataset2D``), or any other
+    narwhals-native eager frame (polars / pyarrow / cuDF / ...), brought in via
+    :func:`~anndata._core._dataframe_backend.from_backend`.
+    """
+    index_names = list(index_names)
+    if isinstance(anno, DataFrameLike):
+        pass
+    elif isinstance(anno, XDataset):
+        anno = Dataset2D(anno)
+    elif anno is None or isinstance(anno, Mapping):
+        anno = _dataframe_from_mapping(anno, index_names, length=length)
+    else:
+        # frames from another backend are ingested via their canonical index column
+        # (obs_names/var_names); the deprecated row_names/col_names alias the mapping path
+        # accepts is not honored here.
+        coerced = try_from_backend(anno, index_name=index_names[0])
+        if coerced is None:
+            msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+            raise ValueError(msg)
+        anno = coerced
+    # The pandas MultiIndex restriction fires before the length check (preserving prior precedence).
+    if isinstance(anno, pd.DataFrame):
+        _reject_pandas_multiindex(anno)
+    # Uniform validation. shape[0] is the row count; len() is the column count on a
+    # Mapping-based Dataset2D.
+    if length is not None and length != anno.shape[0]:
+        raise _mk_df_error(source, attr, length, anno.shape[0])
+    # pandas-specific index/column hygiene (Dataset2D manages its own index).
+    if isinstance(anno, pd.DataFrame):
+        anno = _coerce_pandas_df(anno)
+    return anno
 
 
-@_gen_dataframe.register(Mapping)
-@_gen_dataframe.register(type(None))
-def _gen_dataframe_mapping(
-    anno: Mapping[str, Any] | None,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
+def _dataframe_from_mapping(
+    anno: Mapping[str, Any] | None, index_names: list[str], *, length: int | None
 ) -> pd.DataFrame:
+    """Build a pandas DataFrame from a mapping (or ``None``), mirroring the constructor."""
     if anno is None or len(anno) == 0:
         anno = {}
 
-    def mk_index(l: int) -> pd.Index:
-        return pd.RangeIndex(0, l, name=None).astype(str)
+    def mk_index(length: int) -> pd.Index:
+        return pd.RangeIndex(0, length, name=None).astype(str)
 
     for index_name in index_names:
         if index_name not in anno:
@@ -65,20 +90,11 @@ def _gen_dataframe_mapping(
 
     if length is None:
         df.index = mk_index(len(df))
-    elif length != len(df):
-        raise _mk_df_error(source, attr, length, len(df))
     return df
 
 
-@_gen_dataframe.register(pd.DataFrame)
-def _gen_dataframe_df(
-    anno: pd.DataFrame,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
+def _reject_pandas_multiindex(anno: pd.DataFrame) -> None:
+    """Disallow a pandas ``MultiIndex`` row index on obs/var declaration (unless opted out)."""
     if isinstance(anno.index, pd.MultiIndex) and settings.restrict_index_types:
         msg = (
             "pandas.MultiIndex not supported as index for obs or var on declaration.\n"
@@ -86,8 +102,10 @@ def _gen_dataframe_df(
             "You can also opt out of `settings.restrict_index_types` which will allow pandas.MultiIndex."
         )
         raise ValueError(msg)
-    if length is not None and length != len(anno):
-        raise _mk_df_error(source, attr, length, len(anno))
+
+
+def _coerce_pandas_df(anno: pd.DataFrame) -> pd.DataFrame:
+    """pandas-only index/column hygiene applied on obs/var declaration."""
     anno = anno.copy(deep=False)
     if (
         settings.restrict_index_types
@@ -99,20 +117,6 @@ def _gen_dataframe_df(
     if not len(anno.columns):
         anno.columns = pandas_as_str(anno.columns)
     return anno
-
-
-@_gen_dataframe.register(pd.Series)
-@_gen_dataframe.register(pd.Index)
-def _gen_dataframe_1d(
-    anno: pd.Series | pd.Index,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
-    raise ValueError(msg)
 
 
 def _mk_df_error(
@@ -133,27 +137,3 @@ def _mk_df_error(
             f"({actual} {what}s instead of {expected})"
         )
     return ValueError(msg)
-
-
-@_gen_dataframe.register(Dataset2D)
-def _gen_dataframe_xr(
-    anno: Dataset2D,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return anno
-
-
-@_gen_dataframe.register(XDataset)
-def _gen_dataframe_xdataset(
-    anno: XDataset,
-    index_names: Iterable[str],
-    *,
-    source: Literal["X", "shape"],
-    attr: Literal["obs", "var"],
-    length: int | None = None,
-):
-    return Dataset2D(anno)

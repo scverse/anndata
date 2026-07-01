@@ -23,6 +23,9 @@ from ..compat import (
     XDataArray,
     has_xp,
 )
+from ._dataframe_backend import (
+    DataFrameLike,  # runtime: used in the PEP 695 bound of _subset_df
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -431,7 +434,7 @@ def _subset_sparse[T: CSMatrix | CSArray](
 @_subset.register(pd.DataFrame)
 @_subset.register(Dataset2D)
 @_ensure_numpy_idx
-def _subset_df[T: pd.DataFrame | Dataset2D](
+def _subset_df[T: DataFrameLike](
     df: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> T:
     return df.iloc[subset_idx]

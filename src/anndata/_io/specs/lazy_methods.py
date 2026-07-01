@@ -345,7 +345,7 @@ def read_categorical(
     return CategoricalArray(
         codes=elem["codes"],
         categories=elem["categories"],
-        ordered=elem.attrs["ordered"],
+        ordered=bool(elem.attrs["ordered"]),
         base_path_or_zarr_group=base_path_or_zarr_group,
         elem_name=elem_name,
     )

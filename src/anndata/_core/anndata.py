@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, ClassVar, Literal
 
+    from narwhals.typing import IntoBackend
     from scipy import sparse
     from zarr.storage import StoreLike
 
@@ -74,6 +75,7 @@ if TYPE_CHECKING:
     from ..acc import AdRef, Array, MapAcc, RefAcc
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
+    from ._dataframe_backend import DataFrameLike
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
 
 
@@ -735,7 +737,7 @@ class AnnData:  # noqa: PLW1641
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame | XDataset, attr: Literal["obs", "var"]):
+    def _set_dim_df(self, value: DataFrameLike | XDataset, attr: Literal["obs", "var"]):
         value = _gen_dataframe(
             value,
             [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
@@ -804,12 +806,12 @@ class AnnData:  # noqa: PLW1641
                 v.index = value
 
     @property
-    def obs(self) -> pd.DataFrame | Dataset2D:
-        """One-dimensional annotation of observations (`pd.DataFrame`)."""
+    def obs(self) -> DataFrameLike:
+        """One-dimensional annotation of observations (a :class:`~pandas.DataFrame`-like)."""
         return self._obs
 
     @obs.setter
-    def obs(self, value: pd.DataFrame | XDataset):
+    def obs(self, value: DataFrameLike | XDataset):
         self._set_dim_df(value, "obs")
 
     @obs.deleter
@@ -827,12 +829,12 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_index(names, "obs")
 
     @property
-    def var(self) -> pd.DataFrame | Dataset2D:
-        """One-dimensional annotation of variables/ features (`pd.DataFrame`)."""
+    def var(self) -> DataFrameLike:
+        """One-dimensional annotation of variables/ features (a :class:`~pandas.DataFrame`-like)."""
         return self._var
 
     @var.setter
-    def var(self, value: pd.DataFrame | XDataset):
+    def var(self, value: DataFrameLike | XDataset):
         self._set_dim_df(value, "var")
 
     @var.deleter
@@ -848,6 +850,50 @@ class AnnData:  # noqa: PLW1641
     def var_names(self, names: Sequence[str]):
         names = self._prep_dim_index(names, "var")
         self._set_dim_index(names, "var")
+
+    def obs_as(self, backend: str | IntoBackend) -> Any:
+        """Return :attr:`obs` as a native DataFrame of another backend.
+
+        Parameters
+        ----------
+        backend
+            ``"pandas"``, ``"polars"``, ``"pyarrow"``, ``"modin"`` or ``"cudf"`` (a backend
+            module or :class:`narwhals.Implementation` also works).
+
+        Returns
+        -------
+        :attr:`obs` as a native frame of ``backend``. ``obs_names`` is preserved — the index for
+        pandas, or an ``obs_names`` column for index-less backends.
+
+        Examples
+        --------
+        >>> adata.obs_as("polars")  # doctest: +SKIP
+        """
+        from ._dataframe_backend import to_backend
+
+        return to_backend(self.obs, backend, index_name="obs_names")
+
+    def var_as(self, backend: str | IntoBackend) -> Any:
+        """Return :attr:`var` as a native DataFrame of another backend.
+
+        Parameters
+        ----------
+        backend
+            ``"pandas"``, ``"polars"``, ``"pyarrow"``, ``"modin"`` or ``"cudf"`` (a backend
+            module or :class:`narwhals.Implementation` also works).
+
+        Returns
+        -------
+        :attr:`var` as a native frame of ``backend``. ``var_names`` is preserved — the index for
+        pandas, or a ``var_names`` column for index-less backends.
+
+        Examples
+        --------
+        >>> adata.var_as("polars")  # doctest: +SKIP
+        """
+        from ._dataframe_backend import to_backend
+
+        return to_backend(self.var, backend, index_name="var_names")
 
     @property
     def uns(self) -> MutableMapping:
