@@ -1059,7 +1059,9 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
-    def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc | MetaAcc) -> Array: ...
+    def __getitem__(
+        self, index: LayerAcc | MultiAcc | GraphAcc | MetaAcc
+    ) -> _XDataType | pd.DataFrame | Dataset2D | AwkArray: ...
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
