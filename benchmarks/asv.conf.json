@@ -59,6 +59,8 @@
     // followed by the pip installed packages).
     //
     "matrix": {
+        // https://github.com/airspeed-velocity/asv_runner/issues/52
+        "pip+asv_runner": ["0.2.1"],
         "numpy": [""],
         // "scipy": ["1.2", ""],
         "scipy": [""],
