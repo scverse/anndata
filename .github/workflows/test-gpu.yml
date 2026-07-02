@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
+      - uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.5
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
   # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
@@ -49,8 +49,7 @@ jobs:
       pull-requests: write
 
     steps:
-      # TODO: upgrade once cirun image supports node 24
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           filter: blob:none
@@ -60,7 +59,6 @@ jobs:
         run: nvidia-smi
 
       - name: Install UV
-        # TODO: upgrade once cirun image supports node 24
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
@@ -97,3 +95,5 @@ jobs:
       - name: Remove 'run-gpu-ci' Label
         if: always() && github.event_name == 'pull_request'
         run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-gpu-ci
+        env:
+          GH_TOKEN: ${{ github.token }}
