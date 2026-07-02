@@ -191,7 +191,7 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
         """
         Get the a full array of at the key `k`.
         This method has the same semantics as the `AdRef` path but one level up.
-        In other words, `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`np.ndarray`.
+        In other words, `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
         These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
         """
 
