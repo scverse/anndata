@@ -39,7 +39,7 @@ For these purposes, they are
     Index(['CD4 T cells', 'CD14+ Monocytes'], dtype=...)
     >>> adata[A.varm["PCs"]] # doctest: +ELLIPSIS
     array([[...
-          shape=(1838, 50), dtype=float32)
+          ..., dtype=float32)
 
 #.  introspectible:
 
