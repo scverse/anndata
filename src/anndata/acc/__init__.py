@@ -18,6 +18,8 @@ from ..compat import CupySparseMatrix, DaskArray, has_xp
 
 if TYPE_CHECKING:
     from mudata import MuData
+
+    from ..compat import AwkArray
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})
 
@@ -27,7 +29,7 @@ if TYPE_CHECKING:
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
-    from ..typing import InMemoryArray
+    from ..typing import InMemoryArray, _XDataType
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -184,7 +186,18 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
 
     @abc.abstractmethod
     def get(self, data: D, idx: I, /) -> Array:
-        """Get the referenced array from the AnnData object."""
+        """Get the indexed array from the AnnData object at `idx`."""
+
+    @abc.abstractmethod
+    def get_full_array(
+        self, data: D
+    ) -> _XDataType | pd.DataFrame | Dataset2D | AwkArray:
+        """
+        Get the a full array of at the key `k`.
+        This method has the same semantics as the `AdRef` path but one level up.
+        In other words, `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
+        These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
+        """
 
     def _maybe_flatten(self, idx: I, a: Array) -> Array:
         if len(self.dims(idx)) != 1:
@@ -259,7 +272,11 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
                 return i in getattr(adata, dim).index
         return True  # idx is None or [:, :]
 
+    def get_full_array(self, adata: AnnData) -> _XDataType:
+        return adata.X if self.k is None else adata.layers[self.k]
+
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
+        # To keep things as lazy as possible, we don't use `self.get_full_array` here
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
 
@@ -345,7 +362,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     def get(
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable:
-        match getattr(data, self.dim), k:
+        match self.get_full_array(data), k:
             case pd.DataFrame() as df, None:
                 return df.index.array
             case Dataset2D() as ds, None:
@@ -357,6 +374,9 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
             case _:
                 msg = f"Unsupported {self.dim} container"
                 raise TypeError(msg)
+
+    def get_full_array(self, data: MuData | AnnData) -> pd.DataFrame | Dataset2D:
+        return getattr(data, self.dim)
 
 
 @dataclass(frozen=True)
@@ -424,8 +444,13 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
 
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray:
         # TODO: remove slicing when dropping scipy <1.14
-        arr = getattr(data, f"{self.dim}m")[self.k][:, i : i + 1]
+        arr = self.get_full_array(data)[:, i : i + 1]
         return self._maybe_flatten(i, arr)
+
+    def get_full_array(
+        self, data: MuData | AnnData
+    ) -> AwkArray | _XDataType | pd.DataFrame | Dataset2D:
+        return getattr(data, f"{self.dim}m")[self.k]
 
 
 @dataclass(frozen=True)
@@ -447,6 +472,10 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
 
     def __repr__(self) -> str:
         return f"A.{self.dim}m"
+
+    def get_full_array(self, data: MuData | AnnData):
+        msg = "Cannot retrieve full array for key-value store"
+        raise NotImplementedError(msg)
 
 
 @dataclass(frozen=True)
@@ -514,8 +543,11 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
         df = cast("pd.DataFrame", getattr(data, self.dim))
         # TODO: remove wrapping in [] when dropping scipy <1.14
         iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
-        arr = getattr(data, f"{self.dim}p")[self.k][iloc]
+        arr = self.get_full_array(data)[iloc]
         return self._maybe_flatten(idx, arr)
+
+    def get_full_array(self, data: MuData | AnnData) -> _XDataType:
+        return getattr(data, f"{self.dim}p")[self.k]
 
 
 @dataclass(frozen=True)

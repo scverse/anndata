@@ -71,7 +71,16 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
-    from ..acc import AdRef, Array, MapAcc, RefAcc
+    from ..acc import (
+        AdRef,
+        Array,
+        GraphAcc,
+        LayerAcc,
+        MapAcc,
+        MetaAcc,
+        MultiAcc,
+        RefAcc,
+    )
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1050,15 +1059,24 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
+    def __getitem__(
+        self, index: LayerAcc | MultiAcc | GraphAcc | MetaAcc
+    ) -> _XDataType | pd.DataFrame | Dataset2D | AwkArray: ...
+    @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
     def __getitem__(self, index: Index | AdRef) -> AnnData | Array:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
-        from ..acc import AdRef
+        from ..acc import AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
+        elif isinstance(index, RefAcc):
+            return index.get_full_array(self)
+        elif isinstance(index, MapAcc):
+            msg = f"Cannot index with {index} because this is not a path to an array-like structure."
+            raise IndexError(msg)
 
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
