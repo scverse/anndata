@@ -41,6 +41,8 @@ jobs:
 
       - name: Remove 'run-gpu-ci' Label
         if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh pr edit ${{ github.event.pull_request.number }} --remove-label run-gpu-ci
 
   # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
