@@ -32,11 +32,19 @@ jobs:
     name: "Triage: Check if GPU tests are allowed to run"
     if: (!contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci'))
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      pull-requests: write
     steps:
       - uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
+
+      - name: Remove 'run-gpu-ci' Label
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr -R "$GITHUB_REPOSITORY" edit ${{ github.event.pull_request.number }} --remove-label run-gpu-ci
+
   # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
   test:
     name: GPU Tests
@@ -45,12 +53,10 @@ jobs:
     # Setting a timeout of 30 minutes, as the AWS costs money
     # At time of writing, a typical run takes about 5 minutes
     timeout-minutes: 30
-    permissions:
-      pull-requests: write
+    permissions: {}
 
     steps:
-      # TODO: upgrade once cirun image supports node 24
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           filter: blob:none
@@ -72,8 +78,7 @@ jobs:
           echo "max_python_version=$max_version" >> $GITHUB_ENV
 
       - name: Install UV
-        # TODO: upgrade once cirun image supports node 24
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
           # Any Cuda 14+ will support Python 3.14: https://github.com/cupy/cupy/issues/9346
@@ -82,7 +87,7 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[dev,test,cu12]" -c ci/constraints.txt
+          uv pip install -e ".[test,cu13]" -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
@@ -100,10 +105,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           files: test-data/coverage.xml
-
-      - name: Remove 'run-gpu-ci' Label
-        if: always()
-        uses: actions-ecosystem/action-remove-labels@2ce5d41b4b6aa8503e285553f75ed56e0a40bae0 # v1.3.0
-        with:
-          labels: "run-gpu-ci"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
