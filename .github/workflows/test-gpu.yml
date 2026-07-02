@@ -75,7 +75,7 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
+          uv pip install -e ".[cu13]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
