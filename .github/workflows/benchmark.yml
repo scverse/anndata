@@ -49,11 +49,13 @@ jobs:
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
           # https://github.com/airspeed-velocity/asv/issues/1577
+          # https://github.com/airspeed-velocity/asv_runner/issues/52
           create-args: >-
             python=${{ matrix.python }}
             asv>=0.6.4
             py_rattler<0.22
             conda-build
+            asv_runner<0.2.2
 
       - name: Cache datasets
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
