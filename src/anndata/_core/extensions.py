@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import sys
 import warnings
+from importlib.metadata import version
 
+from packaging.version import Version
 from scverse_misc import make_register_namespace_decorator
 
 from .anndata import AnnData
@@ -10,7 +11,7 @@ from .anndata import AnnData
 __all__ = ["register_anndata_namespace"]
 
 
-if sys.version_info >= (3, 12):
+if Version(version("scverse-misc")) > Version("0.1"):
     register_anndata_namespace = make_register_namespace_decorator(AnnData, "adata")
 else:
     with warnings.catch_warnings():
