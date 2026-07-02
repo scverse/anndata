@@ -444,7 +444,7 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
 
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray:
         # TODO: remove slicing when dropping scipy <1.14
-        arr = getattr(data, f"{self.dim}m")[self.k][:, i : i + 1]
+        arr = self.get_full_array(data)[:, i : i + 1]
         return self._maybe_flatten(i, arr)
 
     def get_full_array(
@@ -543,7 +543,7 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
         df = cast("pd.DataFrame", getattr(data, self.dim))
         # TODO: remove wrapping in [] when dropping scipy <1.14
         iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
-        arr = getattr(data, f"{self.dim}p")[self.k][iloc]
+        arr = self.get_full_array(data)[iloc]
         return self._maybe_flatten(idx, arr)
 
     def get_full_array(self, data: MuData | AnnData) -> _XDataType:
