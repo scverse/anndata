@@ -119,6 +119,7 @@ test-jax = [
 ]
 [project.optional-dependencies]
 gpu = [ "cupy" ]
+cu13 = [ "cupy-cuda13x" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
