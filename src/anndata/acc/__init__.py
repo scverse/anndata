@@ -473,10 +473,6 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     def __repr__(self) -> str:
         return f"A.{self.dim}m"
 
-    def get_full_array(self, data: MuData | AnnData):
-        msg = "Cannot retrieve full array for key-value store"
-        raise NotImplementedError(msg)
-
 
 @dataclass(frozen=True)
 class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
