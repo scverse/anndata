@@ -74,6 +74,8 @@ if TYPE_CHECKING:
     from ..acc import (
         AdRef,
         Array,
+        DataFrameLike,
+        FullArray,
         GraphAcc,
         LayerAcc,
         MapAcc,
@@ -1059,11 +1061,9 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
-    def __getitem__(self, index: MetaAcc) -> pd.DataFrame | Dataset2D: ...
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
     @overload
-    def __getitem__(
-        self, index: MultiAcc
-    ) -> _XDataType | pd.DataFrame | Dataset2D | AwkArray: ...
+    def __getitem__(self, index: MultiAcc) -> FullArray: ...
     @overload
     def __getitem__(self, index: LayerAcc | GraphAcc) -> _XDataType: ...
     @overload
@@ -1077,7 +1077,7 @@ class AnnData:  # noqa: PLW1641
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
         elif isinstance(index, RefAcc):
-            return index.get_full_array(self)
+            return index.get(self)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)

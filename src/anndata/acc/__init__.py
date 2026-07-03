@@ -47,6 +47,19 @@ type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Inde
 
 type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 
+type DataFrameLike = pd.DataFrame | Dataset2D
+"""A 2D dataframe-like container (pandas- or xarray-backed)."""
+
+type FullArray = _XDataType | DataFrameLike | AwkArray
+"""A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
+
+
+class _NoIdx:
+    """Sentinel for :meth:`RefAcc.get`: no index given, so return the full array."""
+
+
+_NO_IDX = _NoIdx()
+
 
 __all__ = [
     "A",
@@ -184,18 +197,17 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object."""
 
+    @overload
+    def get(self, data: D, /) -> FullArray: ...
+    @overload
+    def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I, /) -> Array:
-        """Get the indexed array from the AnnData object at `idx`."""
+    def get(self, data: D, idx: I | _NoIdx = _NO_IDX, /) -> Array | FullArray:
+        """Get the indexed array from the AnnData object at `idx`.
 
-    @abc.abstractmethod
-    def get_full_array(
-        self, data: D
-    ) -> _XDataType | pd.DataFrame | Dataset2D | AwkArray:
-        """
-        Get the a full array of at the key `k`.
-        This method has the same semantics as the `AdRef` path but one level up.
-        In other words, `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
+        When `idx` is omitted, return the full array one level up instead.
+        This has the same semantics as the `AdRef` path but one level up:
+        `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
         These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
         """
 
@@ -272,11 +284,16 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
                 return i in getattr(adata, dim).index
         return True  # idx is None or [:, :]
 
-    def get_full_array(self, adata: AnnData) -> _XDataType:
-        return adata.X if self.k is None else adata.layers[self.k]
-
-    def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray:
-        # To keep things as lazy as possible, we don't use `self.get_full_array` here
+    @overload
+    def get(self, adata: AnnData, /) -> _XDataType: ...
+    @overload
+    def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
+    def get(
+        self, adata: AnnData, idx: Idx2D | _NoIdx = _NO_IDX, /
+    ) -> _XDataType | InMemoryArray:
+        if isinstance(idx, _NoIdx):
+            return adata.X if self.k is None else adata.layers[self.k]
+        # To keep things as lazy as possible, we don't reuse the full-array branch here
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
 
@@ -356,13 +373,22 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
         if idx is None:
             return True  # obs and var index always exist
-        attr: pd.DataFrame | Dataset2D = getattr(data, self.dim)
+        attr: DataFrameLike = getattr(data, self.dim)
         return idx in attr
 
+    @overload
+    def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
+    @overload
     def get(
         self, data: MuData | AnnData, k: str | None, /
-    ) -> pd.api.extensions.ExtensionArray | XVariable:
-        match self.get_full_array(data), k:
+    ) -> pd.api.extensions.ExtensionArray | XVariable: ...
+    def get(
+        self, data: MuData | AnnData, k: str | None | _NoIdx = _NO_IDX, /
+    ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
+        full: DataFrameLike = getattr(data, self.dim)
+        if isinstance(k, _NoIdx):
+            return full
+        match full, k:
             case pd.DataFrame() as df, None:
                 return df.index.array
             case Dataset2D() as ds, None:
@@ -374,9 +400,6 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
             case _:
                 msg = f"Unsupported {self.dim} container"
                 raise TypeError(msg)
-
-    def get_full_array(self, data: MuData | AnnData) -> pd.DataFrame | Dataset2D:
-        return getattr(data, self.dim)
 
 
 @dataclass(frozen=True)
@@ -442,15 +465,18 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
             return False
         return idx is None or idx in range(m[self.k].shape[1])
 
-    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray:
+    @overload
+    def get(self, data: MuData | AnnData, /) -> FullArray: ...
+    @overload
+    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
+    def get(
+        self, data: MuData | AnnData, i: int | _NoIdx = _NO_IDX, /
+    ) -> FullArray | InMemoryArray:
+        full: FullArray = getattr(data, f"{self.dim}m")[self.k]
+        if isinstance(i, _NoIdx):
+            return full
         # TODO: remove slicing when dropping scipy <1.14
-        arr = self.get_full_array(data)[:, i : i + 1]
-        return self._maybe_flatten(i, arr)
-
-    def get_full_array(
-        self, data: MuData | AnnData
-    ) -> AwkArray | _XDataType | pd.DataFrame | Dataset2D:
-        return getattr(data, f"{self.dim}m")[self.k]
+        return self._maybe_flatten(i, full[:, i : i + 1])
 
 
 @dataclass(frozen=True)
@@ -535,15 +561,20 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
             case [i]:
                 return i in getattr(data, self.dim).index
 
-    def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray:
+    @overload
+    def get(self, data: MuData | AnnData, /) -> _XDataType: ...
+    @overload
+    def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
+    def get(
+        self, data: MuData | AnnData, idx: Idx2D | _NoIdx = _NO_IDX, /
+    ) -> _XDataType | InMemoryArray:
+        full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
+        if isinstance(idx, _NoIdx):
+            return full
         df = cast("pd.DataFrame", getattr(data, self.dim))
         # TODO: remove wrapping in [] when dropping scipy <1.14
         iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
-        arr = self.get_full_array(data)[iloc]
-        return self._maybe_flatten(idx, arr)
-
-    def get_full_array(self, data: MuData | AnnData) -> _XDataType:
-        return getattr(data, f"{self.dim}p")[self.k]
+        return self._maybe_flatten(idx, full[iloc])
 
 
 @dataclass(frozen=True)
