@@ -1070,9 +1070,7 @@ class AnnData:  # noqa: PLW1641
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(
-        self, index: Index | AdRef
-    ) -> AnnData | Array | _XDataType | DataFrameLike | FullArray:
+    def __getitem__(self, index: Index | AdRef) -> AnnData | Array | FullArray:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
         from ..acc import AdRef, MapAcc, RefAcc
 
