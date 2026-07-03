@@ -57,6 +57,9 @@ type FullArray = _XDataType | DataFrameLike | AwkArray
 class _NoIdx:
     """Sentinel for :meth:`RefAcc.get`: no index given, so return the full array."""
 
+    def __repr__(self) -> str:
+        return "Return Full Array"
+
 
 _NO_IDX = _NoIdx()
 
