@@ -1213,14 +1213,14 @@ class AccessTrackingStore(LocalStore):
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
 
-    async def get(
+    def get_sync(
         self,
         key: str,
         prototype: BufferPrototype | None = None,
         byte_range: ByteRequest | None = None,
     ) -> object:
         self._check_and_track_key(key)
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
+        return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
