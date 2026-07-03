@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Literal
 
-    from anndata.acc import AdRef, MapAcc
+    from anndata.acc import AdRef, MapAcc, MultiMapAcc
 
 
 type AdRefSer = Sequence[str | int | None]
@@ -259,3 +259,26 @@ def test_not_in_empty(ad_ref: AdRef) -> None:
     if ad_ref in {A.obs.index, A.var.index}:
         pytest.xfail("obs.index and var.index are always in AnnData")
     assert ad_ref not in AnnData()
+
+
+@pytest.mark.parametrize(
+    ("acc", "expected"),
+    [
+        pytest.param(A.X, lambda ad: ad.X, id="X"),
+        pytest.param(A.layers["a"], lambda ad: ad.layers["a"], id="layer"),
+        pytest.param(A.obs, lambda ad: ad.obs, id="obs"),
+        pytest.param(A.var, lambda ad: ad.var, id="var"),
+        pytest.param(A.obsm["umap"], lambda ad: ad.obsm["umap"], id="obsm"),
+        pytest.param(A.varp["cons"], lambda ad: ad.varp["cons"], id="varp"),
+    ],
+)
+def test_get_full_array(
+    adata: AnnData, acc: object, expected: Callable[[AnnData], object]
+) -> None:
+    assert expected(adata) is adata[acc]
+
+
+@pytest.mark.parametrize("acc", [A.obsm, A.varm], ids=str)
+def test_get_full_array_map_unsupported(adata: AnnData, acc: MultiMapAcc) -> None:
+    with pytest.raises(IndexError, match=rf"Cannot index with {acc}"):
+        adata[acc]
