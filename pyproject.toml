@@ -44,7 +44,7 @@ dependencies = [
     "packaging>=24.2",
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
-    "zarr >=3.1",
+    "zarr @ git+https://github.com/d-v-b/zarr-python@perf/prepared-write-v2",
     "typing-extensions; python_version<'3.13'",
     "scverse-misc[settings]>=0.1.0",
 ]
@@ -289,3 +289,6 @@ fragment.perf.name = "Performance"
 fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
 fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
+
+[tool.hatch.metadata]
+allow-direct-references = true
