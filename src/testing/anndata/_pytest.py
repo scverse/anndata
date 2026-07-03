@@ -54,10 +54,8 @@ def _anndata_session_env(request: pytest.FixtureRequest) -> None:
 @pytest.fixture(scope="session", autouse=True)
 def zarr_python_pipeline(request: pytest.FixtureRequest) -> None:
     zarr.config.set({
-        "codec_pipeline": {
-            "path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-            "max_workers": None,
-        }
+        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+        "codec_pipeline.max_workers": None,
     })
 
 
