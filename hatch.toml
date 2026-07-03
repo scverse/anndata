@@ -33,7 +33,7 @@ overrides.matrix.deps.pre-install-commands = [
     # IMPORTANT: `zarr` being a pre-release is used in the testing code
     { if = [
         "pre",
-    ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git\nzarr @ git+https://github.com/zarr-developers/zarr-python.git' > ci/pre-deps.txt" },
+    ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git' > ci/pre-deps.txt" },
 
 ]
 overrides.matrix.deps.python = [
