@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import abc
+import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
+
+if sys.version_info < (3, 15):
+    from typing_extensions import Sentinel
 
 import pandas as pd
 import scipy.sparse as sp
@@ -53,16 +57,7 @@ type DataFrameLike = pd.DataFrame | Dataset2D
 type FullArray = _XDataType | DataFrameLike | AwkArray
 """A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
-
-class _NoIdx:
-    """Sentinel for :meth:`RefAcc.get`: no index given, so return the full array."""
-
-    def __repr__(self) -> str:
-        return "Return Full Array"
-
-
-_NO_IDX = _NoIdx()
-
+_NO_IDX = Sentinel("NO_IDX")
 
 __all__ = [
     "A",
@@ -205,7 +200,7 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | _NoIdx = _NO_IDX, /) -> Array | FullArray:
+    def get(self, data: D, idx: I | Sentinel = _NO_IDX, /) -> Array | FullArray:
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted, return the full array one level up instead.
@@ -292,9 +287,9 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, adata: AnnData, idx: Idx2D | _NoIdx = _NO_IDX, /
+        self, adata: AnnData, idx: Idx2D | Sentinel = _NO_IDX, /
     ) -> _XDataType | InMemoryArray:
-        if isinstance(idx, _NoIdx):
+        if idx is _NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
@@ -386,10 +381,10 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self, data: MuData | AnnData, k: str | None | _NoIdx = _NO_IDX, /
+        self, data: MuData | AnnData, k: str | None | Sentinel = _NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full: DataFrameLike = getattr(data, self.dim)
-        if isinstance(k, _NoIdx):
+        if k is _NO_IDX:
             return full
         match full, k:
             case pd.DataFrame() as df, None:
@@ -473,10 +468,10 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, i: int | _NoIdx = _NO_IDX, /
+        self, data: MuData | AnnData, i: int | Sentinel = _NO_IDX, /
     ) -> FullArray | InMemoryArray:
         full: FullArray = getattr(data, f"{self.dim}m")[self.k]
-        if isinstance(i, _NoIdx):
+        if i is _NO_IDX:
             return full
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
@@ -569,10 +564,10 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, idx: Idx2D | _NoIdx = _NO_IDX, /
+        self, data: MuData | AnnData, idx: Idx2D | Sentinel = _NO_IDX, /
     ) -> _XDataType | InMemoryArray:
         full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
-        if isinstance(idx, _NoIdx):
+        if idx is _NO_IDX:
             return full
         df = cast("pd.DataFrame", getattr(data, self.dim))
         # TODO: remove wrapping in [] when dropping scipy <1.14
