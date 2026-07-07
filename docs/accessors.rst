@@ -186,7 +186,7 @@ Extending accessors
 
 There are three layers of extensibility:
 
-#.  subclassing :class:`RefAcc` and creating a new :class:`AdRef` instance for creating them:
+#.  subclassing :class:`AdRef` and creating a new :class:`AdAcc` instance for creating them:
 
     ..  code-block:: python
 
@@ -204,9 +204,6 @@ There are three layers of extensibility:
 
         adata = sc.datasets.pbmc3k_processed()
         plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
-
-    Note that for implementing :meth:`RefAcc.get`, you will need :class:`NO_IDX`.
-
 
 #.  subclass one or more of the :term:`reference accessor`\ s, and create a new :class:`AdAcc` instance:
 
@@ -226,6 +223,9 @@ There are three layers of extensibility:
     >>> A = AdAcc(ref_class=TwoDRef, meta_cls=MyMetaAcc)
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
+
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+
 
 #.  subclass :class:`AdAcc` to add new accessors:
 
