@@ -167,6 +167,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         :toctree: generated/
 
         Idx2D
+        NO_IDX
 
 ..  toctree::
     :hidden:
@@ -176,6 +177,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.MultiAcc
     generated/anndata.acc.GraphAcc
     generated/anndata.acc.Idx2D
+    generated/anndata.acc.NO_IDX
 
 .. _extending accessors:
 
@@ -202,6 +204,8 @@ There are three layers of extensibility:
 
         adata = sc.datasets.pbmc3k_processed()
         plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
+
+    Note that for implementing :meth:`RefAcc.get`, you will need :class:`NO_IDX`.
 
 
 #.  subclass one or more of the :term:`reference accessor`\ s, and create a new :class:`AdAcc` instance:
