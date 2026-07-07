@@ -10,7 +10,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, cast, overload
 
 if sys.version_info < (3, 15):
-    from typing_extensions import Sentinel
+    from typing_extensions import sentinel
 
 import pandas as pd
 import scipy.sparse as sp
@@ -57,7 +57,7 @@ type DataFrameLike = pd.DataFrame | Dataset2D
 type FullArray = _XDataType | DataFrameLike | AwkArray
 """A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
-_NO_IDX = Sentinel("NO_IDX")
+_NO_IDX = sentinel("NO_IDX")
 
 __all__ = [
     "A",
@@ -200,7 +200,7 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | Sentinel = _NO_IDX, /) -> Array | FullArray:
+    def get(self, data: D, idx: I | sentinel = _NO_IDX, /) -> Array | FullArray:
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted, return the full array one level up instead.
@@ -287,7 +287,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, adata: AnnData, idx: Idx2D | Sentinel = _NO_IDX, /
+        self, adata: AnnData, idx: Idx2D | sentinel = _NO_IDX, /
     ) -> _XDataType | InMemoryArray:
         if idx is _NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
@@ -381,7 +381,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self, data: MuData | AnnData, k: str | None | Sentinel = _NO_IDX, /
+        self, data: MuData | AnnData, k: str | None | sentinel = _NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full: DataFrameLike = getattr(data, self.dim)
         if k is _NO_IDX:
@@ -468,7 +468,7 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, i: int | Sentinel = _NO_IDX, /
+        self, data: MuData | AnnData, i: int | sentinel = _NO_IDX, /
     ) -> FullArray | InMemoryArray:
         full: FullArray = getattr(data, f"{self.dim}m")[self.k]
         if i is _NO_IDX:
@@ -564,7 +564,7 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, idx: Idx2D | Sentinel = _NO_IDX, /
+        self, data: MuData | AnnData, idx: Idx2D | sentinel = _NO_IDX, /
     ) -> _XDataType | InMemoryArray:
         full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
         if idx is _NO_IDX:
