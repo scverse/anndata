@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from .._settings import settings
 from ..compat import (
@@ -21,7 +21,7 @@ from ..compat import (
     DaskArray,
     IndexManager,
     XDataArray,
-    has_xp,
+    has_xp_base,
 )
 from .xarray import Dataset2D
 
@@ -76,10 +76,10 @@ class _XrDtV(NamedTuple):
 
     def __call__(
         self,
-        indexer: SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix,
+        indexer: SupportsArrayApiBase | pd.api.extensions.ExtensionArray | np.matrix,
     ) -> bool:
         return (
-            has_xp(indexer)
+            has_xp_base(indexer)
             and indexer.__array_namespace__().isdtype(indexer.dtype, self.array_api_str)
         ) or (
             isinstance(indexer, pd.api.extensions.ExtensionArray)
@@ -100,7 +100,7 @@ class XArrayDtype(_XrDtV, Enum):
 @singledispatch
 def _gen_anndata_index(
     indexer: Index1D, index: pd.Index
-) -> _Index1DNorm | int | np.integer | SupportsArrayApi:
+) -> _Index1DNorm | int | np.integer | SupportsArrayApiBase:
     msg = f"Unknown indexer {indexer!r} of type {type(indexer)}"
     raise IndexError(msg)
 
@@ -142,7 +142,7 @@ def _from_xarray(indexer: XDataArray, index: pd.Index) -> np.ndarray:
 def _from_sparse(
     indexer: CSMatrix | CSArray,
     index: pd.Index,
-) -> SupportsArrayApi:
+) -> SupportsArrayApiBase:
     indexer = indexer.toarray()
     return _gen_anndata_index(indexer, index)
 
@@ -151,7 +151,7 @@ def _from_sparse(
 def _from_sequence(
     indexer: Sequence,
     index: pd.Index,
-) -> SupportsArrayApi:
+) -> SupportsArrayApiBase:
     indexer: np.ndarray = np.array(indexer)
     if len(indexer) == 0:
         indexer = indexer.astype(int)
@@ -159,18 +159,18 @@ def _from_sequence(
 
 
 @_gen_anndata_index.register(
-    SupportsArrayApi | pd.api.extensions.ExtensionArray | np.matrix | pd.MultiIndex
+    SupportsArrayApiBase | pd.api.extensions.ExtensionArray | np.matrix | pd.MultiIndex
 )
 def _from_array(
-    indexer: SupportsArrayApi
+    indexer: SupportsArrayApiBase
     | pd.api.extensions.ExtensionArray
     | np.matrix
     | pd.MultiIndex,
     index: pd.Index,
-) -> SupportsArrayApi:
+) -> SupportsArrayApiBase:
     # convert to the 1D if it's accidentally 2D column/row vector
     # convert sparse into dense arrays if needed
-    use_xp = has_xp(indexer)
+    use_xp = has_xp_base(indexer)
     # MultiIndex objects are not turned into arrays in _normalize_index
     is_pandas = isinstance(
         indexer,
@@ -201,7 +201,7 @@ def _from_array(
                 )
                 raise IndexError(msg)
             return np.asarray(indexer) if is_pandas else indexer
-        if not isinstance(indexer, np.ndarray) and has_xp(indexer):
+        if not isinstance(indexer, np.ndarray) and has_xp_base(indexer):
             msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
             raise ValueError(msg)
     positions = index.get_indexer(indexer)  # indexer should be string array
@@ -217,7 +217,7 @@ def _from_array(
 
 def _normalize_index(
     indexer: Index1D[IndexManager], index: pd.Index
-) -> _Index1DNorm | int | np.integer | SupportsArrayApi | pd.MultiIndex:
+) -> _Index1DNorm | int | np.integer | SupportsArrayApiBase | pd.MultiIndex:
 
     if isinstance(indexer, pd.Index | pd.Series) and (
         not isinstance(indexer, pd.MultiIndex) or settings.restrict_index_types
@@ -318,7 +318,7 @@ def _ensure_numpy_idx[T, R](
     return _ensure
 
 
-def array_api_ix(*args: SupportsArrayApi) -> tuple[SupportsArrayApi, ...]:
+def array_api_ix(*args: SupportsArrayApiBase) -> tuple[SupportsArrayApiBase, ...]:
     """Construct an open mesh from multiple sequences.
 
     Vendored version of `numpy.ix_` for the array-api.
@@ -341,17 +341,17 @@ def array_api_ix(*args: SupportsArrayApi) -> tuple[SupportsArrayApi, ...]:
 
 
 def _prepare_array_api_idx(
-    a: SupportsArrayApi,
+    a: SupportsArrayApiBase,
     subset_idx: tuple[_Index1DNorm[IndexManager]]
     | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
-) -> tuple[slice | SupportsArrayApi, ...]:
+) -> tuple[slice | SupportsArrayApiBase, ...]:
     """Prepare indices for array-api compatible subsetting."""
     xp = a.__array_namespace__()
 
     def get_idx(idx):
         if isinstance(idx, IndexManager):
             return idx.get_for_array(a)
-        elif isinstance(idx, slice) or has_xp(idx):
+        elif isinstance(idx, slice) or has_xp_base(idx):
             return idx
         else:  # pragma: no cover
             # Convert numpy/list to array-api array on the target device
@@ -369,7 +369,7 @@ def _prepare_array_api_idx(
 def _subset[
     T: np.ndarray
     | pd.DataFrame
-    | SupportsArrayApi
+    | SupportsArrayApiBase
     | DaskArray
     | CSArray
     | CSMatrix
@@ -386,7 +386,7 @@ def _subset[
     indexing with IndexManager support.
     """
     # Check if this is an array-api array (not numpy)
-    if has_xp(a) and not isinstance(a, np.ndarray):
+    if has_xp_base(a) and not isinstance(a, np.ndarray):
         # Use array-api aware indexing
         subset_idx = _prepare_array_api_idx(a, subset_idx)
         return a[subset_idx]
