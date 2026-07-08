@@ -10,7 +10,7 @@ import pandas as pd
 from numpy import ma
 from numpy.typing import NDArray
 
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from . import abc
 from ._core.anndata import AnnData
@@ -40,7 +40,7 @@ else:
     _M = TypeVar("_M")
 
 _Index1DNorm: TypeAlias = (  # noqa: UP040
-    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApi | _M
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | _M
 )
 # TODO: pd.Index[???]
 type Index1D[_M: IndexManager] = (
@@ -86,7 +86,7 @@ type InMemoryArray = (
     | DaskArray
     | CupyArray
     | CupySparseMatrix
-    | SupportsArrayApi
+    | SupportsArrayApiBase
 )
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
 
