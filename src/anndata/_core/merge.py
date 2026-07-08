@@ -29,7 +29,7 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    has_xp,
+    has_xp_base,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from anndata._types import Join_T
 
     from ..compat import XDataArray
-    from ..types import SupportsArrayApi
+    from ..types import SupportsArrayApiBase
 
 
 ###################
@@ -570,7 +570,7 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        elif has_xp(el):
+        elif has_xp_base(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
         else:  # pragma: no cover
             msg = "Cannot reindex element of unsupported type."
@@ -652,8 +652,8 @@ class Reindexer:
         return out
 
     def _apply_to_array_api(
-        self, el: SupportsArrayApi, *, axis: int, fill_value=None
-    ) -> SupportsArrayApi:
+        self, el: SupportsArrayApiBase, *, axis: int, fill_value=None
+    ) -> SupportsArrayApiBase:
         if fill_value is None:
             fill_value = default_fill_value([el])
         xp = el.__array_namespace__()
@@ -924,7 +924,7 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
 
-    elif all(has_xp(a) for a in arrays):
+    elif all(has_xp_base(a) for a in arrays):
         # All arrays are array-api compatible
 
         # use first as a reference to check if all of the arrays are the same type
@@ -1073,7 +1073,7 @@ def missing_element(
     non_numpy_array_apis = {
         a.__array_namespace__()
         for a in els
-        if has_xp(a) and not isinstance(a, np.ndarray)
+        if has_xp_base(a) and not isinstance(a, np.ndarray)
     }
     if len(non_numpy_array_apis) not in {0, 1}:
         msg = "Cannot generate missing elements when there are multiple array backends supported including at least one that is array api compatible."
