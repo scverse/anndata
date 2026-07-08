@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class SupportsArrayApi(Protocol):
+class SupportsArrayApiBase(Protocol):
     device: str
     shape: tuple[int, ...]
     size: int
@@ -21,6 +21,12 @@ class SupportsArrayApi(Protocol):
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
     ) -> ArrayNamespace: ...
     def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
+    def __getitem__(self, k: object) -> SupportsArrayApiBase: ...
+
+
+@runtime_checkable
+class SupportsArrayApi(SupportsArrayApiBase, Protocol):
+    # https://data-apis.org/array-api/latest/design_topics/data_interchange.html
     def __dlpack__(
         self,
         *,
@@ -30,7 +36,6 @@ class SupportsArrayApi(Protocol):
         copy: bool | None = None,
     ) -> Any: ...
     def __dlpack_device__(self) -> tuple[int, int]: ...
-    def __getitem__(self, k: object) -> SupportsArrayApi: ...
 
 
 def __getattr__(key: str):
@@ -48,6 +53,8 @@ def __getattr__(key: str):
             return ExtensionNamespace
         case "SupportsArrayApi":
             return SupportsArrayApi
+        case "SupportsArrayApiBase":
+            return SupportsArrayApiBase
         case _:
             msg = f"types has no attribute {key!r}"
             raise AttributeError(msg)

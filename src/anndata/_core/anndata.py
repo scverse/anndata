@@ -22,7 +22,7 @@ from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from .. import utils
 from .._settings import settings
@@ -1566,7 +1566,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate
             return (
                 (accumulate or type(elem) not in writeable_elems)
-                if not isinstance(elem, SupportsArrayApi)
+                if not isinstance(elem, SupportsArrayApiBase)
                 else accumulate
             )
 

@@ -18,7 +18,7 @@ import scipy.sparse as sp
 from .. import AnnData
 from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
-from ..compat import CupySparseMatrix, DaskArray, has_xp
+from ..compat import CupySparseMatrix, DaskArray, has_xp_base
 
 if TYPE_CHECKING:
     from mudata import MuData
@@ -218,7 +218,7 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
             a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
         if isinstance(a, sp.sparray | sp.spmatrix | CupySparseMatrix | ArrayView):
             a = a.toarray()
-        if has_xp(a):
+        if has_xp_base(a):
             return a.__array_namespace__().reshape(a, (a.size,))
         return a.ravel()
 
