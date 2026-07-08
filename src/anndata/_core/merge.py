@@ -1449,7 +1449,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
-    See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
+    See the :doc:`concatenation <../tutorials/concatenation>` section in the docs for a more in-depth description.
 
     Params
     ------
@@ -1460,7 +1460,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        is taken. If "inner", the intersection. See :doc:`concatenation <../tutorials/concatenation>`
         for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.
