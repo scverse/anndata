@@ -230,6 +230,7 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
+   types.SupportsArrayApiBase
    types.SupportsArrayApi
 
 .. toctree::

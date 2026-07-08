@@ -22,7 +22,7 @@ from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from .. import utils
 from .._settings import settings
@@ -71,7 +71,18 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
-    from ..acc import AdRef, Array, MapAcc, RefAcc
+    from ..acc import (
+        AdRef,
+        Array,
+        DataFrameLike,
+        FullArray,
+        GraphAcc,
+        LayerAcc,
+        MapAcc,
+        MetaAcc,
+        MultiAcc,
+        RefAcc,
+    )
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1050,15 +1061,26 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: MultiAcc) -> FullArray: ...
+    @overload
+    def __getitem__(self, index: LayerAcc | GraphAcc) -> _XDataType: ...
+    @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(self, index: Index | AdRef) -> AnnData | Array:
+    def __getitem__(self, index: Index | AdRef) -> AnnData | Array | FullArray:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
-        from ..acc import AdRef
+        from ..acc import AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
+        elif isinstance(index, RefAcc):
+            return index.get(self)
+        elif isinstance(index, MapAcc):
+            msg = f"Cannot index with {index} because this is not a path to an array-like structure."
+            raise IndexError(msg)
 
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
@@ -1544,7 +1566,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate
             return (
                 (accumulate or type(elem) not in writeable_elems)
-                if not isinstance(elem, SupportsArrayApi)
+                if not isinstance(elem, SupportsArrayApiBase)
                 else accumulate
             )
 

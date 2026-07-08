@@ -15,7 +15,7 @@ from legacy_api_wrap import legacy_api  # noqa: TID251
 from zarr import Array as ZarrArray  # noqa: F401
 from zarr import Group as ZarrGroup
 
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 
 from .._warnings import warn
 
@@ -464,6 +464,10 @@ def _safe_transpose(x):
         return _transpose_by_block(x)
     else:
         return x.T
+
+
+def has_xp_base(x) -> TypeGuard[SupportsArrayApiBase]:
+    return isinstance(x, SupportsArrayApiBase)
 
 
 def has_xp(x) -> TypeGuard[SupportsArrayApi]:
