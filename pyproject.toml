@@ -189,7 +189,7 @@ testpaths = [
     "./ci/scripts", # CI script tests
     # further doctests
     "./docs/accessors.rst",
-    "./docs/concatenation.rst",
+    "./docs/tutorials/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [
