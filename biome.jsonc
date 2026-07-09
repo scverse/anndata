@@ -1,6 +1,18 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.1.1/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.3.12/schema.json",
     "formatter": { "useEditorconfig": true },
+    "linter": {
+        "rules": {
+            "complexity": {
+                "noForEach": "on",
+            },
+        },
+    },
+    "javascript": {
+        "formatter": {
+            "semicolons": "asNeeded",
+        },
+    },
     "overrides": [
         {
             "includes": ["./.vscode/*.json", "**/*.jsonc", "**/asv.conf.json"],
