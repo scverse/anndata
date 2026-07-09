@@ -829,7 +829,10 @@ def validate_key(key: str) -> tuple[bool, str, bool]:
     """
     if not isinstance(key, str):
         return False, f"Non-string key ({type(key).__name__})", True
-    # Slashes will be disallowed in h5 stores (FutureWarning)
     if "/" in key:
-        return False, "Contains '/' (deprecated)", False
+        # Whether a slash aborts an h5ad write is user-configurable; mirror the
+        # setting so the repr's severity matches what a write would actually do.
+        disallowed = bool(get_setting("disallow_forward_slash_in_h5ad", default=True))
+        reason = "Contains '/'" if disallowed else "Contains '/' (deprecated)"
+        return False, reason, disallowed
     return True, "", False

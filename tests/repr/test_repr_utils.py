@@ -311,12 +311,19 @@ class TestKeyValidation:
         assert valid
 
     def test_validate_key_slash(self):
-        """Test slashes are flagged as warning."""
+        """Test slash severity tracks `disallow_forward_slash_in_h5ad`."""
+        import anndata as ad
         from anndata._repr.utils import validate_key
 
         valid, reason, is_hard_error = validate_key("path/to/gene")
         assert not valid
         assert "/" in reason
+        assert is_hard_error, "hard error under the default setting"
+
+        with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+            valid, reason, is_hard_error = validate_key("path/to/gene")
+        assert not valid
+        assert "deprecated" in reason
         assert not is_hard_error
 
     def test_validate_key_non_string(self):

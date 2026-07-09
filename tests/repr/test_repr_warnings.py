@@ -13,6 +13,7 @@ import pytest
 
 import anndata as ad
 from anndata import AnnData
+from anndata._repr.utils import validate_key
 
 
 class TestBasicWarnings:
@@ -282,34 +283,39 @@ class TestSeriesNonSerializable:
 class TestColumnNameValidation:
     """Tests for column name validation (issue #321)."""
 
-    def test_slash_column_name_warns_but_still_serializes(self, tmp_path):
-        """Test slash in column names: warns (yellow) but still works for now."""
-        import warnings
+    def test_slash_column_name_is_hard_error_by_default(self, tmp_path):
+        """Slash in a column name aborts an h5ad write under the default setting."""
+        adata = ad.AnnData(X=np.eye(3))
+        adata.obs["path/gene"] = ["a", "b", "c"]
 
+        assert ad.settings.disallow_forward_slash_in_h5ad, (
+            "Default flipped back! Revisit validate_key() in _repr/utils.py."
+        )
+        with pytest.raises(ValueError, match="Forward slashes are not allowed"):
+            adata.write_h5ad(tmp_path / "test_slash.h5ad")
+
+        assert validate_key("path/gene") == (False, "Contains '/'", True)
+        assert "path/gene" in adata._repr_html_()
+
+    def test_slash_column_name_serializes_when_setting_disabled(self, tmp_path):
+        """With the guard off, a slash key still round-trips and warns softly."""
         adata = ad.AnnData(X=np.eye(3))
         adata.obs["path/gene"] = ["a", "b", "c"]
 
         path = tmp_path / "test_slash.h5ad"
-
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            try:
+        with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+            with pytest.warns(FutureWarning, match="Forward slashes"):
                 adata.write_h5ad(path)
-                serializes = True
-            except Exception:  # noqa: BLE001
-                serializes = False
-                pytest.fail(
-                    "Slash in column names now fails! "
-                    "Update validate_key() in utils.py: "
-                    "set is_hard_error=True for slashes."
-                )
+            assert validate_key("path/gene") == (
+                False,
+                "Contains '/' (deprecated)",
+                False,
+            )
+            html = adata._repr_html_()
 
-        if serializes:
-            adata2 = ad.read_h5ad(path)
-            assert "path/gene" in adata2.obs.columns
-
-        html = adata._repr_html_()
-        assert "deprecated" in html or "/" in html
+        adata2 = ad.read_h5ad(path)
+        assert "path/gene" in adata2.obs.columns
+        assert "deprecated" in html
 
     def test_mapping_sections_warn_for_invalid_keys(self):
         """Test that layers/obsm/etc warn for invalid key names."""
@@ -319,7 +325,11 @@ class TestColumnNameValidation:
 
         html = adata._repr_html_()
         assert "Non-string" in html
-        assert "deprecated" in html
+        # Slash keys are a hard error under the default setting, so the warning
+        # text is the bare reason rather than the deprecation phrasing.
+        assert "Contains" in html
+        with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+            assert "deprecated" in adata._repr_html_()
 
     def test_uns_warns_for_invalid_keys(self):
         """Test that uns warns for invalid key names."""
