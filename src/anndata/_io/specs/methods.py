@@ -25,7 +25,12 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._core.storage import _check_x_and_layers_are_2d_on_write
+from anndata._io.utils import (
+    _check_has_no_slash_key,
+    check_key,
+    zero_dim_array_as_scalar,
+)
 from anndata._types import StorageType
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
@@ -125,12 +130,7 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         and ad.settings.auto_shard_zarr_v3
         and format == 3
     )
-    if ad.settings.auto_shard_zarr_v3 is None and format == 3:
-        warn(
-            "zarr v3 autosharding will be the default in the next minor release.",
-            UserWarning,
-        )
-    elif auto_sharding:
+    if auto_sharding:
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
     # Auto shard sizes are a relatively recent feature
     supports_auto_shard_size = Version(version("zarr")) >= Version("3.1.4")
@@ -343,21 +343,22 @@ def write_anndata(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    _check_x_and_layers_are_2d_on_write(adata)
     g = f.require_group(k)
     for sub_key, elem in iter_outer(adata):
-        if not (sub_key == "X" and elem is None):
-            if sub_key == "layers":
-                if None in elem:
-                    _writer.write_elem(
-                        g, "X", elem[None], dataset_kwargs=dataset_kwargs
-                    )
-                elem = {k: v for k, v in elem.items() if k is not None}
-            _writer.write_elem(
-                g,
-                sub_key,
-                dict(elem) if isinstance(elem, MutableMapping) else elem,
-                dataset_kwargs=dataset_kwargs,
-            )
+        if sub_key == "X" and elem is None:
+            continue
+        _check_has_no_slash_key(sub_key, elem)
+        if sub_key == "layers":
+            if None in elem:
+                _writer.write_elem(g, "X", elem[None], dataset_kwargs=dataset_kwargs)
+            elem = {k: v for k, v in elem.items() if k is not None}
+        _writer.write_elem(
+            g,
+            sub_key,
+            dict(elem) if isinstance(elem, MutableMapping) else elem,
+            dataset_kwargs=dataset_kwargs,
+        )
 
 
 @_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))
@@ -382,6 +383,10 @@ def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnDat
     ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
+    # Older / non-conforming files may contain higher-dimensional `X` or
+    # `layers`; the on-disk spec forbids that. We don't block reading,
+    # but the AnnData setters surface the spec violation as a warning
+    # during construction below.
     return AnnData(**d)
 
 
@@ -804,9 +809,9 @@ def write_sparse_compressed(
         else:
             with zarr_v3_sharding(
                 dataset_kwargs, format=f.metadata.zarr_format
-            ) as dataset_kwargs:
+            ) as dataset_kwargs_local:
                 arr = g.create_array(
-                    attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
+                    attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs_local
                 )
             # see https://github.com/zarr-developers/zarr-python/discussions/2712
             arr[...] = attr[...]

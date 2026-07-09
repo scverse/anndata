@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from importlib.util import find_spec
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -23,7 +25,6 @@ from anndata.tests.helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from anndata._types import AnnDataElem
 
@@ -127,6 +128,22 @@ def test_uns_uses_dask(adata_remote: AnnData):
     assert isinstance(adata_remote.uns["nested"]["nested_further"]["array"], DaskArray)
 
 
+def test_read_lazy_empty_uns_array(tmp_path: Path):
+    # Regression test for #2469: an empty array in ``uns`` is stored unchunked,
+    # so the lazy chunk layout used to be an empty tuple, which dask rejects
+    # ("Empty tuples are not allowed in chunks"). It must read lazily instead.
+    path = tmp_path / "empty_uns.h5ad"
+    adata = AnnData()
+    adata.uns["uns_name"] = {"key_name": []}
+    adata.write_h5ad(path)
+
+    remote = read_lazy(path)
+    arr = remote.uns["uns_name"]["key_name"]
+    assert isinstance(arr, DaskArray)
+    assert arr.shape == (0,)
+    assert np.asarray(arr).shape == (0,)
+
+
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
@@ -188,14 +205,19 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
-    (orig_pth / ".zmetadata").unlink()
+    with Path.open(orig_pth / "zarr.json", "r+") as f:
+        data = json.load(f)
+        del data["consolidated_metadata"]
+        f.seek(0)
+        json.dump(data, f)
+        f.truncate()
     store = AccessTrackingStore(orig_pth, read_only=True)
-    store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
+    store.initialize_key_trackers(["obs/zarr.json", "zarr.json"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
-    store.assert_access_count("obs/.zgroup", 1)
+    store.assert_access_count("obs/zarr.json", 1)
 
 
 @pytest.mark.zarr_io

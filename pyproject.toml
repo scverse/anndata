@@ -45,8 +45,8 @@ dependencies = [
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=3.1",
-    "typing-extensions; python_version<'3.13'",
-    "scverse-misc>=0.0.3",
+    "typing-extensions>=4.16; python_version<='3.14'",
+    "scverse-misc[settings]>=0.1.0",
 ]
 dynamic = [ "version" ]
 
@@ -68,12 +68,14 @@ doc = [
     "sphinxext.opengraph",
     "myst-nb>=1.4",
     "scanpydoc[theme,typehints] >=0.17.1",
+    "scverse-misc[sphinx]",
     "awkward>=2.6.3",
     "IPython",                             # For syntax highlighting in notebooks
     "myst-parser",
     "sphinx-design",
     "anndata[dask]",
     "pandas>=3",
+    "mudata",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
@@ -117,6 +119,7 @@ test-jax = [
 ]
 [project.optional-dependencies]
 gpu = [ "cupy" ]
+cu13 = [ "cupy-cuda13x" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
@@ -164,6 +167,8 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
     "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+    # TODO: remove when https://github.com/scikit-hep/awkward/issues/4078 is resolved
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -172,13 +177,10 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default:anndata will no longer support zarr v2:DeprecationWarning",
-    "default:Consolidated metadata is:UserWarning",
     "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
+    # TODO: Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Writing zarr v2:UserWarning",
-    # TODO: Remove in conjunction with or before https://github.com/scverse/anndata/pull/1707
-    "default:.*will obey copy-on-write semantics:FutureWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
@@ -187,7 +189,7 @@ testpaths = [
     "./ci/scripts", # CI script tests
     # further doctests
     "./docs/accessors.rst",
-    "./docs/concatenation.rst",
+    "./docs/tutorials/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [
@@ -259,6 +261,7 @@ extend-immutable-calls = [ "slice" ]
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
+runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
 strict = true
 [tool.ruff.lint.pylint]
 max-args = 7

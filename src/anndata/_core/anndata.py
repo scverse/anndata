@@ -22,7 +22,7 @@ from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from .. import utils
 from .._settings import settings
@@ -55,7 +55,7 @@ from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import coerce_array
+from .storage import _non_2d_message, coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -71,7 +71,18 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
-    from ..acc import AdRef, Array, MapAcc, RefAcc
+    from ..acc import (
+        AdRef,
+        Array,
+        DataFrameLike,
+        FullArray,
+        GraphAcc,
+        LayerAcc,
+        MapAcc,
+        MetaAcc,
+        MultiAcc,
+        RefAcc,
+    )
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -413,7 +424,13 @@ class AnnData:  # noqa: PLW1641
                 if obs is None:
                     obs = pd.DataFrame(index=X.index)
                 elif not isinstance(X.index, pd.RangeIndex):
-                    x_indices.append(("obs", "index", pandas_as_str(X.index)))
+                    x_indices.append((
+                        "obs",
+                        "index",
+                        pandas_as_str(X.index)
+                        if settings.restrict_index_types
+                        else X.index,
+                    ))
                 if var is None:
                     var = pd.DataFrame(index=X.columns)
                 elif not isinstance(X.columns, pd.RangeIndex):
@@ -431,7 +448,7 @@ class AnnData:  # noqa: PLW1641
                 msg = "`shape` needs to be `None` if `X` is not `None`."
                 raise ValueError(msg)
             # data matrix and shape
-            n_obs, n_vars = X.shape
+            n_obs, n_vars = X.shape[:2]
             source = "X"
         else:
             n_obs, n_vars = (
@@ -463,6 +480,8 @@ class AnnData:  # noqa: PLW1641
         # unstructured annotations
         self.uns = uns or OrderedDict()
 
+        # aligned mappings go through `AlignedMappingProperty.__set__`, which validates and coerces
+        # (`layers` is done a bit farther down in the same way)
         self.obsm = obsm
         self.varm = varm
 
@@ -661,13 +680,25 @@ class AnnData:  # noqa: PLW1641
             msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
             warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
-        if hasattr(value, "shape") and value.shape != self.shape:
+        if hasattr(value, "shape") and value.shape[:2] != self.shape:
+            if len(value.shape) > 2:
+                msg = (
+                    f"Cannot set `X` from an array of shape {tuple(value.shape)}: "
+                    f"its leading two dimensions {tuple(value.shape[:2])} do not "
+                    f"match the AnnData shape {tuple(self.shape)}. Automatic "
+                    f"reshaping is only supported for 2-D inputs."
+                )
+                raise ValueError(msg)
             msg = "Automatic reshaping when setting X will be removed in the future."
             warn(msg, FutureWarning)
             value = value.reshape(self.shape)
+        if (spec_msg := _non_2d_message(value, name="X")) is not None:
+            # In-memory higher-than-2-D `X` is allowed, but the on-disk
+            # AnnData spec is strict; flag it so users know early.
+            warn(spec_msg, UserWarning)
         can_set_direct_if_not_none = (
             value is None
-            or (hasattr(value, "shape") and (self.shape == value.shape))
+            or (hasattr(value, "shape") and (self.shape == value.shape[:2]))
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         )
@@ -798,7 +829,11 @@ class AnnData:  # noqa: PLW1641
         if self.shape[attr == "var"] != len(value):
             msg = f"Length of passed value for {attr}_names is {len(value)}, but this AnnData has shape: {self.shape}"
             raise ValueError(msg)
-        if isinstance(value, pd.Index) and not isinstance(value.name, str | type(None)):
+        if (
+            settings.restrict_index_types
+            and isinstance(value, pd.Index)
+            and not isinstance(value.name, str | type(None))
+        ):
             msg = (
                 f"AnnData expects .{attr}.index.name to be a string or None, "
                 f"but you passed a name of type {type(value.name).__name__!r}"
@@ -811,7 +846,8 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(value.name, str | type(None)):
                 value.name = None
         if (
-            len(value) > 0
+            settings.restrict_index_types
+            and len(value) > 0
             and not isinstance(value, pd.RangeIndex)
             and infer_dtype(value) not in {"string", "bytes"}
         ):
@@ -1083,15 +1119,26 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: MultiAcc) -> FullArray: ...
+    @overload
+    def __getitem__(self, index: LayerAcc | GraphAcc) -> _XDataType: ...
+    @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(self, index: Index | AdRef) -> AnnData | Array:
+    def __getitem__(self, index: Index | AdRef) -> AnnData | Array | FullArray:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
-        from ..acc import AdRef
+        from ..acc import AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
+        elif isinstance(index, RefAcc):
+            return index.get(self)
+        elif isinstance(index, MapAcc):
+            msg = f"Cannot index with {index} because this is not a path to an array-like structure."
+            raise IndexError(msg)
 
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
@@ -1513,6 +1560,12 @@ class AnnData:  # noqa: PLW1641
             `bool(adata.unwriteable())` will always evaluate the same.
         """
 
+        if _non_2d_message(self.X, name="X") is not None:
+            return True
+        for value in self.layers.values():
+            if _non_2d_message(value, name="layer") is not None:
+                return True
+
         from anndata._io.specs.registry import _REGISTRY
 
         writeable_elems = {
@@ -1571,7 +1624,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate
             return (
                 (accumulate or type(elem) not in writeable_elems)
-                if not isinstance(elem, SupportsArrayApi)
+                if not isinstance(elem, SupportsArrayApiBase)
                 else accumulate
             )
 
@@ -1590,9 +1643,15 @@ class AnnData:  # noqa: PLW1641
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self) -> None:
-        if self.obs.index[~self.obs.index.isna()].has_duplicates:
+        if (
+            settings.restrict_index_types
+            and self.obs.index[~self.obs.index.isna()].has_duplicates
+        ):
             utils.warn_names_duplicates("obs")
-        if self.var.index[~self.var.index.isna()].has_duplicates:
+        if (
+            settings.restrict_index_types
+            and self.var.index[~self.var.index.isna()].has_duplicates
+        ):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
@@ -1792,6 +1851,7 @@ class AnnData:  # noqa: PLW1641
         *,
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
+        consolidate_metadata: bool = True,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1804,6 +1864,8 @@ class AnnData:  # noqa: PLW1641
             Chunk shape.
         convert_strings_to_categoricals
             Convert string columns to categorical.
+        consolidate_metadata
+            Whether to consolidate the metadata of the store after writing.
         """
         from ..io import write_zarr
 
@@ -1819,6 +1881,7 @@ class AnnData:  # noqa: PLW1641
             self,
             chunks=chunks,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
+            consolidate_metadata=consolidate_metadata,
         )
 
     def chunked_X(self, chunk_size: int | None = None):

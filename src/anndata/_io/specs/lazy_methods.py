@@ -70,6 +70,11 @@ _DEFAULT_STRIDE = 1000
 def compute_chunk_layout_for_axis_size(
     chunk_axis_size: int, full_axis_size: int
 ) -> tuple[int, ...]:
+    # A zero-length axis must be expressed as a single zero-length chunk:
+    # dask rejects empty chunk tuples ("Empty tuples are not allowed in
+    # chunks"), and ``np.divmod(0, 0)`` would otherwise divide by zero.
+    if full_axis_size == 0:
+        return (0,)
     n_strides, rest = np.divmod(full_axis_size, chunk_axis_size)
     chunk = (chunk_axis_size,) * n_strides
     if rest > 0:

@@ -86,3 +86,14 @@ def test_warn_on_deprecated_extension_namespace():
 def test_keys_function_warns(adata: AnnData, name) -> None:
     with pytest.warns(FutureWarning, match=rf"{name}_keys is deprecated"):
         getattr(adata, f"{name}_keys")()
+
+
+def test_annloader_init_warns(adata: AnnData) -> None:
+    # We currently have no test env that has torch but I ran this locally.
+    pytest.importorskip("torch")
+    from anndata.experimental import AnnLoader
+
+    with pytest.warns(
+        FutureWarning, match=r"Use .*annbatch\.Loader.* instead of .*AnnLoader.*"
+    ):
+        AnnLoader(adata)

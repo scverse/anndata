@@ -3,6 +3,7 @@ from __future__ import annotations
 import bz2
 import gzip
 from collections import OrderedDict
+from importlib.metadata import version
 from os import PathLike, fspath
 from pathlib import Path
 from types import MappingProxyType
@@ -11,10 +12,12 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
+from packaging.version import Version
 from scipy import sparse
 from scverse_misc import Deprecation, deprecated
 
 from .. import AnnData
+from .._settings import settings
 from ..compat import old_positionals, pandas_as_str
 from ..utils import warn
 from .utils import is_float
@@ -75,8 +78,16 @@ def read_excel(
 
     df = read_excel(fspath(filename), sheet)
     X = df.values[:, 1:]
-    row = dict(row_names=pandas_as_str(df.iloc[:, 0]).array)
-    col = dict(col_names=pandas_as_str(df.columns[1:]).array)
+    row = dict(
+        row_names=pandas_as_str(df.iloc[:, 0])
+        if settings.restrict_index_types
+        else df.iloc[:, 0]
+    )
+    col = dict(
+        col_names=pandas_as_str(df.columns[1:])
+        if settings.restrict_index_types
+        else df.columns[1:]
+    )
     return AnnData(X, row, col)
 
 
@@ -336,7 +347,15 @@ def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
     from scipy.io import mmread
 
     # could be rewritten accounting for dtype to be more performant
-    X = mmread(fspath(filename)).astype(dtype)
+    # https://github.com/scverse/anndata/issues/2477 for spmatrix
+    X = mmread(
+        fspath(filename),
+        **(
+            {"spmatrix": True}
+            if Version(version("scipy")) >= Version("1.18.0rc1")
+            else {}
+        ),
+    ).astype(dtype)
     from scipy.sparse import csr_matrix
 
     X = csr_matrix(X)

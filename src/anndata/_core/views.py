@@ -11,7 +11,7 @@ from pandas.api.types import is_bool_dtype
 from scipy import sparse
 
 from anndata._warnings import ImplicitModificationWarning
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 
 from .._settings import settings
 from ..compat import (
@@ -23,6 +23,7 @@ from ..compat import (
     IndexManager,
     ZappyArray,
     has_xp,
+    has_xp_base,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -297,7 +298,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
 
 @singledispatch
 def as_view(obj, view_args):
-    if has_xp(obj):
+    if has_xp_base(obj):
         # TODO: Determine if we need some sort of specific view object for array-api, or some sort of wrapper that just warns loudly?
         # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
         # You should NOT update views.
@@ -462,16 +463,16 @@ def _resolve_idx(
     raise TypeError(msg)
 
 
-@_resolve_idx.register(SupportsArrayApi)
+@_resolve_idx.register(SupportsArrayApiBase)
 def _resolve_idx_array_api(
-    old: SupportsArrayApi, new: _Index1DNorm, l: Literal[0, 1]
-) -> SupportsArrayApi:
+    old: SupportsArrayApiBase, new: _Index1DNorm, l: Literal[0, 1]
+) -> SupportsArrayApiBase:
     xp = old.__array_namespace__()
 
     # handle slice indexing by converting to array indices
     if isinstance(new, slice):
         new = xp.arange(*new.indices(old.shape[0]))
-    if not has_xp(new):  # pragma: no cover
+    if not has_xp_base(new):  # pragma: no cover
         msg = "New indexer must have array api compatibility"
         raise RuntimeError(msg)
 

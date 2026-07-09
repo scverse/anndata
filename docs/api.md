@@ -150,6 +150,11 @@ In particular, for pytorch-based models.
    experimental.AnnLoader
 ```
 
+```{note}
+`AnnLoader` is deprecated and will be removed in 0.14.
+Please see {class}`annbatch.Loader` for the replacement.
+```
+
 Out of core concatenation
 
 ```{eval-rst}
@@ -225,9 +230,16 @@ Types used by the former:
 .. autosummary::
    :toctree: generated/
 
-   types.ExtensionNamespace
+   types.SupportsArrayApiBase
    types.SupportsArrayApi
+
+.. toctree::
+   :hidden:
+
+   generated/anndata.types.ExtensionNamespace
 ```
+
+{class}`scverse_misc.ExtensionNamespace`
 
 (errors-api)=
 
@@ -250,6 +262,7 @@ Types used by the former:
 
    settings
    settings.override
+   settings.reset
 ```
 
 (types-api)=

@@ -6,6 +6,7 @@ from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import joblib
+import numpy as np
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
@@ -33,10 +34,20 @@ def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 
-@pytest.fixture(autouse=True)
-def zarr_shard(request: pytest.FixtureRequest):
-    with ad.settings.override(auto_shard_zarr_v3=True):
-        yield
+@pytest.fixture
+def arr2d() -> np.ndarray:
+    return np.zeros((3, 4))
+
+
+@pytest.fixture
+def arr3d() -> np.ndarray:
+    return np.arange(3 * 4 * 5).reshape((3, 4, 5))
+
+
+@pytest.fixture(params=["X", "layers"])
+def which(request: pytest.FixtureRequest) -> Literal["X", "layers"]:
+    """Which of ``X`` / ``layers`` should hold the non-2-D payload."""
+    return request.param
 
 
 @pytest.fixture(
