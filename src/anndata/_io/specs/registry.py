@@ -37,7 +37,9 @@ if TYPE_CHECKING:
 
 
 def to_writeable(x):
-    # Convert non-numpy arrays to dlpack
+    # Convert non-numpy array-API arrays to numpy via DLPack. Array-API arrays
+    # that cannot export via DLPack (e.g. pydata/sparse) are left as-is so the
+    # registry can dispatch on their concrete type (or raise a clear error).
     if has_xp(x) and not (isinstance(x, np.ndarray) or np.isscalar(x)):
         return np.from_dlpack(x)
     return x

@@ -45,7 +45,7 @@ dependencies = [
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=3.1",
-    "typing-extensions; python_version<'3.13'",
+    "typing-extensions>=4.16; python_version<='3.14'",
     "scverse-misc[settings]>=0.1.0",
     # backend-agnostic obs/var; >=2.10.0 for the narwhals.plugins entry-point system (Dataset2D)
     "narwhals>=2.10.0",
@@ -121,6 +121,7 @@ test-jax = [
 ]
 [project.optional-dependencies]
 gpu = [ "cupy" ]
+cu13 = [ "cupy-cuda13x" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
@@ -193,7 +194,7 @@ testpaths = [
     "./ci/scripts", # CI script tests
     # further doctests
     "./docs/accessors.rst",
-    "./docs/concatenation.rst",
+    "./docs/tutorials/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [

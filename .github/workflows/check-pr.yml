@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check if a milestone is necessary and exists
-        uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
+        uses: flying-sheep/check@e10bb11109d1434ab16729bd988d78d65d47e163 # v1.0.5
         with:
           success: ${{ github.event.pull_request.user.login == 'pre-commit-ci[bot]' || github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.milestone != null || contains(env.LABELS, 'no milestone') }}
       - name: Check if release notes are necessary
@@ -68,6 +68,6 @@ jobs:
           filters: | # this is intentionally a string
             relnotes: 'docs/release-notes/${{ github.event.pull_request.number }}.${{ (contains(github.event.pull_request.title, '!') && 'breaking') || needs.check-milestone.outputs.type }}.md'
       - name: Check if a relevant release fragment is added
-        uses: flying-sheep/check@6162e3da6b50abdfe00c3233e6f0ce2d1bdcf69c # v1.0.4
+        uses: flying-sheep/check@e10bb11109d1434ab16729bd988d78d65d47e163 # v1.0.5
         with:
           success: ${{ steps.changes.outputs.relnotes }}
