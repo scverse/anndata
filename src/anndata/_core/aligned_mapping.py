@@ -346,6 +346,10 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
+    def clear(self) -> None:
+        for key in [k for k in self if k is not None]:
+            del self[key]
+
     def _validate_value(self, val: Value, key: str | None) -> Value:
         """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
 
@@ -532,6 +536,9 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         _ = self.construct(obj, store=value)  # Validate and convert arrays in `value`
         if obj.is_view:
             obj._init_as_actual(obj.copy())
+        prev = getattr(obj, f"_{self.name}", None)
+        if prev is not None and None not in value and (x := prev.get(None)) is not None:
+            value[None] = x
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
