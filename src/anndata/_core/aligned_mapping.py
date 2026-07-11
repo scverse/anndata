@@ -543,14 +543,8 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
             and None not in value
             and (x := prev.get(None)) is not None
         ):
-            value[None] = x
+            value = {**value, None: x}
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
-        x = (
-            getattr(obj, self.name).get(None)
-            if issubclass(self.cls, LayersBase)
-            else None
-        )
-        new = {None: x} if x is not None else {}
-        setattr(obj, self.name, new)
+        setattr(obj, self.name, {})
