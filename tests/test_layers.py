@@ -106,3 +106,17 @@ def test_shape_error():
         ),
     ):
         adata.layers["L"] = np.zeros((X_.shape[0] + 1, X_.shape[1]))
+
+
+def test_replace_layers_preserves_x():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    adata.layers = {}
+    assert adata.layers.keys() == {None}
+    assert (adata.X == X_).all()
+
+
+def test_clear_layers_preserves_x():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    adata.layers.clear()
+    assert adata.layers.keys() == {None}
+    assert (adata.X == X_).all()
