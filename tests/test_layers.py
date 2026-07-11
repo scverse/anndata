@@ -120,3 +120,45 @@ def test_clear_layers_preserves_x():
     adata.layers.clear()
     assert adata.layers.keys() == {None}
     assert (adata.X == X_).all()
+
+
+def test_replace_layers_keeps_x_drops_old():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    adata.layers = dict(M=L.copy())
+    assert adata.layers.keys() == {"M", None}
+    assert (adata.X == X_).all()
+
+
+def test_replace_layers_explicit_x_overrides():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    adata.layers = {None: X_ + 100}
+    assert adata.layers.keys() == {None}
+    assert (adata.X == X_ + 100).all()
+
+
+def test_replace_layers_does_not_mutate_input():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    new_layers = dict(M=L.copy())
+    adata.layers = new_layers
+    assert None not in new_layers
+
+
+def test_del_layers_preserves_x():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    del adata.layers
+    assert adata.layers.keys() == {None}
+    assert (adata.X == X_).all()
+
+
+def test_explicit_x_removal_still_works():
+    adata = AnnData(X=X_, layers=dict(L=L.copy()))
+    del adata.X
+    assert adata.layers.keys() == {"L"}
+    assert adata.X is None
+
+
+def test_replace_obsm_does_not_preserve_none():
+    adata = AnnData(X=X_)
+    adata.obsm[None] = np.zeros((3, 2))
+    adata.obsm = {}
+    assert adata.obsm.keys() == set()
