@@ -537,10 +537,20 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         if obj.is_view:
             obj._init_as_actual(obj.copy())
         prev = getattr(obj, f"_{self.name}", None)
-        if prev is not None and None not in value and (x := prev.get(None)) is not None:
+        if (
+            issubclass(self.cls, LayersBase)
+            and prev is not None
+            and None not in value
+            and (x := prev.get(None)) is not None
+        ):
             value[None] = x
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
-        new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}
+        x = (
+            getattr(obj, self.name).get(None)
+            if issubclass(self.cls, LayersBase)
+            else None
+        )
+        new = {None: x} if x is not None else {}
         setattr(obj, self.name, new)
