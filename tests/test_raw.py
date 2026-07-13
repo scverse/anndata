@@ -152,7 +152,8 @@ def test_to_adata():
 
     # Raw doesn't do layers or varp currently
     # Deleting after creation so we know to rewrite the test if they are supported
-    del adata.layers, adata.varp
+    adata.layers.clear(keep_x=True)
+    del adata.varp
 
     assert_equal(adata, with_raw.raw.to_adata())
 
@@ -160,7 +161,8 @@ def test_to_adata():
 def test_to_adata_populates_obs():
     adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
-    del adata.layers, adata.uns, adata.varp
+    adata.layers.clear(keep_x=True)
+    del adata.uns, adata.varp
     adata_w_raw = adata.copy()
 
     raw = adata.copy()
