@@ -45,7 +45,8 @@ def _set_layer_item(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
 
 
 def _set_layers_bulk(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
-    adata = ad.AnnData(X=arr2d)
+    # no `X`, so bulk-assigning layers has no `.X` to preserve / warn about
+    adata = ad.AnnData(shape=arr2d.shape)
     adata.layers = {"M": arr3d}
     return adata.layers["M"]
 

@@ -109,38 +109,84 @@ def test_shape_error():
 
 
 @pytest.mark.parametrize(
-    ("op", "expected_keys", "expected_X"),
+    ("op", "expected_keys", "expected_X", "warns"),
     [
         pytest.param(
-            lambda adata: setattr(adata, "layers", {}), {None}, X_, id="replace-empty"
+            lambda adata: setattr(adata, "layers", {}),
+            {None},
+            X_,
+            True,
+            id="replace-empty-warns",
         ),
-        pytest.param(lambda adata: adata.layers.clear(), {None}, X_, id="clear"),
         pytest.param(
             lambda adata: setattr(adata, "layers", dict(M=L.copy())),
             {"M", None},
             X_,
-            id="replace-drops-old",
+            True,
+            id="replace-drops-old-warns",
         ),
         pytest.param(
             lambda adata: setattr(adata, "layers", {None: X_ + 100}),
             {None},
             X_ + 100,
+            False,
             id="replace-explicit-x",
         ),
-        pytest.param(lambda adata: delattr(adata, "layers"), {None}, X_, id="del"),
+        pytest.param(
+            lambda adata: setattr(adata, "layers", {None: None, "M": L.copy()}),
+            {"M"},
+            None,
+            False,
+            id="replace-explicit-drop-x",
+        ),
+        pytest.param(
+            lambda adata: setattr(adata, "layers", {None: None}),
+            set(),
+            None,
+            False,
+            id="replace-explicit-drop-only-x",
+        ),
+        pytest.param(lambda adata: adata.layers.clear(), {None}, X_, True, id="clear"),
+        pytest.param(
+            lambda adata: adata.layers.clear(keep_x=True),
+            {None},
+            X_,
+            False,
+            id="clear-keep-x",
+        ),
+        pytest.param(
+            lambda adata: adata.layers.clear(keep_x=False),
+            set(),
+            None,
+            False,
+            id="clear-drop-x",
+        ),
+        pytest.param(
+            lambda adata: delattr(adata, "layers"), {None}, X_, True, id="del"
+        ),
     ],
 )
-def test_replace_layers_preserves_x(op, expected_keys, expected_X):
+def test_replace_layers_preserves_x(op, expected_keys, expected_X, warns):
     adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    op(adata)
+    if warns:
+        with pytest.warns(FutureWarning, match=r"future release may drop"):
+            op(adata)
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            op(adata)
     assert adata.layers.keys() == expected_keys
-    assert (expected_X == adata.X).all()
+    if expected_X is None:
+        assert adata.X is None
+    else:
+        assert (expected_X == adata.X).all()
 
 
 def test_replace_layers_does_not_mutate_input():
     adata = AnnData(X=X_, layers=dict(L=L.copy()))
     new_layers = dict(M=L.copy())
-    adata.layers = new_layers
+    with pytest.warns(FutureWarning, match=r"future release may drop"):
+        adata.layers = new_layers
     assert None not in new_layers
 
 
