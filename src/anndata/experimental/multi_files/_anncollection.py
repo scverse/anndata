@@ -653,7 +653,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     AnnCollection object with n_obs × n_vars = 3338 × 208
       constructed from 2 AnnData objects
         view of obsm: 'X_pca', 'X_umap'
-        view of layers: None
+        view of layers: None (.X)
         obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
     >>> batch = dc[100:200] # AnnCollectionView
     >>> batch
