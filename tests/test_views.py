@@ -549,7 +549,14 @@ def test_view_delattr(attr, subset_func):
     orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
-    with pytest.warns(ad.ImplicitModificationWarning) if attr == "X" else nullcontext():
+    if attr == "X":
+        ctx = pytest.warns(ad.ImplicitModificationWarning)
+    elif attr == "layers":
+        # deleting `.layers` currently keeps `.X` (the `None` key) and warns
+        ctx = pytest.warns(FutureWarning, match=r"future release may drop")
+    else:
+        ctx = nullcontext()
+    with ctx:
         delattr(subset, attr)
 
     assert not subset.is_view
