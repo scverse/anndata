@@ -282,3 +282,69 @@ def test_get_full_array(
 def test_get_full_array_map_unsupported(adata: AnnData, acc: MultiMapAcc) -> None:
     with pytest.raises(IndexError, match=rf"Cannot index with {acc}"):
         adata[acc]
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        pytest.param("X[:,:]", A.X[:, :], id="x"),
+        pytest.param("layers.y[c,:]", A.layers["y"]["c", :], id="layer"),
+        pytest.param("layers.y[:,g]", A.layers["y"][:, "g"], id="layer-var"),
+        pytest.param("obs.a", A.obs["a"], id="obs"),
+        pytest.param("var.b", A.var["b"], id="var"),
+        pytest.param("obsm.c.0", A.obsm["c"][0], id="obsm"),
+        pytest.param("varm.d.1", A.varm["d"][1], id="varm"),
+        pytest.param("obsp.g[c1,:]", A.obsp["g"]["c1", :], id="obsp"),
+        pytest.param("obsp.g[:,c2]", A.obsp["g"][:, "c2"], id="obsp-var"),
+    ],
+)
+@pytest.mark.parametrize("vec", [None, True], ids=["vec=None", "vec=True"])
+def test_resolve_vec(spec: str, expected: AdRef, *, vec: Literal[True] | None) -> None:
+    assert A.resolve(spec, vec=vec) == expected
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        pytest.param("X", A.X, id="x"),
+        pytest.param("layers.y", A.layers["y"], id="layer"),
+        pytest.param("obsm.c", A.obsm["c"], id="obsm"),
+        pytest.param("varm.d", A.varm["d"], id="varm"),
+        pytest.param("obsp.g", A.obsp["g"], id="obsp"),
+        pytest.param("varp.h", A.varp["h"], id="varp"),
+    ],
+)
+@pytest.mark.parametrize("vec", [None, False], ids=["vec=None", "vec=False"])
+def test_resolve_matrix(
+    spec: str, expected: object, *, vec: Literal[False] | None
+) -> None:
+    assert A.resolve(spec, vec=vec) == expected
+
+
+@pytest.mark.parametrize(
+    ("spec", "vec"),
+    [
+        pytest.param("X", True, id="x-matrix-as-vec"),
+        pytest.param("X[:,:]", False, id="x-vec-as-matrix"),
+        pytest.param("layers.y", True, id="layer-matrix-as-vec"),
+        pytest.param("layers.y[c,:]", False, id="layer-vec-as-matrix"),
+        pytest.param("obs.a", False, id="obs-as-matrix"),
+        pytest.param("var.a", False, id="var-as-matrix"),
+        pytest.param("obsm.c", True, id="obsm-matrix-as-vec"),
+        pytest.param("obsm.c.0", False, id="obsm-vec-as-matrix"),
+        pytest.param("obsp.g", True, id="obsp-matrix-as-vec"),
+        pytest.param("obsp.g[c1,:]", False, id="obsp-vec-as-matrix"),
+    ],
+)
+def test_resolve_vec_mismatch(spec: str, *, vec: bool) -> None:
+    with pytest.raises(ValueError, match="vec"):
+        A.resolve(spec, vec=vec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "vec"),
+    [("X", True), ("X[:,:]", False)],
+    ids=["as-vec", "as-matrix"],
+)
+def test_resolve_vec_mismatch_not_strict(spec: str, *, vec: bool) -> None:
+    assert A.resolve(spec, strict=False, vec=vec) is None
