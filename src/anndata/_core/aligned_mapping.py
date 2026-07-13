@@ -579,7 +579,7 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         ):
             warn(
                 "`del adata.layers` currently keeps `.X` (stored under the "
-                "`None` key), but a future release will drop it. Use "
+                "`None` key), but a future release may drop it. Use "
                 "`adata.layers.clear(keep_x=True)` to keep `.X` or "
                 "`adata.layers.clear(keep_x=False)` to drop it and silence "
                 "this warning.",
