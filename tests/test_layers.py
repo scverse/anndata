@@ -108,32 +108,33 @@ def test_shape_error():
         adata.layers["L"] = np.zeros((X_.shape[0] + 1, X_.shape[1]))
 
 
-def test_replace_layers_preserves_x():
+@pytest.mark.parametrize(
+    ("op", "expected_keys", "expected_X"),
+    [
+        pytest.param(
+            lambda adata: setattr(adata, "layers", {}), {None}, X_, id="replace-empty"
+        ),
+        pytest.param(lambda adata: adata.layers.clear(), {None}, X_, id="clear"),
+        pytest.param(
+            lambda adata: setattr(adata, "layers", dict(M=L.copy())),
+            {"M", None},
+            X_,
+            id="replace-drops-old",
+        ),
+        pytest.param(
+            lambda adata: setattr(adata, "layers", {None: X_ + 100}),
+            {None},
+            X_ + 100,
+            id="replace-explicit-x",
+        ),
+        pytest.param(lambda adata: delattr(adata, "layers"), {None}, X_, id="del"),
+    ],
+)
+def test_replace_layers_preserves_x(op, expected_keys, expected_X):
     adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    adata.layers = {}
-    assert adata.layers.keys() == {None}
-    assert (adata.X == X_).all()
-
-
-def test_clear_layers_preserves_x():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    adata.layers.clear()
-    assert adata.layers.keys() == {None}
-    assert (adata.X == X_).all()
-
-
-def test_replace_layers_keeps_x_drops_old():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    adata.layers = dict(M=L.copy())
-    assert adata.layers.keys() == {"M", None}
-    assert (adata.X == X_).all()
-
-
-def test_replace_layers_explicit_x_overrides():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    adata.layers = {None: X_ + 100}
-    assert adata.layers.keys() == {None}
-    assert (adata.X == X_ + 100).all()
+    op(adata)
+    assert adata.layers.keys() == expected_keys
+    assert (expected_X == adata.X).all()
 
 
 def test_replace_layers_does_not_mutate_input():
@@ -141,13 +142,6 @@ def test_replace_layers_does_not_mutate_input():
     new_layers = dict(M=L.copy())
     adata.layers = new_layers
     assert None not in new_layers
-
-
-def test_del_layers_preserves_x():
-    adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    del adata.layers
-    assert adata.layers.keys() == {None}
-    assert (adata.X == X_).all()
 
 
 def test_explicit_x_removal_still_works():
