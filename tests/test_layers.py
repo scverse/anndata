@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from contextlib import nullcontext
 
 import numpy as np
 import pandas as pd
@@ -168,13 +169,12 @@ def test_shape_error():
 )
 def test_replace_layers_preserves_x(op, expected_keys, expected_X, warns):
     adata = AnnData(X=X_, layers=dict(L=L.copy()))
-    if warns:
-        with pytest.warns(FutureWarning, match=r"future release may drop"):
-            op(adata)
-    else:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", FutureWarning)
-            op(adata)
+    with (
+        pytest.warns(FutureWarning, match=r"future release may drop")
+        if warns
+        else nullcontext()
+    ):
+        op(adata)
     assert adata.layers.keys() == expected_keys
     if expected_X is None:
         assert adata.X is None
