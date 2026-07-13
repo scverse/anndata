@@ -568,7 +568,10 @@ class AnnData:  # noqa: PLW1641
             if attr_name not in {"raw", "X"}:
                 keys = elem.keys()
                 if len(keys) > 0:
-                    descr += f"\n    {attr_name}: {str(list(keys))[1:-1]}"
+                    line = f"\n    {attr_name}: {str(list(keys))[1:-1]}"
+                    if None in keys and attr_name == "layers":
+                        line = line.replace("None", "None (.X)")
+                    descr += line
         return descr
 
     def __repr__(self) -> str:

@@ -1560,7 +1560,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> inner
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
-        layers: None
+        layers: None (.X)
     >>> (
     ...     inner.obs_names.astype("string"),
     ...     inner.var_names.astype("string"),
@@ -1571,7 +1571,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
-        layers: None
+        layers: None (.X)
     >>> outer.var_names.astype("string")
     Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
@@ -1621,22 +1621,22 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="unique")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'zeros'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="first")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'rand', 'zeros'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="only")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'zeros'
-        layers: None
+        layers: None (.X)
 
     The same merge strategies can be used for elements in `.uns`
 

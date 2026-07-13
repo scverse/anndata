@@ -736,14 +736,42 @@ class AdAcc[R: AdRef]:
             raise ValueError(msg) from e
 
     @overload
-    def resolve(self, spec: str, *, strict: Literal[True] = True) -> R: ...
+    def resolve(
+        self, spec: str, *, strict: Literal[True] = True, vec: Literal[True]
+    ) -> R: ...
     @overload
-    def resolve(self, spec: str, *, strict: Literal[False]) -> R | None: ...
-    def resolve(self, spec: str, *, strict: bool = True) -> R | None:
+    def resolve(
+        self, spec: str, *, strict: Literal[False], vec: Literal[True]
+    ) -> R | None: ...
+    @overload
+    def resolve(
+        self, spec: str, *, strict: Literal[True] = True, vec: Literal[False]
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    @overload
+    def resolve(
+        self, spec: str, *, strict: Literal[False], vec: Literal[False]
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None: ...
+    @overload
+    def resolve(
+        self, spec: str, *, strict: Literal[True] = True, vec: None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    @overload
+    def resolve(
+        self, spec: str, *, strict: Literal[False], vec: None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None: ...
+    def resolve(
+        self, spec: str, *, strict: bool = True, vec: bool | None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None:
         """Create :class:`AdRef` from a simplified string.
+
+        If `vec` is `True`, `spec` must be an indexed form yielding an :class:`AdRef`, e.g. `"X[:,:]"`, `"obs.a"`, or `"obsm.c.0"` (the current default behavior).
+        If `vec` is `False`, `spec` must refer to a whole container instead (`"X"`, `"layers.<k>"`, `"obsm.<k>"`, `"varm.<k>"`, `"obsp.<k>"`, or `"varp.<k>"`), and a :class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc` is returned instead of an :class:`AdRef`.
+        If `vec` is unset, both forms are accepted.
 
         Examples
         --------
+        Indexed, yielding an `AdRef`:
+
         >>> A.resolve("X[:,:]")
         A.X[:, :]
         >>> A.resolve("layers.y[c,:]")
@@ -762,10 +790,21 @@ class AdAcc[R: AdRef]:
         A.obsp['g']['c1', :]
         >>> A.resolve("obsp.g[:,c2]")
         A.obsp['g'][:, 'c2']
+
+        Whole containers, yielding a `LayerAcc`/`MultiAcc`/`GraphAcc`:
+
+        >>> A.resolve("X", vec=False)
+        A.X
+        >>> A.resolve("layers.y", vec=False)
+        A.layers['y']
+        >>> A.resolve("obsm.c", vec=False)
+        A.obsm['c']
+        >>> A.resolve("obsp.g", vec=False)
+        A.obsp['g']
         """
         from ._parse_str import parse
 
-        return parse(self, spec, strict=strict)
+        return parse(self, spec, strict=strict, vec=vec)
 
     def __repr__(self) -> str:
         return "A"

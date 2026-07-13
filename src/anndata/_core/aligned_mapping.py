@@ -346,6 +346,28 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
+    def clear(self, *, keep_x: bool | None = None) -> None:
+        """Remove all layers.
+
+        Parameters
+        ----------
+        keep_x
+            Whether to keep `.X` (stored under the `None` key).
+            The default (`None`) keeps ``.X`` and warns that a future
+            release may drop it by default - use this parameter explicitly to silence the warning.
+        """
+        if keep_x is None:
+            warn(
+                "`.layers.clear()` currently keeps `.X` (stored under the "
+                "`None` key), but a future release may drop it. Pass "
+                "`keep_x=True` to keep `.X` or `keep_x=False` to drop it "
+                "and silence this warning.",
+                FutureWarning,
+            )
+            keep_x = True
+        for key in [k for k in self if not (keep_x and k is None)]:
+            del self[key]
+
     def _validate_value(self, val: Value, key: str | None) -> Value:
         """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
 
@@ -532,8 +554,36 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         _ = self.construct(obj, store=value)  # Validate and convert arrays in `value`
         if obj.is_view:
             obj._init_as_actual(obj.copy())
+        prev = getattr(obj, f"_{self.name}", None)
+        if issubclass(self.cls, LayersBase):
+            if None in value:
+                if value[None] is None:
+                    value = {k: v for k, v in value.items() if k is not None}
+            elif prev is not None and (x := prev.get(None)) is not None:
+                warn(
+                    "Assigning to `.layers` without a `None` key currently "
+                    "preserves `.X` (stored under the `None` key), but a "
+                    "future release may drop it. Include `.X` explicitly as "
+                    "`{None: adata.X, ...}` to keep it, or `{None: None, ...}` "
+                    "to drop it and silence this warning.",
+                    FutureWarning,
+                )
+                value = {**value, None: x}
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
-        new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}
-        setattr(obj, self.name, new)
+        if issubclass(self.cls, LayersBase) and (
+            (x := getattr(obj, self.name).get(None)) is not None
+        ):
+            warn(
+                "`del adata.layers` currently keeps `.X` (stored under the "
+                "`None` key), but a future release may drop it. Use "
+                "`adata.layers.clear(keep_x=True)` to keep `.X` or "
+                "`adata.layers.clear(keep_x=False)` to drop it and silence "
+                "this warning.",
+                FutureWarning,
+            )
+            # Reassign with `.X` prevents another, less-helpful warning
+            setattr(obj, self.name, {None: x})
+            return
+        setattr(obj, self.name, {})
