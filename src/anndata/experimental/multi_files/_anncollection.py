@@ -530,7 +530,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         for attr, keys in all_attrs_keys.items():
             if len(keys) > 0:
                 line = f"\n    {attr}: {str(keys)[1:-1]}"
-                if "None" in line and "layers" in attr:
+                if "None" in line and attr == "layers":
                     line = line.replace("None", "None (.X)")
                 descr += line
         return descr
@@ -947,14 +947,14 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         for attr, keys in self._view_attrs_keys.items():
             if len(keys) > 0:
                 line = f"\n    view of {attr}: {str(keys)[1:-1]}"
-                if "None" in line and "layers" in attr:
+                if "None" in line and attr == "layers":
                     line = line.replace("None", "None (.X)")
                 descr += line
         for attr in self._attrs:
             keys = list(getattr(self, attr).keys())
             if len(keys) > 0:
                 line = f"\n    {attr}: {str(keys)[1:-1]}"
-                if "None" in line and "layers" in attr:
+                if "None" in line and attr == "layers":
                     line = line.replace("None", "None (.X)")
                 descr += line
         if "obs" in self._view_attrs_keys:
