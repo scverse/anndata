@@ -558,10 +558,8 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         if issubclass(self.cls, LayersBase):
             if None in value:
                 if value[None] is None:
-                    # Explicit `{None: None}` means "drop `.X`"
                     value = {k: v for k, v in value.items() if k is not None}
             elif prev is not None and (x := prev.get(None)) is not None:
-                # No explicit `.X` given: keep the existing one for now
                 warn(
                     "Assigning to `.layers` without a `None` key currently "
                     "preserves `.X` (stored under the `None` key), but a "
