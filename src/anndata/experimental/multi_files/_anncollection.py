@@ -529,7 +529,10 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
             all_attrs_keys[attr] = list(getattr(self.reference, attr).keys())
         for attr, keys in all_attrs_keys.items():
             if len(keys) > 0:
-                descr += f"\n    {attr}: {str(keys)[1:-1]}"
+                line = f"\n    {attr}: {str(keys)[1:-1]}"
+                if "None" in line and "layers" in attr:
+                    line = line.replace("None", "None (.X)")
+                descr += line
         return descr
 
     @old_positionals("ignore_X", "ignore_layers")
@@ -659,7 +662,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
     >>> batch
     AnnCollectionView object with n_obs × n_vars = 100 × 208
         obsm: 'X_pca', 'X_umap'
-        layers: None
+        layers: None (.X)
         obs: 'n_genes', 'percent_mito', 'n_counts', 'louvain'
     >>> batch.X.shape
     (100, 208)
@@ -943,11 +946,17 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         descr += f"\n  constructed from {len(self.adatas)} AnnData objects"
         for attr, keys in self._view_attrs_keys.items():
             if len(keys) > 0:
-                descr += f"\n    view of {attr}: {str(keys)[1:-1]}"
+                line = f"\n    view of {attr}: {str(keys)[1:-1]}"
+                if "None" in line and "layers" in attr:
+                    line = line.replace("None", "None (.X)")
+                descr += line
         for attr in self._attrs:
             keys = list(getattr(self, attr).keys())
             if len(keys) > 0:
-                descr += f"\n    {attr}: {str(keys)[1:-1]}"
+                line = f"\n    {attr}: {str(keys)[1:-1]}"
+                if "None" in line and "layers" in attr:
+                    line = line.replace("None", "None (.X)")
+                descr += line
         if "obs" in self._view_attrs_keys:
             keys = list(self.obs.keys())
             if len(keys) > 0:
