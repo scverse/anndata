@@ -76,7 +76,7 @@ nb_execution_mode = "off"
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
-autodoc_mock_imports = ["torch"]
+autodoc_mock_imports = ["cudf", "modin", "polars", "torch"]
 # autodoc_default_options = {}
 issues_github_path = "scverse/anndata"
 rtd_links_prefix = PurePosixPath("src")
