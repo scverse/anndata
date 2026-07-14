@@ -334,6 +334,15 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
+def _axis_index_name(store: _GroupStorageType, key: str) -> str | None:
+    """Return axis identity for primary annotations and aligned dataframe groups."""
+    return {"obs": "obs_names", "var": "var_names"}.get(key) or {
+        "/obsm": "obs_names",
+        "/varm": "var_names",
+        "/raw/varm": "var_names",
+    }.get(store.name)
+
+
 class Writer:
     def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
@@ -351,7 +360,12 @@ class Writer:
         return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
 
     def _resolve_write_func(
-        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+        self,
+        dest_type: type,
+        elem: Any,
+        modifiers: frozenset[str],
+        *,
+        index_name: str | None = None,
     ) -> tuple[Write, Any]:
         """Find the writer for ``elem``, coercing a frame from another backend on a miss.
 
@@ -364,7 +378,7 @@ class Writer:
         except IORegistryError:
             from anndata._core._dataframe_backend import try_from_backend
 
-            if (coerced := try_from_backend(elem)) is None:
+            if (coerced := try_from_backend(elem, index_name=index_name)) is None:
                 raise
             return self.find_write_func(dest_type, coerced, modifiers), coerced
 
@@ -424,7 +438,10 @@ class Writer:
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func, elem = self._resolve_write_func(type(store), elem, modifiers)
+        index_name = _axis_index_name(store, k)
+        write_func, elem = self._resolve_write_func(
+            type(store), elem, modifiers, index_name=index_name
+        )
 
         if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)

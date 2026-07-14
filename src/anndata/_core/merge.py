@@ -13,6 +13,7 @@ from itertools import repeat
 from operator import and_, or_, sub
 from typing import TYPE_CHECKING, Literal, cast
 
+import narwhals as nw
 import numpy as np
 import pandas as pd
 from natsort import natsorted
@@ -32,6 +33,15 @@ from ..compat import (
     has_xp_base,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
+from ._dataframe_backend import (
+    DataFrameLike,
+    IndexedDataFrameLike,
+    axis_index,
+    column_backed_axis_name,
+    frame_annotation_columns,
+    frame_equal,
+    to_backend,
+)
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -128,11 +138,10 @@ def equal(a, b) -> bool:
     return np.array_equal(a_na, b_na) and np.array_equal(a[~a_na], b[~b_na])
 
 
-@equal.register(pd.DataFrame)
-@equal.register(Dataset2D)
+@equal.register(DataFrameLike)
 @equal.register(pd.Series)
 def equal_dataframe(a, b) -> bool:
-    return a.equals(b)
+    return a.equals(b) if isinstance(a, pd.Series) else frame_equal(a, b)
 
 
 @equal.register(DaskArray)
@@ -330,11 +339,12 @@ def try_unifying_dtype(
     return None
 
 
-def check_combinable_cols(cols: list[pd.Index], join: Join_T):
+def check_combinable_cols(cols: Iterable[Iterable[str]], join: Join_T):
     """Given columns for a set of dataframes, checks if the can be combined.
 
     Looks for if there are duplicated column names that would show up in the result.
     """
+    cols = [pd.Index(col) for col in cols]
     repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
     if join == "inner":
         intersecting_cols = intersect_keys(cols)
@@ -849,16 +859,35 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             raise ValueError(msg)
         else:
             return concat_dataset2d_on_annot_axis(
-                arrays, join="outer", force_lazy=force_lazy
+                arrays,
+                join="outer",
+                force_lazy=force_lazy,
+                concat_indices=index,
             )
-    if any(isinstance(a, pd.DataFrame) for a in arrays):
+    if any(isinstance(a, DataFrameLike) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
-            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            isinstance(a, DataFrameLike) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
             msg = "Cannot concatenate a dataframe with other array types."
             raise NotImplementedError(msg)
+        frames = [a for a in arrays if isinstance(a, DataFrameLike)]
+        backend = _common_native_backend(frames)
+        index_name = next(
+            (
+                name
+                for frame in frames
+                if (name := column_backed_axis_name(frame)) is not None
+            ),
+            None,
+        )
+        arrays = [
+            _frame_to_pandas(a, index_name=index_name)
+            if isinstance(a, DataFrameLike)
+            else a
+            for a in arrays
+        ]
         # TODO: behaviour here should be chosen through a merge strategy
         df = pd.concat(
             unify_dtypes(f(x) for f, x in zip(reindexers, arrays, strict=True)),
@@ -866,7 +895,11 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             ignore_index=True,
         )
         df.index = index
-        return df
+        return (
+            to_backend(df, backend, index_name=index_name)
+            if backend is not None
+            else df
+        )
     elif any(isinstance(a, AwkArray) for a in arrays):
         from ..compat import awkward as ak
 
@@ -980,11 +1013,11 @@ def inner_concat_aligned_mapping(
 def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reindexer]:
     alt_axis = 1 - axis
     if axis == 0:
-        df_indices = lambda x: x.columns
+        df_indices = _concat_frame_columns
     elif axis == 1:
         df_indices = lambda x: x.indices
 
-    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+    if all(isinstance(el, DataFrameLike) for el in els if not_missing(el)):
         common_ind = reduce(
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
@@ -1012,7 +1045,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
 
 
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
-    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+    if all(isinstance(el, DataFrameLike) for el in els if not_missing(el)):
         reindexers = [
             (lambda x: x)
             if not_missing(el)
@@ -1216,8 +1249,26 @@ def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     attr = getattr(adata, axis_name)
     if isinstance(attr, Dataset2D):
         return attr.true_index
-    else:
-        return attr.index
+    return axis_index(attr, index_name=f"{axis_name}_names")
+
+
+def _common_native_backend(frames: Sequence[DataFrameLike]):
+    """Return a shared native backend when concat can preserve index-less representation."""
+    if not frames or any(isinstance(frame, IndexedDataFrameLike) for frame in frames):
+        return None
+    implementations = {nw.from_native(frame).implementation for frame in frames}
+    return implementations.pop() if len(implementations) == 1 else None
+
+
+def _frame_to_pandas(frame: DataFrameLike, *, index_name: str | None) -> pd.DataFrame:
+    """Normalize an eager frame for pandas-based concat/merge algorithms."""
+    return to_backend(frame, "pandas", index_name=index_name)
+
+
+def _concat_frame_columns(frame: DataFrameLike) -> pd.Index:
+    return pd.Index(
+        frame_annotation_columns(frame, index_name=column_backed_axis_name(frame))
+    )
 
 
 def make_dask_col_from_extension_dtype(
@@ -1710,14 +1761,18 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     ]
 
     # Annotation for concatenation axis
-    check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
     annotations = [getattr(a, axis_name) for a in adatas]
-    are_any_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in annotations
+    check_combinable_cols(
+        [
+            frame_annotation_columns(a, index_name=f"{axis_name}_names")
+            for a in annotations
+        ],
+        join=join,
     )
-    if are_any_annotations_dataframes:
+    concat_backend = _common_native_backend(annotations)
+    if not all(isinstance(a, Dataset2D) for a in annotations):
         annotations_in_memory = (
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
+            _frame_to_pandas(a, index_name=f"{axis_name}_names") for a in annotations
         )
         concat_annot = pd.concat(
             unify_dtypes(annotations_in_memory),
@@ -1734,17 +1789,24 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         )
     if label is not None:
         concat_annot[label] = label_col
+    if concat_backend is not None:
+        concat_annot = to_backend(
+            concat_annot, concat_backend, index_name=f"{axis_name}_names"
+        )
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
-    are_any_alt_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in alt_annotations
-    )
-    if are_any_alt_annotations_dataframes:
+    alt_backend = _common_native_backend(alt_annotations)
+    if not all(isinstance(a, Dataset2D) for a in alt_annotations):
         alt_annotations_in_memory = [
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
+            _frame_to_pandas(a, index_name=f"{alt_axis_name}_names")
+            for a in alt_annotations
         ]
         alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
+        if alt_backend is not None:
+            alt_annot = to_backend(
+                alt_annot, alt_backend, index_name=f"{alt_axis_name}_names"
+            )
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.

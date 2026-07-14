@@ -10,12 +10,14 @@ from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, pandas_as_str
 from ..utils import warn
-from ._dataframe_backend import DataFrameLike, try_from_backend
+from ._dataframe_backend import axis_index, set_axis_index, try_ensure_axis_frame
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import Any, Literal
+
+    from ._dataframe_backend import DataFrameLike
 
 
 def _gen_dataframe(
@@ -29,36 +31,36 @@ def _gen_dataframe(
     """Coerce ``anno`` to a stored ``obs``/``var`` frame (a :class:`DataFrameLike`).
 
     Accepts ``None``/mappings (built into a pandas frame), an :class:`xarray.Dataset` /
-    :class:`Dataset2D`, any :class:`DataFrameLike` (pandas / ``Dataset2D``), or any other
-    narwhals-native eager frame (polars / pyarrow / cuDF / ...), brought in via
-    :func:`~anndata._core._dataframe_backend.from_backend`.
+    :class:`Dataset2D`, or a Narwhals-native eager frame. Supported index-less frames such as
+    Polars and PyArrow remain native; mutable pandas-compatible foreign frames normalize to
+    pandas.
     """
     index_names = list(index_names)
-    if isinstance(anno, DataFrameLike):
-        pass
-    elif isinstance(anno, XDataset):
-        anno = Dataset2D(anno)
-    elif anno is None or isinstance(anno, Mapping):
-        anno = _dataframe_from_mapping(anno, index_names, length=length)
-    else:
-        # frames from another backend are ingested via their canonical index column
-        # (obs_names/var_names); the deprecated row_names/col_names alias the mapping path
-        # accepts is not honored here.
-        coerced = try_from_backend(anno, index_name=index_names[0])
-        if coerced is None:
-            msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
-            raise ValueError(msg)
-        anno = coerced
-    # The pandas MultiIndex restriction fires before the length check (preserving prior precedence).
+    if not isinstance(anno, pd.DataFrame | Dataset2D):
+        if isinstance(anno, XDataset):
+            anno = Dataset2D(anno)
+        elif anno is None or isinstance(anno, Mapping):
+            anno = _dataframe_from_mapping(anno, index_names, length=length)
+        else:
+            coerced = try_ensure_axis_frame(anno, index_name=index_names[0])
+            if coerced is None:
+                msg = f"Cannot convert {type(anno)} to {attr} DataFrame"
+                raise ValueError(msg)
+            anno = coerced
     if isinstance(anno, pd.DataFrame):
         _reject_pandas_multiindex(anno)
-    # Uniform validation. shape[0] is the row count; len() is the column count on a
-    # Mapping-based Dataset2D.
     if length is not None and length != anno.shape[0]:
         raise _mk_df_error(source, attr, length, anno.shape[0])
-    # pandas-specific index/column hygiene (Dataset2D manages its own index).
     if isinstance(anno, pd.DataFrame):
         anno = _coerce_pandas_df(anno)
+    elif not isinstance(anno, Dataset2D):
+        index_name = index_names[0]
+        index = axis_index(anno, index_name=index_name)
+        if (
+            settings.restrict_index_types and not is_string_dtype(index[~index.isna()])
+        ) or pd.api.types.is_integer_dtype(index):
+            warn("Transforming to str index.", ImplicitModificationWarning)
+            anno = set_axis_index(anno, pandas_as_str(index), index_name=index_name)
     return anno
 
 

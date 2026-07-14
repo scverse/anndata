@@ -6,7 +6,7 @@ from copy import copy
 from dataclasses import dataclass
 from itertools import chain
 from types import NoneType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -23,6 +23,13 @@ from ..utils import (
     warn,
     warn_once,
 )
+from ._dataframe_backend import (
+    DataFrameLike,
+    axis_index,
+    copy_frame,
+    set_axis_index,
+    to_backend,
+)
 from .access import ElementRef
 from .index import _subset
 from .storage import _non_2d_message, coerce_array
@@ -31,7 +38,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
-    from typing import ClassVar, Literal, Self
+    from typing import Any, ClassVar, Literal, Self
 
     from .anndata import AnnData
 
@@ -39,7 +46,7 @@ if TYPE_CHECKING:
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
+Value = DataFrameLike | CSMatrix | CSArray | np.ndarray
 
 
 class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
@@ -77,7 +84,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
             )
             warn_once(msg, ExperimentalFeatureWarning)
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
-            val = val.reshape((val.shape[0], 1))
+            val = cast("Any", val).reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
             val = Dataset2D(val)
         for i, axis in enumerate(self.axes):
@@ -123,7 +130,13 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     def copy(self) -> dict[K, Value]:
         # Shallow copy for awkward array since their buffers are immutable
         return {
-            k: copy(v) if isinstance(v, AwkArray | NoneType) else v.copy()
+            k: (
+                copy_frame(v)
+                if isinstance(v, DataFrameLike)
+                else copy(v)
+                if isinstance(v, AwkArray | NoneType)
+                else v.copy()
+            )
             for k, v in self.items()
         }
 
@@ -281,26 +294,30 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
             value = self[key]
+            if isinstance(value, DataFrameLike):
+                value = to_backend(
+                    value, "pandas", index_name=f"{self.dim}_names"
+                ).to_numpy()
             for icolumn, column in enumerate(value.T):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 
     def _validate_value(self, val: Value, key: str) -> Value:
-        if isinstance(val, pd.DataFrame):
+        if isinstance(val, DataFrameLike):
             raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
-            if not val.index.equals(self.dim_names):
-                # Could probably also re-order index if it’s contained
+            index_name = f"{self.dim}_names"
+            val_index = axis_index(val, index_name=index_name)
+            if not val_index.equals(self.dim_names):
                 try:
-                    pd.testing.assert_index_equal(val.index, self.dim_names)
+                    pd.testing.assert_index_equal(
+                        val_index, self.dim_names, exact=False, check_names=False
+                    )
                 except AssertionError as e:
                     msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
                     raise ValueError(msg) from None
-                else:
-                    msg = "Index.equals and pd.testing.assert_index_equal disagree"
-                    raise AssertionError(msg)
-            val.index.name = (
-                self.dim_names.name
-            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
+            val = set_axis_index(val, self.dim_names, index_name=index_name)
+            if self._allow_df:
+                return val
         return super()._validate_value(val, key)
 
     @property

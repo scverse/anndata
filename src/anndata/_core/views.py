@@ -26,6 +26,7 @@ from ..compat import (
     has_xp_base,
 )
 from ..utils import warn
+from ._dataframe_backend import DataFrameLike
 from .access import ElementRef
 from .xarray import Dataset2D
 
@@ -378,6 +379,11 @@ def as_view_cupy_csc(mtx, view_args):
 
 @as_view.register(Dataset2D)
 def _(a: Dataset2D, view_args):
+    return a
+
+
+@as_view.register(DataFrameLike)
+def _(a: DataFrameLike, view_args):
     return a
 
 
