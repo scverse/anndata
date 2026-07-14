@@ -325,7 +325,11 @@ def test_indexless_frame_helpers(backend):
     assert frame_equal(frame, copy_frame(frame))
     assert not frame_equal(frame, make_native_frame(backend, {"value": [1, 2]}))
     assert not frame_equal(frame, object())
-    converted = to_backend(frame, "pyarrow" if backend == "polars" else "polars")
+    converted = to_backend(
+        frame,
+        "pyarrow" if backend == "polars" else "pandas",
+        index_name="obs_names",
+    )
     assert axis_index(converted, index_name="obs_names").tolist() == ["a", "b"]
 
     relabeled = relabel_axis_identity(

@@ -25,6 +25,7 @@ from ..utils import (
 )
 from ._dataframe_backend import (
     DataFrameLike,
+    IndexedDataFrameLike,
     axis_index,
     copy_frame,
     set_axis_index,
@@ -315,7 +316,9 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
                 except AssertionError as e:
                     msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
                     raise ValueError(msg) from None
-            val = set_axis_index(val, self.dim_names, index_name=index_name)
+                val = set_axis_index(val, self.dim_names, index_name=index_name)
+            elif isinstance(val, IndexedDataFrameLike):
+                val.index.name = self.dim_names.name
             if self._allow_df:
                 return val
         return super()._validate_value(val, key)
