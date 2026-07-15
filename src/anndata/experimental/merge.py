@@ -18,12 +18,16 @@ from .._core.merge import (
     _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
+    gen_outer_reindexers,
     gen_reindexer,
     intersect_keys,
     merge_dataframes,
     merge_indices,
+    missing_element,
+    not_missing,
     resolve_merge_strategy,
     unify_dtypes,
+    union_keys,
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
@@ -259,37 +263,97 @@ def write_concat_sparse(  # noqa: PLR0917
         del temp_elem
 
 
+def _concat_missing_mapping_key(
+    elems: Sequence[Any],
+    ns: Sequence[int],
+    reindexers: list[Reindexer] | None,
+    *,
+    axis: Literal[0, 1] = 0,
+    index: pd.Index | None = None,
+    fill_value: Any = None,
+):
+    """Concatenate a single mapping key that is absent from some objects (outer join).
+
+    Present elements are read into memory and objects missing the key contribute a
+    ``fill_value`` block, matching :func:`~anndata._core.merge.outer_concat_aligned_mapping`.
+    """
+    if reindexers is None:
+        reindexers = gen_outer_reindexers(elems, ns, new_index=index, axis=axis)
+    arrays = [
+        (elem if isinstance(elem, pd.DataFrame) else to_memory(elem))
+        if not_missing(elem)
+        else missing_element(n, els=elems, axis=axis, fill_value=fill_value)
+        for elem, n in zip(elems, ns, strict=True)
+    ]
+    return concat_arrays(
+        arrays, reindexers, axis=axis, index=index, fill_value=fill_value
+    )
+
+
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings: Collection[dict],
     output_group: ZarrGroup | H5Group,
-    keys: Collection[str],
     output_path: str | Path,
     max_loaded_elems: int,
+    ns: Sequence[int],
     axis: Literal[0, 1] = 0,
     index: pd.Index = None,
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
+    join: Join_T = "inner",
 ):
     """
-    Write a list of mappings to a zarr/h5 group.
+    Write a list of mappings (e.g. ``.obsm``/``.varm`` or ``.layers``) to a zarr/h5 group.
+
+    Mirrors the in-memory :func:`~anndata._core.merge.inner_concat_aligned_mapping` /
+    :func:`~anndata._core.merge.outer_concat_aligned_mapping`: for ``join="inner"`` the
+    intersection of keys is kept, while for ``join="outer"`` the union is kept and keys
+    missing from some objects are filled with ``fill_value`` (``ns`` gives the size of each
+    object along the concatenation axis, used to build the fill).
     """
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",
         "encoding-version": "0.1.0",
     })
+    keys = union_keys(mappings) if join == "outer" else intersect_keys(mappings)
     for k in keys:
-        elems = [m[k] for m in mappings]
-        _write_concat_sequence(
-            elems,
-            output_group=mapping_group,
-            output_path=k,
-            axis=axis,
-            index=index,
-            reindexers=reindexers,
-            fill_value=fill_value,
-            max_loaded_elems=max_loaded_elems,
+        elems = [m.get(k, MissingVal) for m in mappings]
+        if reindexers is not None:
+            cur_reindexers = reindexers
+        elif join == "outer":
+            cur_reindexers = gen_outer_reindexers(elems, ns, new_index=index, axis=axis)
+        else:
+            cur_reindexers = gen_inner_reindexers(elems, new_index=index, axis=axis)
+        # Under an outer join a key can be absent from some objects or need padding along its
+        # free axis; both require `fill_value` (and possibly integer->float promotion). Those
+        # keys are materialized and concatenated through the same `concat_arrays` path as the
+        # in-memory `outer_concat_aligned_mapping`, keeping the result identical to
+        # `anndata.concat`. Keys present in every object that need no reindexing keep the
+        # memory-efficient streaming path.
+        needs_fill = not all(not_missing(elem) for elem in elems) or not all(
+            getattr(r, "no_change", False) for r in cur_reindexers
         )
+        if join == "outer" and needs_fill:
+            write_elem(
+                mapping_group,
+                k,
+                _concat_missing_mapping_key(
+                    elems, ns, reindexers, axis=axis, index=index, fill_value=fill_value
+                ),
+            )
+        else:
+            _write_concat_sequence(
+                elems,
+                output_group=mapping_group,
+                output_path=k,
+                axis=axis,
+                index=index,
+                reindexers=cur_reindexers,
+                fill_value=fill_value,
+                max_loaded_elems=max_loaded_elems,
+                join=join,
+            )
 
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
@@ -742,14 +806,16 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         max_loaded_elems=max_loaded_elems,
     )
 
-    # Write Layers and {axis_name}m
+    # Number of elements each object contributes along the concatenation axis,
+    # used to build fills for keys missing from some objects under an outer join.
+    ns = [x.shape[axis] for x in Xs]
+
+    # Write Layers and {axis_name}m.
+    # `.{axis_name}m` reindexes along its own free (feature) axis, so reindexers are
+    # generated per-key (``None``); `.layers` shares the alt-axis with `X`, so it reuses
+    # the same reindexers as `X`.
     mapping_names = [
-        (
-            f"{axis_name}m",
-            concat_indices,
-            0,
-            None if use_reindexing else [IdentityReindexer()] * len(groups),
-        ),
+        (f"{axis_name}m", concat_indices, 0, None),
         ("layers", None, axis, reindexers),
     ]
     for m, m_index, m_axis, m_reindexers in mapping_names:
@@ -757,11 +823,12 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         _write_concat_mappings(
             maps,
             output_group,
-            intersect_keys(maps),
             m,
             max_loaded_elems=max_loaded_elems,
+            ns=ns,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,
             fill_value=fill_value,
+            join=join,
         )

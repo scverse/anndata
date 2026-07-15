@@ -254,6 +254,37 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
+def test_concat_on_disk_outer_mapping_missing_keys(xxxm_adatas, tmp_path, file_format):
+    """`.obsm` keys absent from some objects are retained (and filled) under an outer join.
+
+    Regression test for https://github.com/scverse/anndata/issues/2394: the fixture's
+    ``obsm["sparse"]`` is missing from the second object and the shared keys have differing
+    widths, so this exercises union-of-keys and outer reindexing on the concatenation-axis
+    mapping (the path :func:`test_concatenate_xxxm` sidesteps by transposing).
+    """
+    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join="outer")
+
+
+def test_concat_on_disk_outer_layers_missing_keys(tmp_path, file_format):
+    """`.layers` keys absent from some objects are retained (and filled) under an outer join.
+
+    Regression test for https://github.com/scverse/anndata/issues/2394; ``var`` differs
+    between objects so the mapping is reindexed along the alternate axis as well.
+    """
+    a = AnnData(
+        np.ones((3, 3)),
+        obs=pd.DataFrame(index=[f"a{i}" for i in range(3)]),
+        var=pd.DataFrame(index=["g1", "g2", "g3"]),
+        layers={"counts": np.arange(9).reshape(3, 3).astype(float)},
+    )
+    b = AnnData(
+        np.ones((2, 3)),
+        obs=pd.DataFrame(index=[f"b{i}" for i in range(2)]),
+        var=pd.DataFrame(index=["g2", "g3", "g4"]),
+    )
+    assert_eq_concat_on_disk([a, b], tmp_path, file_format, join="outer")
+
+
 def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
     import zarr
 
