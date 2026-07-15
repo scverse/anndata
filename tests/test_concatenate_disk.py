@@ -254,15 +254,38 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
-def test_concat_on_disk_outer_mapping_missing_keys(xxxm_adatas, tmp_path, file_format):
+def test_concat_on_disk_outer_mapping_missing_keys(tmp_path, file_format):
     """`.obsm` keys absent from some objects are retained (and filled) under an outer join.
 
-    Regression test for https://github.com/scverse/anndata/issues/2394: the fixture's
-    ``obsm["sparse"]`` is missing from the second object and the shared keys have differing
-    widths, so this exercises union-of-keys and outer reindexing on the concatenation-axis
-    mapping (the path :func:`test_concatenate_xxxm` sidesteps by transposing).
+    Regression test for https://github.com/scverse/anndata/issues/2394. ``dense`` is present
+    in every object but with differing widths (outer reindexing), while ``sparse`` and the
+    dataframe ``df`` are missing from the middle object (union-of-keys + fill) -- the
+    concatenation-axis mapping path that :func:`test_concatenate_xxxm` sidesteps by
+    transposing. Values are numeric so the filled result is writable across supported
+    ``h5py``/``zarr`` versions.
     """
-    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join="outer")
+
+    def make(i, n, dense_w, sparse_w, *, with_df):
+        idx = [f"{i}-cell{j}" for j in range(n)]
+        obsm = {"dense": np.arange(n * dense_w).reshape(n, dense_w).astype(float)}
+        if sparse_w is not None:
+            obsm["sparse"] = sparse.csr_matrix(
+                np.arange(n * sparse_w).reshape(n, sparse_w).astype(float)
+            )
+        if with_df:
+            obsm["df"] = pd.DataFrame({"s": np.arange(n, dtype=float)}, index=idx)
+        return AnnData(
+            sparse.csr_matrix((n, 5)),
+            obs=pd.DataFrame(index=idx),
+            obsm=obsm,
+        )
+
+    adatas = [
+        make(0, 3, 2, 2, with_df=True),
+        make(1, 4, 3, None, with_df=False),
+        make(2, 2, 2, 4, with_df=True),
+    ]
+    assert_eq_concat_on_disk(adatas, tmp_path, file_format, join="outer")
 
 
 def test_concat_on_disk_outer_layers_missing_keys(tmp_path, file_format):
