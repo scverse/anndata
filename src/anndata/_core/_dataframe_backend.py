@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 import narwhals as nw
 import pandas as pd
-from narwhals._utils import Implementation
 
 if TYPE_CHECKING:
     from typing import Any, Self
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
     from .xarray import Dataset2D
 
 
-@runtime_checkable
 class DataFrameLikeIlocIndexer(Protocol):
     """Positional indexer, as in ``df.iloc[...]``."""
 
@@ -78,7 +76,7 @@ class Dataset2DNamespace:
     ``context``, so this namespace doubles as that context.
     """
 
-    _implementation: Implementation = Implementation.PANDAS
+    _implementation: nw.Implementation = nw.Implementation.PANDAS
 
     def __init__(self, *, version: Version) -> None:
         self._version = version
@@ -97,7 +95,7 @@ def __narwhals_namespace__(version: Version) -> Dataset2DNamespace:
 _INDEX_PLACEHOLDER = re.compile(r"__index_level_\d+__")
 
 _KNOWN_BACKENDS = ("pandas", "polars", "pyarrow", "modin", "cudf")
-_EAGER_BACKENDS = frozenset(Implementation.from_backend(b) for b in _KNOWN_BACKENDS)
+_EAGER_BACKENDS = frozenset(nw.Implementation.from_backend(b) for b in _KNOWN_BACKENDS)
 _CANONICAL_AXIS_NAMES = ("obs_names", "var_names")
 
 
@@ -113,13 +111,13 @@ def to_backend(
     :class:`narwhals.Implementation`. When the index is unnamed it rides along as an ``index_name``
     column (non-pandas backends only).
     """
-    impl = Implementation.from_backend(backend)
+    impl = nw.Implementation.from_backend(backend)
     if impl not in _EAGER_BACKENDS:
         msg = f"Unsupported DataFrame backend {backend!r}; expected one of {_KNOWN_BACKENDS}."
         raise ValueError(msg)
 
     nwf = nw.from_native(frame)
-    if impl is Implementation.PANDAS:
+    if impl is nw.Implementation.PANDAS:
         df = nwf.to_pandas()
         if (
             not isinstance(frame, IndexedDataFrameLike)
@@ -175,8 +173,7 @@ def try_from_backend(
     cuDF, ...) becomes a pandas ``DataFrameLike``; a Series, ndarray, mapping, etc. returns
     ``None`` so the caller can handle it.
     """
-    wrapped = nw.from_native(frame, pass_through=True)
-    if wrapped is frame or not isinstance(wrapped, nw.DataFrame):
+    if _try_from_native(frame) is None:
         return None
     return from_backend(frame, index_name=index_name)
 
@@ -187,8 +184,8 @@ def try_ensure_axis_frame(frame: Any, *, index_name: str) -> DataFrameLike | Non
 
     if isinstance(frame, pd.DataFrame | Dataset2D):
         return frame
-    wrapped = nw.from_native(frame, pass_through=True)
-    if wrapped is frame or not isinstance(wrapped, nw.DataFrame):
+    wrapped = _try_from_native(frame)
+    if wrapped is None:
         return None
     if isinstance(frame, IndexedDataFrameLike):
         return from_backend(frame, index_name=index_name)
@@ -260,8 +257,8 @@ def frame_equal(left: DataFrameLike, right: object) -> bool:
     """Compare native frames while preserving like-representation semantics for indexed frames."""
     if isinstance(left, IndexedDataFrameLike):
         return left.equals(right)
-    wrapped_right = nw.from_native(right, pass_through=True)
-    if wrapped_right is right or not isinstance(wrapped_right, nw.DataFrame):
+    wrapped_right = _try_from_native(right)
+    if wrapped_right is None:
         return False
     return _from_native(left).to_arrow().equals(wrapped_right.to_arrow())
 
@@ -277,7 +274,7 @@ def frame_annotation_columns(
 ) -> list[str]:
     """Return logical annotation columns, excluding column-backed axis identity."""
     columns = (
-        list(frame.columns)
+        frame.columns
         if isinstance(frame, IndexedDataFrameLike)
         else _from_native(frame).columns
     )
@@ -288,7 +285,7 @@ def column_backed_axis_name(frame: DataFrameLike) -> str | None:
     """Return a canonical identity field when ``frame`` represents identity as a column."""
     if isinstance(frame, IndexedDataFrameLike):
         return None
-    columns = frame_annotation_columns(frame)
+    columns = _from_native(frame).columns
     return next((name for name in _CANONICAL_AXIS_NAMES if name in columns), None)
 
 
@@ -306,3 +303,10 @@ def _name_index_column(table, *, source_name: str | None, index_name: str):
 
 def _from_native(frame: DataFrameLike) -> nw.DataFrame[Any]:
     return cast("nw.DataFrame[Any]", nw.from_native(cast("Any", frame)))
+
+
+def _try_from_native(frame: Any) -> nw.DataFrame[Any] | None:
+    wrapped = nw.from_native(frame, pass_through=True)
+    return (
+        wrapped if wrapped is not frame and isinstance(wrapped, nw.DataFrame) else None
+    )
