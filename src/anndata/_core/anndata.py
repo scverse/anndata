@@ -795,7 +795,7 @@ class AnnData:  # noqa: PLW1641
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
         self._set_dim_index(value_idx, attr)
-        if isinstance(value, pd.DataFrame) and not len(value.columns):
+        if isinstance(value, pd.DataFrame | Dataset2D) and not len(value.columns):
             value.columns = value.columns.astype(str)
 
     def _prep_dim_index(self, value, attr: str) -> pd.Index:
