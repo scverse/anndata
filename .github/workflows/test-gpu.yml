@@ -13,6 +13,8 @@ env:
   PYTEST_ADDOPTS: "-v --color=yes"
   FORCE_COLOR: "1"
 
+permissions: {}
+
 # Cancel the job if new commits are pushed
 # https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
@@ -30,10 +32,19 @@ jobs:
     name: "Triage: Check if GPU tests are allowed to run"
     if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - uses: flying-sheep/check@v1
+      - uses: flying-sheep/check@e10bb11109d1434ab16729bd988d78d65d47e163 # v1.0.5
         with:
           success: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-gpu-ci') }}
+
+      - name: Remove 'run-gpu-ci' Label
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr -R "$GITHUB_REPOSITORY" edit ${{ github.event.pull_request.number }} --remove-label run-gpu-ci
+
   # If `check` wasn’t skipped or failed, start an AWS runner and run the GPU tests on it.
   test:
     name: GPU Tests
@@ -42,18 +53,20 @@ jobs:
     # Setting a timeout of 30 minutes, as the AWS costs money
     # At time of writing, a typical run takes about 5 minutes
     timeout-minutes: 30
+    permissions: {}
 
     steps:
-      - uses: actions/checkout@v4 # TODO: upgrade once cirun image supports node 24
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Nvidia SMI sanity check
         run: nvidia-smi
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v6 # TODO: upgrade once cirun image supports node 24
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
 
@@ -69,7 +82,7 @@ jobs:
       - name: Install AnnData
         run: |
           uv venv
-          uv pip install -e ".[cu12]" --group=test --group=test-jax -c ci/constraints.txt
+          uv pip install -e ".[cu13]" --group=test --group=test-jax -c ci/constraints.txt
 
       - name: Env list
         run: uv pip list
@@ -80,15 +93,8 @@ jobs:
           uv run coverage combine
           uv run coverage xml
 
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           files: test-data/coverage.xml
-
-      - name: Remove 'run-gpu-ci' Label
-        if: always()
-        uses: actions-ecosystem/action-remove-labels@v1
-        with:
-          labels: "run-gpu-ci"
-          github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -9,7 +9,7 @@ from scipy import sparse
 from anndata.compat import CSArray, CSMatrix
 
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset, has_xp
+from ..compat import XDataset, has_xp_base
 from ..utils import (
     ensure_df_homogeneous,
     get_union_members,
@@ -21,6 +21,50 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from .anndata import AnnData
+
+
+def _non_2d_message(value: Any, *, name: str) -> str | None:
+    """Return a spec-violation message for higher-than-2D ``X``/``layers`` values.
+
+    AnnData's on-disk specification requires ``X`` and every entry of
+    ``layers`` to be two-dimensional. Returns ``None`` for conforming values
+    (no ``shape`` attribute, ``None``, or ``ndim <= 2``).
+    """
+    if value is None:
+        return None
+    shape = getattr(value, "shape", None)
+    if shape is None:
+        return None
+    ndim = len(shape)
+    if ndim <= 2:
+        return None
+    return (
+        f"{name} must be 2-dimensional, but got an array with shape "
+        f"{tuple(shape)} (ndim={ndim}). Storing higher-dimensional arrays "
+        f"in `X` or `layers` violates the AnnData specification, and cannot be written to disk."
+    )
+
+
+def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
+    """Reject writing AnnData objects whose ``X`` or ``layers`` are not 2D.
+
+    AnnData's spec requires ``X`` and ``layers`` entries on disk to be
+    2-dimensional. In-memory we do not block higher-dimensional values, but
+    a 3D+ array would propagate the spec violation onto disk, so we hard-fail
+    at the IO boundary.
+    """
+    if (X := adata.layers.get(None)) is not None:
+        msg = _non_2d_message(X, name="X")
+        if msg is not None:
+            raise ValueError(msg)
+    for key, value in adata.layers.items():
+        if key is None:
+            continue
+        msg = _non_2d_message(value, name=f"Layer {key!r}")
+        if msg is not None:
+            raise ValueError(msg)
 
 
 def coerce_array(
@@ -46,7 +90,7 @@ def coerce_array(
             warn(msg, ImplicitModificationWarning)
             value = value.A
         return value
-    if has_xp(value):
+    if has_xp_base(value):
         return value
     is_non_csc_r_array_or_matrix = (
         (isinstance(value, base) and not isinstance(value, csr_c_format))

@@ -35,9 +35,11 @@ For these purposes, they are
 
     or to extract the referenced vector:
 
-    >>> ref = A.obs["louvain"]
-    >>> adata[ref].categories[:2]  # doctest: +ELLIPSIS
+    >>> adata[A.obs["louvain"]].categories[:2]  # doctest: +ELLIPSIS
     Index(['CD4 T cells', 'CD14+ Monocytes'], dtype=...)
+    >>> adata[A.varm["PCs"]] # doctest: +ELLIPSIS
+    array([[...
+          ...]],... dtype=float32)
 
 #.  introspectible:
 
@@ -165,6 +167,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         :toctree: generated/
 
         Idx2D
+        NO_IDX
 
 ..  toctree::
     :hidden:
@@ -174,6 +177,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.MultiAcc
     generated/anndata.acc.GraphAcc
     generated/anndata.acc.Idx2D
+    generated/anndata.acc.NO_IDX
 
 .. _extending accessors:
 
@@ -182,7 +186,7 @@ Extending accessors
 
 There are three layers of extensibility:
 
-#.  subclassing :class:`RefAcc` and creating a new :class:`AdRef` instance for creating them:
+#.  subclassing :class:`AdRef` and creating a new :class:`AdAcc` instance for creating them:
 
     ..  code-block:: python
 
@@ -200,7 +204,6 @@ There are three layers of extensibility:
 
         adata = sc.datasets.pbmc3k_processed()
         plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
-
 
 #.  subclass one or more of the :term:`reference accessor`\ s, and create a new :class:`AdAcc` instance:
 
@@ -220,6 +223,9 @@ There are three layers of extensibility:
     >>> A = AdAcc(ref_class=TwoDRef, meta_cls=MyMetaAcc)
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
+
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+
 
 #.  subclass :class:`AdAcc` to add new accessors:
 

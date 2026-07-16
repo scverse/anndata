@@ -172,3 +172,31 @@ def test_fail_on_non_csr_csc_matrix():
         match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)
+
+
+class _ArrayApiNoDLPack:
+    def __init__(self, arr: np.ndarray):
+        self._arr = arr
+        self.shape = arr.shape
+        self.size = arr.size
+        self.device = "cpu"
+
+    def __array_namespace__(self, *, api_version=None):
+        return np
+
+    def to_device(self, device, /, *, stream=None):
+        return self
+
+    def __getitem__(self, k):
+        return _ArrayApiNoDLPack(self._arr[k])
+
+
+def test_store_array_api_without_dlpack():
+    X = _ArrayApiNoDLPack(np.arange(6.0).reshape(2, 3))
+    adata = ad.AnnData(X)
+    assert adata.X is X
+    assert adata.shape == (2, 3)
+
+    # also usable as a layer, and survives subsetting
+    adata.layers["copy"] = _ArrayApiNoDLPack(np.zeros((2, 3)))
+    assert isinstance(adata[0:1].X, _ArrayApiNoDLPack)

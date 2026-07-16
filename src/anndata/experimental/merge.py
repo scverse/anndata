@@ -507,7 +507,7 @@ def concat_on_disk(  # noqa: PLR0913
         Which axis to concatenate along.
     join
         How to align values when concatenating. If `"outer"`, the union of the other axis
-        is taken. If `"inner"`, the intersection. See :doc:`concatenation <../concatenation>`
+        is taken. If `"inner"`, the intersection. See :doc:`concatenation <../tutorials/concatenation>`
         for more.
     merge
         How elements not aligned to the axis being concatenated along are selected.

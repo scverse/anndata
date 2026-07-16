@@ -39,9 +39,9 @@ from anndata.compat import (
     XDataset,
     ZarrArray,
     ZarrGroup,
-    has_xp,
+    has_xp_base,
 )
-from anndata.types import SupportsArrayApi
+from anndata.types import SupportsArrayApiBase
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -369,7 +369,7 @@ def gen_adata(  # noqa: PLR0913
         xp = np
     else:
         X = X_type(random_state.binomial(100, 0.005, (M, N)).astype("float32"))
-        xp = X.__array_namespace__() if has_xp(X) else np
+        xp = X.__array_namespace__() if has_xp_base(X) else np
 
     # TODO: make it fully backend native as for now using numpy's random generator
     obsm = dict(
@@ -622,9 +622,13 @@ def assert_equal(
     _assert_equal(a, b, exact=exact, _elem_name=elem_name)
 
 
-@assert_equal.register(SupportsArrayApi)
+@assert_equal.register(SupportsArrayApiBase)
 def assert_equal_array_api(
-    a: SupportsArrayApi, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: SupportsArrayApiBase,
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ) -> None:
     if not np.isscalar(a):
         xp = a.__array_namespace__()
@@ -880,10 +884,10 @@ def assert_adata_equal(
         idx = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False
-        if not np.all(a.obs_names == b.obs_names):
+        if not (a.obs_names == b.obs_names).all():
             idx[0] = a.obs_names
             change_flag = True
-        if not np.all(a.var_names == b.var_names):
+        if not (a.var_names == b.var_names).all():
             idx[1] = a.var_names
             change_flag = True
         if change_flag:

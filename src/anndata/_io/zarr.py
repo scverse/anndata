@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
+    from .._types import _GroupStorageType
+
 
 @contextmanager
 def zarrs_context():
@@ -53,6 +55,7 @@ def write_zarr(
     *,
     chunks: tuple[int, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
+    consolidate_metadata: bool = True,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -79,7 +82,17 @@ def write_zarr(
         f.attrs.setdefault("encoding-version", "0.1.0")
 
         write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
-        zarr.consolidate_metadata(f.store)
+        if consolidate_metadata:
+            with warnings.catch_warnings():
+                # Consolidated metadata will soon be a zarr convention/spec and should be safe to write.
+                # There is no sense in spamming our users about this.
+                # See https://github.com/zarr-developers/zarr-specs/pull/373
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*[Cc]onsolidated metadata.*",
+                    category=UserWarning,
+                )
+                zarr.consolidate_metadata(f.store)
 
 
 def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
@@ -175,8 +188,10 @@ def open_write_group(
     return zarr.open_group(store, mode=mode, **kwargs)
 
 
-def is_group_consolidated(group: zarr.Group) -> bool:
+def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:
     if not isinstance(group, zarr.Group):
-        msg = f"Expected zarr.Group, got {type(group)}"
-        raise TypeError(msg)
+        if strict:
+            msg = f"Expected zarr.Group, got {type(group)}"
+            raise TypeError(msg)
+        return False
     return group.metadata.consolidated_metadata is not None

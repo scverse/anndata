@@ -25,7 +25,7 @@ from ..utils import (
 )
 from .access import ElementRef
 from .index import _subset
-from .storage import coerce_array
+from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
@@ -214,13 +214,15 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     _data: MutableMapping[K, Value]
     """Underlying mapping to the data"""
 
-    def __init__(self, parent: AnnData, *, store: MutableMapping[K, Value]):
+    def __init__(
+        self, parent: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+    ):
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
             if v is None:
                 continue
-            self._data[k] = self._validate_value(v, k)
+            self._data[k] = self._validate_value(v, k) if validate else v
 
     def __getitem__(self, key: K) -> Value:
         return self._data[key]
@@ -313,11 +315,12 @@ class AxisArrays(AlignedActual[OneDIdx, str], AxisArraysBase):
         *,
         axis: Literal[0, 1],
         store: MutableMapping[str, Value] | AxisArraysBase,
+        validate: bool = True,
     ):
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        super().__init__(parent, store=store)
+        super().__init__(parent, store=store, validate=validate)
 
 
 class AxisArraysView(AlignedView[AxisArraysBase, OneDIdx, str], AxisArraysBase):
@@ -343,10 +346,53 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
     def __bool__(self) -> bool:
         return not self.keys() <= {None}
 
+    def clear(self, *, keep_x: bool | None = None) -> None:
+        """Remove all layers.
+
+        Parameters
+        ----------
+        keep_x
+            Whether to keep `.X` (stored under the `None` key).
+            The default (`None`) keeps ``.X`` and warns that a future
+            release may drop it by default - use this parameter explicitly to silence the warning.
+        """
+        if keep_x is None:
+            warn(
+                "`.layers.clear()` currently keeps `.X` (stored under the "
+                "`None` key), but a future release may drop it. Pass "
+                "`keep_x=True` to keep `.X` or `keep_x=False` to drop it "
+                "and silence this warning.",
+                FutureWarning,
+            )
+            keep_x = True
+        for key in [k for k in self if not (keep_x and k is None)]:
+            del self[key]
+
+    def _validate_value(self, val: Value, key: str | None) -> Value:
+        """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
+
+        Called from the explicit write paths (``__setitem__`` and the
+        :class:`AlignedMappingProperty` full-reassign hook) only; we do
+        *not* warn from :meth:`_validate_value` because that runs on
+        every property access via :meth:`AlignedActual.__init__`.
+
+        The ``key=None`` slot mirrors ``AnnData.X`` and is reported by
+        the ``X`` setter itself (with the better name "X").
+        """
+        if key is not None and (msg := _non_2d_message(val, name=f"Layer {key!r}")):
+            warn(msg, UserWarning)
+        return super()._validate_value(val, key)
+
 
 class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
-    def __init__(self, parent: AnnData, *, store: MutableMapping[str | None, Value]):
-        super().__init__(parent, store=store)
+    def __init__(
+        self,
+        parent: AnnData,
+        *,
+        store: MutableMapping[str | None, Value],
+        validate: bool = True,
+    ):
+        super().__init__(parent, store=store, validate=validate)
         self.isbacked = None not in self._data and self.parent.filename is not None
 
     def __getitem__(self, key: str | None) -> Value:
@@ -424,11 +470,12 @@ class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
         *,
         axis: Literal[0, 1],
         store: MutableMapping[str, Value],
+        validate: bool = True,
     ):
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
-        super().__init__(parent, store=store)
+        super().__init__(parent, store=store, validate=validate)
 
 
 class PairwiseArraysView(
@@ -466,10 +513,12 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     name: str | None = None
     """Name of the attribute in the parent object."""
 
-    def construct(self, obj: AnnData, *, store: MutableMapping[K, Value]) -> T:
+    def construct(
+        self, obj: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+    ) -> T:
         if self.axis is None:
-            return self.cls(obj, store=store)
-        return self.cls(obj, axis=self.axis, store=store)
+            return self.cls(obj, store=store, validate=validate)
+        return self.cls(obj, axis=self.axis, store=store, validate=validate)
 
     @property
     def fget(self) -> Callable[[], None]:
@@ -489,7 +538,10 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
             # this needs to return a `property` instance, e.g. for Sphinx
             return self  # type: ignore
         if not obj.is_view:
-            return self.construct(obj, store=getattr(obj, f"_{self.name}"))
+            # all stores are created through `.__set__`, so no need to double-validate.
+            return self.construct(
+                obj, store=getattr(obj, f"_{self.name}"), validate=False
+            )
         parent_anndata = obj._adata_ref
         idxs = (obj._oidx, obj._vidx)
         parent: AlignedMapping = getattr(parent_anndata, self.name)
@@ -499,11 +551,39 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         self, obj: AnnData, value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None
     ) -> None:
         value = convert_to_dict(value)
-        _ = self.construct(obj, store=value)  # Validate
+        _ = self.construct(obj, store=value)  # Validate and convert arrays in `value`
         if obj.is_view:
             obj._init_as_actual(obj.copy())
+        prev = getattr(obj, f"_{self.name}", None)
+        if issubclass(self.cls, LayersBase):
+            if None in value:
+                if value[None] is None:
+                    value = {k: v for k, v in value.items() if k is not None}
+            elif prev is not None and (x := prev.get(None)) is not None:
+                warn(
+                    "Assigning to `.layers` without a `None` key currently "
+                    "preserves `.X` (stored under the `None` key), but a "
+                    "future release may drop it. Include `.X` explicitly as "
+                    "`{None: adata.X, ...}` to keep it, or `{None: None, ...}` "
+                    "to drop it and silence this warning.",
+                    FutureWarning,
+                )
+                value = {**value, None: x}
         setattr(obj, f"_{self.name}", value)
 
     def __delete__(self, obj: AnnData) -> None:
-        new = {None: x} if (x := getattr(obj, self.name).get(None)) is not None else {}
-        setattr(obj, self.name, new)
+        if issubclass(self.cls, LayersBase) and (
+            (x := getattr(obj, self.name).get(None)) is not None
+        ):
+            warn(
+                "`del adata.layers` currently keeps `.X` (stored under the "
+                "`None` key), but a future release may drop it. Use "
+                "`adata.layers.clear(keep_x=True)` to keep `.X` or "
+                "`adata.layers.clear(keep_x=False)` to drop it and silence "
+                "this warning.",
+                FutureWarning,
+            )
+            # Reassign with `.X` prevents another, less-helpful warning
+            setattr(obj, self.name, {None: x})
+            return
+        setattr(obj, self.name, {})

@@ -5,6 +5,7 @@ Code for merging/ concatenating AnnData objects.
 from __future__ import annotations
 
 import uuid
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
 from functools import partial, reduce, singledispatch
@@ -29,7 +30,7 @@ from ..compat import (
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
-    has_xp,
+    has_xp_base,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionDtype
 
     from ..compat import XDataArray
-    from ..types import SupportsArrayApi
+    from ..types import SupportsArrayApiBase
 
 
 ###################
@@ -570,7 +571,7 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
-        elif has_xp(el):
+        elif has_xp_base(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
         else:  # pragma: no cover
             msg = "Cannot reindex element of unsupported type."
@@ -652,8 +653,8 @@ class Reindexer:
         return out
 
     def _apply_to_array_api(
-        self, el: SupportsArrayApi, *, axis: int, fill_value=None
-    ) -> SupportsArrayApi:
+        self, el: SupportsArrayApiBase, *, axis: int, fill_value=None
+    ) -> SupportsArrayApiBase:
         if fill_value is None:
             fill_value = default_fill_value([el])
         xp = el.__array_namespace__()
@@ -924,7 +925,7 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
 
-    elif all(has_xp(a) for a in arrays):
+    elif all(has_xp_base(a) for a in arrays):
         # All arrays are array-api compatible
 
         # use first as a reference to check if all of the arrays are the same type
@@ -1169,7 +1170,7 @@ def missing_element(
     non_numpy_array_apis = {
         a.__array_namespace__()
         for a in els
-        if has_xp(a) and not isinstance(a, np.ndarray)
+        if has_xp_base(a) and not isinstance(a, np.ndarray)
     }
     if len(non_numpy_array_apis) not in {0, 1}:
         msg = "Cannot generate missing elements when there are multiple array backends supported including at least one that is array api compatible."
@@ -1255,7 +1256,21 @@ def concat_pairwise_mapping(
         elif all(isinstance(el, DaskArray) for el in els):
             result[k] = _dask_block_diag(els)
         else:
-            result[k] = sparse.block_diag(els, format="csr")
+            # TODO: Remove the warning catch some time around scipy 1.2 (stated in the warning)
+            # https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html#existing-functions-that-need-careful-migration
+            with warnings.catch_warnings():
+                if any(isinstance(v, np.ndarray) for v in els):
+                    warnings.filterwarnings(
+                        "ignore",
+                        r"`block_diag` is switching to the sparse array interface.",
+                        DeprecationWarning,
+                    )
+
+                diag = sparse.block_diag(els, format="csr")
+            # TODO: Remove once we migrate internally to xxx_array
+            if isinstance(diag, CSArray):
+                diag = sparse.csr_matrix(diag)
+            result[k] = diag
     return result
 
 
@@ -1535,7 +1550,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
 ) -> AnnData:
     """Concatenates AnnData objects along an axis.
 
-    See the :doc:`concatenation <../concatenation>` section in the docs for a more in-depth description.
+    See the :doc:`concatenation <../tutorials/concatenation>` section in the docs for a more in-depth description.
 
     Params
     ------
@@ -1546,7 +1561,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         Which axis to concatenate along.
     join
         How to align values when concatenating. If "outer", the union of the other axis
-        is taken. If "inner", the intersection. See :doc:`concatenation <../concatenation>`
+        is taken. If "inner", the intersection. See :doc:`concatenation <../tutorials/concatenation>`
         for more.
     aligned_axis_key_join
         How to join keys on the *concatenation axis* itself: columns of `obs`/`var`,
@@ -1655,7 +1670,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> inner
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
-        layers: None
+        layers: None (.X)
     >>> (
     ...     inner.obs_names.astype("string"),
     ...     inner.var_names.astype("string"),
@@ -1666,7 +1681,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     >>> outer
     AnnData object with n_obs × n_vars = 4 × 3
         obs: 'group', 'measure'
-        layers: None
+        layers: None (.X)
     >>> outer.var_names.astype("string")
     Index(['var1', 'var2', 'var3'], dtype='string')
     >>> outer.to_df()  # Sparse arrays are padded with zeroes by default
@@ -1716,22 +1731,22 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="unique")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'zeros'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="first")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'ones', 'rand', 'zeros'
-        layers: None
+        layers: None (.X)
     >>> ad.concat([a, b], merge="only")
     AnnData object with n_obs × n_vars = 4 × 2
         obs: 'group'
         varm: 'zeros'
-        layers: None
+        layers: None (.X)
 
     The same merge strategies can be used for elements in `.uns`
 
