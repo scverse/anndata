@@ -87,7 +87,11 @@ class IndexManager:
             existing_xp = existing.__array_namespace__()
             if existing_xp is xp:
                 return existing
-            return xp.from_dlpack(existing)
+            try:
+                return xp.from_dlpack(existing)
+            except BufferError:
+                # numpy#20742: read-only arrays can’t be exported via DLPack
+                return xp.asarray(existing)
         self.add_array(xp.from_dlpack(src_arr, copy=True))
         return self._manager[device]
 
