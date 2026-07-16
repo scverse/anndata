@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, cast
 
 import pandas as pd
 import pytest
-import zarr
 from packaging.version import Version
 
 if TYPE_CHECKING:
@@ -49,14 +48,6 @@ def setup_env() -> None:
 @pytest.fixture(scope="session", autouse=True)
 def _anndata_session_env(request: pytest.FixtureRequest) -> None:
     setup_env()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def zarr_python_pipeline(request: pytest.FixtureRequest) -> None:
-    zarr.config.set({
-        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-        "codec_pipeline.max_workers": None,
-    })
 
 
 @pytest.fixture(autouse=True)
