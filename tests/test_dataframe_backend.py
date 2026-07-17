@@ -348,6 +348,24 @@ def test_indexless_frame_helpers(backend):
         )
 
 
+def test_copy_frame_isolates_polars_mutation():
+    pl = pytest.importorskip("polars")
+    frame = pl.DataFrame({"obs_names": ["a", "b"], "value": [1, 2]})
+
+    copied = copy_frame(frame)
+    copied.insert_column(2, pl.Series("group", ["x", "y"]))
+
+    assert copied.columns == ["obs_names", "value", "group"]
+    assert frame.columns == ["obs_names", "value"]
+
+
+def test_copy_frame_preserves_dataset2d(dataset2d):
+    copied = copy_frame(dataset2d)
+
+    assert isinstance(copied, Dataset2D)
+    assert copied is not dataset2d
+
+
 def test_optional_frame_conversion(named_obs):
     pl = pytest.importorskip("polars")
     assert try_from_backend(np.ones((2, 2))) is None

@@ -264,9 +264,12 @@ def frame_equal(left: DataFrameLike, right: object) -> bool:
 
 
 def copy_frame(frame: DataFrameLike) -> DataFrameLike:
-    """Copy mutable frames; immutable native frames are safe to share."""
-    copy = getattr(frame, "copy", None)
-    return frame if copy is None else copy()
+    """Copy a native frame without materializing lazy storage."""
+    from .xarray import Dataset2D
+
+    if isinstance(frame, Dataset2D):
+        return frame.copy()
+    return cast("DataFrameLike", _from_native(frame).clone().to_native())
 
 
 def frame_annotation_columns(
