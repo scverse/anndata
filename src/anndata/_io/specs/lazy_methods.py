@@ -167,7 +167,10 @@ def read_sparse_as_dask(
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
-    memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
+    if ad.settings.use_sparse_array_on_read:
+        memory_format = sparse.csc_array if is_csc else sparse.csr_array
+    else:
+        memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
     da_mtx = da.map_blocks(
         make_chunk,
