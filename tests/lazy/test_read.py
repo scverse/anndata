@@ -9,8 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData
+from anndata._io.zarr import open_write_group
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
 from anndata.experimental.backed._io import ANNDATA_ELEMS
@@ -295,3 +298,25 @@ def test_nullable_string_index_decoding(tmp_path: Path):
 
     assert obs_names == expected_obs
     assert var_names == expected_var
+
+
+@pytest.mark.parametrize("sparse_format", ["csr", "csc"])
+@pytest.mark.parametrize(
+    "use_sparse_array_on_read", [True, False], ids=["array", "matrix"]
+)
+def test_read_elem_lazy_honors_sparse_array_setting(
+    tmp_path: Path, sparse_format: str, *, use_sparse_array_on_read: bool
+):
+    """`read_elem_lazy` should build its dask meta with a type that honors
+    ``settings.use_sparse_array_on_read`` (cs{r,c}_array vs cs{r,c}_matrix)."""
+    X = getattr(sparse, f"{sparse_format}_matrix")(sparse.random(50, 40, density=0.1))
+    f = open_write_group(tmp_path / "test.zarr", mode="a")
+    write_elem(f, "X", X)
+
+    with ad.settings.override(use_sparse_array_on_read=use_sparse_array_on_read):
+        result = read_elem_lazy(f["X"])
+
+    assert isinstance(result, DaskArray)
+    kind = "array" if use_sparse_array_on_read else "matrix"
+    expected_cls = getattr(sparse, f"{sparse_format}_{kind}")
+    assert isinstance(result._meta, expected_cls)

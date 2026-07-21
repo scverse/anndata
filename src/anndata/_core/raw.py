@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
     from ..acc import AdRef
-    from ..compat import CSMatrix
+    from ..compat import CSArray, CSMatrix
     from ..typing import Index, InMemoryArray, _Index1DNorm
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
@@ -32,7 +32,7 @@ class Raw:
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | CSMatrix | None = None,
+        X: np.ndarray | CSMatrix | CSArray | None = None,
         var: pd.DataFrame | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ) -> None:
@@ -74,7 +74,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
+    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix | CSArray:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
