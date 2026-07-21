@@ -409,22 +409,26 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         -------
             Reindexed dataset.
         """
-        index_dim = self.index_dim
         if axis != 0:  # pragma: no cover
             msg = f"Only axis 0 is supported, got axis: {axis}"
             raise ValueError(msg)
+        dataset = self
+        if dataset.true_index_dim != dataset.index_dim:
+            dataset = dataset.copy()
+            dataset.index = dataset.true_index
+        index_dim = dataset.index_dim
         # Dataset.reindex() can't handle ExtensionArrays
         extension_arrays = {
             col: data
-            for col, data in self._items()
+            for col, data in dataset._items()
             if pd.api.types.is_extension_array_dtype(data.dtype)
         }
-        el = self.ds.drop_vars(extension_arrays.keys())
+        el = dataset.ds.drop_vars(extension_arrays.keys())
         el = el.reindex({index_dim: index}, method=None, fill_value=fill_value)
         for col, data in extension_arrays.items():
             el[col] = XDataArray.from_series(
-                pd.Series(data.data, index=self.index).reindex(
-                    index.rename(self.index.name) if index is not None else index,
+                pd.Series(data.data, index=dataset.index).reindex(
+                    index.rename(dataset.index.name) if index is not None else index,
                     fill_value=fill_value,
                 )
             )
