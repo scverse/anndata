@@ -304,6 +304,38 @@ def test_concat_data_subsetting(
     )
 
 
+def test_concat_dataframes_without_annotation_index(tmp_path: Path):
+    paths = []
+    for dataset_index in range(2):
+        path = tmp_path / f"{dataset_index}.zarr"
+        paths.append(path)
+        obs = pd.DataFrame(
+            {"value": np.arange(4)},
+            index=pd.Index(f"cell_{dataset_index}_{i}" for i in range(4)),
+        )
+        var = pd.DataFrame(
+            {"value": np.arange(4)},
+            index=pd.Index(
+                f"gene_{i}{f'_{dataset_index}' if i % 2 else ''}" for i in range(4)
+            ),
+        )
+        ad.AnnData(
+            X=np.ones((4, 4)),
+            obs=obs,
+            var=var,
+            obsm={"df": obs},
+            varm={"df": var},
+        ).write_zarr(path)
+
+    result = ad.concat(
+        [read_lazy(path, load_annotation_index=False) for path in paths],
+        join="outer",
+    )
+
+    assert result.shape == (8, 6)
+    assert result.obsm["df"].shape == (8, 1)
+
+
 @pytest.mark.parametrize(
     ("attr", "key"),
     (
