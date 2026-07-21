@@ -424,9 +424,53 @@ def h5py_test_data(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("idx", "expected"),
+    [
+        pytest.param(
+            np.array([0, 1, 2], dtype=np.int64),
+            (np.array([0, 1, 2], dtype=np.int64), np.array([0, 1, 2])),
+            id="sorted_unique",
+        ),
+        pytest.param(
+            np.array([3, 1, 0, 2], dtype=np.int64),
+            (np.array([0, 1, 2, 3], dtype=np.int64), np.array([3, 1, 0, 2])),
+            id="unsorted_unique",
+        ),
+        pytest.param(
+            np.array([2, 2, 5, 3, 8, 10, 8], dtype=np.int64),
+            (
+                np.array([2, 3, 5, 8, 10], dtype=np.int64),
+                np.array([0, 0, 2, 1, 3, 4, 3]),
+            ),
+            id="duplicate_heavy",
+        ),
+        pytest.param(
+            np.array([True, False, True, False], dtype=bool),
+            (np.array([0, 2], dtype=np.int64), np.array([0, 1])),
+            id="boolean_mask",
+        ),
+        pytest.param(
+            np.array([], dtype=np.int64),
+            (np.array([], dtype=np.int64), np.array([], dtype=np.int64)),
+            id="empty",
+        ),
+    ],
+)
+def test_process_index_for_h5py(idx, expected):
+    from anndata._core.index import _process_index_for_h5py
+
+    processed, reverse = _process_index_for_h5py(idx)
+    expected_processed, expected_reverse = expected
+
+    np.testing.assert_array_equal(processed, expected_processed)
+    np.testing.assert_array_equal(reverse, expected_reverse)
+
+
+@pytest.mark.parametrize(
     ("indices", "description"),
     [
         pytest.param((np.array([0, 1, 0, 2]),), "single_dimension_with_duplicates"),
+        pytest.param((np.array([3, 1, 0, 2]),), "single_dimension_unsorted_unique"),
         pytest.param(
             (np.array([0, 1, 2]), np.array([1, 2])), "multi_dimensional_no_duplicates"
         ),
@@ -450,6 +494,7 @@ def h5py_test_data(tmp_path):
             (np.array([0, 1, 0]), [1, 2]), "mixed_indexing_with_slices_and_lists"
         ),
         pytest.param((np.array([3, 1, 3, 0, 1]),), "unsorted_indices_with_duplicates"),
+        pytest.param((np.array([], dtype=np.int64),), "empty_indices"),
     ],
 )
 def test_safe_fancy_index_h5py_function(h5py_test_data, indices, description):
