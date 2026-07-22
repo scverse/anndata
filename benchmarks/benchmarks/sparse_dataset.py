@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 import zarr
@@ -23,6 +24,41 @@ def make_alternating_mask(n):
     for i in range(0, 10_000, n):
         mask_alternating[i] = False
     return mask_alternating
+
+
+def make_integer_indexers() -> MappingProxyType:
+    rng = np.random.default_rng(42)
+    fragmented_sample = rng.choice(10_000, size=2_048, replace=False)
+    return MappingProxyType({
+        "single_run": np.arange(2_048),
+        "multiple_runs": np.concatenate([
+            np.arange(0, 512),
+            np.arange(1_500, 2_012),
+            np.arange(3_000, 3_512),
+            np.arange(7_000, 7_512),
+        ]),
+        "fragmented_sorted": np.sort(fragmented_sample),
+        "fragmented_unsorted": rng.permutation(fragmented_sample),
+        "clustered_shuffled": rng.permutation(
+            np.concatenate([
+                np.arange(100, 612),
+                np.arange(1_500, 2_012),
+                np.arange(3_000, 3_512),
+                np.arange(7_000, 7_512),
+            ])
+        ),
+        "clustered_duplicates": rng.permutation(
+            np.concatenate([
+                np.repeat(np.arange(100, 356), 2),
+                np.repeat(np.arange(1_500, 1_756), 2),
+                np.repeat(np.arange(3_000, 3_256), 2),
+                np.repeat(np.arange(7_000, 7_256), 2),
+            ])
+        ),
+    })
+
+
+INT_INDEXERS = make_integer_indexers()
 
 
 class SparseCSRContiguousSlice:
@@ -54,7 +90,7 @@ class SparseCSRContiguousSlice:
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        g = zarr.group(self.filepath)
+        g = zarr.open(self.filepath, mode="w")
         write_elem(g, "X", X)
 
     def setup(self, index: str, use_dask: bool):  # noqa: FBT001
@@ -84,6 +120,64 @@ class SparseCSRContiguousSlice:
             res.compute()
 
 
+class SparseBackedIntegerIndexing:
+    filepath = "data"
+    params = (
+        ("h5ad", "zarr"),
+        ("csr", "csc"),
+        list(INT_INDEXERS.keys()),
+    )
+    param_names = ("store_type", "sparse_format", "index_case")
+
+    def setup_cache(self):
+        rng = np.random.default_rng(42)
+        csr = sparse.random(
+            10_000,
+            10_000,
+            density=0.01,
+            format="csr",
+            random_state=rng,
+        )
+        csc = csr.tocsc()
+        for store_type in ["h5ad", "zarr"]:
+            path = f"{self.filepath}.{store_type}"
+            if store_type == "h5ad":
+                with h5py.File(path, mode="w") as f:
+                    write_elem(f, "csr", csr)
+                    write_elem(f, "csc", csc)
+            else:
+                g = zarr.open(path, mode="w")
+                write_elem(g, "csr", csr)
+                write_elem(g, "csc", csc)
+
+    def setup(self, store_type: str, sparse_format: str, index_case: str):
+        self._h5_file = None
+        if store_type == "h5ad":
+            self._h5_file = h5py.File(f"{self.filepath}.h5ad", mode="r")
+            self.group = self._h5_file
+        else:
+            self.group = zarr.open(f"{self.filepath}.zarr", mode="r")
+        self.x = sparse_dataset(self.group[sparse_format])
+        self.index = INT_INDEXERS[index_case]
+        self.is_csr = sparse_format == "csr"
+
+    def teardown(self, *_):
+        if self._h5_file is not None:
+            self._h5_file.close()
+
+    def time_getitem(self, *_):
+        if self.is_csr:
+            self.x[self.index, :]
+        else:
+            self.x[:, self.index]
+
+    def peakmem_getitem(self, *_):
+        if self.is_csr:
+            self.x[self.index, :]
+        else:
+            self.x[:, self.index]
+
+
 class SparseCSRDaskConcat:
     filepath = "data.zarr"
 
@@ -98,7 +192,7 @@ class SparseCSRDaskConcat:
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        g = zarr.group(self.filepath)
+        g = zarr.open(self.filepath, mode="w")
         write_elem(g, "X", X)
 
     def setup(self, *_):
@@ -146,7 +240,7 @@ class SparseCSRDask:
             format="csr",
             random_state=np.random.default_rng(42),
         )
-        g = zarr.group(self.filepath)
+        g = zarr.open(self.filepath, mode="w")
         write_elem(g, "X", X)
 
     def setup(self, *_):
