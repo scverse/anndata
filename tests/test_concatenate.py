@@ -227,6 +227,118 @@ def test_concat_interface_errors(use_xdataset):
         concat([])
 
 
+def _raise_test_concat_error(*args, **kwargs):
+    msg = "test concat error"
+    raise RuntimeError(msg)
+
+
+def _assert_concat_error_path(
+    error: pytest.ExceptionInfo[BaseException], element_path: str
+) -> None:
+    assert error.value.__notes__ == [
+        f"Error raised while concatenating element {element_path}."
+    ]
+
+
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_error_reports_aligned_mapping_element(join):
+    a = AnnData(np.ones((2, 2)), obs=pd.DataFrame(index=["a", "b"]))
+    b = AnnData(np.ones((2, 2)), obs=pd.DataFrame(index=["c", "d"]))
+    a.obsm["bad"] = pd.DataFrame(np.ones((2, 2)), index=a.obs_names)
+    b.obsm["bad"] = np.ones((2, 2))
+
+    with pytest.raises(NotImplementedError) as error:
+        concat([a, b], join=join)
+
+    _assert_concat_error_path(error, ".obsm['bad']")
+
+
+def test_concat_error_reports_x_element(monkeypatch):
+    a = AnnData(np.ones((2, 2)))
+    b = AnnData(np.ones((2, 2)))
+
+    monkeypatch.setattr(merge, "concat_arrays", _raise_test_concat_error)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([a, b])
+
+    _assert_concat_error_path(error, ".X")
+
+
+def test_concat_error_reports_raw_x_element(monkeypatch):
+    a = AnnData(np.ones((1, 1)))
+    b = AnnData(np.ones((1, 1)))
+    a.raw = AnnData(np.full((1, 1), 2))
+    b.raw = AnnData(np.full((1, 1), 2))
+    concat_arrays = merge.concat_arrays
+
+    def raise_for_raw_x(arrays, *args, **kwargs):
+        arrays = list(arrays)
+        if all(np.all(array == 2) for array in arrays):
+            _raise_test_concat_error()
+        return concat_arrays(arrays, *args, **kwargs)
+
+    monkeypatch.setattr(merge, "concat_arrays", raise_for_raw_x)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([a, b])
+
+    _assert_concat_error_path(error, ".raw.X")
+
+
+def test_concat_error_reports_pairwise_mapping_element(monkeypatch):
+    a = AnnData(np.ones((2, 2)), obsp={"bad": sparse.eye(2, format="csr")})
+    b = AnnData(np.ones((2, 2)), obsp={"bad": sparse.eye(2, format="csr")})
+
+    monkeypatch.setattr(merge.sparse, "block_diag", _raise_test_concat_error)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([a, b], pairwise=True)
+
+    _assert_concat_error_path(error, ".obsp['bad']")
+
+
+def test_concat_error_reports_nested_uns_element(monkeypatch):
+    a = AnnData(np.ones((1, 1)), uns={"outer": {"bad": np.array([1])}})
+    b = AnnData(np.ones((1, 1)), uns={"outer": {"bad": np.array([1])}})
+
+    monkeypatch.setattr(merge, "equal", _raise_test_concat_error)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([a, b], uns_merge="same")
+
+    _assert_concat_error_path(error, ".uns['outer']['bad']")
+
+
+def test_concat_error_reports_custom_merge_element():
+    a = AnnData(np.ones((1, 1)))
+    b = AnnData(np.ones((1, 1)))
+
+    with pytest.raises(RuntimeError) as error:
+        concat([a, b], merge=_raise_test_concat_error)
+
+    _assert_concat_error_path(error, ".var")
+
+
+@pytest.mark.parametrize(("axis", "element_path"), [(0, ".obs"), (1, ".var")])
+def test_concat_error_reports_index_element(monkeypatch, axis, element_path):
+    monkeypatch.setattr(merge, "axis_indices", _raise_test_concat_error)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([AnnData(), AnnData()], axis=axis)
+
+    _assert_concat_error_path(error, element_path)
+
+
+def test_concat_error_reports_mapping_without_child_key(monkeypatch):
+    monkeypatch.setattr(merge, "inner_concat_aligned_mapping", _raise_test_concat_error)
+
+    with pytest.raises(RuntimeError) as error:
+        concat([AnnData(), AnnData()])
+
+    _assert_concat_error_path(error, ".layers")
+
+
 def test_concatenate_roundtrip(
     join_type,
     array_type,
@@ -1752,21 +1864,26 @@ def test_outer_concat_outputs_nullable_bool_writable(tmp_path):
     adatas.write(tmp_path / "test.h5ad")
 
 
-def test_concat_duplicated_columns(join_type):
+@pytest.mark.parametrize(("axis_name", "axis"), [("obs", 0), ("var", 1)])
+def test_concat_duplicated_columns(join_type, axis_name, axis):
     # https://github.com/scverse/anndata/issues/483
-    a = AnnData(
-        obs=pd.DataFrame(
+    a = AnnData(**{
+        axis_name: pd.DataFrame(
             np.ones((5, 2)), columns=["a", "a"], index=[str(x) for x in range(5)]
         )
-    )
-    b = AnnData(
-        obs=pd.DataFrame(
-            np.ones((5, 1)), columns=["a"], index=[str(x) for x in range(5, 10)]
+    })
+    b = AnnData(**{
+        axis_name: pd.DataFrame(
+            np.ones((5, 1)),
+            columns=["a"],
+            index=[str(x) for x in range(5, 10)],
         )
-    )
+    })
 
-    with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'"):
-        concat([a, b], join=join_type)
+    with pytest.raises(pd.errors.InvalidIndexError, match=r"'a'") as error:
+        concat([a, b], join=join_type, axis=axis)
+
+    _assert_concat_error_path(error, f".{axis_name}")
 
 
 @pytest.mark.gpu

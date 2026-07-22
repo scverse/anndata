@@ -8,6 +8,7 @@ import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, MutableSet
+from contextlib import contextmanager
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
@@ -450,23 +451,93 @@ def only[T](vals: Collection[T]) -> T | MissingVal:
 ###################
 
 
-def merge_nested(ds: Collection[Mapping], keys_join: Callable, value_join: Callable):
+def _child_element_path(element_path: str | None, key) -> str | None:
+    if element_path is None:
+        return None
+    if element_path == ".layers" and key is None:
+        return ".X"
+    return f"{element_path}[{key!r}]"
+
+
+def _add_concat_element_note(error: Exception, element_path: str | None) -> None:
+    if element_path is None:
+        return
+    prefix = "Error raised while concatenating element "
+    if any(note.startswith(prefix) for note in getattr(error, "__notes__", ())):
+        return
+    error.add_note(f"{prefix}{element_path}.")
+
+
+@contextmanager
+def _concat_element_errors(element_path: str | None):
+    try:
+        yield
+    except Exception as error:
+        _add_concat_element_note(error, element_path)
+        raise
+
+
+def _prefix_concat_element_note(error: Exception, element_path: str) -> None:
+    prefix = "Error raised while concatenating element "
+    for i, note in enumerate(getattr(error, "__notes__", ())):
+        if note.startswith(prefix):
+            error.__notes__[i] = f"{prefix}{element_path}{note[len(prefix) :]}"
+            return
+    _add_concat_element_note(error, element_path)
+
+
+def _call_with_concat_element_note(
+    element_path: str | None, func: Callable, /, *args, **kwargs
+):
+    try:
+        return func(*args, **kwargs)
+    except Exception as error:
+        _add_concat_element_note(error, element_path)
+        raise
+
+
+def merge_nested(
+    ds: Collection[Mapping],
+    keys_join: Callable,
+    value_join: Callable,
+    *,
+    element_path: str | None = None,
+):
     out = {}
     for k in keys_join(ds):
-        v = _merge_nested(ds, k, keys_join, value_join)
+        child_path = _child_element_path(element_path, k)
+        v = _call_with_concat_element_note(
+            child_path,
+            _merge_nested,
+            ds,
+            k,
+            keys_join,
+            value_join,
+            element_path=child_path,
+        )
         if not_missing(v):
             out[k] = v
     return out
 
 
 def _merge_nested(
-    ds: Collection[Mapping], k, keys_join: Callable, value_join: Callable
+    ds: Collection[Mapping],
+    k,
+    keys_join: Callable,
+    value_join: Callable,
+    *,
+    element_path: str | None = None,
 ):
     vals = [d[k] for d in ds if k in d]
     if len(vals) == 0:
         return MissingVal
     elif all(isinstance(v, Mapping) and not isinstance(v, Dataset2D) for v in vals):
-        new_map = merge_nested(vals, keys_join, value_join)
+        new_map = merge_nested(
+            vals,
+            keys_join,
+            value_join,
+            element_path=element_path,
+        )
         if len(new_map) == 0:
             return MissingVal
         else:
@@ -512,6 +583,31 @@ def resolve_merge_strategy(
     if not isinstance(strategy, Callable):
         strategy = MERGE_STRATEGIES[strategy]
     return strategy
+
+
+def _apply_merge_strategy(
+    strategy: Callable[[Collection[Mapping]], Mapping],
+    mappings: Collection[Mapping],
+    *,
+    element_path: str,
+) -> Mapping:
+    try:
+        if strategy is merge_unique:
+            return merge_nested(
+                mappings, union_keys, unique_value, element_path=element_path
+            )
+        if strategy is merge_same:
+            return merge_nested(
+                mappings, intersect_keys, unique_value, element_path=element_path
+            )
+        if strategy is merge_first:
+            return merge_nested(mappings, union_keys, first, element_path=element_path)
+        if strategy is merge_only:
+            return merge_nested(mappings, union_keys, only, element_path=element_path)
+        return strategy(mappings)
+    except Exception as error:
+        _add_concat_element_note(error, element_path)
+        raise
 
 
 #####################
@@ -957,23 +1053,33 @@ def inner_concat_aligned_mapping(
     axis=0,
     concat_axis=None,
     force_lazy: bool = False,
+    element_path: str | None = None,
 ):
     if concat_axis is None:
         concat_axis = axis
     result = {}
 
     for k in intersect_keys(mappings):
-        els = [m[k] for m in mappings]
-        if reindexers is None:
-            cur_reindexers = gen_inner_reindexers(
-                els, new_index=index, axis=concat_axis
-            )
-        else:
-            cur_reindexers = reindexers
+        child_path = _child_element_path(element_path, k)
+        try:
+            els = [m[k] for m in mappings]
+            if reindexers is None:
+                cur_reindexers = gen_inner_reindexers(
+                    els, new_index=index, axis=concat_axis
+                )
+            else:
+                cur_reindexers = reindexers
 
-        result[k] = concat_arrays(
-            els, cur_reindexers, index=index, axis=concat_axis, force_lazy=force_lazy
-        )
+            result[k] = concat_arrays(
+                els,
+                cur_reindexers,
+                index=index,
+                axis=concat_axis,
+                force_lazy=force_lazy,
+            )
+        except Exception as error:
+            _add_concat_element_note(error, child_path)
+            raise
     return result
 
 
@@ -1082,7 +1188,7 @@ def missing_element(
     return xp.zeros(shape, dtype=bool)
 
 
-def outer_concat_aligned_mapping(
+def outer_concat_aligned_mapping(  # noqa: PLR0913
     mappings,
     *,
     reindexers=None,
@@ -1091,6 +1197,7 @@ def outer_concat_aligned_mapping(
     concat_axis=None,
     fill_value=None,
     force_lazy: bool = False,
+    element_path: str | None = None,
 ):
     if concat_axis is None:
         concat_axis = axis
@@ -1098,47 +1205,56 @@ def outer_concat_aligned_mapping(
     ns = [m.parent.shape[axis] for m in mappings]
 
     for k in union_keys(mappings):
-        els = [m.get(k, MissingVal) for m in mappings]
-        if reindexers is None:
-            cur_reindexers = gen_outer_reindexers(
-                els, ns, new_index=index, axis=concat_axis
-            )
-        else:
-            cur_reindexers = reindexers
-
-        # Dask needs to create a full array and can't do the size-0 trick
-        off_axis_size = 0
-        if any(isinstance(e, DaskArray) for e in els):
-            if not isinstance(cur_reindexers[0], Reindexer):  # pragma: no cover
-                msg = "Cannot re-index a dask array without a Reindexer"
-                raise ValueError(msg)
-            off_axis_size = cur_reindexers[0].idx.shape[0]
-        # Handling of missing values here is hacky for dataframes
-        # We should probably just handle missing elements for all types
-        result[k] = concat_arrays(
-            [
-                el
-                if not_missing(el)
-                else missing_element(
-                    n,
-                    axis=concat_axis,
-                    els=els,
-                    fill_value=fill_value,
-                    off_axis_size=off_axis_size,
+        child_path = _child_element_path(element_path, k)
+        try:
+            els = [m.get(k, MissingVal) for m in mappings]
+            if reindexers is None:
+                cur_reindexers = gen_outer_reindexers(
+                    els, ns, new_index=index, axis=concat_axis
                 )
-                for el, n in zip(els, ns, strict=True)
-            ],
-            cur_reindexers,
-            axis=concat_axis,
-            index=index,
-            fill_value=fill_value,
-            force_lazy=force_lazy,
-        )
+            else:
+                cur_reindexers = reindexers
+
+            # Dask needs to create a full array and can't do the size-0 trick
+            off_axis_size = 0
+            if any(isinstance(e, DaskArray) for e in els):
+                if not isinstance(cur_reindexers[0], Reindexer):  # pragma: no cover
+                    msg = "Cannot re-index a dask array without a Reindexer"
+                    raise ValueError(msg)
+                off_axis_size = cur_reindexers[0].idx.shape[0]
+            # Handling of missing values here is hacky for dataframes
+            # We should probably just handle missing elements for all types
+            result[k] = concat_arrays(
+                [
+                    el
+                    if not_missing(el)
+                    else missing_element(
+                        n,
+                        axis=concat_axis,
+                        els=els,
+                        fill_value=fill_value,
+                        off_axis_size=off_axis_size,
+                    )
+                    for el, n in zip(els, ns, strict=True)
+                ],
+                cur_reindexers,
+                axis=concat_axis,
+                index=index,
+                fill_value=fill_value,
+                force_lazy=force_lazy,
+            )
+        except Exception as error:
+            _add_concat_element_note(error, child_path)
+            raise
     return result
 
 
 def concat_pairwise_mapping(
-    mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
+    mappings: Collection[Mapping],
+    shapes: Collection[int],
+    join_keys=intersect_keys,
+    *,
+    element_path: str | None = None,
 ):
     result = {}
     if any(any(isinstance(v, CSArray) for v in m.values()) for m in mappings):
@@ -1147,40 +1263,75 @@ def concat_pairwise_mapping(
         sparse_class = sparse.csr_matrix
 
     for k in join_keys(mappings):
-        els = [
-            m.get(k, sparse_class((s, s), dtype=bool))
-            for m, s in zip(mappings, shapes, strict=True)
-        ]
-        if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
-            result[k] = _cp_block_diag(els, format="csr")
-        elif all(isinstance(el, DaskArray) for el in els):
-            result[k] = _dask_block_diag(els)
-        else:
-            # TODO: Remove the warning catch some time around scipy 1.2 (stated in the warning)
-            # https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html#existing-functions-that-need-careful-migration
-            with warnings.catch_warnings():
-                if any(isinstance(v, np.ndarray) for v in els):
-                    warnings.filterwarnings(
-                        "ignore",
-                        r"`block_diag` is switching to the sparse array interface.",
-                        DeprecationWarning,
-                    )
+        child_path = _child_element_path(element_path, k)
+        try:
+            els = [
+                m.get(k, sparse_class((s, s), dtype=bool))
+                for m, s in zip(mappings, shapes, strict=True)
+            ]
+            if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
+                result[k] = _cp_block_diag(els, format="csr")
+            elif all(isinstance(el, DaskArray) for el in els):
+                result[k] = _dask_block_diag(els)
+            else:
+                # TODO: Remove the warning catch some time around scipy 1.2 (stated in the warning)
+                # https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html#existing-functions-that-need-careful-migration
+                with warnings.catch_warnings():
+                    if any(isinstance(v, np.ndarray) for v in els):
+                        warnings.filterwarnings(
+                            "ignore",
+                            r"`block_diag` is switching to the sparse array interface.",
+                            DeprecationWarning,
+                        )
 
-                diag = sparse.block_diag(els, format="csr")
-            # TODO: Remove once we migrate internally to xxx_array
-            if isinstance(diag, CSArray):
-                diag = sparse.csr_matrix(diag)
-            result[k] = diag
+                    diag = sparse.block_diag(els, format="csr")
+                # TODO: Remove once we migrate internally to xxx_array
+                if isinstance(diag, CSArray):
+                    diag = sparse.csr_matrix(diag)
+                result[k] = diag
+        except Exception as error:
+            _add_concat_element_note(error, child_path)
+            raise
     return result
 
 
 def merge_dataframes(
-    dfs: Iterable[pd.DataFrame], new_index, merge_strategy=merge_unique
+    dfs: Iterable[pd.DataFrame],
+    new_index,
+    merge_strategy=merge_unique,
+    *,
+    element_path: str | None = None,
 ) -> pd.DataFrame:
     dfs = [df.reindex(index=new_index) for df in dfs]
     # New dataframe with all shared data
-    new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
+    if element_path is None:
+        merged = merge_strategy(dfs)
+    else:
+        merged = _apply_merge_strategy(
+            merge_strategy,
+            dfs,
+            element_path=element_path,
+        )
+    new_df = pd.DataFrame(merged, index=new_index)
     return new_df
+
+
+def _reindex_mapping(
+    mapping: Mapping,
+    reindexer: Reindexer,
+    *,
+    axes: tuple[int, ...],
+    element_path: str,
+) -> dict:
+    result = {}
+    for key, value in mapping.items():
+        child_path = _child_element_path(element_path, key)
+        for axis in axes:
+            value = _call_with_concat_element_note(
+                child_path, reindexer, value, axis=axis
+            )
+        result[key] = value
+    return result
 
 
 def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
@@ -1692,78 +1843,90 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         categories=keys,
     )
 
-    # Combining indexes
-    concat_indices = pd.concat(
-        [axis_indices(a, axis=axis).to_series() for a in adatas], ignore_index=True
-    )
-    if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
-        )
-    concat_indices = pd.Index(concat_indices)
-
-    alt_indices = merge_indices(
-        [axis_indices(a, axis=alt_axis) for a in adatas], join=join
-    )
-    reindexers = [
-        gen_reindexer(alt_indices, axis_indices(a, axis=alt_axis)) for a in adatas
-    ]
-
-    # Annotation for concatenation axis
-    check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
-    annotations = [getattr(a, axis_name) for a in adatas]
-    are_any_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in annotations
-    )
-    if are_any_annotations_dataframes:
-        annotations_in_memory = (
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
-        )
-        concat_annot = pd.concat(
-            unify_dtypes(annotations_in_memory),
-            join=join,
+    with _concat_element_errors(f".{axis_name}"):
+        # Combining indexes
+        concat_indices = pd.concat(
+            [axis_indices(a, axis=axis).to_series() for a in adatas],
             ignore_index=True,
         )
-        concat_annot.index = concat_indices
-    else:
-        concat_annot = concat_dataset2d_on_annot_axis(
-            annotations,
-            join,
-            force_lazy=force_lazy,
-            concat_indices=concat_indices,
-        )
-    if label is not None:
-        concat_annot[label] = label_col
-
-    # Annotation for other axis
-    alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
-    are_any_alt_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in alt_annotations
-    )
-    if are_any_alt_annotations_dataframes:
-        alt_annotations_in_memory = [
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
-        ]
-        alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
-    else:
-        # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
-        # the only "lazy" setting so I'm not sure we really want that.
-        # Because of xarray's merge upcasting, it's safest to simply assume that all dtypes are objects.
-        annotations_with_only_dask = list(
-            make_xarray_extension_dtypes_dask(
-                alt_annotations, use_only_object_dtype=True
+        if index_unique is not None:
+            concat_indices = concat_indices.str.cat(
+                label_col.map(str, na_action="ignore"), sep=index_unique
             )
+        concat_indices = pd.Index(concat_indices)
+
+    with _concat_element_errors(f".{alt_axis_name}"):
+        alt_indices = merge_indices(
+            [axis_indices(a, axis=alt_axis) for a in adatas], join=join
         )
-        for a in annotations_with_only_dask:
-            if a.true_index_dim != a.index_dim:
-                a.index = a.true_index
-        annotations_with_only_dask = [
-            a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
-            for a in annotations_with_only_dask
+        reindexers = [
+            gen_reindexer(alt_indices, axis_indices(a, axis=alt_axis)) for a in adatas
         ]
-        alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override")
+
+    with _concat_element_errors(f".{axis_name}"):
+        # Annotation for concatenation axis
+        check_combinable_cols(
+            [getattr(a, axis_name).columns for a in adatas], join=join
         )
+        annotations = [getattr(a, axis_name) for a in adatas]
+        are_any_annotations_dataframes = any(
+            isinstance(a, pd.DataFrame) for a in annotations
+        )
+        if are_any_annotations_dataframes:
+            annotations_in_memory = (
+                to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
+            )
+            concat_annot = pd.concat(
+                unify_dtypes(annotations_in_memory),
+                join=join,
+                ignore_index=True,
+            )
+            concat_annot.index = concat_indices
+        else:
+            concat_annot = concat_dataset2d_on_annot_axis(
+                annotations,
+                join,
+                force_lazy=force_lazy,
+                concat_indices=concat_indices,
+            )
+        if label is not None:
+            concat_annot[label] = label_col
+
+    with _concat_element_errors(f".{alt_axis_name}"):
+        # Annotation for other axis
+        alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
+        are_any_alt_annotations_dataframes = any(
+            isinstance(a, pd.DataFrame) for a in alt_annotations
+        )
+        if are_any_alt_annotations_dataframes:
+            alt_annotations_in_memory = [
+                to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
+            ]
+            alt_annot = merge_dataframes(
+                alt_annotations_in_memory,
+                alt_indices,
+                merge,
+                element_path=f".{alt_axis_name}",
+            )
+        else:
+            # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
+            # the only "lazy" setting so I'm not sure we really want that.
+            # Because of xarray's merge upcasting, it's safest to simply assume that all dtypes are objects.
+            annotations_with_only_dask = list(
+                make_xarray_extension_dtypes_dask(
+                    alt_annotations, use_only_object_dtype=True
+                )
+            )
+            for a in annotations_with_only_dask:
+                if a.true_index_dim != a.index_dim:
+                    a.index = a.true_index
+            annotations_with_only_dask = [
+                a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
+                for a in annotations_with_only_dask
+            ]
+            alt_annot = Dataset2D(
+                xr.merge(annotations_with_only_dask, join=join, compat="override")
+            )
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
@@ -1777,58 +1940,93 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         msg = f"{join=} should have been validated above by pd.concat"
         raise AssertionError(msg)
 
-    layers = concat_aligned_mapping(
-        [a.layers for a in adatas], axis=axis, reindexers=reindexers
-    )
-    concat_mapping = concat_aligned_mapping(
-        [getattr(a, f"{axis_name}m") for a in adatas],
-        axis=axis,
-        concat_axis=0,
-        index=concat_indices,
-        force_lazy=force_lazy,
-    )
-    if pairwise:
-        concat_pairwise = concat_pairwise_mapping(
-            mappings=[getattr(a, f"{axis_name}p") for a in adatas],
-            shapes=[a.shape[axis] for a in adatas],
-            join_keys=join_keys,
+    with _concat_element_errors(".layers"):
+        layers = concat_aligned_mapping(
+            [a.layers for a in adatas],
+            axis=axis,
+            reindexers=reindexers,
+            element_path=".layers",
         )
+    with _concat_element_errors(f".{axis_name}m"):
+        concat_mapping = concat_aligned_mapping(
+            [getattr(a, f"{axis_name}m") for a in adatas],
+            axis=axis,
+            concat_axis=0,
+            index=concat_indices,
+            force_lazy=force_lazy,
+            element_path=f".{axis_name}m",
+        )
+    if pairwise:
+        with _concat_element_errors(f".{axis_name}p"):
+            concat_pairwise = concat_pairwise_mapping(
+                mappings=[getattr(a, f"{axis_name}p") for a in adatas],
+                shapes=[a.shape[axis] for a in adatas],
+                join_keys=join_keys,
+                element_path=f".{axis_name}p",
+            )
     else:
         concat_pairwise = {}
 
     # TODO: Reindex lazily, so we don't have to make those copies until we're sure we need the element
-    alt_mapping = merge(
-        [
-            {k: r(v, axis=0) for k, v in getattr(a, f"{alt_axis_name}m").items()}
-            for r, a in zip(reindexers, adatas, strict=True)
-        ],
-    )
-    alt_pairwise = merge([
-        {k: r(r(v, axis=0), axis=1) for k, v in getattr(a, f"{alt_axis_name}p").items()}
-        for r, a in zip(reindexers, adatas, strict=True)
-    ])
-    uns = uns_merge([a.uns for a in adatas])
+    with _concat_element_errors(f".{alt_axis_name}m"):
+        alt_mapping = _apply_merge_strategy(
+            merge,
+            [
+                _reindex_mapping(
+                    getattr(a, f"{alt_axis_name}m"),
+                    r,
+                    axes=(0,),
+                    element_path=f".{alt_axis_name}m",
+                )
+                for r, a in zip(reindexers, adatas, strict=True)
+            ],
+            element_path=f".{alt_axis_name}m",
+        )
+    with _concat_element_errors(f".{alt_axis_name}p"):
+        alt_pairwise = _apply_merge_strategy(
+            merge,
+            [
+                _reindex_mapping(
+                    getattr(a, f"{alt_axis_name}p"),
+                    r,
+                    axes=(0, 1),
+                    element_path=f".{alt_axis_name}p",
+                )
+                for r, a in zip(reindexers, adatas, strict=True)
+            ],
+            element_path=f".{alt_axis_name}p",
+        )
+    with _concat_element_errors(".uns"):
+        uns = _apply_merge_strategy(
+            uns_merge,
+            [a.uns for a in adatas],
+            element_path=".uns",
+        )
 
     raw = None
     has_raw = [a.raw is not None for a in adatas]
     if all(has_raw):
-        raw = concat(
-            [
-                AnnData(
-                    X=a.raw.X,
-                    obs=pd.DataFrame(index=a.obs_names),
-                    var=a.raw.var,
-                    varm=a.raw.varm,
-                )
-                for a in adatas
-            ],
-            join=join,
-            label=label,
-            keys=keys,
-            index_unique=index_unique,
-            fill_value=fill_value,
-            axis=axis,
-        )
+        try:
+            raw = concat(
+                [
+                    AnnData(
+                        X=a.raw.X,
+                        obs=pd.DataFrame(index=a.obs_names),
+                        var=a.raw.var,
+                        varm=a.raw.varm,
+                    )
+                    for a in adatas
+                ],
+                join=join,
+                label=label,
+                keys=keys,
+                index_unique=index_unique,
+                fill_value=fill_value,
+                axis=axis,
+            )
+        except Exception as error:
+            _prefix_concat_element_note(error, ".raw")
+            raise
     elif any(has_raw):
         msg = (
             "Only some AnnData objects have `.raw` attribute, "
