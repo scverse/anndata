@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 import warnings
 from contextlib import contextmanager, nullcontext
 from functools import partial
@@ -334,6 +336,39 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     adata = ad.read_h5ad(backing_h5ad)
     assert adata.shape == (3, 1)
     assert_equal(adata, adata_one)
+
+
+def test_write_h5ad_preserves_locked_file(tmp_path: Path) -> None:
+    path = tmp_path / "adata.h5ad"
+    ad.AnnData(np.array([[1, 2], [3, 4]])).write_h5ad(path)
+    original = path.read_bytes()
+    backed = ad.read_h5ad(path, backed="r")
+    code = """
+import sys
+import anndata as ad
+
+path = sys.argv[1]
+adata = ad.read_h5ad(path)
+try:
+    adata.write_h5ad(path)
+except OSError:
+    pass
+else:
+    raise RuntimeError("write unexpectedly succeeded")
+"""
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(path)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert path.read_bytes() == original
+        assert backed.X[0, 0] == 1
+    finally:
+        backed.file.close()
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)

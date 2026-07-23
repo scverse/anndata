@@ -81,6 +81,11 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
 
+    if mode == "w" and filepath.exists() and h5py.is_hdf5(filepath):
+        # Check the write lock before HDF5 opens the file in truncate mode.
+        with h5py.File(filepath, "r+"):
+            pass
+
     with h5py.File(filepath, mode) as f:
         # TODO: Use spec writing system for this
         # Currently can't use write_dispatched here because this function is also called to do an
