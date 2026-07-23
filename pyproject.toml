@@ -47,6 +47,7 @@ dependencies = [
     "zarr >=3.1",
     "typing-extensions>=4.16; python_version<='3.14'",
     "scverse-misc[settings]>=0.1.0",
+    "narwhals>=2.24.0",
 ]
 dynamic = [ "version" ]
 
@@ -75,6 +76,7 @@ doc = [
     "sphinx-design",
     "anndata[dask]",
     "pandas>=3",
+    "pyarrow",
     "mudata",
     # for unreleased changes
     { include-group = "dev-doc" },
@@ -129,6 +131,9 @@ lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
 dask = [
     "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
 ]
+
+[project.entry-points."narwhals.plugins"]
+anndata = "anndata._core._dataframe_backend"
 
 [tool.hatch.version]
 source = "vcs"

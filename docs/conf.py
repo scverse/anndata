@@ -76,7 +76,7 @@ nb_execution_mode = "off"
 # Generate the API documentation when building
 autosummary_generate = True
 autodoc_member_order = "bysource"
-autodoc_mock_imports = ["torch"]
+autodoc_mock_imports = ["cudf", "modin", "polars", "torch"]
 # autodoc_default_options = {}
 issues_github_path = "scverse/anndata"
 rtd_links_prefix = PurePosixPath("src")
@@ -139,6 +139,7 @@ intersphinx_mapping = dict(
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
     annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
     mudata=("https://mudata.readthedocs.io/stable/", None),
+    narwhals=("https://narwhals-dev.github.io/narwhals/", None),
 )
 
 # Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
@@ -187,6 +188,10 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:obj", "typing.R"),
     ("py:class", "_M"),
     ("py:class", "anndata.utils.Default"),
+    ("py:class", "anndata._core._dataframe_backend.DataFrameLike"),
+]
+nitpick_ignore_regex = [
+    (r"py:.*", r"narwhals\._utils\..*"),
 ]
 
 # -- Social cards ---------------------------------------------------------

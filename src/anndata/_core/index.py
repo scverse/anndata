@@ -23,7 +23,7 @@ from ..compat import (
     XDataArray,
     has_xp_base,
 )
-from .xarray import Dataset2D
+from ._dataframe_backend import DataFrameLike, frame_annotation_columns, subset_frame
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -368,12 +368,11 @@ def _prepare_array_api_idx(
 @singledispatch
 def _subset[
     T: np.ndarray
-    | pd.DataFrame
+    | DataFrameLike
     | SupportsArrayApiBase
     | DaskArray
     | CSArray
     | CSMatrix
-    | Dataset2D
 ](
     a: T,
     subset_idx: tuple[_Index1DNorm[IndexManager]]
@@ -428,13 +427,12 @@ def _subset_sparse[T: CSMatrix | CSArray](
     return a[subset_idx]
 
 
-@_subset.register(pd.DataFrame)
-@_subset.register(Dataset2D)
+@_subset.register(DataFrameLike)
 @_ensure_numpy_idx
-def _subset_df[T: pd.DataFrame | Dataset2D](
+def _subset_df[T: DataFrameLike](
     df: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ) -> T:
-    return df.iloc[subset_idx]
+    return subset_frame(df, subset_idx)
 
 
 @_subset.register(AwkArray)
@@ -576,7 +574,10 @@ def _get_vector_ambiguous(
     from ..acc import A
 
     idxdim = "var" if dim == "obs" else "obs"
-    match (k in getattr(adata, dim), k in getattr(adata, f"{idxdim}_names")):
+    in_annotation = k in frame_annotation_columns(
+        getattr(adata, dim), index_name=f"{dim}_names"
+    )
+    match (in_annotation, k in getattr(adata, f"{idxdim}_names")):
         case True, True:
             msg = f"Key {k} could be found in both .{idxdim}_names and .{dim}.columns"
             raise ValueError(msg)

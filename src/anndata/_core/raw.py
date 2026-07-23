@@ -8,6 +8,12 @@ import pandas as pd
 from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
+from ._dataframe_backend import (
+    axis_index,
+    copy_frame,
+    frame_annotation_columns,
+    subset_frame,
+)
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import AlignedMappingProperty, AxisArrays
 from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_index
@@ -20,6 +26,7 @@ if TYPE_CHECKING:
     from ..acc import AdRef
     from ..compat import CSMatrix
     from ..typing import Index, InMemoryArray, _Index1DNorm
+    from ._dataframe_backend import DataFrameLike
     from .aligned_mapping import AxisArraysView
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -33,7 +40,7 @@ class Raw:
         self,
         adata: AnnData,
         X: np.ndarray | CSMatrix | None = None,
-        var: pd.DataFrame | Mapping[str, Sequence] | None = None,
+        var: DataFrameLike | Mapping[str, Sequence] | None = None,
         varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:
@@ -62,7 +69,7 @@ class Raw:
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
-            self._var = adata.var.copy()
+            self._var = copy_frame(adata.var)
             self.varm = adata.varm.copy()
         elif adata.isbacked:
             msg = "Cannot specify X if adata is backed"
@@ -106,7 +113,7 @@ class Raw:
         return self.n_obs, self.n_vars
 
     @property
-    def var(self) -> pd.DataFrame:
+    def var(self) -> DataFrameLike:
         return self._var
 
     @property
@@ -123,7 +130,7 @@ class Raw:
 
     @property
     def var_names(self) -> pd.Index[str]:
-        return self.var.index
+        return axis_index(self.var, index_name="var_names")
 
     @property
     def obs_names(self) -> pd.Index[str]:
@@ -161,7 +168,7 @@ class Raw:
 
         X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
 
-        var = self._var.iloc[vidx]
+        var = subset_frame(self._var, vidx)
         new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
@@ -171,7 +178,12 @@ class Raw:
     def __str__(self) -> str:
         descr = f"Raw AnnData with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
         for attr in ["var", "varm"]:
-            keys = getattr(self, attr).keys()
+            value = getattr(self, attr)
+            keys = (
+                frame_annotation_columns(value, index_name="var_names")
+                if attr == "var"
+                else value.keys()
+            )
             if len(keys) > 0:
                 descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
         return descr
@@ -180,7 +192,7 @@ class Raw:
         return Raw(
             self._adata,
             X=self.X.copy(),
-            var=self.var.copy(),
+            var=copy_frame(self.var),
             varm=None if self._varm is None else self._varm.copy(),
         )
 

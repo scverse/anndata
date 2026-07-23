@@ -12,10 +12,16 @@ from typing import TYPE_CHECKING, ClassVar, cast, overload
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
 
+import narwhals as nw
 import pandas as pd
 import scipy.sparse as sp
 
 from .. import AnnData
+from .._core._dataframe_backend import (
+    DataFrameLike,
+    axis_index,
+    frame_annotation_columns,
+)
 from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
 from ..compat import CupySparseMatrix, DaskArray, has_xp_base
@@ -30,6 +36,8 @@ else:
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
+
+    from numpy.typing import NDArray
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
@@ -50,9 +58,6 @@ type Idx2DList = (
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
 
 type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
-
-type DataFrameLike = pd.DataFrame | Dataset2D
-"""A 2D dataframe-like container (pandas- or xarray-backed)."""
 
 type FullArray = _XDataType | DataFrameLike | AwkArray
 """A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
@@ -373,33 +378,36 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
         if idx is None:
             return True  # obs and var index always exist
-        attr: DataFrameLike = getattr(data, self.dim)
-        return idx in attr
+        frame: DataFrameLike = getattr(data, self.dim)
+        return idx in frame_annotation_columns(frame, index_name=f"{self.dim}_names")
 
     @overload
     def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
     @overload
     def get(
         self, data: MuData | AnnData, k: str | None, /
-    ) -> pd.api.extensions.ExtensionArray | XVariable: ...
+    ) -> pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]: ...
     def get(
         self, data: MuData | AnnData, k: str | None | NO_IDX = NO_IDX, /
-    ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
-        full: DataFrameLike = getattr(data, self.dim)
+    ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]:
+        frame: object = getattr(data, self.dim)
+        if not isinstance(frame, DataFrameLike):
+            msg = f"Unsupported {self.dim} container"
+            raise TypeError(msg)
         if k is NO_IDX:
-            return full
-        match full, k:
-            case pd.DataFrame() as df, None:
-                return df.index.array
-            case Dataset2D() as ds, None:
-                return ds.true_index.array
-            case pd.DataFrame() as df, k:
-                return df[k].array
-            case Dataset2D() as ds, k:
-                return ds[k].variable
-            case _:
-                msg = f"Unsupported {self.dim} container"
-                raise TypeError(msg)
+            return frame
+        if k is None:
+            index = (
+                frame.true_index
+                if isinstance(frame, Dataset2D)
+                else axis_index(frame, index_name=f"{self.dim}_names")
+            )
+            return index.array
+        if isinstance(frame, pd.DataFrame):
+            return frame[k].array
+        if isinstance(frame, Dataset2D):
+            return frame[k].variable
+        return nw.from_native(cast("Any", frame))[k].to_numpy()
 
 
 @dataclass(frozen=True)
