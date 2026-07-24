@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import re
+import shutil
+import tempfile
 from collections.abc import MutableMapping
+from contextlib import contextmanager, nullcontext
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
@@ -47,6 +50,40 @@ if TYPE_CHECKING:
     from .._types import StorageType
 
 
+@contextmanager
+def _write_path(filepath: Path, mode: str):
+    if mode != "w":
+        yield filepath
+        return
+
+    target = filepath.resolve()
+    target_exists = target.exists()
+    if target_exists and target.stat().st_nlink > 1:
+        msg = f"Cannot safely overwrite {target} because it has multiple hard links."
+        raise OSError(msg)
+
+    with tempfile.TemporaryDirectory(
+        dir=target.parent, prefix=f".{target.name}-", suffix=".tmp"
+    ) as directory:
+        temporary = Path(directory) / target.name
+        target_handle = (
+            h5py.File(target, "r+")
+            if target_exists and h5py.is_hdf5(target)
+            else nullcontext()
+        )
+        with target_handle:
+            yield temporary
+            if target.exists():
+                if target.stat().st_nlink > 1:
+                    msg = (
+                        f"Cannot safely overwrite {target} because it has "
+                        "multiple hard links."
+                    )
+                    raise OSError(msg)
+                shutil.copymode(target, temporary)
+        temporary.replace(target)
+
+
 @no_write_dataset_2d
 def write_h5ad(
     filepath: PathLike[str] | str,
@@ -81,7 +118,7 @@ def write_h5ad(
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
 
-    with h5py.File(filepath, mode) as f:
+    with _write_path(filepath, mode) as write_path, h5py.File(write_path, mode) as f:
         # TODO: Use spec writing system for this
         # Currently can't use write_dispatched here because this function is also called to do an
         # inplace update of a backed object, which would delete "/"
