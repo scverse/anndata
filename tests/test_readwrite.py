@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import errno
+import os
 import re
 import warnings
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -17,6 +19,7 @@ import zarr
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
+from anndata._io import h5ad as h5ad_io
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
@@ -334,6 +337,167 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     adata = ad.read_h5ad(backing_h5ad)
     assert adata.shape == (3, 1)
     assert_equal(adata, adata_one)
+
+
+def _write_h5ad_value(path: Path, value: int) -> None:
+    ad.AnnData(np.array([[value]])).write_h5ad(path)
+
+
+def _try_write_h5ad(path: Path, value: int) -> OSError | None:
+    try:
+        _write_h5ad_value(path, value)
+    except OSError as error:
+        return error
+    return None
+
+
+def test_write_h5ad_preserves_locked_file(tmp_path: Path) -> None:
+    path = tmp_path / "adata.h5ad"
+    _write_h5ad_value(path, 1)
+    original = path.read_bytes()
+
+    with h5py.File(path, "r") as reader:
+        with pytest.raises(
+            OSError, match=r"(?i)(lock|open|permission|used by another process)"
+        ):
+            _write_h5ad_value(path, 2)
+        assert reader["X"][0, 0] == 1
+
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("race_at", ["exists", "replace"])
+def test_write_h5ad_race_keeps_both_paths_valid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, race_at: str
+) -> None:
+    path = tmp_path / "adata.h5ad"
+    _write_h5ad_value(path, 1)
+    original = path.read_bytes()
+    original_exists = Path.exists
+    original_replace = Path.replace
+    reader: h5py.File | None = None
+
+    with ExitStack() as readers:
+        if race_at == "exists":
+            path.unlink()
+
+            def exists_after_reader_opens(source: Path) -> bool:
+                nonlocal reader
+                if source != path or reader is not None:
+                    return original_exists(source)
+                path.write_bytes(original)
+                reader = readers.enter_context(h5py.File(path, "r"))
+                return False
+
+            monkeypatch.setattr(Path, "exists", exists_after_reader_opens)
+        else:
+
+            def replace_with_reader(source: Path, target: Path) -> Path:
+                nonlocal reader
+                reader = readers.enter_context(h5py.File(path, "r"))
+                return original_replace(source, target)
+
+            monkeypatch.setattr(Path, "replace", replace_with_reader)
+
+        write_error = _try_write_h5ad(path, 2)
+        assert reader is not None
+        assert reader["X"][0, 0] == 1
+
+    expected = 1 if write_error else 2
+    assert ad.read_h5ad(path).X[0, 0] == expected
+
+
+@pytest.mark.parametrize(
+    ("failure_at", "initial"),
+    [
+        ("write", "hdf5"),
+        ("write", "other"),
+        ("write", "missing"),
+        ("replace", "hdf5"),
+    ],
+)
+def test_write_h5ad_failure_preserves_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_at: Literal["write", "replace"],
+    initial: str,
+) -> None:
+    path = tmp_path / "adata.h5ad"
+    if initial == "hdf5":
+        _write_h5ad_value(path, 1)
+    elif initial == "other":
+        path.write_bytes(b"not an HDF5 file")
+    original = path.read_bytes() if path.exists() else None
+
+    write_error = OSError(errno.ENOSPC, "No space left on device")
+
+    def fail(*args, **kwargs) -> None:
+        raise write_error
+
+    if failure_at == "write":
+        monkeypatch.setattr(h5ad_io, "write_elem", fail)
+    else:
+        monkeypatch.setattr(Path, "replace", fail)
+    with pytest.raises(OSError, match=re.escape(str(write_error))) as error:
+        _write_h5ad_value(path, 2)
+
+    assert error.value is write_error
+    if original is None:
+        assert not path.exists()
+    else:
+        assert path.read_bytes() == original
+    assert not tuple(tmp_path.glob(".adata.h5ad-*.tmp"))
+
+
+def test_write_h5ad_preserves_symlink(tmp_path: Path) -> None:
+    path = tmp_path / "adata.h5ad"
+    link = tmp_path / "linked.h5ad"
+    _write_h5ad_value(path, 1)
+    try:
+        link.symlink_to(path)
+    except OSError as error:
+        pytest.skip(f"Cannot create a symbolic link: {error}")
+
+    _write_h5ad_value(link, 2)
+
+    assert link.is_symlink()
+    assert ad.read_h5ad(path).X[0, 0] == 2
+
+
+def test_write_h5ad_rejects_hard_links(tmp_path: Path) -> None:
+    path = tmp_path / "adata.h5ad"
+    link = tmp_path / "linked.h5ad"
+    _write_h5ad_value(path, 1)
+    try:
+        link.hardlink_to(path)
+    except OSError as error:
+        pytest.skip(f"Cannot create a hard link: {error}")
+    original = path.read_bytes()
+
+    with pytest.raises(OSError, match="multiple hard links"):
+        _write_h5ad_value(path, 2)
+
+    assert path.read_bytes() == original
+    assert link.read_bytes() == original
+
+
+@pytest.mark.parametrize("initial", ["missing", "existing"])
+@pytest.mark.skipif(os.name == "nt", reason="Windows has no POSIX file mode.")
+def test_write_h5ad_file_mode(tmp_path: Path, initial: str) -> None:
+    path = tmp_path / "adata.h5ad"
+    if initial == "existing":
+        _write_h5ad_value(path, 1)
+        path.chmod(0o640)
+        expected = 0o640
+    else:
+        direct = tmp_path / "direct.h5ad"
+        with h5py.File(direct, "w") as f:
+            f["X"] = np.array([[1]])
+        expected = direct.stat().st_mode & 0o777
+
+    _write_h5ad_value(path, 2)
+
+    assert path.stat().st_mode & 0o777 == expected
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
@@ -1034,7 +1198,10 @@ def test_forward_slash_key(
     ):
         getattr(a, f"write_{store_type}")(path)
 
-    # read and check that bad keys were only written if allowed
+    if store_type == "h5ad" and not can_write_slash_key:
+        assert not path.exists()
+        return
+
     elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
     if can_write_slash_key:
         if elem_key in {"obs", "var"}:
@@ -1069,6 +1236,10 @@ def test_leading_slash_error(
     # while “Forward slashes” is raised earlier by `write_anndata`/`write_h5ad`
     with pytest.raises(ValueError, match=r"not in the subpath|Forward slashes"):
         getattr(a, f"write_{store_type}")(path)
+
+    if store_type == "h5ad":
+        assert not path.exists()
+        return
 
     elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
     if elem_key in {"obs", "var"}:
