@@ -15,6 +15,7 @@ from scipy.sparse import csc_matrix, csr_matrix
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
+    Reindexer,
     _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
@@ -23,8 +24,6 @@ from .._core.merge import (
     intersect_keys,
     merge_dataframes,
     merge_indices,
-    missing_element,
-    not_missing,
     resolve_merge_strategy,
     unify_dtypes,
     union_keys,
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Generator, Iterable, Sequence
     from typing import Any, Literal
 
-    from .._core.merge import Reindexer, StrategiesLiteral
+    from .._core.merge import StrategiesLiteral
     from .._types import Join_T
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
@@ -67,14 +66,35 @@ def _indices_equal(indices: Iterable[pd.Index]) -> bool:
     return all(np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
-def _gen_slice_to_append(
+def _sparse_fill_block(
+    n: int, width: int, *, axis: Literal[0, 1], fill_value: Any = None
+):
+    """A sparse fill block for a key missing from one object under an outer join.
+
+    Shaped so it can be stacked directly onto the other (reindexed) blocks. The common
+    ``fill_value`` of ``0`` yields an empty matrix that stores nothing, so a missing key
+    never materializes a dense block regardless of ``width``.
+    """
+    sparse_cls = (csr_matrix, csc_matrix)[axis]
+    shape = (n, width) if axis == 0 else (width, n)
+    if fill_value in (None, 0):
+        return sparse_cls(shape)
+    return sparse_cls(np.broadcast_to(np.asarray(fill_value), shape).copy())
+
+
+def _gen_slice_to_append(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     reindexers,
     max_loaded_elems: int,
     axis=0,
     fill_value=None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ):
-    for ds, ri in zip(datasets, reindexers, strict=False):
+    for i, (ds, ri) in enumerate(zip(datasets, reindexers, strict=False)):
+        if ds is MissingVal:
+            yield _sparse_fill_block(ns[i], width, axis=axis, fill_value=fill_value)
+            continue
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
@@ -180,31 +200,35 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 ###################
 
 
-def write_concat_dense(  # noqa: PLR0917
+def write_concat_dense(  # noqa: PLR0913, PLR0917
     arrays: Sequence[ZarrArray | H5Array],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ):
     """
     Writes the concatenation of given dense arrays to disk using dask.
+
+    Under an outer join an entry may be ``MissingVal`` when the key is absent from that
+    object; it contributes a lazily-created fill block so the present arrays are never
+    brought into memory.
     """
     import dask.array as da
 
-    darrays = (
-        da.from_array(a, chunks="auto" if a.chunks is None else a.chunks)
-        for a in arrays
-    )
+    blocks = []
+    for i, (a, ri) in enumerate(zip(arrays, reindexers, strict=True)):
+        if a is MissingVal:
+            shape = (ns[i], width) if axis == 0 else (width, ns[i])
+            blocks.append(da.full(shape, np.nan if fill_value is None else fill_value))
+        else:
+            darray = da.from_array(a, chunks="auto" if a.chunks is None else a.chunks)
+            blocks.append(ri(darray, axis=1 - axis, fill_value=fill_value))
 
-    res = da.concatenate(
-        [
-            ri(a, axis=1 - axis, fill_value=fill_value)
-            for a, ri in zip(darrays, reindexers, strict=False)
-        ],
-        axis=axis,
-    )
+    res = da.concatenate(blocks, axis=axis)
     write_elem(output_group, output_path, res)
     output_group[output_path].attrs.update({
         "encoding-type": "array",
@@ -212,7 +236,7 @@ def write_concat_dense(  # noqa: PLR0917
     })
 
 
-def write_concat_sparse(  # noqa: PLR0917
+def write_concat_sparse(  # noqa: PLR0913, PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: ZarrGroup | H5Group,
     output_path: ZarrGroup | H5Group,
@@ -220,13 +244,16 @@ def write_concat_sparse(  # noqa: PLR0917
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ) -> None:
     """Writes and concatenates sparse datasets into a single output dataset.
 
     Parameters
     ----------
     datasets
-        A sequence of BaseCompressedSparseDataset objects to be concatenated.
+        A sequence of BaseCompressedSparseDataset objects to be concatenated. Under an
+        outer join an entry may be ``MissingVal`` when the key is absent from that object.
     output_group
         The output group where the concatenated dataset will be written.
     output_path
@@ -239,15 +266,22 @@ def write_concat_sparse(  # noqa: PLR0917
         A reindexer object that defines the reindexing operation to be applied.
     fill_value
         The fill value to use for missing elements. Defaults to None.
+    ns
+        Size of each object along ``axis``, used to shape fills for ``MissingVal`` entries.
+    width
+        Size of the concatenated result along the other axis, used to shape those fills.
     """
+    has_missing = any(d is MissingVal for d in datasets)
     elems = None
-    if all(ri.no_change for ri in reindexers):
+    if all(ri.no_change for ri in reindexers) and not has_missing:
         elems = iter(datasets)
     else:
         elems = _gen_slice_to_append(
-            datasets, reindexers, max_loaded_elems, axis, fill_value
+            datasets, reindexers, max_loaded_elems, axis, fill_value, ns=ns, width=width
         )
-    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
+    number_non_zero = sum(
+        d.group["indices"].shape[0] for d in datasets if d is not MissingVal
+    )
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(
@@ -261,33 +295,6 @@ def write_concat_sparse(  # noqa: PLR0917
     for temp_elem in elems:
         out_dataset.append(temp_elem)
         del temp_elem
-
-
-def _concat_missing_mapping_key(
-    elems: Sequence[Any],
-    ns: Sequence[int],
-    reindexers: list[Reindexer] | None,
-    *,
-    axis: Literal[0, 1] = 0,
-    index: pd.Index | None = None,
-    fill_value: Any = None,
-):
-    """Concatenate a single mapping key that is absent from some objects (outer join).
-
-    Present elements are read into memory and objects missing the key contribute a
-    ``fill_value`` block, matching :func:`~anndata._core.merge.outer_concat_aligned_mapping`.
-    """
-    if reindexers is None:
-        reindexers = gen_outer_reindexers(elems, ns, new_index=index, axis=axis)
-    arrays = [
-        (elem if isinstance(elem, pd.DataFrame) else to_memory(elem))
-        if not_missing(elem)
-        else missing_element(n, els=elems, axis=axis, fill_value=fill_value)
-        for elem, n in zip(elems, ns, strict=True)
-    ]
-    return concat_arrays(
-        arrays, reindexers, axis=axis, index=index, fill_value=fill_value
-    )
 
 
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
@@ -308,8 +315,10 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     Mirrors the in-memory :func:`~anndata._core.merge.inner_concat_aligned_mapping` /
     :func:`~anndata._core.merge.outer_concat_aligned_mapping`: for ``join="inner"`` the
     intersection of keys is kept, while for ``join="outer"`` the union is kept and keys
-    missing from some objects are filled with ``fill_value`` (``ns`` gives the size of each
-    object along the concatenation axis, used to build the fill).
+    missing from some objects are filled with ``fill_value``. ``ns`` gives the size of each
+    object along the concatenation axis, used to shape those fills. Every key streams
+    through :func:`_write_concat_sequence`; a key absent from an object contributes a
+    lazily-built fill block rather than reading the present objects into memory.
     """
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
@@ -325,35 +334,37 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
             cur_reindexers = gen_outer_reindexers(elems, ns, new_index=index, axis=axis)
         else:
             cur_reindexers = gen_inner_reindexers(elems, new_index=index, axis=axis)
-        # Under an outer join a key can be absent from some objects or need padding along its
-        # free axis; both require `fill_value` (and possibly integer->float promotion). Those
-        # keys are materialized and concatenated through the same `concat_arrays` path as the
-        # in-memory `outer_concat_aligned_mapping`, keeping the result identical to
-        # `anndata.concat`. Keys present in every object that need no reindexing keep the
-        # memory-efficient streaming path.
-        needs_fill = not all(not_missing(elem) for elem in elems) or not all(
-            getattr(r, "no_change", False) for r in cur_reindexers
+        _write_concat_sequence(
+            elems,
+            output_group=mapping_group,
+            output_path=k,
+            axis=axis,
+            index=index,
+            reindexers=cur_reindexers,
+            fill_value=fill_value,
+            max_loaded_elems=max_loaded_elems,
+            join=join,
+            ns=ns,
         )
-        if join == "outer" and needs_fill:
-            write_elem(
-                mapping_group,
-                k,
-                _concat_missing_mapping_key(
-                    elems, ns, reindexers, axis=axis, index=index, fill_value=fill_value
-                ),
-            )
-        else:
-            _write_concat_sequence(
-                elems,
-                output_group=mapping_group,
-                output_path=k,
-                axis=axis,
-                index=index,
-                reindexers=cur_reindexers,
-                fill_value=fill_value,
-                max_loaded_elems=max_loaded_elems,
-                join=join,
-            )
+
+
+def _target_free_width(
+    arrays: Sequence[Any], reindexers: list[Reindexer], axis: Literal[0, 1]
+) -> int:
+    """Width of the concatenated result along the axis orthogonal to ``axis``.
+
+    Taken from the first present array: an active reindexer knows the target width, an
+    unchanged one leaves the array's own free axis. Used to shape fills for missing keys.
+    """
+    free_axis = 1 - axis
+    for a, r in zip(arrays, reindexers, strict=True):
+        if a is MissingVal:
+            continue
+        if isinstance(r, Reindexer) and not r.no_change:
+            return len(r.new_idx)
+        return a.shape[free_axis]
+    msg = "Cannot infer output width: every element is missing."
+    raise ValueError(msg)
 
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
@@ -365,11 +376,13 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
     join: Join_T = "inner",
+    ns: Sequence[int] | None = None,
 ):
-    init_elem = arrays[0]
+    present = [a for a in arrays if a is not MissingVal]
+    init_elem = present[0]
     init_type = type(init_elem)
-    if not all(isinstance(a, init_type) for a in arrays):
-        msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+    if not all(isinstance(a, init_type) for a in present):
+        msg = f"All elements must be the same type instead got types: {[type(a) for a in present]}"
         raise NotImplementedError(msg)
 
     if reindexers is None:
@@ -379,9 +392,11 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
             msg = "Cannot reindex arrays with outer join."
             raise NotImplementedError(msg)
 
+    width = _target_free_width(arrays, reindexers, axis)
+
     if isinstance(init_elem, BaseCompressedSparseDataset):
         expected_sparse_fmt = ["csr", "csc"][axis]
-        if all(a.format == expected_sparse_fmt for a in arrays):
+        if all(a.format == expected_sparse_fmt for a in present):
             write_concat_sparse(
                 arrays,
                 output_group,
@@ -390,13 +405,22 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
                 axis,
                 reindexers,
                 fill_value,
+                ns=ns,
+                width=width,
             )
         else:
-            msg = f"Concat of following not supported: {[a.format for a in arrays]}"
+            msg = f"Concat of following not supported: {[a.format for a in present]}"
             raise NotImplementedError(msg)
     else:
         write_concat_dense(
-            arrays, output_group, output_path, axis, reindexers, fill_value
+            arrays,
+            output_group,
+            output_path,
+            axis,
+            reindexers,
+            fill_value,
+            ns=ns,
+            width=width,
         )
 
 
@@ -410,6 +434,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     reindexers: list[Reindexer] | None = None,
     fill_value: Any = None,
     join: Join_T = "inner",
+    ns: Sequence[int] | None = None,
 ):
     """
     array, dataframe, csc_matrix, csc_matrix
@@ -436,7 +461,10 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray)
+        a is MissingVal
+        or isinstance(
+            a, pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray
+        )
         for a in arrays
     ):
         _write_concat_arrays(
@@ -448,6 +476,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
             reindexers,
             fill_value,
             join,
+            ns=ns,
         )
     else:
         msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
