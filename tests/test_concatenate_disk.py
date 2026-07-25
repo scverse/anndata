@@ -308,6 +308,51 @@ def test_concat_on_disk_outer_layers_missing_keys(tmp_path, file_format):
     assert_eq_concat_on_disk([a, b], tmp_path, file_format, join="outer")
 
 
+def test_concat_on_disk_outer_missing_keys_fill_value(tmp_path, file_format):
+    """A non-default ``fill_value`` reaches the fills built for missing mapping keys.
+
+    ``dense`` and ``sparse`` are absent from the second object, so each contributes a
+    fill block; with ``fill_value != 0`` the sparse fill is materialized rather than left
+    empty. The on-disk result must still match :func:`~anndata.concat`.
+    """
+    a = AnnData(
+        sparse.csr_matrix((3, 5)),
+        obs=pd.DataFrame(index=[f"a{i}" for i in range(3)]),
+        obsm={
+            "dense": np.arange(6).reshape(3, 2).astype(float),
+            "sparse": sparse.csr_matrix(np.arange(6).reshape(3, 2).astype(float)),
+        },
+    )
+    b = AnnData(
+        sparse.csr_matrix((2, 5)),
+        obs=pd.DataFrame(index=[f"b{i}" for i in range(2)]),
+    )
+    # ``b`` (which lacks both keys) goes first so the fill is built for the leading object.
+    assert_eq_concat_on_disk(
+        [b, a], tmp_path, file_format, join="outer", fill_value=7.0
+    )
+
+
+def test_concat_on_disk_outer_sparse_layer_missing_keys_var_axis(tmp_path, file_format):
+    """A sparse `.layers` key absent from some objects is filled when concatenating on ``var``.
+
+    Concatenating along ``axis=1`` drives the fill along the layer's column axis, the path
+    the ``obs``-axis tests do not reach.
+    """
+    a = AnnData(
+        sparse.csc_matrix((2, 3)),
+        obs=pd.DataFrame(index=["c0", "c1"]),
+        var=pd.DataFrame(index=["g1", "g2", "g3"]),
+        layers={"counts": sparse.csc_matrix(np.arange(6).reshape(2, 3).astype(float))},
+    )
+    b = AnnData(
+        sparse.csc_matrix((2, 2)),
+        obs=pd.DataFrame(index=["c0", "c1"]),
+        var=pd.DataFrame(index=["g4", "g5"]),
+    )
+    assert_eq_concat_on_disk([a, b], tmp_path, file_format, axis=1, join="outer")
+
+
 def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
     import zarr
 

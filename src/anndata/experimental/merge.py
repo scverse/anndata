@@ -363,8 +363,10 @@ def _target_free_width(
         if isinstance(r, Reindexer) and not r.no_change:
             return len(r.new_idx)
         return a.shape[free_axis]
+    # Unreachable: a key only reaches here from union/intersect of the mappings, so at
+    # least one object always carries it.
     msg = "Cannot infer output width: every element is missing."
-    raise ValueError(msg)
+    raise ValueError(msg)  # pragma: no cover
 
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
