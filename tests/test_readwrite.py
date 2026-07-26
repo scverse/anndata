@@ -928,6 +928,33 @@ def test_backwards_compat_zarr() -> None:
     assert_equal(pbmc_zarr, pbmc_orig)
 
 
+def test_read_zarr_zip_path_suggests_store(tmp_path: Path) -> None:
+    """Reading a zipped store by path suggests the store class to wrap it in."""
+    pth = tmp_path / "adata.zarr.zip"
+    orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
+    with zarr.storage.ZipStore(pth, mode="w") as store:
+        orig.write_zarr(store)
+
+    with pytest.raises(zarr.errors.GroupNotFoundError) as exc_info:
+        ad.io.read_zarr(pth)
+    assert any("zarr.storage.ZipStore" in note for note in exc_info.value.__notes__)
+
+    # the suggested incantation works
+    with zarr.storage.ZipStore(pth, mode="r") as store:
+        assert_equal(ad.io.read_zarr(store), orig)
+
+
+def test_read_zarr_dir_path_suggests_nothing(tmp_path: Path) -> None:
+    """Paths that aren’t single-file stores get no (misleading) suggestion."""
+    pth = tmp_path / "adata.zarr"
+    pth.mkdir()
+
+    with pytest.raises(zarr.errors.GroupNotFoundError) as exc_info:
+        ad.io.read_zarr(pth)
+    notes = getattr(exc_info.value, "__notes__", [])
+    assert not any("Did you mean" in note for note in notes)
+
+
 def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     pth = tmp_path / f"adatas_in_uns.{diskfmt}"
 
