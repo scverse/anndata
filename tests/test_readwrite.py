@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import warnings
+import zipfile
 from contextlib import contextmanager, nullcontext
 from functools import partial
 from importlib.util import find_spec
@@ -41,6 +42,8 @@ from anndata.utils import get_literal_members
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from typing import Literal
+
+    from zarr.storage import StoreLike
 
 HERE = Path(__file__).parent
 ARRAY_TYPES = [
@@ -930,10 +933,14 @@ def test_backwards_compat_zarr() -> None:
 
 def test_read_zarr_zip_path_suggests_store(tmp_path: Path) -> None:
     """Reading a zipped store by path suggests the store class to wrap it in."""
-    pth = tmp_path / "adata.zarr.zip"
     orig = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
-    with zarr.storage.ZipStore(pth, mode="w") as store:
-        orig.write_zarr(store)
+    dir_pth = tmp_path / "adata.zarr"
+    orig.write_zarr(dir_pth)
+    # zip the store’s contents; a ZipStore expects them at the archive root
+    pth = tmp_path / "adata.zarr.zip"
+    with zipfile.ZipFile(pth, mode="w") as zf:
+        for elem in filter(Path.is_file, dir_pth.rglob("*")):
+            zf.write(elem, elem.relative_to(dir_pth).as_posix())
 
     with pytest.raises(zarr.errors.GroupNotFoundError) as exc_info:
         ad.io.read_zarr(pth)
@@ -944,13 +951,25 @@ def test_read_zarr_zip_path_suggests_store(tmp_path: Path) -> None:
         assert_equal(ad.io.read_zarr(store), orig)
 
 
-def test_read_zarr_dir_path_suggests_nothing(tmp_path: Path) -> None:
-    """Paths that aren’t single-file stores get no (misleading) suggestion."""
+def _empty_dir_store(tmp_path: Path) -> Path:
     pth = tmp_path / "adata.zarr"
     pth.mkdir()
+    return pth
 
+
+@pytest.mark.parametrize(
+    "make_store",
+    [
+        pytest.param(_empty_dir_store, id="dir"),
+        pytest.param(lambda _: zarr.storage.MemoryStore(), id="memory"),
+    ],
+)
+def test_read_zarr_suggests_nothing(
+    tmp_path: Path, make_store: Callable[[Path], StoreLike]
+) -> None:
+    """Stores that aren’t single-file paths get no (misleading) suggestion."""
     with pytest.raises(zarr.errors.GroupNotFoundError) as exc_info:
-        ad.io.read_zarr(pth)
+        ad.io.read_zarr(make_store(tmp_path))
     notes = getattr(exc_info.value, "__notes__", [])
     assert not any("Did you mean" in note for note in notes)
 
