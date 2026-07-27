@@ -1375,7 +1375,7 @@ class AnnData:  # noqa: PLW1641
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
     def _copy(
-        self, *, X: _XDataType | None | Literal["no_set_X"] = "no_set_X"
+        self, *, X: _XDataType | Literal["no_set_X"] | None = "no_set_X"
     ) -> AnnData:
         from ..typing import _XDataType
 
