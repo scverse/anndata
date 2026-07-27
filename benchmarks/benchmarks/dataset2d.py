@@ -60,7 +60,7 @@ class Dataset2D:
     def setup(
         self,
         store_type: Literal["zarr", "h5ad"],
-        chunks: None | tuple[int],
+        chunks: tuple[int] | None,
         array_type: Literal[
             "cat", "numeric", "string-array", "nullable-string-array", "all"
         ],

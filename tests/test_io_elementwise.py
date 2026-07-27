@@ -406,7 +406,7 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
 def test_read_lazy_2d_chunk_kwargs(
     store: H5Group | ZarrGroup,
     arr_type: Literal["csr", "csc", "dense"],
-    chunks: None | tuple[int | None, int | None],
+    chunks: tuple[int | None, int | None] | None,
     expected_chunksize: tuple[int, int],
 ) -> None:
     if arr_type == "dense":
