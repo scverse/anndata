@@ -11,7 +11,7 @@ import zarr
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, ZarrGroup
+from anndata.compat import CSArray, CSMatrix
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -40,7 +40,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
+    if isinstance(z, zarr.Group):
         z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
@@ -71,7 +71,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
+    if isinstance(z, zarr.Group):
         z = zarr.open(z.store)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
@@ -92,7 +92,7 @@ def test_read_dispatched_null_case(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
+    if isinstance(z, zarr.Group):
         z = zarr.open(z.store)
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
@@ -170,7 +170,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
-    def check_chunking(k: str, v: ZarrGroup | zarr.Array):
+    def check_chunking(k: str, v: zarr.Group | zarr.Array):
         if (
             not isinstance(v, zarr.Array)
             or v.shape == ()

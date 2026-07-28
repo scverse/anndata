@@ -37,8 +37,6 @@ from anndata.compat import (
     DaskArray,
     XDataArray,
     XDataset,
-    ZarrArray,
-    ZarrGroup,
     has_xp_base,
 )
 from anndata.types import SupportsArrayApiBase
@@ -712,7 +710,7 @@ def assert_equal_cupy_sparse(
 
 
 @assert_equal.register(h5py.Dataset)
-@assert_equal.register(ZarrArray)
+@assert_equal.register(zarr.Array)
 def assert_equal_h5py_dataset(
     a: _ArrayStorageType,
     b: object,
@@ -1282,17 +1280,17 @@ def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
 
 
 def visititems_zarr(
-    z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
+    z: zarr.Group, visitor: Callable[[str, zarr.Group | zarr.Array], None]
 ) -> None:
     for key in z:
         maybe_group = z[key]
-        if isinstance(maybe_group, ZarrGroup):
+        if isinstance(maybe_group, zarr.Group):
             visititems_zarr(maybe_group, visitor)
         else:
             visitor(key, maybe_group)
 
 
-def check_all_sharded(g: ZarrGroup):
+def check_all_sharded(g: zarr.Group):
     def visit(key: str, arr: zarr.Array | zarr.Group):
         # Check for recarray via https://numpy.org/doc/stable/user/basics.rec.html#manipulating-and-displaying-structured-datatypes
         if isinstance(arr, zarr.Array) and arr.shape != () and arr.dtype.names is None:
