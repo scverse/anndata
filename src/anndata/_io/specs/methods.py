@@ -205,7 +205,7 @@ def suppress_autoshard_warning[S: StorageType, T: RWAble](
 def read_basic(
     elem: h5py.File | h5py.Group | h5py.Dataset, *, _reader: Reader
 ) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
-    from anndata._io import h5ad
+    from anndata._io.h5ad import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
     warn(msg, OldFormatWarning)
@@ -216,7 +216,7 @@ def read_basic(
             return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
     elif isinstance(elem, h5py.Dataset):
-        return h5ad.read_dataset(elem)  # TODO: Handle legacy
+        return read_dataset(elem)  # TODO: Handle legacy
 
 
 @_REGISTRY.register_read(zarr.Group, IOSpec("", ""))
@@ -224,7 +224,7 @@ def read_basic(
 def read_basic_zarr(
     elem: zarr.Group | zarr.Array, *, _reader: Reader
 ) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
-    from anndata._io import zarr
+    from anndata._io.zarr import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
     warn(msg, OldFormatWarning)
@@ -234,7 +234,7 @@ def read_basic_zarr(
             return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
     elif isinstance(elem, zarr.Array):
-        return zarr.read_dataset(elem)  # TODO: Handle legacy
+        return read_dataset(elem)  # TODO: Handle legacy
 
 
 # @_REGISTRY.register_read_partial(IOSpec("", ""))
