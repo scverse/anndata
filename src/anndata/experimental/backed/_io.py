@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import h5py
+import zarr
 
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._io.specs.registry import read_elem_lazy
@@ -15,7 +16,6 @@ from testing.anndata._doctest import doctest_needs
 from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
-from ...compat import ZarrGroup
 from ...utils import get_literal_members, warn
 from .. import read_dispatched
 
@@ -32,7 +32,7 @@ ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 @doctest_needs("xarray")
 @requires_xarray
 def read_lazy(
-    store: PathLike[str] | str | MutableMapping | ZarrGroup | h5py.File | h5py.Group,
+    store: PathLike[str] | str | MutableMapping | zarr.Group | h5py.File | h5py.Group,
     *,
     load_annotation_index: bool = True,
 ) -> AnnData:
@@ -104,9 +104,7 @@ def read_lazy(
 
     has_keys = True  # true if consolidated or h5ad
     if not is_h5:
-        import zarr
-
-        if not isinstance(store, ZarrGroup):
+        if not isinstance(store, zarr.Group):
             try:
                 f = zarr.open_consolidated(store, mode="r")
             except ValueError:
