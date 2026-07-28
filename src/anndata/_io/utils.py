@@ -15,10 +15,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any, Literal
 
+    import h5py
+    import zarr
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .._types import StorageType, _WriteInternal
-    from ..compat import H5Group, ZarrGroup
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -295,7 +296,7 @@ def _check_has_no_slash_key(attr: str, elem: object) -> None:
 
 
 def _read_legacy_raw(
-    f: ZarrGroup | H5Group,
+    f: zarr.Group | h5py.Group,
     modern_raw,  # TODO: type
     read_df: Callable,
     read_attr: Callable,
