@@ -1,0 +1,71 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "array",
+    "oneOf": [
+        {
+            "title": "Layer vector (layers)",
+            "minItems": 4,
+            "maxItems": 4,
+            "anyOf": [
+                {
+                    "prefixItems": [
+                        { "const": "layers" },
+                        { "type": ["string", "null"] },
+                        { "type": ["string", "null"] },
+                        { "const": null }
+                    ]
+                },
+                {
+                    "prefixItems": [
+                        { "const": "layers" },
+                        { "type": ["string", "null"] },
+                        { "const": null },
+                        { "type": ["string", "null"] }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "Annotation vector (obs/var)",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+                { "enum": ["obs", "var"] },
+                { "type": ["string", "null"] }
+            ]
+        },
+        {
+            "title": "Vector from a multi-dimensional annotation (obsm/varm)",
+            "minItems": 3,
+            "maxItems": 3,
+            "prefixItems": [
+                { "enum": ["obsm", "varm"] },
+                { "type": "string" },
+                { "type": "integer" }
+            ]
+        },
+        {
+            "title": "Graph vector (obsp/varp)",
+            "minItems": 4,
+            "maxItems": 4,
+            "anyOf": [
+                {
+                    "prefixItems": [
+                        { "enum": ["obsp", "varp"] },
+                        { "type": "string" },
+                        { "type": ["string", "null"] },
+                        { "const": null }
+                    ]
+                },
+                {
+                    "prefixItems": [
+                        { "enum": ["obsp", "varp"] },
+                        { "type": "string" },
+                        { "const": null },
+                        { "type": ["string", "null"] }
+                    ]
+                }
+            ]
+        }
+    ]
+}

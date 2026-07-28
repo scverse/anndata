@@ -153,8 +153,8 @@ def test_backing(adata: ad.AnnData, tmp_path: Path, backing_h5ad: Path) -> None:
     # know that the file is open again....
     assert adata.file.is_open
 
-    adata[:2, 0].X = [0, 0]
-    assert adata[:, 0].X.tolist() == np.reshape([0, 0, 7], (3, 1)).tolist()
+    adata[:2, 0].X = np.array([[0], [0]])
+    assert adata[:, 0].X.tolist() == np.reshape([1, 4, 7], (3, 1)).tolist()
 
     adata_subset = adata[:2, [0, 1]]
     assert adata_subset.is_view
@@ -246,6 +246,7 @@ def test_backed_raw_subset(
     backed_adata = ad.read_h5ad(backed_pth, backed="r")
     backed_v = backed_adata[obs_idx, var_idx]
     assert backed_v.is_view
+    assert backed_v.isbacked
     mem_v = mem_adata[obs_idx, var_idx]
 
     # Value equivalent
@@ -290,10 +291,10 @@ def test_to_memory_full(
 
 
 def test_double_index(adata: ad.AnnData, backing_h5ad: Path):
+    adata_mem = adata.to_memory(copy=True)
+    adata_mem.strings_to_categoricals()
     adata.filename = backing_h5ad
-    with pytest.raises(ValueError, match=r"cannot make a view of a view"):
-        # no view of view of backed object currently
-        adata[:2][:, 0]
+    assert_equal(adata[:2][:, [0, 2]].to_memory(), adata_mem[:2][:, [0, 2]])
 
     # close backing file
     adata.write()
@@ -346,6 +347,7 @@ def test_backed_modification_sparse(
 ):
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse_format(adata.X)
+    orig = adata.X.copy()
     assert not adata.isbacked
 
     adata.write(backing_h5ad)
@@ -354,22 +356,9 @@ def test_backed_modification_sparse(
     assert adata.filename == backing_h5ad
     assert adata.isbacked
 
-    pat = r"__setitem__ for backed sparse will be removed"
-    with pytest.warns(FutureWarning, match=pat):
-        adata.X[0, [0, 2]] = 10
-    with pytest.warns(FutureWarning, match=pat):
-        adata.X[1, [0, 2]] = [11, 12]
-    with (
-        pytest.warns(FutureWarning, match=pat),
-        pytest.raises(ValueError, match=r"cannot change the sparsity structure"),
-    ):
-        adata.X[2, 1] = 13
-
-    assert adata.isbacked
-
-    assert np.all(adata.X[0, :] == np.array([10, 0, 10]))
-    assert np.all(adata.X[1, :] == np.array([11, 0, 12]))
-    assert np.all(adata.X[2, :] == np.array([7, 0, 9]))
+    # Does not modify backed store
+    adata[0, [0, 2]].X = np.array([[10, 10]])
+    np.testing.assert_equal(orig.toarray(), adata.X[...].toarray())
 
 
 # TODO: Work around h5py not supporting this

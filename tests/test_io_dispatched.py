@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from functools import partial
 from typing import TYPE_CHECKING
 
 import h5py
@@ -10,7 +11,7 @@ import zarr
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, ZarrGroup, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, ZarrGroup
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -39,7 +40,7 @@ def test_read_dispatched_w_regex(tmp_path: Path):
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
@@ -70,7 +71,7 @@ def test_read_dispatched_dask(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
@@ -91,7 +92,7 @@ def test_read_dispatched_null_case(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(z, ZarrGroup):
+    if isinstance(z, ZarrGroup):
         z = zarr.open(z.store)
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
@@ -181,10 +182,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
         elif re.match(r"var[mp]?/\w+", k):
             assert v.chunks[0] == N
 
-    if is_zarr_v2():
-        z.visititems(check_chunking)
-    else:
-        visititems_zarr(z, check_chunking)
+    visititems_zarr(z, check_chunking)
 
 
 @pytest.mark.zarr_io
@@ -197,33 +195,23 @@ def test_io_dispatched_keys(tmp_path: Path):
     h5ad_path = tmp_path / "test.h5ad"
     zarr_path = tmp_path / "test.zarr"
 
-    def h5ad_writer(func, store, k, elem, dataset_kwargs, iospec):
-        h5ad_write_keys.append(k if is_zarr_v2() else k.strip("/"))
+    def writer(func, store, k, elem, dataset_kwargs, iospec, keys):
+        keys.append(f"{store.name}/{k}")
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    def zarr_writer(func, store, k, elem, dataset_kwargs, iospec):
-        zarr_write_keys.append(
-            k if is_zarr_v2() else f"{store.name.strip('/')}/{k.strip('/')}".strip("/")
-        )
-        func(store, k, elem, dataset_kwargs=dataset_kwargs)
-
-    def h5ad_reader(func, elem_name: str, elem, iospec):
-        h5ad_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
-        return func(elem)
-
-    def zarr_reader(func, elem_name: str, elem, iospec):
-        zarr_read_keys.append(elem_name if is_zarr_v2() else elem_name.strip("/"))
+    def reader(func, elem_name: str, elem, iospec, keys):
+        keys.append(elem_name)
         return func(elem)
 
     adata = gen_adata((50, 100), **GEN_ADATA_NO_XARRAY_ARGS)
 
     with h5py.File(h5ad_path, "w") as f:
-        write_dispatched(f, "/", adata, callback=h5ad_writer)
-        _ = read_dispatched(f, h5ad_reader)
+        write_dispatched(f, "/", adata, callback=partial(writer, keys=h5ad_write_keys))
+        _ = read_dispatched(f, partial(reader, keys=h5ad_read_keys))
 
     f = open_write_group(zarr_path)
-    write_dispatched(f, "/", adata, callback=zarr_writer)
-    _ = read_dispatched(f, zarr_reader)
+    write_dispatched(f, "/", adata, callback=partial(writer, keys=zarr_write_keys))
+    _ = read_dispatched(f, partial(reader, keys=zarr_read_keys))
 
     assert sorted(h5ad_read_keys) == sorted(zarr_read_keys)
     assert sorted(h5ad_write_keys) == sorted(zarr_write_keys)

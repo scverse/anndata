@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Literal
 
-    from .._types import ArrayStorageType
+    from .._types import _ArrayStorageType
     from . import anndata
 
 
@@ -115,7 +115,7 @@ class AnnDataFileManager:
 
     def _to_memory_mode(self):
         """Close the backing file, forget filename, *do* change to memory mode."""
-        self._adata._X = self._adata.X[()]
+        self._adata.X = self._adata.X[()]
         self._file.close()
         self._file = None
         self._filename = None
@@ -143,7 +143,7 @@ def to_memory(x, *, copy: bool = False):
 
 @to_memory.register(ZarrArray)
 @to_memory.register(h5py.Dataset)
-def _(x: ArrayStorageType, *, copy: bool = False):
+def _(x: _ArrayStorageType, *, copy: bool = False):
     return x[...]
 
 

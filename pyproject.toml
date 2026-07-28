@@ -36,16 +36,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "pandas >=2.2.2",
-    "numpy>=2",
-    "scipy >=1.13",
+    "pandas >=2.3",
+    "numpy>=2.1",
+    "scipy >=1.14,!=1.17.0",
     "h5py>=3.11",
     "natsort",
     "packaging>=24.2",
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
-    "zarr >=2.18.7, !=3.0.*",
-    "typing-extensions; python_version<'3.13'",
+    "zarr >=3.1",
+    "typing-extensions>=4.16; python_version<='3.14'",
+    "scverse-misc[settings]>=0.1.0",
 ]
 dynamic = [ "version" ]
 
@@ -59,24 +60,29 @@ dev = [
     { include-group = "dev-doc" },
 ]
 doc = [
-    "sphinx>=8.2.1,<9",                  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/586
+    "sphinx>=9.1.0",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=2.2.0",
+    "sphinx-autodoc-typehints>=3.6.2",
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
-    "sphinx-toolbox>=3.8.0",
     "sphinxext.opengraph",
-    "myst-nb",
-    "scanpydoc[theme,typehints] >=0.16",
+    "myst-nb>=1.4",
+    "scanpydoc[theme,typehints] >=0.17.1",
+    "scverse-misc[sphinx]",
     "awkward>=2.6.3",
-    "IPython",                           # For syntax highlighting in notebooks
-    "myst_parser",
-    "sphinx_design>=0.5.0",
+    "IPython",                             # For syntax highlighting in notebooks
+    "myst-parser",
+    "sphinx-design",
     "anndata[dask]",
+    "pandas>=3",
+    "mudata",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
-dev-doc = [ "towncrier>=24.8.0" ] # release notes tool
+dev-doc = [
+    "towncrier>=24.8.0", # release notes tool
+    "types-array-api",   # for dev and linking in the docs
+]
 test = [
     "fast-array-utils>=1.2.3",
     "anndata[lazy]",
@@ -90,22 +96,30 @@ test-min = [
     "pytest-mock",
     "pytest-xdist[psutil]",
     "filelock",
+    "jsonschema",
     "matplotlib",
     "scikit-learn",
     "openpyxl",
     "joblib",
     "boltons",
     "scanpy>=1.10",
-    # TODO: Is 1.0dev1 a real pre-release? https://pypi.org/project/httpx/#history
-    "httpx<1.0",         # For data downloading
     "dask[distributed]",
     "awkward>=2.6.3",
     "pyarrow",
+    "pooch",
     "anndata[dask]",
 ]
-
+test-array-api = [
+    { include-group = "test-min" },
+    { include-group = "test-jax" },
+]
+test-jax = [
+    "jax>=0.6.0",
+    "jaxlib>=0.6.0",
+]
 [project.optional-dependencies]
 gpu = [ "cupy" ]
+cu13 = [ "cupy-cuda13x" ]
 cu12 = [ "cupy-cuda12x" ]
 cu11 = [ "cupy-cuda11x" ]
 # requests and aiohttp needed for zarr remote data
@@ -153,6 +167,8 @@ filterwarnings = [
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
     "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+    # TODO: remove when https://github.com/scikit-hep/awkward/issues/4078 is resolved
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
 ]
 # When `--strict-warnings` is used, all warnings are treated as errors, except those:
 filterwarnings_when_strict = [
@@ -161,26 +177,26 @@ filterwarnings_when_strict = [
     "default:(Observation|Variable) names are not unique. To make them unique:UserWarning",
     "default::scipy.sparse.SparseEfficiencyWarning",
     "default::dask.array.core.PerformanceWarning",
-    "default:anndata will no longer support zarr v2:DeprecationWarning",
-    "default:The codec `vlen-utf8:UserWarning",
-    "default:The dtype `StringDType():UserWarning",
-    "default:Consolidated metadata is:UserWarning",
-    "default:.*Structured:zarr.core.dtype.common.UnstableSpecificationWarning",
+    "default:.*Struct:zarr.core.dtype.common.UnstableSpecificationWarning",
+    # TODO: Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
-    "default:Automatic shard shape inference is experimental",
+    "default:Writing zarr v2:UserWarning",
 ]
 python_files = [ "test_*.py" ]
 testpaths = [
-    "anndata",                  # docstrings (module name due to --pyargs)
-    "./tests",                  # unit tests
-    "./ci/scripts",             # CI script tests
-    "./docs/concatenation.rst", # further doctests
+    "anndata",      # docstrings (module name due to --pyargs)
+    "./tests",      # unit tests
+    "./ci/scripts", # CI script tests
+    # further doctests
+    "./docs/accessors.rst",
+    "./docs/tutorials/concatenation.rst",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [
     "gpu: mark test to run on GPU",
     "zarr_io: mark tests that involve zarr io",
     "dask_distributed: tests that need a distributed client with multiple processes",
+    "array_api: tests specific to the array-api",
 ]
 
 [tool.ruff]
@@ -215,7 +231,6 @@ select = [
     "UP",   # pyupgrade
     "W",    # Warning detected by Pycodestyle
 ]
-external = [ "PLR0917" ] # preview rule
 ignore = [
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
@@ -245,6 +260,7 @@ extend-immutable-calls = [ "slice" ]
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = [  ]
+runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
 strict = true
 [tool.ruff.lint.pylint]
 max-args = 7
@@ -252,7 +268,7 @@ max-positional-args = 5
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous"
+ignore-words-list = "theis,coo,homogenous,GroupT"
 
 [tool.towncrier]
 package = "anndata"

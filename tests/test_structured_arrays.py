@@ -8,7 +8,6 @@ import numpy as np
 
 import anndata as ad
 from anndata import AnnData
-from anndata.compat import is_zarr_v2
 from anndata.tests.helpers import gen_vstr_recarray
 
 if TYPE_CHECKING:
@@ -30,16 +29,15 @@ def assert_str_contents_equal(A, B):
 def test_io(
     tmp_path, diskfmt: Literal["zarr", "h5ad"], diskfmt2: Literal["zarr", "h5ad"]
 ) -> None:
-    if not is_zarr_v2():
-        from zarr.core.dtype.common import UnstableSpecificationWarning
+    from zarr.core.dtype.common import UnstableSpecificationWarning
 
-        warnings.filterwarnings(  # raised by “S10” dtype in the recarray below
-            "default", r".*NullTerminatedBytes", UnstableSpecificationWarning
-        )
+    warnings.filterwarnings(  # raised by “S10” dtype in the recarray below
+        "default", r".*NullTerminatedBytes", UnstableSpecificationWarning
+    )
 
-    read1 = lambda pth: getattr(ad, f"read_{diskfmt}")(pth)
+    read1 = getattr(ad, f"read_{diskfmt}")
     write1 = lambda adata, pth: getattr(adata, f"write_{diskfmt}")(pth)
-    read2 = lambda pth: getattr(ad, f"read_{diskfmt2}")(pth)
+    read2 = getattr(ad, f"read_{diskfmt2}")
     write2 = lambda adata, pth: getattr(adata, f"write_{diskfmt2}")(pth)
 
     filepth1 = tmp_path / f"test1.{diskfmt}"

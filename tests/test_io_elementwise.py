@@ -22,7 +22,7 @@ import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr, is_zarr_v2
+from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
-    from anndata._types import GroupStorageType
+    from anndata._types import _GroupStorageType
     from anndata.compat import H5Group
 
 
@@ -55,7 +55,9 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 
 
 @pytest.fixture
-def store(diskfmt, tmp_path) -> Generator[H5Group | ZarrGroup, None, None]:
+def store(
+    diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
+) -> Generator[H5Group | ZarrGroup, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("H5Group", file["/"])
@@ -220,7 +222,7 @@ def create_sparse_store[G: (H5Group, ZarrGroup)](
         # pytest.param(bool, np.bool_(False), "bool", id="np_bool"),
     ],
 )
-def test_io_spec(store: GroupStorageType, value, encoding_type) -> None:
+def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     if callable(value):
         value = value()
 
@@ -404,7 +406,7 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
 def test_read_lazy_2d_chunk_kwargs(
     store: H5Group | ZarrGroup,
     arr_type: Literal["csr", "csc", "dense"],
-    chunks: None | tuple[int | None, int | None],
+    chunks: tuple[int | None, int | None] | None,
     expected_chunksize: tuple[int, int],
 ) -> None:
     if arr_type == "dense":
@@ -448,6 +450,113 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.mark.parametrize(
+    ("num_minor_axis", "expected_dtype"),
+    [
+        pytest.param(1, np.dtype("uint8"), id="one_col-expected_uint8_on_disk"),
+        pytest.param(
+            np.iinfo(np.uint8).max,
+            np.dtype("uint8"),
+            id="max_np.uint8-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int8).max,
+            np.dtype("uint8"),
+            id="max_np.int8-uint8_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint16).max,
+            np.dtype("uint16"),
+            id="max_np.uint16-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int16).max,
+            np.dtype("uint16"),
+            id="max_np.int16-uint16_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint32).max,
+            np.dtype("uint32"),
+            id="max_np.uint32-matching_dtype_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int32).max,
+            np.dtype("uint32"),
+            id="max_np.int32-uint32_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint8).max + 1,
+            np.dtype("uint16"),
+            id="max_np.uint8_plus_one_cols-expected_uint16_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint16).max + 1,
+            np.dtype("uint32"),
+            id="max_np.uint16_plus_one_cols-expected_uint32_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.uint32).max + 1,
+            np.dtype("uint64"),
+            id="max_np.uint32_plus_one_cols-expected_uint64_on_disk",
+        ),
+        pytest.param(
+            np.iinfo(np.int64).max + 1,
+            np.dtype("uint64"),
+            id="max_np.int64_plus_one_cols-expected_uint64_on_disk",
+            marks=pytest.mark.xfail(
+                reason="scipy sparse does not support bigger than max(int64) values in indices and there is no uint128."
+            ),
+        ),
+        pytest.param(
+            np.iinfo(np.uint64).max + 1,
+            np.dtype("uint64"),
+            id="max_np.uint64_plus_one_cols-expected_uint64_on_disk",
+            marks=pytest.mark.xfail(
+                reason="scipy sparse does not support bigger than max(int64) values in indices and there is no uint128."
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_write_indices_min(
+    store: H5Group | ZarrGroup,
+    num_minor_axis: int,
+    expected_dtype: np.dtype,
+    format: Literal["csr", "csc"],
+):
+    minor_axis_index = np.array([num_minor_axis - 1])
+    major_axis_index = np.array([10])
+    row_cols = (
+        (minor_axis_index, major_axis_index)
+        if format == "csc"
+        else (major_axis_index, minor_axis_index)
+    )
+    shape = (num_minor_axis, 20) if format == "csc" else (20, num_minor_axis)
+    X = getattr(sparse, f"{format}_array")(
+        (np.array([10]), row_cols),
+        shape=shape,
+    )
+    assert X.nnz == 1
+    with ad.settings.override(write_csr_csc_indices_with_min_possible_dtype=True):
+        write_elem(store, "X", X)
+
+    assert store["X/indices"].dtype == expected_dtype
+    with ad.settings.override(use_sparse_array_on_read=True):
+        result = read_elem(store["X"])
+    assert_equal(result.data, X.data)
+    assert_equal(result.indices, X.indices)
+    assert_equal(result.indptr, X.indptr)
+    assert X.format == result.format
+    assert result.shape == X.shape
+    # != comparison converts to csr, which allocates a lot of memory or errors out with:
+    # ValueError: array is too big; `arr.size * arr.dtype.itemsize` is larger than the maximum possible size.
+    # Because the old, very large, minor axis is now the major axis and so either it fails to create or the indptr is very big.
+    # The above tests should be enough to capture the desired equality checks so this is mostly for being extra sure.
+    # See https://github.com/scipy/scipy/issues/23826
+    if not (format == "csc" and num_minor_axis > np.iinfo(np.uint16).max + 1):
+        assert (result != X).nnz == 0
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
@@ -465,7 +574,7 @@ def test_write_anndata_to_root(store):
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if not is_zarr_v2() and isinstance(store, ZarrGroup):
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
@@ -545,7 +654,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
 @pytest.mark.parametrize("missing", [True, False], ids=["missing", "no_missing"])
 def test_write_nullable_string(
     *,
-    store: GroupStorageType,
+    store: _GroupStorageType,
     ad_setting: bool | None,
     pd_setting: bool,
     expected_missing: tuple[type[Exception], str] | str,
@@ -581,9 +690,7 @@ def test_categorical_order_type(store):
 
 
 def test_override_specification():
-    """
-    Test that trying to overwrite an existing encoding raises an error.
-    """
+    """Test that trying to overwrite an existing encoding raises an error."""
     from copy import deepcopy
 
     registry = deepcopy(_REGISTRY)
@@ -633,7 +740,7 @@ def test_override_specification():
         ),
     ],
 )
-def test_write_to_root(store: GroupStorageType, value):
+def test_write_to_root(store: _GroupStorageType, value):
     """
     Test that elements which are written as groups can we written to the root group.
     """
@@ -641,14 +748,16 @@ def test_write_to_root(store: GroupStorageType, value):
         value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup) and not is_zarr_v2():
+    if isinstance(store, ZarrGroup):
         store = zarr.open(store.store)
     result = read_elem(store)
 
     assert_equal(result, value)
 
 
-@pytest.mark.parametrize("consolidated", [True, False])
+@pytest.mark.parametrize(
+    "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
+)
 @pytest.mark.zarr_io
 def test_read_zarr_from_group(tmp_path, consolidated):
     # https://github.com/scverse/anndata/issues/1056
@@ -656,10 +765,17 @@ def test_read_zarr_from_group(tmp_path, consolidated):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
     z = open_write_group(pth)
-    write_elem(z, "table/table", adata)
+    write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
-        zarr.consolidate_metadata(z.store)
+        # Catch the warning so we are alerted once it is no longer surfaced i.e., once consolidated metadata stabilizes.
+        with pytest.warns(
+            zarr.errors.ZarrUserWarning
+            if hasattr(zarr, "errors") and hasattr(zarr.errors, "ZarrUserWarning")
+            else UserWarning,
+            match=r"Consolidated metadata",
+        ):
+            zarr.consolidate_metadata(z.store)
 
     read_func = zarr.open_consolidated if consolidated else zarr.open
 
@@ -711,7 +827,7 @@ def test_dataframe_column_uniqueness(store):
     ],
 )
 def test_io_pd_cow(
-    *, exit_stack: ExitStack, store: GroupStorageType, copy_on_write: bool
+    *, exit_stack: ExitStack, store: _GroupStorageType, copy_on_write: bool
 ) -> None:
     """See <https://github.com/zarr-developers/numcodecs/issues/514>."""
     if not PANDAS_3:  # Setting copy_on_write always warns in pandas 3, and does nothing
@@ -750,7 +866,7 @@ def test_chunking_1d_array(
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
-    write_elem(store, "foo", arr, dataset_kwargs={"chunks": 25})
+    write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
     arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert arr.chunksize == expected_chunks
 
@@ -807,63 +923,77 @@ def test_h5_unchunked(
 
 @pytest.mark.zarr_io
 def test_write_auto_sharded(tmp_path: Path):
-    if is_zarr_v2():
-        with (
-            pytest.raises(
-                ValueError, match=r"Cannot use sharding with `zarr-python<3`."
-            ),
-            ad.settings.override(auto_shard_zarr_v3=True),
-        ):
-            pass
-    else:
-        path = tmp_path / "check.zarr"
-        adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-        with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-            adata.write_zarr(path)
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+        adata.write_zarr(path)
 
-        check_all_sharded(zarr.open(path))
+    check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
-def test_write_auto_sharded_against_v2_format():
-    with pytest.raises(ValueError, match=r"Cannot shard v2 format data."):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_write_format=2):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                pass
+@pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.4"),
+    reason="autosharding with chosen size was not available",
+)
+def test_write_auto_sharded_size(tmp_path: Path):
+    path = tmp_path / "check_shards.zarr"
+    z = zarr.open(path)
+    ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    assert (z["two_shards"].shape[0] / z["two_shards"].shards[0]) < 2
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
-def test_write_auto_cannot_set_v2_format_after_sharding():
-    with pytest.raises(ValueError, match=r"Cannot set `zarr_write_format` to 2"):  # noqa: PT012, SIM117
-        with ad.settings.override(zarr_write_format=3):
-            with ad.settings.override(auto_shard_zarr_v3=True):
-                with ad.settings.override(zarr_write_format=2):
-                    pass
+def test_write_shards_by_default(tmp_path: Path):
+    path = tmp_path / "check.zarr"
+    adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
+    ad.settings.reset("auto_shard_zarr_v3")
+    adata.write_zarr(path)
+    check_all_sharded(zarr.open(path))
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="auto sharding is allowed only for zarr v3.")
+@pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.4"),
+    reason="autosharding with chosen size was not available",
+)
+def test_write_auto_sharded_size_sparse(tmp_path: Path):
+    path = "memory://check_shards.zarr"
+    z = zarr.open(path)
+    mat = sparse.random(
+        1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)
+    )
+    ad.io.write_elem(z, "two_shards_per_sub_element", mat)
+    # i.e., there are at most two shards since one shard will contain two chunks,
+    # and the other the last elements, since the target size is 1GB uncompressed.
+    for sub_element in ["indices", "data", "indptr"]:
+        assert (
+            z["two_shards_per_sub_element"][sub_element].shape[0]
+            / z["two_shards_per_sub_element"][sub_element].shards[0]
+        ) < 2, sub_element
+
+
+@pytest.mark.zarr_io
 def test_write_auto_sharded_does_not_override(tmp_path: Path):
     z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
     X = sparse.random(
-        100, 100, density=0.1, format="csr", rng=np.random.default_rng(42)
+        100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        ad.io.write_elem(z, "X_default", X)
-        shards_default = z["X_default"]["indices"].shards
-        new_shards = shards_default[0] // 2
-        new_shards = int(new_shards - new_shards % 2)
-        ad.io.write_elem(
-            z,
-            "X_manually_set",
-            X,
-            dataset_kwargs={
-                "shards": (new_shards,),
-                "chunks": (int(new_shards / 2),),
-            },
-        )
+    ad.io.write_elem(z, "X_default", X)
+    shards_default = z["X_default"]["indices"].shards
+    new_shards = shards_default[0] // 2
+    new_shards = int(new_shards - new_shards % 2)
+    ad.io.write_elem(
+        z,
+        "X_manually_set",
+        X,
+        dataset_kwargs={
+            "shards": (new_shards,),
+            "chunks": (int(new_shards / 2),),
+        },
+    )
 
     def visitor(key: str, array: zarr.Array):
         assert array.shards == (new_shards,)

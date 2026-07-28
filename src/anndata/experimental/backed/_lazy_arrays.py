@@ -10,6 +10,7 @@ from anndata._core.index import _subset
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
 
+from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
 from ...compat import (
     H5Array,
@@ -27,16 +28,18 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from numpy.typing import NDArray
     from pandas._libs.missing import NAType
-    from pandas.core.dtypes.base import ExtensionDtype
+    from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from anndata.compat import H5Group, ZarrGroup
-
-    from ...compat import Index1DNorm
+    from ...compat import H5Group, Index1DNorm, ZarrGroup
+    from ...typing import _Index1DNorm
 
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
         from xarray.core.extension_array import PandasExtensionArray
         from xarray.core.indexing import ExplicitIndexer
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type K = H5Array | ZarrArray
 
 
 class LazyCategoricalDtype(pd.CategoricalDtype):
@@ -316,10 +319,6 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         return self._lazy_dtype
 
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type K = H5Array | H5AsTypeView | ZarrArray
-
-
 class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
@@ -352,45 +351,38 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
         self.file_format = "zarr" if isinstance(mask, ZarrArray) else "h5"
         self.elem_name = elem_name
 
-    def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray | np.ndarray:
-        from xarray.core.extension_array import PandasExtensionArray
-
+    def __getitem__(
+        self, key: ExplicitIndexer
+    ) -> PandasExtensionArray | NDArray[np.str_]:
         values = self._values[key]
         mask = self._mask[key]
-        if self._dtype_str == "nullable-integer":
-            # numpy does not support nan ints
-            extension_array = pd.arrays.IntegerArray(values, mask=mask)
-        elif self._dtype_str == "nullable-boolean":
-            extension_array = pd.arrays.BooleanArray(values, mask=mask)
-        elif self._dtype_str == "nullable-string-array":
+
+        if isinstance(self.dtype, np.dtypes.StringDType):
             # https://github.com/pydata/xarray/issues/10419
             values = values.astype(self.dtype)
             values[mask] = pd.NA
             return values
-        else:
-            msg = f"Invalid dtype_str {self._dtype_str}"
-            raise RuntimeError(msg)
-        return PandasExtensionArray(extension_array)
+
+        from xarray.core.extension_array import PandasExtensionArray
+
+        cls = self.dtype.construct_array_type()
+        return PandasExtensionArray(cls(values, mask))
 
     @cached_property
-    def dtype(self) -> np.dtypes.StringDType[NAType] | ExtensionDtype:
-        if self._dtype_str == "nullable-integer":
-            return pd.array(
-                [],
-                dtype=str(pd.api.types.pandas_dtype(self._values.dtype)).capitalize(),
-            ).dtype
-        elif self._dtype_str == "nullable-boolean":
-            return pd.BooleanDtype()
-        elif self._dtype_str == "nullable-string-array":
+    def dtype(self) -> BaseMaskedDtype | np.dtypes.StringDType[NAType]:
+        if self._dtype_str == "nullable-string-array":
             # https://github.com/pydata/xarray/issues/10419
             return np.dtypes.StringDType(na_object=pd.NA)
-        msg = f"Invalid dtype_str {self._dtype_str}"
-        raise RuntimeError(msg)
+        try:
+            return pandas_nullable_dtype(self._values.dtype)
+        except NotImplementedError:
+            msg = f"Invalid dtype_str {self._dtype_str}"
+            raise RuntimeError(msg) from None
 
 
 @_subset.register(XDataArray)
 def _subset_masked(
-    a: XDataArray, subset_idx: tuple[Index1DNorm] | tuple[Index1DNorm, Index1DNorm]
+    a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):
     return a[subset_idx]
 

@@ -6,11 +6,10 @@ from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import joblib
+import numpy as np
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
-
-from anndata.compat import is_zarr_v2
 
 if Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
@@ -35,17 +34,24 @@ def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 
+@pytest.fixture
+def arr2d() -> np.ndarray:
+    return np.zeros((3, 4))
+
+
+@pytest.fixture
+def arr3d() -> np.ndarray:
+    return np.arange(3 * 4 * 5).reshape((3, 4, 5))
+
+
+@pytest.fixture(params=["X", "layers"])
+def which(request: pytest.FixtureRequest) -> Literal["X", "layers"]:
+    """Which of ``X`` / ``layers`` should hold the non-2-D payload."""
+    return request.param
+
+
 @pytest.fixture(
-    params=[
-        ("h5ad", None),
-        ("zarr", 2),
-        pytest.param(
-            ("zarr", 3),
-            marks=pytest.mark.skipif(
-                is_zarr_v2(), reason="zarr v3 file format not supported with v2 package"
-            ),
-        ),
-    ],
+    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
     ids=["h5ad", "zarr2", "zarr3"],
 )
 def diskfmt(

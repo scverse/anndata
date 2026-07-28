@@ -6,8 +6,6 @@ This includes correct behaviour as well as throwing warnings.
 
 from __future__ import annotations
 
-import warnings
-
 import h5py
 import numpy as np
 import pytest
@@ -19,7 +17,7 @@ from anndata.tests.helpers import assert_equal
 
 
 @pytest.fixture
-def adata():
+def adata() -> AnnData:
     adata = AnnData(
         X=sparse.csr_matrix([[0, 2, 3], [0, 5, 6]], dtype=np.float32),
         obs=dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
@@ -32,70 +30,11 @@ def adata():
     return adata
 
 
-def test_get_obsvar_array_warn(adata):
+def test_get_obsvar_array_warn(adata: AnnData) -> None:
     with pytest.warns(FutureWarning):
-        adata._get_obs_array("a")
+        adata.obs_vector("a")
     with pytest.warns(FutureWarning):
-        adata._get_var_array("s1")
-
-
-@pytest.mark.filterwarnings("ignore::FutureWarning")
-def test_get_obsvar_array(adata):
-    assert np.allclose(adata._get_obs_array("a"), adata.obs_vector("a"))
-    assert np.allclose(
-        adata._get_obs_array("a", layer="x2"),
-        adata.obs_vector("a", layer="x2"),
-    )
-    assert np.allclose(
-        adata._get_obs_array("a", use_raw=True), adata.raw.obs_vector("a")
-    )
-    assert np.allclose(adata._get_var_array("s1"), adata.var_vector("s1"))
-    assert np.allclose(
-        adata._get_var_array("s1", layer="x2"),
-        adata.var_vector("s1", layer="x2"),
-    )
-    assert np.allclose(
-        adata._get_var_array("s1", use_raw=True), adata.raw.var_vector("s1")
-    )
-
-
-def test_obsvar_vector_Xlayer(adata):
-    with pytest.warns(FutureWarning):
-        adata.var_vector("s1", layer="X")
-    with pytest.warns(FutureWarning):
-        adata.obs_vector("a", layer="X")
-
-    adata = adata.copy()
-    adata.layers["X"] = adata.X * 3
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        adata.var_vector("s1", layer="X")
-        adata.obs_vector("a", layer="X")
-
-
-# This should break in 0.9
-def test_dtype_warning():
-    # Tests a warning is thrown
-    with pytest.warns(FutureWarning):
-        a = AnnData(np.ones((3, 3)), dtype=np.float32)
-    assert a.X.dtype == np.float32
-
-    # This shouldn't warn, shouldn't copy
-    with warnings.catch_warnings(record=True) as record:
-        b_X = np.ones((3, 3), dtype=np.float64)
-        b = AnnData(b_X)
-        assert not record
-    assert b_X is b.X
-    assert b.X.dtype == np.float64
-
-    # Should warn, should copy
-    c_X = np.ones((3, 3), dtype=np.float32)
-    with pytest.warns(FutureWarning):
-        c = AnnData(c_X, dtype=np.float64)
-    assert not record
-    assert c_X is not c.X
-    assert c.X.dtype == np.float64
+        adata.var_vector("s1")
 
 
 def test_deprecated_write_attribute(tmp_path):
@@ -136,7 +75,25 @@ def test_warn_on_deprecated__io_module():
         from anndata._io import read_h5ad  # noqa
 
 
+def test_warn_on_deprecated_extension_namespace():
+    with pytest.warns(
+        FutureWarning, match=r"Importing ExtensionNamespace from `types`"
+    ):
+        from anndata.types import ExtensionNamespace  # noqa
+
+
 @pytest.mark.parametrize("name", ["obs", "var", "obsm", "varm", "uns"])
 def test_keys_function_warns(adata: AnnData, name) -> None:
     with pytest.warns(FutureWarning, match=rf"{name}_keys is deprecated"):
         getattr(adata, f"{name}_keys")()
+
+
+def test_annloader_init_warns(adata: AnnData) -> None:
+    # We currently have no test env that has torch but I ran this locally.
+    pytest.importorskip("torch")
+    from anndata.experimental import AnnLoader
+
+    with pytest.warns(
+        FutureWarning, match=r"Use .*annbatch\.Loader.* instead of .*AnnLoader.*"
+    ):
+        AnnLoader(adata)

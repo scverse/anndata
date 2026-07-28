@@ -7,10 +7,10 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
 
-class ElementRef(NamedTuple):
+class ElementRef[K: (str, str | None)](NamedTuple):
     parent: AnnData
     attrname: str
-    keys: tuple[str, ...] = ()
+    keys: tuple[K, ...] = ()
 
     def __str__(self) -> str:
         return f".{self.attrname}" + "".join(f"[{x!r}]" for x in self.keys)

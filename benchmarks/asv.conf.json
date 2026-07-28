@@ -47,7 +47,7 @@
     // "pythons": ["2.7", "3.6"],
     // The list of conda channel names to be searched for benchmark
     // dependency packages in the specified order
-    "conda_channels": ["conda-forge", "defaults"],
+    "conda_channels": ["conda-forge"],
     // The matrix of dependencies to test.  Each key is the name of a
     // package (in PyPI) and the values are version numbers.  An empty
     // list or empty string indicates to just test against the default
@@ -59,6 +59,8 @@
     // followed by the pip installed packages).
     //
     "matrix": {
+        // https://github.com/airspeed-velocity/asv_runner/issues/52
+        "pip+asv_runner": ["0.2.1"],
         "numpy": [""],
         // "scipy": ["1.2", ""],
         "scipy": [""],

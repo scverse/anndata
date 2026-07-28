@@ -71,6 +71,11 @@ def test_raw_set_as_none(adata_raw: ad.AnnData):
     assert_equal(a, b)
 
 
+def test_raw_set_error(adata_raw: ad.AnnData) -> None:
+    with pytest.raises(ValueError, match=r"X has 2 rows, but n_obs is 3"):
+        adata_raw.raw = adata_raw[:2].copy()
+
+
 def test_raw_of_view(adata_raw: ad.AnnData):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
     assert adata_view.raw.X.tolist() == [
@@ -147,7 +152,8 @@ def test_to_adata():
 
     # Raw doesn't do layers or varp currently
     # Deleting after creation so we know to rewrite the test if they are supported
-    del adata.layers, adata.varp
+    adata.layers.clear(keep_x=True)
+    del adata.varp
 
     assert_equal(adata, with_raw.raw.to_adata())
 
@@ -155,7 +161,8 @@ def test_to_adata():
 def test_to_adata_populates_obs():
     adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
-    del adata.layers, adata.uns, adata.varp
+    adata.layers.clear(keep_x=True)
+    del adata.uns, adata.varp
     adata_w_raw = adata.copy()
 
     raw = adata.copy()

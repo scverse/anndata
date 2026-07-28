@@ -4,6 +4,8 @@ This file contains tests for conversion made during io.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import h5py
 import numpy as np
 import pytest
@@ -12,6 +14,10 @@ from scipy import sparse
 import anndata as ad
 from anndata.compat import CSMatrix
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Literal
 
 
 @pytest.fixture(
@@ -64,7 +70,7 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
         assert_equal(disk, from_disk)
 
 
-def test_sparse_to_dense_inplace(tmp_path, spmtx_format):
+def test_sparse_to_dense_inplace(tmp_path: Path, spmtx_format: Literal["csc", "csr"]):
     pth = tmp_path / "adata.h5ad"
     orig = gen_adata((50, 50), spmtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.raw = orig.copy()

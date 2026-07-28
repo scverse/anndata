@@ -14,12 +14,12 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
-import zarr.convenience
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
+from anndata._types import AnnDataElem
 from anndata.compat import (
     CSArray,
     CSMatrix,
@@ -27,21 +27,29 @@ from anndata.compat import (
     ZarrArray,
     ZarrGroup,
     _read_attr,
-    is_zarr_v2,
 )
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
     assert_equal,
     gen_adata,
+    jnp,
+    jnp_array_or_idempotent,
 )
+from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from typing import Literal
 
 HERE = Path(__file__).parent
-
+ARRAY_TYPES = [
+    pytest.param(np.array, id="np.array"),
+    pytest.param(as_dense_dask_array, id="dask_dense"),
+    pytest.param(csr_matrix, id="csr_matrix"),
+    pytest.param(csr_array, id="csr_array"),
+    pytest.param(jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api),
+]
 
 # ------------------------------------------------------------------------------
 # Some test data
@@ -92,7 +100,7 @@ def dataset_kwargs(request):
 
 
 @pytest.fixture
-def rw(backing_h5ad):
+def rw(backing_h5ad) -> tuple[ad.AnnData, ad.AnnData]:
     M, N = 100, 101
     orig = gen_adata((M, N), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write(backing_h5ad)
@@ -119,7 +127,76 @@ def dtype(request):
 # ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_write(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+    adata, _ = rw
+    assert not adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_can_not_write_bad_categorical(
+    rw: tuple[ad.AnnData, ad.AnnData], store_type: Literal["h5", "zarr"] | None
+):
+
+    adata, _ = rw
+    adata.var["arrow_categorical_array"] = pd.Categorical.from_codes(
+        [i % 2 for i in range(adata.shape[1])],
+        categories=pd.arrays.IntervalArray.from_tuples([(0, 10), (20, 30)]),
+    )
+    assert adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+@pytest.mark.parametrize("should_nest", [True, False], ids=["nest", "no_nest"])
+@pytest.mark.parametrize("parent_elem", ["var", "uns", "raw"])
+def test_can_not_write_with_custom_array(
+    rw: tuple[ad.AnnData, ad.AnnData],
+    store_type: Literal["h5", "zarr"] | None,
+    parent_elem: Literal["obs", "uns", "raw"],
+    *,
+    should_nest: bool,
+):
+    import pyarrow as pa
+
+    adata, _ = rw
+    if parent_elem == "raw":
+        adata.raw = adata.copy()
+        getter = lambda adata: getattr(adata, parent_elem).var
+    else:
+        getter = lambda adata: getattr(adata, parent_elem)
+    if should_nest:
+        adata.uns["adata"] = adata.copy()
+    getter(adata.uns["adata"] if should_nest else adata)["arrow_array"] = (
+        pd.arrays.ArrowExtensionArray(pa.array([{"x": 1, "y": True}] * adata.shape[1]))
+    )
+    assert adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("store_type", ["h5", "zarr", None])
+def test_unwriteable_non_2d(
+    arr2d: np.ndarray,
+    arr3d: np.ndarray,
+    which: Literal["X", "layers"],
+    store_type: Literal["h5", "zarr"] | None,
+) -> None:
+
+    def _set_non_2d(
+        adata: ad.AnnData, which: Literal["X", "layers"], value: np.ndarray
+    ) -> None:
+        if which == "X":
+            adata.X = value
+        else:
+            adata.layers["L"] = value
+
+    adata = ad.AnnData(X=arr2d)
+    with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
+        _set_non_2d(adata, which, arr3d)
+    assert adata.unwriteable(store_type=store_type)
+
+
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
 def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
     pth1 = tmp_path / f"first.{diskfmt}"
     write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
@@ -159,8 +236,14 @@ def test_readwrite_roundtrip_async(tmp_path):
 
 
 @pytest.mark.parametrize("storage", ["h5ad", "zarr"])
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwargs):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_kitchensink(
+    tmp_path: Path,
+    storage: Literal["h5ad", "zarr"],
+    typ,
+    backing_h5ad: Path,
+    dataset_kwargs,
+) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     assert not isinstance(adata_src.obs["oanno1"].dtype, pd.CategoricalDtype)
@@ -185,18 +268,20 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata.var.index, adata_src.var.index)
     assert adata.var.index.dtype == adata_src.var.index.dtype
 
+    used_jax = jnp is not None and isinstance(adata_src.X, jnp.ndarray)
     # Dev. Note:
     # either load as same type or load the convert DaskArray to array
     # since we tested if assigned types and loaded types are DaskArray
     # this would also work if they work
     if isinstance(adata_src.raw.X, CSArray):
         assert isinstance(adata.raw.X, CSMatrix)
-    else:
+    elif not used_jax:
         assert isinstance(adata_src.raw.X, type(adata.raw.X) | DaskArray)
     assert isinstance(
         adata_src.uns["uns4"]["c"], type(adata.uns["uns4"]["c"]) | DaskArray
     )
-    assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
+    if not used_jax:
+        assert isinstance(adata_src.varm, type(adata.varm) | DaskArray)
 
     assert_equal(adata.raw.X, adata_src.raw.X)
     pd.testing.assert_frame_equal(adata.raw.var, adata_src.raw.var)
@@ -205,13 +290,15 @@ def test_readwrite_kitchensink(tmp_path, storage, typ, backing_h5ad, dataset_kwa
     assert_equal(adata, adata_src)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_maintain_X_dtype(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     X = typ(X_list).astype("int8")
     adata_src = ad.AnnData(X)
     adata_src.write(backing_h5ad)
 
     adata = ad.read_h5ad(backing_h5ad)
+    if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
+        adata_src.X = np.from_dlpack(adata_src.X)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -249,8 +336,8 @@ def test_readwrite_h5ad_one_dimension(typ, backing_h5ad):
     assert_equal(adata, adata_one)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix, csr_array, as_dense_dask_array])
-def test_readwrite_backed(typ, backing_h5ad):
+@pytest.mark.parametrize("typ", ARRAY_TYPES)
+def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
     X = typ(X_list)
     adata_src = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata_src.filename = backing_h5ad  # change to backed mode
@@ -265,14 +352,26 @@ def test_readwrite_backed(typ, backing_h5ad):
 
 
 @pytest.mark.parametrize(
-    "typ", [np.array, csr_matrix, csc_matrix, csr_array, csc_array]
+    "typ",
+    [
+        pytest.param(np.array, id="np.array"),
+        pytest.param(csr_matrix, id="csr_matrix"),
+        pytest.param(csc_matrix, id="csc_matrix"),
+        pytest.param(csr_array, id="csr_array"),
+        pytest.param(csc_array, id="csc_array"),
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+    ],
 )
-def test_readwrite_equivalent_h5ad_zarr(tmp_path, typ):
+def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
     zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
+    assert not adata.unwriteable()
+
     adata.raw = adata.copy()
 
     adata.write_h5ad(h5ad_pth)
@@ -307,7 +406,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        if not is_zarr_v2() and isinstance(store, ZarrGroup):
+        if isinstance(store, ZarrGroup):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
@@ -316,7 +415,14 @@ def test_read_full_io_error(tmp_path, name, read, write):
                 **dict(store["obs"].attrs),
                 "encoding-type": "invalid",
             })
-            zarr.consolidate_metadata(store.store)
+            # Catch the warning so we are alerted once it is no longer surfaced i.e., once consolidated metadata stabilizes.
+            with pytest.warns(
+                zarr.errors.ZarrUserWarning
+                if hasattr(zarr, "errors") and hasattr(zarr.errors, "ZarrUserWarning")
+                else UserWarning,
+                match=r"Consolidated metadata",
+            ):
+                zarr.consolidate_metadata(store.store)
         else:
             store["obs"].attrs["encoding-type"] = "invalid"
 
@@ -383,14 +489,12 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 def test_zarr_compression(
     tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
 ):
-    if zarr_write_format == 3 and is_zarr_v2():
-        pytest.xfail("Cannot write zarr v3 format with v2 package")
     ad.settings.zarr_write_format = zarr_write_format
     pth = str(Path(tmp_path) / "adata.zarr")
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if not use_compression:
         compressor = None
-    elif zarr_write_format == 2 or is_zarr_v2():
+    elif zarr_write_format == 2:
         from numcodecs import Blosc
 
         compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -418,13 +522,9 @@ def test_zarr_compression(
         ):
             wrongly_compressed.append(key)
 
-    if is_zarr_v2():
-        with zarr.open(pth, "r") as f:
-            f.visititems(check_compressed)
-    else:
-        f = zarr.open(pth, mode="r")
-        for key, value in f.members(max_depth=None):
-            check_compressed(value, key)
+    f = zarr.open(pth, mode="r")
+    for key, value in f.members(max_depth=None):
+        check_compressed(value, key)
     assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
     expected = ad.read_zarr(pth)
@@ -435,11 +535,11 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
     filepth = tmp_path / f"test.{diskfmt}"
 
     orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    orig.obs_names.name = "obs"
-    orig.var_names.name = "var"
+    orig.obs_names = orig.obs_names.rename("obs")
+    orig.var_names = orig.var_names.rename("var")
     modified = orig.copy()
-    modified.obs_names.name = "cells"
-    modified.var_names.name = "genes"
+    modified.obs_names = modified.obs_names.rename("cells")
+    modified.var_names = modified.var_names.rename("genes")
 
     getattr(orig, f"write_{diskfmt}")(filepth)
     read = getattr(ad, f"read_{diskfmt}")(filepth)
@@ -475,15 +575,33 @@ def test_read_tsv_iter():
     assert adata.X.tolist() == X_list
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
 def test_write_csv(typ, tmp_path):
     X = typ(X_list)
     adata = ad.AnnData(X, obs=obs_dict, var=var_dict, uns=uns_dict)
     adata.write_csvs(tmp_path / "test_csv_dir", skip_data=False)
 
 
-@pytest.mark.parametrize("typ", [np.array, csr_matrix])
-def test_write_csv_view(typ, tmp_path):
+@pytest.mark.parametrize(
+    "typ",
+    [
+        pytest.param(
+            jnp_array_or_idempotent, id="jax.array", marks=pytest.mark.array_api
+        ),
+        np.array,
+        csr_matrix,
+    ],
+)
+def test_write_csv_view(typ, tmp_path: Path) -> None:
     # https://github.com/scverse/anndata/issues/401
     import hashlib
 
@@ -521,10 +639,15 @@ def test_write_csv_view(typ, tmp_path):
         pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
     ],
 )
-def test_readwrite_empty(read, write, name, tmp_path):
-    adata = ad.AnnData(uns=dict(empty=np.array([], dtype=float)))
+@pytest.mark.parametrize(
+    "xp_array",
+    [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
+)
+def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
+    adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
     write(tmp_path / name, adata)
     ad_read = read(tmp_path / name)
+    assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
 
@@ -868,34 +991,94 @@ def test_h5py_attr_limit(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "elem_key", ["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"]
+    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
-@pytest.mark.parametrize("disallow_forward_slash_in_h5ad", [True, False])
+@pytest.mark.parametrize(
+    "disallow_forward_slash_in_h5ad",
+    [True, False, None],
+    ids=["ban_slash", "allow_slash", "default"],
+)
 def test_forward_slash_key(
-    elem_key: Literal["obs", "var", "obsm", "varm", "layers", "obsp", "varp", "uns"],
-    tmp_path: Path,
-    store_type: Literal["zarr", "h5ad"],
     *,
+    tmp_path: Path,
+    elem_key: AnnDataElem,
+    store_type: Literal["zarr", "h5ad"],
     disallow_forward_slash_in_h5ad: bool,
-):
-    a = ad.AnnData(np.ones((10, 10)))
+) -> None:
+    a = ad.AnnData(shape=(10, 10))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    path = tmp_path / f"test.{store_type}"
+    is_default = disallow_forward_slash_in_h5ad is None
+    # default case of unset parameter is to not allow writing of forward slashes as of anndata 0.13
+    can_write_slash_key = (
+        elem_key in {"uns", "obs", "var"}
+        and store_type == "h5ad"
+        and (not disallow_forward_slash_in_h5ad and not is_default)
+    )
+    # try to write bad key and make sure we warn or throw an error
+    disallow_forward_slash_in_h5ad = (
+        ad.settings.disallow_forward_slash_in_h5ad
+        if is_default
+        else disallow_forward_slash_in_h5ad
     )
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
         ),
-        pytest.raises(ValueError, match=r"Forward slashes")
-        if store_type == "zarr" or disallow_forward_slash_in_h5ad
-        else pytest.warns(FutureWarning, match=r"Forward slashes"),
+        pytest.warns(FutureWarning, match=r"Forward slashes")
+        if can_write_slash_key
+        else pytest.raises(ValueError, match=r"Forward slashes"),
     ):
-        getattr(a, f"write_{store_type}")(tmp_path / "does_not_matter_the_path.h5ad")
+        getattr(a, f"write_{store_type}")(path)
+
+    # read and check that bad keys were only written if allowed
+    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    if can_write_slash_key:
+        if elem_key in {"obs", "var"}:
+            assert "bad/key" in elem
+        else:
+            assert "bad" in elem
+    elif elem_key in {"obs", "var"}:
+        assert set(elem.columns) == {"_index"}
+    else:
+        assert not elem.keys()
+
+
+@pytest.mark.parametrize(
+    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+)
+@pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
+@pytest.mark.parametrize("key", ["/", "/y"])
+def test_leading_slash_error(
+    *,
+    tmp_path: Path,
+    elem_key: AnnDataElem,
+    store_type: Literal["zarr", "h5ad"],
+    key: str,
+) -> None:
+    a = ad.AnnData(shape=(10, 10))
+    getattr(a, elem_key)[key] = np.ones(
+        (10,) if elem_key in ["obs", "var"] else (10, 10)
+    )
+    path = tmp_path / f"test.{store_type}"
+
+    # “not in the subpath” is raised by e.g. `write_elem(g["z"], "/y", ...)`,
+    # while “Forward slashes” is raised earlier by `write_anndata`/`write_h5ad`
+    with pytest.raises(ValueError, match=r"not in the subpath|Forward slashes"):
+        getattr(a, f"write_{store_type}")(path)
+
+    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    if elem_key in {"obs", "var"}:
+        assert set(elem.columns) == {"_index"}
+    else:
+        assert not elem.keys()
 
 
 @pytest.mark.skipif(
-    find_spec("xarray"),
+    bool(find_spec("xarray")),
     reason="Xarray is installed so `read_{elem_}lazy` will not error",
 )
 @pytest.mark.parametrize(
@@ -914,11 +1097,7 @@ def test_read_lazy_import_error(func, tmp_path):
 @pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = (
-        zarr.convenience.open_consolidated(tmp_path)
-        if is_zarr_v2()
-        else zarr.open(tmp_path)
-    )
+    g = zarr.open(tmp_path)
     with pytest.raises(
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
@@ -926,7 +1105,6 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-@pytest.mark.skipif(is_zarr_v2(), reason="zarr v3 package test")
 def test_write_elem_version_mismatch(tmp_path: Path):
     zarr_path = tmp_path / "foo.zarr"
     adata = ad.AnnData(np.ones((10, 10)))

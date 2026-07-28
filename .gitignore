@@ -24,8 +24,9 @@ __pycache__/
 .ipynb_checkpoints
 
 # docs
-/docs/generated/
 /docs/_build/
+/docs/generated/*
+!/docs/generated/anndata.types.ExtensionNamespace.rst
 
 # IDEs
 /.idea/

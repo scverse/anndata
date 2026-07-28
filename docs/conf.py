@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent
 _extension_dir = HERE / "extensions"
+acc_schema = HERE.parent / "src/anndata/acc/acc-schema-v1.json"
 sys.path[:0] = [str(_extension_dir)]
 
 
@@ -28,6 +29,7 @@ release = version = metadata.version("anndata")
 # default settings
 templates_path = ["_templates"]
 html_static_path = ["_static"]
+html_extra_path = [str(acc_schema)]
 source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 master_doc = "index"
 default_role = "literal"
@@ -58,9 +60,9 @@ extensions = [
     "sphinx_design",
     "sphinxext.opengraph",
     "scanpydoc",  # needs to be before linkcode
+    "scverse_misc.sphinx_ext",
     "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
-    "sphinx_toolbox.more_autodoc.autoprotocol",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
 myst_enable_extensions = [
@@ -75,7 +77,7 @@ nb_execution_mode = "off"
 autosummary_generate = True
 autodoc_member_order = "bysource"
 autodoc_mock_imports = ["torch"]
-# autodoc_default_flags = ['members']
+# autodoc_default_options = {}
 issues_github_path = "scverse/anndata"
 rtd_links_prefix = PurePosixPath("src")
 napoleon_google_docstring = False
@@ -87,17 +89,9 @@ napoleon_custom_sections = [("Params", "Parameters")]
 typehints_defaults = "braces"
 always_use_bars_union = True  # use `|`, not `Union` in types even when on Python ≤3.14
 todo_include_todos = False
-nitpicky = True  # Report broken links
-nitpick_ignore = [  # APIs without an intersphinx entry
-    # These APIs aren’t actually documented
-    ("py:class", "anndata._core.raw.Raw"),
-    ("py:class", "pandas._libs.missing.NAType"),
-    # TODO: remove zappy support; the zappy repo is archived
-    ("py:class", "anndata.compat.ZappyArray"),
-]
 
 
-def setup(app: Sphinx):
+def setup(app: Sphinx) -> None:
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
@@ -124,6 +118,7 @@ def setup(app: Sphinx):
 
 
 intersphinx_mapping = dict(
+    array_api=("https://array-api.readthedocs.io/en/stable", None),
     awkward=("https://awkward-array.org/doc/stable", None),
     cupy=("https://docs.cupy.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
@@ -137,55 +132,67 @@ intersphinx_mapping = dict(
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
+    scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
     zarr=("https://zarr.readthedocs.io/en/stable/", None),
     zarrs=("https://zarrs-python.readthedocs.io/en/stable/", None),
+    annbatch=("https://annbatch.readthedocs.io/en/stable/", None),
+    mudata=("https://mudata.readthedocs.io/stable/", None),
 )
 
+# Fix mis-documented types. Use `anndata.utils.set_module` for ours instead.
 qualname_overrides = {
-    "h5py._hl.group.Group": "h5py.Group",
-    "h5py._hl.files.File": "h5py.File",
-    "h5py._hl.dataset.Dataset": "h5py.Dataset",
-    "anndata._core.anndata.AnnData": "anndata.AnnData",
+    #### stdlib
+    "types.EllipsisType": ("py:data", "Ellipsis"),
+    #### anndata
     **{
         f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
         for cls in ["Layers", "AxisArrays", "PairwiseArrays"]
         for kind in ["", "View"]
     },
-    "anndata._types.ReadCallback": "anndata.experimental.ReadCallback",
-    "anndata._types.WriteCallback": "anndata.experimental.WriteCallback",
-    "anndata._types.Read": "anndata.experimental.Read",
-    "anndata._types.Write": "anndata.experimental.Write",
-    "anndata._types.Dataset2DIlocIndexer": "anndata.experimental.Dataset2DIlocIndexer",
-    "zarr.core.array.Array": "zarr.Array",
-    "zarr.core.group.Group": "zarr.Group",
-    # Buffer is not yet exported, so the buffer class registry is the closest thing
-    "zarr.core.buffer.core.Buffer": "zarr.registry.Registry",
-    "zarr.storage._common.StorePath": "zarr.storage.StorePath",
-    "anndata.compat.DaskArray": "dask.array.Array",
-    "anndata.compat.CupyArray": "cupy.ndarray",
-    "anndata.compat.CupySparseMatrix": "cupyx.scipy.sparse.spmatrix",
-    "anndata.compat.XDataArray": "xarray.DataArray",
-    "anndata.compat.XDataset": "xarray.Dataset",
+    # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
+    "anndata._types.StorageType": "anndata.experimental.StorageType",
+    # https://github.com/theislab/scanpydoc/issues/254
+    "anndata.typing.Index1D": "anndata.typing.Index1D",
+    "anndata.typing.Index": "anndata.typing.Index",
+    "anndata.typing.RWAble": "anndata.typing.RWAble",
+    "anndata.typing.AxisStorable": "anndata.typing.AxisStorable",
+    "anndata.typing.InMemoryArray": "anndata.typing.InMemoryArray",
+    #### h5py
+    "h5py._hl.group.Group": "h5py.Group",
+    "h5py._hl.files.File": "h5py.File",
+    "h5py._hl.dataset.Dataset": "h5py.Dataset",
+    #### arrays
     "awkward.highlevel.Array": "ak.Array",
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
-    # should be fixed soon: https://github.com/tox-dev/sphinx-autodoc-typehints/pull/516
-    "types.EllipsisType": ("py:data", "types.EllipsisType"),
-    "pathlib._local.Path": "pathlib.Path",
 }
-autodoc_type_aliases = dict(
-    NDArray=":data:`~numpy.typing.NDArray`",
-    AxisStorable=":data:`~anndata.typing.AxisStorable`",
-)
+# Sphinx consults this {alias → name} mapping when rendering types
+# sphinx-autodoc-typehints uses when importing types to resolve them
+autodoc_type_aliases = dict()
+# if nothing else helps, modify `nitpick_ignore`
+nitpicky = True  # Report broken links, this stays on
+nitpick_ignore = [  # APIs without an intersphinx entry
+    # These APIs aren’t actually documented
+    ("py:class", "anndata._core.raw.Raw"),
+    ("py:class", "pandas.api.typing.NAType"),
+    # TODO: remove zappy support; the zappy repo is archived
+    ("py:class", "anndata.compat.ZappyArray"),
+    # this happens when a `type` or `class` is generic
+    ("py:class", "anndata.acc.GenericAlias"),
+    ("py:obj", "typing.R"),
+    ("py:class", "_M"),
+    ("py:class", "anndata.utils.Default"),
+]
 
 # -- Social cards ---------------------------------------------------------
 
-ogp_site_url = "https://anndata.readthedocs.io/"
-ogp_image = "https://anndata.readthedocs.io/en/latest/_static/img/anndata_schema.svg"
+ogp_site_url = "https://anndata.scverse.org/"
+ogp_image = f"{ogp_site_url}page/_static/img/anndata_schema.svg"
 
 # -- Options for HTML output ----------------------------------------------
 

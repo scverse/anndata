@@ -18,6 +18,7 @@ defaults:
 
 jobs:
   benchmark:
+    permissions: {}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -32,28 +33,30 @@ jobs:
       ASV_DIR: "./benchmarks"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
           # no blob filter so asv can checkout other commits
 
       - run: git fetch origin main:main
         if: ${{ github.ref_name != 'main' }}
         # Errors on main branch
 
-      - uses: mamba-org/setup-micromamba@v2
+      - uses: mamba-org/setup-micromamba@d7c9bd84e824b79d2af72a2d4196c7f4300d3476 # v3.0.0
         with:
           environment-name: asv
           cache-environment: true
           # Deps documented in https://asv.readthedocs.io/en/latest/installing.html
+          # https://github.com/airspeed-velocity/asv/issues/1577
           create-args: >-
             python=${{ matrix.python }}
-            asv
-            py_rattler
+            asv>=0.6.4
+            py_rattler<0.22
             conda-build
 
       - name: Cache datasets
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache
@@ -63,4 +66,4 @@ jobs:
         working-directory: ${{ env.ASV_DIR }}
         run: |
           asv machine --yes
-          asv run --quick --show-stderr --verbose
+          asv run --dry-run --quick --show-stderr --verbose HEAD^!

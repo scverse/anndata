@@ -3,6 +3,7 @@ installer = "uv"
 dependency-groups = [ "dev" ]
 
 [envs.docs]
+python = "3.14"
 dependency-groups = [ "doc" ]
 scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
@@ -40,8 +41,9 @@ overrides.matrix.deps.python = [
 ]
 overrides.matrix.deps.dependency-groups = [
     { if = [ "stable", "pre" ], value = "test" },
+    { if = [ "array_api" ], value = "test-array-api" },
 ]
 overrides.matrix.deps.extra-args = { if = [ "stable", "pre" ], value = [ "--strict-warnings" ] }
 
 [[envs.hatch-test.matrix]]
-deps = [ "stable", "pre", "min" ]
+deps = [ "stable", "pre", "min", "array_api" ]

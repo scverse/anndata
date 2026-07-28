@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.sparse import issparse
+from scverse_misc import Deprecation, deprecated
 
 from ..._core.anndata import AnnData
 from ...compat import old_positionals
@@ -89,7 +90,7 @@ def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
 
 
 def _convert_on_top(
-    convert: Callable[[Array], Array] | None | Mapping[str, Callable[[Array], Array]],
+    convert: Callable[[Array], Array] | Mapping[str, Callable[[Array], Array]] | None,
     top_convert: Callable[[Array], Array],
     attrs_keys: Sequence[str] | Mapping[str, Sequence[str]],
 ):
@@ -117,6 +118,9 @@ def _convert_on_top(
 
 
 # AnnLoader has the same arguments as DataLoader, but uses BatchIndexSampler by default
+@deprecated(
+    Deprecation("0.12.17", "Use :class:`annbatch.Loader` instead of `AnnLoader`")
+)
 class AnnLoader(DataLoader):
     """\
     PyTorch DataLoader for AnnData objects.

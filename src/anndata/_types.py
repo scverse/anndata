@@ -8,12 +8,16 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from . import typing
 from .compat import H5Array, H5Group, ZarrArray, ZarrGroup
+from .utils import set_module
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any
+    from typing import Any, TypeAlias
+
+    from pandas import DataFrame
 
     from anndata._core.xarray import Dataset2D
+    from anndata.typing import AxisStorable, _XDataType
 
     from ._io.specs.registry import (
         IOSpec,
@@ -22,46 +26,60 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
+    from ._types import AnnDataElem
+    from .compat import XDataset
+
+else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
+    type S = StorageType
+    type RWAble = typing.RWAble
 
 
 __all__ = [
-    "ArrayStorageType",
-    "GroupStorageType",
+    "AnnDataElem",
+    "Dataset2DIlocIndexer",
+    "Read",
+    "ReadCallback",
+    "ReadLazy",
     "StorageType",
+    "Write",
+    "WriteCallback",
+    "_ArrayStorageType",
+    "_GroupStorageType",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
 ]
 
-type ArrayStorageType = ZarrArray | H5Array
-type GroupStorageType = ZarrGroup | H5Group
-type StorageType = ArrayStorageType | GroupStorageType
+# These two are not public, so we don’t make them `type`s
+_ArrayStorageType: TypeAlias = ZarrArray | H5Array  # noqa: UP040
+_GroupStorageType: TypeAlias = ZarrGroup | H5Group  # noqa: UP040
 
-# circumvent https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-type S = StorageType
-type RWAble = typing.RWAble
+type StorageType = _ArrayStorageType | _GroupStorageType
 
 
+@set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
-    def __getitem__(self, idx: Any) -> Dataset2D: ...
+    def __getitem__(self, idx: Any, /) -> Dataset2D: ...
 
 
 class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
-    def __call__(self, elem: S, *, _reader: Reader) -> RWAble: ...
+    def __call__(self, elem: S, /, *, _reader: Reader) -> RWAble: ...
 
 
 class _ReadLazyInternal[S: StorageType](Protocol):
     def __call__(
         self,
         elem: S,
+        /,
         *,
         _reader: LazyReader,
         chunks: tuple[int, ...] | None = None,
     ) -> LazyDataStructures: ...
 
 
+@set_module("anndata.experimental")
 class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
-    def __call__(self, elem: S) -> RWAble:
+    def __call__(self, elem: S, /) -> RWAble:
         """Low-level reading function for an element.
 
         Parameters
@@ -77,7 +95,7 @@ class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
 
 class ReadLazy[S](Protocol):
     def __call__(
-        self, elem: S, *, chunks: tuple[int, ...] | None = None
+        self, elem: S, /, *, chunks: tuple[int, ...] | None = None
     ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 
@@ -94,24 +112,27 @@ class ReadLazy[S](Protocol):
         ...
 
 
-class _WriteInternal[RWAble: typing.RWAble](Protocol):
+class _WriteInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        f: StorageType,
+        f: S,
         k: str,
         v: RWAble,
+        /,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
     ) -> None: ...
 
 
+@set_module("anndata.experimental")
 class Write[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
         f: StorageType,
         k: str,
         v: RWAble,
+        /,
         *,
         dataset_kwargs: Mapping[str, Any],
     ) -> None:
@@ -131,13 +152,14 @@ class Write[RWAble: typing.RWAble](Protocol):
         ...
 
 
+@set_module("anndata.experimental")
 class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        /,
         read_func: Read[S, RWAble],
         elem_name: str,
         elem: StorageType,
+        /,
         *,
         iospec: IOSpec,
     ) -> RWAble:
@@ -162,14 +184,15 @@ class ReadCallback[S: StorageType, RWAble: typing.RWAble](Protocol):
         ...
 
 
+@set_module("anndata.experimental")
 class WriteCallback[RWAble: typing.RWAble](Protocol):
     def __call__(
         self,
-        /,
         write_func: Write[RWAble],
         store: StorageType,
         elem_name: str,
         elem: RWAble,
+        /,
         *,
         iospec: IOSpec,
         dataset_kwargs: Mapping[str, Any],
@@ -184,7 +207,7 @@ class WriteCallback[RWAble: typing.RWAble](Protocol):
         store
             The store to which `elem` should be written.
         elem_name
-            The key to read in from the group.
+            The key to write out to the group.
         elem
             The element to write out.
         iospec
@@ -209,3 +232,30 @@ type AnnDataElem = Literal[
 ]
 
 type Join_T = Literal["inner", "outer"]
+
+
+class ReduceFunc[T](Protocol):
+    def __call__(
+        self,
+        elem: _XDataType | AxisStorable | DataFrame | XDataset,
+        /,
+        *,
+        accumulate: T,
+        attr_name: AnnDataElem | None,
+    ) -> T:
+        """Function to be called on each visit within `anndata.AnnData._reduce`.
+
+        Parameters
+        ----------
+        elem
+            The current element.
+        accumulate
+            The value being accumulated.
+        ref_acc
+            A reference to help uses distinguish where they are in the `AnnData` object.
+
+        Returns
+        -------
+            An accumulated value
+        """
+        ...

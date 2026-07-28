@@ -22,7 +22,7 @@ from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect, warn
 
 # Submodules need to be imported last
-from . import abc, experimental, typing, io, types  # isort: skip
+from . import abc, acc, experimental, io, types, typing  # isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401  # isort: skip
@@ -35,6 +35,7 @@ __all__ = [
     "Raw",
     "WriteWarning",
     "abc",
+    "acc",
     "concat",
     "experimental",
     "io",

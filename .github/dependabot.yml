@@ -7,3 +7,5 @@ updates:
     labels:
       - no milestone
       - skip-gpu-ci
+    cooldown:
+      default-days: 7

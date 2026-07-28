@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from importlib.util import find_spec
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -25,7 +27,6 @@ from anndata.tests.helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from anndata._types import AnnDataElem
 
@@ -96,16 +97,16 @@ def test_access_count_index(
 ) -> None:
     adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
 
-    remote_store_tall_skinny.initialize_key_trackers(["obs/_index"])
+    remote_store_tall_skinny.initialize_key_trackers(["obs/obs_names"])
     read_lazy(remote_store_tall_skinny, load_annotation_index=False)
-    remote_store_tall_skinny.assert_access_count("obs/_index", 0)
+    remote_store_tall_skinny.assert_access_count("obs/obs_names", 0)
 
     read_lazy(remote_store_tall_skinny)
     n_chunks = 4
     count_expected = (  # *2 when mask exists
         n_chunks * 2 if adata_orig.obs.index.dtype == "string" else n_chunks
     )
-    remote_store_tall_skinny.assert_access_count("obs/_index", count_expected)
+    remote_store_tall_skinny.assert_access_count("obs/obs_names", count_expected)
 
 
 def test_access_count_dtype(
@@ -142,6 +143,22 @@ def test_uns_uses_dask(adata_remote: AnnData):
     assert isinstance(adata_remote.uns["nested"]["nested_further"]["array"], DaskArray)
 
 
+def test_read_lazy_empty_uns_array(tmp_path: Path):
+    # Regression test for #2469: an empty array in ``uns`` is stored unchunked,
+    # so the lazy chunk layout used to be an empty tuple, which dask rejects
+    # ("Empty tuples are not allowed in chunks"). It must read lazily instead.
+    path = tmp_path / "empty_uns.h5ad"
+    adata = AnnData()
+    adata.uns["uns_name"] = {"key_name": []}
+    adata.write_h5ad(path)
+
+    remote = read_lazy(path)
+    arr = remote.uns["uns_name"]["key_name"]
+    assert isinstance(arr, DaskArray)
+    assert arr.shape == (0,)
+    assert np.asarray(arr).shape == (0,)
+
+
 def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     remote_to_memory = adata_remote.to_memory()
     assert_equal(remote_to_memory, adata_orig)
@@ -156,7 +173,7 @@ def test_access_counts_obsm_df(tmp_path: Path):
         index=adata.obs_names,
     )
     adata.write_zarr(tmp_path)
-    store = AccessTrackingStore(tmp_path)
+    store = AccessTrackingStore(tmp_path, read_only=True)
     store.initialize_key_trackers(["obsm/df"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obsm/df", 0)
@@ -203,14 +220,31 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
     adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig_pth = tmp_path / "orig.zarr"
     adata.write_zarr(orig_pth)
-    (orig_pth / ".zmetadata").unlink()
-    store = AccessTrackingStore(orig_pth)
-    store.initialize_key_trackers(["obs/.zgroup", ".zgroup"])
+    with Path.open(orig_pth / "zarr.json", "r+") as f:
+        data = json.load(f)
+        del data["consolidated_metadata"]
+        f.seek(0)
+        json.dump(data, f)
+        f.truncate()
+    store = AccessTrackingStore(orig_pth, read_only=True)
+    store.initialize_key_trackers(["obs/zarr.json", "zarr.json"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
     remote_to_memory = remote.to_memory()
     assert_equal(remote_to_memory, adata)
-    store.assert_access_count("obs/.zgroup", 1)
+    store.assert_access_count("obs/zarr.json", 1)
+
+
+@pytest.mark.zarr_io
+def test_empty_df_warns(tmp_path: Path):
+    adata = AnnData(X=np.ones((10, 10)))
+    zarr_path = tmp_path / "orig.zarr"
+    adata.write_zarr(zarr_path)
+    with pytest.warns(
+        UserWarning,
+        match=r"Renaming or reordering columns on `Dataset2D` has no effect",
+    ):
+        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
 
 
 def test_h5_file_obj(tmp_path: Path):

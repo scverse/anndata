@@ -5,4 +5,6 @@
 
 - [ ] Closes #
 - [ ] Tests added
-- [ ] Release note added (or unnecessary)
+
+<!-- only check the following checkbox (and add a reason) if you want to skip release notes -->
+- [ ] Release note not necessary because:

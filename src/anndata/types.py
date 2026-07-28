@@ -3,20 +3,58 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from ._core.anndata import AnnData
+    from enum import Enum
+    from typing import Any, Literal
+
+    from array_api.latest import ArrayNamespace
 
 
 @runtime_checkable
-class ExtensionNamespace(Protocol):
-    """Protocol for extension namespaces.
+class SupportsArrayApiBase(Protocol):
+    device: str
+    shape: tuple[int, ...]
+    size: int
 
-    Enforces that the namespace initializer accepts a class with the proper `__init__` method.
-    Protocol's can't enforce that the `__init__` accepts the correct types. See
-    `_check_namespace_signature` for that. This is mainly useful for static type
-    checking with mypy and IDEs.
-    """
+    def __array_namespace__(
+        self,
+        *,
+        api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
+    ) -> ArrayNamespace: ...
+    def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
+    def __getitem__(self, k: object) -> SupportsArrayApiBase: ...
 
-    def __init__(self, adata: AnnData) -> None:
-        """
-        Used to enforce the correct signature for extension namespaces.
-        """
+
+@runtime_checkable
+class SupportsArrayApi(SupportsArrayApiBase, Protocol):
+    # https://data-apis.org/array-api/latest/design_topics/data_interchange.html
+    def __dlpack__(
+        self,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[Enum, int] | None = None,
+        copy: bool | None = None,
+    ) -> Any: ...
+    def __dlpack_device__(self) -> tuple[int, int]: ...
+
+
+def __getattr__(key: str):
+    match key:
+        case "ExtensionNamespace":
+            from scverse_misc import ExtensionNamespace
+
+            from .utils import warn
+
+            msg = (
+                "Importing ExtensionNamespace from `types` is deprecated. "
+                "Please use scverse_misc instead."
+            )
+            warn(msg, FutureWarning)
+            return ExtensionNamespace
+        case "SupportsArrayApi":
+            return SupportsArrayApi
+        case "SupportsArrayApiBase":
+            return SupportsArrayApiBase
+        case _:
+            msg = f"types has no attribute {key!r}"
+            raise AttributeError(msg)

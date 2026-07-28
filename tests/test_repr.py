@@ -58,5 +58,11 @@ def test_anndata_repr(adata):
 def test_removal(adata, adata_attr):
     attr = adata_attr
     assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE)
-    delattr(adata, attr)
-    assert re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE) is None
+    if attr == "layers":
+        # `del adata.layers` keeps `.X` for backwards compat, but warns it won’t forever
+        with pytest.warns(FutureWarning, match=r"future release may drop"):
+            delattr(adata, attr)
+        assert re.search(r"^\s+layers: None.*$", repr(adata), flags=re.MULTILINE)
+    else:
+        delattr(adata, attr)
+        assert not re.search(rf"^\s+{attr}:.*$", repr(adata), flags=re.MULTILINE)

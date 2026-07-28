@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import re
 import warnings
-from functools import partial
 from itertools import product
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
@@ -16,12 +17,15 @@ from scipy.sparse import csr_matrix, issparse
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
 from anndata._core.raw import Raw
+from anndata._core.sparse_dataset import sparse_dataset
 from anndata._settings import settings
+from anndata.acc import A
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     assert_equal,
     gen_adata,
     get_multiindex_columns_df,
+    jnp,
 )
 
 if TYPE_CHECKING:
@@ -36,6 +40,47 @@ adata_sparse = AnnData(
     dict(obs_names=["s1", "s2"], anno1=["c1", "c2"]),
     dict(var_names=["a", "b", "c"]),
 )
+
+
+@pytest.fixture(params=["zarr", "h5ad"], scope="session")
+def diskfmt(request) -> Literal["zarr", "h5ad"]:
+    return request.param
+
+
+@pytest.fixture(
+    params=[adata_sparse, adata_dense], ids=["sparse", "dense"], scope="session"
+)
+def adata(request) -> AnnData:
+    return request.param
+
+
+@pytest.fixture(scope="session")
+def adata_on_disk(
+    diskfmt: Literal["h5ad", "zarr"],
+    adata: AnnData,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    path = (
+        tmp_path_factory.mktemp("disk_backed")
+        / f"{'sparse' if adata is adata_sparse else 'dense'}.{diskfmt}"
+    )
+    getattr(adata, f"write_{diskfmt}")(path)
+    return path
+
+
+@pytest.mark.parametrize("elem_name", ["X", "obsm", "layers"])
+def test_cant_copy_disk_backed(
+    adata_on_disk: Path, elem_name: Literal["X", "obsm", "layers"]
+):
+    is_sparse = "sparse" in str(adata_on_disk)
+    is_zarr = adata_on_disk.suffix == ".zarr"
+    root = (zarr.open if is_zarr else h5py.File)(adata_on_disk)
+    X = ad.io.sparse_dataset(root["X"]) if is_sparse else root["X"]
+    adata = AnnData(**{elem_name: (X if elem_name == "X" else {"X": X})})
+    with pytest.raises(NotImplementedError, match=r"Copy is not implemented"):
+        adata.copy()
+    if not is_zarr:
+        root.close()
 
 
 def test_creation():
@@ -185,6 +230,30 @@ def test_df_warnings():
         adata.X = df
 
 
+@pytest.mark.parametrize("use_raw", [True, False], ids=["raw", "no_raw"])
+@pytest.mark.parametrize("use_uns", [True, False], ids=["uns", "no_uns"])
+def test_sizeof_print_stratified(capsys, *, use_raw: bool, use_uns: bool):
+    adata = gen_adata((10, 20))
+    if use_uns:
+        adata.uns = {"foo": np.arange(10), "nested": {"here": np.arange(10)}}
+    else:
+        adata.uns = {}
+    if use_raw:
+        adata.raw = adata.copy()
+    adata.__sizeof__(show_stratified=True)
+    captured = capsys.readouterr()
+    for attr in [
+        "layers",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+    ]:
+        assert attr in captured.out
+    assert use_uns == ("uns" in captured.out)
+    assert use_raw == ("raw" in captured.out)
+
+
 @pytest.mark.parametrize("attr", ["X", "layers", "obsm", "varm", "obsp", "varp"])
 @pytest.mark.parametrize("when", ["init", "assign"])
 def test_convert_matrix(attr, when):
@@ -331,29 +400,44 @@ def test_indices_dtypes():
     assert adata.obs_names.tolist() == ["ö", "a"]
 
 
-def test_slicing():
-    adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
+@pytest.mark.parametrize(
+    "xp",
+    [pytest.param(jnp, marks=pytest.mark.array_api), np],
+    ids=["jax", "numpy"],
+)
+def test_slicing(xp) -> None:
+    adata = AnnData(xp.array([[1, 2, 3], [4, 5, 6]]))
 
     # assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()  # No longer the case
 
-    assert adata[0, 0].X.tolist() == np.reshape(1, (1, 1)).tolist()
-    assert adata[0, :].X.tolist() == np.reshape([1, 2, 3], (1, 3)).tolist()
-    assert adata[:, 0].X.tolist() == np.reshape([1, 4], (2, 1)).tolist()
+    assert adata[0, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
+    assert adata[0, :].X.tolist() == xp.reshape(xp.array([1, 2, 3]), (1, 3)).tolist()
+    assert adata[:, 0].X.tolist() == xp.reshape(xp.array([1, 4]), (2, 1)).tolist()
 
     assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[:, np.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
-    assert adata[:, np.array([False, True, True])].X.tolist() == [
+    assert adata[:, xp.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
+    assert adata[:, xp.array([False, True, True])].X.tolist() == [
         [2, 3],
         [5, 6],
     ]
+    assert (
+        adata[xp.array([0]), xp.array([0, 2])].X.tolist()
+        == adata[xp.array([0]), :][:, xp.array([0, 2])].X.tolist()
+    )
     assert adata[:, 1:3].X.tolist() == [[2, 3], [5, 6]]
 
     assert adata[0:2, :][:, 0:2].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[0:1, :][:, 0:2].X.tolist() == np.reshape([1, 2], (1, 2)).tolist()
-    assert adata[0, :][:, 0].X.tolist() == np.reshape(1, (1, 1)).tolist()
+    assert (
+        adata[0:1, :][:, 0:2].X.tolist()
+        == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
+    )
+    assert adata[0, :][:, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
     assert adata[:, 0:2][0:2, :].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[:, 0:2][0:1, :].X.tolist() == np.reshape([1, 2], (1, 2)).tolist()
-    assert adata[:, 0][0, :].X.tolist() == np.reshape(1, (1, 1)).tolist()
+    assert (
+        adata[:, 0:2][0:1, :].X.tolist()
+        == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
+    )
+    assert adata[:, 0][0, :].X.tolist() == xp.reshape(1, (1, 1)).tolist()
 
 
 def test_boolean_slicing():
@@ -405,6 +489,24 @@ def test_oob_boolean_slicing():
         AnnData(np.empty((100, len1)))[:, np.random.randint(0, 2, len2, dtype=bool)]
     assert str(len1) in str(e.value)
     assert str(len2) in str(e.value)
+
+
+def test_pd_index(subtests: pytest.Subtests) -> None:
+    adata = AnnData(
+        np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+        dict(obs_names=["A", "B", "C"]),
+        dict(var_names=["a", "b", "c"]),
+    )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index(adata.obs_names.isin(["A", "B"]))],
+            adata[adata.obs_names.isin(["A", "B"])],
+        )
+    with subtests.test("bool"):
+        assert_equal(
+            adata[pd.Index([0, 2])],
+            adata[[0, 2]],
+        )
 
 
 def test_slicing_strings():
@@ -600,7 +702,8 @@ def test_to_df_dense():
     pd.testing.assert_index_equal(X_df.index, layer_df.index)
 
 
-def test_convenience():
+@pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning")
+def test_convenience(subtests: pytest.Subtests) -> None:
     adata = adata_sparse.copy()
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
@@ -609,40 +712,43 @@ def test_convenience():
     adata_dense = adata.copy()
     adata_dense.X = adata_dense.X.toarray()
 
-    def assert_same_op_result(a1, a2, op):
-        r1 = op(a1)
-        r2 = op(a2)
-        assert np.all(r1 == r2)
-        assert type(r1) is type(r2)
+    def assert_same_op_result(a1, a2, op, /, *args, label: str = "", **kwargs) -> None:
+        label = f"{op.__name__}-{'-'.join(map(str, args))}" + (
+            f"-{label}" if label else ""
+        )
+        with subtests.test(label, **kwargs):
+            r1 = op(a1, *args, **kwargs)
+            r2 = op(a2, *args, **kwargs)
+            assert np.all(r1 == r2)
+            assert type(r1) is type(r2)
 
-    assert np.allclose(adata.obs_vector("b"), np.array([1.0, 2.5]))
-    assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
-    assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
-    assert np.allclose(adata.var_vector("s1"), np.array([0, 1.0, 1.5]))
-    assert np.allclose(adata.raw.var_vector("s2"), np.array([0, 5, 6]))
+    with subtests.test("obs_vector"):
+        assert np.allclose(adata.obs_vector("b"), np.array([1.0, 2.5]))
+        assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
+        assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
+    with subtests.test("var_vector"):
+        assert np.allclose(adata.var_vector("s1"), np.array([0, 1.0, 1.5]))
+        assert np.allclose(adata.raw.var_vector("s2"), np.array([0, 5, 6]))
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, partial(AnnData.obs_vector, k=obs_k, layer=layer)
+            adata, adata_dense, AnnData.obs_vector, obs_k, layer=layer
         )
-
     for obs_k in ["a", "b", "c"]:
         assert_same_op_result(
-            adata.raw, adata_dense.raw, partial(Raw.obs_vector, k=obs_k)
+            adata.raw, adata_dense.raw, Raw.obs_vector, obs_k, label="raw"
         )
-
     for var_k, layer in product(["s1", "s2", "anno2"], [None, "x2"]):
         assert_same_op_result(
-            adata, adata_dense, partial(AnnData.var_vector, k=var_k, layer=layer)
+            adata, adata_dense, AnnData.var_vector, var_k, layer=layer
         )
-
     for var_k in ["s1", "s2", "anno2"]:
         assert_same_op_result(
-            adata.raw, adata_dense.raw, partial(Raw.var_vector, k=var_k)
+            adata.raw, adata_dense.raw, Raw.var_vector, var_k, label="raw"
         )
 
 
-def test_1d_slice_dtypes():
+def test_1d_slice_dtypes(subtests: pytest.Subtests) -> None:
     N, M = 10, 20
     obs_df = pd.DataFrame(
         dict(
@@ -664,16 +770,19 @@ def test_1d_slice_dtypes():
     )
     adata = AnnData(X=np.random.random((N, M)), obs=obs_df, var=var_df)
 
-    new_obs_df = pd.DataFrame(index=adata.obs_names)
-    for k in obs_df.columns:
-        new_obs_df[k] = adata.obs_vector(k)
-        assert new_obs_df[k].dtype == obs_df[k].dtype
-    assert np.all(new_obs_df == obs_df)
-    new_var_df = pd.DataFrame(index=adata.var_names)
-    for k in var_df.columns:
-        new_var_df[k] = adata.var_vector(k)
-        assert new_var_df[k].dtype == var_df[k].dtype
-    assert np.all(new_var_df == var_df)
+    new_obs_df = pd.DataFrame(
+        {k: adata[A.obs[k]] for k in obs_df.columns}, index=adata.obs_names
+    )
+    new_var_df = pd.DataFrame(
+        {k: adata[A.var[k]] for k in var_df.columns}, index=adata.var_names
+    )
+
+    with subtests.test("obs"):
+        assert new_obs_df.dtypes.to_dict() == obs_df.dtypes.to_dict()
+        assert np.all(new_obs_df == obs_df)
+    with subtests.test("var"):
+        assert new_var_df.dtypes.to_dict() == var_df.dtypes.to_dict()
+        assert np.all(new_var_df == var_df)
 
 
 def test_to_df_sparse():
@@ -768,3 +877,23 @@ def test_create_adata_from_single_axis_elem(
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
     assert_equal(from_disk, in_memory)
+
+
+@pytest.mark.parametrize("in_x", [True, False], ids=["X", "layers"])
+@pytest.mark.parametrize("is_sparse", [True, False], ids=["sparse", "dense"])
+@pytest.mark.parametrize("storage", ["h5ad", "zarr"])
+def test_transpose_errors_with_backed_arrays(
+    tmp_path: Path, storage: str, *, is_sparse: bool, in_x: bool
+):
+    adata = AnnData(X=csr_matrix(np.ones((3, 4))) if is_sparse else np.ones((3, 4)))
+    path = tmp_path / f"test.{storage}"
+    getattr(adata, f"write_{storage}")(path)
+    f = (h5py.File if storage == "h5ad" else zarr.open)(path)
+    raw_array = sparse_dataset(f["X"]) if is_sparse else f["X"]
+
+    adata = AnnData(**({"X": raw_array} if in_x else {"layers": {"test": raw_array}}))
+
+    with pytest.raises(ValueError, match=r"Cannot transpose anndata object"):
+        adata.transpose()
+    if storage == "h5ad":
+        f.close()
