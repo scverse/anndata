@@ -7,8 +7,9 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import h5py
+import zarr
 
-from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
+from ..compat import AwkArray, DaskArray
 from .sparse_dataset import BaseCompressedSparseDataset
 from .xarray import Dataset2D
 
@@ -141,7 +142,7 @@ def to_memory(x, *, copy: bool = False):
         return x
 
 
-@to_memory.register(ZarrArray)
+@to_memory.register(zarr.Array)
 @to_memory.register(h5py.Dataset)
 def _(x: _ArrayStorageType, *, copy: bool = False):
     return x[...]
@@ -178,20 +179,18 @@ def _(x: Dataset2D, *, copy: bool = False):
 
 
 @singledispatch
-def filename(x):
+def filename(x) -> str:
     msg = f"Not implemented for {type(x)}"
     raise NotImplementedError(msg)
 
 
-@filename.register(h5py.Group)
-@filename.register(h5py.Dataset)
-def _(x):
+@filename.register(h5py.Group | h5py.Dataset)
+def _(x: h5py.Group | h5py.Dataset) -> str:
     return x.file.filename
 
 
-@filename.register(ZarrArray)
-@filename.register(ZarrGroup)
-def _(x):
+@filename.register(zarr.Array | zarr.Group)
+def _(x: zarr.Array | zarr.Group) -> str:
     return x.store.path
 
 
@@ -206,6 +205,6 @@ def _(x):
     return x.name
 
 
-@get_elem_name.register(ZarrGroup)
+@get_elem_name.register(zarr.Group)
 def _(x):
     return PurePosixPath(x.path).name
