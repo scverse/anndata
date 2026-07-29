@@ -147,6 +147,7 @@ In particular, for pytorch-based models.
    :toctree: generated/
 
    experimental.AnnCollection
+   experimental.AnnCollectionView
    experimental.AnnLoader
 ```
 

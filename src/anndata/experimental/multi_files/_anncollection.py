@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from functools import reduce
 from itertools import chain, pairwise
 from typing import TYPE_CHECKING, cast
@@ -18,11 +18,11 @@ from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import old_positionals
-from ...utils import warn
+from ...utils import set_module, warn
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-    from typing import Literal
+    from collections.abc import Callable, Iterable, Sequence
+    from typing import Literal, TypeAlias
 
     from ..._types import Join_T
     from ...typing import Index, _Index1DNorm
@@ -261,6 +261,7 @@ class MapObsView:
         return descr
 
 
+@set_module("anndata.experimental")
 class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     """\
     An object to access the observation attributes of `adatas` in AnnCollection.
@@ -586,7 +587,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-type ConvertType = Callable | Mapping[str, ConvertType]
+# a `type` alias would hand the docs build a `TypeAliasType` it expands forever
+ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
 
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)

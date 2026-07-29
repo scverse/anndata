@@ -185,7 +185,10 @@ class ArrayView(_SetItemMixin, np.ndarray):
         # it’s a structured array
         return self.dtype.names or ()
 
-    def copy(self, order: Literal["K", "A", "C", "F"] | None = "C") -> np.ndarray:
+    # deliberately not `Self`: copying a view has to stop it being one
+    def copy(  # type: ignore[override]
+        self, order: Literal["K", "A", "C", "F"] | None = "C"
+    ) -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
@@ -229,28 +232,32 @@ class DaskArrayView(_SetItemMixin, DaskArray):
 
 
 # Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
-# do not propagate through subsetting
-class SparseCSRMatrixView(_ViewMixin, sparse.csr_matrix):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csr_matrix:
+# do not propagate through subsetting.
+#
+# Each `copy` below returns the unwrapped type rather than `Self`, which is what
+# https://github.com/scverse/anndata/issues/656 asks for and what
+# `test_deepcopy_subset` checks. scipy declares `copy() -> Self`, so these are
+# genuine Liskov violations that cannot be expressed — hence `[override]`.
+# `csr_matrix` also inherits two incompatible `__mul__`/`__rmul__` (matrix
+# multiplication from `spmatrix`, elementwise from `_spbase`); mypy only reports
+# that for a class with a second base, hence `[misc]`.
+class SparseCSRMatrixView(_ViewMixin, sparse.csr_matrix):  # type: ignore[misc]
+    def copy(self) -> sparse.csr_matrix:  # type: ignore[override]
         return sparse.csr_matrix(self).copy()
 
 
 class SparseCSCMatrixView(_ViewMixin, sparse.csc_matrix):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csc_matrix:
+    def copy(self) -> sparse.csc_matrix:  # type: ignore[override]
         return sparse.csc_matrix(self).copy()
 
 
 class SparseCSRArrayView(_ViewMixin, sparse.csr_array):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csr_array:
+    def copy(self) -> sparse.csr_array:  # type: ignore[override]
         return sparse.csr_array(self).copy()
 
 
 class SparseCSCArrayView(_ViewMixin, sparse.csc_array):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csc_array:
+    def copy(self) -> sparse.csc_array:  # type: ignore[override]
         return sparse.csc_array(self).copy()
 
 

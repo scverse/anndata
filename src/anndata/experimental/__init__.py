@@ -16,7 +16,7 @@ from ..utils import module_get_attr_redirect
 from ._dispatch_io import read_dispatched, write_dispatched
 from .backed import read_lazy
 from .merge import concat_on_disk
-from .multi_files import AnnCollection
+from .multi_files import AnnCollection, AnnCollectionView
 
 if TYPE_CHECKING:
     from typing import Any
@@ -52,6 +52,7 @@ def __getattr__(attr_name: str) -> Any:
 
 __all__ = [
     "AnnCollection",
+    "AnnCollectionView",
     "AnnLoader",
     "Dataset2DIlocIndexer",
     "IOSpec",

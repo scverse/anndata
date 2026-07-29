@@ -10,8 +10,11 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
 import h5py
 import numpy as np
 import pandas as pd
+import zarr
+from numpy.typing import NDArray
 from scipy import sparse
 
+from anndata.abc import CSCDataset, CSRDataset
 from anndata.types import SupportsArrayApiBase
 
 from .._settings import settings
@@ -30,9 +33,9 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import TypeAlias
 
     import zarr
-    from numpy.typing import NDArray
     from typing_extensions import TypeIs
 
     from anndata.typing import Index1D
@@ -41,7 +44,6 @@ if TYPE_CHECKING:
     from ..typing import Index, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
-    from .sparse_dataset import BaseCompressedSparseDataset
 
 
 __all__ = [
@@ -296,14 +298,20 @@ def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[
     raise IndexError(msg)
 
 
-type SubsetIdx = (
-    tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]
+Idx1D: TypeAlias = (  # noqa: UP040
+    slice
+    | NDArray[np.bool_]
+    | NDArray[np.integer]
+    | SupportsArrayApiBase
+    | IndexManager
 )
+"""`_Index1DNorm[IndexManager]`, spelled out so it resolves at runtime."""
+
+SubsetIdx: TypeAlias = tuple[Idx1D] | tuple[Idx1D, Idx1D]  # noqa: UP040
 """A one- or two-dimensional index as stored on a view."""
 
-type NumpyIdx1D = slice | NDArray[np.bool_] | NDArray[np.integer]
-type NumpySubsetIdx = tuple[NumpyIdx1D] | tuple[NumpyIdx1D, NumpyIdx1D]
+NumpyIdx1D: TypeAlias = slice | NDArray[np.bool_] | NDArray[np.integer]  # noqa: UP040
+NumpySubsetIdx: TypeAlias = tuple[NumpyIdx1D] | tuple[NumpyIdx1D, NumpyIdx1D]  # noqa: UP040
 """A :data:`SubsetIdx` whose array parts are numpy arrays."""
 
 
@@ -405,7 +413,8 @@ type Subsettable = (
     | zarr.Array
     | CupyArray
     | CupySparseMatrix
-    | BaseCompressedSparseDataset
+    | CSRDataset
+    | CSCDataset
     | AnnData
 )
 """Everything `_subset` can subset, i.e. everything registered on `_subset_dispatch`."""

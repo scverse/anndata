@@ -246,7 +246,6 @@ class AnnData:  # noqa: PLW1641
     _is_view: bool
 
     # data attributes, set by both `_init_as_view` and `_init_as_actual`
-    file: AnnDataFileManager
     _X: _XDataType | None
     _obs: pd.DataFrame | Dataset2D
     _var: pd.DataFrame | Dataset2D
@@ -353,7 +352,7 @@ class AnnData:  # noqa: PLW1641
         # self._adata_ref is never a view
         self._adata_ref = adata_ref
         # the file is the same as of the reference object
-        self.file = adata_ref.file
+        self.file: AnnDataFileManager = adata_ref.file
 
         # views on attributes of adata_ref
         # pandas cannot be indexed with an `IndexManager` or an array-API array

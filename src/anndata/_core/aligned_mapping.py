@@ -12,11 +12,22 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
+from numpy import ma
 from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..abc import CSCDataset, CSRDataset
-from ..compat import AwkArray, CupyArray, XDataArray, XDataset
+from ..compat import (
+    AwkArray,
+    CSArray,
+    CSMatrix,
+    CupyArray,
+    CupySparseMatrix,
+    DaskArray,
+    XDataArray,
+    XDataset,
+    ZappyArray,
+)
 from ..types import SupportsArrayApiBase
 from ..utils import (
     asarray,
@@ -29,7 +40,7 @@ from ..utils import (
 )
 from .access import ElementRef
 from .file_backing import to_memory
-from .index import _subset
+from .index import Idx1D, _subset
 from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
@@ -39,13 +50,10 @@ ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
-    from typing import Any, ClassVar, Literal, Self
+    from typing import Any, ClassVar, Literal, Self, TypeAlias
 
-    from ..compat import IndexManager
     from ..typing import (
         InMemoryArray,
-        _ArrayDataStructureTypes,
-        _Index1DNorm,
         _XDataType,
     )
     from .anndata import AnnData
@@ -53,11 +61,30 @@ if TYPE_CHECKING:
     from .sparse_dataset import BaseCompressedSparseDataset
 
 
-type OneDIdx = tuple[_Index1DNorm[IndexManager]]
-type TwoDIdx = tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]
+OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
+TwoDIdx: TypeAlias = tuple[Idx1D, Idx1D]  # noqa: UP040
 # everything `coerce_array` lets through; `None` stands for a missing `.X` in `layers`
 # TODO: pd.DataFrame only allowed in AxisArrays?
-type Value = pd.DataFrame | Dataset2D | _ArrayDataStructureTypes | None
+Value: TypeAlias = (  # noqa: UP040
+    pd.DataFrame
+    | Dataset2D
+    | np.ndarray
+    | ma.MaskedArray
+    | CSMatrix
+    | CSArray
+    | DaskArray
+    | CupyArray
+    | CupySparseMatrix
+    | SupportsArrayApiBase
+    | h5py.Dataset
+    | zarr.Array
+    | ZappyArray
+    | CSRDataset
+    | CSCDataset
+    | AwkArray
+    | XDataArray
+    | None
+)
 
 
 def _copy_value(v: Value) -> Value:

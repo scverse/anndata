@@ -66,7 +66,9 @@ class _AbstractCSDataset(ABC):
         """
 
     @abstractmethod
-    def append(self, sparse_matrix: CSMatrix | CSArray | _AbstractCSDataset) -> None:
+    def append(
+        self, sparse_matrix: CSMatrix | CSArray | CSRDataset | CSCDataset
+    ) -> None:
         """Append an in-memory or on-disk sparse matrix to the current object's store.
 
         Parameters
