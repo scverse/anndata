@@ -300,6 +300,10 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata: ClassVar = ["_view_args"]
 
     def drop(self, *args, inplace: bool = False, **kw):
+        """Drop labels, as :meth:`pandas.DataFrame.drop` does.
+
+        Dropping in place initializes the parent view as an actual `AnnData`.
+        """
         if not inplace:
             return self.copy().drop(*args, **kw)
         if self._view_args is None:
@@ -307,9 +311,6 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             return
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
-
-    # not `@wraps`: that would advertise `DataFrame.drop`’s signature, not ours
-    drop.__doc__ = pd.DataFrame.drop.__doc__
 
     def __setattr__(self, key: str, value: Any):
         if key == "index" and self._view_args is not None:
