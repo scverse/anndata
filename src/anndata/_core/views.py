@@ -77,6 +77,10 @@ else:
     _SupportsSetItem = object
 
 
+type ViewArgs = tuple["AnnData", str] | tuple["AnnData", str, tuple[str, ...]]
+"""`ElementRef` args; its `keys` defaults to `()`."""
+
+
 class _SetItemMixin(_SupportsSetItem):
     """\
     Class which (when values are being set) lets their parent AnnData view know,
@@ -103,7 +107,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -124,7 +128,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -198,7 +202,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -264,7 +268,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         import cupy as cp
 

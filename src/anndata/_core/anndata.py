@@ -21,7 +21,6 @@ from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
-from anndata._core.sparse_dataset import sparse_dataset
 from anndata.types import SupportsArrayApiBase
 
 from .. import utils
@@ -56,6 +55,7 @@ from .aligned_mapping import (
     AxisArrays,
     Layers,
     PairwiseArrays,
+    _on_disk_x,
 )
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
@@ -271,7 +271,9 @@ class AnnData:  # noqa: PLW1641
         *,
         obsm: np.ndarray | Mapping[str, AxisStorable] | None = None,
         varm: np.ndarray | Mapping[str, AxisStorable] | None = None,
-        layers: Mapping[str, _XDataType] | None = None,
+        layers: Mapping[str, _XDataType]
+        | Mapping[str | None, _XDataType]
+        | None = None,
         raw: Mapping[str, Any] | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike[str] | str | None = None,
@@ -621,13 +623,12 @@ class AnnData:  # noqa: PLW1641
         if self.isbacked:
             if not self.file.is_open:
                 self.file.open()
-            X = self.file["X"]
-            if isinstance(X, h5py.Group):
-                X = sparse_dataset(X)
+            X = _on_disk_x(self.file["X"])
             # This is so that we can index into a backed dense dataset with
             # indices that aren’t strictly increasing
-            if self.is_view:
-                return _subset(X, (self._oidx, self._vidx))
+            oidx, vidx = self._oidx, self._vidx
+            if oidx is not None and vidx is not None:  # i.e. `self.is_view`
+                return _subset(X, (oidx, vidx))
             return X
         elif (adata_ref := self._adata_ref) is not None:  # i.e. `self.is_view`
             if adata_ref.X is None:
@@ -2000,8 +2001,7 @@ def _infer_shape_for_axis(
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
     for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True):
-        if elem is not None:
-            elem = cast("Mapping", elem)
+        if isinstance(elem, Mapping):
             for sub_elem in elem.values():
                 if hasattr(sub_elem, "shape"):
                     size = cast("int", sub_elem.shape[axis if id == "layers" else 0])
