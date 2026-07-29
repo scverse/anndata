@@ -673,7 +673,7 @@ class AnnData:  # noqa: PLW1641
     def X(self) -> None:
         self.X = None
 
-    layers: AlignedMappingProperty[Layers | LayersView, str | None] = (
+    layers: AlignedMappingProperty[Layers, LayersView, str | None] = (
         AlignedMappingProperty(Layers)
     )
     """\
@@ -895,7 +895,7 @@ class AnnData:  # noqa: PLW1641
     def uns(self):
         self.uns = OrderedDict()
 
-    obsm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+    obsm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (
         AlignedMappingProperty(AxisArrays, 0)
     )
     """\
@@ -907,7 +907,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+    varm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (
         AlignedMappingProperty(AxisArrays, 1)
     )
     """\
@@ -919,7 +919,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `var` but behaves otherwise like a :term:`mapping`.
     """
 
-    obsp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
+    obsp: AlignedMappingProperty[PairwiseArrays, PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 0)
     )
     """\
@@ -931,7 +931,7 @@ class AnnData:  # noqa: PLW1641
     Is sliced with `data` and `obs` but behaves otherwise like a :term:`mapping`.
     """
 
-    varp: AlignedMappingProperty[PairwiseArrays | PairwiseArraysView, str] = (
+    varp: AlignedMappingProperty[PairwiseArrays, PairwiseArraysView, str] = (
         AlignedMappingProperty(PairwiseArrays, 1)
     )
     """\

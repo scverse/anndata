@@ -121,7 +121,7 @@ class Raw:
     def n_obs(self) -> int:
         return self._n_obs
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+    varm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (
         AlignedMappingProperty(AxisArrays, 1)
     )
 

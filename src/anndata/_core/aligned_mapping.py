@@ -501,13 +501,15 @@ type AlignedMapping = (
 
 
 @dataclass
-class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
+class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | None)](
+    property
+):
     """A :class:`property` that creates an ephemeral AlignedMapping.
 
     The actual data is stored as `f'_{self.name}'` in the parent object.
     """
 
-    cls: type[T]
+    cls: type[A]
     """Concrete type that will be constructed."""
     axis: Literal[0, 1] | None = None
     """Axis of the parent to align to."""
@@ -520,10 +522,12 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         *,
         store: MutableMapping[K, Value],
         validate: bool = True,
-    ) -> T:
-        if self.axis is None:
-            return self.cls(obj, store=store, validate=validate)
-        return self.cls(obj, axis=self.axis, store=store, validate=validate)
+    ) -> A:
+        # only the 1D mappings (`AxisArrays`/`PairwiseArrays`) take an `axis`
+        axis_kw: dict[str, Literal[0, 1]] = (
+            {} if self.axis is None else {"axis": self.axis}
+        )
+        return self.cls(obj, store=store, validate=validate, **axis_kw)
 
     @property
     def fget(self) -> Callable[[], None]:
@@ -537,7 +541,7 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     def __set_name__(self, owner: AnnData, name: str):
         self.name = name
 
-    def __get__(self, obj: AnnData | Raw | None, objtype: type | None = None) -> T:
+    def __get__(self, obj: AnnData | Raw | None, objtype: type | None = None) -> A | V:
         if obj is None:
             # When accessed from the class, e.g. via `AnnData.obs`,
             # this needs to return a `property` instance, e.g. for Sphinx
