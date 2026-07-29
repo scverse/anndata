@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
 ]
 dependencies = [
     "pandas >=2.3",
@@ -57,7 +58,18 @@ Home-page = "https://github.com/scverse/anndata"
 
 [dependency-groups]
 dev = [
+    "mypy",
+    "mudata",                           # type checking `anndata.acc`
     { include-group = "dev-doc" },
+    { include-group = "typing-stubs" },
+]
+typing-stubs = [
+    "pandas-stubs",
+    "scipy-stubs",
+    "types-boltons",
+    "types-jsonschema",
+    "types-psutil",
+    "types-tqdm",
 ]
 doc = [
     "sphinx>=9.1.0",
@@ -265,6 +277,28 @@ strict = true
 [tool.ruff.lint.pylint]
 max-args = 7
 max-positional-args = 5
+
+[tool.mypy]
+mypy_path = "src"
+explicit_package_bases = true
+# Installed, but shipping no `py.typed` marker:
+# infer types from their source instead of falling back to `Any`.
+[[tool.mypy.overrides]]
+module = [
+    "array_api_compat.*",
+    "awkward.*",
+    "h5py.*",
+    "joblib.*",
+    "numcodecs.*",
+    "pyarrow.*",
+    "scanpy.*",
+    "sklearn.*",
+]
+follow_untyped_imports = true
+# Optional dependencies that are not installed when type checking.
+[[tool.mypy.overrides]]
+module = [ "cupy.*", "cupyx.*", "jax.*", "loompy.*", "torch.*", "zappy.*" ]
+ignore_missing_imports = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
