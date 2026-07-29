@@ -50,7 +50,13 @@ from ..utils import (
     warn,
 )
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import AlignedMappingProperty, AxisArrays, Layers, PairwiseArrays
+from .aligned_mapping import (
+    AlignedMappingBase,
+    AlignedMappingProperty,
+    AxisArrays,
+    Layers,
+    PairwiseArrays,
+)
 from .file_backing import AnnDataFileManager, to_memory
 from .index import _get_vector_ambiguous, _normalize_indices, _subset
 from .raw import Raw
@@ -1406,16 +1412,18 @@ class AnnData:  # noqa: PLW1641
     ) -> AnnData:
         from ..typing import _XDataType
 
-        new: dict[str, Any] = {}
+        new: dict[str, Any] = {"uns": deepcopy(self._uns)}
         for key, elem in iter_outer(self):
-            new[key] = None if elem is None else elem.copy()
+            # `uns` is deep-copied above, and an absent `raw` is the default
+            if not isinstance(
+                elem, pd.DataFrame | Dataset2D | Raw | AlignedMappingBase
+            ):
+                continue
+            new[key] = elem.copy()
             if key == "layers" and isinstance(
                 X, (*get_union_members(_XDataType), type(None))
             ):
                 new[key][None] = X
-        new["uns"] = deepcopy(self._uns)
-        if self.raw is not None:
-            new["raw"] = self.raw.copy()
         return AnnData(**new)
 
     @old_positionals("copy")

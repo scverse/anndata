@@ -20,12 +20,20 @@ from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray, pandas_spar
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+    from collections.abc import (
+        Callable,
+        Generator,
+        Iterable,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
     from typing import Any, LiteralString
 
+    from ._core.aligned_mapping import AlignedMapping
+    from ._core.raw import Raw
     from ._core.xarray import Dataset2D
     from ._types import AnnDataElem
-    from .typing import AxisStorable, _XDataType
 
 logger = get_logger(__name__)
 
@@ -443,7 +451,10 @@ def module_get_attr_redirect(
 def iter_outer(
     adata,
 ) -> Generator[
-    tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+    tuple[
+        AnnDataElem,
+        pd.DataFrame | Dataset2D | MutableMapping | AlignedMapping | Raw | None,
+    ]
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
     attr_names: list[AnnDataElem] = [
