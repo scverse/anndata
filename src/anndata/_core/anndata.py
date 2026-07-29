@@ -551,14 +551,15 @@ class AnnData:  # noqa: PLW1641
                 return X.__sizeof__()
 
         def fold_size(
-            elem: _XDataType | AxisStorable | pd.DataFrame | XDataset,
+            elem: _XDataType | AxisStorable | pd.DataFrame | XDataset | Raw,
             *,
             accumulate: dict[str, int],
-            attr_name: str | None,  # TODO: type
+            attr_name: AnnDataElem | None,
         ):
+            assert attr_name is not None  # `_reduce` always names the element
             if elem is None:
                 size = 0
-            elif elem is self.raw:
+            elif isinstance(elem, Raw):
                 size = (
                     get_size(elem.X)
                     + get_size(elem.var)
@@ -579,7 +580,9 @@ class AnnData:  # noqa: PLW1641
         backed_at = f" backed at {str(self.filename)!r}" if self.isbacked else ""
         descr = f"AnnData object with n_obs × n_vars = {n_obs} × {n_vars}{backed_at}"
         for attr_name, elem in iter_outer(self):
-            if attr_name not in {"raw", "X"}:
+            if attr_name not in {"raw", "X"} and isinstance(
+                elem, pd.DataFrame | Mapping
+            ):
                 keys = elem.keys()
                 if len(keys) > 0:
                     line = f"\n    {attr_name}: {str(list(keys))[1:-1]}"
@@ -1395,11 +1398,9 @@ class AnnData:  # noqa: PLW1641
     ) -> AnnData:
         from ..typing import _XDataType
 
-        new = {}
+        new: dict[str, Any] = {}
         for key, elem in iter_outer(self):
-            if elem is not None:
-                elem = elem.copy()
-            new[key] = elem
+            new[key] = None if elem is None else elem.copy()
             if key == "layers" and isinstance(
                 X, (*get_union_members(_XDataType), type(None))
             ):
@@ -1430,11 +1431,11 @@ class AnnData:  # noqa: PLW1641
         new = {}
         for attr_name, attr in iter_outer(self):
             if attr is not None:
-                if attr is self.raw:
+                if isinstance(attr, Raw):
                     new["raw"] = {
-                        "X": to_memory(self.raw.X, copy=copy),
-                        "var": to_memory(self.raw.var, copy=copy),
-                        "varm": to_memory(self.raw.varm, copy=copy),
+                        "X": to_memory(attr.X, copy=copy),
+                        "var": to_memory(attr.var, copy=copy),
+                        "varm": to_memory(attr.varm, copy=copy),
                     }
                 else:
                     new[attr_name] = to_memory(attr, copy=copy)
