@@ -39,6 +39,7 @@ from ..compat import (
 )
 from ..logging import anndata_logger as logger
 from ..utils import (
+    asarray,
     axis_len,
     deprecation_msg,
     ensure_df_homogeneous,
@@ -632,8 +633,11 @@ class AnnData:  # noqa: PLW1641
         elif (adata_ref := self._adata_ref) is not None:  # i.e. `self.is_view`
             if adata_ref.X is None:
                 return None
+            oidx, vidx = self._oidx, self._vidx
+            assert oidx is not None
+            assert vidx is not None
             return as_view(
-                _subset(adata_ref.X, (self._oidx, self._vidx)),
+                _subset(adata_ref.X, (oidx, vidx)),
                 ElementRef(self, "X"),
             )
         return self.layers.get(None)
@@ -1342,9 +1346,7 @@ class AnnData:  # noqa: PLW1641
             raise ValueError(msg)
         else:
             X = self.X
-        if isinstance(X, CSMatrix | CSArray):
-            X = X.toarray()
-        return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
+        return pd.DataFrame(asarray(X), index=self.obs_names, columns=self.var_names)
 
     @deprecated(
         Deprecation(
@@ -1919,19 +1921,19 @@ class AnnData:  # noqa: PLW1641
         if (X := self.X) is None:
             msg = "Cannot chunk an AnnData without `X`."
             raise ValueError(msg)
-        reverse = None
         if self.isbacked:
             # h5py can only slice with a sorted list of unique index values
             # so random batch with indices [2, 2, 5, 3, 8, 10, 8] will fail
             # this fixes the problem
             indices, reverse = np.unique(choice, return_inverse=True)
-            selection = X[indices.tolist()]
-        else:
-            selection = X[choice]
+            # reading a backed store always yields an in-memory array
+            selection = asarray(X[indices.tolist()])
+            return selection[reverse]
 
+        selection = X[choice]
         if isinstance(selection, CSMatrix | CSArray):
             selection = selection.toarray()
-        return selection if reverse is None else selection[reverse]
+        return selection
 
     def _has_X(self) -> bool:
         """
@@ -2000,9 +2002,11 @@ def _infer_shape_for_axis(
     for elem in [xxx, xxxm, xxxp]:
         if elem is not None and hasattr(elem, "shape"):
             return elem.shape[0]
-    for elem, id in zip([layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True):
-        if isinstance(elem, Mapping):
-            for sub_elem in elem.values():
+    for mapping, id in zip(
+        [layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True
+    ):
+        if isinstance(mapping, Mapping):
+            for sub_elem in mapping.values():
                 if hasattr(sub_elem, "shape"):
                     size = cast("int", sub_elem.shape[axis if id == "layers" else 0])
                     return size

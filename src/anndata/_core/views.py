@@ -469,7 +469,7 @@ else:
 
 def _resolve_idxs(
     old: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
-    new: tuple[_Index1DNorm, _Index1DNorm],
+    new: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
     adata: AnnData,
 ) -> tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
@@ -478,7 +478,7 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(
-    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: int
+    old: _Index1DNorm[IndexManager], new: _Index1DNorm[IndexManager], l: int
 ) -> _Index1DNorm[IndexManager]:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
@@ -486,7 +486,7 @@ def _resolve_idx(
 
 @_resolve_idx.register(SupportsArrayApiBase)
 def _resolve_idx_array_api(
-    old: SupportsArrayApiBase, new: _Index1DNorm, l: int
+    old: SupportsArrayApiBase, new: _Index1DNorm[IndexManager], l: int
 ) -> SupportsArrayApiBase:
     xp = old.__array_namespace__()
 
@@ -514,7 +514,9 @@ def _resolve_idx_array_api(
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: int
+    old: NDArray[np.bool_] | NDArray[np.integer],
+    new: _Index1DNorm[IndexManager],
+    l: int,
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
     if not isinstance(new, slice | np.ndarray):
         # `old` is a numpy index, so the resolved index has to be one, too
@@ -530,7 +532,7 @@ def _resolve_idx_ndarray(
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: _Index1DNorm, l: int
+    old: slice, new: _Index1DNorm[IndexManager], l: int
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
@@ -554,7 +556,7 @@ def _resolve_idx_slice_slice(old: slice, new: slice, l: int) -> slice:
 
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
-    old: IndexManager, new: _Index1DNorm, l: int
+    old: IndexManager, new: _Index1DNorm[IndexManager], l: int
 ) -> _Index1DNorm[IndexManager]:
     """Resolve indices when old is an IndexManager.
 
