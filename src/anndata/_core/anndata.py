@@ -58,7 +58,12 @@ from .aligned_mapping import (
     _on_disk_x,
 )
 from .file_backing import AnnDataFileManager, to_memory
-from .index import _get_vector_ambiguous, _normalize_indices, _subset
+from .index import (
+    _get_vector_ambiguous,
+    _index_manager_to_numpy_idx,
+    _normalize_indices,
+    _subset,
+)
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
@@ -316,8 +321,8 @@ class AnnData:  # noqa: PLW1641
     def _init_as_view(
         self,
         adata_ref: AnnData,
-        oidx: _Index1DNorm | int | np.integer,
-        vidx: _Index1DNorm | int | np.integer,
+        oidx: _Index1DNorm[IndexManager] | int | np.integer,
+        vidx: _Index1DNorm[IndexManager] | int | np.integer,
     ):
         self._is_view = True
         if isinstance(oidx, int | np.integer):
@@ -339,12 +344,8 @@ class AnnData:  # noqa: PLW1641
             prev_oidx, prev_vidx = adata_ref._oidx, adata_ref._vidx
             adata_ref = adata_ref._adata_ref
             oidx, vidx = _resolve_idxs((prev_oidx, prev_vidx), (oidx, vidx), adata_ref)
-        for axis, idx in [("o", oidx), ("v", vidx)]:
-            setattr(
-                self,
-                f"_{axis}idx",
-                IndexManager.from_array(idx) if has_xp(idx) else idx,
-            )
+        self._oidx = IndexManager.from_array(oidx) if has_xp(oidx) else oidx
+        self._vidx = IndexManager.from_array(vidx) if has_xp(vidx) else vidx
 
         # self._adata_ref is never a view
         self._adata_ref = adata_ref
@@ -352,12 +353,9 @@ class AnnData:  # noqa: PLW1641
         self.file = adata_ref.file
 
         # views on attributes of adata_ref
-        var_sub = adata_ref.var.iloc[
-            np.array(self._vidx) if isinstance(self._vidx, IndexManager) else self._vidx
-        ]
-        obs_sub = adata_ref.obs.iloc[
-            np.array(self._oidx) if isinstance(self._oidx, IndexManager) else self._oidx
-        ]
+        # pandas cannot be indexed with an `IndexManager` or an array-API array
+        var_sub = adata_ref.var.iloc[_index_manager_to_numpy_idx(self._vidx)]
+        obs_sub = adata_ref.obs.iloc[_index_manager_to_numpy_idx(self._oidx)]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
@@ -369,9 +367,9 @@ class AnnData:  # noqa: PLW1641
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
-        if adata_ref._raw is not None:
+        if (ref_raw := adata_ref._raw) is not None:
             # slicing along variables axis is ignored
-            self._raw = adata_ref.raw[self, oidx]
+            self._raw = ref_raw[self, oidx]
         else:
             self._raw = None
 
