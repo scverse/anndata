@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import MutableMapping, Sequence
+from collections.abc import MutableMapping
 from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
 from types import NoneType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -16,7 +16,8 @@ from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..abc import CSCDataset, CSRDataset
-from ..compat import AwkArray, CupyArray, XDataset
+from ..compat import AwkArray, CupyArray, XDataArray, XDataset
+from ..types import SupportsArrayApiBase
 from ..utils import (
     asarray,
     axis_len,
@@ -27,28 +28,71 @@ from ..utils import (
     warn_once,
 )
 from .access import ElementRef
+from .file_backing import to_memory
 from .index import _subset
 from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
-ON_DISK_TYPES = (h5py.Dataset, zarr.Array, CSRDataset, CSCDataset)
+ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 """Element types that live on disk and so cannot be copied in memory."""
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
     from typing import ClassVar, Literal, Self
 
-    from ..typing import _ArrayDataStructureTypes
+    from ..compat import IndexManager
+    from ..typing import (
+        InMemoryArray,
+        _ArrayDataStructureTypes,
+        _Index1DNorm,
+        _XDataType,
+    )
     from .anndata import AnnData
     from .raw import Raw
+    from .sparse_dataset import BaseCompressedSparseDataset
 
 
-OneDIdx = Sequence[int] | Sequence[bool] | slice
-TwoDIdx = tuple[OneDIdx, OneDIdx]
+type OneDIdx = tuple[_Index1DNorm[IndexManager]]
+type TwoDIdx = tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]
 # everything `coerce_array` lets through; `None` stands for a missing `.X` in `layers`
 # TODO: pd.DataFrame only allowed in AxisArrays?
 type Value = pd.DataFrame | Dataset2D | _ArrayDataStructureTypes | None
+
+
+def _copy_value(v: Value) -> Value:
+    # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
+    if isinstance(v, AwkArray | NoneType | ON_DISK_TYPES):
+        return copy(v)
+    if isinstance(v, pd.DataFrame | Dataset2D | XDataArray):
+        return v.copy()
+    return _copy_array(v)
+
+
+def _copy_array(a: _XDataType) -> InMemoryArray:
+    """An in-memory copy of an array element."""
+    if isinstance(a, ON_DISK_TYPES):
+        return to_memory(a)
+    if isinstance(a, np.ndarray):
+        return a.copy()
+    if isinstance(a, SupportsArrayApiBase):
+        # the array API standard has no `.copy()`, e.g. `torch.Tensor` lacks it
+        return a.__array_namespace__().asarray(a, copy=True)
+    return a.copy()
+
+
+def _on_disk_x(
+    elem: h5py.Group | h5py.Dataset | BaseCompressedSparseDataset,
+) -> h5py.Dataset | CSRDataset | CSCDataset:
+    """Interpret an on-disk `.X` element, wrapping sparse groups."""
+    if isinstance(elem, h5py.Group):
+        from .sparse_dataset import sparse_dataset
+
+        return sparse_dataset(elem)
+    if not isinstance(elem, h5py.Dataset):
+        msg = f"Unexpected on-disk element of type {type(elem).__name__}"
+        raise AssertionError(msg)
+    return elem
 
 
 class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
@@ -141,13 +185,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
         return parent
 
     def copy(self) -> dict[K, Value]:
-        # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
-        return {
-            k: copy(v)
-            if isinstance(v, (AwkArray, NoneType, *ON_DISK_TYPES))
-            else v.copy()
-            for k, v in self.items()
-        }
+        return {k: _copy_value(v) for k, v in self.items()}
 
     def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[Self, I, K]:
         """Returns a subset copy-on-write view of the object."""
@@ -427,12 +465,7 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
             parent = self._anndata_parent
             if not parent.file.is_open:
                 parent.file.open()
-            X = parent.file["X"]
-            if isinstance(X, h5py.Group):
-                from ..io import sparse_dataset
-
-                X = sparse_dataset(X)
-            return X
+            return _on_disk_x(parent.file["X"])
         return super().__getitem__(key)
 
     def __iter__(self) -> Iterator[str | None]:
@@ -465,7 +498,7 @@ LayersBase._view_class = LayersView
 LayersBase._actual_class = Layers
 
 
-class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
+class PairwiseArraysBase(AlignedMappingBase[TwoDIdx, str]):
     """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
@@ -491,7 +524,7 @@ class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
+class PairwiseArrays(AlignedActual[TwoDIdx, str], PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -507,7 +540,7 @@ class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
 
 
 class PairwiseArraysView(
-    AlignedView[PairwiseArraysBase, OneDIdx, str], PairwiseArraysBase
+    AlignedView[PairwiseArraysBase, TwoDIdx, str], PairwiseArraysBase
 ):
     pass
 
@@ -573,15 +606,21 @@ class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | No
             # When accessed from the class, e.g. via `AnnData.obs`,
             # this needs to return a `property` instance, e.g. for Sphinx
             return self  # type: ignore
-        if not obj.is_view:
+        from .anndata import AnnData
+
+        # only `AnnData` can be a view
+        if not isinstance(obj, AnnData) or (parent_anndata := obj._adata_ref) is None:
             # all stores are created through `.__set__`, so no need to double-validate.
             return self.construct(
                 obj, store=getattr(obj, f"_{self.name}"), validate=False
             )
-        parent_anndata = obj._adata_ref
         idxs = (obj._oidx, obj._vidx)
-        parent: AlignedMapping = getattr(parent_anndata, self.name)
-        return parent._view(obj, tuple(idxs[ax] for ax in parent.axes))
+        parent: A = getattr(parent_anndata, self.name)
+        axes = parent.axes
+        subset_idx = (
+            (idxs[axes[0]],) if len(axes) == 1 else (idxs[axes[0]], idxs[axes[1]])
+        )
+        return cast("V", parent._view(obj, subset_idx))
 
     def __set__(
         self,

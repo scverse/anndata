@@ -36,6 +36,7 @@ class AnnDataFileManager:
             msg = "Cannot provide both a h5py.File and the name and/or mode arguments to constructor"
             raise ValueError(msg)
         self._adata_ref = weakref.ref(adata)
+        self._file: h5py.File | None
         if file_obj is not None:
             self.filename = filename(file_obj)
             self._filemode = file_obj.mode
@@ -66,26 +67,33 @@ class AnnDataFileManager:
         else:
             return f"Backing file manager of file {self.filename}."
 
+    @property
+    def _open_file(self) -> h5py.File:
+        if self._file is None:
+            msg = "Backing file is not open."
+            raise ValueError(msg)
+        return self._file
+
     def __contains__(self, x) -> bool:
-        return x in self._file
+        return x in self._open_file
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self._file)
+        return iter(self._open_file)
 
     def __getitem__(
         self, key: str
     ) -> h5py.Group | h5py.Dataset | BaseCompressedSparseDataset:
-        return self._file[key]
+        return self._open_file[key]
 
     def __setitem__(
         self,
         key: str,
         value: h5py.Group | h5py.Dataset | BaseCompressedSparseDataset,
     ):
-        self._file[key] = value
+        self._open_file[key] = value
 
     def __delitem__(self, key: str):
-        del self._file[key]
+        del self._open_file[key]
 
     @property
     def filename(self) -> Path | None:

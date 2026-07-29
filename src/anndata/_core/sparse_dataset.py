@@ -300,7 +300,9 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
                 np.arange(*major_index.indices(self.shape[self.major_axis])),
                 minor_index,
             )
-        compressed_vectors = self._get_contiguous_compressed_slice(major_index)
+        compressed_vectors = self._get_contiguous_compressed_slice(
+            slice(major_index.start, major_index.stop)
+        )
         return self.memory_format(
             compressed_vectors,
             shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),

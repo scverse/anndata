@@ -1570,19 +1570,23 @@ class AnnData:  # noqa: PLW1641
                 return (
                     accumulate
                     or any(
-                        predicate(e[attr], accumulate=accumulate)
-                        for e in [elem.var, elem.varm]
-                        for attr in e
+                        predicate(elem.var[col], accumulate=accumulate)
+                        for col in elem.var.columns
+                    )
+                    or any(
+                        predicate(v, accumulate=accumulate) for v in elem.varm.values()
                     )
                     or predicate(elem.X, accumulate=accumulate)
                 )
-            if isinstance(elem, pd.DataFrame | XDataset | Mapping):
+            if isinstance(elem, pd.DataFrame):
                 accumulate = accumulate or any(
-                    predicate(elem[k], accumulate=accumulate) for k in elem
+                    predicate(elem[col], accumulate=accumulate) for col in elem.columns
                 )
-                if isinstance(elem, pd.DataFrame):
-                    return accumulate or predicate(elem.index, accumulate=accumulate)
-                return accumulate
+                return accumulate or predicate(elem.index, accumulate=accumulate)
+            if isinstance(elem, XDataset | Mapping):
+                return accumulate or any(
+                    predicate(v, accumulate=accumulate) for v in elem.values()
+                )
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)

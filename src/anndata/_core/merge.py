@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, MutableSet
+from collections.abc import Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
@@ -37,7 +37,7 @@ from .index import _subset, make_slice
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator, Iterable, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
     from typing import Any
 
     from numpy.typing import NDArray
@@ -510,11 +510,11 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: str | Callable | None,
+    strategy: str | Callable[[Collection[Mapping]], Mapping] | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
-    if not isinstance(strategy, Callable):
-        strategy = MERGE_STRATEGIES[strategy]
-    return strategy
+    if callable(strategy):
+        return strategy
+    return MERGE_STRATEGIES[strategy]
 
 
 #####################
@@ -598,13 +598,14 @@ class Reindexer:
             and axis == minor_axis
             and is_outer
         ):
-            return el.map_blocks(
+            return da.map_blocks(
                 partial(
                     self._apply_to_sparse,
                     axis=axis,
                     fill_value=fill_value,
                     keep_format=True,
                 ),
+                el,
                 chunks=(el.chunks[0], len(self.new_idx))
                 if minor_axis == 1
                 else (len(self.new_idx), el.chunks[1]),
@@ -669,7 +670,7 @@ class Reindexer:
             # convert fill_value to the same type as el - to keep everything in the same dtype
             # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
             fv = xp.asarray(fill_value)
-            return xp.broadcast_to(fv, shape)
+            return xp.broadcast_to(fv, tuple(shape))
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
@@ -685,14 +686,13 @@ class Reindexer:
 
     def _apply_to_sparse(  # noqa: PLR0912
         self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
-    ) -> CSMatrix:
+    ) -> CSMatrix | CSArray:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
             from scipy import sparse
-        import array_api_compat
 
-        xp = array_api_compat.array_namespace(el.data)
+        xp = el.data.__array_namespace__()
 
         if fill_value is None:
             fill_value = default_fill_value([el])
@@ -715,7 +715,7 @@ class Reindexer:
             else:
                 return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
 
-        fill_idxer = None
+        fill_idxer: tuple[Any, Any] | None = None
 
         if len(to_fill) > 0 or isinstance(el, CupySparseMatrix):
             idxmtx_dtype = xp.result_type(el.dtype, xp.asarray(fill_value).dtype)
@@ -831,7 +831,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
 def np_bool_to_pd_bool_array(df: pd.DataFrame):
     for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
-            df[col_name] = pd.array(df[col_name].values)
+            df[col_name] = pd.array(df[col_name].to_numpy())
     return df
 
 
@@ -996,7 +996,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
-        common_keys = intersect_keys(el.fields for el in els)
+        common_keys = intersect_keys([el.fields for el in els])
         # TODO: replace dtype=object once this is fixed: https://github.com/scikit-hep/awkward/issues/3730
         reindexers = [
             Reindexer(
@@ -1144,6 +1144,7 @@ def concat_pairwise_mapping(
     mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
 ):
     result = {}
+    sparse_class: Callable[..., CSMatrix | CSArray]
     if any(any(isinstance(v, CSArray) for v in m.values()) for m in mappings):
         sparse_class = sparse.csr_array
     else:
@@ -1151,7 +1152,7 @@ def concat_pairwise_mapping(
 
     for k in join_keys(mappings):
         els = [
-            m.get(k, sparse_class((s, s), dtype=bool))
+            m.get(k, sparse_class((s, s)).astype(bool))
             for m, s in zip(mappings, shapes, strict=True)
         ]
         if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
@@ -1289,10 +1290,11 @@ def make_dask_col_from_extension_dtype(
                 chunk = np.array(variable.data[idx])
             return chunk
 
+        dtype: str | np.dtype
         if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
             dtype = "object"
         else:
-            dtype = col.dtype.numpy_dtype
+            dtype = np.dtype(col.dtype.type)
         return da.map_blocks(
             get_chunk,
             chunks=chunk_size,
@@ -1450,7 +1452,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
-    join: Join_T | Default = Default("inner"),  # noqa: B008
+    join: Join_T | Default[Join_T] = Default("inner"),  # noqa: B008
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
@@ -1697,12 +1699,12 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         keys = np.arange(len(adatas)).astype(str)
 
     axis, axis_name = _resolve_axis(axis)
-    alt_axis, alt_axis_name = _resolve_axis(axis=1 - axis)
+    alt_axis, alt_axis_name = _resolve_axis("var" if axis == 0 else "obs")
 
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(adatas)), [a.shape[axis] for a in adatas]),
-        categories=keys,
+        categories=pd.Index(keys),
     )
 
     # Combining indexes
@@ -1728,6 +1730,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     are_any_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in annotations
     )
+    concat_annot: pd.DataFrame | Dataset2D
     if are_any_annotations_dataframes:
         annotations_in_memory = (
             to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
@@ -1753,6 +1756,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     are_any_alt_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in alt_annotations
     )
+    alt_annot: pd.DataFrame | Dataset2D
     if are_any_alt_annotations_dataframes:
         alt_annotations_in_memory = [
             to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
@@ -1770,13 +1774,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         for a in annotations_with_only_dask:
             if a.true_index_dim != a.index_dim:
                 a.index = a.true_index
-        annotations_with_only_dask = [
+        datasets_to_merge = [
             a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
             for a in annotations_with_only_dask
         ]
-        alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override")
-        )
+        alt_annot = Dataset2D(xr.merge(datasets_to_merge, join=join, compat="override"))
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping

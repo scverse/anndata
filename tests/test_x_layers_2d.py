@@ -192,7 +192,9 @@ def test_read_with_non_2d_warns(
         assert not any("Layer" in str(w.message) for w in record)
     else:  # "layers"
         assert adata.X.shape == arr2d.shape  # untouched
-        assert adata.layers["L"].shape == arr3d.shape
+        layer = adata.layers["L"]
+        assert layer is not None
+        assert layer.shape == arr3d.shape
         assert any("Layer 'L'" in str(w.message) for w in record)
         assert not any("X must be" in str(w.message) for w in record)
 

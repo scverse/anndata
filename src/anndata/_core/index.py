@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from ..typing import Index, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
+    from .sparse_dataset import BaseCompressedSparseDataset
 
 
 __all__ = [
@@ -391,10 +392,13 @@ def _subset[
     | CSArray
     | CSMatrix
     | Dataset2D
+    | AwkArray
+    | XDataArray
+    | h5py.Dataset
+    | BaseCompressedSparseDataset
 ](
     a: T,
-    subset_idx: tuple[_Index1DNorm[IndexManager]]
-    | tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
+    subset_idx: tuple[_Index1DNorm[IndexManager], ...],
 ) -> T | np.ndarray:
     """Select a subset of array `a` using the given indices.
 
