@@ -1429,7 +1429,7 @@ class AnnData:  # noqa: PLW1641
             backed = anndata.io.read_h5ad("file.h5ad", backed="r")
             mem = backed[backed.obs["cluster"] == "a", :].to_memory()
         """
-        new = {}
+        new: dict[str, Any] = {}
         for attr_name, attr in iter_outer(self):
             if attr is not None:
                 if isinstance(attr, Raw):
@@ -1551,7 +1551,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or predicate(elem.categories, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
                 # matches behavior in methods.py
-                return accumulate or predicate(elem._values, accumulate=accumulate)
+                return accumulate or predicate(elem.values, accumulate=accumulate)
             if isinstance(elem, AwkArray):
                 import awkward as ak
 
@@ -1737,6 +1737,7 @@ class AnnData:  # noqa: PLW1641
             raise ValueError(msg)
         if filename is None:
             filename = self.filename
+        assert filename is not None  # `isbacked` implies a filename
 
         write_h5ad(
             Path(filename),
@@ -1913,10 +1914,9 @@ class AnnData:  # noqa: PLW1641
         This is more efficient than trying `adata.X is None` for views, since creating
         views (at least anndata's kind) can be expensive.
         """
-        if not self.is_view:
+        if (adata_ref := self._adata_ref) is None:  # i.e. not a view
             return self.X is not None
-        else:
-            return self._adata_ref.X is not None
+        return adata_ref.X is not None
 
     # --------------------------------------------------------------------------
     # all of the following is for backwards compat
