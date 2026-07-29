@@ -4,6 +4,7 @@ from codecs import decode
 from collections.abc import Mapping
 from enum import Enum, auto
 from functools import partial, singledispatch
+from importlib import import_module
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Protocol, cast, overload
 
@@ -20,6 +21,8 @@ from .._warnings import warn
 
 if TYPE_CHECKING:
     from typing import Any, Self, TypeAlias, TypeGuard
+
+    from .._core.anndata import AnnData
 
 
 #############################
@@ -205,23 +208,28 @@ old_positionals = partial(legacy_api, category=FutureWarning)
 #############################
 
 
+def _optional_pandas_array_type(
+    module: str, name: str
+) -> type[pd.api.extensions.ExtensionArray] | None:
+    """Look up an array class that only exists in some pandas versions."""
+    return getattr(import_module(module), name, None)
+
+
 PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
-    pd.arrays.StringArray,
-    pd.arrays.ArrowStringArray,
+    typ
+    for typ in (
+        pd.arrays.StringArray,
+        pd.arrays.ArrowStringArray,
+        # these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
+        _optional_pandas_array_type(
+            "pandas.core.arrays.string_", "StringArrayNumpySemantics"
+        ),
+        _optional_pandas_array_type(
+            "pandas.core.arrays.string_arrow", "ArrowStringArrayNumpySemantics"
+        ),
+    )
+    if typ is not None
 ]
-# these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
-try:
-    from pandas.core.arrays.string_ import StringArrayNumpySemantics
-except ImportError:
-    pass
-else:
-    PANDAS_STRING_ARRAY_TYPES += [StringArrayNumpySemantics]
-try:
-    from pandas.core.arrays.string_arrow import ArrowStringArrayNumpySemantics
-except ImportError:
-    pass
-else:
-    PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
 
 
 class SparseFrameAccessor(Protocol):
@@ -254,30 +262,20 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
     return a if pd.options.future.infer_string else a.astype(object)
 
 
-@overload
-def _read_attr[V, T](
-    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
-) -> V: ...
-
-
-@overload
-def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
-
-
 @singledispatch
-def _read_attr[V, T](
+def _read_attr_dispatch[V, T](
     attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
 ) -> V | T:
     if default is Empty.TOKEN:
         return attrs[name]
     else:
-        return attrs.get(name, default=default)
+        return attrs.get(name, default)
 
 
-@_read_attr.register(h5py.AttributeManager)
+@_read_attr_dispatch.register(h5py.AttributeManager)
 def _read_attr_hdf5[T](
     attrs: h5py.AttributeManager, name: str, default: T | Empty = Empty.TOKEN
-) -> str | T:
+) -> str | list[str] | T:
     """
     Read an HDF5 attribute and perform all necessary conversions.
 
@@ -297,6 +295,29 @@ def _read_attr_hdf5[T](
         return attr.decode("utf-8")
     else:  # NumPy array
         return [decode(s, "utf-8") for s in attr]
+
+
+# `singledispatch` can’t carry the overloads, so they live on this thin wrapper
+@overload
+def _read_attr[V](
+    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
+) -> V: ...
+@overload
+def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
+) -> V | T:
+    return _read_attr_dispatch(attrs, name, default)
+
+
+def _dtype_fields(
+    dtype: np.dtype,
+) -> Mapping[str, tuple[np.dtype, int] | tuple[np.dtype, int, Any]]:
+    """The fields of a structured `dtype`."""
+    if (fields := dtype.fields) is None:
+        msg = f"Expected a structured dtype, got {dtype}"
+        raise ValueError(msg)
+    return fields
 
 
 def _from_fixed_length_strings(value):
@@ -344,7 +365,8 @@ def _decode_structured_array(
         dtype = arr.dtype
     # codecs.decode is 2x slower than this lambda, go figure
     decode = np.frompyfunc(lambda x: x.decode("utf-8"), 1, 1)
-    for k, (dt, _) in dtype.fields.items():
+    # fields with a title are 3-tuples, the rest are 2-tuples
+    for k, (dt, *_) in _dtype_fields(dtype).items():
         check = h5py.check_string_dtype(dt)
         if check is not None and check.encoding == "utf-8":
             decode(arr[k], out=arr[k])
@@ -362,8 +384,8 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     But if we didn't do this conversion, we would have to use a special codec in v2
     for objects and v3 doesn't support objects at all.  So we leave this function as-is.
     """
-    new_dtype = []
-    for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
+    new_dtype: list[tuple[str, np.dtype | tuple[str, int]]] = []
+    for dt_name, (dt_type, dt_offset, *_) in _dtype_fields(value.dtype).items():
         if dt_type.kind == "O":
             #  Assuming the objects are str
             size = max(len(x.encode()) for x in value.getfield("O", dt_offset))
@@ -375,13 +397,21 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe[Group_T: zarr.Group | h5py.Group](
-    f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
-) -> Group_T:
+@overload
+def _require_group_write_dataframe(
+    f: zarr.Group, name: str, df: pd.DataFrame
+) -> zarr.Group: ...
+@overload
+def _require_group_write_dataframe(
+    f: h5py.Group, name: str, df: pd.DataFrame
+) -> h5py.Group: ...
+def _require_group_write_dataframe(
+    f: zarr.Group | h5py.Group, name: str, df: pd.DataFrame
+) -> zarr.Group | h5py.Group:
     if len(df.columns) > 5_000 and isinstance(f, h5py.Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, *args, track_order=True, **kwargs)
-    return f.require_group(name, *args, **kwargs)
+        return f.create_group(name, track_order=True)
+    return f.require_group(name)
 
 
 #############################
@@ -389,7 +419,7 @@ def _require_group_write_dataframe[Group_T: zarr.Group | h5py.Group](
 #############################
 
 
-def _clean_uns(adata: AnnData):  # noqa: F821
+def _clean_uns(adata: AnnData) -> None:
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with

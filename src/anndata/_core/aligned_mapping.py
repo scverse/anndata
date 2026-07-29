@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Literal, Self
 
     from .anndata import AnnData
+    from .raw import Raw
 
 
 OneDIdx = Sequence[int] | Sequence[bool] | slice
@@ -59,8 +60,8 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     _actual_class: ClassVar[type[AlignedActual]]
     """The actual class (which has it’s own data) for this aligned mapping."""
 
-    _parent: AnnData  # technically also can be Raw for .varm
-    """The parent object that this mapping is aligned to."""
+    _parent: AnnData | Raw
+    """The parent object that this mapping is aligned to (`Raw` only for `.varm`)."""
 
     def __repr__(self) -> str:
         return f"{type(self).__name__} with keys: {', '.join(map(repr, self.keys()))}"
@@ -514,7 +515,11 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     """Name of the attribute in the parent object."""
 
     def construct(
-        self, obj: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+        self,
+        obj: AnnData | Raw,
+        *,
+        store: MutableMapping[K, Value],
+        validate: bool = True,
     ) -> T:
         if self.axis is None:
             return self.cls(obj, store=store, validate=validate)
@@ -532,7 +537,7 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
     def __set_name__(self, owner: AnnData, name: str):
         self.name = name
 
-    def __get__(self, obj: AnnData | None, objtype: type | None = None) -> T:
+    def __get__(self, obj: AnnData | Raw | None, objtype: type | None = None) -> T:
         if obj is None:
             # When accessed from the class, e.g. via `AnnData.obs`,
             # this needs to return a `property` instance, e.g. for Sphinx
@@ -548,11 +553,15 @@ class AlignedMappingProperty[T: AlignedMapping, K: (str, str | None)](property):
         return parent._view(obj, tuple(idxs[ax] for ax in parent.axes))
 
     def __set__(
-        self, obj: AnnData, value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None
+        self,
+        obj: AnnData | Raw,
+        value: Mapping[K, Value] | Iterable[tuple[K, Value]] | None,
     ) -> None:
+        from .anndata import AnnData
+
         value = convert_to_dict(value)
         _ = self.construct(obj, store=value)  # Validate and convert arrays in `value`
-        if obj.is_view:
+        if isinstance(obj, AnnData) and obj.is_view:  # only `AnnData` can be a view
             obj._init_as_actual(obj.copy())
         prev = getattr(obj, f"_{self.name}", None)
         if issubclass(self.cls, LayersBase):

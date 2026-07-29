@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from enum import Enum
     from typing import Any, Literal
 
     from array_api.latest import ArrayNamespace
@@ -35,8 +34,9 @@ class SupportsArrayApiBase(Protocol):
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
     ) -> ArrayNamespace: ...
-    def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
-    def __getitem__(self, k: object) -> SupportsArrayApiBase: ...
+    # `device` and the index are implementation-defined objects
+    def to_device(self, device: Any, /, *, stream: int | Any | None = ...) -> Any: ...
+    def __getitem__(self, k: Any, /) -> SupportsArrayApiBase: ...
 
 
 @runtime_checkable
@@ -47,7 +47,8 @@ class SupportsArrayApi(SupportsArrayApiBase, Protocol):
         *,
         stream: int | Any | None = None,
         max_version: tuple[int, int] | None = None,
-        dl_device: tuple[Enum, int] | None = None,
+        # the DLPack device type is an `IntEnum`, i.e. usable as a plain `int`
+        dl_device: tuple[int, int] | None = None,
         copy: bool | None = None,
     ) -> Any: ...
     def __dlpack_device__(self) -> tuple[int, int]: ...

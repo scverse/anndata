@@ -27,7 +27,11 @@ if TYPE_CHECKING:
 
 # TODO: Implement views for Raw
 class Raw:
+    # `Raw` parents its `varm` like a non-view `AnnData` does, and never is a view
     is_view: ClassVar = False
+    _adata_ref: ClassVar[None] = None
+    _oidx: ClassVar[None] = None
+    _vidx: ClassVar[None] = None
 
     def __init__(
         self,

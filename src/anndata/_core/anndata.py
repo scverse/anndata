@@ -229,6 +229,15 @@ class AnnData:  # noqa: PLW1641
     _adata_ref: AnnData | None
     _oidx: _Index1DNorm[IndexManager] | None
     _vidx: _Index1DNorm[IndexManager] | None
+    _is_view: bool
+
+    # data attributes, set by both `_init_as_view` and `_init_as_actual`
+    file: AnnDataFileManager
+    _X: _XDataType | None
+    _obs: pd.DataFrame | Dataset2D
+    _var: pd.DataFrame | Dataset2D
+    _uns: MutableMapping
+    _raw: Raw | None
 
     @old_positionals(
         "obsm",
@@ -694,7 +703,7 @@ class AnnData:  # noqa: PLW1641
     """
 
     @property
-    def raw(self) -> Raw:
+    def raw(self) -> Raw | None:
         """\
         Store raw version of :attr:`X` and :attr:`var` as `.raw.X` and `.raw.var`.
 
@@ -721,7 +730,7 @@ class AnnData:  # noqa: PLW1641
         return self._raw
 
     @raw.setter
-    def raw(self, value: AnnData) -> None:
+    def raw(self, value: AnnData | None) -> None:
         if value is None:
             del self.raw
             return

@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from ..compat import XDataArray
     from ..types import SupportsArrayApiBase
+    from .raw import Raw
 
 
 ###################
@@ -1199,6 +1200,16 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
+def _all_raws(adatas: Collection[AnnData]) -> list[Raw] | None:
+    """Every object’s :attr:`~anndata.AnnData.raw`, or `None` if any lacks one."""
+    raws = []
+    for adata in adatas:
+        if (raw := adata.raw) is None:
+            return None
+        raws.append(raw)
+    return raws
+
+
 def _resolve_axis(
     axis: Literal["obs", 0, "var", 1],
 ) -> tuple[Literal[0], Literal["obs"]] | tuple[Literal[1], Literal["var"]]:
@@ -1810,17 +1821,17 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     uns = uns_merge([a.uns for a in adatas])
 
     raw = None
-    has_raw = [a.raw is not None for a in adatas]
-    if all(has_raw):
+    raws = _all_raws(adatas)
+    if raws is not None:
         raw = concat(
             [
                 AnnData(
-                    X=a.raw.X,
+                    X=a_raw.X,
                     obs=pd.DataFrame(index=a.obs_names),
-                    var=a.raw.var,
-                    varm=a.raw.varm,
+                    var=a_raw.var,
+                    varm=a_raw.varm,
                 )
-                for a in adatas
+                for a, a_raw in zip(adatas, raws, strict=True)
             ],
             join=join,
             label=label,
@@ -1829,7 +1840,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             fill_value=fill_value,
             axis=axis,
         )
-    elif any(has_raw):
+    elif any(a.raw is not None for a in adatas):
         msg = (
             "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."
