@@ -223,8 +223,11 @@ def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
         )
         if isinstance(x, DaskArray):
-            x = x.map_blocks(
+            import dask.array as da
+
+            x = da.map_blocks(
                 sparse.csr_matrix,
+                x,
                 meta=sparse.csr_matrix(x._meta),
                 dtype=x.dtype,
             ).compute()
@@ -334,7 +337,9 @@ def check_combinable_cols(cols: list[pd.Index], join: Join_T):
 
     Looks for if there are duplicated column names that would show up in the result.
     """
-    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+    repeated_cols: set[str] = reduce(
+        lambda x, y: x.union(y[y.duplicated()]), cols, set()
+    )
     if join == "inner":
         intersecting_cols = intersect_keys(cols)
         problem_cols = repeated_cols.intersection(intersecting_cols)
@@ -344,11 +349,10 @@ def check_combinable_cols(cols: list[pd.Index], join: Join_T):
         raise ValueError()
 
     if len(problem_cols) > 0:
-        problem_cols = list(problem_cols)
         msg = (
             f"Cannot combine dataframes as some contained duplicated column names - "
             "causing ambiguity.\n\n"
-            f"The problem columns are: {problem_cols}"
+            f"The problem columns are: {sorted(problem_cols)}"
         )
         raise pd.errors.InvalidIndexError(msg)
 
@@ -413,7 +417,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value[T](vals: Collection[T]) -> T | MissingVal:
+def unique_value[T](vals: Sequence[T]) -> T | type[MissingVal]:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -425,7 +429,7 @@ def unique_value[T](vals: Collection[T]) -> T | MissingVal:
     return unique_val
 
 
-def first[T](vals: Collection[T]) -> T | MissingVal:
+def first[T](vals: Collection[T]) -> T | type[MissingVal]:
     """
     Given a collection of vals, return the first non-missing one. If they're all missing,
     return MissingVal.
@@ -436,7 +440,7 @@ def first[T](vals: Collection[T]) -> T | MissingVal:
     return MissingVal
 
 
-def only[T](vals: Collection[T]) -> T | MissingVal:
+def only[T](vals: Sequence[T]) -> T | type[MissingVal]:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -695,13 +699,13 @@ class Reindexer:
         if fill_value != 0:
             to_fill = self.new_idx.get_indexer(self.new_idx.difference(self.old_idx))
         else:
-            to_fill = xp.array([])
+            to_fill = xp.asarray([])
 
         # Fixing outer indexing for missing values
         if el.shape[axis] == 0:
-            shape = list(el.shape)
-            shape[axis] = len(self.new_idx)
-            shape = tuple(shape)
+            shape_list = list(el.shape)
+            shape_list[axis] = len(self.new_idx)
+            shape = tuple(shape_list)
             if fill_value == 0:
                 if isinstance(el, CSArray):
                     memory_class = sparse.csr_array
@@ -714,7 +718,7 @@ class Reindexer:
         fill_idxer = None
 
         if len(to_fill) > 0 or isinstance(el, CupySparseMatrix):
-            idxmtx_dtype = xp.promote_types(el.dtype, xp.array(fill_value).dtype)
+            idxmtx_dtype = xp.result_type(el.dtype, xp.asarray(fill_value).dtype)
         else:
             idxmtx_dtype = bool
         if isinstance(el, CSArray):
