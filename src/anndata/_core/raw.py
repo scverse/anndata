@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from ..typing import Index, InMemoryArray, _Index1DNorm
     from .aligned_mapping import AxisArraysView, Value
     from .anndata import AnnData
+    from .xarray import Dataset2D
 
 
 # TODO: Implement views for Raw
@@ -52,7 +53,7 @@ class Raw:
         self,
         adata: AnnData,
         X: InMemoryArray | None = None,
-        var: pd.DataFrame | Mapping[str, Sequence] | None = None,
+        var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
         varm: Mapping[str, Value] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:

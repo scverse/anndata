@@ -665,13 +665,11 @@ class AnnData:  # noqa: PLW1641
             # In-memory higher-than-2-D `X` is allowed, but the on-disk
             # AnnData spec is strict; flag it so users know early.
             warn(spec_msg, UserWarning)
-        can_set_direct_if_not_none = (
-            value is None
-            or self.shape == value.shape[:2]
+        if value is not None and not (
+            self.shape == value.shape[:2]
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
-        )
-        if not can_set_direct_if_not_none:
+        ):
             msg = f"Data matrix has wrong shape {value.shape}, need to be {self.shape}."
             raise ValueError(msg)
         if self.is_view:
@@ -1228,6 +1226,9 @@ class AnnData:  # noqa: PLW1641
         del df
 
         for frame in dfs:
+            if not isinstance(frame, pd.DataFrame):
+                # lazy frames dedup their categories on access
+                continue
             string_cols = [
                 key for key in frame.columns if infer_dtype(frame[key]) == "string"
             ]

@@ -312,7 +312,7 @@ def _index_manager_to_numpy_idx(idx: _Index1DNorm[IndexManager]) -> NumpyIdx1D:
 
 
 def _index_manager_to_numpy_idx_in_tuple(subset_idx: SubsetIdx) -> NumpySubsetIdx:
-    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+    """Convert non-numpy indices in a tuple of indices to numpy arrays."""
     if len(subset_idx) == 1:
         return (_index_manager_to_numpy_idx(subset_idx[0]),)
     return (
@@ -324,7 +324,7 @@ def _index_manager_to_numpy_idx_in_tuple(subset_idx: SubsetIdx) -> NumpySubsetId
 def _ensure_numpy_idx[T, R](
     func: Callable[[T, NumpySubsetIdx], R],
 ) -> Callable[[T, SubsetIdx], R]:
-    """Convert IndexManager instances to numpy arrays in a tuple of indices."""
+    """Convert non-numpy indices in a tuple of indices to numpy arrays."""
 
     @wraps(func)
     def _ensure(a: T, subset_idx: SubsetIdx) -> R:
