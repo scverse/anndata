@@ -954,7 +954,7 @@ class AnnData:  # noqa: PLW1641
     )
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
-        return self._obs.keys().tolist()
+        return list(self._obs.keys())
 
     @deprecated(
         Deprecation(
@@ -967,7 +967,7 @@ class AnnData:  # noqa: PLW1641
     )
     def var_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`var`."""
-        return self._var.keys().tolist()
+        return list(self._var.keys())
 
     @deprecated(
         Deprecation(
