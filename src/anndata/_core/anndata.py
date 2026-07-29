@@ -18,7 +18,6 @@ import pandas as pd
 import zarr
 from natsort import natsorted
 from pandas.api.types import infer_dtype
-from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
@@ -31,6 +30,7 @@ from .._warnings import ImplicitModificationWarning
 from ..compat import (
     AwkArray,
     CSArray,
+    CSMatrix,
     IndexManager,
     XDataset,
     _move_adj_mtx,
@@ -83,7 +83,6 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView, Value
 
@@ -543,7 +542,7 @@ class AnnData:  # noqa: PLW1641
                 return int(np.array(X.shape).prod() * X.dtype.itemsize)
             elif isinstance(X, BaseCompressedSparseDataset) and with_disk:
                 return cs_to_bytes(X._to_backed())
-            elif issparse(X):
+            elif isinstance(X, CSMatrix | CSArray):
                 return cs_to_bytes(X)
             elif isinstance(X, dict | MutableMapping):
                 return sum(get_size(v) for v in X.values())
@@ -624,11 +623,11 @@ class AnnData:  # noqa: PLW1641
             if self.is_view:
                 return _subset(X, (self._oidx, self._vidx))
             return X
-        elif self.is_view and self._adata_ref.X is None:
-            return None
-        elif self.is_view:
+        elif (adata_ref := self._adata_ref) is not None:  # i.e. `self.is_view`
+            if adata_ref.X is None:
+                return None
             return as_view(
-                _subset(self._adata_ref.X, (self._oidx, self._vidx)),
+                _subset(adata_ref.X, (self._oidx, self._vidx)),
                 ElementRef(self, "X"),
             )
         return self.layers.get(None)
@@ -644,7 +643,7 @@ class AnnData:  # noqa: PLW1641
             msg = "The ability to set X with a scalar value will be removed in the future.  Initializing as an `np.array` with the shape of the current view."
             warn(msg, FutureWarning)
             value = np.full(self.shape, fill_value=value)
-        if hasattr(value, "shape") and value.shape[:2] != self.shape:
+        if value is not None and value.shape[:2] != self.shape:
             if len(value.shape) > 2:
                 msg = (
                     f"Cannot set `X` from an array of shape {tuple(value.shape)}: "
@@ -662,7 +661,7 @@ class AnnData:  # noqa: PLW1641
             warn(spec_msg, UserWarning)
         can_set_direct_if_not_none = (
             value is None
-            or (hasattr(value, "shape") and (self.shape == value.shape[:2]))
+            or self.shape == value.shape[:2]
             or (self.n_vars == 1 and self.n_obs == len(value))
             or (self.n_obs == 1 and self.n_vars == len(value))
         )
@@ -1327,7 +1326,7 @@ class AnnData:  # noqa: PLW1641
             raise ValueError(msg)
         else:
             X = self.X
-        if issparse(X):
+        if isinstance(X, CSMatrix | CSArray):
             X = X.toarray()
         return pd.DataFrame(X, index=self.obs_names, columns=self.var_names)
 
@@ -1598,12 +1597,12 @@ class AnnData:  # noqa: PLW1641
     def _check_uniqueness(self) -> None:
         if (
             settings.restrict_index_types
-            and self.obs.index[~self.obs.index.isna()].has_duplicates
+            and self.obs.index[self.obs.index.notna()].has_duplicates
         ):
             utils.warn_names_duplicates("obs")
         if (
             settings.restrict_index_types
-            and self.var.index[~self.var.index.isna()].has_duplicates
+            and self.var.index[self.var.index.notna()].has_duplicates
         ):
             utils.warn_names_duplicates("var")
 
@@ -1901,7 +1900,8 @@ class AnnData:  # noqa: PLW1641
         else:
             selection = self.X[choice]
 
-        selection = selection.toarray() if issparse(selection) else selection
+        if isinstance(selection, CSMatrix | CSArray):
+            selection = selection.toarray()
         return selection if reverse is None else selection[reverse]
 
     def _has_X(self) -> bool:
