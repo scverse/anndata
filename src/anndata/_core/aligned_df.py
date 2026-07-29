@@ -91,7 +91,7 @@ def _gen_dataframe_df(
     anno = anno.copy(deep=False)
     if (
         settings.restrict_index_types
-        and not is_string_dtype(anno.index[~anno.index.isna()])
+        and not is_string_dtype(anno.index[anno.index.notna()])
     ) or pd.api.types.is_integer_dtype(anno.index):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)

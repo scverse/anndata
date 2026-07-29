@@ -61,17 +61,20 @@ Analogous to :class:`h5py.Dataset` or :class:`zarr.Array`, but for sparse matric
 """
 
 
+def _redeclare_abstract_methods[T: type[_AbstractCSDataset]](cls: T) -> T:
+    """Rebind the abstract methods so Sphinx doesn’t interpret them as inherited."""
+    for name in ("__getitem__", "to_memory"):
+        setattr(cls, name, getattr(_AbstractCSDataset, name))
+    return cls
+
+
+@_redeclare_abstract_methods
 class CSRDataset(_AbstractCSDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSR")
     format = "csr"
 
 
+@_redeclare_abstract_methods
 class CSCDataset(_AbstractCSDataset, ABC):
     __doc__ = _sparse_dataset_doc.format(format="CSC")
     format = "csc"
-
-
-for cls in (CSRDataset, CSCDataset):
-    # So that Sphinx doesn’t interpret these as inherited
-    cls.__getitem__ = _AbstractCSDataset.__getitem__
-    cls.to_memory = _AbstractCSDataset.to_memory

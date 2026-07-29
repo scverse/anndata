@@ -11,9 +11,24 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class SupportsArrayApiBase(Protocol):
-    device: str
-    shape: tuple[int, ...]
-    size: int
+    """The part of the array API standard’s array object that we rely on.
+
+    The attributes are read-only, since implementations such as
+    :class:`numpy.ndarray` expose them as properties.
+
+    https://data-apis.org/array-api/latest/API_specification/array_object.html
+    """
+
+    @property
+    def device(self) -> str: ...
+    @property
+    def dtype(self) -> Any: ...
+    @property
+    def ndim(self) -> int: ...
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+    @property
+    def size(self) -> int: ...
 
     def __array_namespace__(
         self,

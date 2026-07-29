@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from enum import Enum, auto
 from functools import partial, singledispatch
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Protocol, cast, overload
 
 import h5py
 import numpy as np
@@ -222,6 +222,17 @@ except ImportError:
     pass
 else:
     PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
+
+
+class SparseFrameAccessor(Protocol):
+    """The part of :attr:`pandas.DataFrame.sparse` we use, which pandas-stubs declares as an untyped `...`."""
+
+    def to_coo(self) -> scipy.sparse.coo_matrix: ...
+
+
+def pandas_sparse(df: pd.DataFrame) -> SparseFrameAccessor:
+    """Access :attr:`pandas.DataFrame.sparse` with type information."""
+    return cast("SparseFrameAccessor", df.sparse)
 
 
 @overload

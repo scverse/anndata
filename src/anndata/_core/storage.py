@@ -81,7 +81,9 @@ def coerce_array(
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    array_data_structure_types = get_union_members(_ArrayDataStructureTypes)
+    array_data_structure_types: tuple[type, ...] = get_union_members(
+        _ArrayDataStructureTypes
+    )
     if isinstance(value, XDataset):
         value = Dataset2D(value)
     if isinstance(value, (*array_data_structure_types, Dataset2D)):

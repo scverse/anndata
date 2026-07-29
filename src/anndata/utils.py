@@ -16,7 +16,7 @@ import anndata
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
 from ._warnings import warn
-from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
+from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray, pandas_sparse
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -253,12 +253,12 @@ def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:
     from collections import Counter
 
     values = index.array.copy()
-    indices_dup = index.duplicated(keep="first") & ~index.isna()
+    indices_dup = index.duplicated(keep="first") & index.notna()
     values_dup = values[indices_dup]
     values_set = set(values)
-    counter = Counter()
+    counter: Counter[str] = Counter()
     issue_interpretation_warning = False
-    example_colliding_values = []
+    example_colliding_values: list[str] = []
     for i, v in enumerate(values_dup):
         while True:
             counter[v] += 1
@@ -310,7 +310,7 @@ def ensure_df_homogeneous(
 ) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
-        arr = df.sparse.to_coo().tocsr()
+        arr = pandas_sparse(df).to_coo().tocsr()
     else:
         arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
@@ -356,8 +356,8 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     # here, we do not want to call BoundStructArray.__getitem__
     # but np.ndarray.__getitem__, therefore we avoid the following line
     # arr = np.ndarray.__new__(cls, (len(cols[0]),), dtype)
-    for i, name in enumerate(dtype.names):
-        arr[name] = np.array(cols[i], dtype=dtype_list[i][1])
+    for i, (name, col_dtype, _) in enumerate(dtype_list):
+        arr[name] = np.array(cols[i], dtype=col_dtype)
 
     return arr
 

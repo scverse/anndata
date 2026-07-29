@@ -28,7 +28,6 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
-    from ._types import AnnDataElem
     from .compat import XDataset
 
 else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580

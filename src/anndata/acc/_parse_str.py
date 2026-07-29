@@ -40,12 +40,17 @@ def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: bool = True, vec: bool | None = None
 ) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None:
     """Create accessor from string."""
-    if not strict:
-        try:
-            parse(a, spec, vec=vec)
-        except ValueError:
-            return None
+    if strict:
+        return _parse(a, spec, vec=vec)
+    try:
+        return _parse(a, spec, vec=vec)
+    except ValueError:
+        return None
 
+
+def _parse[P: AdRef](
+    a: AdAcc[P], spec: str, *, vec: bool | None
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P]:
     if spec.startswith("X"):
         _check_vec(spec, vec=vec, actual=(do_vec := "[" in spec))
         return _parse_path_2d(lambda _: a.X, spec) if do_vec else a.X

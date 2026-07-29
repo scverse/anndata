@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 __all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
 
 if TYPE_CHECKING or sys.version_info >= (3, 13):
-    _M = TypeVar("_M", IndexManager, Never, default=Never)
+    _M = TypeVar("_M", bound=IndexManager, default=Never)
 else:
     _M = TypeVar("_M")
 

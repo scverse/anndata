@@ -88,7 +88,7 @@ class AnnDataFileManager:
         del self._file[key]
 
     @property
-    def filename(self) -> Path:
+    def filename(self) -> Path | None:
         return self._filename
 
     @filename.setter
@@ -191,7 +191,8 @@ def _(x: h5py.Group | h5py.Dataset) -> str:
 
 @filename.register(zarr.Array | zarr.Group)
 def _(x: zarr.Array | zarr.Group) -> str:
-    return x.store.path
+    # Zarr v3 stores have no generic path, but their `str` is a unique URL
+    return str(x.store)
 
 
 @singledispatch
