@@ -498,7 +498,7 @@ def _resolve_idx_array_api(
                 xp.arange(n)[:, None] == selected[None, :],
                 axis=1,
             )
-        old = xp.where(old)[0]
+        old = xp.nonzero(old)[0]
     return old[new]
 
 
@@ -511,7 +511,7 @@ def _resolve_idx_ndarray(
         mask_new[np.flatnonzero(old)[new]] = True
         return mask_new
     if is_bool_dtype(old):
-        old = np.where(old)[0]
+        old = np.flatnonzero(old)
     return old[new]
 
 
