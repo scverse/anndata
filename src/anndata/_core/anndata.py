@@ -1858,14 +1858,17 @@ class AnnData:  # noqa: PLW1641
         if chunk_size is None:
             # Should be some adaptive code
             chunk_size = 6000
+        if (X := self.X) is None:
+            msg = "Cannot chunk an AnnData without `X`."
+            raise ValueError(msg)
         start = 0
         n = self.n_obs
         for _ in range(int(n // chunk_size)):
             end = start + chunk_size
-            yield (self.X[start:end], start, end)
+            yield (X[start:end], start, end)
             start = end
         if start < n:
-            yield (self.X[start:n], start, n)
+            yield (X[start:n], start, n)
 
     @old_positionals("replace")
     def chunk_X(
@@ -1900,15 +1903,18 @@ class AnnData:  # noqa: PLW1641
             msg = "select should be int or array"
             raise ValueError(msg)
 
+        if (X := self.X) is None:
+            msg = "Cannot chunk an AnnData without `X`."
+            raise ValueError(msg)
         reverse = None
         if self.isbacked:
             # h5py can only slice with a sorted list of unique index values
             # so random batch with indices [2, 2, 5, 3, 8, 10, 8] will fail
             # this fixes the problem
             indices, reverse = np.unique(choice, return_inverse=True)
-            selection = self.X[indices.tolist()]
+            selection = X[indices.tolist()]
         else:
-            selection = self.X[choice]
+            selection = X[choice]
 
         if isinstance(selection, CSMatrix | CSArray):
             selection = selection.toarray()
