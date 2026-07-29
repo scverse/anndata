@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import zarr
 
-from anndata._core.index import _subset
+from anndata._core.index import _subset_dispatch
 from anndata._core.views import as_view
 from anndata._io.specs.lazy_methods import get_chunksize
 
@@ -194,7 +194,7 @@ class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
             raise RuntimeError(msg) from None
 
 
-@_subset.register(XDataArray)
+@_subset_dispatch.register(XDataArray)
 def _subset_masked(
     a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
 ):

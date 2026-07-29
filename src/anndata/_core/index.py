@@ -383,9 +383,8 @@ def _prepare_array_api_idx(
     return maybe_array_api_idxs
 
 
-@singledispatch
-def _subset[
-    T: np.ndarray
+type Subsettable = (
+    np.ndarray
     | pd.DataFrame
     | SupportsArrayApiBase
     | DaskArray
@@ -396,11 +395,16 @@ def _subset[
     | XDataArray
     | h5py.Dataset
     | BaseCompressedSparseDataset
-](
-    a: T,
+)
+"""Everything `_subset` can subset, i.e. everything registered on `_subset_dispatch`."""
+
+
+@singledispatch
+def _subset_dispatch(
+    a: np.ndarray | SupportsArrayApiBase,
     subset_idx: tuple[_Index1DNorm[IndexManager], ...],
-) -> T | np.ndarray:
-    """Select a subset of array `a` using the given indices.
+) -> SupportsArrayApiBase | np.ndarray:
+    """Subset a numpy or array-API array; everything else is registered below.
 
     For numpy arrays with array indices (not slices), this uses np.ix_ for
     coordinate-based indexing. For array-api arrays, it uses device-aware
@@ -409,8 +413,7 @@ def _subset[
     # Check if this is an array-api array (not numpy)
     if not isinstance(a, np.ndarray) and has_xp_base(a):
         # Use array-api aware indexing
-        xp_a: SupportsArrayApiBase = a
-        return cast("T", xp_a[_prepare_array_api_idx(xp_a, subset_idx)])
+        return a[_prepare_array_api_idx(a, subset_idx)]
 
     # For numpy arrays and other types, ensure we have numpy indices
     numpy_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)
@@ -422,7 +425,19 @@ def _subset[
     return a[numpy_idx]
 
 
-@_subset.register(DaskArray)
+def _subset[T: Subsettable](
+    a: T, subset_idx: tuple[_Index1DNorm[IndexManager], ...]
+) -> T | np.ndarray:
+    """Select a subset of `a` using the given indices.
+
+    Dispatch cannot express “returns what it was given”, so the generic
+    signature lives here and the implementations register on
+    `_subset_dispatch`.
+    """
+    return cast("T | np.ndarray", _subset_dispatch(a, subset_idx))
+
+
+@_subset_dispatch.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(
     a: DaskArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
@@ -434,8 +449,8 @@ def _subset_dask(
     return a[subset_idx]
 
 
-@_subset.register(CSMatrix)
-@_subset.register(CSArray)
+@_subset_dispatch.register(CSMatrix)
+@_subset_dispatch.register(CSArray)
 @_ensure_numpy_idx
 def _subset_sparse[T: CSMatrix | CSArray](
     a: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
@@ -449,8 +464,8 @@ def _subset_sparse[T: CSMatrix | CSArray](
     return a[subset_idx]
 
 
-@_subset.register(pd.DataFrame)
-@_subset.register(Dataset2D)
+@_subset_dispatch.register(pd.DataFrame)
+@_subset_dispatch.register(Dataset2D)
 @_ensure_numpy_idx
 def _subset_df[T: pd.DataFrame | Dataset2D](
     df: T, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
@@ -458,7 +473,7 @@ def _subset_df[T: pd.DataFrame | Dataset2D](
     return df.iloc[subset_idx]
 
 
-@_subset.register(AwkArray)
+@_subset_dispatch.register(AwkArray)
 @_ensure_numpy_idx
 def _subset_awkarray(
     a: AwkArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
@@ -469,7 +484,7 @@ def _subset_awkarray(
 
 
 # Registration for SparseDataset occurs in sparse_dataset.py
-@_subset.register(h5py.Dataset)
+@_subset_dispatch.register(h5py.Dataset)
 @_ensure_numpy_idx
 def _subset_dataset(
     d: h5py.Dataset, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]

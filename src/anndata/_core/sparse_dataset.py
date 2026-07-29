@@ -38,7 +38,12 @@ from ..compat import (
     CupyCSRMatrix,
     _read_attr,
 )
-from .index import _ensure_numpy_idx, _fix_slice_bounds, _subset, unpack_index
+from .index import (
+    _ensure_numpy_idx,
+    _fix_slice_bounds,
+    _subset_dispatch,
+    unpack_index,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -691,7 +696,7 @@ def sparse_dataset(
     raise ValueError(msg)
 
 
-@_subset.register(BaseCompressedSparseDataset)
+@_subset_dispatch.register(BaseCompressedSparseDataset)
 @_ensure_numpy_idx
 def subset_sparsedataset(
     d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
