@@ -117,7 +117,7 @@ class _ViewMixin(_SetItemMixin):
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
-_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "inner"]
+_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"]
 
 
 class ArrayView(_SetItemMixin, np.ndarray):
@@ -160,7 +160,8 @@ class ArrayView(_SetItemMixin, np.ndarray):
         if out is None:
             outputs = (None,) * ufunc.nout
         else:
-            out = outputs = tuple(convert_all(out))
+            out = tuple(convert_all(out))
+            outputs = out
 
         results = super().__array_ufunc__(
             ufunc, method, *convert_all(inputs), out=out, **kwargs
@@ -291,11 +292,14 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
     def drop(self, *args, inplace: bool = False, **kw):
         if not inplace:
             return self.copy().drop(*args, **kw)
+        if self._view_args is None:
+            super().drop(*args, inplace=True, **kw)
+            return
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
     def __setattr__(self, key: str, value: Any):
-        if key == "index":
+        if key == "index" and self._view_args is not None:
             msg = (
                 f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "
                 "initializing view as actual."
@@ -506,7 +510,10 @@ def _resolve_idx_array_api(
 def _resolve_idx_ndarray(
     old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: int
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
-    if is_bool_dtype(old) and is_bool_dtype(new):
+    if not isinstance(new, slice | np.ndarray):
+        # `old` is a numpy index, so the resolved index has to be one, too
+        new = np.asarray(new)
+    if not isinstance(new, slice) and is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
         mask_new[np.flatnonzero(old)[new]] = True
         return mask_new
@@ -521,8 +528,10 @@ def _resolve_idx_slice(
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
-    else:
-        return np.arange(*old.indices(l))[new]
+    if not isinstance(new, np.ndarray):
+        # `old` resolves to a numpy index, so the resolved index has to be one, too
+        new = np.asarray(new)
+    return np.arange(*old.indices(l))[new]
 
 
 def _resolve_idx_slice_slice(old: slice, new: slice, l: int) -> slice:
@@ -547,9 +556,6 @@ def _resolve_idx_index_manager(
     index and resolve with the array-api implementation. Device mismatch
     raises an error.
     """
-    if has_xp(new):
-        old_arr = old.get_for_array(new)
-        return IndexManager.from_array(_resolve_idx(old_arr, new, l))
-
-    resolved = _resolve_idx_ndarray(old.get_default(), new, l)
+    old_arr = old.get_for_array(new) if has_xp(new) else old.get_default()
+    resolved = _resolve_idx(old_arr, new, l)
     return IndexManager.from_array(resolved) if has_xp(resolved) else resolved

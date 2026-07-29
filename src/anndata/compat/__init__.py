@@ -471,7 +471,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     for k, v in d.items():
         if isinstance(v, Mapping):
             _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif scipy.sparse.issparse(v) and v.shape == (n, n):
+        elif isinstance(v, CSMatrix | CSArray) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
 
@@ -503,9 +503,9 @@ def _safe_transpose(x):
         return x.T
 
 
-def has_xp_base(x) -> TypeGuard[SupportsArrayApiBase]:
+def has_xp_base(x: object) -> TypeGuard[SupportsArrayApiBase]:
     return isinstance(x, SupportsArrayApiBase)
 
 
-def has_xp(x) -> TypeGuard[SupportsArrayApi]:
+def has_xp(x: object) -> TypeGuard[SupportsArrayApi]:
     return isinstance(x, SupportsArrayApi)

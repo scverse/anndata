@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from typing import Any, Literal
+    from typing import Any, Literal, Self
 
     from array_api.latest import ArrayNamespace
 
@@ -36,7 +36,7 @@ class SupportsArrayApiBase(Protocol):
     ) -> ArrayNamespace: ...
     # `device` and the index are implementation-defined objects
     def to_device(self, device: Any, /, *, stream: int | Any | None = ...) -> Any: ...
-    def __getitem__(self, k: Any, /) -> SupportsArrayApiBase: ...
+    def __getitem__(self, k: Any, /) -> Self: ...
 
 
 @runtime_checkable
