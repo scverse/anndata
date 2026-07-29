@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch, wraps
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -30,7 +31,7 @@ from .access import ElementRef
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, KeysView, Sequence
+    from collections.abc import Iterable, Sequence
     from typing import Any, ClassVar
 
     from numpy.typing import NDArray
@@ -67,7 +68,16 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     adata_view._init_as_actual(new)
 
 
-class _SetItemMixin:
+if TYPE_CHECKING:
+
+    class _SupportsSetItem:
+        def __setitem__(self, idx: Any, value: Any) -> None: ...
+
+else:
+    _SupportsSetItem = object
+
+
+class _SetItemMixin(_SupportsSetItem):
     """\
     Class which (when values are being set) lets their parent AnnData view know,
     so it can make a copy of itself.
@@ -129,12 +139,12 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
     def __array_ufunc__(
         self: ArrayView,
-        ufunc: Callable[..., Any],
+        ufunc: np.ufunc,
         method: _UFuncMethod,
         *inputs,
         out: tuple[np.ndarray, ...] | None = None,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> Any:
         """Makes numpy ufuncs convert all instances of views to plain arrays.
 
         See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
@@ -146,6 +156,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
                 for arr in arrs
             )
 
+        outputs: tuple[np.ndarray | None, ...]
         if out is None:
             outputs = (None,) * ufunc.nout
         else:
@@ -165,9 +176,9 @@ class ArrayView(_SetItemMixin, np.ndarray):
         )
         return results[0] if len(results) == 1 else results
 
-    def keys(self) -> KeysView[str]:
+    def keys(self) -> tuple[str, ...]:
         # it’s a structured array
-        return self.dtype.names
+        return self.dtype.names or ()
 
     def copy(self, order: str = "C") -> np.ndarray:
         # we want a conventional array
@@ -207,9 +218,9 @@ class DaskArrayView(_SetItemMixin, DaskArray):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
-    def keys(self) -> KeysView[str]:
+    def keys(self) -> tuple[str, ...]:
         # it’s a structured array
-        return self.dtype.names
+        return self.dtype.names or ()
 
 
 # Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
@@ -381,13 +392,13 @@ def _(a: Dataset2D, view_args):
     return a
 
 
-try:
+if find_spec("awkward") or TYPE_CHECKING:
     import weakref
 
     from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
-    _registry = weakref.WeakValueDictionary()
+    _registry: weakref.WeakValueDictionary[int, AnnData] = weakref.WeakValueDictionary()
     _PARAM_NAME = "_view_args"
 
     class AwkwardArrayView(_ViewMixin, AwkArray):
@@ -440,7 +451,7 @@ try:
 
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
 
-except ImportError:
+else:
 
     class AwkwardArrayView:
         pass
@@ -457,7 +468,7 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(
-    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: Literal[0, 1]
+    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: int
 ) -> _Index1DNorm[IndexManager]:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
@@ -465,7 +476,7 @@ def _resolve_idx(
 
 @_resolve_idx.register(SupportsArrayApiBase)
 def _resolve_idx_array_api(
-    old: SupportsArrayApiBase, new: _Index1DNorm, l: Literal[0, 1]
+    old: SupportsArrayApiBase, new: _Index1DNorm, l: int
 ) -> SupportsArrayApiBase:
     xp = old.__array_namespace__()
 
@@ -493,7 +504,7 @@ def _resolve_idx_array_api(
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: Literal[0, 1]
+    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: int
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
     if is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
@@ -506,7 +517,7 @@ def _resolve_idx_ndarray(
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: _Index1DNorm, l: Literal[0, 1]
+    old: slice, new: _Index1DNorm, l: int
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
@@ -514,20 +525,21 @@ def _resolve_idx_slice(
         return np.arange(*old.indices(l))[new]
 
 
-def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
+def _resolve_idx_slice_slice(old: slice, new: slice, l: int) -> slice:
     r = range(*old.indices(l))[new]
     # Convert back to slice
-    start, stop, step = r.start, r.stop, r.step
+    start, step = r.start, r.step
+    stop: int | None = r.stop
     if len(r) == 0:
         stop = start
-    elif stop < 0:
+    elif r.stop < 0:
         stop = None
     return slice(start, stop, step)
 
 
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
-    old: IndexManager, new: _Index1DNorm, l: Literal[0, 1]
+    old: IndexManager, new: _Index1DNorm, l: int
 ) -> _Index1DNorm[IndexManager]:
     """Resolve indices when old is an IndexManager.
 

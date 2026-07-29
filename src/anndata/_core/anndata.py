@@ -257,16 +257,16 @@ class AnnData:  # noqa: PLW1641
         var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
-        obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+        obsm: np.ndarray | Mapping[str, AxisStorable] | None = None,
+        varm: np.ndarray | Mapping[str, AxisStorable] | None = None,
         layers: Mapping[str, _XDataType] | None = None,
         raw: Mapping[str, Any] | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-        varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+        obsp: np.ndarray | Mapping[str, AxisStorable] | None = None,
+        varp: np.ndarray | Mapping[str, AxisStorable] | None = None,
         oidx: _Index1DNorm | int | np.integer | None = None,
         vidx: _Index1DNorm | int | np.integer | None = None,
     ):
@@ -832,7 +832,7 @@ class AnnData:  # noqa: PLW1641
         return self._obs
 
     @obs.setter
-    def obs(self, value: pd.DataFrame | XDataset):
+    def obs(self, value: pd.DataFrame | XDataset | Dataset2D):
         self._set_dim_df(value, "obs")
 
     @obs.deleter
@@ -855,7 +855,7 @@ class AnnData:  # noqa: PLW1641
         return self._var
 
     @var.setter
-    def var(self, value: pd.DataFrame | XDataset):
+    def var(self, value: pd.DataFrame | XDataset | Dataset2D):
         self._set_dim_df(value, "var")
 
     @var.deleter
