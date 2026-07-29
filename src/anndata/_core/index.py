@@ -216,7 +216,7 @@ def _from_array(
         if not isinstance(indexer, np.ndarray) and has_xp_base(indexer):
             msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
             raise ValueError(msg)
-    # indexer should be a string array here
+    # indexer is a string array here; `get_indexer` needs a collection
     names = indexer if isinstance(indexer, pd.Index) else pd.Index(np.asarray(indexer))
     positions = index.get_indexer(names)
     if xp.any(positions < 0):
@@ -307,12 +307,18 @@ type NumpySubsetIdx = tuple[NumpyIdx1D] | tuple[NumpyIdx1D, NumpyIdx1D]
 """A :data:`SubsetIdx` whose array parts are numpy arrays."""
 
 
-def _index_manager_to_numpy_idx(idx: _Index1DNorm[IndexManager]) -> NumpyIdx1D:
+def _index_manager_to_numpy_idx(idx: _Index1DNorm[IndexManager]) -> _Index1DNorm:
+    """Unwrap an `IndexManager`; every other index is passed through untouched."""
+    return np.asarray(idx) if isinstance(idx, IndexManager) else idx
+
+
+def _as_numpy_idx(idx: _Index1DNorm[IndexManager]) -> NumpyIdx1D:
+    """Materialise an index for consumers that only take numpy, e.g. pandas and h5py."""
     return idx if isinstance(idx, slice | np.ndarray) else np.asarray(idx)
 
 
-def _index_manager_to_numpy_idx_in_tuple(subset_idx: SubsetIdx) -> NumpySubsetIdx:
-    """Convert non-numpy indices in a tuple of indices to numpy arrays."""
+def _index_manager_to_numpy_idx_in_tuple(subset_idx: SubsetIdx) -> SubsetIdx:
+    """Unwrap any `IndexManager` in a tuple of indices."""
     if len(subset_idx) == 1:
         return (_index_manager_to_numpy_idx(subset_idx[0]),)
     return (
@@ -321,14 +327,21 @@ def _index_manager_to_numpy_idx_in_tuple(subset_idx: SubsetIdx) -> NumpySubsetId
     )
 
 
+def _as_numpy_subset_idx(subset_idx: SubsetIdx) -> NumpySubsetIdx:
+    """Materialise a tuple of indices for the numpy-only implementations."""
+    if len(subset_idx) == 1:
+        return (_as_numpy_idx(subset_idx[0]),)
+    return (_as_numpy_idx(subset_idx[0]), _as_numpy_idx(subset_idx[1]))
+
+
 def _ensure_numpy_idx[T, R](
     func: Callable[[T, NumpySubsetIdx], R],
 ) -> Callable[[T, SubsetIdx], R]:
-    """Convert non-numpy indices in a tuple of indices to numpy arrays."""
+    """Materialise non-numpy indices for the wrapped implementation."""
 
     @wraps(func)
     def _ensure(a: T, subset_idx: SubsetIdx) -> R:
-        return func(a, _index_manager_to_numpy_idx_in_tuple(subset_idx))
+        return func(a, _as_numpy_subset_idx(subset_idx))
 
     return _ensure
 
@@ -393,6 +406,7 @@ type Subsettable = (
     | CupyArray
     | CupySparseMatrix
     | BaseCompressedSparseDataset
+    | AnnData
 )
 """Everything `_subset` can subset, i.e. everything registered on `_subset_dispatch`."""
 
@@ -411,7 +425,7 @@ def _subset_dispatch(a: Subsettable, subset_idx: SubsetIdx) -> Subsettable:
         # zarr and cupy arrays are indexed just like numpy ones, but aren’t typed as such
         a = cast("np.ndarray", a)
 
-    numpy_idx = _index_manager_to_numpy_idx_in_tuple(subset_idx)
+    numpy_idx = _as_numpy_subset_idx(subset_idx)
 
     # Select as combination of indexes, not coordinates
     # Correcting for indexing behaviour of np.ndarray

@@ -16,8 +16,8 @@ from .aligned_mapping import (
     _on_disk_x,
 )
 from .index import (
+    _as_numpy_idx,
     _get_vector_ambiguous,
-    _index_manager_to_numpy_idx,
     _normalize_index,
     _subset,
     unpack_index,
@@ -186,7 +186,7 @@ class Raw:
             else _subset(self._X, (oidx, vidx))
         )
 
-        var = self._var.iloc[_index_manager_to_numpy_idx(vidx)]
+        var = self._var.iloc[_as_numpy_idx(vidx)]
         new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
@@ -281,7 +281,7 @@ class _RawViewHack:
 
     @property
     def var_names(self) -> pd.Index:
-        return self.parent_raw.var_names[_index_manager_to_numpy_idx(self.vidx)]
+        return self.parent_raw.var_names[_as_numpy_idx(self.vidx)]
 
 
 class IndexDimError(IndexError):

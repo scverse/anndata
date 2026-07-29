@@ -60,10 +60,11 @@ from .aligned_mapping import (
 )
 from .file_backing import AnnDataFileManager, to_memory
 from .index import (
+    _as_numpy_idx,
     _get_vector_ambiguous,
-    _index_manager_to_numpy_idx,
     _normalize_indices,
     _subset,
+    _subset_dispatch,
 )
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
@@ -97,6 +98,7 @@ if TYPE_CHECKING:
     )
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView, Value
+    from .index import SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
 
@@ -355,8 +357,8 @@ class AnnData:  # noqa: PLW1641
 
         # views on attributes of adata_ref
         # pandas cannot be indexed with an `IndexManager` or an array-API array
-        var_sub = adata_ref.var.iloc[_index_manager_to_numpy_idx(self._vidx)]
-        obs_sub = adata_ref.obs.iloc[_index_manager_to_numpy_idx(self._oidx)]
+        var_sub = adata_ref.var.iloc[_as_numpy_idx(self._vidx)]
+        obs_sub = adata_ref.obs.iloc[_as_numpy_idx(self._oidx)]
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
@@ -2027,3 +2029,9 @@ def _infer_shape(
         _infer_shape_for_axis(obs, obsm, layers, obsp, 0),
         _infer_shape_for_axis(var, varm, layers, varp, 1),
     )
+
+
+@_subset_dispatch.register(AnnData)
+def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
+    """`AnnData` normalises its own indices, so pass them through untouched."""
+    return a[subset_idx]
