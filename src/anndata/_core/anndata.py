@@ -852,7 +852,7 @@ class AnnData:  # noqa: PLW1641
         return self.obs.index
 
     @obs_names.setter
-    def obs_names(self, names: Sequence[str]):
+    def obs_names(self, names: pd.Index | Sequence[str]):
         names = self._prep_dim_index(names, "obs")
         self._set_dim_index(names, "obs")
 
@@ -875,7 +875,7 @@ class AnnData:  # noqa: PLW1641
         return self.var.index
 
     @var_names.setter
-    def var_names(self, names: Sequence[str]):
+    def var_names(self, names: pd.Index | Sequence[str]):
         names = self._prep_dim_index(names, "var")
         self._set_dim_index(names, "var")
 

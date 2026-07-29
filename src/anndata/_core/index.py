@@ -27,6 +27,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import TypeGuard
 
     from numpy.typing import NDArray
 
@@ -76,7 +77,10 @@ class _XrDtV(NamedTuple):
 
     def __call__(
         self,
-        indexer: SupportsArrayApiBase | pd.api.extensions.ExtensionArray | np.matrix,
+        indexer: SupportsArrayApiBase
+        | pd.api.extensions.ExtensionArray
+        | np.matrix
+        | pd.MultiIndex,
     ) -> bool:
         return (
             has_xp_base(indexer)
@@ -127,7 +131,8 @@ def _from_int(indexer: np.integer | int, index: pd.Index) -> np.integer | int:
 
 
 @_gen_anndata_index.register(str)
-def _from_str(indexer: str, index: pd.Index) -> int:
+def _from_str(indexer: str, index: pd.Index) -> int | slice | NDArray[np.bool_]:
+    # non-unique names resolve to a slice or a mask rather than a position
     return index.get_loc(indexer)
 
 
@@ -143,8 +148,7 @@ def _from_sparse(
     indexer: CSMatrix | CSArray,
     index: pd.Index,
 ) -> SupportsArrayApiBase:
-    indexer = indexer.toarray()
-    return _gen_anndata_index(indexer, index)
+    return _gen_anndata_index(indexer.toarray(), index)
 
 
 @_gen_anndata_index.register(Sequence)
@@ -152,10 +156,16 @@ def _from_sequence(
     indexer: Sequence,
     index: pd.Index,
 ) -> SupportsArrayApiBase:
-    indexer: np.ndarray = np.array(indexer)
-    if len(indexer) == 0:
-        indexer = indexer.astype(int)
-    return _gen_anndata_index(indexer, index)
+    arr = np.array(indexer)
+    if len(arr) == 0:
+        arr = arr.astype(int)
+    return _gen_anndata_index(arr, index)
+
+
+def is_pandas_idx(
+    indexer: object,
+) -> TypeGuard[pd.api.extensions.ExtensionArray | pd.MultiIndex]:
+    return isinstance(indexer, pd.api.extensions.ExtensionArray | pd.MultiIndex)
 
 
 @_gen_anndata_index.register(
@@ -170,15 +180,16 @@ def _from_array(
 ) -> SupportsArrayApiBase:
     # convert to the 1D if it's accidentally 2D column/row vector
     # convert sparse into dense arrays if needed
-    use_xp = has_xp_base(indexer)
     # MultiIndex objects are not turned into arrays in _normalize_index
-    is_pandas = isinstance(
-        indexer,
-        pd.api.extensions.ExtensionArray | pd.MultiIndex,
-    )
-    xp = indexer.__array_namespace__() if use_xp else np
+    is_pandas = is_pandas_idx(indexer)
+    xp = indexer.__array_namespace__() if has_xp_base(indexer) else np
     if indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0]):
-        indexer = xp.ravel(indexer)
+        # the array API has no `ravel`, and `np.matrix` is always 2D
+        indexer = (
+            np.asarray(indexer).reshape(-1)
+            if isinstance(indexer, np.matrix)
+            else xp.reshape(indexer, (-1,))
+        )
     # https://github.com/numpy/numpy/issues/27545
     is_numpy_string = indexer.dtype == np.dtypes.StringDType()
     if not is_numpy_string or is_pandas:
@@ -191,7 +202,7 @@ def _from_array(
             return indexer_int
         if XArrayDtype.SignedInt(indexer) or XArrayDtype.UnsignedInt(indexer):
             # Might not work for range indexes
-            return np.asarray(indexer) if is_pandas else indexer
+            return np.asarray(indexer) if is_pandas_idx(indexer) else indexer
         if XArrayDtype.Bool(indexer):
             if indexer.shape != index.shape:
                 msg = (
@@ -200,15 +211,17 @@ def _from_array(
                     f"AnnData index has shape {index.shape}."
                 )
                 raise IndexError(msg)
-            return np.asarray(indexer) if is_pandas else indexer
+            return np.asarray(indexer) if is_pandas_idx(indexer) else indexer
         if not isinstance(indexer, np.ndarray) and has_xp_base(indexer):
             msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
             raise ValueError(msg)
-    positions = index.get_indexer(indexer)  # indexer should be string array
+    # indexer should be a string array here
+    names = indexer if isinstance(indexer, pd.Index) else pd.Index(np.asarray(indexer))
+    positions = index.get_indexer(names)
     if xp.any(positions < 0):
-        not_found = indexer[positions < 0]
+        not_found = names[positions < 0]
         msg = (
-            f"Values {list(not_found)}, from {list(indexer)}, "
+            f"Values {list(not_found)}, from {list(names)}, "
             "are not valid obs/ var names or indices."
         )
         raise KeyError(msg)
