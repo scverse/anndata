@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+from functools import reduce, singledispatch
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Literal
 
@@ -181,7 +181,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         # it’s a structured array
         return self.dtype.names or ()
 
-    def copy(self, order: str = "C") -> np.ndarray:
+    def copy(self, order: Literal["K", "A", "C", "F"] | None = "C") -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
@@ -288,7 +288,6 @@ class DictView(_ViewMixin, dict):
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata: ClassVar = ["_view_args"]
 
-    @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):
         if not inplace:
             return self.copy().drop(*args, **kw)
@@ -297,6 +296,9 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             return
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
+
+    # not `@wraps`: that would advertise `DataFrame.drop`’s signature, not ours
+    drop.__doc__ = pd.DataFrame.drop.__doc__
 
     def __setattr__(self, key: str, value: Any):
         if key == "index" and self._view_args is not None:
