@@ -11,11 +11,14 @@ from typing import TYPE_CHECKING
 import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
-from ..compat import AwkArray, CSArray, CSMatrix, CupyArray, XDataset
+from ..abc import CSCDataset, CSRDataset
+from ..compat import AwkArray, CupyArray, XDataset
 from ..utils import (
+    asarray,
     axis_len,
     convert_to_dict,
     deprecation_msg,
@@ -29,18 +32,23 @@ from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
+ON_DISK_TYPES = (h5py.Dataset, zarr.Array, CSRDataset, CSCDataset)
+"""Element types that live on disk and so cannot be copied in memory."""
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping
     from typing import ClassVar, Literal, Self
 
+    from ..typing import _ArrayDataStructureTypes
     from .anndata import AnnData
     from .raw import Raw
 
 
 OneDIdx = Sequence[int] | Sequence[bool] | slice
 TwoDIdx = tuple[OneDIdx, OneDIdx]
+# everything `coerce_array` lets through; `None` stands for a missing `.X` in `layers`
 # TODO: pd.DataFrame only allowed in AxisArrays?
-Value = pd.DataFrame | CSMatrix | CSArray | np.ndarray
+type Value = pd.DataFrame | Dataset2D | _ArrayDataStructureTypes | None
 
 
 class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
@@ -133,9 +141,11 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
         return parent
 
     def copy(self) -> dict[K, Value]:
-        # Shallow copy for awkward array since their buffers are immutable
+        # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
         return {
-            k: copy(v) if isinstance(v, AwkArray | NoneType) else v.copy()
+            k: copy(v)
+            if isinstance(v, (AwkArray, NoneType, *ON_DISK_TYPES))
+            else v.copy()
             for k, v in self.items()
         }
 
@@ -296,8 +306,7 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
-            value = self[key]
-            for icolumn, column in enumerate(value.T):
+            for icolumn, column in enumerate(asarray(self[key]).T):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 

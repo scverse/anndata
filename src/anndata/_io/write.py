@@ -101,7 +101,8 @@ def write_loom(
     filename = Path(filename)
     obs, var = adata.obs, adata.var
     # guaranteed by `@no_write_dataset_2d`
-    assert isinstance(obs, pd.DataFrame) and isinstance(var, pd.DataFrame)
+    assert isinstance(obs, pd.DataFrame)
+    assert isinstance(var, pd.DataFrame)
     row_attrs: dict[Hashable, Any] = {
         k: np.array(v) for k, v in var.to_dict("list").items()
     }
