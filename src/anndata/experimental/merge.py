@@ -6,7 +6,7 @@ from contextlib import ExitStack, contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -32,11 +32,16 @@ from .._io.specs import read_elem, write_elem
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterator, Sequence
     from typing import Any, Literal
 
+    from zarr.core.common import AccessModeLiteral
+
     from .._core.merge import Reindexer, StrategiesLiteral
-    from .._types import Join_T
+    from .._types import Join_T, StorageType
+    from ..compat import CSMatrix
+
+    type AnyReindexer = Reindexer | IdentityReindexer
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -59,18 +64,18 @@ class IdentityReindexer:
 
 
 # Checks if given indices are equal to each other in the whole list.
-def _indices_equal(indices: Iterable[pd.Index]) -> bool:
+def _indices_equal(indices: Sequence[pd.Index]) -> bool:
     init_elem = indices[0]
     return all(np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
 def _gen_slice_to_append(
     datasets: Sequence[BaseCompressedSparseDataset],
-    reindexers,
+    reindexers: Sequence[AnyReindexer],
     max_loaded_elems: int,
-    axis=0,
+    axis: Literal[0, 1] = 0,
     fill_value=None,
-):
+) -> Generator[CSMatrix]:
     for ds, ri in zip(datasets, reindexers, strict=False):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
@@ -104,7 +109,7 @@ def _gen_slice_to_append(
 
 @singledispatch
 @contextmanager
-def as_group(store, *, mode: str) -> Generator[zarr.Group | h5py.Group]:
+def as_group(store, *, mode: AccessModeLiteral) -> Generator[zarr.Group | h5py.Group]:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
@@ -112,7 +117,9 @@ def as_group(store, *, mode: str) -> Generator[zarr.Group | h5py.Group]:
 @as_group.register(PathLike)
 @as_group.register(str)
 @contextmanager
-def _(store: PathLike[str] | str, *, mode: str) -> Generator[zarr.Group | h5py.Group]:
+def _(
+    store: PathLike[str] | str, *, mode: AccessModeLiteral
+) -> Generator[zarr.Group | h5py.Group]:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
@@ -135,7 +142,7 @@ def _(store: PathLike[str] | str, *, mode: str) -> Generator[zarr.Group | h5py.G
 @as_group.register(h5py.Group)
 @contextmanager
 def _(
-    store: zarr.Group | h5py.Group, *, mode: str
+    store: zarr.Group | h5py.Group, *, mode: AccessModeLiteral
 ) -> Generator[zarr.Group | h5py.Group]:
     del mode
     yield store
@@ -146,7 +153,21 @@ def _(
 ###################
 
 
-def read_as_backed(group: zarr.Group | h5py.Group):
+def _subgroup(group: zarr.Group | h5py.Group, key: str) -> zarr.Group | h5py.Group:
+    if not isinstance(sub := group[key], zarr.Group | h5py.Group):
+        msg = f"Expected {key!r} to be a group, got {type(sub)}."
+        raise TypeError(msg)
+    return sub
+
+
+def _read_df(group: zarr.Group | h5py.Group, key: str) -> pd.DataFrame:
+    if not isinstance(df := read_elem(_subgroup(group, key)), pd.DataFrame):
+        msg = f"Expected {key!r} to be a dataframe, got {type(df)}."
+        raise TypeError(msg)
+    return df
+
+
+def read_as_backed(group: StorageType):
     """
     Read the group until
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
@@ -167,9 +188,16 @@ def read_as_backed(group: zarr.Group | h5py.Group):
     return read_dispatched(group, callback=callback)
 
 
-def _df_index(df: zarr.Group | h5py.Group) -> pd.Index:
-    index_key = df.attrs["_index"]
-    return pd.Index(read_elem(df[index_key]))
+def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
+    df = _subgroup(group, key)
+    if not isinstance(index_key := df.attrs["_index"], str):
+        msg = f"Expected `_index` of {key!r} to be a string, got {index_key!r}."
+        raise TypeError(msg)
+    index = read_elem(df[index_key])
+    if not isinstance(index, np.ndarray | pd.api.extensions.ExtensionArray):
+        msg = f"Expected index of {key!r} to be an array, got {type(index)}."
+        raise TypeError(msg)
+    return pd.Index(index)
 
 
 ###################
@@ -180,9 +208,9 @@ def _df_index(df: zarr.Group | h5py.Group) -> pd.Index:
 def write_concat_dense(  # noqa: PLR0917
     arrays: Sequence[zarr.Array | h5py.Dataset],
     output_group: zarr.Group | h5py.Group,
-    output_path: zarr.Group | h5py.Group,
+    output_path: str,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer | None = None,
+    reindexers: Sequence[AnyReindexer] = (),
     fill_value: Any = None,
 ):
     """
@@ -212,10 +240,10 @@ def write_concat_dense(  # noqa: PLR0917
 def write_concat_sparse(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: zarr.Group | h5py.Group,
-    output_path: zarr.Group | h5py.Group,
+    output_path: str,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    reindexers: Reindexer | None = None,
+    reindexers: Sequence[AnyReindexer] = (),
     fill_value: Any = None,
 ) -> None:
     """Writes and concatenates sparse datasets into a single output dataset.
@@ -237,7 +265,7 @@ def write_concat_sparse(  # noqa: PLR0917
     fill_value
         The fill value to use for missing elements. Defaults to None.
     """
-    elems = None
+    elems: Iterator[BaseCompressedSparseDataset | CSMatrix]
     if all(ri.no_change for ri in reindexers):
         elems = iter(datasets)
     else:
@@ -264,11 +292,11 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings: Collection[dict],
     output_group: zarr.Group | h5py.Group,
     keys: Collection[str],
-    output_path: str | Path,
+    output_path: str,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    index: pd.Index = None,
-    reindexers: list[Reindexer] | None = None,
+    index: pd.Index | None = None,
+    reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Any = None,
 ):
     """
@@ -296,15 +324,14 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     arrays: Sequence[zarr.Array | h5py.Dataset | BaseCompressedSparseDataset],
     output_group: zarr.Group | h5py.Group,
-    output_path: str | Path,
+    output_path: str,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    reindexers: list[Reindexer] | None = None,
+    reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Any = None,
     join: Join_T = "inner",
 ):
-    init_elem = arrays[0]
-    init_type = type(init_elem)
+    init_type = type(arrays[0])
     if not all(isinstance(a, init_type) for a in arrays):
         msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
         raise NotImplementedError(msg)
@@ -316,25 +343,31 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
             msg = "Cannot reindex arrays with outer join."
             raise NotImplementedError(msg)
 
-    if isinstance(init_elem, BaseCompressedSparseDataset):
-        expected_sparse_fmt = ["csr", "csc"][axis]
-        if all(a.format == expected_sparse_fmt for a in arrays):
-            write_concat_sparse(
-                arrays,
-                output_group,
-                output_path,
-                max_loaded_elems,
-                axis,
-                reindexers,
-                fill_value,
-            )
-        else:
-            msg = f"Concat of following not supported: {[a.format for a in arrays]}"
-            raise NotImplementedError(msg)
-    else:
+    sparse_datasets = [a for a in arrays if isinstance(a, BaseCompressedSparseDataset)]
+    if not sparse_datasets:
         write_concat_dense(
-            arrays, output_group, output_path, axis, reindexers, fill_value
+            [a for a in arrays if not isinstance(a, BaseCompressedSparseDataset)],
+            output_group,
+            output_path,
+            axis,
+            reindexers,
+            fill_value,
         )
+    elif all(a.format == ("csr", "csc")[axis] for a in sparse_datasets):
+        write_concat_sparse(
+            sparse_datasets,
+            output_group,
+            output_path,
+            max_loaded_elems,
+            axis,
+            reindexers,
+            fill_value,
+        )
+    else:
+        msg = (
+            f"Concat of following not supported: {[a.format for a in sparse_datasets]}"
+        )
+        raise NotImplementedError(msg)
 
 
 def _write_concat_sequence(  # noqa: PLR0913, PLR0917
@@ -342,28 +375,26 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         pd.DataFrame | BaseCompressedSparseDataset | h5py.Dataset | zarr.Array
     ],
     output_group: zarr.Group | h5py.Group,
-    output_path: str | Path,
+    output_path: str,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     index: pd.Index | None = None,
-    reindexers: list[Reindexer] | None = None,
+    reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Any = None,
     join: Join_T = "inner",
 ):
     """
     array, dataframe, csc_matrix, csc_matrix
     """
-    if any(isinstance(a, pd.DataFrame) for a in arrays):
+    non_dfs = [a for a in arrays if not isinstance(a, pd.DataFrame)]
+    if len(non_dfs) < len(arrays):
         if reindexers is None:
             if join == "inner":
                 reindexers = gen_inner_reindexers(arrays, None, axis=axis)
             else:
                 msg = "Cannot reindex dataframes with outer join."
                 raise NotImplementedError(msg)
-        if not all(
-            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
-            for a in arrays
-        ):
+        if any(a is not MissingVal and 0 not in a.shape for a in non_dfs):
             msg = "Cannot concatenate a dataframe with other array types."
             raise NotImplementedError(msg)
         df = concat_arrays(
@@ -375,13 +406,11 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(
-            a, pd.DataFrame | BaseCompressedSparseDataset | h5py.Dataset | zarr.Array
-        )
-        for a in arrays
+        isinstance(a, BaseCompressedSparseDataset | h5py.Dataset | zarr.Array)
+        for a in non_dfs
     ):
         _write_concat_arrays(
-            arrays,
+            non_dfs,
             output_group,
             output_path,
             max_loaded_elems,
@@ -396,14 +425,17 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
 
 
 def _write_alt_mapping(
-    groups: Collection[h5py.Group, zarr.Group],
+    groups: Collection[h5py.Group | zarr.Group],
     output_group: zarr.Group | h5py.Group,
     alt_axis_name: Literal["obs", "var"],
     merge: Callable,
-    reindexers: list[Reindexer],
+    reindexers: Sequence[AnyReindexer],
 ):
     alt_mapping = merge([
-        {k: r(read_elem(v), axis=0) for k, v in dict(g[f"{alt_axis_name}m"]).items()}
+        {
+            k: r(read_elem(v), axis=0)
+            for k, v in dict(_subgroup(g, f"{alt_axis_name}m")).items()
+        }
         for r, g in zip(reindexers, groups, strict=True)
     ])
     write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
@@ -418,7 +450,7 @@ def _write_alt_annot(
 ):
     # Annotation for other axis
     alt_annot = merge_dataframes(
-        [read_elem(g[alt_axis_name]) for g in groups], alt_indices, merge
+        [_read_df(g, alt_axis_name) for g in groups], alt_indices, merge
     )
     write_elem(output_group, alt_axis_name, alt_annot)
 
@@ -428,15 +460,15 @@ def _write_axis_annot(  # noqa: PLR0917
     output_group: zarr.Group | h5py.Group,
     axis_name: Literal["obs", "var"],
     concat_indices: pd.Index,
-    label: str,
-    label_col: str,
+    label: str | None,
+    label_col: pd.Categorical[str],
     join: Join_T,
 ):
-    concat_annot = pd.concat(
-        unify_dtypes(read_elem(g[axis_name]) for g in groups),
-        join=join,
-        ignore_index=True,
+    # `unify_dtypes` only returns the lazy `Dataset2D` variant if it’s passed one
+    dfs = cast(
+        "list[pd.DataFrame]", unify_dtypes(_read_df(g, axis_name) for g in groups)
     )
+    concat_annot = pd.concat(dfs, join=join, ignore_index=True)
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
@@ -448,12 +480,12 @@ def _write_alt_pairwise(
     output_group: zarr.Group | h5py.Group,
     alt_axis_name: Literal["obs", "var"],
     merge: Callable,
-    reindexers: list[Reindexer],
+    reindexers: Sequence[AnyReindexer],
 ):
     alt_pairwise = merge([
         {
             k: r(r(read_elem_lazy(v), axis=0), axis=1)
-            for k, v in dict(g[f"{alt_axis_name}p"]).items()
+            for k, v in dict(_subgroup(g, f"{alt_axis_name}p")).items()
         }
         for r, g in zip(reindexers, groups, strict=True)
     ])
@@ -610,10 +642,11 @@ def concat_on_disk(  # noqa: PLR0913
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
-    if is_out_path_like := isinstance(out_file, str | PathLike):
-        out_file = Path(out_file)
-        if not out_file.parent.exists():
-            msg = f"Parent directory of {out_file} does not exist."
+    out_path: Path | None = None
+    if isinstance(out_file, str | PathLike):
+        out_file = out_path = Path(out_file)
+        if not out_path.parent.exists():
+            msg = f"Parent directory of {out_path} does not exist."
             raise FileNotFoundError(msg)
 
     if isinstance(in_files, Mapping):
@@ -630,16 +663,17 @@ def concat_on_disk(  # noqa: PLR0913
     if (
         len(in_files) == 1
         and isinstance(in_file := in_files[0], str | PathLike)
-        and is_out_path_like
+        and out_path is not None
     ):
-        (shutil.copytree if in_file.is_dir() else shutil.copy2)(in_file, out_file)
+        in_path = Path(in_file)
+        (shutil.copytree if in_path.is_dir() else shutil.copy2)(in_path, out_path)
         return
 
     if keys is None:
-        keys = np.arange(len(in_files)).astype(str)
+        keys = [str(i) for i in range(len(in_files))]
 
     axis, axis_name = _resolve_axis(axis)
-    _, alt_axis_name = _resolve_axis(1 - axis)
+    alt_axis_name: Literal["obs", "var"] = "var" if axis_name == "obs" else "obs"
 
     with ExitStack() as stack, as_group(out_file, mode="w") as output_group:
         groups = [stack.enter_context(as_group(f, mode="r")) for f in in_files]
@@ -666,7 +700,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     axis: Literal[0, 1],
     axis_name: Literal["obs", "var"],
     alt_axis_name: Literal["obs", "var"],
-    keys: np.ndarray[tuple[int], np.dtype[Any]] | Collection[str],
+    keys: Collection[str],
     max_loaded_elems: int,
     join: Join_T = "inner",
     label: str | None,
@@ -677,7 +711,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     """Internal helper to minimize the amount of indented code within the context manager"""
     use_reindexing = False
 
-    alt_idxs = [_df_index(g[alt_axis_name]) for g in groups]
+    alt_idxs = [_df_index(g, alt_axis_name) for g in groups]
     # All {axis_name}_names must be equal if reindexing not applied
     if not _indices_equal(alt_idxs):
         use_reindexing = True
@@ -696,24 +730,24 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(groups)), [x.shape[axis] for x in Xs]),
-        categories=keys,
+        categories=pd.Index(list(keys)),
     )
 
     # Combining indexes
-    concat_indices = pd.concat(
-        [pd.Series(_df_index(g[axis_name])) for g in groups], ignore_index=True
+    index_ser = pd.concat(
+        [pd.Series(_df_index(g, axis_name)) for g in groups], ignore_index=True
     )
     if index_unique is not None:
-        concat_indices = concat_indices.str.cat(
+        index_ser = index_ser.str.cat(
             label_col.map(str, na_action="ignore"), sep=index_unique
         )
 
     # Resulting indices for {axis_name} and {alt_axis_name}
-    concat_indices = pd.Index(concat_indices)
+    concat_indices = pd.Index(index_ser)
 
     alt_index = merge_indices(alt_idxs, join=join)
 
-    reindexers = None
+    reindexers: Sequence[AnyReindexer]
     if use_reindexing:
         reindexers = [
             gen_reindexer(alt_index, alt_old_index) for alt_old_index in alt_idxs
@@ -748,7 +782,9 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     )
 
     # Write Layers and {axis_name}m
-    mapping_names = [
+    mapping_names: list[
+        tuple[str, pd.Index | None, Literal[0, 1], Sequence[AnyReindexer] | None]
+    ] = [
         (
             f"{axis_name}m",
             concat_indices,

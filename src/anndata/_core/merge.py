@@ -243,9 +243,7 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def unify_dtypes(
-    dfs: Iterable[pd.DataFrame | Dataset2D],
-) -> list[pd.DataFrame | Dataset2D]:
+def unify_dtypes[T: (pd.DataFrame, Dataset2D)](dfs: Iterable[T]) -> list[T]:
     """Attempt to unify datatypes from multiple dataframes.
 
     For catching cases where pandas would convert to object dtype.

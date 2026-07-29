@@ -786,7 +786,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 [a.obsm for a in adatas], index=self.obs_names
             )
             self._obsm = (
-                AxisArrays(self, axis=0, store={}) if self._obsm == {} else self._obsm
+                AxisArrays(cast("AnnData", self), axis=0, store={})
+                if self._obsm == {}
+                else self._obsm
             )
 
         # process inner join of views

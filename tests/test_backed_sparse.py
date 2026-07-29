@@ -325,7 +325,7 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     array_names = ["indptr", "indices", "data"]
     for name in array_names:
         old_array_shapes[name] = getattr(diskmtx, f"_{name}").shape
-    diskmtx.append(cast("CSMatrix", sparse_dataset(subgroup(f, "mtx_2"))))
+    diskmtx.append(sparse_dataset(subgroup(f, "mtx_2")))
     for name in array_names:
         assert old_array_shapes[name] != getattr(diskmtx, f"_{name}").shape
 
@@ -387,7 +387,7 @@ def test_dataset_append_disk(
     b_disk = sparse_dataset(subgroup(f, "b"))
     assert isinstance(a_disk, BaseCompressedSparseDataset)
 
-    a_disk.append(cast("CSMatrix", b_disk))
+    a_disk.append(b_disk)
     fromdisk = a_disk.to_memory()
 
     frommem = append_method([a, b])
@@ -599,7 +599,7 @@ def test_wrong_shape(
     assert isinstance(a_disk, BaseCompressedSparseDataset)
 
     with pytest.raises(AssertionError):
-        a_disk.append(cast("CSMatrix", b_disk))
+        a_disk.append(b_disk)
 
 
 def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):

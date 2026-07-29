@@ -228,11 +228,13 @@ def test_empty_df_warns(tmp_path: Path):
     adata.write_zarr(zarr_path)
     root = zarr.open(zarr_path)
     assert isinstance(root, zarr.Group)
+    obs = read_elem_lazy(root["obs"])
+    assert isinstance(obs, Dataset2D)
     with pytest.warns(
         UserWarning,
         match=r"Renaming or reordering columns on `Dataset2D` has no effect",
     ):
-        adata.obs = read_elem_lazy(root["obs"])
+        adata.obs = obs
 
 
 def test_h5_file_obj(tmp_path: Path):

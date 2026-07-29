@@ -309,6 +309,7 @@ def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
 ) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
+    arr: np.ndarray | sparse.csr_matrix
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
         arr = pandas_sparse(df).to_coo().tocsr()
     else:
@@ -445,7 +446,7 @@ def iter_outer(
     tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
-    for attr_name in [
+    attr_names: list[AnnDataElem] = [
         "obs",
         "var",
         "uns",
@@ -455,7 +456,8 @@ def iter_outer(
         "varp",
         "layers",
         "raw",
-    ]:
+    ]
+    for attr_name in attr_names:
         was_closed = adata.isbacked and not adata.file.is_open
         yield (attr_name, getattr(adata, attr_name))
         if was_closed:

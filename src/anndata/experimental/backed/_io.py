@@ -3,13 +3,13 @@ from __future__ import annotations
 from contextlib import nullcontext
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import zarr
 
 from anndata._core.file_backing import AnnDataFileManager
-from anndata._io.specs.registry import read_elem_lazy
+from anndata._io.specs.registry import read_elem, read_elem_lazy
 from anndata._types import AnnDataElem
 from testing.anndata._doctest import doctest_needs
 
@@ -21,18 +21,34 @@ from .. import read_dispatched
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import Any
+
+    from zarr.storage import StoreLike
 
     from anndata._io.specs.registry import IOSpec
-    from anndata._types import Read, StorageType
+    from anndata._types import Read, StorageType, _GroupStorageType
 
 
 ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 
+def _as_group(elem: StorageType) -> _GroupStorageType:
+    if not isinstance(elem, zarr.Group | h5py.Group):
+        msg = f"Expected a group, got {type(elem)}"
+        raise ValueError(msg)
+    return elem
+
+
 @doctest_needs("xarray")
 @requires_xarray
 def read_lazy(
-    store: PathLike[str] | str | MutableMapping | zarr.Group | h5py.File | h5py.Group,
+    store: PathLike[str]
+    | str
+    | MutableMapping
+    | StoreLike
+    | zarr.Group
+    | h5py.File
+    | h5py.Group,
     *,
     load_annotation_index: bool = True,
 ) -> AnnData:
@@ -96,42 +112,41 @@ def read_lazy(
     AnnData object with n_obs × n_vars = 490 × 33452
         obs: 'donor_id', 'self_reported_ethnicity_ontology_term_id', 'organism_ontology_term_id'...
     """
-    is_store_arg_h5_store = isinstance(store, h5py.Dataset | h5py.File | h5py.Group)
-    is_store_arg_h5_path = (
-        isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad"
-    )
-    is_h5 = is_store_arg_h5_path or is_store_arg_h5_store
-
+    f: StorageType
+    h5_file: h5py.File | None = None
     has_keys = True  # true if consolidated or h5ad
-    if not is_h5:
-        if not isinstance(store, zarr.Group):
-            try:
-                f = zarr.open_consolidated(store, mode="r")
-            except ValueError:
-                msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
-                warn(msg, UserWarning)
-                has_keys = False
-                f = zarr.open_group(store, mode="r")
-        else:
-            f = store
-    elif is_store_arg_h5_store:
+    if isinstance(store, h5py.Dataset | h5py.File | h5py.Group):
+        f = store
+    elif isinstance(store, PathLike | str) and Path(store).suffix == ".h5ad":
+        f = h5_file = h5py.File(store, mode="r")
+    elif isinstance(store, zarr.Group):
         f = store
     else:
-        f = h5py.File(store, mode="r")
+        try:
+            f = zarr.open_consolidated(store, mode="r")
+        except ValueError:
+            msg = "Did not read zarr as consolidated. Consider consolidating your metadata."
+            warn(msg, UserWarning)
+            has_keys = False
+            f = zarr.open_group(store, mode="r")
 
     def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
+            group = _as_group(elem)
             iter_object = (
-                dict(elem).items()
+                dict(group).items()
                 if has_keys
                 else tuple(
                     (k, v)
-                    for k, v in ((k, elem.get(k, None)) for k in ANNDATA_ELEMS)
+                    for k, v in ((k, group.get(k, None)) for k in ANNDATA_ELEMS)
                     # need to do this instead of `k in elem` to prevent unnecessary metadata accesses
                     if v is not None
                 )
             )
-            return AnnData(**{k: read_dispatched(v, callback) for k, v in iter_object})
+            kwargs: dict[str, Any] = {
+                k: read_dispatched(v, callback) for k, v in iter_object
+            }
+            return AnnData(**kwargs)
         elif (
             iospec.encoding_type
             in {
@@ -151,10 +166,11 @@ def read_lazy(
                 return read_elem_lazy(elem, use_range_index=not load_annotation_index)
             return read_elem_lazy(elem)
         elif iospec.encoding_type in {"awkward-array"}:
-            return read_dispatched(elem, None)
+            return read_elem(elem)
         elif iospec.encoding_type == "dict":
             return {
-                k: read_dispatched(v, callback=callback) for k, v in dict(elem).items()
+                k: read_dispatched(v, callback=callback)
+                for k, v in dict(_as_group(elem)).items()
             }
         return func(elem)
 
@@ -163,7 +179,7 @@ def read_lazy(
         if not load_annotation_index
         else nullcontext()
     ):
-        adata: AnnData = read_dispatched(f, callback=callback)
-    if is_store_arg_h5_path and not is_store_arg_h5_store:
-        adata.file = AnnDataFileManager(adata, file_obj=f)
+        adata = cast("AnnData", read_dispatched(f, callback=callback))
+    if h5_file is not None:
+        adata.file = AnnDataFileManager(adata, file_obj=h5_file)
     return adata

@@ -320,7 +320,11 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
     SHAPE = (100, 10)
     rng = np.random.default_rng(42)
     X_cpu = dask_matrix_type(rng.normal(size=SHAPE))
-    X_gpu_roundtripped = as_cupy(X_cpu).map_blocks(lambda x: x.get(), meta=X_cpu._meta)
+    import dask.array as da
+
+    X_gpu_roundtripped = da.map_blocks(
+        lambda x: x.get(), as_cupy(X_cpu), meta=X_cpu._meta
+    )
     assert isinstance(X_gpu_roundtripped._meta, type(X_cpu._meta))
     assert isinstance(X_gpu_roundtripped.compute(), type(X_cpu.compute()))
     assert_equal(X_gpu_roundtripped.compute(), X_cpu.compute())

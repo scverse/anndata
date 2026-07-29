@@ -65,18 +65,6 @@ if TYPE_CHECKING:
     from .registry import Reader, Writer
 
 ####################
-# Dask utils       #
-####################
-
-try:
-    from dask.utils import SerializableLock as Lock
-except ImportError:
-    from threading import Lock
-
-# to fix https://github.com/dask/distributed/issues/780
-GLOBAL_LOCK = Lock()
-
-####################
 # Dispatch methods #
 ####################
 
@@ -154,7 +142,7 @@ def _to_cpu_mem_wrapper(write_func):
     def wrapper(
         f,
         k,
-        cupy_val: CupyArray | CupyCSMatrix,
+        cupy_val,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -215,8 +203,7 @@ def read_basic(
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
-    elif isinstance(elem, h5py.Dataset):
-        return read_dataset(elem)  # TODO: Handle legacy
+    return read_dataset(elem)  # TODO: Handle legacy
 
 
 @_REGISTRY.register_read(zarr.Group, IOSpec("", ""))
@@ -345,6 +332,7 @@ def write_anndata(
             continue
         _check_has_no_slash_key(sub_key, elem)
         if sub_key == "layers":
+            assert isinstance(elem, MutableMapping)
             if None in elem:
                 _writer.write_elem(g, "X", elem[None], dataset_kwargs=dataset_kwargs)
             elem = {k: v for k, v in elem.items() if k is not None}

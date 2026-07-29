@@ -354,18 +354,14 @@ def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:
 
     # could be rewritten accounting for dtype to be more performant
     # https://github.com/scverse/anndata/issues/2477 for spmatrix
-    X = mmread(
-        fspath(filename),
-        **(
-            {"spmatrix": True}
-            if Version(version("scipy")) >= Version("1.18.0rc1")
-            else {}
-        ),
-    ).astype(dtype)
+    path = fspath(filename)
+    if Version(version("scipy")) >= Version("1.18.0rc1"):
+        X = mmread(path, spmatrix=True)
+    else:
+        X = mmread(path)
     from scipy.sparse import csr_matrix
 
-    X = csr_matrix(X)
-    return AnnData(X)
+    return AnnData(csr_matrix(X.astype(dtype)))
 
 
 @old_positionals("first_column_names", "dtype")

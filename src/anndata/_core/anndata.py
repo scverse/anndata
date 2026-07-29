@@ -85,7 +85,7 @@ if TYPE_CHECKING:
     )
     from ..compat import CSArray, CSMatrix
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
-    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
+    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView, Value
 
 
 @set_module("anndata")
@@ -1210,12 +1210,12 @@ class AnnData:  # noqa: PLW1641
             dfs = [df]
         del df
 
-        for df in dfs:
+        for frame in dfs:
             string_cols = [
-                key for key in df.columns if infer_dtype(df[key]) == "string"
+                key for key in frame.columns if infer_dtype(frame[key]) == "string"
             ]
             for key in string_cols:
-                c = pd.Categorical(df[key])
+                c = pd.Categorical(frame[key])
                 # TODO: We should only check if non-null values are unique, but
                 # this would break cases where string columns with nulls could
                 # be written as categorical, but not as string.
@@ -1233,7 +1233,7 @@ class AnnData:  # noqa: PLW1641
                         "error message while copying or writing to disk."
                     )
                     raise RuntimeError(msg)
-                df[key] = c
+                frame[key] = c
                 logger.info(f"... storing {key!r} as categorical")
 
     _sanitize = strings_to_categoricals  # backwards compat
@@ -1481,12 +1481,12 @@ class AnnData:  # noqa: PLW1641
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
-    def _reduce[T](
+    def _reduce[R](
         self,
-        func: ReduceFunc[T],
+        func: ReduceFunc[R],
         *,
-        init: T,
-    ) -> T:
+        init: R,
+    ) -> R:
         """Accumulate a value starting from init by iterating over the parent "elems"of the AnnData object i.e., raw, obs, varp etc.
 
         Parameters
@@ -1536,7 +1536,7 @@ class AnnData:  # noqa: PLW1641
         }
 
         def predicate(  # noqa: PLR0911
-            elem: RWAble,
+            elem: RWAble | Raw,
             *,
             accumulate: bool,
             attr_name: AnnDataElem | None = None,
@@ -1557,7 +1557,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in container[2].values()
                 )
-            if attr_name == "raw":
+            if isinstance(elem, Raw):
                 return (
                     accumulate
                     or any(
@@ -1567,16 +1567,7 @@ class AnnData:  # noqa: PLW1641
                     )
                     or predicate(elem.X, accumulate=accumulate)
                 )
-            if attr_name in {
-                "obs",
-                "obsm",
-                "varm",
-                "var",
-                "layers",
-                "varp",
-                "obsp",
-                "uns",
-            } or isinstance(elem, pd.DataFrame | XDataset | MutableMapping):
+            if isinstance(elem, pd.DataFrame | XDataset | Mapping):
                 accumulate = accumulate or any(
                     predicate(elem[k], accumulate=accumulate) for k in elem
                 )
