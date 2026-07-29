@@ -239,6 +239,13 @@ class AnnData:  # noqa: PLW1641
     _uns: MutableMapping
     _raw: Raw | None
 
+    # backing stores for the `AlignedMappingProperty`s below
+    _layers: MutableMapping[str | None, Value]
+    _obsm: MutableMapping[str, Value]
+    _varm: MutableMapping[str, Value]
+    _obsp: MutableMapping[str, Value]
+    _varp: MutableMapping[str, Value]
+
     @old_positionals(
         "obsm",
         "varm",

@@ -14,13 +14,13 @@ from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_inde
 from .sparse_dataset import sparse_dataset
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping, MutableMapping, Sequence
     from typing import ClassVar
 
     from ..acc import AdRef
     from ..compat import CSMatrix
     from ..typing import Index, InMemoryArray, _Index1DNorm
-    from .aligned_mapping import AxisArraysView
+    from .aligned_mapping import AxisArraysView, Value
     from .anndata import AnnData
     from .sparse_dataset import BaseCompressedSparseDataset
 
@@ -32,6 +32,9 @@ class Raw:
     _adata_ref: ClassVar[None] = None
     _oidx: ClassVar[None] = None
     _vidx: ClassVar[None] = None
+
+    _varm: MutableMapping[str, Value]
+    """Backing store for the `varm` `AlignedMappingProperty`."""
 
     def __init__(
         self,
@@ -66,7 +69,10 @@ class Raw:
                 self._X = adata.X.get()
             else:
                 self._X = adata.X.copy()
-            self._var = adata.var.copy()
+            if not isinstance(var_df := adata.var, pd.DataFrame):
+                msg = "Cannot create `.raw` from an AnnData with a lazy `var`"
+                raise NotImplementedError(msg)
+            self._var = var_df.copy()
             self.varm = adata.varm.copy()
         elif adata.isbacked:
             msg = "Cannot specify X if adata is backed"
@@ -185,7 +191,7 @@ class Raw:
             self._adata,
             X=self.X.copy(),
             var=self.var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
+            varm=dict(self._varm),
         )
 
     def to_adata(self) -> AnnData:
@@ -195,11 +201,11 @@ class Raw:
         return AnnData(
             X=None if self.X is None else self.X.copy(),
             var=self.var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
+            varm=dict(self._varm),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
             obsp=self._adata.obsp.copy(),
-            uns=self._adata.uns.copy(),
+            uns=dict(self._adata.uns),
         )
 
     def _normalize_indices(
