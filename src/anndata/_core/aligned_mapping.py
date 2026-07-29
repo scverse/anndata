@@ -6,7 +6,7 @@ from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
 from types import NoneType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -38,8 +38,8 @@ ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 """Element types that live on disk and so cannot be copied in memory."""
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping
-    from typing import ClassVar, Literal, Self
+    from collections.abc import Iterable, Iterator, Mapping
+    from typing import Any, ClassVar, Literal, Self
 
     from ..compat import IndexManager
     from ..typing import (
@@ -204,9 +204,6 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
     # override docstring
     parent: AnnData
     """Reference to parent AnnData view"""
-
-    attrname: str
-    """What attribute in the parent is this?"""
 
     parent_mapping: P
     """The object this is a view of."""
@@ -516,7 +513,7 @@ class PairwiseArraysBase(AlignedMappingBase[TwoDIdx, str]):
     @property
     def axes(self) -> tuple[Literal[0], Literal[0]] | tuple[Literal[1], Literal[1]]:
         """Axes of the parent this is aligned to"""
-        return self._axis, self._axis  # type: ignore
+        return (0, 0) if self._axis == 0 else (1, 1)
 
     @property
     def dim(self) -> str:
@@ -589,23 +586,28 @@ class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | No
         )
         return self.cls(obj, store=store, validate=validate, **axis_kw)
 
-    @property
-    def fget(self) -> Callable[[], None]:
-        """Fake fget for sphinx-autodoc-typehints."""
+    def __post_init__(self) -> None:
+        """Install a fake `fget` for sphinx-autodoc-typehints."""
 
-        def fake(): ...
+        def fake(obj): ...
 
         fake.__annotations__ = {"return": self.cls._actual_class | self.cls._view_class}
-        return fake
+        property.__init__(self, fake)
 
     def __set_name__(self, owner: AnnData, name: str):
         self.name = name
 
-    def __get__(self, obj: AnnData | Raw | None, objtype: type | None = None) -> A | V:
+    @overload
+    def __get__(self, obj: None, objtype: type | None = None, /) -> Self: ...
+    @overload
+    def __get__(self, obj: Any, objtype: type | None = None, /) -> A | V: ...
+    def __get__(
+        self, obj: AnnData | Raw | None, objtype: type | None = None, /
+    ) -> Self | A | V:
         if obj is None:
             # When accessed from the class, e.g. via `AnnData.obs`,
             # this needs to return a `property` instance, e.g. for Sphinx
-            return self  # type: ignore
+            return self
         from .anndata import AnnData
 
         # only `AnnData` can be a view

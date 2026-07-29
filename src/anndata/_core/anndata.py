@@ -91,6 +91,7 @@ if TYPE_CHECKING:
     )
     from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView, Value
+    from .sparse_dataset import BackedSparseMatrix
 
 
 @set_module("anndata")
@@ -542,7 +543,7 @@ class AnnData:  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
-        def cs_to_bytes(X: CSArray | CSMatrix) -> int:
+        def cs_to_bytes(X: CSArray | CSMatrix | BackedSparseMatrix) -> int:
             return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
         def get_size(X: RWAble) -> int:
@@ -1356,7 +1357,7 @@ class AnnData:  # noqa: PLW1641
             ),
         )
     )
-    def obs_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
+    def obs_vector(self, k: str, /, *, layer: str | None = None) -> Array:
         """\
         Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 
@@ -1387,7 +1388,7 @@ class AnnData:  # noqa: PLW1641
             ),
         )
     )
-    def var_vector(self, k: str, /, *, layer: str | None = None) -> np.ndarray:
+    def var_vector(self, k: str, /, *, layer: str | None = None) -> Array:
         """\
         Convenience function for returning a 1 dimensional ndarray of values from :attr:`X`, :attr:`layers`\\ `[k]`, or :attr:`obs`.
 

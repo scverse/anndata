@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,9 @@ import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._warnings import ImplicitModificationWarning
 from anndata.tests.helpers import assert_equal, get_multiindex_columns_df
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.parametrize("dtype", [object, "string"])
@@ -157,7 +161,7 @@ def test_arrow_index(restrict_index_types):
         )
 
 
-def test_arrow_index_write():
+def test_arrow_index_write(tmp_path: Path):
     ad.settings.restrict_index_types = False
     # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists in the arrow extension array
     arr = pa.array(
@@ -179,7 +183,7 @@ def test_arrow_index_write():
         IORegistryError,
         match=r"No method registered for writing <class 'pandas",
     ):
-        adata.write_zarr("foo.zarr")
+        adata.write_zarr(tmp_path / "adata.zarr")
 
 
 @pytest.mark.parametrize(

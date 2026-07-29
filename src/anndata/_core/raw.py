@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING, cast, overload
 import numpy as np
 import pandas as pd
 
-from ..compat import CSArray, CSMatrix, CupyArray, CupySparseMatrix
+from ..compat import CupyArray, CupySparseMatrix
 from ..types import SupportsArrayApiBase
+from ..utils import asarray
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
     AlignedMappingProperty,
@@ -14,7 +15,13 @@ from .aligned_mapping import (
     _copy_array,
     _on_disk_x,
 )
-from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_index
+from .index import (
+    _get_vector_ambiguous,
+    _index_manager_to_numpy_idx,
+    _normalize_index,
+    _subset,
+    unpack_index,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -152,7 +159,8 @@ class Raw:
         from .anndata import AnnData
 
         if isinstance(index, AdRef):
-            return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
+            # `RefAcc.get` has no official `Raw` support, but works for the accessors it has
+            return index.acc.get(self, index.idx)
 
         if (
             isinstance(index, tuple)
@@ -177,7 +185,7 @@ class Raw:
             else _subset(self._X, (oidx, vidx))
         )
 
-        var = self._var.iloc[vidx]
+        var = self._var.iloc[_index_manager_to_numpy_idx(vidx)]
         new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
@@ -247,13 +255,12 @@ class Raw:
         idx = self.var_names.get_loc(k)
         # a scalar position would drop the dimension we want to ravel
         a = _subset(X, (slice(None), np.array([idx]) if isinstance(idx, int) else idx))
-        if isinstance(a, CSMatrix | CSArray):
-            return np.ravel(a.toarray())
         if isinstance(a, np.ndarray):
             return np.ravel(a)
         if isinstance(a, SupportsArrayApiBase):
+            # the array API standard has no `ravel`, and we stay in the namespace
             return a.__array_namespace__().reshape(a, (a.size,))
-        return np.ravel(a)
+        return np.ravel(asarray(a))
 
 
 # This exists to accommodate AlignedMappings,
@@ -273,7 +280,7 @@ class _RawViewHack:
 
     @property
     def var_names(self) -> pd.Index:
-        return self.parent_raw.var_names[self.vidx]
+        return self.parent_raw.var_names[_index_manager_to_numpy_idx(self.vidx)]
 
 
 class IndexDimError(IndexError):

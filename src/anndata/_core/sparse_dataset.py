@@ -51,7 +51,8 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._types import _ArrayStorageType, _GroupStorageType
-    from ..typing import Index, Index1D, _Index1DNorm
+    from ..typing import Index, Index1D
+    from .index import NumpySubsetIdx
 
 
 type DenseType = np.ndarray | CupyArray
@@ -696,9 +697,10 @@ def sparse_dataset(
     raise ValueError(msg)
 
 
-@_subset_dispatch.register(BaseCompressedSparseDataset)
+# registered on the abstract base so the public `abc.CS[RC]Dataset` types dispatch too
+@_subset_dispatch.register(abc._AbstractCSDataset)
 @_ensure_numpy_idx
 def subset_sparsedataset(
-    d, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
-):
+    d: abc._AbstractCSDataset, subset_idx: NumpySubsetIdx
+) -> float | CSMatrix | CSArray:
     return d[subset_idx]

@@ -742,11 +742,11 @@ def test_convenience(subtests: pytest.Subtests) -> None:
 
     assert adata.raw is not None
     with subtests.test("obs_vector"):
-        assert np.allclose(adata.obs_vector("b"), np.array([1.0, 2.5]))
+        assert np.allclose(asarray(adata.obs_vector("b")), np.array([1.0, 2.5]))
         assert np.allclose(asarray(adata.raw.obs_vector("c")), np.array([3, 6]))
         assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
     with subtests.test("var_vector"):
-        assert np.allclose(adata.var_vector("s1"), np.array([0, 1.0, 1.5]))
+        assert np.allclose(asarray(adata.var_vector("s1")), np.array([0, 1.0, 1.5]))
         assert np.allclose(asarray(adata.raw.var_vector("s2")), np.array([0, 5, 6]))
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
