@@ -14,7 +14,6 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
-from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -23,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
     from typing import Any, Literal
 
+    from anndata.abc import CSCDataset, CSRDataset
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ..._types import StorageType
@@ -75,13 +75,14 @@ def compute_chunk_layout_for_axis_size(
     return chunk
 
 
-@contextmanager
-def maybe_open_sparse_dataset(
-    path_or_sparse_dataset: Path | CSRDataset | CSCDataset, elem_name: str
-) -> Generator[CSRDataset | CSCDataset, None, None]:
-    if not isinstance(path_or_sparse_dataset, Path):
-        yield path_or_sparse_dataset
-        return
+def make_dask_chunk(
+    path_or_sparse_dataset: Path | CSRDataset | CSCDataset,
+    elem_name: str,
+    block_info: BlockInfo | None = None,
+) -> CSMatrix | CSArray | np.typing.NDArray:
+    if block_info is None:
+        msg = "Block info is required"
+        raise ValueError(msg)
     # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
     # https://github.com/scverse/anndata/issues/1105
     with maybe_open_h5(path_or_sparse_dataset, elem_name) as f:
@@ -90,23 +91,16 @@ def maybe_open_sparse_dataset(
         # The prupose of caching the indptr was when the dataset is reused
         # which is in general the case but is not here.  Hence
         # caching it on every access to the dataset here is quite costly.
-        yield ad.io.sparse_dataset(f, should_cache_indptr=False)
-
-
-def make_dask_chunk(
-    path_or_sparse_dataset: Path | CSRDataset | CSCDataset,
-    elem_name: str,
-    block_info: BlockInfo | None = None,
-) -> CSMatrix | CSArray:
-    if block_info is None:
-        msg = "Block info is required"
-        raise ValueError(msg)
-    with maybe_open_sparse_dataset(path_or_sparse_dataset, elem_name) as mtx:
+        # `maybe_open_h5` yields a dense `Dataset`, a sparse `Group` or a sparse dataset
+        mtx: Any = (
+            ad.io.sparse_dataset(f, should_cache_indptr=False)
+            if isinstance(f, h5py.Group)
+            else f
+        )
         idx = tuple(
             slice(start, stop) for start, stop in block_info[None]["array-location"]
         )
         chunk = mtx[idx]
-    assert not isinstance(chunk, float)
     return chunk
 
 
