@@ -1135,6 +1135,13 @@ class AnnData:  # noqa: PLW1641
                 idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
                 uns[color_key] = np.array(color_vec)[(idx,)]
 
+    @_remove_unused_categories.register(Dataset2D)
+    @staticmethod
+    def _remove_unused_categories_xr(
+        df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
+    ):
+        pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
+
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
         Rename categories of annotation `key` in :attr:`obs`, :attr:`var`,
@@ -1951,14 +1958,6 @@ class AnnData:  # noqa: PLW1641
         values = getattr(self, a)[keys].values
         getattr(self, a).drop(keys, axis=1, inplace=True)
         return values
-
-
-@AnnData._remove_unused_categories.register(Dataset2D)
-@staticmethod
-def _remove_unused_categories_xr(
-    df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
-):
-    pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
 
 def _check_2d_shape(X):
