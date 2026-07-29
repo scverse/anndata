@@ -7,7 +7,7 @@ import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, cast, overload
+from typing import TYPE_CHECKING, ClassVar, overload
 
 import numpy as np
 import pandas as pd
@@ -618,6 +618,10 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
         return f"A.{self.dim}p"
 
 
+# `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
+_DEFAULT_REF_CLASS: Any = AdRef
+
+
 @dataclass(frozen=True)
 class AdAcc[R: AdRef]:
     r"""Accessor to create :class:`AdRef`\ s (:data:`A`).
@@ -625,8 +629,7 @@ class AdAcc[R: AdRef]:
     See examples below and in :mod:`anndata.acc`.
     """
 
-    # `R`’s bound can’t be expressed as a default for the type variable itself
-    ref_class: type[R] = cast("type[R]", AdRef)
+    ref_class: type[R] = _DEFAULT_REF_CLASS
 
     layer_cls: type[LayerAcc] = LayerAcc
     """Class to use for `layers` accessors."""

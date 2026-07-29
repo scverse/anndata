@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
-import zarr
 from legacy_api_wrap import legacy_api  # noqa: TID251
 
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
@@ -21,6 +20,8 @@ from .._warnings import warn
 
 if TYPE_CHECKING:
     from typing import Any, Self, TypeAlias, TypeGuard
+
+    import zarr
 
     from .._core.anndata import AnnData
 
