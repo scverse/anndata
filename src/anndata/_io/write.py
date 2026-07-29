@@ -7,18 +7,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
 from anndata._io.utils import no_write_dataset_2d
 
 from .._warnings import WriteWarning
-from ..compat import old_positionals
+from ..compat import CSArray, CSMatrix, _safe_transpose, old_positionals
 from ..logging import get_logger
-from ..utils import warn
+from ..utils import asarray, warn
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
     from os import PathLike
+    from typing import Any
 
     from .. import AnnData
 
@@ -51,11 +52,11 @@ def write_csvs(
         varm=adata.varm.to_df(),
     )
     if not skip_data:
-        d["X"] = pd.DataFrame(adata.X.toarray() if issparse(adata.X) else adata.X)
+        d["X"] = pd.DataFrame(asarray(adata.X))
     d_write = {**d, **adata._uns}
     not_yet_raised_sparse_warning = True
     for key, value in d_write.items():
-        if issparse(value):
+        if isinstance(value, CSMatrix | CSArray):
             if not_yet_raised_sparse_warning:
                 msg = "Omitting to write sparse annotation."
                 warn(msg, WriteWarning)
@@ -98,11 +99,18 @@ def write_loom(
 ) -> None:
     """See :meth:`~anndata.AnnData.write_loom`."""
     filename = Path(filename)
-    row_attrs = {k: np.array(v) for k, v in adata.var.to_dict("list").items()}
+    obs, var = adata.obs, adata.var
+    # guaranteed by `@no_write_dataset_2d`
+    assert isinstance(obs, pd.DataFrame) and isinstance(var, pd.DataFrame)
+    row_attrs: dict[Hashable, Any] = {
+        k: np.array(v) for k, v in var.to_dict("list").items()
+    }
     row_names = adata.var_names
     row_dim = row_names.name if row_names.name is not None else "var_names"
     row_attrs[row_dim] = row_names.values
-    col_attrs = {k: np.array(v) for k, v in adata.obs.to_dict("list").items()}
+    col_attrs: dict[Hashable, Any] = {
+        k: np.array(v) for k, v in obs.to_dict("list").items()
+    }
     col_names = adata.obs_names
     col_dim = col_names.name if col_names.name is not None else "obs_names"
     col_attrs[col_dim] = col_names.values
@@ -121,9 +129,11 @@ def write_loom(
             f"Use write_obsm_varm=True to export multi-dimensional annotations"
         )
 
-    layers = {"": adata.X.T}
+    layers = {"": _safe_transpose(adata.X)}
     for key, layer in adata.layers.items():
-        layers[key] = layer.T
+        if key is None:  # `.X`, already written as the unnamed main layer
+            continue
+        layers[key] = _safe_transpose(layer)
 
     from loompy import create
 
@@ -153,7 +163,7 @@ def _write_in_zarr_chunks(za, key, value):
             s0, e0 = za.chunks[0] * ci[0], za.chunks[0] * (ci[0] + 1)
             s1, e1 = za.chunks[1] * ci[1], za.chunks[1] * (ci[1] + 1)
             print(ci, s0, e1, s1, e1)
-            if issparse(value):
+            if isinstance(value, CSMatrix | CSArray):
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1].todense()
             else:
                 za[s0:e0, s1:e1] = value[s0:e0, s1:e1]

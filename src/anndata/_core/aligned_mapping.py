@@ -3,10 +3,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import MutableMapping, Sequence
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from types import NoneType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -81,16 +81,17 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
             val = val.reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
             val = Dataset2D(val)
-        for i, axis in enumerate(self.axes):
+        own_axes: tuple[Literal[0, 1], ...] = (0, 1) if len(self.axes) == 2 else (0,)
+        for i, axis in zip(own_axes, self.axes, strict=True):
             if self.parent.shape[axis] == axis_len(val, i):
                 continue
             right_shape = tuple(self.parent.shape[a] for a in self.axes)
-            actual_shape = tuple(axis_len(val, a) for a, _ in enumerate(self.axes))
+            actual_shape = tuple(axis_len(val, a) for a in own_axes)
             if actual_shape[i] is None and isinstance(val, AwkArray):
                 dim = ("obs", "var")[i]
                 msg = (
-                    f"The AwkwardArray is of variable length in dimension {dim}.",
-                    f"Try ak.to_regular(array, {i}) before including the array in AnnData",
+                    f"The AwkwardArray is of variable length in dimension {dim}. "
+                    f"Try ak.to_regular(array, {i}) before including the array in AnnData"
                 )
             else:
                 dims = tuple(("obs", "var")[ax] for ax in self.axes)
@@ -118,8 +119,18 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     def is_view(self) -> bool: ...
 
     @property
-    def parent(self) -> AnnData:
+    def parent(self) -> AnnData | Raw:
         return self._parent
+
+    @property
+    def _anndata_parent(self) -> AnnData:
+        """The parent, which is only a `Raw` for `Raw.varm`."""
+        from .anndata import AnnData
+
+        if not isinstance(parent := self._parent, AnnData):
+            msg = f"{self.attrname} is parented by {type(parent).__name__}, not AnnData"
+            raise AssertionError(msg)
+        return parent
 
     def copy(self) -> dict[K, Value]:
         # Shallow copy for awkward array since their buffers are immutable
@@ -159,9 +170,9 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         self.parent_mapping = parent_mapping
         self._parent = parent_view
         self.subset_idx = subset_idx
-        if hasattr(parent_mapping, "_axis"):
-            # LayersBase has no _axis, the rest does
-            self._axis = parent_mapping._axis  # type: ignore
+        # LayersBase has no _axis, the rest does
+        if (axis := getattr(parent_mapping, "_axis", None)) is not None:
+            self._axis = axis
 
     def __getitem__(self, key: K) -> Value:
         if self.parent_mapping[key] is None:
@@ -197,7 +208,7 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         with view_update(self.parent, self.attrname, ()) as new_mapping:
             del new_mapping[key]
 
-    def __contains__(self, key: K) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self.parent_mapping
 
     def __iter__(self) -> Iterator[K]:
@@ -216,7 +227,11 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     """Underlying mapping to the data"""
 
     def __init__(
-        self, parent: AnnData, *, store: MutableMapping[K, Value], validate: bool = True
+        self,
+        parent: AnnData | Raw,
+        *,
+        store: MutableMapping[K, Value],
+        validate: bool = True,
     ):
         self._parent = parent
         self._data = store
@@ -236,7 +251,7 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
         else:
             self._data[key] = value
 
-    def __contains__(self, key: K) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self._data
 
     def __delitem__(self, key: K):
@@ -394,13 +409,16 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
         validate: bool = True,
     ):
         super().__init__(parent, store=store, validate=validate)
-        self.isbacked = None not in self._data and self.parent.filename is not None
+        self.isbacked = (
+            None not in self._data and self._anndata_parent.filename is not None
+        )
 
     def __getitem__(self, key: str | None) -> Value:
         if key is None and self.isbacked:
-            if not self.parent.file.is_open:
-                self.parent.file.open()
-            X = self.parent.file["X"]
+            parent = self._anndata_parent
+            if not parent.file.is_open:
+                parent.file.open()
+            X = parent.file["X"]
             if isinstance(X, h5py.Group):
                 from ..io import sparse_dataset
 
@@ -408,7 +426,7 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
             return X
         return super().__getitem__(key)
 
-    def __iter__(self) -> str | None:
+    def __iter__(self) -> Iterator[str | None]:
         keys_iter = super().__iter__()
         if self.isbacked:
             yield from chain([None], keys_iter)
@@ -420,7 +438,7 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
             return data_length + 1
         return data_length
 
-    def __contains__(self, key: str | None) -> bool:
+    def __contains__(self, key: object) -> bool:
         if key is None and self.isbacked:
             return True
         return super().__contains__(key)
@@ -513,8 +531,8 @@ class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | No
     """Concrete type that will be constructed."""
     axis: Literal[0, 1] | None = None
     """Axis of the parent to align to."""
-    name: str | None = None
-    """Name of the attribute in the parent object."""
+    name: str = field(init=False)
+    """Name of the attribute in the parent object, set by `__set_name__`."""
 
     def construct(
         self,
