@@ -6,7 +6,7 @@ from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
 from types import NoneType
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np

@@ -36,6 +36,10 @@ def parse[P: AdRef](
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: Literal[False], vec: None = None
 ) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None: ...
+@overload
+def parse[P: AdRef](
+    a: AdAcc[P], spec: str, *, strict: bool = True, vec: bool | None = None
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None: ...
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: bool = True, vec: bool | None = None
 ) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None:

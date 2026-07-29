@@ -310,7 +310,7 @@ class LazyReader(Reader):
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-        chunks: tuple[int, ...] | None = None,
+        chunks: tuple[int | None, ...] | None = None,
         **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
@@ -437,7 +437,7 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType, chunks: tuple[int | None, ...] | None = None, **kwargs
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.

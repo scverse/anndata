@@ -23,7 +23,13 @@ from ..utils import warn
 from .utils import is_float
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator, Mapping
+    from collections.abc import (
+        Generator,
+        Iterable,
+        Iterator,
+        Mapping,
+        MutableMapping,
+    )
 
 
 @old_positionals("first_column_names", "dtype")
@@ -140,7 +146,7 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
         # read array
         X = f[key][()]
         # try to find row and column names
-        rows_cols = [{}, {}]
+        rows_cols: list[dict[str, np.ndarray]] = [{}, {}]
         for iname, name in enumerate(["row_names", "col_names"]):
             if name in keys:
                 rows_cols[iname][name] = f[name][()]
@@ -149,7 +155,7 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
 
 
 def _fmt_loom_axis_attrs(
-    input: Mapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
+    input: MutableMapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
 ) -> tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
     axis_df = pd.DataFrame()
     axis_mapping = {}
@@ -426,11 +432,11 @@ def _read_text(  # noqa: PLR0912, PLR0915
     first_column_names: bool | None,
     dtype: str,
 ) -> AnnData:
-    comments = []
-    data = []
+    comments: list[str] = []
+    rows: list[np.ndarray] = []
     lines = _iter_lines(f)
-    col_names = []
-    row_names = []
+    col_names: list[str] = []
+    row_names: list[str] = []
     # read header and column names
     for line in lines:
         if line.startswith("#"):
@@ -449,20 +455,20 @@ def _read_text(  # noqa: PLR0912, PLR0915
             elif not is_float(line_list[0]) or first_column_names:
                 first_column_names = True
                 row_names.append(line_list[0])
-                data.append(np.array(line_list[1:], dtype=dtype))
+                rows.append(np.array(line_list[1:], dtype=dtype))
             else:
-                data.append(np.array(line_list, dtype=dtype))
+                rows.append(np.array(line_list, dtype=dtype))
             break
-    if not col_names:
-        # try reading col_names from the last comment line
-        if len(comments) > 0:
-            # logg.msg("    assuming last comment line stores variable names", v=4)
-            col_names = np.array(comments[-1].split())
-        # just numbers as col_names
-        else:
-            # logg.msg("    did not find column names in file", v=4)
-            col_names = np.arange(len(data[0])).astype(str)
-    col_names = np.array(col_names, dtype=str)
+    if col_names:
+        cols = np.array(col_names, dtype=str)
+    # try reading col_names from the last comment line
+    elif len(comments) > 0:
+        # logg.msg("    assuming last comment line stores variable names", v=4)
+        cols = np.array(comments[-1].split(), dtype=str)
+    # just numbers as col_names
+    else:
+        # logg.msg("    did not find column names in file", v=4)
+        cols = np.arange(len(rows[0])).astype(str)
     # read another line to check if first column contains row names or not
     if first_column_names is None:
         first_column_names = False
@@ -472,57 +478,57 @@ def _read_text(  # noqa: PLR0912, PLR0915
             # logg.msg("    assuming first column in file stores row names", v=4)
             first_column_names = True
             row_names.append(line_list[0])
-            data.append(np.array(line_list[1:], dtype=dtype))
+            rows.append(np.array(line_list[1:], dtype=dtype))
         else:
-            data.append(np.array(line_list, dtype=dtype))
+            rows.append(np.array(line_list, dtype=dtype))
         break
     # if row names are just integers
-    if len(data) > 1 and data[0].size != data[1].size:
+    if len(rows) > 1 and rows[0].size != rows[1].size:
         # logg.msg(
         #     "    assuming first row stores column names and first column row names",
         #     v=4,
         # )
         first_column_names = True
-        col_names = np.array(data[0]).astype(int).astype(str)
-        row_names.append(data[1][0].astype(int).astype(str))
-        data = [data[1][1:]]
+        cols = np.array(rows[0]).astype(int).astype(str)
+        row_names.append(rows[1][0].astype(int).astype(str))
+        rows = [rows[1][1:]]
     # parse the file
     for line in lines:
         line_list = line.split(delimiter)
         if first_column_names:
             row_names.append(line_list[0])
-            data.append(np.array(line_list[1:], dtype=dtype))
+            rows.append(np.array(line_list[1:], dtype=dtype))
         else:
-            data.append(np.array(line_list, dtype=dtype))
+            rows.append(np.array(line_list, dtype=dtype))
     # logg.msg("    read data into list of lists", t=True, v=4)
     # transform to array, this takes a long time and a lot of memory
     # but it’s actually the same thing as np.genfromtxt does
     # - we don’t use the latter as it would involve another slicing step
     #   in the end, to separate row_names from float data, slicing takes
     #   a lot of memory and CPU time
-    if data[0].size != data[-1].size:
+    if rows[0].size != rows[-1].size:
         msg = (
-            f"Length of first line ({data[0].size}) is different "
-            f"from length of last line ({data[-1].size})."
+            f"Length of first line ({rows[0].size}) is different "
+            f"from length of last line ({rows[-1].size})."
         )
         raise ValueError(msg)
-    data = np.array(data, dtype=dtype)
+    data = np.array(rows, dtype=dtype)
     # logg.msg("    constructed array from list of list", t=True, v=4)
     # transform row_names
     if not row_names:
-        row_names = np.arange(len(data)).astype(str)
+        obs_names = np.arange(len(data)).astype(str)
         # logg.msg("    did not find row names in file", v=4)
     else:
-        row_names = np.array(row_names)
-        for iname, name in enumerate(row_names):
-            row_names[iname] = name.strip('"')
+        obs_names = np.array(row_names)
+        for iname, name in enumerate(obs_names):
+            obs_names[iname] = name.strip('"')
     # adapt col_names if necessary
-    if col_names.size > data.shape[1]:
-        col_names = col_names[1:]
-    for iname, name in enumerate(col_names):
-        col_names[iname] = name.strip('"')
+    if cols.size > data.shape[1]:
+        cols = cols[1:]
+    for iname, name in enumerate(cols):
+        cols[iname] = name.strip('"')
     return AnnData(
         data,
-        obs=dict(obs_names=row_names),
-        var=dict(var_names=col_names),
+        obs=dict(obs_names=obs_names),
+        var=dict(var_names=cols),
     )

@@ -17,6 +17,7 @@ from ..._settings import settings
 from ...compat import H5AsTypeView, XBackendArray, XDataArray, XZarrArrayWrapper
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Literal
 
@@ -33,9 +34,7 @@ else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
     type K = h5py.Array | zarr.Array
 
 
-class ZarrOrHDF5Wrapper[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](
-    XZarrArrayWrapper
-):
+class ZarrOrHDF5Wrapper[K: h5py.Dataset | H5AsTypeView | zarr.Array](XZarrArrayWrapper):
     def __init__(self, array: K) -> None:
         # AstypeView from h5py .astype() lacks chunks attribute
         self.chunks = getattr(array, "chunks", None)
@@ -63,19 +62,19 @@ class ZarrOrHDF5Wrapper[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](
         if (n_key_dims := len(key)) != 1:
             msg = f"Backed arrays currently only supported in 1d, got {n_key_dims} dims"
             raise ValueError(msg)
-        key = key[0]
+        idx = key[0]
         # See https://github.com/h5py/h5py/issues/293 for why we need to convert.
         # See https://github.com/pydata/xarray/blob/fa03b5b4ae95a366f6de5b60f5cc4eb801cd51ec/xarray/core/indexing.py#L1259-L1263
         # for why we can expect sorted/deduped indexers (which are needed for hdf5).
         if (
-            isinstance(key, np.ndarray)
-            and np.issubdtype(key.dtype, np.integer)
+            isinstance(idx, np.ndarray)
+            and np.issubdtype(idx.dtype, np.integer)
             and isinstance(self._array, h5py.Dataset | H5AsTypeView)
         ):
             key_mask = np.zeros(self._array.shape).astype("bool")
-            key_mask[key] = True
+            key_mask[idx] = True
             return self._array[key_mask]
-        return self._array[key]
+        return self._array[idx]
 
 
 class CategoricalArray[K: (h5py.Dataset, zarr.Array)](XBackendArray):
@@ -112,18 +111,16 @@ class CategoricalArray[K: (h5py.Dataset, zarr.Array)](XBackendArray):
     @cached_property
     def categories(self) -> np.ndarray:
         if isinstance(self._categories, zarr.Array):
-            return self._categories[...]
+            return np.asarray(self._categories[...])
         from anndata.io import read_elem
 
-        return read_elem(self._categories)
+        return np.asarray(read_elem(self._categories))
 
     def __getitem__(self, key: ExplicitIndexer) -> PandasExtensionArray:
         from xarray.core.extension_array import PandasExtensionArray
 
         codes = self._codes[key]
-        categorical_array = pd.Categorical.from_codes(
-            codes=codes, categories=self.categories, ordered=self._ordered
-        )
+        categorical_array = pd.Categorical.from_codes(codes=codes, dtype=self.dtype)
         if settings.remove_unused_categories:
             categorical_array = categorical_array.remove_unused_categories()
         return PandasExtensionArray(categorical_array)
@@ -179,7 +176,10 @@ class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
 
         from xarray.core.extension_array import PandasExtensionArray
 
-        cls = self.dtype.construct_array_type()
+        # pandas-stubs only types the base class’ argument-less constructor
+        cls: Callable[..., pd.api.extensions.ExtensionArray] = (
+            self.dtype.construct_array_type()
+        )
         return PandasExtensionArray(cls(values, mask))
 
     @cached_property

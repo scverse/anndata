@@ -74,7 +74,7 @@ class _ReadLazyInternal[S: StorageType](Protocol):
         /,
         *,
         _reader: LazyReader,
-        chunks: tuple[int, ...] | None = None,
+        chunks: tuple[int | None, ...] | None = None,
     ) -> LazyDataStructures: ...
 
 
@@ -96,7 +96,7 @@ class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
 
 class ReadLazy[S](Protocol):
     def __call__(
-        self, elem: S, /, *, chunks: tuple[int, ...] | None = None
+        self, elem: S, /, *, chunks: tuple[int | None, ...] | None = None
     ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 

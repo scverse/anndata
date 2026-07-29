@@ -11,6 +11,7 @@ import pytest
 import zarr
 
 from anndata import AnnData
+from anndata._core.xarray import Dataset2D
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
 from anndata.experimental.backed._io import ANNDATA_ELEMS
@@ -225,11 +226,13 @@ def test_empty_df_warns(tmp_path: Path):
     adata = AnnData(X=np.ones((10, 10)))
     zarr_path = tmp_path / "orig.zarr"
     adata.write_zarr(zarr_path)
+    root = zarr.open(zarr_path)
+    assert isinstance(root, zarr.Group)
     with pytest.warns(
         UserWarning,
         match=r"Renaming or reordering columns on `Dataset2D` has no effect",
     ):
-        adata.obs = read_elem_lazy(zarr.open(zarr_path)["obs"])
+        adata.obs = read_elem_lazy(root["obs"])
 
 
 def test_h5_file_obj(tmp_path: Path):
@@ -248,7 +251,9 @@ def df_group(tmp_path_factory) -> zarr.Group:
     path = tmp_path_factory.mktemp("foo.zarr")
     g = zarr.open_group(path, mode="w", zarr_format=2)
     write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
-    return zarr.open(path, mode="r")["foo"]
+    foo = zarr.open_group(path, mode="r")["foo"]
+    assert isinstance(foo, zarr.Group)
+    return foo
 
 
 @pytest.mark.parametrize(
@@ -263,6 +268,7 @@ def test_chunks_df(
     df_group: zarr.Group,
 ):
     ds = read_elem_lazy(df_group, chunks=chunks)
+    assert isinstance(ds, Dataset2D)
     for k in ds:
         if isinstance(arr := ds[k].data, DaskArray):
             assert arr.chunksize == expected_chunks

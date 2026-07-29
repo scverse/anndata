@@ -16,7 +16,7 @@ from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -121,12 +121,13 @@ def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | 
     assert result is x
 
 
-def get_gpu_devices() -> Iterator:
-    return (
+def get_gpu_devices() -> list:
+    assert jnp is not None
+    return [
         d
         for d in jnp.__array_namespace_info__().devices()
         if d is not None and d.device_kind == "GPU"
-    )
+    ]
 
 
 skip_if_no_jax_gpu = pytest.mark.skipif(
@@ -138,6 +139,7 @@ skip_if_no_jax_gpu = pytest.mark.skipif(
 @skip_if_no_jax_gpu
 @pytest.mark.array_api
 def test_to_writeable_jax_gpu_array() -> None:
+    assert jnp is not None
     x = jnp.asarray([1.0, 2.0], device=get_gpu_devices()[0])
     result = to_writeable(x)
     assert isinstance(result, np.ndarray)
@@ -146,6 +148,7 @@ def test_to_writeable_jax_gpu_array() -> None:
 
 @pytest.mark.array_api
 def test_to_writeable_does_not_recurse() -> None:
+    assert jnp is not None
     x = {"a": jnp.array([1.0, 2.0])}
     result = to_writeable(x)
     # since dict is not supported, it should return unchanged

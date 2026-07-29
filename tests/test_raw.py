@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 
 import anndata as ad
 from anndata import ImplicitModificationWarning
 from anndata.tests.helpers import GEN_ADATA_DASK_ARGS, assert_equal, gen_adata
+from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from typing import Any
 
 # -------------------------------------------------------------------------------
 # Some test data
@@ -17,14 +23,14 @@ data = [
     [7, 8, 9],
 ]  # data matrix of shape n_obs × n_vars
 
-obs_dict = dict(  # annotation of observations / rows
+obs_dict: dict[str, list[Any]] = dict(  # annotation of observations / rows
     row_names=["name1", "name2", "name3"],  # row annotation
     oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
     oanno2=["o1", "o2", "o3"],  # string annotation
     oanno3=[2.1, 2.2, 2.3],  # float annotation
 )
 
-var_dict = dict(  # annotation of variables / columns
+var_dict: dict[str, list[Any]] = dict(  # annotation of variables / columns
     col_names=["var1", "var2", "var3"], vanno1=[3.1, 3.2, 3.3]
 )
 
@@ -50,9 +56,10 @@ def adata_raw() -> ad.AnnData:
 
 
 def test_raw_init(adata_raw: ad.AnnData):
+    assert adata_raw.raw is not None
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
-    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
+    assert asarray(adata_raw.raw[:, 0].X).tolist() == [[1], [4], [7]]
 
 
 def test_raw_del(adata_raw: ad.AnnData):
@@ -78,7 +85,8 @@ def test_raw_set_error(adata_raw: ad.AnnData) -> None:
 
 def test_raw_of_view(adata_raw: ad.AnnData):
     adata_view = adata_raw[adata_raw.obs["oanno1"] == "cat2"]
-    assert adata_view.raw.X.tolist() == [
+    assert adata_view.raw is not None
+    assert asarray(adata_view.raw.X).tolist() == [
         [4, 5, 6],
         [7, 8, 9],
     ]
@@ -90,9 +98,10 @@ def test_raw_rw(adata_raw: ad.AnnData, backing_h5ad):
 
     assert_equal(adata_read, adata_raw, exact=True)
 
+    assert adata_raw.raw is not None
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
-    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
+    assert asarray(adata_raw.raw[:, 0].X).tolist() == [[1], [4], [7]]
 
 
 def test_raw_view_rw(adata_raw: ad.AnnData, backing_h5ad):
@@ -107,29 +116,32 @@ def test_raw_view_rw(adata_raw: ad.AnnData, backing_h5ad):
 
     assert_equal(adata_read, adata_raw_view, exact=True)
 
+    assert adata_raw.raw is not None
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
-    assert adata_raw.raw[:, 0].X.tolist() == [[1], [4], [7]]
+    assert asarray(adata_raw.raw[:, 0].X).tolist() == [[1], [4], [7]]
 
 
 def test_raw_backed(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.filename = backing_h5ad
 
+    assert adata_raw.raw is not None
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
     if adata_raw.raw[:, 0].X.shape[1] != 1:
         pytest.xfail("Raw is broken for backed slices")
-    assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
+    assert asarray(adata_raw.raw[:, 0].X[:]).tolist() == [[1], [4], [7]]
 
 
 def test_raw_view_backed(adata_raw: ad.AnnData, backing_h5ad):
     adata_raw.filename = backing_h5ad
 
+    assert adata_raw.raw is not None
     assert adata_raw.var_names.tolist() == ["var1", "var2"]
     assert adata_raw.raw.var_names.tolist() == ["var1", "var2", "var3"]
     if adata_raw.raw[:, 0].X.shape[1] != 1:
         pytest.xfail("Raw is broken for backed slices")
-    assert adata_raw.raw[:, 0].X[:].tolist() == [[1], [4], [7]]
+    assert asarray(adata_raw.raw[:, 0].X[:]).tolist() == [[1], [4], [7]]
 
 
 def test_raw_as_parent_view():

@@ -8,12 +8,11 @@ from math import ceil
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy.sparse import issparse
 from scverse_misc import Deprecation, deprecated
 
 from ..._core.anndata import AnnData
-from ...compat import old_positionals
-from ..multi_files._anncollection import AnnCollection, _ConcatViewMixin
+from ...compat import CSArray, CSMatrix, old_positionals
+from ..multi_files._anncollection import AnnCollection, AnnCollectionView
 
 if find_spec("torch") or TYPE_CHECKING:
     import torch
@@ -24,9 +23,9 @@ else:
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
 
-    from scipy.sparse import spmatrix
+    from ..multi_files._anncollection import ConvertType
 
-    type Array = torch.Tensor | np.ndarray | spmatrix
+    type Array = torch.Tensor | np.ndarray | CSMatrix | CSArray
 
 
 # Custom sampler to get proper batches instead of joined separate indices
@@ -79,7 +78,7 @@ def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
         elif pin_memory:
             arr = arr.pin_memory()
     elif arr.dtype.name != "category" and np.issubdtype(arr.dtype, np.number):
-        if issparse(arr):
+        if isinstance(arr, CSMatrix | CSArray):
             arr = arr.toarray()
         if use_cuda:
             arr = torch.tensor(arr, device="cuda")
@@ -90,30 +89,26 @@ def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
 
 
 def _convert_on_top(
-    convert: Callable[[Array], Array] | Mapping[str, Callable[[Array], Array]] | None,
+    convert: ConvertType | None,
     top_convert: Callable[[Array], Array],
     attrs_keys: Sequence[str] | Mapping[str, Sequence[str]],
-):
+) -> ConvertType:
     if convert is None:
-        new_convert = top_convert
-    elif callable(convert):
+        return top_convert
+    if callable(convert):
 
-        def compose_convert(arr):
+        def compose_convert(arr: Array) -> Array:
             return top_convert(convert(arr))
 
-        new_convert = compose_convert
-    else:
-        new_convert = {}
-        for attr in attrs_keys:
-            if attr not in convert:
-                new_convert[attr] = top_convert
-            else:
-                as_ks: Sequence[str] | None
-                if not isinstance(attrs_keys, Mapping):
-                    as_ks = None
-                else:
-                    as_ks = attrs_keys[attr]
-                new_convert[attr] = _convert_on_top(convert[attr], top_convert, as_ks)
+        return compose_convert
+
+    new_convert: dict[str, ConvertType] = {}
+    for attr in attrs_keys:
+        if attr not in convert:
+            new_convert[attr] = top_convert
+        else:
+            as_ks = attrs_keys[attr] if isinstance(attrs_keys, Mapping) else ()
+            new_convert[attr] = _convert_on_top(convert[attr], top_convert, as_ks)
     return new_convert
 
 
@@ -153,7 +148,11 @@ class AnnLoader(DataLoader):
     @old_positionals("batch_size", "shuffle", "use_default_converter", "use_cuda")
     def __init__(
         self,
-        adatas: Sequence[AnnData] | dict[str, AnnData],
+        adatas: AnnData
+        | Sequence[AnnData]
+        | dict[str, AnnData]
+        | AnnCollection
+        | AnnCollectionView,
         *,
         batch_size: int = 1,
         shuffle: bool = False,
@@ -161,6 +160,7 @@ class AnnLoader(DataLoader):
         use_cuda: bool = False,
         **kwargs,
     ):
+        dataset: AnnCollection | AnnCollectionView
         if isinstance(adatas, AnnData):
             adatas = [adatas]
 
@@ -186,7 +186,7 @@ class AnnLoader(DataLoader):
                 indices_strict=indices_strict,
             )
 
-        elif isinstance(adatas, _ConcatViewMixin):
+        elif isinstance(adatas, AnnCollection | AnnCollectionView):
             dataset = copy(adatas)
         else:
             msg = "adata should be of type AnnData or AnnCollection."

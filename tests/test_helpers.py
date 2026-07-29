@@ -328,6 +328,7 @@ def test_as_cupy_dask(request: pytest.FixtureRequest, dask_matrix_type) -> None:
 
 @pytest.mark.array_api
 def test_gen_adata_jax_backend() -> None:
+    assert jnp is not None
     adata = gen_adata(
         (5, 5),
         X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
@@ -340,10 +341,12 @@ def test_gen_adata_jax_backend() -> None:
 
 @pytest.mark.array_api
 def test_gen_adata_jax_subfield_assignment(subtests: pytest.Subtests) -> None:
+    assert jnp is not None
     adata = gen_adata(
         (5, 5),
         X_type=lambda x: jnp.asarray(x, dtype=jnp.float32),
     )
+    assert isinstance(adata.X, jnp.ndarray | type(jnp.ones(1)))  # jax.Array
 
     adata.obsm["pca"] = adata.X[:, :2]
     adata.varm["gene_scores"] = adata.X.T[:3].T

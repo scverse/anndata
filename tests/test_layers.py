@@ -9,6 +9,7 @@ import pytest
 
 from anndata import AnnData, ImplicitModificationWarning, read_h5ad
 from anndata.tests.helpers import gen_typed_df_t2_size
+from anndata.utils import asarray
 
 X_ = np.arange(12).reshape((3, 4))
 L = np.arange(12).reshape((3, 4)) + 12
@@ -26,7 +27,7 @@ def test_creation(X: np.ndarray | None):
     assert "L" in adata.layers
     assert "X" not in adata.layers
     assert "some_other_thing" not in adata.layers
-    assert (adata.layers["L"] == L).all()
+    assert (asarray(adata.layers["L"]) == L).all()
     assert adata.shape == L.shape
 
 
@@ -78,7 +79,7 @@ def test_readwrite(X: np.ndarray | None, backing_h5ad):
     adata_read = read_h5ad(backing_h5ad)
 
     assert adata.layers.keys() == adata_read.layers.keys()
-    assert (adata.layers["L"] == adata_read.layers["L"]).all()
+    assert (asarray(adata.layers["L"]) == asarray(adata_read.layers["L"])).all()
 
 
 def test_backed():

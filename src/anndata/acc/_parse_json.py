@@ -41,8 +41,9 @@ def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
             raise ValueError(msg)
 
 
-def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, None] | tuple[None, str]:
-    return tuple(i if isinstance(i, str) else None for i in idx)  # type: ignore
+def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
+    i, j = idx
+    return (i if isinstance(i, str) else None, j if isinstance(j, str) else None)
 
 
 def to_json(ref: AdRef) -> list[str | int | None]:
