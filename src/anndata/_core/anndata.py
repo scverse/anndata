@@ -259,8 +259,8 @@ class AnnData:  # noqa: PLW1641
     def __init__(  # noqa: PLR0913
         self,
         X: _XDataType | pd.DataFrame | None = None,
-        obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
-        var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+        obs: pd.DataFrame | Dataset2D | Mapping[str, Iterable[Any]] | None = None,
+        var: pd.DataFrame | Dataset2D | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
         obsm: np.ndarray | Mapping[str, AxisStorable] | None = None,
@@ -767,7 +767,9 @@ class AnnData:  # noqa: PLW1641
         """Number of variables/features."""
         return len(self.var_names)
 
-    def _set_dim_df(self, value: pd.DataFrame | XDataset, attr: Literal["obs", "var"]):
+    def _set_dim_df(
+        self, value: pd.DataFrame | XDataset | Dataset2D, attr: Literal["obs", "var"]
+    ):
         value = _gen_dataframe(
             value,
             [f"{attr}_names", f"{'row' if attr == 'obs' else 'col'}_names"],
