@@ -8,22 +8,25 @@ import pytest
 import anndata as ad
 from anndata._core._dataframe_backend import (
     DataFrameLike,
+    _from_backend,
+    _ingest_as_pandas,
+    _ingest_axis_frame,
     axis_index,
-    column_backed_axis_name,
+    column_backed_dim,
     copy_frame,
     frame_annotation_columns,
+    frame_column,
     frame_equal,
-    from_backend,
-    relabel_axis_identity,
+    native_backend,
+    relabel_axis,
     set_axis_index,
     subset_frame,
     to_backend,
-    try_ensure_axis_frame,
-    try_from_backend,
+    true_axis_index,
 )
 from anndata._core.raw import Raw
 from anndata._core.xarray import Dataset2D
-from anndata.compat import XDataset
+from anndata.compat import XDataset, XVariable
 from anndata.tests.helpers import assert_equal, gen_typed_df
 
 pytest.importorskip("xarray")
@@ -40,11 +43,33 @@ def dataset2d(df):
 
 
 @pytest.fixture
+def lazy_dataset2d():
+    """A `Dataset2D` mixing a chunked dask column with an in-memory categorical one."""
+    da = pytest.importorskip("dask.array")
+    n = 50
+    return Dataset2D(
+        XDataset(
+            {
+                "val": ("idx", da.from_array(np.arange(n, dtype="float64"), chunks=20)),
+                "grp": ("idx", pd.array(["a", "b"] * (n // 2), dtype="category")),
+            },
+            coords={"idx": [f"c{i}" for i in range(n)]},
+        )
+    )
+
+
+@pytest.fixture
 def named_obs():
     return pd.DataFrame(
         {"cell_type": pd.Categorical(["A", "B", "A"]), "n_genes": [10, 20, 30]},
         index=pd.Index(["AAAC", "AAAG", "AAAT"], name="obs_names"),
     )
+
+
+@pytest.fixture
+def dask_obs(named_obs):
+    dd = pytest.importorskip("dask.dataframe")
+    return dd.from_pandas(named_obs, npartitions=2)
 
 
 def make_native_frame(backend, data):
@@ -83,25 +108,38 @@ def test_narwhals_categorical_preserved(named_obs):
     assert out["cell_type"].tolist() == ["A", "B", "A"]
 
 
-def test_narwhals_realises_backed_dataset2d():
-    da = pytest.importorskip("dask.array")
-    n = 50
-    ds = Dataset2D(
-        XDataset(
-            {
-                "val": ("idx", da.from_array(np.arange(n, dtype="float64"), chunks=20)),
-                "grp": ("idx", pd.array(["a", "b"] * (n // 2), dtype="category")),
-            },
-            coords={"idx": [f"c{i}" for i in range(n)]},
-        )
-    )
-    frame = nw.from_native(ds)
-    assert isinstance(frame, nw.DataFrame)
-    native = frame.to_native()
-    assert type(native).__module__.split(".")[0] == "pandas"
-    assert "dask" not in type(native["val"].values).__module__
-    assert native["val"].tolist() == list(range(n))
-    assert isinstance(native["grp"].dtype, pd.CategoricalDtype)
+def test_narwhals_lazy_dataset2d_is_a_lazyframe(lazy_dataset2d):
+    frame = nw.from_native(lazy_dataset2d)
+    assert isinstance(frame, nw.LazyFrame)
+    assert frame.implementation is nw.Implementation.DASK
+    assert set(frame.columns) == {"val", "grp"}
+
+    collected = frame.collect().to_native()
+    assert collected["val"].tolist() == list(range(lazy_dataset2d.shape[0]))
+    assert isinstance(collected["grp"].dtype, pd.CategoricalDtype)
+
+
+def test_narwhals_lazy_dataset2d_defers_the_read(lazy_dataset2d):
+    """Wrapping and building a query must not touch the data behind the dask columns."""
+    frame = nw.from_native(lazy_dataset2d).filter(nw.col("val") >= 45)
+    assert isinstance(frame, nw.LazyFrame)
+    assert frame.collect()["val"].to_list() == [45.0, 46.0, 47.0, 48.0, 49.0]
+
+
+def test_dataset2d_to_dask_dataframe_partitions_follow_chunks(lazy_dataset2d):
+    ddf = lazy_dataset2d.to_dask_dataframe()
+    assert ddf.npartitions == 3  # 50 rows in chunks of 20
+    assert isinstance(ddf.dtypes["grp"], pd.CategoricalDtype)
+
+    computed = ddf.compute()
+    assert computed.index.tolist() == [f"c{i}" for i in range(50)]
+    assert computed["val"].tolist() == list(range(50))
+
+
+def test_dataset2d_in_memory_is_not_lazy(dataset2d):
+    assert not dataset2d.is_lazy
+    assert isinstance(nw.from_native(dataset2d), nw.DataFrame)
+    assert dataset2d.to_dask_dataframe().npartitions == 1
 
 
 @pytest.mark.parametrize("backend", ["pandas", "pyarrow", "polars"])
@@ -117,7 +155,7 @@ def test_to_backend_from_dataset2d(dataset2d, backend):
         assert got.column(name).to_pylist() == src.column(name).to_pylist()
 
 
-def test_to_backend_named_index_identity(named_obs):
+def test_to_backend_named_index_becomes_names_column(named_obs):
     ds = Dataset2D(XDataset.from_dataframe(named_obs))
     for backend in ("polars", "pyarrow"):
         pytest.importorskip(backend)
@@ -186,23 +224,49 @@ def test_to_backend_unnamed_index_named(named_obs):
     assert "var_names" in adata.var_as("polars").columns
 
 
-def test_to_backend_canonicalizes_arbitrarily_named_index():
+def test_to_backend_renames_arbitrarily_named_index():
     pl = pytest.importorskip("polars")
     obs = pd.DataFrame({"kind": ["a", "b"]}, index=pd.Index(["c0", "c1"], name="cells"))
-    out = to_backend(obs, "polars", index_name="obs_names")
+    out = to_backend(obs, "polars", dim="obs")
     assert isinstance(out, pl.DataFrame)
     assert out.columns == ["kind", "obs_names"]
     assert out["obs_names"].to_list() == ["c0", "c1"]
 
 
-def test_to_backend_rejects_reserved_identity_column_collision():
+def test_to_backend_rejects_reserved_names_column_collision():
     pytest.importorskip("polars")
     obs = pd.DataFrame(
         {"obs_names": ["annotation-a", "annotation-b"]},
         index=pd.Index(["c0", "c1"], name="cells"),
     )
     with pytest.raises(ValueError, match="reserved column 'obs_names'"):
-        to_backend(obs, "polars", index_name="obs_names")
+        to_backend(obs, "polars", dim="obs")
+
+
+def test_obs_as_narwhals_wraps_storage_as_it_is(named_obs):
+    """Every storage form answers the same narwhals query; only lazy storage stays lazy."""
+    pytest.importorskip("polars")
+    dd = pytest.importorskip("dask.dataframe")
+    X = np.zeros((3, 2), "f4")
+    stored = {
+        "pandas": named_obs,
+        "polars": make_native_frame(
+            "polars",
+            {"obs_names": ["AAAC", "AAAG", "AAAT"], "n_genes": [10, 20, 30]},
+        ),
+        "dask": dd.from_pandas(named_obs, npartitions=2),
+    }
+    for name, obs in stored.items():
+        frame = ad.AnnData(X, obs=obs).obs_as("narwhals")
+        assert isinstance(frame, nw.LazyFrame if name == "dask" else nw.DataFrame)
+        query = frame.filter(nw.col("n_genes") >= 20).select("n_genes")
+        eager = query.collect() if isinstance(query, nw.LazyFrame) else query
+        assert list(eager.to_native()["n_genes"]) == [20, 30]
+
+
+def test_obs_as_narwhals_keeps_pandas_index(named_obs):
+    frame = ad.AnnData(np.zeros((3, 2), "f4"), obs=named_obs).obs_as("narwhals")
+    assert list(nw.maybe_get_index(frame)) == ["AAAC", "AAAG", "AAAT"]
 
 
 @pytest.mark.parametrize("backend", ["polrs", "duckdb"])
@@ -211,14 +275,62 @@ def test_to_backend_rejects_unsupported_backend(dataset2d, backend):
         to_backend(dataset2d, backend)
 
 
-def test_narwhals_plugin_entry_point_registered():
+@pytest.mark.parametrize("lazy", [False, True], ids=["eager", "lazy"])
+def test_narwhals_frame_ingests_as_its_native_frame(lazy):
+    """A narwhals frame is unwrapped on the way in, never stored as the wrapper."""
+    pl = pytest.importorskip("polars")
+    frame = pl.DataFrame({"obs_names": ["c0", "c1", "c2"], "g": [1, 2, 3]})
+    adata = ad.AnnData(
+        np.zeros((3, 2), "f4"),
+        obs=nw.from_native(frame.lazy() if lazy else frame, eager_only=not lazy),
+    )
+    assert isinstance(adata.obs, pl.DataFrame)
+    assert adata.obs_names.tolist() == ["c0", "c1", "c2"]
+
+
+def test_narwhals_pandas_frame_ingests_by_the_pandas_path(named_obs):
+    """Unwrapping dispatches again, so a pandas-backed frame keeps its index."""
+    adata = ad.AnnData(
+        np.zeros((3, 2), "f4"), obs=nw.from_native(named_obs, eager_only=True)
+    )
+    expected = ad.AnnData(np.zeros((3, 2), "f4"), obs=named_obs)
+    assert isinstance(adata.obs, pd.DataFrame)
+    assert list(adata.obs.columns) == list(expected.obs.columns)
+    assert adata.obs.index.equals(expected.obs.index)
+
+
+def test_narwhals_frame_in_obsm_is_unwrapped(named_obs):
+    pl = pytest.importorskip("polars")
+    adata = ad.AnnData(np.zeros((3, 2), "f4"), obs=named_obs)
+    adata.obsm["k"] = nw.from_native(
+        pl.DataFrame({"obs_names": list(named_obs.index), "x": [1, 2, 3]}),
+        eager_only=True,
+    )
+    assert isinstance(adata.obsm["k"], pl.DataFrame)
+
+
+def test_narwhals_frame_in_uns_is_written(tmp_path, diskfmt, named_obs):
+    pl = pytest.importorskip("polars")
+    adata = ad.AnnData(np.zeros((3, 2), "f4"), obs=named_obs)
+    adata.uns["frame"] = nw.from_native(pl.DataFrame({"x": [1, 2, 3]}), eager_only=True)
+    path = tmp_path / f"a.{diskfmt}"
+    getattr(adata, f"write_{diskfmt}")(path)
+    back = getattr(ad.io, f"read_{diskfmt}")(path)
+    assert back.uns["frame"]["x"].tolist() == [1, 2, 3]
+
+
+def test_narwhals_plugin_entry_point_registered(dataset2d):
     from importlib.metadata import entry_points
+
+    from anndata._core import xarray as xarray_module
 
     eps = {e.name: e for e in entry_points(group="narwhals.plugins")}
     assert "anndata" in eps
     mod = eps["anndata"].load()
+    assert mod is xarray_module
     assert mod.NATIVE_PACKAGE == "anndata"
-    assert callable(mod.is_native)
+    assert mod.is_native(dataset2d)
+    assert not mod.is_native(pd.DataFrame({"a": [1]}))
     assert callable(mod.__narwhals_namespace__)
 
 
@@ -237,7 +349,7 @@ def test_to_backend_empty_obs():
             pd.DataFrame(index=pd.Index(["c0", "c1", "c2"], name="obs_names"))
         )
     )
-    out = to_backend(zero_col, "polars", index_name="obs_names")
+    out = to_backend(zero_col, "polars", dim="obs")
     assert out.shape == (3, 1)
     assert out.columns == ["obs_names"]
 
@@ -246,7 +358,7 @@ def test_to_backend_empty_obs():
             pd.DataFrame({"g": pd.Series([], dtype="int64")}).rename_axis("obs_names")
         )
     )
-    out0 = to_backend(zero_row, "polars", index_name="obs_names")
+    out0 = to_backend(zero_row, "polars", dim="obs")
     assert out0.shape[0] == 0
     assert set(out0.columns) >= {"g"}
 
@@ -261,8 +373,8 @@ def test_dataframe_like_isinstance(named_obs, dataset2d):
 
 
 def test_from_backend_passthrough(named_obs, dataset2d):
-    assert from_backend(named_obs) is named_obs
-    assert from_backend(dataset2d) is dataset2d
+    assert _from_backend(named_obs) is named_obs
+    assert _from_backend(dataset2d) is dataset2d
 
 
 def test_dataframe_x_index_sets_default_axis_names():
@@ -274,8 +386,8 @@ def test_dataframe_x_index_sets_default_axis_names():
 def test_from_backend_foreign_restores_index(named_obs):
     pytest.importorskip("polars")
 
-    pl_frame = to_backend(named_obs, "polars", index_name="obs_names")
-    back = from_backend(pl_frame, index_name="obs_names")
+    pl_frame = to_backend(named_obs, "polars", dim="obs")
+    back = _from_backend(pl_frame, dim="obs")
     assert isinstance(back, DataFrameLike)
     assert back.index.name == "obs_names"
     assert list(back.index) == ["AAAC", "AAAG", "AAAT"]
@@ -285,18 +397,15 @@ def test_from_backend_foreign_restores_index(named_obs):
 
 def test_indexed_frame_helpers(named_obs):
     frame = named_obs.copy()
-    assert axis_index(frame, index_name="obs_names") is frame.index
-    assert frame_annotation_columns(frame, index_name="obs_names") == [
+    assert axis_index(frame, dim="obs") is frame.index
+    assert frame_annotation_columns(frame, dim="obs") == [
         "cell_type",
         "n_genes",
     ]
-    assert column_backed_axis_name(frame) is None
-    assert (
-        relabel_axis_identity(frame, source_name="obs_names", target_name="var_names")
-        is frame
-    )
+    assert column_backed_dim(frame) is None
+    assert relabel_axis(frame, source="obs", target="var") is frame
 
-    renamed = set_axis_index(frame, pd.Index(["x", "y", "z"]), index_name="obs_names")
+    renamed = set_axis_index(frame, pd.Index(["x", "y", "z"]), dim="obs")
     assert renamed is frame
     assert frame.index.tolist() == ["x", "y", "z"]
     pd.testing.assert_frame_equal(
@@ -310,42 +419,35 @@ def test_indexed_frame_helpers(named_obs):
 @pytest.mark.parametrize("backend", ["polars", "pyarrow"])
 def test_indexless_frame_helpers(backend):
     frame = make_native_frame(backend, {"obs_names": ["a", "b"], "value": [1, 2]})
-    assert axis_index(frame, index_name="obs_names").tolist() == ["a", "b"]
-    assert frame_annotation_columns(frame, index_name="obs_names") == ["value"]
-    assert column_backed_axis_name(frame) == "obs_names"
-    assert (
-        relabel_axis_identity(frame, source_name="obs_names", target_name="obs_names")
-        is frame
-    )
+    assert axis_index(frame, dim="obs").tolist() == ["a", "b"]
+    assert frame_annotation_columns(frame, dim="obs") == ["value"]
+    assert column_backed_dim(frame) == "obs"
+    assert relabel_axis(frame, source="obs", target="obs") is frame
 
-    renamed = set_axis_index(frame, pd.Index(["x", "y"]), index_name="obs_names")
-    assert axis_index(renamed, index_name="obs_names").tolist() == ["x", "y"]
+    renamed = set_axis_index(frame, pd.Index(["x", "y"]), dim="obs")
+    assert axis_index(renamed, dim="obs").tolist() == ["x", "y"]
     subset = subset_frame(frame, (np.array([1]), slice(None)))
-    assert axis_index(subset, index_name="obs_names").tolist() == ["b"]
+    assert axis_index(subset, dim="obs").tolist() == ["b"]
     assert frame_equal(frame, copy_frame(frame))
     assert not frame_equal(frame, make_native_frame(backend, {"value": [1, 2]}))
     assert not frame_equal(frame, object())
     converted = to_backend(
         frame,
         "pyarrow" if backend == "polars" else "pandas",
-        index_name="obs_names",
+        dim="obs",
     )
-    assert axis_index(converted, index_name="obs_names").tolist() == ["a", "b"]
+    assert axis_index(converted, dim="obs").tolist() == ["a", "b"]
 
-    relabeled = relabel_axis_identity(
-        frame, source_name="obs_names", target_name="var_names"
-    )
-    assert column_backed_axis_name(relabeled) == "var_names"
+    relabeled = relabel_axis(frame, source="obs", target="var")
+    assert column_backed_dim(relabeled) == "var"
     missing = make_native_frame(backend, {"value": [1]})
-    with pytest.raises(ValueError, match="missing required identity column"):
-        axis_index(missing, index_name="obs_names")
-    with pytest.raises(ValueError, match="missing required identity column"):
-        relabel_axis_identity(missing, source_name="obs_names", target_name="var_names")
+    with pytest.raises(ValueError, match="missing required column"):
+        axis_index(missing, dim="obs")
+    with pytest.raises(ValueError, match="missing required column"):
+        relabel_axis(missing, source="obs", target="var")
     collision = make_native_frame(backend, {"obs_names": ["a"], "var_names": ["g"]})
     with pytest.raises(ValueError, match="reserved column 'var_names'"):
-        relabel_axis_identity(
-            collision, source_name="obs_names", target_name="var_names"
-        )
+        relabel_axis(collision, source="obs", target="var")
 
 
 def test_copy_frame_isolates_polars_mutation():
@@ -368,24 +470,24 @@ def test_copy_frame_preserves_dataset2d(dataset2d):
 
 def test_optional_frame_conversion(named_obs):
     pl = pytest.importorskip("polars")
-    assert try_from_backend(np.ones((2, 2))) is None
-    assert try_ensure_axis_frame(None, index_name="obs_names") is None
-    assert try_ensure_axis_frame(named_obs, index_name="obs_names") is named_obs
+    assert _ingest_as_pandas(np.ones((2, 2))) is None
+    assert _ingest_axis_frame(None, dim="obs") is None
+    assert _ingest_axis_frame(named_obs, dim="obs") is named_obs
     with pytest.raises(ValueError, match="Cannot convert"):
         ad.AnnData(X=np.zeros((2, 1)), obs=np.ones((2, 2)))
 
     native = pl.DataFrame({"value": [1, 2]})
-    ensured = try_ensure_axis_frame(native, index_name="obs_names")
+    ensured = _ingest_axis_frame(native, dim="obs")
     assert isinstance(ensured, pl.DataFrame)
     assert ensured["obs_names"].to_list() == ["0", "1"]
 
-    converted = try_from_backend(
+    converted = _ingest_as_pandas(
         pl.DataFrame({"obs_names": ["a", "b"], "value": [1, 2]}),
-        index_name="obs_names",
+        dim="obs",
     )
     assert isinstance(converted, pd.DataFrame)
     assert converted.index.tolist() == ["a", "b"]
-    assert from_backend(native, index_name="obs_names").index.tolist() == [0, 1]
+    assert _from_backend(native, dim="obs").index.tolist() == [0, 1]
 
 
 @pytest.mark.parametrize("key", ["obs", "metadata"])
@@ -413,7 +515,7 @@ def test_write_elem_foreign_backend(tmp_path, diskfmt, key):
         assert back["obs_names"].tolist() == ["c0", "c1"]
 
 
-def test_native_polars_without_identity_column_gets_default_names():
+def test_native_polars_without_names_column_gets_default_names():
     pl = pytest.importorskip("polars")
     adata = ad.AnnData(X=np.zeros((2, 1)), obs=pl.DataFrame({"kind": ["a", "b"]}))
     assert isinstance(adata.obs, pl.DataFrame)
@@ -421,7 +523,7 @@ def test_native_polars_without_identity_column_gets_default_names():
     assert adata.obs["obs_names"].to_list() == ["0", "1"]
 
 
-def test_native_polars_numeric_identity_is_stringified():
+def test_native_polars_numeric_names_are_stringified():
     pl = pytest.importorskip("polars")
     with pytest.warns(
         ad.ImplicitModificationWarning, match="Transforming to str index"
@@ -445,7 +547,7 @@ def test_native_polars_names_make_unique():
 
 
 @pytest.mark.parametrize("backend", ["polars", "pyarrow"])
-def test_native_frame_concat_preserves_backend_and_identity(backend):
+def test_native_frame_concat_preserves_backend_and_names(backend):
     left = ad.AnnData(
         X=np.ones((1, 2)),
         obs=make_native_frame(backend, {"obs_names": ["a"], "group": ["x"]}),
@@ -586,3 +688,229 @@ def test_concat_normalizes_mixed_dataframe_like_before_equality():
 
     result = ad.concat([left, right], merge="same")
     pd.testing.assert_frame_equal(result.var, var)
+
+
+def test_dask_obs_is_stored_as_a_lazy_dataset2d(dask_obs):
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dask_obs)
+
+    assert isinstance(adata.obs, Dataset2D)
+    assert adata.obs.is_lazy
+    assert adata.obs_names.tolist() == ["AAAC", "AAAG", "AAAT"]
+    assert list(adata.obs.columns) == ["cell_type", "n_genes"]
+    # Categoricals cannot stay dask arrays without losing their categories, so they are read;
+    # everything else is still deferred.
+    assert isinstance(adata.obs["cell_type"].dtype, pd.CategoricalDtype)
+    assert isinstance(nw.from_native(adata.obs), nw.LazyFrame)
+
+
+def test_dask_obs_preserves_every_dtype_family():
+    """Each dtype needs a different representation, since xarray can hold only some eagerly."""
+    dd = pytest.importorskip("dask.dataframe")
+    pdf = pd.DataFrame(
+        {
+            "text": ["x", "y", "x"],
+            "nullable_text": pd.array(["a", None, "c"], dtype="string"),
+            "kind": pd.Categorical(["p", "q", "p"]),
+            "count": pd.array([1, 2, None], dtype="Int64"),
+            "score": [1.0, 2.0, 3.0],
+        },
+        index=pd.Index(["c0", "c1", "c2"], name="obs_names"),
+    )
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dd.from_pandas(pdf, npartitions=2))
+
+    # Only the plain float column can stay deferred; the rest xarray must hold eagerly.
+    assert adata.obs.is_lazy
+
+    in_memory = adata.obs.to_memory()
+    assert in_memory["text"].tolist() == ["x", "y", "x"]
+    assert in_memory["nullable_text"].tolist() == ["a", pd.NA, "c"]
+    assert in_memory["kind"].tolist() == ["p", "q", "p"]
+    assert in_memory["count"].tolist() == [1, 2, pd.NA]
+    assert in_memory["score"].tolist() == [1.0, 2.0, 3.0]
+    assert isinstance(in_memory["kind"].dtype, pd.CategoricalDtype)
+    assert in_memory["count"].dtype == "Int64"
+    # Strings round trip as a nullable string dtype rather than as `object`.
+    assert isinstance(in_memory["text"].dtype, pd.StringDtype)
+
+    # Subsetting has to work column by column, which is where a raw Arrow-backed
+    # string array would fail.
+    assert adata[["c2", "c0"]].obs.to_memory()["text"].tolist() == ["x", "x"]
+    assert adata.obs_as("dask").compute()["text"].tolist() == ["x", "y", "x"]
+
+
+def test_dask_obs_takes_names_from_the_names_column():
+    dd = pytest.importorskip("dask.dataframe")
+    frame = dd.from_pandas(
+        pd.DataFrame({"obs_names": ["a", "b", "c"], "value": [1, 2, 3]}), npartitions=2
+    )
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=frame)
+
+    assert adata.obs_names.tolist() == ["a", "b", "c"]
+    assert list(adata.obs.columns) == ["value"]
+
+
+def test_dask_obs_positional_index_is_stringified():
+    dd = pytest.importorskip("dask.dataframe")
+    frame = dd.from_pandas(pd.DataFrame({"value": [1, 2, 3]}), npartitions=1)
+    with pytest.warns(
+        ad.ImplicitModificationWarning, match="Transforming to str index"
+    ):
+        adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=frame)
+
+    assert adata.obs_names.tolist() == ["0", "1", "2"]
+
+
+def test_dask_obs_supports_views_and_copies(dask_obs):
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dask_obs)
+
+    view = adata[["AAAT", "AAAC"]]
+    assert isinstance(view.obs, Dataset2D)
+    assert view.obs_names.tolist() == ["AAAT", "AAAC"]
+    assert view.obs.to_memory()["n_genes"].tolist() == [30, 10]
+
+    copied = adata.copy()
+    assert isinstance(copied.obs, Dataset2D)
+    assert copied.obs_names.tolist() == adata.obs_names.tolist()
+
+    assert isinstance(adata.to_memory().obs, pd.DataFrame)
+
+
+def test_dask_obs_shape_mismatch_is_reported(dask_obs):
+    with pytest.raises(ValueError, match="must have as many rows"):
+        ad.AnnData(X=np.zeros((2, 2), "f4"), obs=dask_obs)
+
+
+def test_dask_obsm_is_ingested(dask_obs, named_obs):
+    dd = pytest.importorskip("dask.dataframe")
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=named_obs)
+    adata.obsm["meta"] = dd.from_pandas(
+        pd.DataFrame({"score": [1, 2, 3]}, index=named_obs.index), npartitions=2
+    )
+
+    assert isinstance(adata.obsm["meta"], Dataset2D)
+    assert adata.obsm["meta"].to_memory()["score"].tolist() == [1, 2, 3]
+
+
+def test_polars_lazyframe_is_collected_on_ingest():
+    pl = pytest.importorskip("polars")
+    frame = pl.LazyFrame({"obs_names": ["a", "b"], "value": [1, 2]})
+    adata = ad.AnnData(X=np.zeros((2, 2), "f4"), obs=frame)
+
+    assert isinstance(adata.obs, pl.DataFrame)
+    assert adata.obs_names.tolist() == ["a", "b"]
+
+
+def test_obs_as_dask_stays_lazy(dask_obs):
+    dd = pytest.importorskip("dask.dataframe")
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dask_obs)
+
+    out = adata.obs_as("dask")
+    assert isinstance(out, dd.DataFrame)
+    computed = out.compute()
+    assert computed.index.tolist() == ["AAAC", "AAAG", "AAAT"]
+    assert computed["n_genes"].tolist() == [10, 20, 30]
+
+
+def test_to_backend_dask_from_eager_frames(named_obs):
+    dd = pytest.importorskip("dask.dataframe")
+
+    from_pandas = to_backend(named_obs, "dask", dim="obs")
+    assert isinstance(from_pandas, dd.DataFrame)
+    assert from_pandas.compute().index.tolist() == ["AAAC", "AAAG", "AAAT"]
+
+    pl = pytest.importorskip("polars")
+    from_polars = to_backend(
+        pl.DataFrame({"obs_names": ["a", "b"], "value": [1, 2]}), "dask", dim="obs"
+    )
+    assert from_polars.compute().index.tolist() == ["a", "b"]
+
+
+def test_adapt_rejects_an_uningested_lazy_frame():
+    dd = pytest.importorskip("dask.dataframe")
+    frame = dd.from_pandas(
+        pd.DataFrame({"obs_names": ["a"], "value": [1]}), npartitions=1
+    )
+
+    with pytest.raises(TypeError, match="defers evaluation"):
+        axis_index(frame, dim="obs")
+
+
+def test_dask_obs_survives_concat(dask_obs):
+    dd = pytest.importorskip("dask.dataframe")
+    other = dd.from_pandas(
+        pd.DataFrame(
+            {"cell_type": pd.Categorical(["B"]), "n_genes": [40]},
+            index=pd.Index(["TTTT"], name="obs_names"),
+        ),
+        npartitions=1,
+    )
+    left = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dask_obs)
+    right = ad.AnnData(X=np.zeros((1, 2), "f4"), obs=other)
+
+    result = ad.concat([left, right])
+
+    assert isinstance(result.obs, Dataset2D)
+    assert result.obs_names.tolist() == ["AAAC", "AAAG", "AAAT", "TTTT"]
+    assert result.obs.to_memory()["n_genes"].tolist() == [10, 20, 30, 40]
+
+
+def test_dask_obs_reports_itself_unwriteable(dask_obs, tmp_path, diskfmt):
+    adata = ad.AnnData(X=np.zeros((3, 2), "f4"), obs=dask_obs)
+
+    assert adata.unwriteable()
+    with pytest.raises(NotImplementedError, match="Dataset2D not supported"):
+        getattr(adata, f"write_{diskfmt}")(tmp_path / f"a.{diskfmt}")
+
+
+@pytest.mark.parametrize("backend", ["polars", "pyarrow"])
+def test_frame_column_gives_numpy_for_index_less_frames(backend):
+    frame = make_native_frame(backend, {"obs_names": ["a", "b"], "value": [1, 2]})
+
+    column = frame_column(frame, "value")
+    assert isinstance(column, np.ndarray)
+    assert column.tolist() == [1, 2]
+
+
+def test_frame_column_gives_the_pandas_array_for_indexed_frames(named_obs):
+    column = frame_column(named_obs, "cell_type")
+
+    assert isinstance(column, pd.Categorical)
+    assert column.tolist() == ["A", "B", "A"]
+
+
+def test_frame_column_gives_the_variable_for_a_dataset2d(dataset2d, df):
+    column = frame_column(dataset2d, df.columns[0])
+
+    assert isinstance(column, XVariable)
+    assert column.values.tolist() == df[df.columns[0]].tolist()
+
+
+def test_true_axis_index_matches_axis_index_when_not_deferred(named_obs):
+    pd.testing.assert_index_equal(
+        true_axis_index(named_obs, dim="obs"), axis_index(named_obs, dim="obs")
+    )
+
+
+def test_true_axis_index_prefers_out_of_memory_names():
+    """A backed frame indexes by a stand-in, but reports the names it defers to."""
+    ds = Dataset2D(
+        XDataset(
+            {"obs_names": ("idx", ["AAAC", "AAAG"]), "n": ("idx", [1, 2])},
+            coords={"idx": [0, 1]},
+        )
+    )
+    ds.true_index_dim = "obs_names"
+
+    assert axis_index(ds, dim="obs").tolist() == [0, 1]
+    assert true_axis_index(ds, dim="obs").tolist() == ["AAAC", "AAAG"]
+
+
+@pytest.mark.parametrize("backend", ["polars", "pyarrow"])
+def test_native_backend_names_only_index_less_representations(
+    backend, named_obs, dataset2d
+):
+    frame = make_native_frame(backend, {"obs_names": ["a"], "value": [1]})
+
+    assert native_backend(frame) is nw.Implementation.from_backend(backend)
+    assert native_backend(named_obs) is None
+    assert native_backend(dataset2d) is None

@@ -574,9 +574,7 @@ def _get_vector_ambiguous(
     from ..acc import A
 
     idxdim = "var" if dim == "obs" else "obs"
-    in_annotation = k in frame_annotation_columns(
-        getattr(adata, dim), index_name=f"{dim}_names"
-    )
+    in_annotation = k in frame_annotation_columns(getattr(adata, dim), dim=dim)
     match (in_annotation, k in getattr(adata, f"{idxdim}_names")):
         case True, True:
             msg = f"Key {k} could be found in both .{idxdim}_names and .{dim}.columns"

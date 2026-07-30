@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
 
+    from ..._core._dataframe_backend import Dim
     from ..._core.xarray import Dataset2D
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
@@ -334,13 +335,24 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
-def _axis_index_name(store: _GroupStorageType, key: str) -> str | None:
-    """Return axis identity for primary annotations and aligned dataframe groups."""
-    return {"obs": "obs_names", "var": "var_names"}.get(key) or {
-        "/obsm": "obs_names",
-        "/varm": "var_names",
-        "/raw/varm": "var_names",
-    }.get(store.name)
+_DIM_BY_PATH: Mapping[str, Dim] = {"/obs": "obs", "/var": "var", "/raw/var": "var"}
+_DIM_BY_PARENT: Mapping[str, Dim] = {
+    "/obsm": "obs",
+    "/varm": "var",
+    "/raw/varm": "var",
+}
+
+
+def _dim_for_element(store: _GroupStorageType, key: str) -> Dim | None:
+    """The dimension a written element holds axis names for, going by its location.
+
+    `obs` and `var` are matched on their full path, so that an unrelated element sharing
+    the name (`uns["obs"]`, say) is not mistaken for one. Aligned dataframes are matched on
+    the mapping they live in.
+    """
+    return _DIM_BY_PATH.get(f"{store.name.rstrip('/')}/{key}") or _DIM_BY_PARENT.get(
+        store.name
+    )
 
 
 class Writer:
@@ -365,20 +377,19 @@ class Writer:
         elem: Any,
         modifiers: frozenset[str],
         *,
-        index_name: str | None = None,
+        dim: Dim | None = None,
     ) -> tuple[Write, Any]:
-        """Find the writer for ``elem``, coercing a frame from another backend on a miss.
+        """Find the writer for `elem`, converting a frame of another backend on a miss.
 
-        On a dispatch miss, normalize a frame from another backend (polars/pyarrow/cuDF/...) to
-        pandas and retry. Returns ``(write_func, elem)`` -- ``elem`` may have been coerced. The
-        narwhals path runs only on the miss, so ordinary (array/mapping/...) writes are untouched.
+        Returns the write function and `elem`, which may have been converted. Only a miss
+        goes through narwhals, so ordinary array/mapping/… writes are untouched.
         """
         try:
             return self.find_write_func(dest_type, elem, modifiers), elem
         except IORegistryError:
-            from anndata._core._dataframe_backend import try_from_backend
+            from anndata._core._dataframe_backend import _ingest_as_pandas
 
-            if (coerced := try_from_backend(elem, index_name=index_name)) is None:
+            if (coerced := _ingest_as_pandas(elem, dim=dim)) is None:
                 raise
             return self.find_write_func(dest_type, coerced, modifiers), coerced
 
@@ -438,9 +449,8 @@ class Writer:
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        index_name = _axis_index_name(store, k)
         write_func, elem = self._resolve_write_func(
-            type(store), elem, modifiers, index_name=index_name
+            type(store), elem, modifiers, dim=_dim_for_element(store, k)
         )
 
         if self.callback is None:

@@ -108,6 +108,7 @@ test-min = [
     "dask[distributed]",
     "awkward>=2.6.3",
     "pyarrow",
+    "polars",
     "pooch",
     "anndata[dask]",
 ]
@@ -133,7 +134,7 @@ dask = [
 ]
 
 [project.entry-points."narwhals.plugins"]
-anndata = "anndata._core._dataframe_backend"
+anndata = "anndata._core.xarray"
 
 [tool.hatch.version]
 source = "vcs"

@@ -12,18 +12,17 @@ from typing import TYPE_CHECKING, ClassVar, cast, overload
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
 
-import narwhals as nw
 import pandas as pd
 import scipy.sparse as sp
 
 from .. import AnnData
 from .._core._dataframe_backend import (
     DataFrameLike,
-    axis_index,
     frame_annotation_columns,
+    frame_column,
+    true_axis_index,
 )
 from .._core.views import ArrayView
-from .._core.xarray import Dataset2D
 from ..compat import CupySparseMatrix, DaskArray, has_xp_base
 
 if TYPE_CHECKING:
@@ -379,7 +378,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         if idx is None:
             return True  # obs and var index always exist
         frame: DataFrameLike = getattr(data, self.dim)
-        return idx in frame_annotation_columns(frame, index_name=f"{self.dim}_names")
+        return idx in frame_annotation_columns(frame, dim=self.dim)
 
     @overload
     def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
@@ -397,17 +396,8 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         if k is NO_IDX:
             return frame
         if k is None:
-            index = (
-                frame.true_index
-                if isinstance(frame, Dataset2D)
-                else axis_index(frame, index_name=f"{self.dim}_names")
-            )
-            return index.array
-        if isinstance(frame, pd.DataFrame):
-            return frame[k].array
-        if isinstance(frame, Dataset2D):
-            return frame[k].variable
-        return nw.from_native(cast("Any", frame))[k].to_numpy()
+            return true_axis_index(frame, dim=self.dim).array
+        return frame_column(frame, k)
 
 
 @dataclass(frozen=True)

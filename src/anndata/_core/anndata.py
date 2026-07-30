@@ -52,12 +52,15 @@ from ..utils import (
 from ._dataframe_backend import (
     DataFrameLike,
     axis_index,
-    column_backed_axis_name,
+    column_backed_dim,
     copy_frame,
     frame_annotation_columns,
-    relabel_axis_identity,
+    other_dim,
+    reject_categorical_op,
+    relabel_axis,
     set_axis_index,
     subset_frame,
+    supports_categorical_ops,
     to_backend,
 )
 from .aligned_df import _gen_dataframe
@@ -77,8 +80,10 @@ if TYPE_CHECKING:
 
     import cudf
     import modin.pandas as mpd
+    import narwhals as nw
     import polars as pl
     import pyarrow as pa
+    from dask.dataframe import DataFrame as DaskDataFrame
     from narwhals.typing import IntoBackend
     from scipy import sparse
     from zarr.storage import StoreLike
@@ -492,12 +497,12 @@ class AnnData:  # noqa: PLW1641
         # now we can verify if indices match!
         for attr_name, x_name, idx in x_indices:
             attr = getattr(self, attr_name)
-            attr_idx = axis_index(attr, index_name=f"{attr_name}_names")
+            attr_idx = axis_index(attr, dim=attr_name)
             if isinstance(attr_idx, pd.RangeIndex):
                 setattr(
                     self,
                     f"_{attr_name}",
-                    set_axis_index(attr, idx, index_name=f"{attr_name}_names"),
+                    set_axis_index(attr, idx, dim=attr_name),
                 )
             elif not idx.equals(attr_idx):
                 msg = f"Index of {attr_name} must match {x_name} of X."
@@ -591,7 +596,7 @@ class AnnData:  # noqa: PLW1641
         for attr_name, elem in iter_outer(self):
             if attr_name not in {"raw", "X"}:
                 keys = (
-                    frame_annotation_columns(elem, index_name=f"{attr_name}_names")
+                    frame_annotation_columns(elem, dim=attr_name)
                     if attr_name in {"obs", "var"}
                     else elem.keys()
                 )
@@ -788,9 +793,7 @@ class AnnData:  # noqa: PLW1641
             length=self.n_obs if attr == "obs" else self.n_vars,
         )
         raise_value_error_if_multiindex_columns(value, attr)
-        value_idx = self._prep_dim_index(
-            axis_index(value, index_name=f"{attr}_names"), attr
-        )
+        value_idx = self._prep_dim_index(axis_index(value, dim=attr), attr)
         if self.is_view:
             self._init_as_actual(self.copy())
         setattr(self, f"_{attr}", value)
@@ -840,23 +843,19 @@ class AnnData:  # noqa: PLW1641
             warn(msg, UserWarning)
         return value
 
-    def _set_dim_index(self, value: pd.Index, attr: str):
+    def _set_dim_index(self, value: pd.Index, attr: Literal["obs", "var"]):
         # Assumes _prep_dim_index has been run
         if self.is_view:
             self._init_as_actual(self.copy())
-        setattr(
-            self,
-            f"_{attr}",
-            set_axis_index(getattr(self, attr), value, index_name=f"{attr}_names"),
-        )
+        setattr(self, f"_{attr}", set_axis_index(getattr(self, attr), value, dim=attr))
         mapping = getattr(self, f"_{attr}m")
         for key, v in list(mapping.items()):
             if isinstance(v, DataFrameLike):
-                mapping[key] = set_axis_index(v, value, index_name=f"{attr}_names")
+                mapping[key] = set_axis_index(v, value, dim=attr)
 
     @property
     def obs(self) -> DataFrameLike:
-        """One-dimensional annotation of observations (a :class:`~pandas.DataFrame`-like)."""
+        """One-dimensional annotation of observations (`pd.DataFrame`-like)."""
         return self._obs
 
     @obs.setter
@@ -869,8 +868,8 @@ class AnnData:  # noqa: PLW1641
 
     @property
     def obs_names(self) -> pd.Index:
-        """Names of observations, represented by an index or ``obs_names`` column."""
-        return axis_index(self.obs, index_name="obs_names")
+        """Names of observations (alias for `.obs.index` or its `obs_names` column)."""
+        return axis_index(self.obs, dim="obs")
 
     @obs_names.setter
     def obs_names(self, names: Sequence[str]):
@@ -879,7 +878,7 @@ class AnnData:  # noqa: PLW1641
 
     @property
     def var(self) -> DataFrameLike:
-        """One-dimensional annotation of variables/ features (a :class:`~pandas.DataFrame`-like)."""
+        """One-dimensional annotation of variables/ features (`pd.DataFrame`-like)."""
         return self._var
 
     @var.setter
@@ -892,8 +891,8 @@ class AnnData:  # noqa: PLW1641
 
     @property
     def var_names(self) -> pd.Index:
-        """Names of variables, represented by an index or ``var_names`` column."""
-        return axis_index(self.var, index_name="var_names")
+        """Names of variables (alias for `.var.index` or its `var_names` column)."""
+        return axis_index(self.var, dim="var")
 
     @var_names.setter
     def var_names(self, names: Sequence[str]):
@@ -916,23 +915,34 @@ class AnnData:  # noqa: PLW1641
     def obs_as(self, backend: Literal["cudf"]) -> cudf.DataFrame: ...
 
     @overload
+    def obs_as(self, backend: Literal["dask"]) -> DaskDataFrame: ...
+
+    @overload
+    def obs_as(
+        self, backend: Literal["narwhals"]
+    ) -> nw.DataFrame[Any] | nw.LazyFrame[Any]: ...
+
+    @overload
     def obs_as(self, backend: str | IntoBackend) -> Any: ...
 
     def obs_as(self, backend: str | IntoBackend) -> Any:
-        """Return :attr:`obs` as a native DataFrame of another backend.
+        """Return :attr:`obs` as a native dataframe of another backend.
 
         Parameters
         ----------
         backend
-            ``"pandas"``, ``"polars"``, ``"pyarrow"``, ``"modin"`` or ``"cudf"`` (a backend
-            module or :class:`narwhals.Implementation` also works).
+            `"pandas"`, `"polars"`, `"pyarrow"`, `"modin"`, `"cudf"`, `"dask"` or
+            `"narwhals"` (a backend module or :class:`narwhals.Implementation` also works).
 
         Returns
         -------
-        :attr:`obs` as a native frame of ``backend``. ``obs_names`` is preserved — the index for
-        pandas, or an ``obs_names`` column for index-less backends.
+        :attr:`obs` as a native dataframe of `backend`, keeping :attr:`obs_names` in the
+        index for pandas and dask, in an `obs_names` column for index-less backends.
+        Only `"dask"` stays lazy; the others read a lazily stored annotation into memory.
+        `"narwhals"` wraps the annotation as it is stored, giving a
+        :class:`narwhals.LazyFrame` when that storage is lazy.
         """
-        return to_backend(self.obs, backend, index_name="obs_names")
+        return to_backend(self.obs, backend, dim="obs")
 
     @overload
     def var_as(self, backend: Literal["pandas"]) -> pd.DataFrame: ...
@@ -950,23 +960,34 @@ class AnnData:  # noqa: PLW1641
     def var_as(self, backend: Literal["cudf"]) -> cudf.DataFrame: ...
 
     @overload
+    def var_as(self, backend: Literal["dask"]) -> DaskDataFrame: ...
+
+    @overload
+    def var_as(
+        self, backend: Literal["narwhals"]
+    ) -> nw.DataFrame[Any] | nw.LazyFrame[Any]: ...
+
+    @overload
     def var_as(self, backend: str | IntoBackend) -> Any: ...
 
     def var_as(self, backend: str | IntoBackend) -> Any:
-        """Return :attr:`var` as a native DataFrame of another backend.
+        """Return :attr:`var` as a native dataframe of another backend.
 
         Parameters
         ----------
         backend
-            ``"pandas"``, ``"polars"``, ``"pyarrow"``, ``"modin"`` or ``"cudf"`` (a backend
-            module or :class:`narwhals.Implementation` also works).
+            `"pandas"`, `"polars"`, `"pyarrow"`, `"modin"`, `"cudf"`, `"dask"` or
+            `"narwhals"` (a backend module or :class:`narwhals.Implementation` also works).
 
         Returns
         -------
-        :attr:`var` as a native frame of ``backend``. ``var_names`` is preserved — the index for
-        pandas, or a ``var_names`` column for index-less backends.
+        :attr:`var` as a native dataframe of `backend`, keeping :attr:`var_names` in the
+        index for pandas and dask, in a `var_names` column for index-less backends.
+        Only `"dask"` stays lazy; the others read a lazily stored annotation into memory.
+        `"narwhals"` wraps the annotation as it is stored, giving a
+        :class:`narwhals.LazyFrame` when that storage is lazy.
         """
-        return to_backend(self.var, backend, index_name="var_names")
+        return to_backend(self.var, backend, dim="var")
 
     @property
     def uns(self) -> MutableMapping:
@@ -1050,7 +1071,7 @@ class AnnData:  # noqa: PLW1641
     )
     def obs_keys(self) -> list[str]:
         """List keys of observation annotation :attr:`obs`."""
-        return frame_annotation_columns(self._obs, index_name="obs_names")
+        return frame_annotation_columns(self._obs, dim="obs")
 
     @deprecated(
         Deprecation(
@@ -1063,7 +1084,7 @@ class AnnData:  # noqa: PLW1641
     )
     def var_keys(self) -> list[str]:
         """List keys of variable annotation :attr:`var`."""
-        return frame_annotation_columns(self._var, index_name="var_names")
+        return frame_annotation_columns(self._var, dim="var")
 
     @deprecated(
         Deprecation(
@@ -1198,7 +1219,7 @@ class AnnData:  # noqa: PLW1641
     def _remove_unused_categories(
         df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
     ):
-        if not isinstance(df_full, pd.DataFrame):
+        if not supports_categorical_ops(df_full):
             return
         for k in df_full:
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
@@ -1243,19 +1264,15 @@ class AnnData:  # noqa: PLW1641
         if isinstance(categories, Mapping):
             msg = "Only list-like `categories` is supported."
             raise ValueError(msg)
-        if key in frame_annotation_columns(self.obs, index_name="obs_names"):
+        if key in frame_annotation_columns(self.obs, dim="obs"):
             df = self.obs
-        elif key in frame_annotation_columns(self.var, index_name="var_names"):
+        elif key in frame_annotation_columns(self.var, dim="var"):
             df = self.var
         else:
             msg = f"{key} is neither in `.obs` nor in `.var`."
             raise ValueError(msg)
-        if not isinstance(df, pd.DataFrame):
-            msg = (
-                "Renaming categories is currently supported only for pandas-backed "
-                "annotations. Convert and reassign the annotation as pandas first."
-            )
-            raise NotImplementedError(msg)
+        if not supports_categorical_ops(df):
+            reject_categorical_op("Renaming categories")
         old_categories = df[key].cat.categories.tolist()
         df[key] = df[key].cat.rename_categories(categories)
         # this is not a good solution
@@ -1298,8 +1315,8 @@ class AnnData:  # noqa: PLW1641
         Turns the view of an :class:`~anndata.AnnData` into an actual
         :class:`~anndata.AnnData`.
 
-        Only pandas-backed annotations are converted. Native index-less frames keep their
-        backend string dtype.
+        Only pandas-backed annotations are converted; index-less ones keep their backend’s
+        own string dtype.
         """
         dont_modify = False  # only necessary for backed views
         if df is None:
@@ -1311,7 +1328,7 @@ class AnnData:  # noqa: PLW1641
         del df
 
         for df in dfs:
-            if not isinstance(df, pd.DataFrame):
+            if not supports_categorical_ops(df):
                 continue
             string_cols = [
                 key for key in df.columns if infer_dtype(df[key]) == "string"
@@ -1385,34 +1402,24 @@ class AnnData:  # noqa: PLW1641
             msg = "Cannot transpose anndata object that has raw zarr arrays or h5py arrays backing X or layers"
             raise ValueError(msg)
 
-        def swap_frame_axis(value, *, source_name: str, target_name: str):
+        def swap_frame_dim(value, *, source: Literal["obs", "var"]):
             return (
-                relabel_axis_identity(
-                    value, source_name=source_name, target_name=target_name
-                )
+                relabel_axis(value, source=source, target=other_dim(source))
                 if isinstance(value, DataFrameLike)
                 else value
             )
 
         return AnnData(
             layers={k: _safe_transpose(v) for k, v in self.layers.items()},
-            obs=swap_frame_axis(
-                self.var, source_name="var_names", target_name="obs_names"
-            ),
-            var=swap_frame_axis(
-                self.obs, source_name="obs_names", target_name="var_names"
-            ),
+            obs=swap_frame_dim(self.var, source="var"),
+            var=swap_frame_dim(self.obs, source="obs"),
             uns=self._uns,
             obsm={
-                key: swap_frame_axis(
-                    value, source_name="var_names", target_name="obs_names"
-                )
+                key: swap_frame_dim(value, source="var")
                 for key, value in self.varm.items()
             },
             varm={
-                key: swap_frame_axis(
-                    value, source_name="obs_names", target_name="var_names"
-                )
+                key: swap_frame_dim(value, source="obs")
                 for key, value in self.obsm.items()
             },
             obsp=self.varp,
@@ -1676,11 +1683,7 @@ class AnnData:  # noqa: PLW1641
                 elem, pd.DataFrame | Dataset2D
             ):
                 return accumulate or predicate(
-                    to_backend(
-                        elem,
-                        "pandas",
-                        index_name=column_backed_axis_name(elem),
-                    ),
+                    to_backend(elem, "pandas", dim=column_backed_dim(elem)),
                     accumulate=accumulate,
                     attr_name=attr_name,
                 )

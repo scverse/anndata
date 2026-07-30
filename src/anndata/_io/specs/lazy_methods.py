@@ -12,7 +12,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
-from anndata._core.xarray import Dataset2D, requires_xarray
+from anndata._core.xarray import NULLABLE_STRING_ATTR, Dataset2D, requires_xarray
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import (
     DaskArray,
@@ -261,7 +261,7 @@ def _gen_xarray_dict_iterator_from_elems(
                 attrs={
                     "base_path_or_zarr_group": v.base_path_or_zarr_group,
                     "elem_name": v.elem_name,
-                    "is_nullable_string": (
+                    NULLABLE_STRING_ATTR: (
                         isinstance(v, MaskedArray)
                         and isinstance(v.dtype, pd.StringDtype | np.dtypes.StringDType)
                     ),

@@ -130,7 +130,7 @@ class Raw:
 
     @property
     def var_names(self) -> pd.Index[str]:
-        return axis_index(self.var, index_name="var_names")
+        return axis_index(self.var, dim="var")
 
     @property
     def obs_names(self) -> pd.Index[str]:
@@ -180,7 +180,7 @@ class Raw:
         for attr in ["var", "varm"]:
             value = getattr(self, attr)
             keys = (
-                frame_annotation_columns(value, index_name="var_names")
+                frame_annotation_columns(value, dim="var")
                 if attr == "var"
                 else value.keys()
             )

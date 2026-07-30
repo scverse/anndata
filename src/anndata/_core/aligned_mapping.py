@@ -26,10 +26,12 @@ from ..utils import (
 from ._dataframe_backend import (
     DataFrameLike,
     IndexedDataFrameLike,
+    _ingest_lazy,
     axis_index,
     copy_frame,
     set_axis_index,
     to_backend,
+    unwrap_narwhals,
 )
 from .access import ElementRef
 from .index import _subset
@@ -78,6 +80,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
 
     def _validate_value(self, val: Value, key: K) -> Value:
         """Raises an error if value is invalid"""
+        val = unwrap_narwhals(val)
         if isinstance(val, AwkArray):
             msg = (
                 "Support for Awkward Arrays is currently experimental. "
@@ -296,19 +299,20 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
         for key in self.keys():
             value = self[key]
             if isinstance(value, DataFrameLike):
-                value = to_backend(
-                    value, "pandas", index_name=f"{self.dim}_names"
-                ).to_numpy()
+                value = to_backend(value, "pandas", dim=self.dim).to_numpy()
             for icolumn, column in enumerate(value.T):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 
     def _validate_value(self, val: Value, key: str) -> Value:
+        val = unwrap_narwhals(val)
+        if (ingested := _ingest_lazy(val, dim=self.dim)) is not None:
+            val = cast("Value", ingested)
         if isinstance(val, DataFrameLike):
             raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
-            index_name = f"{self.dim}_names"
-            val_index = axis_index(val, index_name=index_name)
+            val_index = axis_index(val, dim=self.dim)
             if not val_index.equals(self.dim_names):
+                # Could probably also re-order index if it’s contained
                 try:
                     pd.testing.assert_index_equal(
                         val_index, self.dim_names, exact=False, check_names=False
@@ -316,11 +320,10 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
                 except AssertionError as e:
                     msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
                     raise ValueError(msg) from None
-                val = set_axis_index(val, self.dim_names, index_name=index_name)
+                val = set_axis_index(val, self.dim_names, dim=self.dim)
             elif isinstance(val, IndexedDataFrameLike):
+                # consistent with AnnData.obsm.setter and AnnData.varm.setter
                 val.index.name = self.dim_names.name
-            if self._allow_df:
-                return val
         return super()._validate_value(val, key)
 
     @property

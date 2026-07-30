@@ -13,7 +13,6 @@ from itertools import repeat
 from operator import and_, or_, sub
 from typing import TYPE_CHECKING, Literal, cast
 
-import narwhals as nw
 import numpy as np
 import pandas as pd
 from natsort import natsorted
@@ -35,12 +34,12 @@ from ..compat import (
 from ..utils import Default, asarray, axis_len, warn, warn_once
 from ._dataframe_backend import (
     DataFrameLike,
-    IndexedDataFrameLike,
-    axis_index,
-    column_backed_axis_name,
+    column_backed_dim,
     frame_annotation_columns,
     frame_equal,
+    native_backend,
     to_backend,
+    true_axis_index,
 )
 from .anndata import AnnData
 from .index import _subset, make_slice
@@ -50,6 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Sequence
     from typing import Any
 
+    import narwhals as nw
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
 
@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 
     from ..compat import XDataArray
     from ..types import SupportsArrayApiBase
+    from ._dataframe_backend import Dim
 
 
 ###################
@@ -872,34 +873,18 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         ):
             msg = "Cannot concatenate a dataframe with other array types."
             raise NotImplementedError(msg)
-        frames = [a for a in arrays if isinstance(a, DataFrameLike)]
-        backend = _common_native_backend(frames)
-        index_name = next(
-            (
-                name
-                for frame in frames
-                if (name := column_backed_axis_name(frame)) is not None
-            ),
-            None,
-        )
-        arrays = [
-            _frame_to_pandas(a, index_name=index_name)
-            if isinstance(a, DataFrameLike)
-            else a
-            for a in arrays
-        ]
-        # TODO: behaviour here should be chosen through a merge strategy
-        df = pd.concat(
-            unify_dtypes(f(x) for f, x in zip(reindexers, arrays, strict=True)),
-            axis=axis,
-            ignore_index=True,
-        )
-        df.index = index
-        return (
-            to_backend(df, backend, index_name=index_name)
-            if backend is not None
-            else df
-        )
+
+        def concat_in_pandas(values: Sequence[Any]) -> pd.DataFrame:
+            # TODO: behaviour here should be chosen through a merge strategy
+            df = pd.concat(
+                unify_dtypes(f(x) for f, x in zip(reindexers, values, strict=True)),
+                axis=axis,
+                ignore_index=True,
+            )
+            df.index = index
+            return df
+
+        return _via_pandas(arrays, concat_in_pandas, dim=_discover_dim(arrays))
     elif any(isinstance(a, AwkArray) for a in arrays):
         from ..compat import awkward as ak
 
@@ -1246,29 +1231,56 @@ def _resolve_axis(
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, axis_name = _resolve_axis(axis)
-    attr = getattr(adata, axis_name)
-    if isinstance(attr, Dataset2D):
-        return attr.true_index
-    return axis_index(attr, index_name=f"{axis_name}_names")
+    return true_axis_index(getattr(adata, axis_name), dim=axis_name)
 
 
-def _common_native_backend(frames: Sequence[DataFrameLike]):
-    """Return a shared native backend when concat can preserve index-less representation."""
-    if not frames or any(isinstance(frame, IndexedDataFrameLike) for frame in frames):
+def _common_native_backend(
+    frames: Sequence[DataFrameLike],
+) -> nw.Implementation | None:
+    """The backend shared by all of `frames`, if they are index-less frames of one."""
+    backends = {native_backend(frame) for frame in frames}
+    # Indexed frames answer `None`, which is not a backend to convert back to.
+    if len(backends) != 1 or None in backends:
         return None
-    implementations = {nw.from_native(frame).implementation for frame in frames}
-    return implementations.pop() if len(implementations) == 1 else None
+    return backends.pop()
 
 
-def _frame_to_pandas(frame: DataFrameLike, *, index_name: str | None) -> pd.DataFrame:
-    """Normalize an eager frame for pandas-based concat/merge algorithms."""
-    return to_backend(frame, "pandas", index_name=index_name)
+def _discover_dim(values: Iterable[Any]) -> Dim | None:
+    """The dimension index-less frames among `values` keep their axis names for."""
+    return next(
+        (
+            dim
+            for value in values
+            if isinstance(value, DataFrameLike)
+            and (dim := column_backed_dim(value)) is not None
+        ),
+        None,
+    )
+
+
+def _via_pandas[T](
+    values: Sequence[T],
+    run: Callable[[Sequence[T | pd.DataFrame]], pd.DataFrame],
+    *,
+    dim: Dim | None,
+) -> DataFrameLike:
+    """Run a pandas-only algorithm over `values`, restoring a shared native backend after.
+
+    Concat and merge are implemented against pandas, so every frame is converted first.
+    Where the inputs were all index-less frames of one backend, the result is converted
+    back, so the representation survives the round trip. Non-frames pass through untouched.
+    """
+    frames = [v for v in values if isinstance(v, DataFrameLike)]
+    backend = _common_native_backend(frames)
+    result = run([
+        to_backend(v, "pandas", dim=dim) if isinstance(v, DataFrameLike) else v
+        for v in values
+    ])
+    return result if backend is None else to_backend(result, backend, dim=dim)
 
 
 def _concat_frame_columns(frame: DataFrameLike) -> pd.Index:
-    return pd.Index(
-        frame_annotation_columns(frame, index_name=column_backed_axis_name(frame))
-    )
+    return pd.Index(frame_annotation_columns(frame, dim=column_backed_dim(frame)))
 
 
 def make_dask_col_from_extension_dtype(
@@ -1763,50 +1775,42 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     # Annotation for concatenation axis
     annotations = [getattr(a, axis_name) for a in adatas]
     check_combinable_cols(
-        [
-            frame_annotation_columns(a, index_name=f"{axis_name}_names")
-            for a in annotations
-        ],
+        [frame_annotation_columns(a, dim=axis_name) for a in annotations],
         join=join,
     )
-    concat_backend = _common_native_backend(annotations)
+
+    def add_label[T](annot: T) -> T:
+        # Before any conversion back, as index-less frames have no item assignment.
+        if label is not None:
+            annot[label] = label_col
+        return annot
+
     if not all(isinstance(a, Dataset2D) for a in annotations):
-        annotations_in_memory = (
-            _frame_to_pandas(a, index_name=f"{axis_name}_names") for a in annotations
-        )
-        concat_annot = pd.concat(
-            unify_dtypes(annotations_in_memory),
-            join=join,
-            ignore_index=True,
-        )
-        concat_annot.index = concat_indices
+
+        def concat_in_pandas(frames: Sequence[pd.DataFrame]) -> pd.DataFrame:
+            out = pd.concat(unify_dtypes(frames), join=join, ignore_index=True)
+            out.index = concat_indices
+            return add_label(out)
+
+        concat_annot = _via_pandas(annotations, concat_in_pandas, dim=axis_name)
     else:
-        concat_annot = concat_dataset2d_on_annot_axis(
-            annotations,
-            join,
-            force_lazy=force_lazy,
-            concat_indices=concat_indices,
-        )
-    if label is not None:
-        concat_annot[label] = label_col
-    if concat_backend is not None:
-        concat_annot = to_backend(
-            concat_annot, concat_backend, index_name=f"{axis_name}_names"
+        concat_annot = add_label(
+            concat_dataset2d_on_annot_axis(
+                annotations,
+                join,
+                force_lazy=force_lazy,
+                concat_indices=concat_indices,
+            )
         )
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
-    alt_backend = _common_native_backend(alt_annotations)
     if not all(isinstance(a, Dataset2D) for a in alt_annotations):
-        alt_annotations_in_memory = [
-            _frame_to_pandas(a, index_name=f"{alt_axis_name}_names")
-            for a in alt_annotations
-        ]
-        alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
-        if alt_backend is not None:
-            alt_annot = to_backend(
-                alt_annot, alt_backend, index_name=f"{alt_axis_name}_names"
-            )
+        alt_annot = _via_pandas(
+            alt_annotations,
+            lambda frames: merge_dataframes(frames, alt_indices, merge),
+            dim=alt_axis_name,
+        )
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.
