@@ -29,7 +29,7 @@ def test_shape(df, dataset2d):
 
 
 def test_columns(df, dataset2d):
-    assert np.all(dataset2d.columns.sort_values() == df.columns.sort_values())
+    pd.testing.assert_index_equal(dataset2d.columns, df.columns)
 
 
 @pytest.mark.parametrize("same_columns", [True, False], ids=["same", "different"])
