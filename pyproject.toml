@@ -58,12 +58,12 @@ Home-page = "https://github.com/scverse/anndata"
 
 [dependency-groups]
 dev = [
-    "mypy",
-    "mudata",                           # type checking `anndata.acc`
     { include-group = "dev-doc" },
-    { include-group = "typing-stubs" },
+    { include-group = "typing" },
 ]
-typing-stubs = [
+typing = [
+    "docutils-stubs",
+    "mudata",           # `anndata.acc`
     "pandas-stubs",
     "scipy-stubs",
     "types-boltons",
@@ -279,7 +279,7 @@ max-args = 7
 max-positional-args = 5
 
 [tool.mypy]
-mypy_path = "src"
+mypy_path = [ "src" ]
 explicit_package_bases = true
 warn_unused_ignores = true
 # Installed, but shipping no `py.typed` marker:
@@ -304,7 +304,10 @@ module = [
     "cupyx.*",
     "jax.*",
     "loompy.*",
+    "memory_profiler",
+    "pooch",
     "torch.*",
+    "sphinx.*",
     "zappy.*",
 ]
 ignore_missing_imports = true

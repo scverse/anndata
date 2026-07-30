@@ -187,21 +187,8 @@ def _(x: Dataset2D, *, copy: bool = False):
 
 
 @singledispatch
-def filename(x) -> str:
-    msg = f"Not implemented for {type(x)}"
-    raise NotImplementedError(msg)
-
-
-@filename.register(h5py.Group | h5py.Dataset)
-def _(x: h5py.Group | h5py.Dataset) -> str:
+def filename(x: h5py.Group | h5py.Dataset) -> str:
     return x.file.filename
-
-
-@filename.register(zarr.Array | zarr.Group)
-def _(x: zarr.Array | zarr.Group) -> str:
-    # zarr v3 dropped `Store.path`; only local stores map to a filesystem path
-    store = x.store
-    return str(store.root if isinstance(store, zarr.storage.LocalStore) else store)
 
 
 @singledispatch
