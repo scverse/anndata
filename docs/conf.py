@@ -159,6 +159,7 @@ qualname_overrides = {
     "anndata.typing.RWAble": "anndata.typing.RWAble",
     "anndata.typing.AxisStorable": "anndata.typing.AxisStorable",
     "anndata.typing.InMemoryArray": "anndata.typing.InMemoryArray",
+    "anndata.typing.AlignedArray": "anndata.typing.AlignedArray",
     #### h5py
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",

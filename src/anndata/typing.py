@@ -16,6 +16,7 @@ from anndata.types import SupportsArrayApiBase
 
 from . import abc
 from ._core.anndata import AnnData
+from ._core.xarray import Dataset2D
 from .compat import (
     AwkArray,
     CSArray,
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
+__all__ = ["AlignedArray", "AxisStorable", "Index", "Index1D", "RWAble"]
 
 if TYPE_CHECKING or sys.version_info >= (3, 13):
     _M = TypeVar("_M", bound=IndexManager, default=Never)
@@ -98,9 +99,12 @@ _XDataType: TypeAlias = (  # noqa: UP040
     | abc.CSRDataset
     | abc.CSCDataset
 )
-_ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
+
+type AlignedArray = _XDataType | AwkArray | XDataArray | Dataset2D
+"""Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
+
 _InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
-    pd.DataFrame | np.number | str | _ArrayDataStructureTypes
+    AlignedArray | pd.DataFrame | np.number | str
 )
 type AxisStorable = (
     _InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]

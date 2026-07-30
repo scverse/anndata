@@ -75,18 +75,16 @@ def coerce_array(
     allow_array_like: bool = False,
 ):
     """Coerce arrays stored in layers/X, and aligned arrays ({obs,var}{m,p})."""
-    from ..typing import _ArrayDataStructureTypes
+    from ..typing import AlignedArray
 
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
     # If value is one of the allowed types, return it
-    array_data_structure_types: tuple[type, ...] = get_union_members(
-        _ArrayDataStructureTypes
-    )
+    array_data_structure_types: tuple[type, ...] = get_union_members(AlignedArray)
     if isinstance(value, XDataset):
         value = Dataset2D(value)
-    if isinstance(value, (*array_data_structure_types, Dataset2D)):
+    if isinstance(value, array_data_structure_types):
         if isinstance(value, np.matrix):
             msg = f"{name} should not be a np.matrix, use np.ndarray instead."
             warn(msg, ImplicitModificationWarning)

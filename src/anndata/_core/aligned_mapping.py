@@ -12,22 +12,11 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from numpy import ma
 from scverse_misc import Deprecation, deprecated
 
 from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..abc import CSCDataset, CSRDataset
-from ..compat import (
-    AwkArray,
-    CSArray,
-    CSMatrix,
-    CupyArray,
-    CupySparseMatrix,
-    DaskArray,
-    XDataArray,
-    XDataset,
-    ZappyArray,
-)
+from ..compat import AwkArray, CupyArray, XDataArray, XDataset
 from ..types import SupportsArrayApiBase
 from ..utils import (
     asarray,
@@ -53,6 +42,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Literal, Self, TypeAlias
 
     from ..typing import (
+        AlignedArray,
         InMemoryArray,
         _XDataType,
     )
@@ -60,31 +50,17 @@ if TYPE_CHECKING:
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
 
+    # everything `coerce_array` lets through, plus `pd.DataFrame`;
+    # `None` stands for a missing `.X` in `layers`
+    # TODO: pd.DataFrame only allowed in AxisArrays?
+    Value: TypeAlias = AlignedArray | pd.DataFrame | None  # noqa: UP040
+else:
+    # used in generic parameters
+    Value = object
+
 
 OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
 TwoDIdx: TypeAlias = tuple[Idx1D, Idx1D]  # noqa: UP040
-# everything `coerce_array` lets through; `None` stands for a missing `.X` in `layers`
-# TODO: pd.DataFrame only allowed in AxisArrays?
-Value: TypeAlias = (  # noqa: UP040
-    pd.DataFrame
-    | Dataset2D
-    | np.ndarray
-    | ma.MaskedArray
-    | CSMatrix
-    | CSArray
-    | DaskArray
-    | CupyArray
-    | CupySparseMatrix
-    | SupportsArrayApiBase
-    | h5py.Dataset
-    | zarr.Array
-    | ZappyArray
-    | CSRDataset
-    | CSCDataset
-    | AwkArray
-    | XDataArray
-    | None
-)
 
 
 def _copy_value(v: Value) -> Value:
