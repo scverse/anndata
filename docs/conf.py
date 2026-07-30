@@ -174,7 +174,9 @@ qualname_overrides = {
 }
 # Sphinx consults this {alias → name} mapping when rendering types
 # sphinx-autodoc-typehints uses when importing types to resolve them
-autodoc_type_aliases: dict[str, str] = dict()
+autodoc_type_aliases = dict(
+    Scalar=":py:type:`~pandas.api.typing.aliases.Scalar`",
+)
 # if nothing else helps, modify `nitpick_ignore`
 nitpicky = True  # Report broken links, this stays on
 nitpick_ignore = [  # APIs without an intersphinx entry
