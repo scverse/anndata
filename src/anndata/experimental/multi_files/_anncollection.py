@@ -14,7 +14,7 @@ from testing.anndata._doctest import doctest_filterwarnings
 from ..._core.aligned_mapping import AxisArrays
 from ..._core.anndata import AnnData
 from ..._core.index import _normalize_index, _normalize_indices
-from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
+from ..._core.merge import concat_arrays, inner_concat_aligned_mapping, intersect_keys
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import old_positionals
@@ -771,8 +771,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         if join_obsm == "inner":
             view_attrs.remove("obsm")
             self._attrs.append("obsm")
+            obsm_mappings = [a.obsm for a in adatas]
             self._obsm = inner_concat_aligned_mapping(
-                [a.obsm for a in adatas], index=self.obs_names
+                obsm_mappings, keys=intersect_keys(obsm_mappings), index=self.obs_names
             )
             self._obsm = (
                 AxisArrays(self, axis=0, store={}) if self._obsm == {} else self._obsm
