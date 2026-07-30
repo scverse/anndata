@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def import_name(full_name: str) -> Any:
+def import_name(full_name: str) -> object:
     from importlib import import_module
 
     parts = full_name.split(".")
@@ -428,7 +428,7 @@ def module_get_attr_redirect(
     attr_name: str,
     deprecated_mapping: Mapping[str, str],
     old_module_path: str | None = None,
-) -> Any:
+) -> object:
     full_old_module_path = (
         f"anndata{'.' + old_module_path if old_module_path is not None else ''}"
     )

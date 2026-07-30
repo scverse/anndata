@@ -17,6 +17,7 @@ from scipy.sparse import csc_matrix, csr_matrix
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
+    _other_axis,
     _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
@@ -33,8 +34,9 @@ from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Generator, Iterator, Sequence
-    from typing import Any, Literal
+    from typing import Literal
 
+    from pandas.api.typing.aliases import Scalar
     from zarr.core.common import AccessModeLiteral
 
     from .._core.merge import Reindexer, StrategiesLiteral
@@ -74,13 +76,13 @@ def _gen_slice_to_append(
     reindexers: Sequence[AnyReindexer],
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
-    fill_value=None,
+    fill_value: Scalar | None = None,
 ) -> Generator[CSMatrix]:
     for ds, ri in zip(datasets, reindexers, strict=False):
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
-                ri(to_memory(ds), axis=1 - axis, fill_value=fill_value)
+                ri(to_memory(ds), axis=_other_axis(axis), fill_value=fill_value)
             )
         else:
             slice_size = max_loaded_elems // ds.shape[1 - axis]
@@ -96,7 +98,7 @@ def _gen_slice_to_append(
                     ds_part = ds[:, idx : idx + slice_size]
 
                 yield (csr_matrix, csc_matrix)[axis](
-                    ri(ds_part, axis=1 - axis, fill_value=fill_value)
+                    ri(ds_part, axis=_other_axis(axis), fill_value=fill_value)
                 )
                 rem_slices -= slice_size
                 idx += slice_size
@@ -211,7 +213,7 @@ def write_concat_dense(  # noqa: PLR0917
     output_path: str,
     axis: Literal[0, 1] = 0,
     reindexers: Sequence[AnyReindexer] = (),
-    fill_value: Any = None,
+    fill_value: Scalar | None = None,
 ):
     """
     Writes the concatenation of given dense arrays to disk using dask.
@@ -225,7 +227,7 @@ def write_concat_dense(  # noqa: PLR0917
 
     res = da.concatenate(
         [
-            ri(a, axis=1 - axis, fill_value=fill_value)
+            ri(a, axis=_other_axis(axis), fill_value=fill_value)
             for a, ri in zip(darrays, reindexers, strict=False)
         ],
         axis=axis,
@@ -244,7 +246,7 @@ def write_concat_sparse(  # noqa: PLR0917
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Sequence[AnyReindexer] = (),
-    fill_value: Any = None,
+    fill_value: Scalar | None = None,
 ) -> None:
     """Writes and concatenates sparse datasets into a single output dataset.
 
@@ -297,7 +299,7 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     axis: Literal[0, 1] = 0,
     index: pd.Index | None = None,
     reindexers: Sequence[AnyReindexer] | None = None,
-    fill_value: Any = None,
+    fill_value: Scalar | None = None,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
@@ -328,7 +330,7 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Sequence[AnyReindexer] | None = None,
-    fill_value: Any = None,
+    fill_value: Scalar | None = None,
     join: Join_T = "inner",
 ):
     init_type = type(arrays[0])
@@ -380,7 +382,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     axis: Literal[0, 1] = 0,
     index: pd.Index | None = None,
     reindexers: Sequence[AnyReindexer] | None = None,
-    fill_value: Any = None,
+    fill_value: Scalar | None = None,
     join: Join_T = "inner",
 ):
     """
@@ -507,7 +509,7 @@ def concat_on_disk(  # noqa: PLR0913
     label: str | None = None,
     keys: Collection[str] | None = None,
     index_unique: str | None = None,
-    fill_value: Any | None = None,
+    fill_value: Scalar | None = None,
     pairwise: bool = False,
 ) -> None:
     """\
@@ -705,7 +707,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     join: Join_T = "inner",
     label: str | None,
     index_unique: str | None,
-    fill_value: Any | None,
+    fill_value: Scalar | None,
     merge: Callable[[Collection[Mapping]], Mapping],
 ) -> None:
     """Internal helper to minimize the amount of indented code within the context manager"""

@@ -23,13 +23,7 @@ from ..utils import warn
 from .utils import is_float
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Generator,
-        Iterable,
-        Iterator,
-        Mapping,
-        MutableMapping,
-    )
+    from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
 
 
 @old_positionals("first_column_names", "dtype")

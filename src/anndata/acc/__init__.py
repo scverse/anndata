@@ -187,11 +187,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     _: KW_ONLY
     ref_class: type[R]
 
-    def process_idx(self, idx: Any, /) -> I:
+    def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
         return idx
 
-    def __getitem__(self, idx: Any, /) -> R:
+    def __getitem__(self, idx: Any, /) -> R:  # noqa: ANN401  # subclasses may override `idx` however they want
         idx = self.process_idx(idx)
         return self.ref_class(self, idx)
 

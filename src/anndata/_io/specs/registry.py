@@ -230,7 +230,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
-    def get_spec(self, elem: Any) -> IOSpec:
+    def get_spec(self, elem: StorageType) -> IOSpec:
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
                 return self.write_specs[typ_meta]
@@ -262,15 +262,13 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
     return IOSpec(**{k.replace("-", "_"): v for k, v in spec.items()})
 
 
-def get_spec(
-    elem: StorageType,
-) -> IOSpec:
+def get_spec(elem: StorageType) -> IOSpec:
     return proc_spec({
         k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
     })
 
 
-def _iter_patterns(elem) -> Generator[WriteSrcType, None, None]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType, None, None]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 
@@ -279,7 +277,8 @@ def _iter_patterns(elem) -> Generator[WriteSrcType, None, None]:
     if isinstance(elem, DaskArray):
         yield (t, type(elem._meta), elem.dtype.kind)
         yield (t, type(elem._meta))
-    if hasattr(elem, "dtype"):
+    # Array API dtypes don’t have guaranteed attributes
+    if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
     yield t
 
@@ -345,7 +344,7 @@ class Writer:
         self.callback = callback
 
     def find_write_func(
-        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+        self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
     ) -> Write:
         for pattern in _iter_patterns(elem):
             if self.registry.has_write(dest_type, pattern, modifiers):

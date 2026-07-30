@@ -71,7 +71,7 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
 if TYPE_CHECKING:
 
     class _SupportsSetItem:
-        def __setitem__(self, idx: Any, value: Any) -> None: ...
+        def __setitem__(self, idx: object, value: object) -> None: ...
 
 else:
     _SupportsSetItem = object
@@ -90,7 +90,7 @@ class _SetItemMixin(_SupportsSetItem):
 
     _view_args: ElementRef | None
 
-    def __setitem__(self, idx: Any, value: Any):
+    def __setitem__(self, idx: object, value: object) -> None:
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
@@ -148,7 +148,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         *inputs,
         out: tuple[np.ndarray, ...] | None = None,
         **kwargs,
-    ) -> Any:
+    ) -> np.ndarray | tuple[np.ndarray, ...]:
         """Makes numpy ufuncs convert all instances of views to plain arrays.
 
         See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
@@ -311,7 +311,7 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
-    def __setattr__(self, key: str, value: Any):
+    def __setattr__(self, key: str, value: object) -> None:
         if key == "index" and self._view_args is not None:
             msg = (
                 f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "

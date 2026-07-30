@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
+    from pandas.api.typing.aliases import Scalar
 
     from anndata._types import Join_T
 
@@ -552,10 +553,12 @@ class Reindexer:
         self.new_pos = new_pos[mask]
         self.old_pos = old_pos[mask]
 
-    def __call__(self, el, *, axis=1, fill_value=None):
+    def __call__(
+        self, el, *, axis: Literal[0, 1] = 1, fill_value: Scalar | None = None
+    ):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
-    def apply(self, el, *, axis, fill_value=None):  # noqa: PLR0911
+    def apply(self, el, *, axis: Literal[0, 1], fill_value: Scalar | None = None):  # noqa: PLR0911
         """
         Reindex element so el[axis] is aligned to self.new_idx.
 
@@ -579,12 +582,22 @@ class Reindexer:
             msg = "Cannot reindex element of unsupported type."
             raise TypeError(msg)
 
-    def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
+    def _apply_to_df_like(
+        self,
+        el: pd.DataFrame | Dataset2D,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
+    ):
         if fill_value is None:
             fill_value = np.nan
+        # axis=1 is not supported for Dataset2D, but it will throw an error
+        axis = cast("Literal[0]", axis)
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
 
-    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+    def _apply_to_dask_array(
+        self, el: DaskArray, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import dask.array as da
 
         indexer = self.idx
@@ -629,7 +642,9 @@ class Reindexer:
 
         return sub_el
 
-    def _apply_to_cupy_array(self, el, *, axis, fill_value=None):
+    def _apply_to_cupy_array(
+        self, el, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import cupy as cp
 
         if fill_value is None:
@@ -640,12 +655,8 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))
 
-        old_idx_tuple = [slice(None)] * len(el.shape)
-        old_idx_tuple[axis] = self.old_pos
-        old_idx_tuple = tuple(old_idx_tuple)
-        new_idx_tuple = [slice(None)] * len(el.shape)
-        new_idx_tuple[axis] = self.new_pos
-        new_idx_tuple = tuple(new_idx_tuple)
+        old_idx_tuple = make_slice(self.old_pos, axis, len(el.shape))
+        new_idx_tuple = make_slice(self.new_pos, axis, len(el.shape))
 
         out_shape = list(el.shape)
         out_shape[axis] = len(self.new_idx)
@@ -656,7 +667,11 @@ class Reindexer:
         return out
 
     def _apply_to_array_api(
-        self, el: SupportsArrayApiBase, *, axis: int, fill_value=None
+        self,
+        el: SupportsArrayApiBase,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
     ) -> SupportsArrayApiBase:
         if fill_value is None:
             fill_value = default_fill_value([el])
@@ -685,7 +700,12 @@ class Reindexer:
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
-        self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
+        self,
+        el: CSMatrix | CSArray,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
+        keep_format: bool = True,
     ) -> CSMatrix | CSArray:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
@@ -762,7 +782,9 @@ class Reindexer:
             out = out.tocsr() if el.format == "csr" else out.tocsc()
         return out
 
-    def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
+    def _apply_to_awkward(
+        self, el: AwkArray, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import awkward as ak
 
         if self.no_change:
@@ -794,7 +816,7 @@ def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
         raise ValueError(msg)
 
 
-def default_fill_value(els):
+def default_fill_value(els: Iterable[object]) -> Scalar:
     """Given some arrays, returns what the default fill value should be.
 
     This is largely due to backwards compat, and might not be the ideal solution.
@@ -1062,7 +1084,7 @@ def missing_element(
     n: int,
     els: list[CSArray | CSMatrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
-    fill_value: Any | None = None,
+    fill_value: Scalar | None = None,
     off_axis_size: int = 0,
 ) -> NDArray[np.bool_] | DaskArray:
     """Generates value to use when there is a missing element."""
@@ -1213,6 +1235,10 @@ def _all_raws(adatas: Collection[AnnData]) -> list[Raw] | None:
             return None
         raws.append(raw)
     return raws
+
+
+def _other_axis(axis: Literal[0, 1]) -> Literal[0, 1]:
+    return 1 if axis == 0 else 0
 
 
 def _resolve_axis(
@@ -1460,7 +1486,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     label: str | None = None,
     keys: Collection | None = None,
     index_unique: str | None = None,
-    fill_value: Any | None = None,
+    fill_value: Scalar | None = None,
     pairwise: bool = False,
     force_lazy: bool = False,
 ) -> AnnData:

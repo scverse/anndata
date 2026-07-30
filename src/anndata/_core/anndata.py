@@ -568,10 +568,9 @@ class AnnData:  # noqa: PLW1641
         def fold_size(
             elem: Storable | XDataset | Raw,
             *,
-            accumulate: dict[str, int],
-            attr_name: AnnDataElem | None,
-        ):
-            assert attr_name is not None  # `_reduce` always names the element
+            accumulate: defaultdict[str, int],
+            attr_name: AnnDataElem,
+        ) -> defaultdict[str, int]:
             if elem is None:
                 size = 0
             elif isinstance(elem, Raw):
@@ -1128,7 +1127,7 @@ class AnnData:  # noqa: PLW1641
     @staticmethod
     def _remove_unused_categories(
         df_full: pd.DataFrame, df_sub: pd.DataFrame, uns: dict[str, Any]
-    ):
+    ) -> None:
         for k in df_full:
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
@@ -1155,7 +1154,7 @@ class AnnData:  # noqa: PLW1641
     @staticmethod
     def _remove_unused_categories_xr(
         df_full: Dataset2D, df_sub: Dataset2D, uns: dict[str, Any]
-    ):
+    ) -> None:
         pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
     def rename_categories(self, key: str, categories: Sequence[Any]):
@@ -1509,12 +1508,7 @@ class AnnData:  # noqa: PLW1641
             write_h5ad(filename, self)
             return read_h5ad(filename, backed=mode)
 
-    def _reduce[R](
-        self,
-        func: ReduceFunc[R],
-        *,
-        init: R,
-    ) -> R:
+    def _reduce[R](self, func: ReduceFunc[R, AnnDataElem], *, init: R) -> R:
         """Accumulate a value starting from init by iterating over the parent "elems"of the AnnData object i.e., raw, obs, varp etc.
 
         Parameters
@@ -1693,7 +1687,7 @@ class AnnData:  # noqa: PLW1641
         *,
         convert_strings_to_categoricals: bool = True,
         compression: Literal["gzip", "lzf"] | None = None,
-        compression_opts: int | Any = None,
+        compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
     ):
         """\

@@ -132,7 +132,7 @@ else:
 
     class AwkArray:
         @staticmethod
-        def __repr__():
+        def __repr__() -> str:
             return "mock awkward.highlevel.Array"
 
 
@@ -142,7 +142,7 @@ else:
 
     class ZappyArray:
         @staticmethod
-        def __repr__():
+        def __repr__() -> str:
             return "mock zappy.base.ZappyArray"
 
 

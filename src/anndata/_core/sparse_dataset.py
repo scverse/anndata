@@ -272,15 +272,18 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         return (major, minor) if self.format == "csr" else (minor, major)
 
     @singledispatchmethod
-    def _get(self, major_index: Any, minor_index: slice) -> SparseMatrixType:
+    def _get(
+        self, major_index: int | slice | Sequence | np.ndarray, minor_index: slice
+    ) -> SparseMatrixType:
         vectors: CompressedVectors = CompressedVectors(
             _read_dense(self.data, ...),
             _read_dense(self.indices, ...),
             _read_dense(self.indptr, ...),
         )
-        return self.memory_format(vectors, shape=self.shape)[
-            self._gen_maj_min_tuple(major_index, minor_index)
-        ]
+        key = self._gen_maj_min_tuple(major_index, minor_index)
+        # scipy-stubs’ __getitem__ overloads only cover fixed index shapes,
+        # not this dispatch fallback’s generic major_index/minor_index union.
+        return self.memory_format(vectors, shape=self.shape)[key]  # type: ignore[index]
 
     @_get.register
     def _get_intXslice(self, major_index: int, minor_index: slice) -> SparseMatrixType:
@@ -415,7 +418,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         return self._data.dtype
 
     @classmethod
-    def _check_group_format(cls, group):
+    def _check_group_format(cls, group: GroupT) -> None:
         group_format = _get_group_format(group)
         assert group_format == cls.format
 

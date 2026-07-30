@@ -19,8 +19,6 @@ from .merge import concat_on_disk
 from .multi_files import AnnCollection, AnnCollectionView
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from .pytorch import AnnLoader
 
 # Map old name in `anndata.experimental` to new name in `anndata`
@@ -40,7 +38,7 @@ _DEPRECATED = MappingProxyType(
 )
 
 
-def __getattr__(attr_name: str) -> Any:
+def __getattr__(attr_name: str) -> object:
     if attr_name == "AnnLoader":
         from .pytorch import AnnLoader
 

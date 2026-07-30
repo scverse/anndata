@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @singledispatch
 def _gen_dataframe(
-    anno: Any,
+    anno: object,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],

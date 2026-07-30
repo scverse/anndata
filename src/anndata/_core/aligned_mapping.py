@@ -39,7 +39,7 @@ ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
-    from typing import Any, ClassVar, Literal, Self, TypeAlias
+    from typing import ClassVar, Literal, Self, TypeAlias
 
     from ..typing import AlignedArray, InMemoryArray, _XDataType
     from .anndata import AnnData
@@ -596,7 +596,7 @@ class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | No
     @overload
     def __get__(self, obj: None, objtype: type | None = None, /) -> Self: ...
     @overload
-    def __get__(self, obj: Any, objtype: type | None = None, /) -> A | V: ...
+    def __get__(self, obj: AnnData | Raw, objtype: type | None = None, /) -> A | V: ...
     def __get__(
         self, obj: AnnData | Raw | None, objtype: type | None = None, /
     ) -> Self | A | V:

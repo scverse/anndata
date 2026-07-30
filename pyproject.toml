@@ -220,6 +220,7 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
+    "ANN",  # Annotations
     "B",    # Likely bugs and design issues
     "BLE",  # Blind except
     "C4",   # Comprehensions
@@ -244,6 +245,13 @@ select = [
     "W",    # Warning detected by Pycodestyle
 ]
 ignore = [
+    # TODO: fix these
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "ANN204",
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,

@@ -20,12 +20,10 @@ from ..utils import (
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from .anndata import AnnData
 
 
-def _non_2d_message(value: Any, *, name: str) -> str | None:
+def _non_2d_message(value: object, *, name: str) -> str | None:
     """Return a spec-violation message for higher-than-2D ``X``/``layers`` values.
 
     AnnData's on-disk specification requires ``X`` and every entry of
@@ -68,7 +66,7 @@ def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
 
 
 def coerce_array(
-    value: Any,
+    value: object,
     *,
     name: str,
     allow_df: bool = False,

@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Iterator, KeysView
     from typing import Any, Literal
 
+    from pandas.api.typing.aliases import Scalar
+
     from .._types import Dataset2DIlocIndexer
 
 
@@ -51,7 +53,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     """
 
     @staticmethod
-    def _validate_shape_invariants(ds: XDataset):
+    def _validate_shape_invariants(ds: XDataset) -> None:
         """
         Validate that the dataset has only one dimension, which is the index dimension.
         This is a requirement for 2D datasets.
@@ -302,7 +304,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         )
 
     def __setitem__(
-        self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
+        self, key: Hashable | Iterable[Hashable] | Mapping, value: object
     ) -> None:
         """
         Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
@@ -400,7 +402,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         self,
         index: pd.Index | None = None,
         axis: Literal[0] = 0,
-        fill_value: Any | None = np.nan,
+        fill_value: Scalar | None = np.nan,
     ) -> Dataset2D:
         """Reindex the current object against a new index.
 

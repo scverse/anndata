@@ -60,7 +60,7 @@ type StorageType = _ArrayStorageType | _GroupStorageType
 
 @set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
-    def __getitem__(self, idx: Any, /) -> Dataset2D: ...
+    def __getitem__(self, idx: object, /) -> Dataset2D: ...
 
 
 class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
@@ -235,14 +235,14 @@ type AnnDataElem = Literal[
 type Join_T = Literal["inner", "outer"]
 
 
-class ReduceFunc[T](Protocol):
+class ReduceFunc[T, E: AnnDataElem | None](Protocol):
     def __call__(
         self,
         elem: _XDataType | Storable | DataFrame | XDataset,
         /,
         *,
         accumulate: T,
-        attr_name: AnnDataElem | None,
+        attr_name: E,
     ) -> T:
         """Function to be called on each visit within `anndata.AnnData._reduce`.
 
