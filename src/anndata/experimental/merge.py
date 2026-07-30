@@ -8,8 +8,10 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from scipy.sparse import csc_matrix, csr_matrix
 
 from .._core.file_backing import to_memory
@@ -27,7 +29,6 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
-from ..compat import H5Array, H5Group, ZarrArray, ZarrGroup
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ def _gen_slice_to_append(
 
 @singledispatch
 @contextmanager
-def as_group(store, *, mode: str) -> Generator[ZarrGroup | H5Group]:
+def as_group(store, *, mode: str) -> Generator[zarr.Group | h5py.Group]:
     msg = "This is not yet implemented."
     raise NotImplementedError(msg)
 
@@ -111,7 +112,7 @@ def as_group(store, *, mode: str) -> Generator[ZarrGroup | H5Group]:
 @as_group.register(PathLike)
 @as_group.register(str)
 @contextmanager
-def _(store: PathLike[str] | str, *, mode: str) -> Generator[ZarrGroup | H5Group]:
+def _(store: PathLike[str] | str, *, mode: str) -> Generator[zarr.Group | h5py.Group]:
     store = Path(store)
     if store.suffix == ".h5ad":
         import h5py
@@ -123,8 +124,6 @@ def _(store: PathLike[str] | str, *, mode: str) -> Generator[ZarrGroup | H5Group
             f.close()
 
     elif mode == "r":  # others all write: r+, a, w, w-
-        import zarr
-
         yield zarr.open_group(store, mode=mode)
     else:
         from anndata._io.zarr import open_write_group
@@ -132,10 +131,12 @@ def _(store: PathLike[str] | str, *, mode: str) -> Generator[ZarrGroup | H5Group
         yield open_write_group(store, mode=mode)
 
 
-@as_group.register(ZarrGroup)
-@as_group.register(H5Group)
+@as_group.register(zarr.Group)
+@as_group.register(h5py.Group)
 @contextmanager
-def _(store: ZarrGroup | H5Group, *, mode: str) -> Generator[ZarrGroup | H5Group]:
+def _(
+    store: zarr.Group | h5py.Group, *, mode: str
+) -> Generator[zarr.Group | h5py.Group]:
     del mode
     yield store
 
@@ -145,7 +146,7 @@ def _(store: ZarrGroup | H5Group, *, mode: str) -> Generator[ZarrGroup | H5Group
 ###################
 
 
-def read_as_backed(group: ZarrGroup | H5Group):
+def read_as_backed(group: zarr.Group | h5py.Group):
     """
     Read the group until
     BaseCompressedSparseDataset, Array or EAGER_TYPES are encountered.
@@ -166,7 +167,7 @@ def read_as_backed(group: ZarrGroup | H5Group):
     return read_dispatched(group, callback=callback)
 
 
-def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
+def _df_index(df: zarr.Group | h5py.Group) -> pd.Index:
     index_key = df.attrs["_index"]
     return pd.Index(read_elem(df[index_key]))
 
@@ -177,9 +178,9 @@ def _df_index(df: ZarrGroup | H5Group) -> pd.Index:
 
 
 def write_concat_dense(  # noqa: PLR0917
-    arrays: Sequence[ZarrArray | H5Array],
-    output_group: ZarrGroup | H5Group,
-    output_path: ZarrGroup | H5Group,
+    arrays: Sequence[zarr.Array | h5py.Dataset],
+    output_group: zarr.Group | h5py.Group,
+    output_path: zarr.Group | h5py.Group,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
     fill_value: Any = None,
@@ -210,8 +211,8 @@ def write_concat_dense(  # noqa: PLR0917
 
 def write_concat_sparse(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
-    output_group: ZarrGroup | H5Group,
-    output_path: ZarrGroup | H5Group,
+    output_group: zarr.Group | h5py.Group,
+    output_path: zarr.Group | h5py.Group,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     reindexers: Reindexer | None = None,
@@ -261,7 +262,7 @@ def write_concat_sparse(  # noqa: PLR0917
 
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings: Collection[dict],
-    output_group: ZarrGroup | H5Group,
+    output_group: zarr.Group | h5py.Group,
     keys: Collection[str],
     output_path: str | Path,
     max_loaded_elems: int,
@@ -293,8 +294,8 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
 
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
-    arrays: Sequence[ZarrArray | H5Array | BaseCompressedSparseDataset],
-    output_group: ZarrGroup | H5Group,
+    arrays: Sequence[zarr.Array | h5py.Dataset | BaseCompressedSparseDataset],
+    output_group: zarr.Group | h5py.Group,
     output_path: str | Path,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
@@ -337,8 +338,10 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
 
 
 def _write_concat_sequence(  # noqa: PLR0913, PLR0917
-    arrays: Sequence[pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray],
-    output_group: ZarrGroup | H5Group,
+    arrays: Sequence[
+        pd.DataFrame | BaseCompressedSparseDataset | h5py.Dataset | zarr.Array
+    ],
+    output_group: zarr.Group | h5py.Group,
     output_path: str | Path,
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
@@ -372,7 +375,9 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, pd.DataFrame | BaseCompressedSparseDataset | H5Array | ZarrArray)
+        isinstance(
+            a, pd.DataFrame | BaseCompressedSparseDataset | h5py.Dataset | zarr.Array
+        )
         for a in arrays
     ):
         _write_concat_arrays(
@@ -391,8 +396,8 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
 
 
 def _write_alt_mapping(
-    groups: Collection[H5Group, ZarrGroup],
-    output_group: ZarrGroup | H5Group,
+    groups: Collection[h5py.Group, zarr.Group],
+    output_group: zarr.Group | h5py.Group,
     alt_axis_name: Literal["obs", "var"],
     merge: Callable,
     reindexers: list[Reindexer],
@@ -405,8 +410,8 @@ def _write_alt_mapping(
 
 
 def _write_alt_annot(
-    groups: Collection[H5Group, ZarrGroup],
-    output_group: ZarrGroup | H5Group,
+    groups: Collection[h5py.Group | zarr.Group],
+    output_group: zarr.Group | h5py.Group,
     alt_axis_name: Literal["obs", "var"],
     alt_indices: pd.Index,
     merge: Callable,
@@ -419,8 +424,8 @@ def _write_alt_annot(
 
 
 def _write_axis_annot(  # noqa: PLR0917
-    groups: Collection[H5Group, ZarrGroup],
-    output_group: ZarrGroup | H5Group,
+    groups: Collection[h5py.Group | zarr.Group],
+    output_group: zarr.Group | h5py.Group,
     axis_name: Literal["obs", "var"],
     concat_indices: pd.Index,
     label: str,
@@ -439,8 +444,8 @@ def _write_axis_annot(  # noqa: PLR0917
 
 
 def _write_alt_pairwise(
-    groups: Collection[H5Group, ZarrGroup],
-    output_group: ZarrGroup | H5Group,
+    groups: Collection[h5py.Group | zarr.Group],
+    output_group: zarr.Group | h5py.Group,
     alt_axis_name: Literal["obs", "var"],
     merge: Callable,
     reindexers: list[Reindexer],
@@ -456,9 +461,9 @@ def _write_alt_pairwise(
 
 
 def concat_on_disk(  # noqa: PLR0913
-    in_files: Collection[PathLike[str] | str | H5Group | ZarrGroup]
-    | Mapping[str, PathLike[str] | str | H5Group | ZarrGroup],
-    out_file: PathLike[str] | str | H5Group | ZarrGroup,
+    in_files: Collection[PathLike[str] | str | h5py.Group | zarr.Group]
+    | Mapping[str, PathLike[str] | str | h5py.Group | zarr.Group],
+    out_file: PathLike[str] | str | h5py.Group | zarr.Group,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
@@ -538,7 +543,7 @@ def concat_on_disk(  # noqa: PLR0913
         DataFrames are padded with missing values.
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
-        This is False by default, since the resulting arrays are often not meaningful, and raises {class}`NotImplementedError` when True.
+        This is False by default, since the resulting arrays are often not meaningful, and raises :exc:`NotImplementedError` when True.
         If you are interested in this feature, please open an issue.
 
     Notes
@@ -656,8 +661,8 @@ def concat_on_disk(  # noqa: PLR0913
 
 def _concat_on_disk_inner(  # noqa: PLR0913
     *,
-    groups: list[H5Group | ZarrGroup],
-    output_group: H5Group | ZarrGroup,
+    groups: list[h5py.Group | zarr.Group],
+    output_group: h5py.Group | zarr.Group,
     axis: Literal[0, 1],
     axis_name: Literal["obs", "var"],
     alt_axis_name: Literal["obs", "var"],

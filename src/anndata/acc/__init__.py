@@ -387,7 +387,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]: ...
     def get(
-        self, data: MuData | AnnData, k: str | None | NO_IDX = NO_IDX, /
+        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]:
         frame: object = getattr(data, self.dim)
         if not isinstance(frame, DataFrameLike):

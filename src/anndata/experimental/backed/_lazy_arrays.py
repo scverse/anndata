@@ -3,8 +3,10 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
+import zarr
 
 from anndata._core.index import _subset
 from anndata._core.views import as_view
@@ -12,14 +14,7 @@ from anndata._io.specs.lazy_methods import get_chunksize
 
 from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
-from ...compat import (
-    H5Array,
-    H5AsTypeView,
-    XBackendArray,
-    XDataArray,
-    XZarrArrayWrapper,
-    ZarrArray,
-)
+from ...compat import H5AsTypeView, XBackendArray, XDataArray, XZarrArrayWrapper
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,21 +24,22 @@ if TYPE_CHECKING:
     from pandas._libs.missing import NAType
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from ...compat import ZarrGroup
     from ...typing import _Index1DNorm
 
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
         from xarray.core.extension_array import PandasExtensionArray
         from xarray.core.indexing import ExplicitIndexer
 else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type K = H5Array | ZarrArray
+    type K = h5py.Array | zarr.Array
 
 
-class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrapper):
+class ZarrOrHDF5Wrapper[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](
+    XZarrArrayWrapper
+):
     def __init__(self, array: K) -> None:
         # AstypeView from h5py .astype() lacks chunks attribute
         self.chunks = getattr(array, "chunks", None)
-        if isinstance(array, ZarrArray):
+        if isinstance(array, zarr.Array):
             super().__init__(array)
             return
         self._array = array
@@ -53,7 +49,7 @@ class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrappe
     def __getitem__(self, key: ExplicitIndexer):
         from xarray.core.indexing import IndexingSupport, explicit_indexing_adapter
 
-        if isinstance(self._array, ZarrArray):
+        if isinstance(self._array, zarr.Array):
             return super().__getitem__(key)
         res = explicit_indexing_adapter(
             key, self.shape, IndexingSupport.OUTER_1VECTOR, self._getitem
@@ -74,7 +70,7 @@ class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrappe
         if (
             isinstance(key, np.ndarray)
             and np.issubdtype(key.dtype, np.integer)
-            and isinstance(self._array, H5Array | H5AsTypeView)
+            and isinstance(self._array, h5py.Dataset | H5AsTypeView)
         ):
             key_mask = np.zeros(self._array.shape).astype("bool")
             key_mask[key] = True
@@ -82,7 +78,7 @@ class ZarrOrHDF5Wrapper[K: (H5Array | H5AsTypeView, ZarrArray)](XZarrArrayWrappe
         return self._array[key]
 
 
-class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
+class CategoricalArray[K: (h5py.Dataset, zarr.Array)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy categorical data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -92,14 +88,14 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
     _codes: ZarrOrHDF5Wrapper[K]
     _categories: K
     shape: tuple[int, ...]
-    base_path_or_zarr_group: Path | ZarrGroup
+    base_path_or_zarr_group: Path | zarr.Group
     elem_name: str
 
     def __init__(
         self,
         codes: K,
         categories: K,
-        base_path_or_zarr_group: Path | ZarrGroup,
+        base_path_or_zarr_group: Path | zarr.Group,
         elem_name: str,
         *args,
         ordered: bool,
@@ -110,12 +106,12 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         self._codes = ZarrOrHDF5Wrapper(codes)
         self.shape = self._codes.shape
         self.base_path_or_zarr_group = base_path_or_zarr_group
-        self.file_format = "zarr" if isinstance(codes, ZarrArray) else "h5"
+        self.file_format = "zarr" if isinstance(codes, zarr.Array) else "h5"
         self.elem_name = elem_name
 
     @cached_property
     def categories(self) -> np.ndarray:
-        if isinstance(self._categories, ZarrArray):
+        if isinstance(self._categories, zarr.Array):
             return self._categories[...]
         from anndata.io import read_elem
 
@@ -137,7 +133,7 @@ class CategoricalArray[K: (H5Array, ZarrArray)](XBackendArray):
         return pd.CategoricalDtype(categories=self.categories, ordered=self._ordered)
 
 
-class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
+class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
     """
     A wrapper class meant to enable working with lazy masked data.
     We do not guarantee the stability of this API beyond that guaranteed
@@ -148,7 +144,7 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
     _values: ZarrOrHDF5Wrapper[K]
     _dtype_str: Literal["nullable-integer", "nullable-boolean", "nullable-string-array"]
     shape: tuple[int, ...]
-    base_path_or_zarr_group: Path | ZarrGroup
+    base_path_or_zarr_group: Path | zarr.Group
     elem_name: str
 
     def __init__(
@@ -158,7 +154,7 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
         mask: K,
-        base_path_or_zarr_group: Path | ZarrGroup,
+        base_path_or_zarr_group: Path | zarr.Group,
         elem_name: str,
     ):
         self._mask = ZarrOrHDF5Wrapper(mask)
@@ -166,7 +162,7 @@ class MaskedArray[K: (H5Array | H5AsTypeView, ZarrArray)](XBackendArray):
         self._dtype_str = dtype_str
         self.shape = self._values.shape
         self.base_path_or_zarr_group = base_path_or_zarr_group
-        self.file_format = "zarr" if isinstance(mask, ZarrArray) else "h5"
+        self.file_format = "zarr" if isinstance(mask, zarr.Array) else "h5"
         self.elem_name = elem_name
 
     def __getitem__(

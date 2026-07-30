@@ -22,7 +22,7 @@ import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr
+from anndata.compat import CSArray, CSMatrix, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from anndata._types import _GroupStorageType
-    from anndata.compat import H5Group
 
 
 PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
@@ -57,10 +56,10 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 @pytest.fixture
 def store(
     diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
-) -> Generator[H5Group | ZarrGroup, None, None]:
+) -> Generator[h5py.Group | zarr.Group, None, None]:
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
-        store = cast("H5Group", file["/"])
+        store = cast("h5py.Group", file["/"])
     elif diskfmt == "zarr":
         store = open_write_group(tmp_path / "test.zarr")
     else:
@@ -84,15 +83,15 @@ def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
 
 
 def create_dense_store(
-    store: H5Group | ZarrGroup, *, shape: tuple[int, ...] = DEFAULT_SHAPE
-) -> H5Group | ZarrGroup:
+    store: h5py.Group | zarr.Group, *, shape: tuple[int, ...] = DEFAULT_SHAPE
+) -> h5py.Group | zarr.Group:
     X = np.random.randn(*shape)
 
     write_elem(store, "X", X)
     return store
 
 
-def create_sparse_store[G: (H5Group, ZarrGroup)](
+def create_sparse_store[G: (h5py.Group, zarr.Group)](
     sparse_format: Literal["csc", "csr"], store: G, shape=DEFAULT_SHAPE
 ) -> G:
     """Returns a store
@@ -247,7 +246,7 @@ def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     ],
 )
 def test_io_spec_compressed_scalars(
-    store: H5Group | ZarrGroup, value: np.ndarray, encoding_type: str
+    store: h5py.Group | zarr.Group, value: np.ndarray, encoding_type: str
 ):
     key = f"key_for_{encoding_type}"
     write_elem(
@@ -345,7 +344,9 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (40, None)),
     ],
 )
-def test_read_lazy_subsets_nd_dask(store: H5Group | ZarrGroup, n_dims, chunks) -> None:
+def test_read_lazy_subsets_nd_dask(
+    store: h5py.Group | zarr.Group, n_dims, chunks
+) -> None:
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
     X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
@@ -377,7 +378,7 @@ def test_read_lazy_h5_cluster(
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
-def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
+def test_undersized_shape_to_default(store: h5py.Group | zarr.Group) -> None:
     shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
@@ -404,9 +405,9 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
     ],
 )
 def test_read_lazy_2d_chunk_kwargs(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     arr_type: Literal["csr", "csc", "dense"],
-    chunks: None | tuple[int | None, int | None],
+    chunks: tuple[int | None, int | None] | None,
     expected_chunksize: tuple[int, int],
 ) -> None:
     if arr_type == "dense":
@@ -519,7 +520,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 )
 @pytest.mark.parametrize("format", ["csr", "csc"])
 def test_write_indices_min(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     num_minor_axis: int,
     expected_dtype: np.dtype,
     format: Literal["csr", "csc"],
@@ -574,7 +575,7 @@ def test_write_anndata_to_root(store):
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup):
+    if isinstance(store, zarr.Group):
         store = zarr.open(store.store)
     from_disk = read_elem(store)
 
@@ -698,7 +699,7 @@ def test_override_specification():
     with pytest.raises(TypeError):
 
         @registry.register_write(
-            ZarrGroup, ad.AnnData, IOSpec("some new type", "0.1.0")
+            zarr.Group, ad.AnnData, IOSpec("some new type", "0.1.0")
         )
         def _(store, key, adata):
             pass
@@ -748,7 +749,7 @@ def test_write_to_root(store: _GroupStorageType, value):
         value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup):
+    if isinstance(store, zarr.Group):
         store = zarr.open(store.store)
     result = read_elem(store)
 
@@ -861,7 +862,7 @@ def test_read_sparse_array(
     "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
 )
 def test_chunking_1d_array(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     arr: np.ndarray,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
@@ -887,7 +888,7 @@ def test_chunking_1d_array(
     ],
 )
 def test_chunking_2d_array(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):

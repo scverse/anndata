@@ -16,7 +16,7 @@ from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup
+from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
@@ -494,7 +494,7 @@ def test_data_access(
     idx_maj: Idx,
     idx_min: Idx,
     exp: list[str],
-    open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
+    open_func: Callable[[zarr.Group], CSRDataset | CSCDataset | DaskArray],
     zarr_metadata_key: str,
     zarr_separator: str,
     *,
@@ -605,7 +605,7 @@ def test_wrong_formats(tmp_path: Path):
         disk_mtx.append(sparse.random(100, 100, format="coo"))
     with pytest.raises(NotImplementedError):
         disk_mtx.append(np.random.random((100, 100)))
-    if isinstance(f, ZarrGroup):
+    if isinstance(f, zarr.Group):
         data = np.random.random((100, 100))
         disk_dense = f.create_array("dense", shape=(100, 100), dtype=data.dtype)
         disk_dense[...] = data
