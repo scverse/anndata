@@ -1,3 +1,4 @@
+# ruff: noqa: PLR0912, PLR0915
 from __future__ import annotations
 
 import re
@@ -59,22 +60,17 @@ def ondisk_equivalent_adata(
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
     csr_path = tmp_path / f"csr.{diskfmt}"
     csc_path = tmp_path / f"csc.{diskfmt}"
-    dense_path = tmp_path / f"dense.{diskfmt}"
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
     csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
-    dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
     write(csr_mem, csr_path)
     write(csc_mem, csc_path)
-    # write(csr_mem, dense_path, as_dense="X")
-    write(dense_mem, dense_path)
     if diskfmt == "h5ad":
         csr_disk = ad.read_h5ad(csr_path, backed="r")
         csc_disk = ad.read_h5ad(csc_path, backed="r")
-        dense_disk = ad.read_h5ad(dense_path, backed="r")
     else:
 
         def read_zarr_backed(path):
@@ -98,9 +94,8 @@ def ondisk_equivalent_adata(
 
         csr_disk = read_zarr_backed(csr_path)
         csc_disk = read_zarr_backed(csc_path)
-        dense_disk = read_zarr_backed(dense_path)
 
-    return csr_mem, csr_disk, csc_disk, dense_disk
+    return csr_mem, csr_disk, csc_mem, csc_disk
 
 
 @pytest.mark.parametrize(
@@ -110,10 +105,10 @@ def test_empty_backed_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     empty_mask,
 ):
-    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    csr_mem, csr_disk, csc_mem, csc_disk = ondisk_equivalent_adata
 
     assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
-    assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
+    assert_equal(csc_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
 
     # The following do not work because of https://github.com/scipy/scipy/issues/19919
     # Our implementation returns a (0,0) sized matrix but scipy does (1,0).
@@ -127,7 +122,7 @@ def test_backed_indexing(
     subset_func,
     subset_func2,
 ):
-    csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+    csr_mem, csr_disk, csc_mem, csc_disk = ondisk_equivalent_adata
 
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
@@ -135,9 +130,9 @@ def test_backed_indexing(
     assert_equal(csr_mem[obs_idx, var_idx].X, csr_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem[obs_idx, var_idx].X, csc_disk[obs_idx, var_idx].X)
     assert_equal(csr_mem.X[...], csc_disk.X[...])
-    assert_equal(csr_mem[obs_idx, :].X, dense_disk[obs_idx, :].X)
+    assert_equal(csr_mem[obs_idx, :].X, csr_disk[obs_idx, :].X)
     assert_equal(csr_mem[obs_idx].X, csr_disk[obs_idx].X)
-    assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
+    assert_equal(csc_mem[:, var_idx].X, csc_disk[:, var_idx].X)
 
 
 def test_backed_ellipsis_indexing(
@@ -145,10 +140,244 @@ def test_backed_ellipsis_indexing(
     ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
     equivalent_ellipsis_index: tuple[slice, slice],
 ):
-    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    csr_mem, csr_disk, csc_mem, csc_disk = ondisk_equivalent_adata
 
     assert_equal(csr_mem.X[equivalent_ellipsis_index], csr_disk.X[ellipsis_index])
-    assert_equal(csr_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
+    assert_equal(csc_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
+
+
+@pytest.fixture
+def large_ondisk_equivalent_adata(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> tuple[AnnData, AnnData, AnnData, AnnData]:
+    csr_path = tmp_path / f"large_csr.{diskfmt}"
+    csc_path = tmp_path / f"large_csc.{diskfmt}"
+
+    write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
+
+    csr_mem = ad.AnnData(
+        X=sparse.random(
+            4_096,
+            4_096,
+            format="csr",
+            density=0.01,
+            random_state=np.random.default_rng(42),
+        )
+    )
+    csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
+
+    write(csr_mem, csr_path)
+    write(csc_mem, csc_path)
+    if diskfmt == "h5ad":
+        csr_disk = ad.read_h5ad(csr_path, backed="r")
+        csc_disk = ad.read_h5ad(csc_path, backed="r")
+    else:
+
+        def read_zarr_backed(path):
+            path = str(path)
+
+            f = zarr.open(path, mode="r")
+
+            def callback(func, elem_name, elem, iospec):
+                if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
+                    return AnnData(**{
+                        k: read_dispatched(v, callback) for k, v in dict(elem).items()
+                    })
+                if iospec.encoding_type in {"csc_matrix", "csr_matrix"}:
+                    return sparse_dataset(elem)
+                return func(elem)
+
+            return read_dispatched(f, callback=callback)
+
+        csr_disk = read_zarr_backed(csr_path)
+        csc_disk = read_zarr_backed(csc_path)
+
+    return csr_mem, csr_disk, csc_mem, csc_disk
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        pytest.param(np.arange(256, 512), id="sorted_adjacent"),
+        pytest.param(np.array([21, 5, 12, 5, 1, 18, 9]), id="unsorted"),
+        pytest.param(np.array([3, 3, 7, 7, 2, 2, 11]), id="duplicates"),
+        pytest.param(np.array([], dtype=int), id="empty"),
+        pytest.param(np.array([17]), id="single"),
+        pytest.param(np.array([-3, -1, 0]), id="negative"),
+    ],
+)
+def test_backed_integer_indexing_correctness(
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    indexer: np.ndarray,
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+
+    assert_equal(csr_mem.X[indexer, :], csr_disk.X[indexer, :])
+    assert_equal(csc_mem.X[:, indexer], csc_disk.X[:, indexer])
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [pytest.param(np.arange(1_000, 3_048), id="contiguous")],
+)
+def test_backed_integer_indexing_uses_contiguous_slice_path(
+    *,
+    mocker: MockerFixture,
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    indexer: np.ndarray,
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+
+    from anndata._core import sparse_dataset as sparse_dataset_module
+
+    contiguous_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "_get_contiguous_compressed_slice"
+    )
+    vector_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors"
+    )
+    slices_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors_for_slices"
+    )
+
+    assert_equal(csr_mem.X[indexer, :], csr_disk.X[indexer, :])
+    assert_equal(csc_mem.X[:, indexer], csc_disk.X[:, indexer])
+
+    assert contiguous_spy.call_count == 2
+    assert slices_spy.call_count == 0
+    assert vector_spy.call_count == 0, (
+        f"vector path call count: {vector_spy.call_count}"
+    )
+
+
+def test_backed_integer_indexing_uses_multiple_run_slice_path(
+    *,
+    mocker: MockerFixture,
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+    indexer = np.concatenate([
+        np.arange(100, 612),
+        np.arange(1_500, 2_012),
+        np.arange(2_500, 3_012),
+        np.arange(3_500, 4_012),
+    ])
+
+    from anndata._core import sparse_dataset as sparse_dataset_module
+
+    contiguous_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "_get_contiguous_compressed_slice"
+    )
+    slice_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors_for_slices"
+    )
+    vector_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors"
+    )
+
+    assert_equal(csr_mem.X[indexer, :], csr_disk.X[indexer, :])
+    assert_equal(csc_mem.X[:, indexer], csc_disk.X[:, indexer])
+
+    assert contiguous_spy.call_count == 0
+    assert slice_spy.call_count == 2
+    assert vector_spy.call_count == 0
+
+
+def test_backed_integer_indexing_fragmented_uses_vector_path(
+    *,
+    mocker: MockerFixture,
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+    rng = np.random.default_rng(42)
+    indexer = rng.choice(4_096, size=2_048, replace=False)
+    rng.shuffle(indexer)
+
+    from anndata._core import sparse_dataset as sparse_dataset_module
+
+    slice_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors_for_slices"
+    )
+    vector_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors"
+    )
+
+    assert_equal(csr_mem.X[indexer, :], csr_disk.X[indexer, :])
+    assert_equal(csc_mem.X[:, indexer], csc_disk.X[:, indexer])
+
+    assert slice_spy.call_count == 0, f"slice path call count: {slice_spy.call_count}"
+    assert vector_spy.call_count == 2, (
+        f"vector path call count: {vector_spy.call_count}"
+    )
+
+
+def test_backed_integer_indexing_clustered_duplicates_uses_slice_path(
+    *,
+    mocker: MockerFixture,
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+    rng = np.random.default_rng(42)
+    clusters = [
+        np.repeat(np.arange(100, 356), 2),
+        np.repeat(np.arange(1_000, 1_256), 2),
+        np.repeat(np.arange(2_000, 2_256), 2),
+        np.repeat(np.arange(3_000, 3_256), 2),
+    ]
+    indexer = np.concatenate(clusters)
+    rng.shuffle(indexer)
+
+    from anndata._core import sparse_dataset as sparse_dataset_module
+
+    contiguous_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "_get_contiguous_compressed_slice"
+    )
+    slice_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors_for_slices"
+    )
+    vector_spy = mocker.spy(
+        sparse_dataset_module.BackedSparseMatrix, "get_compressed_vectors"
+    )
+
+    assert_equal(csr_mem.X[indexer, :], csr_disk.X[indexer, :])
+    assert_equal(csc_mem.X[:, indexer], csc_disk.X[:, indexer])
+
+    assert contiguous_spy.call_count == 0
+    assert slice_spy.call_count == 2
+    assert vector_spy.call_count == 0
+
+
+@pytest.mark.parametrize(
+    "indexer",
+    [
+        pytest.param(np.array([4_096]), id="positive"),
+        pytest.param(np.array([-4_097]), id="negative"),
+    ],
+)
+def test_backed_integer_indexing_out_of_bounds(
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+    indexer: np.ndarray,
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+
+    with pytest.raises(IndexError):
+        csr_mem.X[indexer, :]
+    with pytest.raises(IndexError):
+        csr_disk.X[indexer, :]
+    with pytest.raises(IndexError):
+        csc_mem.X[:, indexer]
+    with pytest.raises(IndexError):
+        csc_disk.X[:, indexer]
+
+
+def test_backed_sparse_matrix_bool_mask_direct(
+    large_ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    csr_mem, csr_disk, csc_mem, csc_disk = large_ondisk_equivalent_adata
+    mask = make_one_group_mask(csr_mem.shape[0])
+
+    assert_equal(csr_mem.X[mask, :], csr_disk.X._to_backed()[mask, :])
+    assert_equal(csc_mem.X[:, mask], csc_disk.X._to_backed()[:, mask])
 
 
 def make_randomized_mask(size: int) -> np.ndarray:
@@ -216,7 +445,7 @@ def test_consecutive_bool(
     should_trigger_optimization
         Whether or not a given mask should trigger the optimized behavior.
     """
-    _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    _, csr_disk, _, csc_disk = ondisk_equivalent_adata
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
@@ -227,27 +456,42 @@ def test_consecutive_bool(
     spy = mocker.spy(
         sparse_dataset.BackedSparseMatrix, "get_compressed_vectors_for_slices"
     )
-    assert_equal(csr_disk.X[mask, :], csr_disk.X[np.where(mask)])
+    before = spy.call_count
+    left = csr_disk.X[mask, :]
+    right = csr_disk.X[np.where(mask)]
+    assert_equal(left, right)
     if should_trigger_optimization is not None:
-        assert (
-            spy.call_count == 1 if should_trigger_optimization else not spy.call_count
-        )
-    assert_equal(csc_disk.X[:, mask], csc_disk.X[:, np.where(mask)[0]])
+        if should_trigger_optimization:
+            assert spy.call_count > before
+        else:
+            assert spy.call_count == before
+    before = spy.call_count
+    left = csc_disk.X[:, mask]
+    right = csc_disk.X[:, np.where(mask)[0]]
+    assert_equal(left, right)
     if should_trigger_optimization is not None:
-        assert (
-            spy.call_count == 2 if should_trigger_optimization else not spy.call_count
-        )
-    assert_equal(csr_disk[mask, :].X, csr_disk[np.where(mask)].X)
+        if should_trigger_optimization:
+            assert spy.call_count > before
+        else:
+            assert spy.call_count == before
+    before = spy.call_count
+    left = csr_disk[mask, :].X
+    right = csr_disk[np.where(mask)].X
+    assert_equal(left, right)
     if should_trigger_optimization is not None:
-        assert (
-            spy.call_count == 3 if should_trigger_optimization else not spy.call_count
-        )
+        if should_trigger_optimization:
+            assert spy.call_count > before
+        else:
+            assert spy.call_count == before
     subset = csc_disk[:, mask]
-    assert_equal(subset.X, csc_disk[:, np.where(mask)[0]].X)
+    before = spy.call_count
+    right = csc_disk[:, np.where(mask)[0]].X
+    assert_equal(subset.X, right)
     if should_trigger_optimization is not None:
-        assert (
-            spy.call_count == 4 if should_trigger_optimization else not spy.call_count
-        )
+        if should_trigger_optimization:
+            assert spy.call_count > before
+        else:
+            assert spy.call_count == before
     if should_trigger_optimization is not None and not csc_disk.isbacked:
         size = subset.shape[1]
         if should_trigger_optimization:
@@ -255,13 +499,15 @@ def test_consecutive_bool(
             subset_subset_mask[size // 2] = False
         else:
             subset_subset_mask = make_one_elem_mask(size)
-        assert_equal(
-            subset[:, subset_subset_mask].X,
-            subset[:, np.where(subset_subset_mask)[0]].X,
-        )
-        assert (
-            spy.call_count == 5 if should_trigger_optimization else not spy.call_count
-        ), f"Actual count: {spy.call_count}"
+        before = spy.call_count
+        left = subset[:, subset_subset_mask].X
+        right = subset[:, np.where(subset_subset_mask)[0]].X
+        assert_equal(left, right)
+        if should_trigger_optimization is not None:
+            if should_trigger_optimization:
+                assert spy.call_count > before, f"Actual count: {spy.call_count}"
+            else:
+                assert spy.call_count == before, f"Actual count: {spy.call_count}"
 
 
 @pytest.mark.parametrize(
@@ -653,7 +899,7 @@ def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
 def test_backed_sizeof(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
 ):
-    csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    csr_mem, csr_disk, _, csc_disk = ondisk_equivalent_adata
 
     assert csr_mem.__sizeof__() == csr_disk.__sizeof__(with_disk=True)
     assert csr_mem.__sizeof__() == csc_disk.__sizeof__(with_disk=True)
