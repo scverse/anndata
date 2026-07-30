@@ -293,6 +293,6 @@ Types used by the former:
    typing.Index
    typing.InMemoryArray
    typing.AlignedArray
-   typing.AxisStorable
+   typing.Storable
    typing.RWAble
 ```

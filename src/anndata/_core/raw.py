@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef
     from ..typing import Index, InMemoryArray, _Index1DNorm
-    from .aligned_mapping import AxisArraysView, Value
+    from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
     from .xarray import Dataset2D
 
@@ -43,7 +43,7 @@ class Raw:
     _oidx: ClassVar[None] = None
     _vidx: ClassVar[None] = None
 
-    _varm: MutableMapping[str, Value]
+    _varm: MutableMapping[str, AlignedArray]
     """Backing store for the `varm` `AlignedMappingProperty`."""
 
     _X: InMemoryArray | None
@@ -54,7 +54,7 @@ class Raw:
         adata: AnnData,
         X: InMemoryArray | None = None,
         var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
-        varm: Mapping[str, Value] | None = None,
+        varm: Mapping[str, AlignedArray] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:
             msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"

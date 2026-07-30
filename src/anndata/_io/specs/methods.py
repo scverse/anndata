@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from anndata._core.sparse_dataset import BackedSparseMatrix
     from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
-    from anndata.typing import AxisStorable, RWAble, _InMemoryArrayOrScalarType
+    from anndata.typing import RWAble, Storable, _StorableArrayOrScalar
 
     from .registry import Reader, Writer
 
@@ -199,7 +199,7 @@ def suppress_autoshard_warning[S: StorageType, T: RWAble](
 @_REGISTRY.register_read(h5py.Dataset, IOSpec("", ""))
 def read_basic(
     elem: h5py.File | h5py.Group | h5py.Dataset, *, _reader: Reader
-) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
+) -> dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io.h5ad import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
@@ -217,7 +217,7 @@ def read_basic(
 @_REGISTRY.register_read(zarr.Array, IOSpec("", ""))
 def read_basic_zarr(
     elem: zarr.Group | zarr.Array, *, _reader: Reader
-) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
+) -> dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray:
     from anndata._io.zarr import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
@@ -432,9 +432,7 @@ def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.1.0"))
-def read_mapping(
-    elem: _GroupStorageType, *, _reader: Reader
-) -> dict[str, AxisStorable]:
+def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Storable]:
     return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
@@ -444,7 +442,7 @@ def read_mapping(
 def write_mapping(
     f: _GroupStorageType,
     k: str,
-    v: dict[str, AxisStorable],
+    v: dict[str, Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -465,7 +463,7 @@ def write_mapping(
 def write_list(
     f: _GroupStorageType,
     k: str,
-    elem: list[AxisStorable],
+    elem: list[Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),

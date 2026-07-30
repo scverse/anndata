@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pandas import DataFrame
 
     from anndata._core.xarray import Dataset2D
-    from anndata.typing import AxisStorable, _XDataType
+    from anndata.typing import Storable, _XDataType
 
     from ._io.specs.registry import (
         IOSpec,
@@ -238,7 +238,7 @@ type Join_T = Literal["inner", "outer"]
 class ReduceFunc[T](Protocol):
     def __call__(
         self,
-        elem: _XDataType | AxisStorable | DataFrame | XDataset,
+        elem: _XDataType | Storable | DataFrame | XDataset,
         /,
         *,
         accumulate: T,

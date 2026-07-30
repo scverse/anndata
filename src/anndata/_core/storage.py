@@ -80,7 +80,11 @@ def coerce_array(
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
-    # If value is one of the allowed types, return it
+    if isinstance(value, pd.DataFrame):
+        if allow_df:
+            raise_value_error_if_multiindex_columns(value, name)
+        return value if allow_df else ensure_df_homogeneous(value, name)
+    # If value is one of the allowed types (except if it’s a df and allow_df is False above), return it
     array_data_structure_types: tuple[type, ...] = get_union_members(AlignedArray)
     if isinstance(value, XDataset):
         value = Dataset2D(value)
@@ -102,10 +106,6 @@ def coerce_array(
     if any(is_non_csc_r_array_or_matrix):
         msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
         raise ValueError(msg)
-    if isinstance(value, pd.DataFrame):
-        if allow_df:
-            raise_value_error_if_multiindex_columns(value, name)
-        return value if allow_df else ensure_df_homogeneous(value, name)
     # if value is an array-like object, try to convert it
     e = None
     if allow_array_like:

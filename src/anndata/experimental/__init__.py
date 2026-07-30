@@ -33,7 +33,7 @@ _DEPRECATED = MappingProxyType(
             ("sparse_dataset", "io.sparse_dataset"),
             ("read_elem", "io.read_elem"),
             ("write_elem", "io.write_elem"),
-            ("RWAble", "typing.AxisStorable"),
+            ("RWAble", "typing.Storable"),
             ("InMemoryElem", "typing.RWAble"),
         )
     )

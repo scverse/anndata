@@ -96,8 +96,15 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..typing import AxisStorable, Index, Index1D, _Index1DNorm, _XDataType
-    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView, Value
+    from ..typing import (
+        AlignedArray,
+        Index,
+        Index1D,
+        Storable,
+        _Index1DNorm,
+        _XDataType,
+    )
+    from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
@@ -253,11 +260,11 @@ class AnnData:  # noqa: PLW1641
     _raw: Raw | None
 
     # backing stores for the `AlignedMappingProperty`s below
-    _layers: MutableMapping[str | None, Value]
-    _obsm: MutableMapping[str, Value]
-    _varm: MutableMapping[str, Value]
-    _obsp: MutableMapping[str, Value]
-    _varp: MutableMapping[str, Value]
+    _layers: MutableMapping[str | None, AlignedArray | None]
+    _obsm: MutableMapping[str, AlignedArray]
+    _varm: MutableMapping[str, AlignedArray]
+    _obsp: MutableMapping[str, AlignedArray]
+    _varp: MutableMapping[str, AlignedArray]
 
     @old_positionals(
         "obsm",
@@ -277,8 +284,8 @@ class AnnData:  # noqa: PLW1641
         var: pd.DataFrame | Dataset2D | Mapping[str, Iterable[Any]] | None = None,
         uns: Mapping[str, Any] | None = None,
         *,
-        obsm: np.ndarray | Mapping[str, AxisStorable] | None = None,
-        varm: np.ndarray | Mapping[str, AxisStorable] | None = None,
+        obsm: np.ndarray | Mapping[str, AlignedArray] | None = None,
+        varm: np.ndarray | Mapping[str, AlignedArray] | None = None,
         layers: Mapping[str, _XDataType]
         | Mapping[str | None, _XDataType]
         | None = None,
@@ -287,8 +294,8 @@ class AnnData:  # noqa: PLW1641
         filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        obsp: np.ndarray | Mapping[str, AxisStorable] | None = None,
-        varp: np.ndarray | Mapping[str, AxisStorable] | None = None,
+        obsp: np.ndarray | Mapping[str, AlignedArray] | None = None,
+        varp: np.ndarray | Mapping[str, AlignedArray] | None = None,
         oidx: _Index1DNorm | int | np.integer | None = None,
         vidx: _Index1DNorm | int | np.integer | None = None,
     ):
@@ -559,7 +566,7 @@ class AnnData:  # noqa: PLW1641
                 return X.__sizeof__()
 
         def fold_size(
-            elem: _XDataType | AxisStorable | pd.DataFrame | XDataset | Raw,
+            elem: Storable | XDataset | Raw,
             *,
             accumulate: dict[str, int],
             attr_name: AnnDataElem | None,
