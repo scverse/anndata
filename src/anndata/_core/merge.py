@@ -692,7 +692,9 @@ class Reindexer:
         else:
             from scipy import sparse
 
-        xp = el.data.__array_namespace__()
+        import array_api_compat
+
+        xp = array_api_compat.array_namespace(el.data)
 
         if fill_value is None:
             fill_value = default_fill_value([el])

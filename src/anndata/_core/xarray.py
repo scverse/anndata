@@ -217,7 +217,6 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
         ret = self.ds.__getitem__(key)
-        # empty Dataset
         if is_empty := (
             isinstance(key, Sized) and len(key) == 0 and not isinstance(key, tuple)
         ):

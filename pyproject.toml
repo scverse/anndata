@@ -286,7 +286,6 @@ warn_unused_ignores = true
 # infer types from their source instead of falling back to `Any`.
 [[tool.mypy.overrides]]
 module = [
-    "array_api_compat.*",
     "awkward.*",
     "h5py.*",
     "joblib.*",
@@ -297,9 +296,17 @@ module = [
     "sklearn.*",
 ]
 follow_untyped_imports = true
-# Optional dependencies that are not installed when type checking.
+# Dependencies that ship no type information (absent or `Incomplete` annotations).
 [[tool.mypy.overrides]]
-module = [ "cupy.*", "cupyx.*", "jax.*", "loompy.*", "torch.*", "zappy.*" ]
+module = [
+    "array_api_compat.*",
+    "cupy.*",
+    "cupyx.*",
+    "jax.*",
+    "loompy.*",
+    "torch.*",
+    "zappy.*",
+]
 ignore_missing_imports = true
 
 [tool.codespell]

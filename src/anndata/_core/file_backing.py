@@ -199,8 +199,9 @@ def _(x: h5py.Group | h5py.Dataset) -> str:
 
 @filename.register(zarr.Array | zarr.Group)
 def _(x: zarr.Array | zarr.Group) -> str:
-    # Zarr v3 stores have no generic path, but their `str` is a unique URL
-    return str(x.store)
+    # zarr v3 dropped `Store.path`; only local stores map to a filesystem path
+    store = x.store
+    return str(store.root if isinstance(store, zarr.storage.LocalStore) else store)
 
 
 @singledispatch

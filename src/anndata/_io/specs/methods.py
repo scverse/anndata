@@ -17,6 +17,7 @@ import zarr
 from numcodecs import VLenUTF8
 from packaging.version import Version
 from scipy import sparse
+from zarr.core.dtype import VariableLengthUTF8
 
 import anndata as ad
 from anndata import AnnData, Raw
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
 
     from anndata._core.sparse_dataset import BackedSparseMatrix
     from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
-    from anndata.compat import CSArray, CSMatrix
+    from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
     from anndata.typing import AxisStorable, RWAble, _InMemoryArrayOrScalarType
 
     from .registry import Reader, Writer
@@ -148,7 +149,7 @@ def _to_cpu_mem_wrapper(write_func):
     def wrapper(
         f,
         k,
-        cupy_val,
+        cupy_val: CupyArray | CupyCSMatrix,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -339,7 +340,6 @@ def write_anndata(
         _check_has_no_slash_key(sub_key, elem)
         if sub_key == "layers":
             assert isinstance(elem, MutableMapping)
-            # `layers` is keyed by `str | None`, where `None` is `X`
             layers: Mapping[Any, Any] = elem
             if None in layers:
                 _writer.write_elem(g, "X", layers[None], dataset_kwargs=dataset_kwargs)
@@ -687,7 +687,8 @@ def write_vlen_string_array_zarr(
         arr = f.create_array(
             k,
             shape=elem.shape,
-            dtype=np.dtypes.StringDType(),
+            # zarr’s `ZDTypeLike` is invariant, so its own dtypes don’t satisfy it
+            dtype=VariableLengthUTF8(),  # type: ignore[arg-type]
             filters=filters,
             fill_value=fill_value,
             **dataset_kwargs,
@@ -1296,6 +1297,7 @@ for store_type, array_type in product(_STORE_TYPES, PANDAS_STRING_ARRAY_TYPES):
 
 
 class _BaseMaskedArray(Protocol):
+    # `IntegerArray` and `BooleanArray` take disjoint dtypes, so nothing narrower fits both
     def __call__(
         self, values: NDArray[Any], /, *, mask: NDArray[np.bool_]
     ) -> pd.api.extensions.ExtensionArray: ...
@@ -1388,19 +1390,20 @@ def write_scalar_zarr(
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
 
     filters: list[VLenUTF8] | None
-    dtype: np.dtype
+    dtype: VariableLengthUTF8 | np.dtype
     fill_value: str | None
     match f.metadata.zarr_format, value:
         case 2, str():
-            filters, dtype, fill_value = [VLenUTF8()], np.dtypes.StringDType(), ""
+            filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
         case 3, str():
-            filters, dtype, fill_value = None, np.dtypes.StringDType(), None
+            filters, dtype, fill_value = None, VariableLengthUTF8(), None
         case _, _:
             filters, dtype, fill_value = None, np.array(value).dtype, None
     a = f.create_array(
         key,
         shape=(),
-        dtype=dtype,
+        # zarr’s `ZDTypeLike` is invariant, so its own dtypes don’t satisfy it
+        dtype=dtype,  # type: ignore[arg-type]
         filters=filters,
         fill_value=fill_value,
         **dataset_kwargs,

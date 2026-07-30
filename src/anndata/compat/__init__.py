@@ -199,7 +199,7 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
-CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+CupyCSMatrix: TypeAlias = CupyCSCMatrix | CupyCSRMatrix  # noqa: UP040
 
 old_positionals = partial(legacy_api, category=FutureWarning)
 

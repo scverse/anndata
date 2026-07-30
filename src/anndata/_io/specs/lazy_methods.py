@@ -120,8 +120,8 @@ def read_sparse_as_dask(
     elem: h5py.Group | zarr.Group,
     *,
     _reader: LazyReader,
-    chunks: tuple[int | None, ...]
-    | None = None,  # only tuple[int, int] is supported here
+    # the reader registry fixes this signature; only `tuple[int, int]` is accepted
+    chunks: tuple[int | None, ...] | None = None,
 ) -> DaskArray:
     import dask.array as da
 

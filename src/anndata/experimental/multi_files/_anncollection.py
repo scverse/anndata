@@ -21,7 +21,7 @@ from ...compat import old_positionals
 from ...utils import set_module, warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence, Sized
     from typing import Literal, TypeAlias
 
     from ..._types import Join_T
@@ -131,7 +131,8 @@ class _IterateViewMixin:
 
         @property
         def shape(self) -> tuple[int, int]: ...
-        def __getitem__(self, index: Index, /) -> AnnCollectionView: ...
+        # `LazyAttrData` yields arrays here, so only `len` is common to all mixin users
+        def __getitem__(self, index: Index, /) -> Sized: ...
 
     @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(

@@ -583,7 +583,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
         if idx is NO_IDX:
             return full
         index: pd.Index = getattr(data, self.dim).index
-        # TODO: remove wrapping in an array when dropping scipy <1.14
+        # a scalar index makes scipy return a 1D COO array, which cannot be flattened
         match idx:
             case str() as i, slice() as j:
                 sub = full[np.array([index.get_loc(i)]), j]

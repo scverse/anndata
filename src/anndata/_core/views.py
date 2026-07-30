@@ -185,7 +185,6 @@ class ArrayView(_SetItemMixin, np.ndarray):
         # it’s a structured array
         return self.dtype.names or ()
 
-    # deliberately not `Self`: copying a view has to stop it being one
     def copy(  # type: ignore[override]
         self, order: Literal["K", "A", "C", "F"] | None = "C"
     ) -> np.ndarray:
