@@ -754,7 +754,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                label_col.map(str, na_action="ignore"), sep=index_unique
+                list(label_col.map(str, na_action="ignore")), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
@@ -770,7 +770,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             view_attrs.remove("obs")
             self._attrs.append("obs")
             # `pd.concat` can’t deal with the lazy `Dataset2D` variant of `obs`
-            obs_dfs = cast("list[pd.DataFrame]", [a.obs for a in adatas])
+            obs_dfs = [cast("pd.DataFrame", a.obs) for a in adatas]
             concat_annot = pd.concat(obs_dfs, join=join_obs, ignore_index=True)
             concat_annot.index = self.obs_names
             self._obs = concat_annot

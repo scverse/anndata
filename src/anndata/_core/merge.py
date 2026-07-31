@@ -1741,7 +1741,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
+            list(label_col.map(str, na_action="ignore")), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 

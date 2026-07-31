@@ -741,7 +741,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     )
     if index_unique is not None:
         index_ser = index_ser.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
+            list(label_col.map(str, na_action="ignore")), sep=index_unique
         )
 
     # Resulting indices for {axis_name} and {alt_axis_name}
