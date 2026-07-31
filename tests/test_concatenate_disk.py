@@ -8,6 +8,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from scipy import sparse
 
 import anndata as ad
@@ -255,8 +256,6 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
 
 
 def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
-    import zarr
-
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
     g = zarr.open(tmp_path)
     assert g.metadata.zarr_format == 3

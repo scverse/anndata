@@ -5,8 +5,10 @@ from collections.abc import Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Never, TypeVar
 
+import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from numpy import ma
 from numpy.typing import NDArray
 
@@ -21,11 +23,9 @@ from .compat import (
     CupyArray,
     CupySparseMatrix,
     DaskArray,
-    H5Array,
     IndexManager,
     XDataArray,
     ZappyArray,
-    ZarrArray,
 )
 
 if TYPE_CHECKING:
@@ -91,7 +91,12 @@ type InMemoryArray = (
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
 
 _XDataType: TypeAlias = (  # noqa: UP040
-    InMemoryArray | H5Array | ZarrArray | ZappyArray | abc.CSRDataset | abc.CSCDataset
+    InMemoryArray
+    | h5py.Dataset
+    | zarr.Array
+    | ZappyArray
+    | abc.CSRDataset
+    | abc.CSCDataset
 )
 _ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
 _InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040

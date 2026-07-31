@@ -23,14 +23,7 @@ from anndata._io import h5ad as h5ad_io
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
-from anndata.compat import (
-    CSArray,
-    CSMatrix,
-    DaskArray,
-    ZarrArray,
-    ZarrGroup,
-    _read_attr,
-)
+from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
@@ -570,7 +563,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
     path = tmp_path / name
     write(adata, path)
     with store_context(path) as store:
-        if isinstance(store, ZarrGroup):
+        if isinstance(store, zarr.Group):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
             # TODO: Having to fully specify attributes to not override fixed in zarr v3.0.5
@@ -673,7 +666,7 @@ def test_zarr_compression(
     ad.io.write_zarr(pth, adata, compressor=compressor)
 
     def check_compressed(value, key):
-        if not isinstance(value, ZarrArray) or value.shape == ():
+        if not isinstance(value, zarr.Array) or value.shape == ():
             return None
         (read_compressor,) = value.compressors or [None]
         if zarr_write_format == 2:
@@ -953,8 +946,6 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
 
 @pytest.mark.zarr_io
 def test_zarr_chunk_X(tmp_path):
-    import zarr
-
     zarr_pth = Path(tmp_path) / "test.zarr"
     adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     adata.write_zarr(zarr_pth, chunks=(10, 10))
@@ -1074,7 +1065,6 @@ def test_scanpy_krumsiek11(
 )
 def test_backwards_compat_zarr() -> None:
     import scanpy as sc
-    import zarr
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()
     # Old zarr writer couldn’t do sparse arrays

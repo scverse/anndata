@@ -37,9 +37,6 @@ from ..compat import (
     CupyCSCMatrix,
     CupyCSMatrix,
     CupyCSRMatrix,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
     _read_attr,
 )
 from .index import _ensure_numpy_idx, _fix_slice_bounds, _subset, unpack_index
@@ -141,9 +138,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     def copy(self) -> SparseMatrixType:
         if isinstance(self.data, h5py.Dataset):
             return sparse_dataset(self.data.parent).to_memory()
-        if isinstance(self.data, ZarrArray):
-            import zarr
-
+        if isinstance(self.data, zarr.Array):
             anndata_group = zarr.open_group(store=self.data.store, mode="r")
             sparse_group = anndata_group[
                 str(
@@ -174,7 +169,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     def get_compressed_vectors(self, row_idxs: Iterable[int]) -> CompressedVectors:
         indptr_slices = [slice(*(self.indptr[i : i + 2])) for i in row_idxs]
         # HDF5 cannot handle out-of-order integer indexing
-        if isinstance(self.data, ZarrArray):
+        if isinstance(self.data, zarr.Array):
             as_np_indptr = self.np_module.concatenate([
                 self.np_module.arange(s.start, s.stop) for s in indptr_slices
             ])
@@ -196,7 +191,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         indptr_indices = [self.indptr[slice(s.start, s.stop + 1)] for s in slices]
         indptr_limits = [slice(i[0].item(), i[-1].item()) for i in indptr_indices]
         # HDF5 cannot handle out-of-order integer indexing
-        if isinstance(self.data, ZarrArray):
+        if isinstance(self.data, zarr.Array):
             indptr_int = self.np_module.concatenate([
                 self.np_module.arange(s.start, s.stop) for s in indptr_limits
             ])
@@ -354,9 +349,9 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStora
     @property
     def backend(self) -> Literal["zarr", "hdf5"]:
         """Which file type is used on-disk."""
-        if isinstance(self.group, ZarrGroup):
+        if isinstance(self.group, zarr.Group):
             return "zarr"
-        elif isinstance(self.group, H5Group):
+        elif isinstance(self.group, h5py.Group):
             return "hdf5"
         else:
             msg = f"Unknown group type {type(self.group)}"
@@ -511,7 +506,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStora
         # see https://github.com/zarr-developers/zarr-python/discussions/2712 for why we need to read first
         append_data = sparse_matrix.data
         append_indices = sparse_matrix.indices
-        if isinstance(sparse_matrix.data, ZarrArray):
+        if isinstance(sparse_matrix.data, zarr.Array):
             data[orig_data_size:] = append_data[...]
         else:
             data[orig_data_size:] = append_data
@@ -524,7 +519,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStora
         )
 
         # indices
-        if isinstance(sparse_matrix.data, ZarrArray):
+        if isinstance(sparse_matrix.data, zarr.Array):
             append_indices = append_indices[...]
         indices = self.group["indices"]
         orig_data_size = indices.shape[0]

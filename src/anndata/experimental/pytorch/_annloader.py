@@ -90,7 +90,7 @@ def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
 
 
 def _convert_on_top(
-    convert: Callable[[Array], Array] | None | Mapping[str, Callable[[Array], Array]],
+    convert: Callable[[Array], Array] | Mapping[str, Callable[[Array], Array]] | None,
     top_convert: Callable[[Array], Array],
     attrs_keys: Sequence[str] | Mapping[str, Sequence[str]],
 ):
