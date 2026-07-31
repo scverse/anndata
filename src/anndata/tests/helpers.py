@@ -215,7 +215,7 @@ def gen_random_column(  # noqa: PLR0911
 
 def gen_typed_df(
     n: int,
-    index: pd.Index[Any] | None = None,
+    index: pd.Index[str] | None = None,
     dtypes: Collection[np.dtype | pd.api.extensions.ExtensionDtype] = DEFAULT_COL_TYPES,
 ):
     columns = [gen_random_column(n, dtype) for dtype in dtypes]
@@ -463,7 +463,7 @@ def gen_adata(  # noqa: PLR0913
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
         df=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
-        df_int_index=gen_typed_df(10, index=pd.Index(list(range(10)))),
+        df_int_index=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     with warnings.catch_warnings():

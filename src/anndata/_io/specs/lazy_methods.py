@@ -20,7 +20,7 @@ from .registry import _LAZY_REGISTRY, IOSpec, read_elem
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping, Sequence
-    from typing import Any, Literal
+    from typing import Any, Final, Literal
 
     from anndata.abc import CSCDataset, CSRDataset
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
@@ -398,9 +398,11 @@ def read_nullable(
     )
 
 
-_NULLABLE_ENCODING_TYPES: list[
-    Literal["nullable-integer", "nullable-boolean", "nullable-string-array"]
-] = ["nullable-integer", "nullable-boolean", "nullable-string-array"]
+_NULLABLE_ENCODING_TYPES: Final = (
+    "nullable-integer",
+    "nullable-boolean",
+    "nullable-string-array",
+)
 
 for encoding_type in _NULLABLE_ENCODING_TYPES:
     for group_type in (zarr.Group, h5py.Group):

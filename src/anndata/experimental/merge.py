@@ -6,7 +6,7 @@ from contextlib import ExitStack, contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import h5py
 import numpy as np
@@ -467,9 +467,7 @@ def _write_axis_annot(  # noqa: PLR0917
     join: Join_T,
 ):
     # `unify_dtypes` only returns the lazy `Dataset2D` variant if it’s passed one
-    dfs = cast(
-        "list[pd.DataFrame]", unify_dtypes(_read_df(g, axis_name) for g in groups)
-    )
+    dfs = unify_dtypes(_read_df(g, axis_name) for g in groups)
     concat_annot = pd.concat(dfs, join=join, ignore_index=True)
     concat_annot.index = concat_indices
     if label is not None:

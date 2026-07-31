@@ -1065,12 +1065,14 @@ def write_dataframe(
         index_name = "_index"
     group.attrs["_index"] = check_key(index_name)
 
-    # `Index._values` is "the best" array representation. It's the true array backing the
-    # object, where `.values` is always a np.ndarray and .array is always a pandas
-    # array – so unwrap the `NumpyExtensionArray` that `.array` wraps ndarrays in.
-    index_values: npt.NDArray | pd.api.extensions.ExtensionArray = df.index.array
-    if isinstance(index_values, pd.arrays.NumpyExtensionArray):
-        index_values = index_values.to_numpy()
+    if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
+        assert isinstance(df.index.array, pd.arrays.ExtensionArray)
+    # We support non-nullable numpy arrays and nullable pandas string/numeric extension arrays
+    index_values = (
+        df.index.to_numpy()
+        if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
+        else df.index.array
+    )
     _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)

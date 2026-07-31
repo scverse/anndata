@@ -289,6 +289,7 @@ max-positional-args = 5
 [tool.mypy]
 mypy_path = [ "src" ]
 explicit_package_bases = true
+warn_redundant_casts = true
 warn_unused_ignores = true
 # Installed, but shipping no `py.typed` marker:
 # infer types from their source instead of falling back to `Any`.

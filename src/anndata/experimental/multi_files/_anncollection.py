@@ -588,7 +588,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-# a `type` alias would hand the docs build a `TypeAliasType` it expands forever
+# a `type` alias would hand the docs build a `TypeAliasType`, which would loop infinitely
 ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
 
 
@@ -747,7 +747,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True
         )
         if keys is None:
-            keys = [str(i) for i in range(len(adatas))]
+            keys = list(map(str, range(len(adatas))))
         label_col = pd.Categorical.from_codes(
             np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
             categories=pd.Index(keys),
