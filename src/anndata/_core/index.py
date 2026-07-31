@@ -10,38 +10,30 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
 import h5py
 import numpy as np
 import pandas as pd
-import zarr
 from numpy.typing import NDArray
 from scipy import sparse
-
-from anndata.abc import CSCDataset, CSRDataset
-from anndata.types import SupportsArrayApiBase
 
 from .._settings import settings
 from ..compat import (
     AwkArray,
     CSArray,
     CSMatrix,
-    CupyArray,
-    CupySparseMatrix,
     DaskArray,
     IndexManager,
     XDataArray,
     has_xp_base,
 )
+from ..types import SupportsArrayApiBase
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import TypeAlias
 
-    import zarr
     from typing_extensions import TypeIs
 
-    from anndata.typing import Index1D
-
     from ..acc import Array
-    from ..typing import Index, _Index1DNorm
+    from ..typing import AlignedArray, Index, Index1D, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
 
@@ -58,6 +50,9 @@ __all__ = [
     "unpack_index",
 ]
 
+ArrayApiDtype = Literal["real floating", "signed integer", "unsigned integer", "bool"]
+DtypeKind = Literal["f", "i", "u", "b"]
+
 
 def _normalize_indices(
     index: Index[IndexManager], names0: pd.Index, names1: pd.Index
@@ -67,10 +62,6 @@ def _normalize_indices(
         index = index[0]
     ax0, ax1 = unpack_index(index)
     return _normalize_index(ax0, names0), _normalize_index(ax1, names1)
-
-
-ArrayApiDtype = Literal["real floating", "signed integer", "unsigned integer", "bool"]
-DtypeKind = Literal["f", "i", "u", "b"]
 
 
 class _XrDtV(NamedTuple):
@@ -406,29 +397,10 @@ def _prepare_array_api_idx(
     return maybe_array_api_idxs
 
 
-type Subsettable = (
-    np.ndarray
-    | pd.DataFrame
-    | SupportsArrayApiBase
-    | DaskArray
-    | CSArray
-    | CSMatrix
-    | Dataset2D
-    | AwkArray
-    | XDataArray
-    | h5py.Dataset
-    | zarr.Array
-    | CupyArray
-    | CupySparseMatrix
-    | CSRDataset
-    | CSCDataset
-    | AnnData
-)
-"""Everything `_subset` can subset, i.e. everything registered on `_subset_dispatch`."""
-
-
 @singledispatch
-def _subset_dispatch(a: Subsettable, subset_idx: SubsetIdx) -> Subsettable:
+def _subset_dispatch(
+    a: AlignedArray | AnnData, subset_idx: SubsetIdx
+) -> AlignedArray | AnnData:
     """Subset a numpy or array-API array; everything else is registered below.
 
     For numpy arrays with array indices (not slices), this uses np.ix_ for
@@ -450,7 +422,7 @@ def _subset_dispatch(a: Subsettable, subset_idx: SubsetIdx) -> Subsettable:
     return a[numpy_idx]
 
 
-def _subset[T: Subsettable](
+def _subset[T: AlignedArray](
     a: T, subset_idx: tuple[_Index1DNorm[IndexManager], ...]
 ) -> T | np.ndarray:
     """Select a subset of `a` using the given indices.
