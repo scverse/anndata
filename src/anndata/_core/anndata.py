@@ -73,11 +73,9 @@ from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
     from os import PathLike
-    from typing import Any, ClassVar, Literal
+    from typing import Any, ClassVar, Literal, TypeAlias
 
-    from scipy import sparse
     from zarr.storage import StoreLike
 
     from anndata._types import AnnDataElem
@@ -104,9 +102,15 @@ if TYPE_CHECKING:
         _Index1DNorm,
         _XDataType,
     )
+    from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
+
+    IntoAlignedMapping: TypeAlias = np.ndarray | Mapping[str, AlignedArray] | None  # noqa: UP040
+    IntoLayers: TypeAlias = (  # noqa: UP040
+        Mapping[str, _XDataType] | Mapping[str | None, _XDataType] | None
+    )
 
 
 @set_module("anndata")
@@ -280,22 +284,20 @@ class AnnData:  # noqa: PLW1641
     def __init__(  # noqa: PLR0913
         self,
         X: _XDataType | pd.DataFrame | None = None,
-        obs: pd.DataFrame | Dataset2D | Mapping[str, Iterable[Any]] | None = None,
-        var: pd.DataFrame | Dataset2D | Mapping[str, Iterable[Any]] | None = None,
+        obs: IntoAlignedDf = None,
+        var: IntoAlignedDf = None,
         uns: Mapping[str, Any] | None = None,
         *,
-        obsm: np.ndarray | Mapping[str, AlignedArray] | None = None,
-        varm: np.ndarray | Mapping[str, AlignedArray] | None = None,
-        layers: Mapping[str, _XDataType]
-        | Mapping[str | None, _XDataType]
-        | None = None,
-        raw: Mapping[str, Any] | None = None,
+        obsm: IntoAlignedMapping = None,
+        varm: IntoAlignedMapping = None,
+        layers: IntoLayers = None,
+        raw: Raw | Mapping[str, Any] | None = None,
         shape: tuple[int, int] | None = None,
         filename: PathLike[str] | str | None = None,
         filemode: Literal["r", "r+"] | None = None,
         asview: bool = False,
-        obsp: np.ndarray | Mapping[str, AlignedArray] | None = None,
-        varp: np.ndarray | Mapping[str, AlignedArray] | None = None,
+        obsp: IntoAlignedMapping = None,
+        varp: IntoAlignedMapping = None,
         oidx: _Index1DNorm | int | np.integer | None = None,
         vidx: _Index1DNorm | int | np.integer | None = None,
     ):
@@ -332,7 +334,7 @@ class AnnData:  # noqa: PLW1641
         adata_ref: AnnData,
         oidx: _Index1DNorm[IndexManager] | int | np.integer,
         vidx: _Index1DNorm[IndexManager] | int | np.integer,
-    ):
+    ) -> None:
         self._is_view = True
         if isinstance(oidx, int | np.integer):
             if not (-adata_ref.n_obs <= oidx < adata_ref.n_obs):
@@ -386,24 +388,26 @@ class AnnData:  # noqa: PLW1641
         self,
         X=None,
         *,
-        obs=None,
-        var=None,
-        uns=None,
-        obsm=None,
-        varm=None,
-        varp=None,
-        obsp=None,
-        raw=None,
-        layers=None,
-        shape=None,
-        filename=None,
-        filemode=None,
-    ):
+        obs: IntoAlignedDf = None,
+        var: IntoAlignedDf = None,
+        uns: Mapping[str, Any] | None = None,
+        obsm: IntoAlignedMapping = None,
+        varm: IntoAlignedMapping = None,
+        varp: IntoAlignedMapping = None,
+        obsp: IntoAlignedMapping = None,
+        raw: Raw | Mapping[str, Any] | None = None,
+        layers: IntoLayers = None,
+        shape: tuple[int, int] | None = None,
+        filename: PathLike[str] | str | None = None,
+        filemode: Literal["r", "r+"] | None = None,
+    ) -> None:
         # view attributes
         self._is_view = False
         self._adata_ref = None
         self._oidx = None
         self._vidx = None
+
+        layers = _widen_layers_type(layers)
 
         # ----------------------------------------------------------------------
         # various ways of initializing the data
@@ -441,13 +445,13 @@ class AnnData:  # noqa: PLW1641
                 )
                 X = X.layers.get(None)
 
-            if layers is not None and None in layers:
-                if X is not None and X is not layers[None]:
+            if layers is not None and (x_from_layers := layers.get(None)) is not None:
+                if X is not None and X is not x_from_layers:
                     msg = (
                         "If you provide `layers[None]` and `X`, they must be identical."
                     )
                     raise ValueError(msg)
-                X = layers[None]
+                X = x_from_layers
 
             # init from DataFrame
             elif isinstance(X, pd.DataFrame):
@@ -473,6 +477,7 @@ class AnnData:  # noqa: PLW1641
         # ----------------------------------------------------------------------
 
         # check data type of X
+        source: Literal["X", "shape"]
         if X is not None:
             X = coerce_array(X, name="X")
             if shape is not None:
@@ -509,7 +514,7 @@ class AnnData:  # noqa: PLW1641
                 raise ValueError(msg)
 
         # unstructured annotations
-        self.uns = uns or OrderedDict()
+        self.uns = uns if isinstance(uns, MutableMapping) else OrderedDict(uns or {})
 
         # aligned mappings go through `AlignedMappingProperty.__set__`, which validates and coerces
         # (`layers` is done a bit farther down in the same way)
@@ -530,7 +535,7 @@ class AnnData:  # noqa: PLW1641
                 "got raw from other adata but also filename?"
             )
             if {"raw", "raw.X"} & set(self.file):
-                raw = dict(X=None, **raw)
+                raw = dict(X=None, **(raw or {}))
 
         # clean up old formats
         self._clean_up_old_format(uns)
@@ -1983,6 +1988,13 @@ class AnnData:  # noqa: PLW1641
         return values
 
 
+def _widen_layers_type[T](
+    m: Mapping[str, T] | Mapping[str | None, T] | None, /
+) -> Mapping[str | None, T] | None:
+    """Work around Mapping’s key type being invariant, unlike dict’s."""
+    return cast("Mapping[str | None, T] | None", m)
+
+
 def _check_2d_shape(X):
     """\
     Check shape of array or sparse matrix.
@@ -1995,14 +2007,18 @@ def _check_2d_shape(X):
 
 
 def _infer_shape_for_axis(
-    xxx: pd.DataFrame | Mapping[str, Iterable[Any]] | None,
-    xxxm: np.ndarray | Mapping[str, Sequence[Any]] | None,
-    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None,
-    xxxp: np.ndarray | Mapping[str, Sequence[Any]] | None,
+    xxx: IntoAlignedDf,
+    xxxm: IntoAlignedMapping,
+    layers: IntoLayers,
+    xxxp: IntoAlignedMapping,
     axis: Literal[0, 1],
 ) -> int | None:
     for elem in [xxx, xxxm, xxxp]:
-        if elem is not None and hasattr(elem, "shape"):
+        if (
+            elem is not None
+            and not isinstance(elem, Mapping)
+            and hasattr(elem, "shape")
+        ):
             return elem.shape[0]
     for mapping, id in zip(
         [layers, xxxm, xxxp], ["layers", "xxxm", "xxxp"], strict=True
@@ -2016,14 +2032,14 @@ def _infer_shape_for_axis(
 
 
 def _infer_shape(
-    obs: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
-    var: pd.DataFrame | Mapping[str, Iterable[Any]] | None = None,
+    obs: IntoAlignedDf = None,
+    var: IntoAlignedDf = None,
     *,
-    obsm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-    varm: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-    layers: Mapping[str, np.ndarray | sparse.spmatrix] | None = None,
-    obsp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
-    varp: np.ndarray | Mapping[str, Sequence[Any]] | None = None,
+    obsm: IntoAlignedMapping = None,
+    varm: IntoAlignedMapping = None,
+    layers: IntoLayers = None,
+    obsp: IntoAlignedMapping = None,
+    varp: IntoAlignedMapping = None,
 ):
     return (
         _infer_shape_for_axis(obs, obsm, layers, obsp, 0),
