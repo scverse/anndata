@@ -9,6 +9,9 @@ from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, overload
 
+if sys.version_info < (3, 15):
+    from typing_extensions import sentinel
+
 import numpy as np
 import pandas as pd
 
@@ -32,22 +35,11 @@ else:
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
-    from enum import Enum
     from typing import Any, Literal, Self, TypeGuard
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
     from ..typing import InMemoryArray, _XDataType
-
-    class NoIdx(Enum):
-        """Type of the :data:`NO_IDX` sentinel."""
-
-        NO_IDX = "NO_IDX"
-
-elif sys.version_info >= (3, 15):
-    from typing import sentinel as NoIdx
-else:
-    from typing_extensions import sentinel as NoIdx
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -71,7 +63,7 @@ type DataFrameLike = pd.DataFrame | Dataset2D
 type FullArray = _XDataType | DataFrameLike | AwkArray
 """A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
-NO_IDX = NoIdx.NO_IDX if TYPE_CHECKING else NoIdx("NO_IDX")
+NO_IDX = sentinel("NO_IDX")
 """Sentinel object needed for implementing :meth:`anndata.acc.RefAcc.get` when subclassing."""
 
 __all__ = [
@@ -216,7 +208,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NoIdx = NO_IDX, /) -> Array | FullArray:
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> Array | FullArray:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -307,7 +299,10 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, adata: AnnData, idx: Idx2D | NoIdx = NO_IDX, /
+        self,
+        adata: AnnData,
+        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
     ) -> _XDataType | InMemoryArray:
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
@@ -403,7 +398,10 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self, data: MuData | AnnData, k: str | NoIdx | None = NO_IDX, /
+        self,
+        data: MuData | AnnData,
+        k: str | NO_IDX | None = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full: DataFrameLike = getattr(data, self.dim)
         if k is NO_IDX:
@@ -484,7 +482,10 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, i: int | NoIdx = NO_IDX, /
+        self,
+        data: MuData | AnnData,
+        i: int | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
     ) -> FullArray | InMemoryArray:
         full: FullArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
@@ -577,7 +578,10 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, idx: Idx2D | NoIdx = NO_IDX, /
+        self,
+        data: MuData | AnnData,
+        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
     ) -> _XDataType | InMemoryArray:
         full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:
