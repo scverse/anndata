@@ -216,6 +216,25 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
+class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
+    def __new__(
+        cls,
+        input_array: Sequence[Any],
+        view_args: ViewArgs | None = None,
+    ):
+        arr = np.ma.asarray(input_array).view(cls)
+
+        if view_args is not None:
+            view_args = ElementRef(*view_args)
+        arr._view_args = view_args
+        return arr
+
+    def __array_finalize__(self, obj: np.ndarray | None):
+        super().__array_finalize__(obj)
+        if obj is not None:
+            self._view_args = getattr(obj, "_view_args", None)
+
+
 # Extends DaskArray
 # Calls parent __new__ constructor since
 # even calling astype on a dask array
@@ -360,6 +379,11 @@ def as_view(obj, view_args):
 @as_view.register(np.ndarray)
 def as_view_array(array, view_args):
     return ArrayView(array, view_args=view_args)
+
+
+@as_view.register(np.ma.MaskedArray)
+def as_view_masked_array(array, view_args):
+    return MaskedArrayView(array, view_args=view_args)
 
 
 @as_view.register(DaskArray)

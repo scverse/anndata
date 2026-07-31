@@ -30,6 +30,7 @@ from anndata._core.index import (
 )
 from anndata._core.views import (
     ArrayView,
+    MaskedArrayView,
     SparseCSCArrayView,
     SparseCSCMatrixView,
     SparseCSRArrayView,
@@ -777,6 +778,29 @@ def test_element_is_never_a_foreign_view() -> None:
 
     assert type(other.obsm["o"]) is np.ndarray
     assert not np.shares_memory(other.obsm["o"], adata.obsm["o"])
+
+
+def test_view_of_masked_array():
+    mask = np.zeros((10, 5), dtype=bool)
+    mask[0, 0] = True
+    data = np.ma.MaskedArray(np.arange(50.0).reshape(10, 5), mask=mask)
+
+    adata = ad.AnnData(np.zeros((10, 10)), obsm={"masked": data})
+    view = adata[:5, :]
+
+    masked_view = view.obsm["masked"]
+    assert isinstance(masked_view, MaskedArrayView)
+    assert isinstance(masked_view, np.ma.MaskedArray)
+    assert masked_view.mask[0, 0]
+    assert not masked_view.mask[1, 0]
+    assert np.ma.is_masked(masked_view)
+
+    with pytest.warns(ImplicitModificationWarning, match=r"obsm"):
+        masked_view[1, 0] = 1234.0
+    assert view.obsm["masked"][1, 0] == 1234.0
+    # Original is untouched: writing to a view actualizes it as a copy.
+    assert adata.obsm["masked"][1, 0] == 5.0
+    assert adata.obsm["masked"].mask[0, 0]
 
 
 def test_modify_uns_in_copy():
