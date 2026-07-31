@@ -552,13 +552,12 @@ def _resolve_idx_slice(
 def _resolve_idx_slice_slice(old: slice, new: slice, l: int) -> slice:
     r = range(*old.indices(l))[new]
     # Convert back to slice
-    start, step = r.start, r.step
     stop: int | None = r.stop
     if len(r) == 0:
-        stop = start
+        stop = r.start
     elif r.stop < 0:
         stop = None
-    return slice(start, stop, step)
+    return slice(r.start, stop, r.step)
 
 
 @_resolve_idx.register(IndexManager)

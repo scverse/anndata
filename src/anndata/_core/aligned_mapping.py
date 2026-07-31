@@ -41,9 +41,6 @@ if TYPE_CHECKING:
     from .anndata import AnnData
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
-else:
-    # used in generic parameters
-    AlignedArray = object
 
 
 OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
@@ -90,7 +87,7 @@ def _on_disk_x(
 
 
 class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
-    MutableMapping[K, AlignedArray], ABC
+    MutableMapping[K, "AlignedArray"], ABC
 ):
     """\
     An abstract base class for Mappings containing array-like values aligned

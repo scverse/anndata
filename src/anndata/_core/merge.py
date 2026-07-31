@@ -38,8 +38,10 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Generator, Iterable, Sequence
+    from pathlib import Path
     from typing import Any
 
+    import zarr
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
     from pandas.api.typing.aliases import Scalar
@@ -1289,8 +1291,10 @@ def make_dask_col_from_extension_dtype(
     from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
-    base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
-    elem_name = col.attrs.get("elem_name")
+    base_path_or_zarr_group: Path | zarr.Group | None = col.attrs.get(
+        "base_path_or_zarr_group"
+    )
+    elem_name: str | None = col.attrs.get("elem_name")
     if (
         base_path_or_zarr_group is not None and elem_name is not None
     ):  # lazy, backed by store

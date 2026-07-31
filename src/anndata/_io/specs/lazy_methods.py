@@ -38,15 +38,19 @@ if TYPE_CHECKING:
 @overload
 @contextmanager
 def maybe_open_h5(
-    path_or_other: Path, elem_name: str
-) -> Generator[h5py.File, None, None]: ...
+    path: Path | h5py.File, /, elem_name: str
+) -> Generator[h5py.File]: ...
 @overload
+@contextmanager  # D actually accepts anything, but that’d confuse the type checker
+def maybe_open_h5[D: (zarr.Group, CSRDataset, CSCDataset)](
+    obj: D, /, elem_name: str
+) -> Generator[D]: ...
 @contextmanager
-def maybe_open_h5[D](path_or_other: D, elem_name: str) -> Generator[D, None, None]: ...
-@contextmanager
-def maybe_open_h5[D](
-    path_or_other: h5py.File | D, elem_name: str
-) -> Generator[h5py.File | D, None, None]:
+def maybe_open_h5(
+    path_or_other: Path | h5py.File | zarr.Group | CSRDataset | CSCDataset,
+    /,
+    elem_name: str,
+) -> Generator[h5py.File | zarr.Group | CSRDataset | CSCDataset]:
     if not isinstance(path_or_other, Path):
         yield path_or_other
         return
@@ -86,22 +90,30 @@ def make_dask_chunk(
     # We need to open the file in each task since `dask` cannot share h5py objects when using `dask.distributed`
     # https://github.com/scverse/anndata/issues/1105
     with maybe_open_h5(path_or_sparse_dataset, elem_name) as f:
-        # See https://github.com/scverse/anndata/pull/2005 for why
-        # should_cache_indptr is False.
-        # The prupose of caching the indptr was when the dataset is reused
-        # which is in general the case but is not here.  Hence
-        # caching it on every access to the dataset here is quite costly.
-        # `maybe_open_h5` yields a dense `Dataset`, a sparse `Group` or a sparse dataset
-        mtx: Any = (
-            ad.io.sparse_dataset(f, should_cache_indptr=False)
-            if isinstance(f, h5py.Group)
-            else f
-        )
-        idx = tuple(
-            slice(start, stop) for start, stop in block_info[None]["array-location"]
-        )
-        chunk = mtx[idx]
-    return chunk
+        return _compute_chunk(f, block_info)
+
+
+def _compute_chunk(
+    f: h5py.File | CSRDataset | CSCDataset, block_info: BlockInfo
+) -> CSMatrix | CSArray | np.typing.NDArray:
+    # See https://github.com/scverse/anndata/pull/2005 for why
+    # should_cache_indptr is False.
+    # The purpose of caching the indptr was when the dataset is reused
+    # which is in general the case but is not here.  Hence
+    # caching it on every access to the dataset here is quite costly.
+    # `maybe_open_h5` yields a dense `Dataset`, a sparse `Group` or a sparse dataset
+    mtx = (
+        ad.io.sparse_dataset(f, should_cache_indptr=False)
+        if isinstance(f, h5py.Group)
+        else f
+    )
+    idx = tuple(
+        slice(start, stop) for start, stop in block_info[None]["array-location"]
+    )
+    rv = mtx[idx]
+    if TYPE_CHECKING:  # annotation bug: indexing with slices never returns a scalar
+        assert not isinstance(rv, int | float)
+    return rv
 
 
 @singledispatch
