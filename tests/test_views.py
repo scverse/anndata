@@ -325,7 +325,8 @@ def test_set_obsm(adata):
     subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
 
     subset = adata[subset_idx, :]
-    assert subset.is_view
+    if not TYPE_CHECKING:
+        assert subset.is_view
     subset.obsm = dict(o=np.ones((dim0_size, dim1_size)))
     assert not subset.is_view
     assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation

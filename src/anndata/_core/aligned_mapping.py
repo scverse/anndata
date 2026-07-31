@@ -5,7 +5,6 @@ from collections.abc import MutableMapping
 from copy import copy
 from dataclasses import dataclass, field
 from itertools import chain
-from types import NoneType
 from typing import TYPE_CHECKING, cast, overload
 
 import h5py
@@ -34,9 +33,6 @@ from .storage import _non_2d_message, coerce_array
 from .views import as_view, view_update
 from .xarray import Dataset2D
 
-ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
-"""Element types that live on disk and so cannot be copied in memory."""
-
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from typing import ClassVar, Literal, Self, TypeAlias
@@ -53,10 +49,14 @@ else:
 OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
 TwoDIdx: TypeAlias = tuple[Idx1D, Idx1D]  # noqa: UP040
 
+ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
+"""Element types that live on disk and so cannot be copied in memory."""
+
 
 def _copy_value(v: AlignedArray) -> AlignedArray:
+    """Copy an array element in memory without copying on-disk elements."""
     # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
-    if isinstance(v, AwkArray | NoneType | ON_DISK_TYPES):
+    if isinstance(v, AwkArray | ON_DISK_TYPES | None):
         return copy(v)
     if isinstance(v, pd.DataFrame | Dataset2D | XDataArray):
         return v.copy()
@@ -491,7 +491,8 @@ LayersBase._view_class = LayersView
 LayersBase._actual_class = Layers
 
 
-class PairwiseArraysBase(AlignedMappingBase[TwoDIdx, str]):
+# OneDIdx because this is aligned to one axis
+class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
     """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
@@ -517,7 +518,7 @@ class PairwiseArraysBase(AlignedMappingBase[TwoDIdx, str]):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActual[TwoDIdx, str], PairwiseArraysBase):
+class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -533,7 +534,7 @@ class PairwiseArrays(AlignedActual[TwoDIdx, str], PairwiseArraysBase):
 
 
 class PairwiseArraysView(
-    AlignedView[PairwiseArraysBase, TwoDIdx, str], PairwiseArraysBase
+    AlignedView[PairwiseArraysBase, OneDIdx, str], PairwiseArraysBase
 ):
     pass
 
