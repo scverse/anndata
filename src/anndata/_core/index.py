@@ -183,8 +183,6 @@ def _from_array(
 ) -> SupportsArrayApiBase:
     # convert to the 1D if it's accidentally 2D column/row vector
     # convert sparse into dense arrays if needed
-    # MultiIndex objects are not turned into arrays in _normalize_index
-    is_pandas = is_pandas_idx(indexer)
     xp = indexer.__array_namespace__() if has_xp_base(indexer) else np
     if indexer.shape == (index.shape[0], 1) or indexer.shape == (1, index.shape[0]):
         # the array API has no `ravel`, and `np.matrix` is always 2D
@@ -195,7 +193,8 @@ def _from_array(
         )
     # https://github.com/numpy/numpy/issues/27545
     is_numpy_string = indexer.dtype == np.dtypes.StringDType()
-    if not is_numpy_string or is_pandas:
+    # MultiIndex objects are not turned into arrays in _normalize_index, so handle them explicitly
+    if not is_numpy_string or is_pandas_idx(indexer):
         # if it is a float array or something along those lines, convert it to integers
         if XArrayDtype.Float(indexer):
             indexer_int = xp.astype(indexer, xp.int64)
@@ -219,7 +218,15 @@ def _from_array(
             msg = f"indexer is array-api compatible but has unsupported dtype: {indexer.dtype}"
             raise ValueError(msg)
     # indexer is a string array here; `get_indexer` needs a collection
-    names = indexer if isinstance(indexer, pd.Index) else pd.Index(np.asarray(indexer))
+    names = (
+        indexer
+        if isinstance(indexer, pd.Index)
+        else pd.Index(
+            indexer
+            if isinstance(indexer, pd.api.extensions.ExtensionArray)
+            else np.asarray(indexer)
+        )
+    )
     positions = index.get_indexer(names)
     if xp.any(positions < 0):
         not_found = names[positions < 0]
