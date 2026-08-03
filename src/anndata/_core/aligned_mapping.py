@@ -17,7 +17,6 @@ from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..abc import CSCDataset, CSRDataset
 from ..compat import AwkArray, CupyArray, XDataArray, XDataset
 from ..types import SupportsArrayApiBase
-from ..typing import AlignedArray, InMemoryArray
 from ..utils import (
     asarray,
     axis_len,
@@ -39,6 +38,7 @@ if TYPE_CHECKING:
     from typing import ClassVar, Literal, Self, TypeAlias
 
     from ..compat import ZappyArray
+    from ..typing import AlignedArray, InMemoryArray
     from .anndata import AnnData
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -373,7 +373,7 @@ class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
-class AxisArrays(AlignedActual[OneDIdx, str, _AlignedAny], AxisArraysBase):
+class AxisArrays(AlignedActual[OneDIdx, str, "_AlignedAny"], AxisArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -389,8 +389,8 @@ class AxisArrays(AlignedActual[OneDIdx, str, _AlignedAny], AxisArraysBase):
 
 
 class AxisArraysView(
-    AlignedView[AxisArraysBase, OneDIdx, str, _AlignedAny],
-    AxisArraysBase[_AlignedAny],
+    AlignedView[AxisArraysBase, OneDIdx, str, "_AlignedAny"],
+    AxisArraysBase["_AlignedAny"],
 ):
     pass
 
@@ -399,7 +399,7 @@ AxisArraysBase._view_class = AxisArraysView
 AxisArraysBase._actual_class = AxisArrays
 
 
-class LayersBase(AlignedMappingBase[TwoDIdx, str | None, AlignedArray]):
+class LayersBase(AlignedMappingBase[TwoDIdx, str | None, "AlignedArray"]):
     """\
     Mapping of key: array-like, where array-like is aligned to both axes of the
     parent anndata.
@@ -454,7 +454,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None, AlignedArray]):
         return super()._validate_value(val, key)
 
 
-class Layers(AlignedActual[TwoDIdx, str | None, AlignedArray], LayersBase):
+class Layers(AlignedActual[TwoDIdx, str | None, "AlignedArray"], LayersBase):
     def __init__(
         self,
         parent: AnnData,
@@ -494,7 +494,7 @@ class Layers(AlignedActual[TwoDIdx, str | None, AlignedArray], LayersBase):
 
 
 class LayersView(
-    AlignedView[LayersBase, TwoDIdx, str | None, AlignedArray], LayersBase
+    AlignedView[LayersBase, TwoDIdx, str | None, "AlignedArray"], LayersBase
 ):
     def __init__(
         self, parent_mapping: LayersBase, parent_view: AnnData, subset_idx: TwoDIdx
@@ -511,7 +511,7 @@ LayersBase._actual_class = Layers
 
 
 # OneDIdx because this is aligned to one axis
-class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, AlignedArray]):
+class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, "AlignedArray"]):
     """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
@@ -537,7 +537,7 @@ class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, AlignedArray]):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActual[OneDIdx, str, AlignedArray], PairwiseArraysBase):
+class PairwiseArrays(AlignedActual[OneDIdx, str, "AlignedArray"], PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -553,7 +553,7 @@ class PairwiseArrays(AlignedActual[OneDIdx, str, AlignedArray], PairwiseArraysBa
 
 
 class PairwiseArraysView(
-    AlignedView[PairwiseArraysBase, OneDIdx, str, AlignedArray], PairwiseArraysBase
+    AlignedView[PairwiseArraysBase, OneDIdx, str, "AlignedArray"], PairwiseArraysBase
 ):
     pass
 
