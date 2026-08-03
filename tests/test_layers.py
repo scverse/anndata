@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import warnings
 from contextlib import nullcontext
+from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,6 +12,9 @@ import pytest
 from anndata import AnnData, ImplicitModificationWarning, read_h5ad
 from anndata.tests.helpers import gen_typed_df_t2_size
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 X_ = np.arange(12).reshape((3, 4))
 L = np.arange(12).reshape((3, 4)) + 12
@@ -95,6 +100,14 @@ def test_copy():
     # check that we have a copy
     adata.layers["L"] += 10
     assert np.all(adata.layers["L"] != bdata.layers["L"])  # 201
+
+
+def test_copy_on_disk(tmp_path: Path):
+    """On-disk elements can’t be copied, so a copy shares them with the original."""
+    with h5py.File(tmp_path / "layer.h5", "w") as f:
+        ds = f.create_dataset("L", data=L)
+        adata = AnnData(X=X_, layers=dict(L=ds))
+        assert adata.layers.copy()["L"] is ds
 
 
 def test_shape_error():

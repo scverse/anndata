@@ -147,9 +147,13 @@ In particular, for pytorch-based models.
    :toctree: generated/
 
    experimental.AnnCollection
-   experimental.AnnCollectionView
    experimental.AnnLoader
 ```
+
+:::{class} experimental.AnnCollectionView
+
+A view of {class}`experimental.AnnCollection` with most of the same functions and attributes.
+:::
 
 ```{note}
 `AnnLoader` is deprecated and will be removed in 0.14.

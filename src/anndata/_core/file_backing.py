@@ -71,7 +71,7 @@ class AnnDataFileManager:
     def _open_file(self) -> h5py.File:
         if self._file is None:
             msg = "Backing file is not open."
-            raise ValueError(msg)
+            raise RuntimeError(msg)
         return self._file
 
     def __contains__(self, x) -> bool:

@@ -55,9 +55,10 @@ OnDiskArray = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 
 def _copy_value[V: _AlignedAny](v: V) -> V:
     """Copy an array element in memory without copying on-disk elements."""
-    # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
-    if isinstance(v, AwkArray | OnDiskArray | None):
-        return copy(v)
+    if isinstance(v, OnDiskArray | None):
+        return v  # on-disk arrays can’t be copied
+    if isinstance(v, AwkArray):
+        return copy(v)  # immutable buffers, so a shallow copy is enough
     if isinstance(v, pd.DataFrame | Dataset2D | XDataArray):
         return cast("V", v.copy())
     return _copy_array(v)
