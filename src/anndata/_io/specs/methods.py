@@ -585,6 +585,7 @@ def write_basic_dask_dask_dense(
 
     dataset_kwargs = dict(dataset_kwargs)
     is_h5 = isinstance(f, h5py.Group)
+    store_keywords = dict(scheduler="threads") if is_h5 else dict()
     if not is_h5:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     if is_h5:
@@ -594,7 +595,7 @@ def write_basic_dask_dask_dense(
             dataset_kwargs, format=f.metadata.zarr_format
         ) as dataset_kwargs:
             g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g, scheduler="threads")
+    da.store(elem, g, **store_keywords)
 
 
 @_REGISTRY.register_read(h5py.Dataset, IOSpec("array", "0.2.0"))
