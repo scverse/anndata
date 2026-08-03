@@ -17,6 +17,7 @@ from .._warnings import ExperimentalFeatureWarning, ImplicitModificationWarning
 from ..abc import CSCDataset, CSRDataset
 from ..compat import AwkArray, CupyArray, XDataArray, XDataset
 from ..types import SupportsArrayApiBase
+from ..typing import AlignedArray, InMemoryArray
 from ..utils import (
     asarray,
     axis_len,
@@ -37,32 +38,40 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from typing import ClassVar, Literal, Self, TypeAlias
 
-    from ..typing import AlignedArray, InMemoryArray
+    from ..compat import ZappyArray
     from .anndata import AnnData
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
+
+    type _AlignedAny = AlignedArray | pd.DataFrame
 
 
 OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
 TwoDIdx: TypeAlias = tuple[Idx1D, Idx1D]  # noqa: UP040
 
-ON_DISK_TYPES = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
+OnDiskArray = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 """Element types that live on disk and so cannot be copied in memory."""
 
 
-def _copy_value(v: AlignedArray) -> AlignedArray:
+def _copy_value[V: _AlignedAny](v: V) -> V:
     """Copy an array element in memory without copying on-disk elements."""
     # awkward arrays have immutable buffers, and on-disk elements aren’t copyable
-    if isinstance(v, AwkArray | ON_DISK_TYPES | None):
+    if isinstance(v, AwkArray | OnDiskArray | None):
         return copy(v)
     if isinstance(v, pd.DataFrame | Dataset2D | XDataArray):
-        return v.copy()
+        return cast("V", v.copy())
     return _copy_array(v)
 
 
-def _copy_array(a: AlignedArray) -> InMemoryArray:
+@overload
+def _copy_array[V: InMemoryArray](a: V) -> V: ...
+@overload
+def _copy_array(a: OnDiskArray | ZappyArray) -> InMemoryArray: ...
+def _copy_array(
+    a: InMemoryArray | OnDiskArray | ZappyArray,
+) -> InMemoryArray:
     """An in-memory copy of an array element."""
-    if isinstance(a, ON_DISK_TYPES):
+    if isinstance(a, OnDiskArray):
         return to_memory(a)
     if isinstance(a, np.ndarray):
         return a.copy()
@@ -86,8 +95,8 @@ def _on_disk_x(
     return elem
 
 
-class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
-    MutableMapping[K, "AlignedArray"], ABC
+class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _AlignedAny](
+    MutableMapping[K, V], ABC
 ):
     """\
     An abstract base class for Mappings containing array-like values aligned
@@ -112,7 +121,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
     def _ipython_key_completions_(self) -> list[K]:
         return list(self.keys())
 
-    def _validate_value(self, val: AlignedArray, key: K) -> AlignedArray:
+    def _validate_value(self, val: _AlignedAny, key: K) -> V:
         """Raises an error if value is invalid"""
         if isinstance(val, AwkArray):
             msg = (
@@ -175,10 +184,10 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
             raise AssertionError(msg)
         return parent
 
-    def copy(self) -> dict[K, AlignedArray]:
+    def copy(self) -> dict[K, V]:
         return {k: _copy_value(v) for k, v in self.items()}
 
-    def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[Self, I, K]:
+    def _view(self, parent: AnnData, subset_idx: I) -> AlignedView[Self, I, K, V]:
         """Returns a subset copy-on-write view of the object."""
         return self._view_class(self, parent, subset_idx)
 
@@ -187,9 +196,12 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
         return dict(self)
 
 
-class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | None)](
-    AlignedMappingBase[I, K]
-):
+class AlignedView[
+    P: AlignedMappingBase,
+    I: (OneDIdx, TwoDIdx),
+    K: (str, str | None),
+    V: _AlignedAny,
+](AlignedMappingBase[I, K, V]):
     is_view: ClassVar[Literal[True]] = True
 
     # override docstring
@@ -210,15 +222,16 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         if (axis := getattr(parent_mapping, "_axis", None)) is not None:
             self._axis = axis
 
-    def __getitem__(self, key: K) -> AlignedArray:
+    def __getitem__(self, key: K) -> V:
+        # Only `LayersBase()[None]` is ever `None`, so we override the return type there
         if self.parent_mapping[key] is None:
-            return None
+            return cast("V", None)
         return as_view(
             _subset(self.parent_mapping[key], self.subset_idx),
             ElementRef(self.parent, self.attrname, (key,)),
         )
 
-    def __setitem__(self, key: K, value: AlignedArray) -> None:
+    def __setitem__(self, key: K, value: _AlignedAny) -> None:
         value = self._validate_value(value, key)  # Validate before mutating
         msg = (
             f"Setting element `.{self.attrname}['{key}']` of view, "
@@ -254,19 +267,19 @@ class AlignedView[P: AlignedMappingBase, I: (OneDIdx, TwoDIdx), K: (str, str | N
         return len(self.parent_mapping)
 
 
-class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
-    AlignedMappingBase[I, K]
+class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _AlignedAny](
+    AlignedMappingBase[I, K, V]
 ):
     is_view: ClassVar[Literal[False]] = False
 
-    _data: MutableMapping[K, AlignedArray]
+    _data: MutableMapping[K, V]
     """Underlying mapping to the data"""
 
     def __init__(
         self,
         parent: AnnData | Raw,
         *,
-        store: MutableMapping[K, AlignedArray],
+        store: MutableMapping[K, V],
         validate: bool = True,
     ):
         self._parent = parent
@@ -276,16 +289,17 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
                 continue
             self._data[k] = self._validate_value(v, k) if validate else v
 
-    def __getitem__(self, key: K) -> AlignedArray:
+    def __getitem__(self, key: K) -> V:
         return self._data[key]
 
-    def __setitem__(self, key: K, value: AlignedArray):
+    def __setitem__(self, key: K, value: _AlignedAny):
         if value is not None:
             value = self._validate_value(value, key)
         if key is None and value is None:
             del self[key]
         else:
-            self._data[key] = value
+            # `value` is only ever `None` here for `LayersBase()[None]`
+            self._data[key] = cast("V", value)
 
     def __contains__(self, key: object) -> bool:
         return key in self._data
@@ -303,7 +317,7 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None)](
         return len(self._data)
 
 
-class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
+class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
     """\
     Mapping of key→array-like,
     where array-like is aligned to an axis of parent AnnData.
@@ -336,7 +350,7 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 
-    def _validate_value(self, val: AlignedArray, key: str) -> AlignedArray:
+    def _validate_value(self, val: _AlignedAny, key: str) -> V:
         if isinstance(val, pd.DataFrame):
             raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
             if not val.index.equals(self.dim_names):
@@ -359,13 +373,13 @@ class AxisArraysBase(AlignedMappingBase[OneDIdx, str]):
         return (self.parent.obs_names, self.parent.var_names)[self._axis]
 
 
-class AxisArrays(AlignedActual[OneDIdx, str], AxisArraysBase):
+class AxisArrays(AlignedActual[OneDIdx, str, _AlignedAny], AxisArraysBase):
     def __init__(
         self,
         parent: AnnData,
         *,
         axis: Literal[0, 1],
-        store: MutableMapping[str, AlignedArray] | AxisArraysBase,
+        store: MutableMapping[str, _AlignedAny] | AxisArraysBase,
         validate: bool = True,
     ):
         if axis not in {0, 1}:
@@ -374,7 +388,10 @@ class AxisArrays(AlignedActual[OneDIdx, str], AxisArraysBase):
         super().__init__(parent, store=store, validate=validate)
 
 
-class AxisArraysView(AlignedView[AxisArraysBase, OneDIdx, str], AxisArraysBase):
+class AxisArraysView(
+    AlignedView[AxisArraysBase, OneDIdx, str, _AlignedAny],
+    AxisArraysBase[_AlignedAny],
+):
     pass
 
 
@@ -382,7 +399,7 @@ AxisArraysBase._view_class = AxisArraysView
 AxisArraysBase._actual_class = AxisArrays
 
 
-class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
+class LayersBase(AlignedMappingBase[TwoDIdx, str | None, AlignedArray]):
     """\
     Mapping of key: array-like, where array-like is aligned to both axes of the
     parent anndata.
@@ -420,7 +437,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
             del self[key]
 
     def _validate_value(
-        self, val: AlignedArray | None, key: str | None
+        self, val: _AlignedAny | None, key: str | None
     ) -> AlignedArray | None:
         """Warn if storing ``val`` under ``key`` would violate the on-disk spec.
 
@@ -437,7 +454,7 @@ class LayersBase(AlignedMappingBase[TwoDIdx, str | None]):
         return super()._validate_value(val, key)
 
 
-class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
+class Layers(AlignedActual[TwoDIdx, str | None, AlignedArray], LayersBase):
     def __init__(
         self,
         parent: AnnData,
@@ -476,12 +493,17 @@ class Layers(AlignedActual[TwoDIdx, str | None], LayersBase):
         return super().__contains__(key)
 
 
-class LayersView(AlignedView[LayersBase, TwoDIdx, str | None], LayersBase):
+class LayersView(
+    AlignedView[LayersBase, TwoDIdx, str | None, AlignedArray], LayersBase
+):
     def __init__(
         self, parent_mapping: LayersBase, parent_view: AnnData, subset_idx: TwoDIdx
     ) -> None:
         super().__init__(parent_mapping, parent_view, subset_idx)
         self.isbacked = parent_mapping.isbacked
+
+    def __getitem__(self, key: str | None) -> AlignedArray | None:
+        return super().__getitem__(key)
 
 
 LayersBase._view_class = LayersView
@@ -489,7 +511,7 @@ LayersBase._actual_class = Layers
 
 
 # OneDIdx because this is aligned to one axis
-class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
+class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, AlignedArray]):
     """\
     Mapping of key: array-like, where both axes of array-like are aligned to
     one axis of the parent anndata.
@@ -515,7 +537,7 @@ class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str]):
         return self._dimnames[self._axis]
 
 
-class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
+class PairwiseArrays(AlignedActual[OneDIdx, str, AlignedArray], PairwiseArraysBase):
     def __init__(
         self,
         parent: AnnData,
@@ -531,7 +553,7 @@ class PairwiseArrays(AlignedActual[OneDIdx, str], PairwiseArraysBase):
 
 
 class PairwiseArraysView(
-    AlignedView[PairwiseArraysBase, OneDIdx, str], PairwiseArraysBase
+    AlignedView[PairwiseArraysBase, OneDIdx, str, AlignedArray], PairwiseArraysBase
 ):
     pass
 

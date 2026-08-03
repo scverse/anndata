@@ -892,7 +892,7 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_index(names, "var")
 
     @property
-    def uns(self) -> MutableMapping:
+    def uns(self) -> MutableMapping:  # [str, Storable]:
         """Unstructured annotation (ordered dictionary)."""
         uns = self._uns
         if self.is_view:

@@ -112,7 +112,9 @@ def asarray_dask(x):
 
 @singledispatch
 def to_df(
-    obj: AlignedArray, index: Axes | None = None, columns: Axes | None = None
+    obj: AlignedArray | pd.DataFrame,
+    index: Axes | None = None,
+    columns: Axes | None = None,
 ) -> pd.DataFrame:
     return pd.DataFrame(asarray(obj), index=index, columns=columns)
 

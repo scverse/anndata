@@ -100,12 +100,11 @@ type AlignedArray = (
     | abc.CSCDataset
     | AwkArray
     | XDataArray
-    | pd.DataFrame
     | Dataset2D
 )
 """Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
 
-_StorableArrayOrScalar: TypeAlias = AlignedArray | np.number | str  # noqa: UP040
+_StorableArrayOrScalar: TypeAlias = AlignedArray | pd.DataFrame | np.number | str  # noqa: UP040
 type Storable = _StorableArrayOrScalar | dict[str, "Storable"] | list["Storable"]
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
