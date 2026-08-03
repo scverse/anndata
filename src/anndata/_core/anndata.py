@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, ClassVar, Literal, TypeAlias
 
+    from numpy.typing import NDArray
     from zarr.storage import StoreLike
 
     from anndata._types import AnnDataElem
@@ -94,22 +95,17 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..typing import (
-        AlignedArray,
-        Index,
-        Index1D,
-        Storable,
-        _Index1DNorm,
-        _XDataType,
-    )
+    from ..typing import AlignedArray, Index, Index1D, Storable, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
-    IntoAlignedMapping: TypeAlias = np.ndarray | Mapping[str, AlignedArray] | None  # noqa: UP040
+    IntoAlignedMapping: TypeAlias = (  # noqa: UP040
+        NDArray[np.void] | Mapping[str, AlignedArray] | None
+    )
     IntoLayers: TypeAlias = (  # noqa: UP040
-        Mapping[str, _XDataType] | Mapping[str | None, _XDataType] | None
+        Mapping[str, AlignedArray] | Mapping[str | None, AlignedArray] | None
     )
 
 
@@ -282,7 +278,7 @@ class AnnData:  # noqa: PLW1641
     )
     def __init__(  # noqa: PLR0913
         self,
-        X: _XDataType | pd.DataFrame | None = None,
+        X: AlignedArray | None = None,
         obs: IntoAlignedDf = None,
         var: IntoAlignedDf = None,
         uns: Mapping[str, Any] | None = None,
@@ -385,7 +381,7 @@ class AnnData:  # noqa: PLW1641
 
     def _init_as_actual(  # noqa: PLR0912, PLR0913, PLR0915
         self,
-        X: AnnData | _XDataType | None = None,
+        X: AnnData | AlignedArray | None = None,
         *,
         obs: IntoAlignedDf = None,
         var: IntoAlignedDf = None,
@@ -622,7 +618,7 @@ class AnnData:  # noqa: PLW1641
         return self.n_obs, self.n_vars
 
     @property
-    def X(self) -> _XDataType | None:
+    def X(self) -> AlignedArray | None:
         """Data matrix of shape :attr:`n_obs` × :attr:`n_vars`."""
         if self.isbacked:
             if not self.file.is_open:
@@ -647,7 +643,7 @@ class AnnData:  # noqa: PLW1641
         return self.layers.get(None)
 
     @X.setter
-    def X(self, value: _XDataType | None) -> None:
+    def X(self, value: AlignedArray | None) -> None:
         value = (
             coerce_array(value, name="X", allow_array_like=True)
             if value is not None
@@ -1978,7 +1974,7 @@ def _widen_layers_type[T](
     m: Mapping[str, T] | Mapping[str | None, T] | None, /
 ) -> Mapping[str | None, T] | None:
     """Work around Mapping’s key type being invariant, unlike dict’s."""
-    return cast("Mapping[str | None, T] | None", m)
+    return cast("Any", m)
 
 
 def _check_2d_shape(X):

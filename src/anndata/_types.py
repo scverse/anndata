@@ -16,10 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from pandas import DataFrame
-
     from anndata._core.xarray import Dataset2D
-    from anndata.typing import Storable, _XDataType
+    from anndata.typing import Storable
 
     from ._io.specs.registry import (
         IOSpec,
@@ -237,12 +235,7 @@ type Join_T = Literal["inner", "outer"]
 
 class ReduceFunc[T, E: AnnDataElem | None](Protocol):
     def __call__(
-        self,
-        elem: _XDataType | Storable | DataFrame | XDataset,
-        /,
-        *,
-        accumulate: T,
-        attr_name: E,
+        self, elem: Storable | XDataset, /, *, accumulate: T, attr_name: E
     ) -> T:
         """Function to be called on each visit within `anndata.AnnData._reduce`.
 

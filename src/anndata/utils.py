@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     )
     from typing import Any, LiteralString
 
+    from numpy.typing import NDArray
+
     from ._core.aligned_mapping import AlignedMapping
     from ._core.raw import Raw
     from ._core.xarray import Dataset2D
@@ -108,7 +110,7 @@ def convert_to_dict_dict(obj: dict):
 
 
 @convert_to_dict.register(np.ndarray)
-def convert_to_dict_ndarray(obj: np.ndarray):
+def convert_to_dict_ndarray(obj: NDArray[np.void]):
     if obj.dtype.fields is None:
         msg = (
             "Can only convert np.ndarray with compound dtypes to dict, "

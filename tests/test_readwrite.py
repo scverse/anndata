@@ -21,6 +21,7 @@ from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
+from anndata.experimental.backed import Dataset2D
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
@@ -298,8 +299,8 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     adata = ad.read_h5ad(backing_h5ad)
     if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
         adata_src.X = np.from_dlpack(adata_src.X)
-    assert adata.X is not None
-    assert adata_src.X is not None
+    assert not isinstance(adata.X, Dataset2D | None)
+    assert not isinstance(adata_src.X, Dataset2D | None)
     assert adata.X.dtype == adata_src.X.dtype
 
 
