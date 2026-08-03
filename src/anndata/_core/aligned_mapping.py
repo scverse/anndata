@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from typing import ClassVar, Literal, Self, TypeAlias
 
-    from ..typing import AlignedArray, InMemoryArray, _XDataType
+    from ..typing import AlignedArray, InMemoryArray
     from .anndata import AnnData
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
@@ -60,7 +60,7 @@ def _copy_value(v: AlignedArray) -> AlignedArray:
     return _copy_array(v)
 
 
-def _copy_array(a: _XDataType) -> InMemoryArray:
+def _copy_array(a: AlignedArray) -> InMemoryArray:
     """An in-memory copy of an array element."""
     if isinstance(a, ON_DISK_TYPES):
         return to_memory(a)

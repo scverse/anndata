@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
-    from ..typing import InMemoryArray, _XDataType
+    from ..typing import AlignedArray, InMemoryArray
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -60,7 +60,7 @@ type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 type DataFrameLike = pd.DataFrame | Dataset2D
 """A 2D dataframe-like container (pandas- or xarray-backed)."""
 
-type FullArray = _XDataType | DataFrameLike | AwkArray
+type FullArray = AlignedArray | DataFrameLike | AwkArray
 """A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
 NO_IDX = sentinel("NO_IDX")
@@ -295,7 +295,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
         return True  # idx is None or [:, :]
 
     @overload
-    def get(self, adata: AnnData, /) -> _XDataType: ...
+    def get(self, adata: AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
@@ -303,7 +303,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
         adata: AnnData,
         idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         /,
-    ) -> _XDataType | InMemoryArray:
+    ) -> AlignedArray:  # AlignedArray includes InMemoryArray
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
@@ -574,7 +574,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
         return all(i in index for i in idx if isinstance(i, str))
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> _XDataType: ...
+    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
@@ -582,8 +582,8 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
         data: MuData | AnnData,
         idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         /,
-    ) -> _XDataType | InMemoryArray:
-        full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
+    ) -> AlignedArray:
+        full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:
             return full
         index: pd.Index = getattr(data, self.dim).index

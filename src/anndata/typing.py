@@ -91,16 +91,18 @@ type InMemoryArray = (
 )
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
 
-_XDataType: TypeAlias = (  # noqa: UP040
+type AlignedArray = (
     InMemoryArray
     | h5py.Dataset
     | zarr.Array
     | ZappyArray
     | abc.CSRDataset
     | abc.CSCDataset
+    | AwkArray
+    | XDataArray
+    | pd.DataFrame
+    | Dataset2D
 )
-
-type AlignedArray = _XDataType | AwkArray | XDataArray | pd.DataFrame | Dataset2D
 """Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
 
 _StorableArrayOrScalar: TypeAlias = AlignedArray | np.number | str  # noqa: UP040
