@@ -145,7 +145,7 @@ intersphinx_mapping = dict(
 qualname_overrides = {
     #### stdlib
     "types.EllipsisType": ("py:data", "Ellipsis"),
-    "builtins.PyCapsule": "types.CapsuleType",
+    "PyCapsule": "types.CapsuleType",
     #### anndata
     **{
         f"anndata._core.aligned_mapping.{cls}{kind}": "collections.abc.Mapping"
