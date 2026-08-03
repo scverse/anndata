@@ -30,6 +30,7 @@ from ..compat import (
     AwkArray,
     CSArray,
     CSMatrix,
+    Empty,
     IndexManager,
     XDataset,
     _move_adj_mtx,
@@ -43,7 +44,6 @@ from ..utils import (
     axis_len,
     deprecation_msg,
     ensure_df_homogeneous,
-    get_union_members,
     iter_outer,
     raise_value_error_if_multiindex_columns,
     set_module,
@@ -1414,11 +1414,7 @@ class AnnData:  # noqa: PLW1641
         """
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
-    def _copy(
-        self, *, X: _XDataType | Literal["no_set_X"] | None = "no_set_X"
-    ) -> AnnData:
-        from ..typing import _XDataType
-
+    def _copy(self, *, X: AlignedArray | Empty | None = Empty.TOKEN) -> AnnData:
         new: dict[str, Any] = {"uns": deepcopy(self._uns)}
         for key, elem in iter_outer(self):
             # `uns` is deep-copied above, and an absent `raw` is the default
@@ -1427,9 +1423,7 @@ class AnnData:  # noqa: PLW1641
             ):
                 continue
             new[key] = elem.copy()
-            if key == "layers" and isinstance(
-                X, (*get_union_members(_XDataType), type(None))
-            ):
+            if key == "layers" and X is not Empty.TOKEN:
                 new[key][None] = X
         return AnnData(**new)
 
