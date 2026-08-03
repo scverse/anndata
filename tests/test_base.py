@@ -807,6 +807,7 @@ def test_1d_slice_dtypes(subtests: pytest.Subtests) -> None:
 def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
+    assert df[df.columns[0]].dtype == pd.SparseDtype(np.int64, 0)
     assert df.values.tolist() == X.tolist()
 
 

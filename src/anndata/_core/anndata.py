@@ -47,6 +47,7 @@ from ..utils import (
     iter_outer,
     raise_value_error_if_multiindex_columns,
     set_module,
+    to_df,
     warn,
 )
 from .aligned_df import _gen_dataframe
@@ -1324,8 +1325,7 @@ class AnnData:  # noqa: PLW1641
         :class:`~pandas.DataFrame`, where :attr:`obs_names` initializes the
         index, and :attr:`var_names` the columns.
 
-        * No annotations are maintained in the returned object.
-        * The data matrix is densified in case it is sparse.
+        No annotations are maintained in the returned object.
 
         Params
         ------
@@ -1343,7 +1343,7 @@ class AnnData:  # noqa: PLW1641
             raise ValueError(msg)
         else:
             X = self.X
-        return pd.DataFrame(asarray(X), index=self.obs_names, columns=self.var_names)
+        return to_df(X, index=self.obs_names, columns=self.var_names)
 
     @deprecated(
         Deprecation(

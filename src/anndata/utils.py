@@ -15,8 +15,16 @@ from scipy import sparse
 import anndata
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
+from ._core.xarray import Dataset2D
 from ._warnings import warn
-from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray, pandas_sparse
+from .compat import (
+    CSArray,
+    CSMatrix,
+    CupyArray,
+    CupySparseMatrix,
+    DaskArray,
+    pandas_sparse,
+)
 from .logging import get_logger
 
 if TYPE_CHECKING:
@@ -31,11 +39,14 @@ if TYPE_CHECKING:
     from typing import Any, LiteralString
 
     from numpy.typing import NDArray
+    from pandas.api.typing.aliases import Axes
+
+    from anndata.typing import AlignedArray
 
     from ._core.aligned_mapping import AlignedMapping
     from ._core.raw import Raw
-    from ._core.xarray import Dataset2D
     from ._types import AnnDataElem
+
 
 logger = get_logger(__name__)
 
@@ -97,6 +108,44 @@ def asarray_cupy_sparse(x):
 @asarray.register(DaskArray)
 def asarray_dask(x):
     return asarray(x.compute())
+
+
+@singledispatch
+def to_df(
+    obj: AlignedArray, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    return pd.DataFrame(asarray(obj), index=index, columns=columns)
+
+
+@to_df.register(pd.DataFrame)
+def _to_df_df(
+    obj: pd.DataFrame, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    if (index is not None and not obj.index.equals(index)) or (
+        columns is not None and not obj.columns.equals(columns)
+    ):
+        obj = obj.copy()
+    if index is not None:
+        obj.index = pd.Index(index)
+    if columns is not None:
+        obj.columns = pd.Index(columns)
+    return obj
+
+
+@to_df.register(Dataset2D)
+def _to_df_dataset2d(
+    obj: Dataset2D, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    return to_df(obj.to_memory(), index=index, columns=columns)
+
+
+@to_df.register(CSMatrix | CSArray)
+def _to_df_sparse(
+    obj: CSMatrix | CSArray, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    return pd.DataFrame.sparse.from_spmatrix(  # type: ignore[attr-defined]
+        obj, index=index, columns=columns
+    )
 
 
 @singledispatch

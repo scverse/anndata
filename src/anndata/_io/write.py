@@ -14,7 +14,7 @@ from anndata._io.utils import no_write_dataset_2d
 from .._warnings import WriteWarning
 from ..compat import CSArray, CSMatrix, _safe_transpose, old_positionals
 from ..logging import get_logger
-from ..utils import asarray, warn
+from ..utils import to_df, warn
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -52,7 +52,7 @@ def write_csvs(
         varm=adata.varm.to_df(),
     )
     if not skip_data:
-        d["X"] = pd.DataFrame(asarray(adata.X))
+        d["X"] = to_df(adata.X)
     d_write = {**d, **adata._uns}
     not_yet_raised_sparse_warning = True
     for key, value in d_write.items():
