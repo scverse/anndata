@@ -257,7 +257,6 @@ class AnnData:  # noqa: PLW1641
     _is_view: bool
 
     # data attributes, set by both `_init_as_view` and `_init_as_actual`
-    _X: _XDataType | None
     _obs: pd.DataFrame | Dataset2D
     _var: pd.DataFrame | Dataset2D
     _uns: MutableMapping
@@ -386,7 +385,7 @@ class AnnData:  # noqa: PLW1641
 
     def _init_as_actual(  # noqa: PLR0912, PLR0913, PLR0915
         self,
-        X=None,
+        X: AnnData | _XDataType | None = None,
         *,
         obs: IntoAlignedDf = None,
         var: IntoAlignedDf = None,
@@ -433,15 +432,8 @@ class AnnData:  # noqa: PLW1641
                     msg = "If `X` is a dict no further arguments must be provided."
                     raise ValueError(msg)
                 obs, var, uns, obsm, varm, obsp, varp, layers, raw = (
-                    X.obs,
-                    X.var,
-                    X.uns,
-                    X.obsm,
-                    X.varm,
-                    X.obsp,
-                    X.varp,
-                    X.layers,
-                    X.raw,
+                    *(X.obs, X.var, X.uns, X.obsm, X.varm),
+                    *(X.obsp, X.varp, X.layers, X.raw),
                 )
                 X = X.layers.get(None)
 
@@ -1108,7 +1100,7 @@ class AnnData:  # noqa: PLW1641
     @overload
     def __getitem__(self, index: MultiAcc) -> FullArray: ...
     @overload
-    def __getitem__(self, index: LayerAcc | GraphAcc) -> _XDataType: ...
+    def __getitem__(self, index: LayerAcc | GraphAcc) -> AlignedArray: ...
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
