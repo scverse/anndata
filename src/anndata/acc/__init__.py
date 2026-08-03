@@ -28,8 +28,6 @@ from ..compat import (
 
 if TYPE_CHECKING:
     from mudata import MuData
-
-    from ..compat import AwkArray
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})
 
@@ -59,9 +57,6 @@ type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 
 type DataFrameLike = pd.DataFrame | Dataset2D
 """A 2D dataframe-like container (pandas- or xarray-backed)."""
-
-type FullArray = AlignedArray | DataFrameLike | AwkArray
-"""A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
 NO_IDX = sentinel("NO_IDX")
 """Sentinel object needed for implementing :meth:`anndata.acc.RefAcc.get` when subclassing."""
@@ -204,11 +199,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         """Check if the referenced array is in the AnnData object."""
 
     @overload
-    def get(self, data: D, /) -> FullArray: ...
+    def get(self, data: D, /) -> AlignedArray: ...
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> Array | FullArray:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -303,7 +298,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
         adata: AnnData,
         idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         /,
-    ) -> AlignedArray:  # AlignedArray includes InMemoryArray
+    ) -> AlignedArray:
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
@@ -478,7 +473,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
         return idx is None or idx in range(arr.shape[1])
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> FullArray: ...
+    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(
@@ -486,8 +481,8 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
         data: MuData | AnnData,
         i: int | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         /,
-    ) -> FullArray | InMemoryArray:
-        full: FullArray = getattr(data, f"{self.dim}m")[self.k]
+    ) -> AlignedArray:
+        full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
         # TODO: remove slicing when dropping scipy <1.14

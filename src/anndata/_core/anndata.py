@@ -87,7 +87,6 @@ if TYPE_CHECKING:
         AdRef,
         Array,
         DataFrameLike,
-        FullArray,
         GraphAcc,
         LayerAcc,
         MapAcc,
@@ -1094,14 +1093,12 @@ class AnnData:  # noqa: PLW1641
     @overload
     def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
     @overload
-    def __getitem__(self, index: MultiAcc) -> FullArray: ...
-    @overload
-    def __getitem__(self, index: LayerAcc | GraphAcc) -> AlignedArray: ...
+    def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(self, index: Index | AdRef) -> AnnData | Array | FullArray:
+    def __getitem__(self, index: Index | AdRef) -> AnnData | AlignedArray | Array:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
         from ..acc import AdRef, MapAcc, RefAcc
 
