@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, cast, overload
 import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from natsort import natsorted
 from pandas.api.types import infer_dtype
 from scipy.sparse import issparse
@@ -32,7 +33,6 @@ from ..compat import (
     CSArray,
     IndexManager,
     XDataset,
-    ZarrArray,
     _move_adj_mtx,
     has_xp,
     old_positionals,
@@ -1261,7 +1261,7 @@ class AnnData:  # noqa: PLW1641
             )
             raise ValueError(msg)
         if any(
-            isinstance(elem, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset)
+            isinstance(elem, zarr.Array | BaseCompressedSparseDataset | h5py.Dataset)
             for elem in (self.X, *self.layers.values())
         ):
             msg = "Cannot transpose anndata object that has raw zarr arrays or h5py arrays backing X or layers"
@@ -1375,7 +1375,7 @@ class AnnData:  # noqa: PLW1641
         return _get_vector_ambiguous(self, k, "var", layer=layer)
 
     def _copy(
-        self, *, X: _XDataType | None | Literal["no_set_X"] = "no_set_X"
+        self, *, X: _XDataType | Literal["no_set_X"] | None = "no_set_X"
     ) -> AnnData:
         from ..typing import _XDataType
 
@@ -1434,12 +1434,12 @@ class AnnData:  # noqa: PLW1641
             if isinstance(elem, MutableMapping):
                 return accumulate or any(
                     isinstance(
-                        v, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset
+                        v, zarr.Array | BaseCompressedSparseDataset | h5py.Dataset
                     )
                     for v in elem.values()
                 )
             return accumulate or isinstance(
-                elem, ZarrArray | BaseCompressedSparseDataset | h5py.Dataset
+                elem, zarr.Array | BaseCompressedSparseDataset | h5py.Dataset
             )
 
         return self._reduce(predicate, init=False)

@@ -11,9 +11,8 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse
+import zarr
 from legacy_api_wrap import legacy_api  # noqa: TID251
-from zarr import Array as ZarrArray  # noqa: F401
-from zarr import Group as ZarrGroup
 
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 
@@ -100,10 +99,6 @@ class Empty(Enum):
     TOKEN = auto()
 
 
-H5Group = h5py.Group
-H5Array = h5py.Dataset
-H5File = h5py.File
-
 # h5py recommends using .astype("T") over .asstr() when using numpy ≥2
 if TYPE_CHECKING:
     from h5py._hl.dataset import AsTypeView as H5AsTypeView
@@ -153,7 +148,7 @@ else:
     DaskArray = type("Array", (), dict(__module__="dask.array"))
 
 
-if find_spec("xarray") or TYPE_CHECKING:
+if TYPE_CHECKING or find_spec("xarray"):
     import xarray
     from xarray import DataArray as XDataArray
     from xarray import Dataset as XDataset
@@ -369,10 +364,10 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
+def _require_group_write_dataframe[Group_T: zarr.Group | h5py.Group](
     f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
 ) -> Group_T:
-    if len(df.columns) > 5_000 and isinstance(f, H5Group):
+    if len(df.columns) > 5_000 and isinstance(f, h5py.Group):
         # actually 64kb is the limit, but this should be a conservative estimate
         return f.create_group(name, *args, track_order=True, **kwargs)
     return f.require_group(name, *args, **kwargs)

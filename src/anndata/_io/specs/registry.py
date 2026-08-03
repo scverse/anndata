@@ -8,11 +8,12 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
+import zarr
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, has_xp
+from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
 
@@ -377,7 +378,7 @@ class Writer:
                 msg = f"'/' is not in the subpath of {store.name!r}"
                 raise ValueError(msg)
 
-            if isinstance(store, ZarrGroup):
+            if isinstance(store, zarr.Group):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())
@@ -392,7 +393,7 @@ class Writer:
             # for AnnData elements other than `obs`, `var`, and `uns`.
             if "/" in k:
                 if (
-                    isinstance(store, ZarrGroup)
+                    isinstance(store, zarr.Group)
                     or settings.disallow_forward_slash_in_h5ad
                 ):
                     msg = f"Forward slashes are not allowed in keys in {type(store)}"
