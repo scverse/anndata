@@ -170,8 +170,6 @@ qualname_overrides = {
     "numpy.int64": ("py:attr", "numpy.int64"),
     "numpy.dtypes.StringDType": ("py:attr", "numpy.dtypes.StringDType"),
     "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/pull/745
-    "numpy._typing._array_like.GenericAlias": ("py:data", "numpy.typing.NDArray"),
     "pandas.DataFrame.iloc": ("py:attr", "pandas.DataFrame.iloc"),
     "pandas.DataFrame.loc": ("py:attr", "pandas.DataFrame.loc"),
 }
@@ -189,8 +187,6 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
     #### these happen when a `type` or `class` is generic
-    # https://github.com/tox-dev/sphinx-autodoc-typehints/pull/745
-    ("py:class", "anndata.acc.GenericAlias"),
     ("py:obj", "typing.R"),
     ("py:class", "_M"),
     ("py:class", "anndata.utils.Default"),
