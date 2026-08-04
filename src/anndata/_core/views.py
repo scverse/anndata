@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Any, ClassVar
 
-    from numpy.typing import NDArray
+    from numpy.typing import ArrayLike, NDArray
 
     from anndata import AnnData
 
@@ -90,6 +90,9 @@ class _SetItemMixin(_SupportsSetItem):
 
     _view_args: ElementRef | None
 
+    def _view_update_target(self, container: _SupportsSetItem) -> _SupportsSetItem:
+        return container
+
     def __setitem__(self, idx: object, value: object) -> None:
         if self._view_args is None:
             super().__setitem__(idx, value)
@@ -100,7 +103,7 @@ class _SetItemMixin(_SupportsSetItem):
             )
             warn(msg, ImplicitModificationWarning)
             with view_update(*self._view_args) as container:
-                container[idx] = value
+                self._view_update_target(container)[idx] = value
 
 
 class _ViewMixin(_SetItemMixin):
@@ -195,6 +198,30 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
+class _MaskedSubarrayView(_SetItemMixin, np.ndarray):
+    _attr: ClassVar[str]
+
+    def __new__(cls, input_array: np.ndarray, view_args: ElementRef | None):
+        arr = np.asanyarray(input_array).view(cls)
+        arr._view_args = view_args
+        return arr
+
+    def __array_finalize__(self, obj: np.ndarray | None):
+        if obj is not None:
+            self._view_args = getattr(obj, "_view_args", None)
+
+    def _view_update_target(self, container: _SupportsSetItem) -> _SupportsSetItem:
+        return getattr(container, self._attr)
+
+
+class _MaskView(_MaskedSubarrayView):
+    _attr = "mask"
+
+
+class _DataView(_MaskedSubarrayView):
+    _attr = "data"
+
+
 class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
     def __new__(
         cls,
@@ -212,6 +239,26 @@ class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
         super().__array_finalize__(obj)
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    @property
+    def mask(self) -> _MaskView | np.bool_:
+        m = super().mask
+        if not isinstance(m, np.ndarray):
+            # `nomask` sentinel: many numpy.ma internals rely on `is nomask`
+            # identity, so don’t wrap it in a view.
+            return m
+        return _MaskView(m, self._view_args)
+
+    @mask.setter
+    def mask(self, value: ArrayLike) -> None:
+        self.__setmask__(value)  # type: ignore[arg-type]
+
+    @property
+    def data(self) -> _DataView:  # type: ignore[override]
+        return _DataView(super().data, self._view_args)
+
+    def copy(self, *args, **kwargs) -> np.ma.MaskedArray:  # type: ignore[override]
+        return np.ma.MaskedArray(self, subok=False, copy=True)
 
 
 # Extends DaskArray
