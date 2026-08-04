@@ -12,7 +12,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from scipy.sparse import csc_matrix, csr_matrix
+from scipy.sparse import csc_matrix, csr_matrix, hstack
 
 from .._core.file_backing import to_memory
 from .._core.merge import (
@@ -27,6 +27,7 @@ from .._core.merge import (
     merge_indices,
     resolve_merge_strategy,
     unify_dtypes,
+    union_keys,
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
     from zarr.core.common import AccessModeLiteral
 
     from .._core.merge import Reindexer, StrategiesLiteral
-    from .._types import Join_T, StorageType
+    from .._types import Join_T, StorageType, _ArrayStorageType
     from ..compat import CSMatrix
 
     type AnyReindexer = Reindexer | IdentityReindexer
@@ -492,6 +493,88 @@ def _write_alt_pairwise(
     write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
 
 
+def _pairwise_row_block(
+    elem: BaseCompressedSparseDataset
+    | _ArrayStorageType
+    | np.ndarray
+    | type[MissingVal],
+    n: int,
+    offset: int,
+    total: int,
+    dtype: np.dtype,
+) -> csr_matrix:
+    """One row-block of the block-diagonal pairwise result.
+
+    ``elem`` is one object's ``(n, n)`` pairwise element (or :data:`MissingVal`), placed
+    at column ``offset`` of a ``(n, total)`` row of zeros. Only this one object's element
+    is ever in memory, which is what lets the block diagonal stream out per-object.
+    """
+    if elem is MissingVal:
+        # Matches `concat_pairwise_mapping`, which substitutes an empty (n, n) block.
+        block = csr_matrix((n, n), dtype=dtype)
+    else:
+        block = csr_matrix(
+            to_memory(elem) if not isinstance(elem, np.ndarray) else elem
+        )
+        block = block.astype(dtype)
+    left, right = offset, total - offset - n
+    parts = [
+        p
+        for p in (
+            csr_matrix((n, left), dtype=dtype),
+            block,
+            csr_matrix((n, right), dtype=dtype),
+        )
+        if p.shape[1]
+    ]
+    return hstack(parts, format="csr") if len(parts) > 1 else parts[0]
+
+
+def _write_concat_pairwise(
+    groups: Collection[h5py.Group | zarr.Group],
+    output_group: h5py.Group | zarr.Group,
+    axis_name: Literal["obs", "var"],
+    ns: Sequence[int],
+    join: Join_T,
+):
+    """Write ``.{axis_name}p`` as the block diagonal of each object's pairwise elements.
+
+    Mirrors :func:`~anndata._core.merge.concat_pairwise_mapping`: the result for a key is
+    the block diagonal of that key across the objects, with an empty block standing in
+    where an object lacks the key. The blocks are appended one object at a time, so only a
+    single object's pairwise element is held in memory rather than the whole ``(N, N)``
+    result (``ns`` gives each object's size along the concatenation axis).
+    """
+    mappings = [read_as_backed(_subgroup(g, f"{axis_name}p")) for g in groups]
+    pairwise_group = output_group.create_group(f"{axis_name}p")
+    pairwise_group.attrs.update({
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0",
+    })
+    total = sum(ns)
+    offsets = np.cumsum([0, *ns[:-1]])
+    keys = union_keys(mappings) if join == "outer" else intersect_keys(mappings)
+    for k in keys:
+        elems = [m.get(k, MissingVal) for m in mappings]
+        # The dtype has to be settled before the first block is written, since that is
+        # what fixes the dtype of the output dataset every later block is appended to.
+        present = [e for e in elems if e is not MissingVal]
+        dtype = (
+            np.result_type(*(e.dtype for e in present)) if present else np.dtype(bool)
+        )
+        blocks = (
+            _pairwise_row_block(elem, n, int(off), total, dtype)
+            for elem, n, off in zip(elems, ns, offsets, strict=True)
+        )
+        init_elem = next(blocks)
+        write_elem(pairwise_group, k, init_elem)
+        del init_elem
+        out_dataset: BaseCompressedSparseDataset = read_as_backed(pairwise_group[k])
+        for block in blocks:
+            out_dataset.append(block)
+            del block
+
+
 def concat_on_disk(  # noqa: PLR0913
     in_files: Collection[PathLike[str] | str | h5py.Group | zarr.Group]
     | Mapping[str, PathLike[str] | str | h5py.Group | zarr.Group],
@@ -575,8 +658,9 @@ def concat_on_disk(  # noqa: PLR0913
         DataFrames are padded with missing values.
     pairwise
         Whether pairwise elements along the concatenated dimension should be included.
-        This is False by default, since the resulting arrays are often not meaningful, and raises :exc:`NotImplementedError` when True.
-        If you are interested in this feature, please open an issue.
+        This is False by default, since the resulting arrays are often not meaningful.
+        When True, each key becomes the block diagonal of that key across the objects, as
+        it does for :func:`anndata.concat`.
 
     Notes
     -----
@@ -635,10 +719,6 @@ def concat_on_disk(  # noqa: PLR0913
         raise ValueError(msg)
 
     # Argument normalization
-    if pairwise:
-        msg = "pairwise concatenation not yet implemented"
-        raise NotImplementedError(msg)
-
     merge = resolve_merge_strategy(merge)
     uns_merge = resolve_merge_strategy(uns_merge)
 
@@ -690,6 +770,7 @@ def concat_on_disk(  # noqa: PLR0913
             index_unique=index_unique,
             fill_value=fill_value,
             merge=merge,
+            pairwise=pairwise,
         )
 
 
@@ -707,6 +788,7 @@ def _concat_on_disk_inner(  # noqa: PLR0913
     index_unique: str | None,
     fill_value: Scalar | None,
     merge: Callable[[Collection[Mapping]], Mapping],
+    pairwise: bool = False,
 ) -> None:
     """Internal helper to minimize the amount of indented code within the context manager"""
     use_reindexing = False
@@ -768,6 +850,18 @@ def _concat_on_disk_inner(  # noqa: PLR0913
 
     # Write {alt_axis_name}p
     _write_alt_pairwise(groups, output_group, alt_axis_name, merge, reindexers)
+
+    # Write {axis_name}p
+    # Like in-memory `concat`, pairwise elements along the concatenated axis are only
+    # kept when explicitly asked for, since the block diagonal is often not meaningful.
+    if pairwise:
+        _write_concat_pairwise(
+            groups,
+            output_group,
+            axis_name,
+            [x.shape[axis] for x in Xs],
+            join,
+        )
 
     # Write X
 

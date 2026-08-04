@@ -256,6 +256,58 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
+def _pairwise_adata(i: int, n: int, keys: Collection[str]) -> AnnData:
+    idx = [f"{i}-cell{j}" for j in range(n)]
+    return AnnData(
+        sparse.csr_matrix(np.ones((n, 3))),
+        obs=pd.DataFrame(index=idx),
+        var=pd.DataFrame(index=list("ghi")),
+        obsp={
+            k: sparse.csr_matrix((np.arange(n * n).reshape(n, n) + i).astype(float))
+            for k in keys
+        },
+    )
+
+
+def test_concat_on_disk_pairwise(tmp_path, file_format, join_type):
+    """`pairwise=True` writes the block diagonal of `.obsp`, as :func:`concat` does."""
+    adatas = [
+        _pairwise_adata(0, 3, ["conn"]),
+        _pairwise_adata(1, 2, ["conn"]),
+        _pairwise_adata(2, 4, ["conn"]),
+    ]
+    assert_eq_concat_on_disk(
+        adatas, tmp_path, file_format, join=join_type, pairwise=True
+    )
+
+
+def test_concat_on_disk_pairwise_missing_keys(tmp_path, file_format, join_type):
+    """Objects lacking a pairwise key contribute an empty block.
+
+    The first object is missing ``extra`` on purpose: the dtype of the result has to be
+    settled across all objects before the first block is written, otherwise the empty
+    stand-in block would fix the output dtype to ``bool``.
+    """
+    adatas = [
+        _pairwise_adata(0, 3, ["conn"]),
+        _pairwise_adata(1, 2, ["conn", "extra"]),
+        _pairwise_adata(2, 4, ["extra"]),
+    ]
+    assert_eq_concat_on_disk(
+        adatas, tmp_path, file_format, join=join_type, pairwise=True
+    )
+
+
+def test_concat_on_disk_pairwise_not_written_by_default(tmp_path, file_format):
+    """Without ``pairwise=True`` the concatenation-axis pairwise group is left out."""
+    adatas = [_pairwise_adata(0, 3, ["conn"]), _pairwise_adata(1, 2, ["conn"])]
+    paths = _adatas_to_paths(adatas, tmp_path, file_format)
+    out_name = tmp_path / f"out.{file_format}"
+    concat_on_disk(paths, out_name)
+    with as_group(out_name, mode="r") as rg:
+        assert "obsp" not in dict(rg)
+
+
 def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
     g = zarr.open(tmp_path)
