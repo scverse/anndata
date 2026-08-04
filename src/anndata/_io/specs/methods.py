@@ -586,7 +586,8 @@ def write_basic_dask_dask_dense(
             dataset_kwargs, format=f.metadata.zarr_format
         ) as dataset_kwargs:
             g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    if isinstance(f, h5py.Group):
+    # use threaded scheduler with dask<=2025.3.0 avoid "Could not serialize object of type HighLevelGraph" error
+    if isinstance(f, h5py.Group) or Version(version("dask")) <= Version("2025.3.0"):
         da.store(elem, g, scheduler="threads")
     else:
         da.store(elem, g)
