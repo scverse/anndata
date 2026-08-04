@@ -10,7 +10,8 @@ from scipy import sparse
 import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core.sparse_dataset import sparse_dataset
-from anndata.compat import CupyCSRMatrix
+from anndata.abc import CSRDataset
+from anndata.compat import CSArray, CSMatrix, CupyCSRMatrix
 from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
@@ -77,10 +78,15 @@ def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
     # compressor None because there are no GPU compressors right now
     ad.io.write_zarr(zarr_path, adata, compressor=None)
     g = zarr.open_group(zarr_path, mode="r")
-    adata = AnnData(X=sparse_dataset(g["X"]))
-    expected = AnnData(X=ad.io.read_elem(g["X"]))
+    x_disk = g["X"]
+    assert isinstance(x_disk, zarr.Group)
+    adata = AnnData(X=sparse_dataset(x_disk))
+    expected = AnnData(X=ad.io.read_elem(x_disk))
+    assert isinstance(adata.X, CSRDataset)
+    assert isinstance(expected.X, CSMatrix | CSArray)
     assert isinstance(adata.X[index], sparse.csr_matrix)
     with zarr.config.enable_gpu():
-        assert isinstance(adata.X[index], CupyCSRMatrix)
-        assert_equal(expected.X[index], adata.X[index].get())
+        x_gpu = adata.X[index]
+        assert isinstance(x_gpu, CupyCSRMatrix)
+        assert_equal(expected.X[index], x_gpu.get())
     assert isinstance(adata.X[index], sparse.csr_matrix)

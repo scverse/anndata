@@ -8,6 +8,7 @@ import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import pytest
+from awkward.operations import str as ak_str
 
 import anndata
 from anndata import AnnData, ImplicitModificationWarning, read_h5ad
@@ -199,8 +200,8 @@ def test_view_of_awkward_array_with_custom_behavior():
             ak.Array(np.array([["a", "a"], ["a", "a"]])),
         ]),
         # categorical array
-        ak.str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
-        ak.str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
+        ak_str.to_categorical(ak.Array([["a", "b", "c"], ["a", "b"]])),
+        ak_str.to_categorical(ak.Array([[1, 1, 2], [3, 3]])),
         # tyical record type with AIRR data consisting of different dtypes
         ak.Array([
             [

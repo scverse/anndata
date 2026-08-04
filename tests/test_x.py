@@ -180,6 +180,8 @@ class _ArrayApiNoDLPack:
         self.shape = arr.shape
         self.size = arr.size
         self.device = "cpu"
+        self.dtype = arr.dtype
+        self.ndim = arr.ndim
 
     def __array_namespace__(self, *, api_version=None):
         return np

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import reduce, singledispatch, wraps
+from functools import reduce, singledispatch
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -30,7 +31,7 @@ from .access import ElementRef
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, KeysView, Sequence
+    from collections.abc import Iterable, Sequence
     from typing import Any, ClassVar
 
     from numpy.typing import NDArray
@@ -67,7 +68,20 @@ def view_update(adata_view: AnnData, attr_name: str, keys: tuple[str, ...]):
     adata_view._init_as_actual(new)
 
 
-class _SetItemMixin:
+if TYPE_CHECKING:
+
+    class _SupportsSetItem:
+        def __setitem__(self, idx: object, value: object) -> None: ...
+
+else:
+    _SupportsSetItem = object
+
+
+type ViewArgs = tuple["AnnData", str] | tuple["AnnData", str, tuple[str, ...]]
+"""`ElementRef` args; its `keys` defaults to `()`."""
+
+
+class _SetItemMixin(_SupportsSetItem):
     """\
     Class which (when values are being set) lets their parent AnnData view know,
     so it can make a copy of itself.
@@ -76,7 +90,7 @@ class _SetItemMixin:
 
     _view_args: ElementRef | None
 
-    def __setitem__(self, idx: Any, value: Any):
+    def __setitem__(self, idx: object, value: object) -> None:
         if self._view_args is None:
             super().__setitem__(idx, value)
         else:
@@ -93,7 +107,7 @@ class _ViewMixin(_SetItemMixin):
     def __init__(
         self,
         *args,
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
         **kwargs,
     ):
         if view_args is not None:
@@ -107,14 +121,14 @@ class _ViewMixin(_SetItemMixin):
         return deepcopy(getattr(parent._adata_ref, attrname))
 
 
-_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "inner"]
+_UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"]
 
 
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
 
@@ -129,12 +143,12 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
     def __array_ufunc__(
         self: ArrayView,
-        ufunc: Callable[..., Any],
+        ufunc: np.ufunc,
         method: _UFuncMethod,
         *inputs,
         out: tuple[np.ndarray, ...] | None = None,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> np.ndarray | tuple[np.ndarray, ...]:
         """Makes numpy ufuncs convert all instances of views to plain arrays.
 
         See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
@@ -146,10 +160,12 @@ class ArrayView(_SetItemMixin, np.ndarray):
                 for arr in arrs
             )
 
+        outputs: tuple[np.ndarray | None, ...]
         if out is None:
             outputs = (None,) * ufunc.nout
         else:
-            out = outputs = tuple(convert_all(out))
+            out = tuple(convert_all(out))
+            outputs = out
 
         results = super().__array_ufunc__(
             ufunc, method, *convert_all(inputs), out=out, **kwargs
@@ -165,11 +181,13 @@ class ArrayView(_SetItemMixin, np.ndarray):
         )
         return results[0] if len(results) == 1 else results
 
-    def keys(self) -> KeysView[str]:
+    def keys(self) -> tuple[str, ...]:
         # it’s a structured array
-        return self.dtype.names
+        return self.dtype.names or ()
 
-    def copy(self, order: str = "C") -> np.ndarray:
+    def copy(  # type: ignore[override]
+        self, order: Literal["K", "A", "C", "F"] | None = "C"
+    ) -> np.ndarray:
         # we want a conventional array
         return np.array(self)
 
@@ -186,7 +204,7 @@ class DaskArrayView(_SetItemMixin, DaskArray):
     def __new__(
         cls,
         input_array: DaskArray,
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         arr = super().__new__(
             cls,
@@ -207,34 +225,38 @@ class DaskArrayView(_SetItemMixin, DaskArray):
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
 
-    def keys(self) -> KeysView[str]:
+    def keys(self) -> tuple[str, ...]:
         # it’s a structured array
-        return self.dtype.names
+        return self.dtype.names or ()
 
 
 # Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
-# do not propagate through subsetting
-class SparseCSRMatrixView(_ViewMixin, sparse.csr_matrix):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csr_matrix:
+# do not propagate through subsetting.
+#
+# Each `copy` below returns the unwrapped type rather than `Self`, which is what
+# https://github.com/scverse/anndata/issues/656 asks for and what
+# `test_deepcopy_subset` checks. scipy declares `copy() -> Self`, so these are
+# genuine Liskov violations that cannot be expressed — hence `[override]`.
+# `csr_matrix` also inherits two incompatible `__mul__`/`__rmul__` (matrix
+# multiplication from `spmatrix`, elementwise from `_spbase`); mypy only reports
+# that for a class with a second base, hence `[misc]`.
+class SparseCSRMatrixView(_ViewMixin, sparse.csr_matrix):  # type: ignore[misc]
+    def copy(self) -> sparse.csr_matrix:  # type: ignore[override]
         return sparse.csr_matrix(self).copy()
 
 
 class SparseCSCMatrixView(_ViewMixin, sparse.csc_matrix):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csc_matrix:
+    def copy(self) -> sparse.csc_matrix:  # type: ignore[override]
         return sparse.csc_matrix(self).copy()
 
 
 class SparseCSRArrayView(_ViewMixin, sparse.csr_array):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csr_array:
+    def copy(self) -> sparse.csr_array:  # type: ignore[override]
         return sparse.csr_array(self).copy()
 
 
 class SparseCSCArrayView(_ViewMixin, sparse.csc_array):
-    # https://github.com/scverse/anndata/issues/656
-    def copy(self) -> sparse.csc_array:
+    def copy(self) -> sparse.csc_array:  # type: ignore[override]
         return sparse.csc_array(self).copy()
 
 
@@ -252,7 +274,7 @@ class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
         input_array: Sequence[Any],
-        view_args: tuple[AnnData, str, tuple[str, ...]] | None = None,
+        view_args: ViewArgs | None = None,
     ):
         import cupy as cp
 
@@ -276,15 +298,21 @@ class DictView(_ViewMixin, dict):
 class DataFrameView(_ViewMixin, pd.DataFrame):
     _metadata: ClassVar = ["_view_args"]
 
-    @wraps(pd.DataFrame.drop)
     def drop(self, *args, inplace: bool = False, **kw):
+        """Drop labels, as :meth:`pandas.DataFrame.drop` does.
+
+        Dropping in place initializes the parent view as an actual `AnnData`.
+        """
         if not inplace:
             return self.copy().drop(*args, **kw)
+        if self._view_args is None:
+            super().drop(*args, inplace=True, **kw)
+            return
         with view_update(*self._view_args) as df:
             df.drop(*args, inplace=True, **kw)
 
-    def __setattr__(self, key: str, value: Any):
-        if key == "index":
+    def __setattr__(self, key: str, value: object) -> None:
+        if key == "index" and self._view_args is not None:
             msg = (
                 f"Trying to modify {key} of attribute `.{self._view_args.attrname}` of view, "
                 "initializing view as actual."
@@ -381,13 +409,13 @@ def _(a: Dataset2D, view_args):
     return a
 
 
-try:
+if find_spec("awkward") or TYPE_CHECKING:
     import weakref
 
     from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
-    _registry = weakref.WeakValueDictionary()
+    _registry: weakref.WeakValueDictionary[int, AnnData] = weakref.WeakValueDictionary()
     _PARAM_NAME = "_view_args"
 
     class AwkwardArrayView(_ViewMixin, AwkArray):
@@ -440,7 +468,7 @@ try:
 
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
 
-except ImportError:
+else:
 
     class AwkwardArrayView:
         pass
@@ -448,7 +476,7 @@ except ImportError:
 
 def _resolve_idxs(
     old: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
-    new: tuple[_Index1DNorm, _Index1DNorm],
+    new: tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]],
     adata: AnnData,
 ) -> tuple[_Index1DNorm[IndexManager], _Index1DNorm[IndexManager]]:
     o, v = (_resolve_idx(old[i], new[i], adata.shape[i]) for i in (0, 1))
@@ -457,7 +485,7 @@ def _resolve_idxs(
 
 @singledispatch
 def _resolve_idx(
-    old: _Index1DNorm[IndexManager], new: _Index1DNorm, l: Literal[0, 1]
+    old: _Index1DNorm[IndexManager], new: _Index1DNorm[IndexManager], l: int
 ) -> _Index1DNorm[IndexManager]:
     msg = f"Unrecognized indexer of type {type(old)}"
     raise TypeError(msg)
@@ -465,7 +493,7 @@ def _resolve_idx(
 
 @_resolve_idx.register(SupportsArrayApiBase)
 def _resolve_idx_array_api(
-    old: SupportsArrayApiBase, new: _Index1DNorm, l: Literal[0, 1]
+    old: SupportsArrayApiBase, new: _Index1DNorm[IndexManager], l: int
 ) -> SupportsArrayApiBase:
     xp = old.__array_namespace__()
 
@@ -487,47 +515,54 @@ def _resolve_idx_array_api(
                 xp.arange(n)[:, None] == selected[None, :],
                 axis=1,
             )
-        old = xp.where(old)[0]
+        old = xp.nonzero(old)[0]
     return old[new]
 
 
 @_resolve_idx.register(np.ndarray)
 def _resolve_idx_ndarray(
-    old: NDArray[np.bool_] | NDArray[np.integer], new: _Index1DNorm, l: Literal[0, 1]
+    old: NDArray[np.bool_] | NDArray[np.integer],
+    new: _Index1DNorm[IndexManager],
+    l: int,
 ) -> NDArray[np.bool_] | NDArray[np.integer]:
-    if is_bool_dtype(old) and is_bool_dtype(new):
+    if not isinstance(new, slice | np.ndarray):
+        # `old` is a numpy index, so the resolved index has to be one, too
+        new = np.asarray(new)
+    if not isinstance(new, slice) and is_bool_dtype(old) and is_bool_dtype(new):
         mask_new = np.zeros_like(old)
         mask_new[np.flatnonzero(old)[new]] = True
         return mask_new
     if is_bool_dtype(old):
-        old = np.where(old)[0]
+        old = np.flatnonzero(old)
     return old[new]
 
 
 @_resolve_idx.register(slice)
 def _resolve_idx_slice(
-    old: slice, new: _Index1DNorm, l: Literal[0, 1]
+    old: slice, new: _Index1DNorm[IndexManager], l: int
 ) -> slice | NDArray[np.integer]:
     if isinstance(new, slice):
         return _resolve_idx_slice_slice(old, new, l)
-    else:
-        return np.arange(*old.indices(l))[new]
+    if not isinstance(new, np.ndarray):
+        # `old` resolves to a numpy index, so the resolved index has to be one, too
+        new = np.asarray(new)
+    return np.arange(*old.indices(l))[new]
 
 
-def _resolve_idx_slice_slice(old: slice, new: slice, l: Literal[0, 1]) -> slice:
+def _resolve_idx_slice_slice(old: slice, new: slice, l: int) -> slice:
     r = range(*old.indices(l))[new]
     # Convert back to slice
-    start, stop, step = r.start, r.stop, r.step
+    stop: int | None = r.stop
     if len(r) == 0:
-        stop = start
-    elif stop < 0:
+        stop = r.start
+    elif r.stop < 0:
         stop = None
-    return slice(start, stop, step)
+    return slice(r.start, stop, r.step)
 
 
 @_resolve_idx.register(IndexManager)
 def _resolve_idx_index_manager(
-    old: IndexManager, new: _Index1DNorm, l: Literal[0, 1]
+    old: IndexManager, new: _Index1DNorm[IndexManager], l: int
 ) -> _Index1DNorm[IndexManager]:
     """Resolve indices when old is an IndexManager.
 
@@ -535,9 +570,6 @@ def _resolve_idx_index_manager(
     index and resolve with the array-api implementation. Device mismatch
     raises an error.
     """
-    if has_xp(new):
-        old_arr = old.get_for_array(new)
-        return IndexManager.from_array(_resolve_idx(old_arr, new, l))
-
-    resolved = _resolve_idx_ndarray(old.get_default(), new, l)
+    old_arr = old.get_for_array(new) if has_xp(new) else old.get_default()
+    resolved = _resolve_idx(old_arr, new, l)
     return IndexManager.from_array(resolved) if has_xp(resolved) else resolved

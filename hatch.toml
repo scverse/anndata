@@ -14,6 +14,11 @@ scripts.create = "towncrier create {args}"
 scripts.build = "python3 ci/scripts/towncrier_automation.py {args}"
 scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
 
+[envs.hatch-check-types]
+dependencies = [ "mypy" ]
+dependency-groups = [ "test", "typing", "dev-doc" ]
+scripts.check = "mypy {args:.}"
+
 [envs.hatch-test]
 python = "3.14"
 default-args = [  ]

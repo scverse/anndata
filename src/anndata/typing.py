@@ -16,6 +16,7 @@ from anndata.types import SupportsArrayApiBase
 
 from . import abc
 from ._core.anndata import AnnData
+from ._core.xarray import Dataset2D
 from .compat import (
     AwkArray,
     CSArray,
@@ -32,10 +33,10 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
 
-__all__ = ["AxisStorable", "Index", "Index1D", "RWAble"]
+__all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 
 if TYPE_CHECKING or sys.version_info >= (3, 13):
-    _M = TypeVar("_M", IndexManager, Never, default=Never)
+    _M = TypeVar("_M", bound=IndexManager, default=Never)
 else:
     _M = TypeVar("_M")
 
@@ -90,22 +91,32 @@ type InMemoryArray = (
 )
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
 
-_XDataType: TypeAlias = (  # noqa: UP040
+type AlignedArray = (
     InMemoryArray
     | h5py.Dataset
     | zarr.Array
     | ZappyArray
     | abc.CSRDataset
     | abc.CSCDataset
+    | AwkArray
+    | XDataArray
+    | Dataset2D
 )
-_ArrayDataStructureTypes: TypeAlias = _XDataType | AwkArray | XDataArray  # noqa: UP040
-_InMemoryArrayOrScalarType: TypeAlias = (  # noqa: UP040
-    pd.DataFrame | np.number | str | _ArrayDataStructureTypes
-)
-type AxisStorable = (
-    _InMemoryArrayOrScalarType | dict[str, "AxisStorable"] | list["AxisStorable"]
-)
+"""Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
+
+_StorableArrayOrScalar: TypeAlias = AlignedArray | pd.DataFrame | np.number | str  # noqa: UP040
+type Storable = _StorableArrayOrScalar | dict[str, "Storable"] | list["Storable"]
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
-type RWAble = AxisStorable | AnnData | pd.api.extensions.ExtensionArray
-"""A superset of :type:`anndata.typing.AxisStorable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
+type RWAble = Storable | AnnData | pd.api.extensions.ExtensionArray
+"""A superset of :type:`anndata.typing.Storable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
+
+
+def __getattr__(name: str) -> object:
+    from ._warnings import warn
+
+    if name == "AxisStorable":
+        msg = "AxisStorable is deprecated, use Storable instead"
+        warn(msg, FutureWarning)
+
+    raise AttributeError(name)
