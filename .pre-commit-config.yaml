@@ -17,10 +17,8 @@ repos:
     rev: v0.16.1
     hooks:
       - id: ruff-check
-        types_or: [python, pyi, jupyter]
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
-        types_or: [python, pyi, jupyter]
   - repo: local
     hooks:
       - id: mypy
