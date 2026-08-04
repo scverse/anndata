@@ -442,6 +442,9 @@ def deprecation_msg(
 
 def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
     def decorator(f: C) -> C:
+        # record the real module before overwriting it, so tooling (e.g. Sphinx)
+        # can still find where `f` is actually defined; see `docs/extensions/merge_attr_docs.py`
+        setattr(f, "__source_module__", f.__module__)  # noqa: B010
         f.__module__ = name
         return f
 

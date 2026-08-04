@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from .sparse_dataset import BackedSparseMatrix
 
     IntoAlignedMapping: TypeAlias = (  # noqa: UP040
-        NDArray[np.void] | Mapping[str, AlignedArray] | None
+        Mapping[str, AlignedArray] | NDArray[np.void] | None
     )
     IntoLayers: TypeAlias = (  # noqa: UP040
         Mapping[str, AlignedArray] | Mapping[str | None, AlignedArray] | None
