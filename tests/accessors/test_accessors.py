@@ -15,7 +15,7 @@ from anndata.acc import A
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection
-    from typing import Literal
+    from typing import Any, Literal
 
     from anndata.acc import AdRef, MapAcc, MultiMapAcc
 
@@ -101,14 +101,18 @@ def test_dims(ad_ref: AdRef, dims: Collection[Literal["obs", "var"]]) -> None:
     assert ad_ref.dims == dims
 
 
+OBS_MAPS: Sequence[MapAcc] = [A.obsm, A.obsp]
+VAR_MAPS: Sequence[MapAcc] = [A.varm, A.varp]
+
+
 @pytest.mark.parametrize(
     ("obj", "expected"),
     [
         pytest.param(A.layers["a"], "a", id="A.layers[]"),
-        *[pytest.param(o, "obs", id=str(o)) for o in [A.obs, A.obsm, A.obsp]],
-        *[pytest.param(v, "var", id=str(v)) for v in [A.var, A.varm, A.varp]],
-        *[pytest.param(o["b"], ("obs", "b"), id=f"{o}[]") for o in [A.obsm, A.obsp]],
-        *[pytest.param(v["c"], ("var", "c"), id=f"{v}[]") for v in [A.varm, A.varp]],
+        *[pytest.param(o, "obs", id=str(o)) for o in [A.obs, *OBS_MAPS]],
+        *[pytest.param(v, "var", id=str(v)) for v in [A.var, *VAR_MAPS]],
+        *[pytest.param(o["b"], ("obs", "b"), id=f"{o}[]") for o in OBS_MAPS],
+        *[pytest.param(v["c"], ("var", "c"), id=f"{v}[]") for v in VAR_MAPS],
         pytest.param(A.obs["d"], (A.obs, "d"), id="path"),
     ],
 )
@@ -134,27 +138,27 @@ def test_match(*, obj: object, expected: object) -> None:
 @pytest.mark.parametrize(
     "mk_path",
     [
-        pytest.param(lambda: A.X["c1"], id="x-notuple"),
-        pytest.param(lambda: A.X[:3, :], id="x-partslice"),
-        pytest.param(lambda: A.X[:, b""], id="x-nostr"),
-        pytest.param(lambda: A.X[["a"], ["b"]], id="x-twolists"),
-        pytest.param(lambda: A.layers[1], id="layers-nostr"),
-        pytest.param(lambda: A.layers["a"][:3, :], id="layer-partslice"),
-        pytest.param(lambda: A.layers["a"][:, b""], id="layer-nostr"),
-        pytest.param(lambda: A.layers["a"][["a"], ["b"]], id="layer-twolists"),
-        pytest.param(lambda: A.obs[1], id="obs-nostr"),
-        pytest.param(lambda: A.obsm[0], id="obsms-nostr"),
-        pytest.param(lambda: A.obsm["a"][:3, 0], id="obsm-partslice"),
-        pytest.param(lambda: A.obsm["a"]["b"], id="obsm-noint"),
-        pytest.param(lambda: A.varp[0], id="varps-nostr"),
-        pytest.param(lambda: A.varp["x"][0, :], id="varp-nostr-inner"),
-        pytest.param(lambda: A.varp["x"]["a", "b"], id="varp-twostr"),
-        pytest.param(lambda: A.varp["x"][["a"], ["b"]], id="varp-twolists"),
+        pytest.param(lambda a: a.X["c1"], id="x-notuple"),
+        pytest.param(lambda a: a.X[:3, :], id="x-partslice"),
+        pytest.param(lambda a: a.X[:, b""], id="x-nostr"),
+        pytest.param(lambda a: a.X[["a"], ["b"]], id="x-twolists"),
+        pytest.param(lambda a: a.layers[1], id="layers-nostr"),
+        pytest.param(lambda a: a.layers["a"][:3, :], id="layer-partslice"),
+        pytest.param(lambda a: a.layers["a"][:, b""], id="layer-nostr"),
+        pytest.param(lambda a: a.layers["a"][["a"], ["b"]], id="layer-twolists"),
+        pytest.param(lambda a: a.obs[1], id="obs-nostr"),
+        pytest.param(lambda a: a.obsm[0], id="obsms-nostr"),
+        pytest.param(lambda a: a.obsm["a"][:3, 0], id="obsm-partslice"),
+        pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
+        pytest.param(lambda a: a.varp[0], id="varps-nostr"),
+        pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
+        pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),
+        pytest.param(lambda a: a.varp["x"][["a"], ["b"]], id="varp-twolists"),
     ],
 )
-def test_invalid(mk_path: Callable[[], AdRef]) -> None:
+def test_invalid(mk_path: Callable[[Any], AdRef]) -> None:
     with pytest.raises((ValueError, TypeError)):
-        mk_path()
+        mk_path(A)
 
 
 @pytest.mark.parametrize(
@@ -336,7 +340,7 @@ def test_resolve_matrix(
         pytest.param("obsp.g[c1,:]", False, id="obsp-vec-as-matrix"),
     ],
 )
-def test_resolve_vec_mismatch(spec: str, *, vec: bool) -> None:
+def test_resolve_vec_mismatch(spec: str, *, vec: Literal[True, False]) -> None:
     with pytest.raises(ValueError, match="vec"):
         A.resolve(spec, vec=vec)
 
@@ -346,5 +350,7 @@ def test_resolve_vec_mismatch(spec: str, *, vec: bool) -> None:
     [("X", True), ("X[:,:]", False)],
     ids=["as-vec", "as-matrix"],
 )
-def test_resolve_vec_mismatch_not_strict(spec: str, *, vec: bool) -> None:
+def test_resolve_vec_mismatch_not_strict(
+    spec: str, *, vec: Literal[True, False]
+) -> None:
     assert A.resolve(spec, strict=False, vec=vec) is None

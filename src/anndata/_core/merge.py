@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, MutableSet
+from collections.abc import Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
@@ -37,16 +37,20 @@ from .index import _subset, make_slice
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator, Iterable, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
+    from pathlib import Path
     from typing import Any
 
+    import zarr
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
+    from pandas.api.typing.aliases import Scalar
 
     from anndata._types import Join_T
 
     from ..compat import XDataArray
     from ..types import SupportsArrayApiBase
+    from .raw import Raw
 
 
 ###################
@@ -222,8 +226,11 @@ def as_sparse(x, *, use_sparse_array: bool = False) -> CSMatrix | CSArray:
             sparse.csr_array if use_sparse_array else sparse.csr_matrix
         )
         if isinstance(x, DaskArray):
-            x = x.map_blocks(
+            import dask.array as da
+
+            x = da.map_blocks(
                 sparse.csr_matrix,
+                x,
                 meta=sparse.csr_matrix(x._meta),
                 dtype=x.dtype,
             ).compute()
@@ -242,9 +249,7 @@ def as_cp_sparse(x) -> CupySparseMatrix:
         return cpsparse.csr_matrix(x)
 
 
-def unify_dtypes(
-    dfs: Iterable[pd.DataFrame | Dataset2D],
-) -> list[pd.DataFrame | Dataset2D]:
+def unify_dtypes[T: (pd.DataFrame, Dataset2D)](dfs: Iterable[T]) -> list[T]:
     """Attempt to unify datatypes from multiple dataframes.
 
     For catching cases where pandas would convert to object dtype.
@@ -335,7 +340,9 @@ def check_combinable_cols(cols: list[pd.Index], join: Join_T):
 
     Looks for if there are duplicated column names that would show up in the result.
     """
-    repeated_cols = reduce(lambda x, y: x.union(y[y.duplicated()]), cols, set())
+    repeated_cols: set[str] = reduce(
+        lambda x, y: x.union(y[y.duplicated()]), cols, set()
+    )
     if join == "inner":
         intersecting_cols = intersect_keys(cols)
         problem_cols = repeated_cols.intersection(intersecting_cols)
@@ -345,11 +352,10 @@ def check_combinable_cols(cols: list[pd.Index], join: Join_T):
         raise ValueError()
 
     if len(problem_cols) > 0:
-        problem_cols = list(problem_cols)
         msg = (
             f"Cannot combine dataframes as some contained duplicated column names - "
             "causing ambiguity.\n\n"
-            f"The problem columns are: {problem_cols}"
+            f"The problem columns are: {sorted(problem_cols)}"
         )
         raise pd.errors.InvalidIndexError(msg)
 
@@ -414,7 +420,7 @@ def _dask_block_diag(mats):
 ###################
 
 
-def unique_value[T](vals: Collection[T]) -> T | MissingVal:
+def unique_value[T](vals: Sequence[T]) -> T | type[MissingVal]:
     """
     Given a collection vals, returns the unique value (if one exists), otherwise
     returns MissingValue.
@@ -426,7 +432,7 @@ def unique_value[T](vals: Collection[T]) -> T | MissingVal:
     return unique_val
 
 
-def first[T](vals: Collection[T]) -> T | MissingVal:
+def first[T](vals: Collection[T]) -> T | type[MissingVal]:
     """
     Given a collection of vals, return the first non-missing one. If they're all missing,
     return MissingVal.
@@ -437,7 +443,7 @@ def first[T](vals: Collection[T]) -> T | MissingVal:
     return MissingVal
 
 
-def only[T](vals: Collection[T]) -> T | MissingVal:
+def only[T](vals: Sequence[T]) -> T | type[MissingVal]:
     """Return the only value in the collection, otherwise MissingVal."""
     if len(vals) == 1:
         return vals[0]
@@ -507,11 +513,11 @@ StrategiesLiteral = Literal["same", "unique", "first", "only"]
 
 
 def resolve_merge_strategy(
-    strategy: str | Callable | None,
+    strategy: str | Callable[[Collection[Mapping]], Mapping] | None,
 ) -> Callable[[Collection[Mapping]], Mapping]:
-    if not isinstance(strategy, Callable):
-        strategy = MERGE_STRATEGIES[strategy]
-    return strategy
+    if callable(strategy):
+        return strategy
+    return MERGE_STRATEGIES[strategy]
 
 
 #####################
@@ -549,10 +555,12 @@ class Reindexer:
         self.new_pos = new_pos[mask]
         self.old_pos = old_pos[mask]
 
-    def __call__(self, el, *, axis=1, fill_value=None):
+    def __call__(
+        self, el, *, axis: Literal[0, 1] = 1, fill_value: Scalar | None = None
+    ):
         return self.apply(el, axis=axis, fill_value=fill_value)
 
-    def apply(self, el, *, axis, fill_value=None):  # noqa: PLR0911
+    def apply(self, el, *, axis: Literal[0, 1], fill_value: Scalar | None = None):  # noqa: PLR0911
         """
         Reindex element so el[axis] is aligned to self.new_idx.
 
@@ -576,12 +584,22 @@ class Reindexer:
             msg = "Cannot reindex element of unsupported type."
             raise TypeError(msg)
 
-    def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
+    def _apply_to_df_like(
+        self,
+        el: pd.DataFrame | Dataset2D,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
+    ):
         if fill_value is None:
             fill_value = np.nan
+        # axis=1 is not supported for Dataset2D, but it will throw an error
+        axis = cast("Literal[0]", axis)
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
 
-    def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
+    def _apply_to_dask_array(
+        self, el: DaskArray, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import dask.array as da
 
         indexer = self.idx
@@ -595,13 +613,14 @@ class Reindexer:
             and axis == minor_axis
             and is_outer
         ):
-            return el.map_blocks(
+            return da.map_blocks(
                 partial(
                     self._apply_to_sparse,
                     axis=axis,
                     fill_value=fill_value,
                     keep_format=True,
                 ),
+                el,
                 chunks=(el.chunks[0], len(self.new_idx))
                 if minor_axis == 1
                 else (len(self.new_idx), el.chunks[1]),
@@ -625,7 +644,9 @@ class Reindexer:
 
         return sub_el
 
-    def _apply_to_cupy_array(self, el, *, axis, fill_value=None):
+    def _apply_to_cupy_array(
+        self, el, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import cupy as cp
 
         if fill_value is None:
@@ -636,12 +657,8 @@ class Reindexer:
             shape[axis] = len(self.new_idx)
             return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))
 
-        old_idx_tuple = [slice(None)] * len(el.shape)
-        old_idx_tuple[axis] = self.old_pos
-        old_idx_tuple = tuple(old_idx_tuple)
-        new_idx_tuple = [slice(None)] * len(el.shape)
-        new_idx_tuple[axis] = self.new_pos
-        new_idx_tuple = tuple(new_idx_tuple)
+        old_idx_tuple = make_slice(self.old_pos, axis, len(el.shape))
+        new_idx_tuple = make_slice(self.new_pos, axis, len(el.shape))
 
         out_shape = list(el.shape)
         out_shape[axis] = len(self.new_idx)
@@ -652,7 +669,11 @@ class Reindexer:
         return out
 
     def _apply_to_array_api(
-        self, el: SupportsArrayApiBase, *, axis: int, fill_value=None
+        self,
+        el: SupportsArrayApiBase,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
     ) -> SupportsArrayApiBase:
         if fill_value is None:
             fill_value = default_fill_value([el])
@@ -666,7 +687,7 @@ class Reindexer:
             # convert fill_value to the same type as el - to keep everything in the same dtype
             # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
             fv = xp.asarray(fill_value)
-            return xp.broadcast_to(fv, shape)
+            return xp.broadcast_to(fv, tuple(shape))
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
@@ -681,12 +702,18 @@ class Reindexer:
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse(  # noqa: PLR0912
-        self, el: CSMatrix | CSArray, *, axis, fill_value=None, keep_format: bool = True
-    ) -> CSMatrix:
+        self,
+        el: CSMatrix | CSArray,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
+        keep_format: bool = True,
+    ) -> CSMatrix | CSArray:
         if isinstance(el, CupySparseMatrix):
             from cupyx.scipy import sparse
         else:
             from scipy import sparse
+
         import array_api_compat
 
         xp = array_api_compat.array_namespace(el.data)
@@ -696,13 +723,13 @@ class Reindexer:
         if fill_value != 0:
             to_fill = self.new_idx.get_indexer(self.new_idx.difference(self.old_idx))
         else:
-            to_fill = xp.array([])
+            to_fill = xp.asarray([])
 
         # Fixing outer indexing for missing values
         if el.shape[axis] == 0:
-            shape = list(el.shape)
-            shape[axis] = len(self.new_idx)
-            shape = tuple(shape)
+            shape_list = list(el.shape)
+            shape_list[axis] = len(self.new_idx)
+            shape = tuple(shape_list)
             if fill_value == 0:
                 if isinstance(el, CSArray):
                     memory_class = sparse.csr_array
@@ -712,10 +739,10 @@ class Reindexer:
             else:
                 return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
 
-        fill_idxer = None
+        fill_idxer: tuple[Any, Any] | None = None
 
         if len(to_fill) > 0 or isinstance(el, CupySparseMatrix):
-            idxmtx_dtype = xp.promote_types(el.dtype, xp.array(fill_value).dtype)
+            idxmtx_dtype = xp.result_type(el.dtype, xp.asarray(fill_value).dtype)
         else:
             idxmtx_dtype = bool
         if isinstance(el, CSArray):
@@ -757,7 +784,9 @@ class Reindexer:
             out = out.tocsr() if el.format == "csr" else out.tocsc()
         return out
 
-    def _apply_to_awkward(self, el: AwkArray, *, axis, fill_value=None):
+    def _apply_to_awkward(
+        self, el: AwkArray, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+    ):
         import awkward as ak
 
         if self.no_change:
@@ -789,7 +818,7 @@ def merge_indices(inds: Iterable[pd.Index], join: Join_T) -> pd.Index:
         raise ValueError(msg)
 
 
-def default_fill_value(els):
+def default_fill_value(els: Iterable[object]) -> Scalar:
     """Given some arrays, returns what the default fill value should be.
 
     This is largely due to backwards compat, and might not be the ideal solution.
@@ -828,7 +857,7 @@ def gen_reindexer(new_var: pd.Index, cur_var: pd.Index) -> Reindexer:
 def np_bool_to_pd_bool_array(df: pd.DataFrame):
     for col_name, col_type in dict(df.dtypes).items():
         if col_type is np.dtype(bool):
-            df[col_name] = pd.array(df[col_name].values)
+            df[col_name] = pd.array(df[col_name].to_numpy())
     return df
 
 
@@ -993,7 +1022,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
         if not all(isinstance(el, AwkArray) for el in els if not_missing(el)):
             msg = "Cannot concatenate an AwkwardArray with other array types."
             raise NotImplementedError(msg)
-        common_keys = intersect_keys(el.fields for el in els)
+        common_keys = intersect_keys([el.fields for el in els])
         # TODO: replace dtype=object once this is fixed: https://github.com/scikit-hep/awkward/issues/3730
         reindexers = [
             Reindexer(
@@ -1057,7 +1086,7 @@ def missing_element(
     n: int,
     els: list[CSArray | CSMatrix | np.ndarray | DaskArray],
     axis: Literal[0, 1] = 0,
-    fill_value: Any | None = None,
+    fill_value: Scalar | None = None,
     off_axis_size: int = 0,
 ) -> NDArray[np.bool_] | DaskArray:
     """Generates value to use when there is a missing element."""
@@ -1141,6 +1170,7 @@ def concat_pairwise_mapping(
     mappings: Collection[Mapping], shapes: Collection[int], join_keys=intersect_keys
 ):
     result = {}
+    sparse_class: Callable[..., CSMatrix | CSArray]
     if any(any(isinstance(v, CSArray) for v in m.values()) for m in mappings):
         sparse_class = sparse.csr_array
     else:
@@ -1148,7 +1178,7 @@ def concat_pairwise_mapping(
 
     for k in join_keys(mappings):
         els = [
-            m.get(k, sparse_class((s, s), dtype=bool))
+            m.get(k, sparse_class((s, s)).astype(bool))
             for m, s in zip(mappings, shapes, strict=True)
         ]
         if all(isinstance(el, CupySparseMatrix | CupyArray) for el in els):
@@ -1199,6 +1229,20 @@ def merge_outer(mappings, batch_keys, *, join_index="-", merge=merge_unique):
     return out
 
 
+def _all_raws(adatas: Collection[AnnData]) -> list[Raw] | None:
+    """Every object’s :attr:`~anndata.AnnData.raw`, or `None` if any lacks one."""
+    raws = []
+    for adata in adatas:
+        if (raw := adata.raw) is None:
+            return None
+        raws.append(raw)
+    return raws
+
+
+def _other_axis(axis: Literal[0, 1]) -> Literal[0, 1]:
+    return 1 if axis == 0 else 0
+
+
 def _resolve_axis(
     axis: Literal["obs", 0, "var", 1],
 ) -> tuple[Literal[0], Literal["obs"]] | tuple[Literal[1], Literal["var"]]:
@@ -1247,8 +1291,10 @@ def make_dask_col_from_extension_dtype(
     from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
-    base_path_or_zarr_group = col.attrs.get("base_path_or_zarr_group")
-    elem_name = col.attrs.get("elem_name")
+    base_path_or_zarr_group: Path | zarr.Group | None = col.attrs.get(
+        "base_path_or_zarr_group"
+    )
+    elem_name: str | None = col.attrs.get("elem_name")
     if (
         base_path_or_zarr_group is not None and elem_name is not None
     ):  # lazy, backed by store
@@ -1276,10 +1322,11 @@ def make_dask_col_from_extension_dtype(
                 chunk = np.array(variable.data[idx])
             return chunk
 
+        dtype: str | np.dtype
         if col.dtype == "category" or col.dtype == "string" or use_only_object_dtype:  # noqa PLR1714
             dtype = "object"
         else:
-            dtype = col.dtype.numpy_dtype
+            dtype = np.dtype(col.dtype.type)
         return da.map_blocks(
             get_chunk,
             chunks=chunk_size,
@@ -1437,13 +1484,13 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     adatas: Collection[AnnData] | Mapping[str, AnnData],
     *,
     axis: Literal["obs", 0, "var", 1] = "obs",
-    join: Join_T | Default = Default("inner"),  # noqa: B008
+    join: Join_T | Default[Join_T] = Default("inner"),  # noqa: B008
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
     keys: Collection | None = None,
     index_unique: str | None = None,
-    fill_value: Any | None = None,
+    fill_value: Scalar | None = None,
     pairwise: bool = False,
     force_lazy: bool = False,
 ) -> AnnData:
@@ -1684,12 +1731,12 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         keys = np.arange(len(adatas)).astype(str)
 
     axis, axis_name = _resolve_axis(axis)
-    alt_axis, alt_axis_name = _resolve_axis(axis=1 - axis)
+    alt_axis, alt_axis_name = _resolve_axis("var" if axis == 0 else "obs")
 
     # Label column
     label_col = pd.Categorical.from_codes(
         np.repeat(np.arange(len(adatas)), [a.shape[axis] for a in adatas]),
-        categories=keys,
+        categories=pd.Index(keys),
     )
 
     # Combining indexes
@@ -1698,7 +1745,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     )
     if index_unique is not None:
         concat_indices = concat_indices.str.cat(
-            label_col.map(str, na_action="ignore"), sep=index_unique
+            list(label_col.map(str, na_action="ignore")), sep=index_unique
         )
     concat_indices = pd.Index(concat_indices)
 
@@ -1715,6 +1762,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     are_any_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in annotations
     )
+    concat_annot: pd.DataFrame | Dataset2D
     if are_any_annotations_dataframes:
         annotations_in_memory = (
             to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
@@ -1740,6 +1788,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     are_any_alt_annotations_dataframes = any(
         isinstance(a, pd.DataFrame) for a in alt_annotations
     )
+    alt_annot: pd.DataFrame | Dataset2D
     if are_any_alt_annotations_dataframes:
         alt_annotations_in_memory = [
             to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
@@ -1757,13 +1806,11 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
         for a in annotations_with_only_dask:
             if a.true_index_dim != a.index_dim:
                 a.index = a.true_index
-        annotations_with_only_dask = [
+        datasets_to_merge = [
             a.ds.rename({a.true_index_dim: DS_MERGE_DUMMY_INDEX_NAME})
             for a in annotations_with_only_dask
         ]
-        alt_annot = Dataset2D(
-            xr.merge(annotations_with_only_dask, join=join, compat="override")
-        )
+        alt_annot = Dataset2D(xr.merge(datasets_to_merge, join=join, compat="override"))
 
     if join == "inner":
         concat_aligned_mapping = inner_concat_aligned_mapping
@@ -1810,17 +1857,17 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     uns = uns_merge([a.uns for a in adatas])
 
     raw = None
-    has_raw = [a.raw is not None for a in adatas]
-    if all(has_raw):
+    raws = _all_raws(adatas)
+    if raws is not None:
         raw = concat(
             [
                 AnnData(
-                    X=a.raw.X,
+                    X=a_raw.X,
                     obs=pd.DataFrame(index=a.obs_names),
-                    var=a.raw.var,
-                    varm=a.raw.varm,
+                    var=a_raw.var,
+                    varm=a_raw.varm,
                 )
-                for a in adatas
+                for a, a_raw in zip(adatas, raws, strict=True)
             ],
             join=join,
             label=label,
@@ -1829,7 +1876,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
             fill_value=fill_value,
             axis=axis,
         )
-    elif any(has_raw):
+    elif any(a.raw is not None for a in adatas):
         msg = (
             "Only some AnnData objects have `.raw` attribute, "
             "not concatenating `.raw` attributes."

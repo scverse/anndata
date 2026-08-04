@@ -42,9 +42,9 @@ if TYPE_CHECKING:
     from os import PathLike
     from typing import Any, Literal
 
-    from .._core.file_backing import AnnDataFileManager
     from .._core.raw import Raw
     from .._types import StorageType
+    from ..typing import RWAble
 
 
 @no_write_dataset_2d
@@ -92,12 +92,14 @@ def write_h5ad(
             _check_has_no_slash_key(k, elem)
 
             if k == "raw":
-                _write_raw(
-                    f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
-                )
+                if adata.raw is not None:
+                    _write_raw(
+                        f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
+                    )
                 continue
 
             if k == "layers":
+                assert isinstance(elem, MutableMapping)
                 if None in elem:
                     _write_x(
                         f,
@@ -148,7 +150,7 @@ def _write_raw(
         write_sparse_as_dense(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
         write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
         write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
-    elif raw is not None:
+    else:
         write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs)
 
 
@@ -157,6 +159,7 @@ def _write_raw(
 def write_sparse_as_dense(
     f: h5py.Group,
     key: str,
+    /,
     value: CSMatrix | BaseCompressedSparseDataset,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -174,7 +177,9 @@ def write_sparse_as_dense(
     dset = f.create_dataset(key, shape=value.shape, dtype=value.dtype, **dataset_kwargs)
     compressed_axis = int(isinstance(value, sparse.csc_matrix))
     for idx in idx_chunks_along_axis(value.shape, compressed_axis, 1000):
-        dset[idx] = value[idx].toarray()
+        chunk = value[idx]
+        assert not isinstance(chunk, float)  # slicing never yields a scalar
+        dset[idx] = chunk.toarray()
     if real_key is not None:
         del f[real_key]
         f[real_key] = f[key]
@@ -185,7 +190,7 @@ def read_h5ad_backed(
     filename: str | PathLike[str], mode: Literal["r", "r+"]
 ) -> AnnData:
     f = h5py.File(filename, mode)
-    d = dict(filename=f)
+    d: dict[str, Any] = dict(filename=f)
 
     attributes = ["obsm", "varm", "obsp", "varp", "uns", "layers"]
     df_attributes = ["obs", "var"]
@@ -276,25 +281,32 @@ def read_h5ad(
 
         def callback(read_func, elem_name: str, elem: StorageType, iospec: IOSpec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-                return AnnData(**{
+                assert isinstance(elem, h5py.Group)
+                attrs: dict[str, Any] = {
                     # This is covering up backwards compat in the anndata initializer
                     # In most cases we should be able to call `func(elen[k])` instead
                     k: read_dispatched(elem[k], callback)
                     for k in elem
                     if not k.startswith("raw.")
-                })
+                }
+                return AnnData(**attrs)
             elif elem_name.startswith("/raw."):
                 return None
             elif elem_name == "/X" and "X" in as_sparse:
+                assert isinstance(elem, h5py.Dataset)
                 return rdasp(elem)
             elif elem_name == "/raw":
                 return _read_raw(f, as_sparse, rdasp)
             elif elem_name in {"/obs", "/var"}:
                 # Backwards compat
+                assert isinstance(elem, h5py.Group | h5py.Dataset)
                 return read_dataframe(elem)
             return read_func(elem)
 
         adata = read_dispatched(f, callback=callback)
+        if not isinstance(adata, AnnData):
+            msg = f"Expected an AnnData at the file root, got {type(adata).__name__}"
+            raise ValueError(msg)
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
@@ -310,18 +322,19 @@ def read_h5ad(
 
 
 def _read_raw(
-    f: h5py.File | AnnDataFileManager,
+    f: h5py.File,
     as_sparse: Collection[str] = (),
     rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
 ) -> dict:
-    if as_sparse:
-        assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
-    raw = {}
+    raw: dict[str, RWAble] = {}
     if "X" in attrs and "raw/X" in f:
-        read_x = rdasp if "raw/X" in as_sparse else read_elem
-        raw["X"] = read_x(f["raw/X"])
+        if "raw/X" in as_sparse:
+            assert rdasp is not None, "must supply rdasp if as_sparse is supplied"
+            raw["X"] = rdasp(f["raw/X"])
+        else:
+            raw["X"] = read_elem(f["raw/X"])
     for v in ("var", "varm"):
         if v in attrs and f"raw/{v}" in f:
             raw[v] = read_elem(f[f"raw/{v}"])
@@ -344,8 +357,8 @@ def read_dataframe_legacy(dataset: h5py.Dataset) -> pd.DataFrame:
     return df.set_index(df.columns[0])
 
 
-def read_dataframe(group: h5py.Group | h5py.Dataset) -> pd.DataFrame:
-    """Backwards compat function"""
+def read_dataframe(group: h5py.Group | h5py.Dataset) -> RWAble:
+    """Read `obs`/`var`, which is a `DataFrame` unless it was written as a plain mapping."""
     if not isinstance(group, h5py.Group):
         return read_dataframe_legacy(group)
     else:

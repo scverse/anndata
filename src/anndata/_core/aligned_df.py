@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import singledispatch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
@@ -14,13 +14,22 @@ from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Any, Literal
+    from typing import Literal, TypeAlias
+
+IntoAlignedDf: TypeAlias = (  # noqa: UP040
+    Mapping[str, Iterable[Any]]
+    | pd.DataFrame
+    | pd.Series
+    | pd.Index
+    | XDataset
+    | Dataset2D
+    | None
+)
 
 
 @singledispatch
 def _gen_dataframe(
-    anno: Any,
+    anno: IntoAlignedDf,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
@@ -91,7 +100,7 @@ def _gen_dataframe_df(
     anno = anno.copy(deep=False)
     if (
         settings.restrict_index_types
-        and not is_string_dtype(anno.index[~anno.index.isna()])
+        and not is_string_dtype(anno.index[anno.index.notna()])
     ) or pd.api.types.is_integer_dtype(anno.index):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)

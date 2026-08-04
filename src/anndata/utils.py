@@ -15,22 +15,43 @@ from scipy import sparse
 import anndata
 
 from ._core.sparse_dataset import BaseCompressedSparseDataset
+from ._core.xarray import Dataset2D
 from ._warnings import warn
-from .compat import CSArray, CupyArray, CupySparseMatrix, DaskArray
+from .compat import (
+    CSArray,
+    CSMatrix,
+    CupyArray,
+    CupySparseMatrix,
+    DaskArray,
+    pandas_sparse,
+)
 from .logging import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+    from collections.abc import (
+        Callable,
+        Generator,
+        Iterable,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
     from typing import Any, LiteralString
 
-    from ._core.xarray import Dataset2D
+    from numpy.typing import NDArray
+    from pandas.api.typing.aliases import Axes
+
+    from anndata.typing import AlignedArray
+
+    from ._core.aligned_mapping import AlignedMapping
+    from ._core.raw import Raw
     from ._types import AnnDataElem
-    from .typing import AxisStorable, _XDataType
+
 
 logger = get_logger(__name__)
 
 
-def import_name(full_name: str) -> Any:
+def import_name(full_name: str) -> object:
     from importlib import import_module
 
     parts = full_name.split(".")
@@ -90,6 +111,46 @@ def asarray_dask(x):
 
 
 @singledispatch
+def to_df(
+    obj: AlignedArray | pd.DataFrame,
+    index: Axes | None = None,
+    columns: Axes | None = None,
+) -> pd.DataFrame:
+    return pd.DataFrame(asarray(obj), index=index, columns=columns)
+
+
+@to_df.register(pd.DataFrame)
+def _to_df_df(
+    obj: pd.DataFrame, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    if (index is not None and not obj.index.equals(index)) or (
+        columns is not None and not obj.columns.equals(columns)
+    ):
+        obj = obj.copy()
+    if index is not None:
+        obj.index = pd.Index(index)
+    if columns is not None:
+        obj.columns = pd.Index(columns)
+    return obj
+
+
+@to_df.register(Dataset2D)
+def _to_df_dataset2d(
+    obj: Dataset2D, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    return to_df(obj.to_memory(), index=index, columns=columns)
+
+
+@to_df.register(CSMatrix | CSArray)
+def _to_df_sparse(
+    obj: CSMatrix | CSArray, index: Axes | None = None, columns: Axes | None = None
+) -> pd.DataFrame:
+    return pd.DataFrame.sparse.from_spmatrix(  # type: ignore[attr-defined]
+        obj, index=index, columns=columns
+    )
+
+
+@singledispatch
 def convert_to_dict(obj) -> dict:
     return dict(obj)
 
@@ -100,7 +161,7 @@ def convert_to_dict_dict(obj: dict):
 
 
 @convert_to_dict.register(np.ndarray)
-def convert_to_dict_ndarray(obj: np.ndarray):
+def convert_to_dict_ndarray(obj: NDArray[np.void]):
     if obj.dtype.fields is None:
         msg = (
             "Can only convert np.ndarray with compound dtypes to dict, "
@@ -253,12 +314,12 @@ def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:
     from collections import Counter
 
     values = index.array.copy()
-    indices_dup = index.duplicated(keep="first") & ~index.isna()
+    indices_dup = index.duplicated(keep="first") & index.notna()
     values_dup = values[indices_dup]
     values_set = set(values)
-    counter = Counter()
+    counter: Counter[str] = Counter()
     issue_interpretation_warning = False
-    example_colliding_values = []
+    example_colliding_values: list[str] = []
     for i, v in enumerate(values_dup):
         while True:
             counter[v] += 1
@@ -309,8 +370,9 @@ def ensure_df_homogeneous(
     df: pd.DataFrame, name: str
 ) -> np.ndarray | sparse.csr_matrix:
     # TODO: rename this function, I would not expect this to return a non-dataframe
+    arr: np.ndarray | sparse.csr_matrix
     if all(isinstance(dt, pd.SparseDtype) for dt in df.dtypes):
-        arr = df.sparse.to_coo().tocsr()
+        arr = pandas_sparse(df).to_coo().tocsr()
     else:
         arr = df.to_numpy()
     if df.dtypes.nunique() != 1:
@@ -356,8 +418,8 @@ def convert_dictionary_to_structured_array(source: Mapping[str, Sequence[Any]]):
     # here, we do not want to call BoundStructArray.__getitem__
     # but np.ndarray.__getitem__, therefore we avoid the following line
     # arr = np.ndarray.__new__(cls, (len(cols[0]),), dtype)
-    for i, name in enumerate(dtype.names):
-        arr[name] = np.array(cols[i], dtype=dtype_list[i][1])
+    for i, (name, col_dtype, _) in enumerate(dtype_list):
+        arr[name] = np.array(cols[i], dtype=col_dtype)
 
     return arr
 
@@ -380,6 +442,9 @@ def deprecation_msg(
 
 def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
     def decorator(f: C) -> C:
+        # record the real module before overwriting it, so tooling (e.g. Sphinx)
+        # can still find where `f` is actually defined; see `docs/extensions/merge_attr_docs.py`
+        setattr(f, "__source_module__", f.__module__)  # noqa: B010
         f.__module__ = name
         return f
 
@@ -419,7 +484,7 @@ def module_get_attr_redirect(
     attr_name: str,
     deprecated_mapping: Mapping[str, str],
     old_module_path: str | None = None,
-) -> Any:
+) -> object:
     full_old_module_path = (
         f"anndata{'.' + old_module_path if old_module_path is not None else ''}"
     )
@@ -442,10 +507,13 @@ def module_get_attr_redirect(
 def iter_outer(
     adata,
 ) -> Generator[
-    tuple[AnnDataElem, AxisStorable | _XDataType | Dataset2D | pd.DataFrame]
+    tuple[
+        AnnDataElem,
+        pd.DataFrame | Dataset2D | MutableMapping | AlignedMapping | Raw | None,
+    ]
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""
-    for attr_name in [
+    attr_names: list[AnnDataElem] = [
         "obs",
         "var",
         "uns",
@@ -455,7 +523,8 @@ def iter_outer(
         "varp",
         "layers",
         "raw",
-    ]:
+    ]
+    for attr_name in attr_names:
         was_closed = adata.isbacked and not adata.file.is_open
         yield (attr_name, getattr(adata, attr_name))
         if was_closed:

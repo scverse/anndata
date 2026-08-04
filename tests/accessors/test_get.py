@@ -11,6 +11,8 @@ from scipy import sparse as sp
 
 from anndata.acc import A
 from anndata.compat import (
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
@@ -120,7 +122,7 @@ def convert_ndarrays(
     adata: AnnData, array_conv: Callable[[InMemoryArray], InMemoryArray], /
 ) -> None:
     def conv(v: InMemoryArray) -> InMemoryArray:
-        if isinstance(v, sp.sparray | sp.spmatrix):
+        if isinstance(v, CSMatrix | CSArray):
             v = v.toarray()
         return array_conv(v)
 
@@ -137,9 +139,11 @@ def convert_ndarrays(
 
 
 def convert_dataframes(
-    adata: AnnData, df_conv: Callable[[pd.Series], InMemoryArray], /
+    adata: AnnData, df_conv: Callable[[pd.DataFrame], pd.DataFrame | XDataset], /
 ) -> None:
+    assert isinstance(adata.obs, pd.DataFrame)
     adata.obs = df_conv(adata.obs)
+    assert isinstance(adata.var, pd.DataFrame)
     adata.var = df_conv(adata.var)
 
 
@@ -148,7 +152,7 @@ def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:
     match expected:
         case np.ndarray():
             return expected.flatten() if ndim == 1 else expected
-        case sp.sparray() | sp.spmatrix():
+        case sp.csr_matrix() | sp.csc_matrix() | sp.csr_array() | sp.csc_array():
             return _expected2np(expected.toarray(), ad_ref)
         case pd.Series() | pd.Index() | XDataArray():
             return expected.to_numpy()

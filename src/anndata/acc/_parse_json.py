@@ -27,22 +27,23 @@ def _as_idx_2d(data: Sequence[str | int | None]) -> Idx2D | None:
 
 def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
     match data:
-        case ["layers", str() | None as l, *idx] if idx := _as_idx_2d(idx):
-            return a.layers[l][idx]
+        case ["layers", str() | None as l, *idx] if idx_2d := _as_idx_2d(idx):
+            return a.layers[l][idx_2d]
         case ["obs" | "var" as dim, str() | None as col]:
             acc = a.obs if dim == "obs" else a.var
             return acc.index if col is None else acc[col]
         case ["obsm" | "varm" as dim, str(col), int(i)]:
             return (a.obsm if dim == "obsm" else a.varm)[col][i]
-        case ["obsp" | "varp" as dim, str(k), *idx] if idx := _as_idx_2d(idx):
-            return (a.obsp if dim == "obsp" else a.varp)[k][idx]
+        case ["obsp" | "varp" as dim, str(k), *idx] if idx_2d := _as_idx_2d(idx):
+            return (a.obsp if dim == "obsp" else a.varp)[k][idx_2d]
         case _:
             msg = f"Cannot parse {data!r}"
             raise ValueError(msg)
 
 
-def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, None] | tuple[None, str]:
-    return tuple(i if isinstance(i, str) else None for i in idx)  # type: ignore
+def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
+    i, j = idx
+    return (i if isinstance(i, str) else None, j if isinstance(j, str) else None)
 
 
 def to_json(ref: AdRef) -> list[str | int | None]:

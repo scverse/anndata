@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
 ]
 dependencies = [
     "pandas >=2.3",
@@ -58,11 +59,22 @@ Home-page = "https://github.com/scverse/anndata"
 [dependency-groups]
 dev = [
     { include-group = "dev-doc" },
+    { include-group = "typing" },
+]
+typing = [
+    "docutils-stubs",
+    "mudata",           # `anndata.acc`
+    "pandas-stubs",
+    "scipy-stubs",
+    "types-boltons",
+    "types-jsonschema",
+    "types-psutil",
+    "types-tqdm",
 ]
 doc = [
     "sphinx>=9.1.0",
     "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=3.6.2",
+    "sphinx-autodoc-typehints>=3.13.2",
     "sphinx-issues>=5.0.1",
     "sphinx-copybutton",
     "sphinxext.opengraph",
@@ -208,6 +220,7 @@ docstring-code-format = true
 
 [tool.ruff.lint]
 select = [
+    "ANN",  # Annotations
     "B",    # Likely bugs and design issues
     "BLE",  # Blind except
     "C4",   # Comprehensions
@@ -232,6 +245,13 @@ select = [
     "W",    # Warning detected by Pycodestyle
 ]
 ignore = [
+    # TODO: fix these
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "ANN204",
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
@@ -265,6 +285,41 @@ strict = true
 [tool.ruff.lint.pylint]
 max-args = 7
 max-positional-args = 5
+
+[tool.mypy]
+mypy_path = [ "src" ]
+explicit_package_bases = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Installed, but shipping no `py.typed` marker:
+# infer types from their source instead of falling back to `Any`.
+[[tool.mypy.overrides]]
+module = [
+    "awkward.*",
+    "h5py.*",
+    "joblib.*",
+    "mudata.*",
+    "numcodecs.*",
+    "pyarrow.*",
+    "scanpy.*",
+    "sklearn.*",
+]
+follow_untyped_imports = true
+# Dependencies that ship no type information (absent or `Incomplete` annotations).
+[[tool.mypy.overrides]]
+module = [
+    "array_api_compat.*",
+    "cupy.*",
+    "cupyx.*",
+    "jax.*",
+    "loompy.*",
+    "memory_profiler",
+    "pooch",
+    "torch.*",
+    "sphinx.*",
+    "zappy.*",
+]
+ignore_missing_imports = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
