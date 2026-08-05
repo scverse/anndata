@@ -106,7 +106,7 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
 
     Parameters
     ----------
-    dataset_kwarg
+    dataset_kwargs
         The kwarg dict potentially containing "compressor"
 
     Returns
