@@ -146,7 +146,7 @@ def _to_df_sparse(
     obj: CSMatrix | CSArray, index: Axes | None = None, columns: Axes | None = None
 ) -> pd.DataFrame:
     df: pd.DataFrame = pd.DataFrame.sparse.from_spmatrix(  # type: ignore[attr-defined]
-        obj, index=index, columns=columns, fill_value=0
+        obj, index=index, columns=columns
     )
     return df.astype({
         c: pd.SparseDtype(cast("pd.SparseDtype", df[c].dtype).subtype, fill_value=0)
