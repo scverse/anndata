@@ -5,7 +5,7 @@ import warnings
 from dataclasses import dataclass
 from functools import partial, singledispatch
 from types import FunctionType, UnionType
-from typing import TYPE_CHECKING, Literal, TypeAliasType, get_args, get_origin
+from typing import TYPE_CHECKING, Literal, TypeAliasType, cast, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -145,9 +145,13 @@ def _to_df_dataset2d(
 def _to_df_sparse(
     obj: CSMatrix | CSArray, index: Axes | None = None, columns: Axes | None = None
 ) -> pd.DataFrame:
-    return pd.DataFrame.sparse.from_spmatrix(  # type: ignore[attr-defined]
+    df: pd.DataFrame = pd.DataFrame.sparse.from_spmatrix(  # type: ignore[attr-defined]
         obj, index=index, columns=columns
     )
+    return df.astype({
+        c: pd.SparseDtype(cast("pd.SparseDtype", df[c].dtype).subtype, fill_value=0)
+        for c in df.columns
+    })
 
 
 @singledispatch
