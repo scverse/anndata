@@ -38,7 +38,6 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "**.ipynb_checkpoints",
-    "tutorials/notebooks/*.rst",
     # exclude all 0.x.y.md files, but not index.md
     "release-notes/[!i]*.md",
     "news.md",  # is `include`d into index.md
