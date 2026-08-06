@@ -20,6 +20,7 @@ from anndata.compat import (
     XDataArray,
     XDataset,
     XVariable,
+    is_scipy_sparse,
 )
 from anndata.tests.helpers import (
     DASK_CAN_SPARRAY,
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
     from anndata.acc import AdRef, InMemoryArray
+    from anndata.compat import SparseArray, SparseMatrix
 
 
 needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installed.")
@@ -147,12 +149,14 @@ def convert_dataframes(
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:
+def _expected2np(
+    expected: InMemoryArray | SparseArray | SparseMatrix, ad_ref: AdRef, /
+) -> np.ndarray:
     ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
             return expected.flatten() if ndim == 1 else expected
-        case sp.csr_matrix() | sp.csc_matrix() | sp.csr_array() | sp.csc_array():
+        case _ if is_scipy_sparse(expected):
             return _expected2np(expected.toarray(), ad_ref)
         case pd.Series() | pd.Index() | XDataArray():
             return expected.to_numpy()
