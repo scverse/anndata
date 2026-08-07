@@ -324,7 +324,9 @@ ignore_missing_imports = true
 
 [tool.codespell]
 skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous,GroupT"
+ignore-words-list = "theis,coo,homogenous,GroupT,scarches"
+# base64 blobs (e.g. images in notebook outputs)
+ignore-regex = "[A-Za-z0-9+/]{100,}={0,2}"
 
 [tool.towncrier]
 package = "anndata"

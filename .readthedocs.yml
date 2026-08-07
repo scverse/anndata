@@ -19,7 +19,3 @@ build:
       html:
         - uvx hatch run docs:build
         - mv docs/_build $READTHEDOCS_OUTPUT
-submodules:
-  include:
-    - "docs/tutorials/notebooks"
-  recursive: true
