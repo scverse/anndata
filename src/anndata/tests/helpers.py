@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from zarr.abc.store import ByteRequest
     from zarr.core.buffer import Buffer, BufferPrototype
 
-    from anndata.compat import CupyCSMatrix
+    from anndata.compat import CupyCSMatrix, SparseArray, SparseMatrix
 
     from .._types import _ArrayStorageType
     from ..typing import Index1D
@@ -706,10 +706,9 @@ def assert_equal_arrayview(
 
 
 @assert_equal.register(BaseCompressedSparseDataset)
-@assert_equal.register(sparse.spmatrix)
-@assert_equal.register(CSArray)
+@assert_equal.register(sparse.sparray | sparse.spmatrix)
 def assert_equal_sparse(
-    a: BaseCompressedSparseDataset | sparse.spmatrix | CSArray,
+    a: BaseCompressedSparseDataset | SparseArray | SparseMatrix,
     b: object,
     *,
     exact: bool = False,

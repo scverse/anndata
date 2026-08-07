@@ -27,10 +27,14 @@ from ..types import SupportsArrayApiBase
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
+    import sys
     from collections.abc import Callable
     from typing import TypeAlias
 
-    from typing_extensions import TypeIs
+    if sys.version_info >= (3, 13):
+        from typing import TypeIs
+    else:
+        from typing_extensions import TypeIs
 
     from ..acc import Array
     from ..typing import AlignedArray, Index, Index1D, _Index1DNorm

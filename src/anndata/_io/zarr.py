@@ -69,7 +69,7 @@ def write_zarr(
     ) -> None:
         if (
             chunks is not None
-            and not isinstance(elem, sparse.spmatrix)
+            and not isinstance(elem, sparse.sparray | sparse.spmatrix)
             and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
