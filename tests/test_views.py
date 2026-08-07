@@ -5,7 +5,7 @@ from copy import deepcopy
 from functools import partial
 from importlib.metadata import version
 from importlib.util import find_spec
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import joblib
 import numpy as np
@@ -29,6 +29,7 @@ from anndata._core.index import (
 )
 from anndata._core.views import (
     ArrayView,
+    MaskedArrayView,
     SparseCSCArrayView,
     SparseCSCMatrixView,
     SparseCSRArrayView,
@@ -707,6 +708,86 @@ def test_view_retains_ndarray_subclass():
 
     assert isinstance(view.obsm["foo"], NDArraySubclass)
     assert view.obsm["foo"].shape == (5, 5)
+
+
+@pytest.fixture
+def adata_mask() -> ad.AnnData:
+    mask = np.zeros((10, 5), dtype=bool)
+    mask[0, 0] = True
+    data = np.ma.MaskedArray(np.arange(50.0).reshape(10, 5), mask=mask)
+    return ad.AnnData(np.zeros((10, 10)), obsm={"masked": data})
+
+
+def test_masked(adata_mask: ad.AnnData) -> None:
+    view = adata_mask[:5, :]
+
+    assert isinstance(view.obsm["masked"], MaskedArrayView)
+    m = view.obsm["masked"].mask
+    assert isinstance(m, np.ndarray)
+    assert m[0, 0]
+    assert not m[1, 0]
+    assert np.ma.is_masked(view.obsm["masked"])
+
+
+def test_masked_mod(adata_mask: ad.AnnData) -> None:
+    view = adata_mask[:5, :]
+
+    assert isinstance(view.obsm["masked"], MaskedArrayView)
+    with pytest.warns(ImplicitModificationWarning, match=r"obsm"):
+        view.obsm["masked"][1, 0] = 1234.0
+    assert view.obsm["masked"][1, 0] == 1234.0
+
+    # Original is untouched: writing to a view actualizes it as a copy.
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    assert orig[1, 0] == 5.0
+    assert cast("np.ndarray", orig.mask)[0, 0]
+
+
+def test_masked_mod_mask(adata_mask: ad.AnnData) -> None:
+    """`.mask`/`.data` are plain `ndarray`s sharing memory with the masked array;
+    indexed assignment through them must still trigger copy-on-write.
+    """
+    view = adata_mask[:5, :]
+
+    assert isinstance(view.obsm["masked"], MaskedArrayView)
+    m = view.obsm["masked"].mask
+    assert isinstance(m, np.ndarray)
+    with pytest.warns(ImplicitModificationWarning, match=r"obsm"):
+        m[1, 0] = True
+    assert cast("np.ndarray", view.obsm["masked"].mask)[1, 0]
+
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    assert not cast("np.ndarray", orig.mask)[1, 0]
+
+
+def test_masked_mod_data(adata_mask: ad.AnnData) -> None:
+    view = adata_mask[:5, :]
+
+    assert isinstance(view.obsm["masked"], MaskedArrayView)
+    with pytest.warns(ImplicitModificationWarning, match=r"obsm"):
+        view.obsm["masked"].data[2, 0] = 999.0
+    assert view.obsm["masked"].data[2, 0] == 999.0
+
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    assert orig.data[2, 0] == 10.0
+
+
+def test_masked_copy(adata_mask: ad.AnnData) -> None:
+    # `.copy()` returns a conventional, detached masked array.
+    view = adata_mask[:5, :].obsm["masked"]
+
+    assert isinstance(view, MaskedArrayView)
+    masked_copy = view.copy()
+    assert not np.shares_memory(masked_copy, view)
+    assert type(masked_copy) is np.ma.MaskedArray
+    masked_copy[1, 1] = -1.0
+
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    assert orig[1, 1] == 6.0
 
 
 def test_modify_uns_in_copy():
