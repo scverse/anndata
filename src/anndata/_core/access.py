@@ -21,9 +21,22 @@ class ElementRef[K: (str, str | None)](NamedTuple):
             lambda d, k: d[k], self.keys[:-1], getattr(self.parent, self.attrname)
         )
 
+    def _get_in(self, adata: AnnData):
+        return reduce(lambda d, k: d[k], self.keys, getattr(adata, self.attrname))
+
     def get(self):
         """Get referenced value in self.parent."""
-        return reduce(lambda d, k: d[k], self.keys, getattr(self.parent, self.attrname))
+        return self._get_in(self.parent)
+
+    def get_unsubset(self):
+        """Get referenced value in the AnnData `self.parent` is a view of.
+
+        That is, the element before the view’s subsetting was applied.
+        `None` if `self.parent` is not a view.
+        """
+        if (adata_ref := self.parent._adata_ref) is None:
+            return None
+        return self._get_in(adata_ref)
 
     def set(self, val):
         """Set referenced value in self.parent."""
