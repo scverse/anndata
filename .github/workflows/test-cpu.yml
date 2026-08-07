@@ -1,4 +1,4 @@
-name: CI
+name: autofix.ci
 
 on:
   push:
@@ -22,14 +22,16 @@ jobs:
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &clone
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - &setup-uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          enable-cache: false
+          enable-cache: true
       - id: get-envs
         run: |
           ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
@@ -49,27 +51,20 @@ jobs:
         io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
         exclude:
           - { env: { name: "hatch-test.array_api" }, io_mark: "dask_distributed" }
-
     permissions:
       id-token: write  # for codecov OIDC
-    env:  # environment variables for use in codecov’s env_vars tagging
+    env:
+      # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}
+      UV_PYTHON: ${{ matrix.env.python }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
+      - *clone
 
       - name: Install system dependencies
         run: sudo apt install -y hdf5-tools
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          python-version: ${{ matrix.env.python }}
+      - *setup-uv
 
       - name: Install dependencies
         run: |
@@ -105,11 +100,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
+      - *clone
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -135,23 +126,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-
+      - *clone
+      - *setup-uv
       - run: uv tool install hatch
-
       - name: Run pre-commit hooks
         run: uvx prek run --all-files --show-diff-on-failure --color=always
         env:
           SKIP: no-commit-to-branch
+      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        if: ${{ !cancelled() }}
 
   check:
     if: always()

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Protocol, cast, overload
 import h5py
 import numpy as np
 import pandas as pd
-import scipy.sparse
+import scipy.sparse as sps
 from legacy_api_wrap import legacy_api  # noqa: TID251
 
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
@@ -19,16 +19,45 @@ from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 from .._warnings import warn
 
 if TYPE_CHECKING:
+    import sys
     from typing import Any, Self, TypeAlias, TypeGuard
+
+    if sys.version_info >= (3, 13):
+        from typing import TypeIs
+    else:
+        from typing_extensions import TypeIs
 
     import zarr
 
     from .._core.anndata import AnnData
 
+    type SparseArray[ST: np.number | np.bool] = (
+        sps.bsr_array[ST]
+        | sps.coo_array[ST]
+        | sps.csc_array[ST]
+        | sps.csr_array[ST]
+        | sps.dia_array[ST]
+        | sps.dok_array[ST]
+        | sps.lil_array[ST]
+    )
+    type SparseMatrix[ST: np.number | np.bool] = (
+        sps.bsr_matrix[ST]
+        | sps.coo_matrix[ST]
+        | sps.csc_matrix[ST]
+        | sps.csr_matrix[ST]
+        | sps.dia_matrix[ST]
+        | sps.dok_matrix[ST]
+        | sps.lil_matrix[ST]
+    )
+
 
 #############################
 # scipy sparse array comapt #
 #############################
+
+
+CSMatrix: TypeAlias = sps.csr_matrix | sps.csc_matrix  # noqa: UP040
+CSArray: TypeAlias = sps.csr_array | sps.csc_array  # noqa: UP040
 
 
 class IndexManager:
@@ -93,10 +122,6 @@ class IndexManager:
             return xp.from_dlpack(existing)
         self.add_array(xp.from_dlpack(src_arr, copy=True))
         return self._manager[device]
-
-
-CSMatrix: TypeAlias = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix  # noqa: UP040
-CSArray: TypeAlias = scipy.sparse.csr_array | scipy.sparse.csc_array  # noqa: UP040
 
 
 class Empty(Enum):
@@ -236,7 +261,7 @@ PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
 class SparseFrameAccessor(Protocol):
     """The part of :attr:`pandas.DataFrame.sparse` we use, which pandas-stubs declares as an untyped `...`."""
 
-    def to_coo(self) -> scipy.sparse.coo_matrix: ...
+    def to_coo(self) -> sps.coo_matrix: ...
 
 
 def pandas_sparse(df: pd.DataFrame) -> SparseFrameAccessor:
@@ -455,7 +480,7 @@ def _move_adj_mtx(d) -> None:
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
+            and isinstance(n[k], sps.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
             msg = (
@@ -497,7 +522,7 @@ def _safe_transpose(x):
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
 
-    if isinstance(x, DaskArray) and scipy.sparse.issparse(x._meta):
+    if isinstance(x, DaskArray) and sps.issparse(x._meta):
         return _transpose_by_block(x)
     else:
         return x.T
@@ -509,3 +534,8 @@ def has_xp_base(x: object) -> TypeGuard[SupportsArrayApiBase]:
 
 def has_xp(x: object) -> TypeGuard[SupportsArrayApi]:
     return isinstance(x, SupportsArrayApi)
+
+
+def is_scipy_sparse(obj: object) -> TypeIs[SparseArray[Any] | SparseMatrix[Any]]:
+    # https://github.com/scipy/scipy/issues/22432#issuecomment-5205755178
+    return isinstance(obj, sps.sparray | sps.spmatrix)

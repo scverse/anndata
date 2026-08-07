@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from ._core.aligned_mapping import AlignedMapping
     from ._core.raw import Raw
     from ._types import AnnDataElem
+    from .compat import SparseArray, SparseMatrix
 
 
 logger = get_logger(__name__)
@@ -79,34 +80,33 @@ def asarray(x):
     return np.asarray(x)
 
 
-@asarray.register(CSArray)
-@asarray.register(sparse.spmatrix)
-def asarray_sparse(x):
+@asarray.register(sparse.sparray | sparse.spmatrix)
+def asarray_sparse(x: SparseArray | SparseMatrix):
     return x.toarray()
 
 
 @asarray.register(BaseCompressedSparseDataset)
-def asarray_sparse_dataset(x):
+def asarray_sparse_dataset(x: BaseCompressedSparseDataset):
     return asarray(x.to_memory())
 
 
 @asarray.register(h5py.Dataset)
-def asarray_h5py_dataset(x):
+def asarray_h5py_dataset(x: h5py.Dataset):
     return x[...]
 
 
 @asarray.register(CupyArray)
-def asarray_cupy(x):
+def asarray_cupy(x: CupyArray):
     return x.get()
 
 
 @asarray.register(CupySparseMatrix)
-def asarray_cupy_sparse(x):
+def asarray_cupy_sparse(x: CupySparseMatrix):
     return x.toarray().get()
 
 
 @asarray.register(DaskArray)
-def asarray_dask(x):
+def asarray_dask(x: DaskArray):
     return asarray(x.compute())
 
 

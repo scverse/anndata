@@ -46,7 +46,8 @@ dependencies = [
     "array-api-compat>=1.7.1",
     "legacy-api-wrap",
     "zarr >=3.1",
-    "typing-extensions>=4.16; python_version<='3.14'",
+    # `typing_extensions.sentinel`, see `anndata.acc`
+    "typing-extensions>=4.16; python_version<'3.15'",
     "scverse-misc[settings]>=0.1.0",
 ]
 dynamic = [ "version" ]
