@@ -781,7 +781,7 @@ def test_masked_copy(adata_mask: ad.AnnData) -> None:
 
     assert isinstance(view, MaskedArrayView)
     masked_copy = view.copy()
-    not np.shares_memory(masked_copy, view)
+    assert not np.shares_memory(masked_copy, view)
     assert type(masked_copy) is np.ma.MaskedArray
     masked_copy[1, 1] = -1.0
 
