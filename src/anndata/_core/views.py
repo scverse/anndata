@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -124,22 +124,69 @@ class _ViewMixin(_SetItemMixin):
 _UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"]
 
 
+@contextmanager
+def _unchanged(arr: NDArray):
+    """Restore `arr`’s contents on exit, however the body modified them."""
+    backup = arr.copy()
+    try:
+        yield
+    finally:
+        arr[...] = backup
+
+
 class ArrayView(_SetItemMixin, np.ndarray):
-    def __new__(
-        cls,
-        input_array: Sequence[Any],
-        view_args: ViewArgs | None = None,
-    ):
+    _is_element: bool
+    """Whether `self` is `_view_args`’ referent, rather than derived from it."""
+
+    def __new__(cls, input_array: Sequence[Any], view_args: ViewArgs | None = None):
         arr = np.asanyarray(input_array).view(cls)
 
         if view_args is not None:
             view_args = ElementRef(*view_args)
         arr._view_args = view_args
+        arr._is_element = True
         return arr
 
     def __array_finalize__(self, obj: np.ndarray | None):
+        # Derivatives (e.g. `el.T`, `el[1:3]`, …) inherit `_view_args`,
+        # but aren’t what it refers to
+        self._is_element = False
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    def __setitem__(self, idx: object, value: object) -> None:
+        """Route the write to the cells `idx` actually names, then actualize."""
+        if (ref := self._view_args) is None:
+            # `super()` is `_SetItemMixin`, so we use `np.ndarray.__setitem__`
+            np.ndarray.__setitem__(self, cast("Any", idx), cast("Any", value))
+            return
+        # if `el` is not a pure ndarray, we can’t write into it
+        el = el if type(el := ref.unsubset_element) is np.ndarray else None
+        if el is None or not np.shares_memory(self, el):
+            if el is None or self._is_element:
+                # `idx` addresses the element itself, which is the common case
+                _SetItemMixin.__setitem__(self, idx, value)
+                return
+            # array/mask indexing copied, so there is no aliased buffer to
+            # write through and `idx` does not address the element either
+            msg = (
+                f"Cannot modify `.{ref.attrname}` through a copy of itself. "
+                "Indexing an element of a view with an array or mask returns a new array, "
+                "so the write cannot be routed back. "
+                "Subset the AnnData instead, or assign to the element directly."
+            )
+            raise ValueError(msg)
+        msg = (
+            f"Trying to modify attribute `.{ref.attrname}` of view, "
+            "initializing view as actual."
+        )
+        warn(msg, ImplicitModificationWarning)
+        # `self` is a window onto the parent’s buffer,
+        # so writing into it lets numpy work out which cells `idx` means;
+        # actualizing then copies them out, and the parent goes back to how we found it.
+        with _unchanged(el):
+            np.ndarray.__setitem__(self, cast("Any", idx), cast("Any", value))
+            ref.parent._init_as_actual(ref.parent.copy())
 
     def __array_ufunc__(
         self: ArrayView,
