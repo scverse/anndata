@@ -160,9 +160,8 @@ class ArrayView(_SetItemMixin, np.ndarray):
             # `super()` is `_SetItemMixin`, so we use `np.ndarray.__setitem__`
             np.ndarray.__setitem__(self, cast("Any", idx), cast("Any", value))
             return
-        el = ref.get_unsubset()
-        if type(el) is not np.ndarray:
-            el = None  # we can’t write into `el`
+        # if `el` is not a pure ndarray, we can’t write into it
+        el = el if type(el := ref.unsubset_element) is np.ndarray else None
         if el is None or not np.shares_memory(self, el):
             if el is None or self._is_element:
                 # `idx` addresses the element itself, which is the common case
