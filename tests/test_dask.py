@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -133,6 +134,7 @@ def test_dask_distributed_write(
     import dask.distributed as dd
     import numpy as np
 
+    assert isinstance(adata.X, DaskArray)
     pth = tmp_path / f"test_write.{diskfmt}"
     with as_group(pth, mode="w") as g, dd.Client(local_cluster_addr):
         M, N = adata.X.shape
@@ -144,10 +146,11 @@ def test_dask_distributed_write(
             ad.io.write_elem(g, "/", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
-            if auto_shard_zarr_v3:
+            if auto_shard_zarr_v3 and isinstance(g, zarr.Group):
                 check_all_sharded(g)
             curr = ad.io.read_elem(g)
 
+    assert isinstance(curr, AnnData)
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
 

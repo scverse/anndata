@@ -160,6 +160,7 @@ def test_concat_to_memory_obs(
 ):
     concatenated_memory = simple_subset_func(ad.concat(adatas_for_concat, join=join))
     concated_remote = simple_subset_func(ad.concat(lazy_adatas_for_concat, join=join))
+    assert isinstance(concatenated_memory.obs, pd.DataFrame)
     assert_equal(
         *unify_extension_dtypes(to_memory(concated_remote.obs), concatenated_memory.obs)
     )
@@ -224,6 +225,7 @@ def test_concat_to_memory_var(
         var_df_only_ds_0 = adatas_for_concat[0][:, pd_index_only_ds_0].var.copy()
         test_cases.append((pd_index_only_ds_0, var_df_only_ds_0, 0))
     for pd_index, var_df, store_idx in test_cases:
+        assert isinstance(var_df, pd.DataFrame)
         remote_df = to_memory(concated_remote[:, pd_index].var)
         remote_df_corrected, _ = unify_extension_dtypes(remote_df, var_df)
         # NOTE: xr.merge always upcasts to float due to NA and you can't downcast?
@@ -284,14 +286,18 @@ def test_concat_data_subsetting(
     from anndata._core.xarray import Dataset2D
 
     remote_concatenated = ad.concat([adata_remote, adata_remote], join=join)
-    if index is not None:
-        if np.isscalar(index) and index == "a":
-            index = remote_concatenated.obs["obs_cat"] == "a"
-        remote_concatenated = remote_concatenated[index]
     orig_concatenated = ad.concat([adata_orig, adata_orig], join=join)
     if index is not None:
-        orig_concatenated = orig_concatenated[index]
+        subset_index = (
+            remote_concatenated.obs["obs_cat"] == "a"
+            if np.isscalar(index) and index == "a"
+            else index
+        )
+        remote_concatenated = remote_concatenated[subset_index]
+        orig_concatenated = orig_concatenated[subset_index]
     in_memory_remote_concatenated = remote_concatenated.to_memory()
+    assert isinstance(in_memory_remote_concatenated.obs, pd.DataFrame)
+    assert isinstance(orig_concatenated.obs, pd.DataFrame)
     corrected_remote_obs, corrected_memory_obs = unify_extension_dtypes(
         in_memory_remote_concatenated.obs, orig_concatenated.obs
     )

@@ -10,6 +10,8 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
+from anndata.abc import CSCDataset, CSRDataset
+from anndata.compat import CSArray, CSMatrix
 from anndata.tests.helpers import (
     GEN_ADATA_DASK_ARGS,
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -23,9 +25,12 @@ from anndata.utils import asarray
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-    from typing import Literal
+    from typing import Any, Literal
+
+    import pandas as pd
 
     from anndata.compat import DaskArray
+    from anndata.typing import Index1D
 
 subset_func2 = subset_func
 
@@ -43,7 +48,7 @@ def adata() -> ad.AnnData:
         [7, 8, 9],
     ]  # data matrix of shape n_obs x n_vars
     X = np.array(X_list)
-    obs_dict = dict(  # annotation of observations / rows
+    obs_dict: dict[str, list[Any]] = dict(  # annotation of observations / rows
         row_names=["name1", "name2", "name3"],  # row annotation
         oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
         oanno2=["o1", "o2", "o3"],  # string annotation
@@ -231,8 +236,8 @@ def test_backed_raw_subset(
     array_type: Callable[
         [np.ndarray], np.ndarray | sparse.csr_array | sparse.csr_matrix
     ],
-    subset_func: Callable[[ad.AnnData], ad.AnnData],
-    subset_func2: Callable[[ad.AnnData], ad.AnnData],
+    subset_func: Callable[[pd.Index[str]], Index1D],
+    subset_func2: Callable[[pd.Index[str]], Index1D],
 ):
     backed_pth = tmp_path / "backed.h5ad"
     final_pth = tmp_path / "final.h5ad"
@@ -319,6 +324,7 @@ def test_return_to_memory_mode(adata: ad.AnnData, backing_h5ad: Path):
 
 
 def test_backed_modification(adata: ad.AnnData, backing_h5ad: Path):
+    assert isinstance(adata.X, np.ndarray)
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse.csr_matrix(adata.X)
     assert not adata.isbacked
@@ -345,6 +351,7 @@ def test_backed_modification_sparse(
     backing_h5ad: Path,
     sparse_format: type[sparse.csr_matrix | sparse.csc_matrix],
 ):
+    assert isinstance(adata.X, np.ndarray)
     adata.X[:, 1] = 0  # Make it a little sparse
     adata.X = sparse_format(adata.X)
     orig = adata.X.copy()
@@ -358,7 +365,10 @@ def test_backed_modification_sparse(
 
     # Does not modify backed store
     adata[0, [0, 2]].X = np.array([[10, 10]])
-    np.testing.assert_equal(orig.toarray(), adata.X[...].toarray())
+    assert isinstance(adata.X, CSRDataset | CSCDataset)
+    from_disk = adata.X[...]
+    assert isinstance(from_disk, CSMatrix | CSArray)
+    np.testing.assert_equal(orig.toarray(), from_disk.toarray())
 
 
 # TODO: Work around h5py not supporting this

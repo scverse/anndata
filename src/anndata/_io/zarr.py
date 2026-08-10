@@ -20,13 +20,13 @@ from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-    from os import PathLike
+    from typing import Any
 
     from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
+    from ..typing import RWAble
 
 
 @contextmanager
@@ -53,7 +53,7 @@ def write_zarr(
     store: StoreLike,
     adata: AnnData,
     *,
-    chunks: tuple[int, ...] | None = None,
+    chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
     **ds_kwargs,
@@ -69,7 +69,7 @@ def write_zarr(
     ) -> None:
         if (
             chunks is not None
-            and not isinstance(elem, sparse.spmatrix)
+            and not isinstance(elem, sparse.sparray | sparse.spmatrix)
             and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
@@ -95,7 +95,7 @@ def write_zarr(
                 zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
+def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 
@@ -108,11 +108,12 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     def callback(func, elem_name: str, elem, iospec):
         """Read with handling for backwards compat"""
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(**{
+            attrs: dict[str, Any] = {
                 k: read_dispatched(v, callback)
                 for k, v in dict(elem).items()
                 if not k.startswith("raw.")
-            })
+            }
+            return AnnData(**attrs)
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:
@@ -123,8 +124,11 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
         return func(elem)
 
     with zarrs_context():
-        f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+        f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode="r")
         adata = read_dispatched(f, callback=callback)
+        if not isinstance(adata, AnnData):
+            msg = f"Expected an AnnData at the store root, got {type(adata).__name__}"
+            raise ValueError(msg)
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
@@ -143,7 +147,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
 def read_dataset(dataset: zarr.Array):
     """Legacy method for reading datasets without encoding_type."""
     value = dataset[...]
-    if not hasattr(value, "dtype"):
+    if not isinstance(value, np.ndarray):  # scalars have no dtype to inspect
         return value
     elif isinstance(value.dtype, str):
         pass
@@ -172,7 +176,8 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 
 @report_read_key_on_error
-def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
+def read_dataframe(group: zarr.Group | zarr.Array) -> RWAble:
+    """Read `obs`/`var`, which is a `DataFrame` unless it was written as a plain mapping."""
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)

@@ -11,7 +11,7 @@ import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
-if Version(version("dask")) < Version("2024.8.0"):
+if not TYPE_CHECKING and Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq

@@ -60,7 +60,7 @@ class Dataset2D:
     def setup(
         self,
         store_type: Literal["zarr", "h5ad"],
-        chunks: None | tuple[int],
+        chunks: tuple[int] | None,
         array_type: Literal[
             "cat", "numeric", "string-array", "nullable-string-array", "all"
         ],
@@ -70,6 +70,8 @@ class Dataset2D:
             if store_type == "h5ad"
             else zarr.open(f"data_{array_type}.zarr")
         )
+        assert isinstance(self.store, h5py.File | zarr.Group), self.store
+        assert isinstance(self.store["df"], h5py.Group | zarr.Group), self.store["df"]
         self.ds = ad.experimental.read_elem_lazy(self.store["df"], chunks=chunks)
         self.n_obs = self.ds.shape[0]
 
