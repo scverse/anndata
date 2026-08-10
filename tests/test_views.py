@@ -713,7 +713,7 @@ def test_derived_view_write_error(derive: Callable[[ArrayView], ArrayView]) -> N
         pytest.param([0, 1], id="fancy"),
     ],
 )
-def test_element_write(index) -> None:
+def test_element_write(index: slice | list[int]) -> None:
     """Writing to the element itself works and doesn’t touch the parent."""
     a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
 

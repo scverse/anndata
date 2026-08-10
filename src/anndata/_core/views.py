@@ -32,7 +32,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from typing import Any, ClassVar
+    from typing import Any, ClassVar, Self
 
     from numpy.typing import NDArray
 
@@ -128,7 +128,9 @@ class ArrayView(_SetItemMixin, np.ndarray):
     _is_element: bool
     """Whether `self` is `_view_args`’ referent, rather than derived from it."""
 
-    def __new__(cls, input_array: Sequence[Any], view_args: ViewArgs | None = None):
+    def __new__(
+        cls, input_array: Sequence[Any], view_args: ViewArgs | None = None
+    ) -> Self:
         arr = np.asanyarray(input_array).view(cls)
 
         if view_args is not None:
@@ -137,7 +139,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         arr._is_element = True
         return arr
 
-    def __array_finalize__(self, obj: np.ndarray | None):
+    def __array_finalize__(self, obj: np.ndarray | None) -> None:
         # Derivatives (e.g. `el.T`, `el[1:3]`, …) inherit `_view_args`,
         # but aren’t what it refers to
         self._is_element = False
