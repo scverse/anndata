@@ -676,73 +676,53 @@ def test_double_index(subset_func, subset_func2):
 
 
 @pytest.mark.parametrize(
-    ("derive", "idx", "cell"),
+    "derive",
     [
-        pytest.param(lambda el: el, (1, 0), (1, 0), id="element"),
-        pytest.param(lambda el: el[1:3], (0, 0), (1, 0), id="slice"),
-        pytest.param(lambda el: el[1:4][1:2], (0, 0), (2, 0), id="slice-of-slice"),
-        pytest.param(lambda el: el[::2], (1, 0), (2, 0), id="strided"),
-        pytest.param(lambda el: el[:, 2:], (3, 0), (3, 2), id="column-slice"),
-        pytest.param(lambda el: el[1], 0, (1, 0), id="row"),
-        pytest.param(lambda el: el.T, (0, 1), (1, 0), id="transpose"),
-        pytest.param(lambda el: el.reshape(-1), 5, (1, 1), id="reshape"),
+        pytest.param(lambda el: el[1:3], id="slice"),
+        pytest.param(lambda el: el[::2], id="strided"),
+        pytest.param(lambda el: el[1], id="row"),
+        pytest.param(lambda el: el.T, id="transpose"),
+        pytest.param(lambda el: el.reshape(-1), id="reshape"),
+        pytest.param(lambda el: el[[1, 3]], id="fancy"),
+        pytest.param(lambda el: el[np.arange(5) % 2 == 1], id="mask"),
     ],
 )
-def test_derived_view_write(
-    derive: Callable[[ArrayView], ArrayView],
-    idx: tuple[int, int],
-    cell: tuple[int, int],
-) -> None:
-    """Writes through a derived element view must land where `idx` points.
+def test_derived_view_write_error(derive: Callable[[ArrayView], ArrayView]) -> None:
+    """`_view_args` rides along every subclass-preserving op, not just `__getitem__`.
 
-    `_view_args` rides along every subclass-preserving op, not just
-    `__getitem__`, so `.T`/`.reshape`/… need the same routing as the `slice`
-    case from https://github.com/scverse/anndata/pull/2582#pullrequestreview-4856369546.
+    Writing through such a derived array would land on the wrong cells
+    (https://github.com/scverse/anndata/pull/2582#pullrequestreview-4856369546),
+    so it errors instead.
     """
-    # obsm element is a 5x4 arange, so element[r, c] == r*4 + c
     a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
 
-    view = a[:5, :]
-    target = derive(cast("ArrayView", view.obsm["o"]))
+    target = derive(cast("ArrayView", a[:5, :].obsm["o"]))
 
-    with pytest.warns(ImplicitModificationWarning):
-        target[idx] = 777
+    with pytest.raises(ValueError, match=r"through a derived array"):
+        target[0] = 777
 
-    expected = np.arange(20).reshape(5, 4)
-    expected[cell] = 777
-    np.testing.assert_array_equal(np.asarray(view.obsm["o"]), expected)
     np.testing.assert_array_equal(
         a.obsm["o"], np.arange(40).reshape(10, 4), err_msg="parent must not be mutated"
     )
 
 
 @pytest.mark.parametrize(
-    "derive",
+    "index",
     [
-        pytest.param(lambda el: el[[1, 3]], id="fancy"),
-        pytest.param(lambda el: el[np.arange(5) % 2 == 1], id="mask"),
+        pytest.param(slice(None, 5), id="slice"),
+        pytest.param([0, 1], id="fancy"),
     ],
 )
-def test_view_copy_write_error(derive: Callable[[ArrayView], ArrayView]):
-    """Array/mask indexing copies, so there is nothing to route the write back to."""
+def test_element_write(index) -> None:
+    """Writing to the element itself works and doesn’t touch the parent."""
     a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
 
-    target = derive(cast("ArrayView", a[:5, :].obsm["o"]))
-
-    with pytest.raises(ValueError, match=r"through a copy of itself"):
-        target[0, 0] = 777
-
-
-def test_detached_element_write():
-    """A fancy *view* index copies the element, but `idx` still addresses it."""
-    a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
-
-    view = a[[0, 1, 2, 3, 4], :]
+    view = a[index, :]
     element = cast("ArrayView", view.obsm["o"])
     with pytest.warns(ImplicitModificationWarning):
         element[1, 0] = 777
 
-    expected = np.arange(20).reshape(5, 4)
+    expected = np.arange(40).reshape(10, 4)[index]
     expected[1, 0] = 777
     np.testing.assert_array_equal(np.asarray(view.obsm["o"]), expected)
     np.testing.assert_array_equal(
