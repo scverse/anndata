@@ -475,9 +475,11 @@ def write_list(
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
 @_REGISTRY.register_write(h5py.Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(h5py.Group, np.ndarray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, views.MaskedArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(h5py.Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, views.ArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, np.ndarray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, views.MaskedArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, zarr.Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, h5py.Dataset, IOSpec("array", "0.2.0"))
@@ -486,7 +488,7 @@ def write_list(
 def write_basic(
     f: _GroupStorageType,
     k: str,
-    elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | zarr.Array,
+    elem: np.ndarray | h5py.Dataset | np.ma.MaskedArray | zarr.Array,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),

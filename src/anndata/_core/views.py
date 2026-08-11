@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import reduce, singledispatch
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -143,22 +143,29 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return arr
 
     def __array_finalize__(self, obj: np.ndarray | None) -> None:
+        super().__array_finalize__(obj)
         # Derivatives (e.g. `el.T`, `el[1:3]`, …) inherit `_view_args`,
         # but aren’t what it refers to
         self._is_element = False
-        if obj is not None:
-            self._view_args = getattr(obj, "_view_args", None)
+        self._view_args = getattr(obj, "_view_args", None)
+
+    def _check_is_element(self) -> None:
+        """Refuse modification through a derivative of the element.
+
+        An index addresses `self`, not the element, so the copy-on-modify
+        in `_SetItemMixin` would write to the wrong cells.
+        """
+        if (ref := self._view_args) is None or self._is_element:
+            return
+        msg = (
+            f"Cannot modify `.{ref.attrname}` of a view through a derived array "
+            f"(e.g. `{ref}[…]` or `{ref}.T`). "
+            f"Subset the AnnData instead, or assign to `{ref}` directly."
+        )
+        raise ValueError(msg)
 
     def __setitem__(self, idx: object, value: object) -> None:
-        if (ref := self._view_args) is not None and not self._is_element:
-            # `idx` addresses `self`, not the element, so the copy-on-modify
-            # in `_SetItemMixin.__setitem__` would write to the wrong cells.
-            msg = (
-                f"Cannot modify `.{ref.attrname}` of a view through a derived array "
-                f"(e.g. `{ref}[…]` or `{ref}.T`). "
-                f"Subset the AnnData instead, or assign to `{ref}` directly."
-            )
-            raise ValueError(msg)
+        self._check_is_element()
         super().__setitem__(idx, value)
 
     def __array_ufunc__(
@@ -219,17 +226,16 @@ class ArrayView(_SetItemMixin, np.ndarray):
         return self.copy()
 
 
-class _MaskedSubarrayView(_SetItemMixin, np.ndarray):
+class _MaskedSubarrayView(ArrayView):
     _attr: ClassVar[str]
 
-    def __new__(cls, input_array: np.ndarray, view_args: ElementRef | None):
+    def __new__(
+        cls, input_array: np.ndarray, view_args: ElementRef | None, *, is_element: bool
+    ):
         arr = np.asanyarray(input_array).view(cls)
         arr._view_args = view_args
+        arr._is_element = is_element
         return arr
-
-    def __array_finalize__(self, obj: np.ndarray | None):
-        if obj is not None:
-            self._view_args = getattr(obj, "_view_args", None)
 
     def _view_update_target(self, container: _SupportsSetItem) -> _SupportsSetItem:
         return getattr(container, self._attr)
@@ -243,10 +249,10 @@ class _DataView(_MaskedSubarrayView):
     _attr = "data"
 
 
-class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
+class MaskedArrayView(ArrayView, np.ma.MaskedArray):
     def __new__(
         cls,
-        input_array: Sequence[Any],
+        input_array: ArrayLike,
         view_args: ViewArgs | None = None,
     ):
         arr = np.ma.asarray(input_array).view(cls)
@@ -254,12 +260,15 @@ class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
         if view_args is not None:
             view_args = ElementRef(*view_args)
         arr._view_args = view_args
+        arr._is_element = True
         return arr
 
-    def __array_finalize__(self, obj: np.ndarray | None):
-        super().__array_finalize__(obj)
-        if obj is not None:
-            self._view_args = getattr(obj, "_view_args", None)
+    def _update_from(self, obj: np.ndarray) -> None:
+        # `numpy.ma`’s `_arraymethod` wrappers (`.T`, `.reshape`, …) build the
+        # result from `self._data`, so `__array_finalize__` never sees a view.
+        super()._update_from(obj)  # type: ignore[misc]
+        self._view_args = getattr(obj, "_view_args", None)
+        self._is_element = False
 
     @property
     def mask(self) -> _MaskView | np.bool_:
@@ -268,15 +277,40 @@ class MaskedArrayView(_SetItemMixin, np.ma.MaskedArray):
             # `nomask` sentinel: many numpy.ma internals rely on `is nomask`
             # identity, so don’t wrap it in a view.
             return m
-        return _MaskView(m, self._view_args)
+        return _MaskView(m, self._view_args, is_element=self._is_element)
 
     @mask.setter
     def mask(self, value: ArrayLike) -> None:
-        self.__setmask__(value)  # type: ignore[arg-type]
+        self._check_is_element()
+        if self._view_args is None:
+            self.__setmask__(value)  # type: ignore[arg-type]
+            return
+        msg = (
+            f"Trying to modify attribute `.{self._view_args.attrname}` of view, "
+            "initializing view as actual."
+        )
+        warn(msg, ImplicitModificationWarning)
+        with view_update(*self._view_args) as container:
+            container.mask = value
 
     @property
     def data(self) -> _DataView:  # type: ignore[override]
-        return _DataView(super().data, self._view_args)
+        return _DataView(super().data, self._view_args, is_element=self._is_element)
+
+    @property  # type: ignore[misc]
+    def real(self) -> Self:  # type: ignore[override]
+        real = cast("Self", super().real)
+        real._view_args = self._view_args
+        return real
+
+    @property  # type: ignore[misc]
+    def imag(self) -> Self:  # type: ignore[override]
+        imag = cast("Self", super().imag)
+        imag._view_args = self._view_args
+        return imag
+
+    def _detach(self) -> np.ma.MaskedArray:
+        return self.view(np.ma.MaskedArray)
 
     def copy(self, *args, **kwargs) -> np.ma.MaskedArray:  # type: ignore[override]
         return np.ma.MaskedArray(self, subok=False, copy=True)

@@ -1895,3 +1895,30 @@ def test_1d_concat():
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)
+
+
+@pytest.mark.parametrize("join_type", ["inner", "outer"])
+def test_concat_masked(join_type: Literal["inner", "outer"]) -> None:
+    """Only `np.ma.concatenate` merges masks, `np.concatenate` silently drops them."""
+    masked = ma.MaskedArray(
+        np.arange(20.0).reshape(5, 4), mask=np.eye(5, 4, dtype=bool)
+    )
+    a = AnnData(np.zeros((5, 4)), layers={"l": masked})
+    a.var_names = [f"v{i}" for i in range(4)]
+    b = a.copy()
+    if join_type == "outer":
+        b.var_names = [f"w{i}" for i in range(4)]
+
+    result = concat([a, b], join=join_type, index_unique="-")
+
+    assert type(result.layers["l"]) is ma.MaskedArray
+    mask = ma.getmaskarray(result.layers["l"])
+    # both inputs’ own masked cells survive
+    np.testing.assert_array_equal(mask[:5, :4], np.eye(5, 4, dtype=bool))
+    if join_type == "inner":
+        np.testing.assert_array_equal(mask[5:, :4], np.eye(5, 4, dtype=bool))
+    else:
+        # vars only present in the other object have no data, so they’re masked
+        assert mask[:5, 4:].all()
+        np.testing.assert_array_equal(mask[5:, 4:], np.eye(5, 4, dtype=bool))
+        assert mask[5:, :4].all()

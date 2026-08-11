@@ -55,6 +55,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
     from types import EllipsisType, FunctionType
     from typing import Any, Literal
 
@@ -873,6 +874,82 @@ def test_masked_copy(adata_mask: ad.AnnData) -> None:
     orig = adata_mask.obsm["masked"]
     assert isinstance(orig, np.ma.MaskedArray)
     assert orig[1, 1] == 6.0
+
+
+@pytest.mark.parametrize(
+    "derive",
+    [
+        pytest.param(lambda el: el[1:3], id="slice"),
+        pytest.param(lambda el: el.T, id="transpose"),
+        pytest.param(lambda el: el.reshape(-1), id="reshape"),
+        pytest.param(lambda el: el.real, id="real"),
+        pytest.param(lambda el: el.mask[1:3], id="mask-slice"),
+        pytest.param(lambda el: el.data[1:3], id="data-slice"),
+    ],
+)
+def test_masked_derived_view_write_error(
+    adata_mask: ad.AnnData, derive: Callable[[MaskedArrayView], np.ndarray]
+) -> None:
+    """Derived arrays refuse writes, just like those derived from an `ArrayView`.
+
+    `numpy.ma` restores the subclass for its own derivatives, so `_view_args`
+    rides along there too – see `test_derived_view_write_error`.
+    """
+    target = derive(cast("MaskedArrayView", adata_mask[:5, :].obsm["masked"]))
+
+    with pytest.raises(ValueError, match=r"through a derived array"):
+        target[0] = True
+
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    np.testing.assert_array_equal(orig.data, np.arange(50.0).reshape(10, 5))
+    assert cast("np.ndarray", orig.mask).sum() == 1
+
+
+def test_masked_set_mask(adata_mask: ad.AnnData) -> None:
+    """Assigning a whole new mask is copy-on-write, like `el.mask[…] = …` is."""
+    view = adata_mask[:5, :]
+    element = cast("MaskedArrayView", view.obsm["masked"])
+
+    with pytest.warns(ImplicitModificationWarning, match=r"obsm"):
+        element.mask = np.ones((5, 5), dtype=bool)
+
+    assert np.ma.getmaskarray(cast("np.ndarray", view.obsm["masked"])).all()
+    orig = adata_mask.obsm["masked"]
+    assert isinstance(orig, np.ma.MaskedArray)
+    assert cast("np.ndarray", orig.mask).sum() == 1
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        pytest.param(
+            lambda adata: ad.concat([adata[:5], adata[5:]], index_unique="-").obsm[
+                "masked"
+            ],
+            id="concat",
+        ),
+        pytest.param(lambda adata: adata[:5, :].obsm["masked"] + 1, id="arithmetic"),
+    ],
+)
+def test_masked_element_is_never_a_view(
+    adata_mask: ad.AnnData, make: Callable[[ad.AnnData], np.ma.MaskedArray]
+) -> None:
+    """Unlike `np.concatenate`/ufuncs, `numpy.ma` re-views our subclass onto results.
+
+    `coerce_array` detaches them again, so what lands in an AnnData is plain.
+    """
+    element = make(adata_mask)
+
+    adata = ad.AnnData(np.zeros((len(element), 5)), obsm={"masked": element})
+
+    assert type(adata.obsm["masked"]) is np.ma.MaskedArray
+    assert np.ma.getmaskarray(cast("np.ndarray", adata.obsm["masked"]))[0, 0]
+
+
+def test_masked_write(adata_mask: ad.AnnData, tmp_path: Path) -> None:
+    """The IO registry dispatches on the exact type, so views need registering."""
+    adata_mask[:5, :].write_h5ad(tmp_path / "masked.h5ad")
 
 
 def test_modify_uns_in_copy():
