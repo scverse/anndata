@@ -781,21 +781,6 @@ def test_element_is_never_a_foreign_view() -> None:
     assert not np.shares_memory(other.obsm["o"], adata.obsm["o"])
 
 
-def test_element_is_never_a_foreign_view() -> None:
-    """`coerce_array` detaches views, so no element is a view of another AnnData.
-
-    A view’s element shares memory with the viewed AnnData,
-    so it has to be copied,
-    otherwise writing to the new element would mutate the old one.
-    """
-    adata = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40.0).reshape(10, 4)})
-
-    other = ad.AnnData(np.zeros((5, 5)), obsm={"o": adata[:5, :].obsm["o"]})
-
-    assert type(other.obsm["o"]) is np.ndarray
-    assert not np.shares_memory(other.obsm["o"], adata.obsm["o"])
-
-
 @pytest.fixture
 def adata_mask() -> ad.AnnData:
     mask = np.zeros((10, 5), dtype=bool)
