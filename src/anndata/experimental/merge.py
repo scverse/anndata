@@ -101,7 +101,8 @@ def _gen_slice_to_append(  # noqa: PLR0917
 ) -> Generator[CSMatrix]:
     for i, (ds, ri) in enumerate(zip(datasets, reindexers, strict=False)):
         if ds is MissingVal:
-            assert ns is not None and width is not None
+            assert ns is not None
+            assert width is not None
             yield _sparse_fill_block(ns[i], width, axis=axis, fill_value=fill_value)
             continue
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
@@ -254,7 +255,8 @@ def write_concat_dense(  # noqa: PLR0913, PLR0917
     blocks = []
     for i, (a, ri) in enumerate(zip(arrays, reindexers, strict=True)):
         if a is MissingVal:
-            assert ns is not None and width is not None
+            assert ns is not None
+            assert width is not None
             shape = (ns[i], width) if axis == 0 else (width, ns[i])
             blocks.append(da.full(shape, np.nan if fill_value is None else fill_value))
         else:
