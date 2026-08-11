@@ -202,6 +202,10 @@ class ArrayView(_SetItemMixin, np.ndarray):
         # it’s a structured array
         return self.dtype.names or ()
 
+    def _detach(self) -> np.ndarray:
+        """Return `self` as its conventional type, sharing its memory."""
+        return self.view(np.ndarray)
+
     def copy(  # type: ignore[override]
         self, order: Literal["K", "A", "C", "F"] | None = "C"
     ) -> np.ndarray:
