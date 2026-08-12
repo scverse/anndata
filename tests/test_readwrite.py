@@ -996,7 +996,7 @@ def test_h5py_attr_limit(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+    "elem_key", sorted(set(get_literal_members(AnnDataElem)) - {"raw", "X"})
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
 @pytest.mark.parametrize(
@@ -1053,7 +1053,7 @@ def test_forward_slash_key(
 
 
 @pytest.mark.parametrize(
-    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+    "elem_key", sorted(set(get_literal_members(AnnDataElem)) - {"raw", "X"})
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
 @pytest.mark.parametrize("key", ["/", "/y"])
