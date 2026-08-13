@@ -17,5 +17,5 @@ build:
       - ( find docs/release-notes -regex '[^.]+[.][^.]+.md' | grep -q . ) && uvx hatch run docs:towncrier build --keep || true
     build:
       html:
-        - uvx hatch run docs:build
+        - uvx --from=hatch!=1.18.0 hatch run docs:build
         - mv docs/_build $READTHEDOCS_OUTPUT
