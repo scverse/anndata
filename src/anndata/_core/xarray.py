@@ -287,11 +287,11 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         -------
         :class:`pandas.Index` that represents the "columns."
         """
-        columns = set(self.ds.keys())
+        columns = pd.Index(self.ds.keys())
         index_key = self.ds.attrs.get("indexing_key", None)
         if index_key is not None:
-            columns.discard(index_key)
-        return pd.Index(columns)
+            columns.drop([index_key])
+        return columns
 
     @columns.setter
     def columns(self, val) -> None:

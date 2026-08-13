@@ -41,7 +41,7 @@
             "prefixItems": [
                 { "enum": ["obsm", "varm"] },
                 { "type": "string" },
-                { "type": "integer" }
+                { "type": ["integer", "string"] }
             ]
         },
         {

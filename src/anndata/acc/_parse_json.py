@@ -32,7 +32,7 @@ def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
         case ["obs" | "var" as dim, str() | None as col]:
             acc = a.obs if dim == "obs" else a.var
             return acc.index if col is None else acc[col]
-        case ["obsm" | "varm" as dim, str(col), int(i)]:
+        case ["obsm" | "varm" as dim, str(col), int(i) | str(i)]:
             return (a.obsm if dim == "obsm" else a.varm)[col][i]
         case ["obsp" | "varp" as dim, str(k), *idx] if idx_2d := _as_idx_2d(idx):
             return (a.obsp if dim == "obsp" else a.varp)[k][idx_2d]
