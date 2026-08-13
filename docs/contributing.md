@@ -9,7 +9,7 @@ AnnData follows the development practices outlined in the [Scanpy contribution g
 ## Code checks
 
 We use [prek][] to run the [pre-commit][] hooks that enforce code style, formatting, and static type checking.
-Install it and run `prek install` once to set up the git hook, then `prek run --all-files` to check the whole repository.
+Install it and run `prek install` once to set up the git hook, then `prek run --all-files` or `hatch check` to check the whole repository.
 The same hooks run in the `Pre-commit checks` job of the CI, and Dependabot keeps their versions current.
 
 Static type checking is done by [mypy][] over `src` and `tests`, configured through `[tool.mypy]` in the `pyproject.toml`.
