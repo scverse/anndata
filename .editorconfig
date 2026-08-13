@@ -9,7 +9,9 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 max_line_length = 88
 
-# TOML is formatted by taplo, which is configured for 4 spaces in .taplo.toml
+[pyproject.toml]
+max_line_length = 120
+
 [{*.{yml,yaml},.cruft.json}]
 indent_size = 2
 
