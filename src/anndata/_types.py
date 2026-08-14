@@ -253,8 +253,9 @@ class ReduceFunc[T](Protocol):
             The current element.
         accumulate
             The value being accumulated.
-        ref_acc
-            A reference to help uses distinguish where they are in the `AnnData` object.
+        attr_name
+            The name of the attribute being visited, to help distinguish where
+            you are in the `AnnData` object.
 
         Returns
         -------
