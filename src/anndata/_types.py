@@ -16,10 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any, TypeAlias
 
-    from pandas import DataFrame
-
     from anndata._core.xarray import Dataset2D
-    from anndata.typing import AxisStorable, _XDataType
+    from anndata.typing import Storable
 
     from ._io.specs.registry import (
         IOSpec,
@@ -28,7 +26,6 @@ if TYPE_CHECKING:
         Reader,
         Writer,
     )
-    from ._types import AnnDataElem
     from .compat import XDataset
 
 else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
@@ -61,7 +58,7 @@ type StorageType = _ArrayStorageType | _GroupStorageType
 
 @set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
-    def __getitem__(self, idx: Any, /) -> Dataset2D: ...
+    def __getitem__(self, idx: object, /) -> Dataset2D: ...
 
 
 class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
@@ -75,7 +72,7 @@ class _ReadLazyInternal[S: StorageType](Protocol):
         /,
         *,
         _reader: LazyReader,
-        chunks: tuple[int, ...] | None = None,
+        chunks: tuple[int | None, ...] | None = None,
     ) -> LazyDataStructures: ...
 
 
@@ -97,7 +94,7 @@ class Read[S: StorageType, RWAble: typing.RWAble](Protocol):
 
 class ReadLazy[S](Protocol):
     def __call__(
-        self, elem: S, /, *, chunks: tuple[int, ...] | None = None
+        self, elem: S, /, *, chunks: tuple[int | None, ...] | None = None
     ) -> LazyDataStructures:
         """Low-level reading function for a lazy element.
 
@@ -236,14 +233,9 @@ type AnnDataElem = Literal[
 type Join_T = Literal["inner", "outer"]
 
 
-class ReduceFunc[T](Protocol):
+class ReduceFunc[T, E: AnnDataElem | None](Protocol):
     def __call__(
-        self,
-        elem: _XDataType | AxisStorable | DataFrame | XDataset,
-        /,
-        *,
-        accumulate: T,
-        attr_name: AnnDataElem | None,
+        self, elem: Storable | XDataset, /, *, accumulate: T, attr_name: E
     ) -> T:
         """Function to be called on each visit within `anndata.AnnData._reduce`.
 
@@ -253,8 +245,9 @@ class ReduceFunc[T](Protocol):
             The current element.
         accumulate
             The value being accumulated.
-        ref_acc
-            A reference to help uses distinguish where they are in the `AnnData` object.
+        attr_name
+            The name of the attribute being visited, to help distinguish where
+            you are in the `AnnData` object.
 
         Returns
         -------

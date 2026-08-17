@@ -78,12 +78,12 @@ def _adatas_to_paths(
     file_format: str,
 ) -> dict[str, Path] | list[Path]:
     """Gets list of adatas, writes them and returns their paths as zarr."""
-    paths = {}
+    paths: dict[str, Path] = {}
     for k, v in adatas.items() if isinstance(adatas, Mapping) else enumerate(adatas):
         p = tmp_path / f"{k}.{file_format}"
         with as_group(p, mode="a") as f:
             write_elem(f, "/", v)
-        paths[k] = p
+        paths[str(k)] = p
     return paths if isinstance(adatas, Mapping) else list(paths.values())
 
 
@@ -133,9 +133,10 @@ def test_anndatas(
     reindex: bool,
     merge_strategy: merge.StrategiesLiteral,
 ):
-    _, off_axis_name = _resolve_axis(1 - axis)
+    off_axis: Literal[0, 1] = 1 if axis == 0 else 0
+    _, off_axis_name = _resolve_axis(off_axis)
     random_axes = {0, 1} if reindex else {axis}
-    sparse_fmt = "csr" if axis == 0 else "csc"
+    sparse_fmt: Literal["csr", "csc"] = "csr" if axis == 0 else "csc"
     kw = (
         GEN_ADATA_OOC_CONCAT_ARGS
         if not reindex

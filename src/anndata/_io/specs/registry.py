@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import zarr
@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
+    type WriteSrcType = (
+        type | tuple[type, str] | tuple[type, type] | tuple[type, type, str]
+    )
+
 
 def to_writeable(x):
     # Convert non-numpy array-API arrays to numpy via DLPack. Array-API arrays
@@ -67,7 +71,7 @@ class IOSpec:
 class IORegistryError(Exception):
     @classmethod
     def _from_write_parts(
-        cls, dest_type: type, typ: type | tuple[type, str], modifiers: frozenset[str]
+        cls, dest_type: type, typ: WriteSrcType, modifiers: frozenset[str]
     ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
@@ -90,16 +94,17 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
-def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
+def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs) -> None:
+        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs):
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
             return result
 
-        return wrapper
+        # a wrapper can never structurally match the wrapped function’s type
+        return cast("W", wrapper)
 
     return decorator
 
@@ -107,8 +112,8 @@ def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     read: dict[tuple[type, IOSpec, frozenset[str]], RI]
     read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
-    write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
-    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec]
+    write: dict[tuple[type, WriteSrcType, frozenset[str]], _WriteInternal]
+    write_specs: dict[WriteSrcType, IOSpec]
 
     def __init__(self) -> None:
         self.read = {}
@@ -116,13 +121,13 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         self.write = {}
         self.write_specs = {}
 
-    def register_write[S: StorageType, T: RWAble](
+    def register_write[W: _WriteInternal](
         self,
-        dest_type: type[S],
-        src_type: type | tuple[type, str],
+        dest_type: type[StorageType],
+        src_type: WriteSrcType,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_WriteInternal[S, T]], _WriteInternal[S, T]]:
+    ) -> Callable[[W], W]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -138,7 +143,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func: _WriteInternal[S, T]) -> _WriteInternal[S, T]:
+        def _register(func: W) -> W:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
@@ -147,7 +152,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     def get_write(
         self,
         dest_type: type,
-        src_type: type | tuple[type, str],
+        src_type: WriteSrcType,
         modifiers: frozenset[str] = frozenset(),
         *,
         writer: Writer,
@@ -164,7 +169,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     def has_write(
         self,
         dest_type: type,
-        src_type: type | tuple[type, str],
+        src_type: WriteSrcType,
         modifiers: frozenset[str],
     ) -> bool:
         return (dest_type, src_type, modifiers) in self.write
@@ -194,7 +199,8 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
-        internal = self.read[(src_type, spec, modifiers)]
+        # the registry cannot express that `RI`’s `_reader` type matches `reader`’s
+        internal: Callable[..., Any] = self.read[(src_type, spec, modifiers)]
         return partial(internal, _reader=reader)
 
     def has_read(
@@ -225,7 +231,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
-    def get_spec(self, elem: Any) -> IOSpec:
+    def get_spec(self, elem: StorageType) -> IOSpec:
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
                 return self.write_specs[typ_meta]
@@ -257,17 +263,13 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
     return IOSpec(**{k.replace("-", "_"): v for k, v in spec.items()})
 
 
-def get_spec(
-    elem: StorageType,
-) -> IOSpec:
+def get_spec(elem: StorageType) -> IOSpec:
     return proc_spec({
         k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
     })
 
 
-def _iter_patterns(
-    elem,
-) -> Generator[tuple[type, type | str] | tuple[type, type, str], None, None]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType, None, None]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 
@@ -276,7 +278,8 @@ def _iter_patterns(
     if isinstance(elem, DaskArray):
         yield (t, type(elem._meta), elem.dtype.kind)
         yield (t, type(elem._meta))
-    if hasattr(elem, "dtype"):
+    # Array API dtypes don’t have guaranteed attributes
+    if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
     yield t
 
@@ -311,7 +314,7 @@ class LazyReader(Reader):
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-        chunks: tuple[int, ...] | None = None,
+        chunks: tuple[int | None, ...] | None = None,
         **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
@@ -362,7 +365,7 @@ class Writer:
         self.callback = callback
 
     def find_write_func(
-        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+        self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
     ) -> Write:
         for pattern in _iter_patterns(elem):
             if self.registry.has_write(dest_type, pattern, modifiers):
@@ -482,7 +485,7 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType, chunks: tuple[int | None, ...] | None = None, **kwargs
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.

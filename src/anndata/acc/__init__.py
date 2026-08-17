@@ -7,13 +7,13 @@ import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, cast, overload
+from typing import TYPE_CHECKING, ClassVar, overload
 
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
 
+import numpy as np
 import pandas as pd
-import scipy.sparse as sp
 
 from .. import AnnData
 from .._core._dataframe_backend import (
@@ -23,12 +23,16 @@ from .._core._dataframe_backend import (
     true_axis_index,
 )
 from .._core.views import ArrayView
-from ..compat import CupySparseMatrix, DaskArray, has_xp_base
+from ..compat import (
+    CSArray,
+    CSMatrix,
+    CupySparseMatrix,
+    DaskArray,
+    SupportsArrayApiBase,
+)
 
 if TYPE_CHECKING:
     from mudata import MuData
-
-    from ..compat import AwkArray
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})
 
@@ -40,7 +44,7 @@ if TYPE_CHECKING:
 
     from .._core.aligned_mapping import AxisArrays
     from ..compat import XVariable
-    from ..typing import InMemoryArray, _XDataType
+    from ..typing import AlignedArray, InMemoryArray
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -58,8 +62,6 @@ type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Inde
 
 type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 
-type FullArray = _XDataType | DataFrameLike | AwkArray
-"""A complete array one level up from an :class:`AdRef`, e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`."""
 
 NO_IDX = sentinel("NO_IDX")
 """Sentinel object needed for implementing :meth:`anndata.acc.RefAcc.get` when subclassing."""
@@ -168,7 +170,7 @@ class MapAcc[R: RefAcc](abc.ABC):
 
 
 @dataclass(frozen=True)
-class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
+class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     r"""Abstract base class for reference accessors.
 
     See :term:`reference accessor`\ s for all existing subclasses.
@@ -177,13 +179,13 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
     _: KW_ONLY
     ref_class: type[R]
 
-    def process_idx(self, idx: Any, /) -> I:
+    def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
         return idx
 
-    def __getitem__(self, idx: Any, /) -> R:
+    def __getitem__(self, idx: Any, /) -> R:  # noqa: ANN401  # subclasses may override `idx` however they want
         idx = self.process_idx(idx)
-        return self.ref_class(self, idx)  # type: ignore
+        return self.ref_class(self, idx)
 
     @abc.abstractmethod
     def dims(self, idx: I, /) -> Axes:
@@ -202,11 +204,11 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
         """Check if the referenced array is in the AnnData object."""
 
     @overload
-    def get(self, data: D, /) -> FullArray: ...
+    def get(self, data: D, /) -> AlignedArray: ...
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> Array | FullArray:
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -215,20 +217,24 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
         These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
         """
 
-    def _maybe_flatten(self, idx: I, a: Array) -> Array:
+    def _maybe_flatten(
+        self, idx: I, a: InMemoryArray | pd.api.extensions.ExtensionArray
+    ) -> Array:
         if len(self.dims(idx)) != 1:
             return a
         if isinstance(a, DaskArray):
-            a = a.map_blocks(lambda x: self._maybe_flatten(idx, x))
-        if isinstance(a, sp.sparray | sp.spmatrix | CupySparseMatrix | ArrayView):
+            import dask.array as da
+
+            a = da.map_blocks(lambda x: self._maybe_flatten(idx, x), a)
+        if isinstance(a, CSMatrix | CSArray | CupySparseMatrix | ArrayView):
             a = a.toarray()
-        if has_xp_base(a):
+        if isinstance(a, SupportsArrayApiBase):
             return a.__array_namespace__().reshape(a, (a.size,))
         return a.ravel()
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
+class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`).
 
     Examples
@@ -289,12 +295,15 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
         return True  # idx is None or [:, :]
 
     @overload
-    def get(self, adata: AnnData, /) -> _XDataType: ...
+    def get(self, adata: AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, adata: AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
-    ) -> _XDataType | InMemoryArray:
+        self,
+        adata: AnnData,
+        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
+    ) -> AlignedArray:
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
@@ -321,7 +330,9 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 
 
 @dataclass(frozen=True)
-class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
+class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
+    RefAcc[R, str | None, MuData | AnnData]
+):
     r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
 
     Examples
@@ -365,7 +376,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
 
         return super().__getitem__(k)
 
-    def dims(self, k: str, /) -> Axes:
+    def dims(self, k: str | None, /) -> Axes:
         return {self.dim}
 
     def __repr__(self) -> str:
@@ -387,7 +398,10 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]: ...
     def get(
-        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
+        self,
+        data: MuData | AnnData,
+        k: str | NO_IDX | None = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable | NDArray[Any]:
         frame: object = getattr(data, self.dim)
         if not isinstance(frame, DataFrameLike):
@@ -401,7 +415,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
+class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -427,13 +441,8 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
-    def process_idx(i: object, /) -> int | list[int] | pd.Index[int]:
-        if isinstance(i, tuple):
-            if len(i) != 2 or i[0] != slice(None):
-                msg = f"Unsupported slice {i!r}"
-                raise ValueError(msg)
-            i = i[1]
-        if not isinstance(i, int) and not _is_t_list(i, int):
+    def process_idx(i: object, /) -> int:
+        if not isinstance(i := _drop_multi_slice(i), int):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
@@ -443,10 +452,9 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     @overload
     def __getitem__(self, i: IdxMultiList, /) -> list[R]: ...
     def __getitem__(self, i: int | tuple[slice, int] | IdxMultiList, /) -> R | list[R]:
-        i = self.process_idx(i)
-        if isinstance(i, list | pd.Index):
-            return [self[j] for j in i]
-        return super().__getitem__(i)
+        if _is_t_list(idx := _drop_multi_slice(i), int):
+            return [self[j] for j in idx]
+        return super().__getitem__(idx)
 
     def dims(self, i: int, /) -> Axes:
         return {self.dim}
@@ -459,18 +467,21 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
 
     def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
         m: AxisArrays = getattr(data, f"{self.dim}m")
-        if self.k not in m:
+        if (arr := m.get(self.k)) is None:
             return False
-        return idx is None or idx in range(m[self.k].shape[1])
+        return idx is None or idx in range(arr.shape[1])
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> FullArray: ...
+    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /
-    ) -> FullArray | InMemoryArray:
-        full: FullArray = getattr(data, f"{self.dim}m")[self.k]
+        self,
+        data: MuData | AnnData,
+        i: int | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
+    ) -> AlignedArray:
+        full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
         # TODO: remove slicing when dropping scipy <1.14
@@ -499,7 +510,7 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
+class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnData]):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
 
     Examples
@@ -553,26 +564,35 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
             return False
         if idx is None:
             return True
-        match [i for i in idx if isinstance(i, str)]:
-            case []:
-                return True
-            case [i]:
-                return i in getattr(data, self.dim).index
+        index: pd.Index = getattr(data, self.dim).index
+        return all(i in index for i in idx if isinstance(i, str))
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> _XDataType: ...
+    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
-    ) -> _XDataType | InMemoryArray:
-        full: _XDataType = getattr(data, f"{self.dim}p")[self.k]
+        self,
+        data: MuData | AnnData,
+        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        /,
+    ) -> AlignedArray:
+        full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:
             return full
-        df = cast("pd.DataFrame", getattr(data, self.dim))
-        # TODO: remove wrapping in [] when dropping scipy <1.14
-        iloc = tuple([df.index.get_loc(i)] if isinstance(i, str) else i for i in idx)
-        return self._maybe_flatten(idx, full[iloc])
+        index: pd.Index = getattr(data, self.dim).index
+        # a scalar index makes scipy return a 1D COO array, which cannot be flattened
+        match idx:
+            case str() as i, slice() as j:
+                sub = full[np.array([index.get_loc(i)]), j]
+            case slice() as i, str() as j:
+                sub = full[i, np.array([index.get_loc(j)])]
+            case slice() as i, slice() as j:
+                sub = full[i, j]
+            case _:  # pragma: no cover
+                msg = f"Invalid index: {idx}"
+                raise TypeError(msg)
+        return self._maybe_flatten(idx, sub)
 
 
 @dataclass(frozen=True)
@@ -596,6 +616,10 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
         return f"A.{self.dim}p"
 
 
+# `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
+_DEFAULT_REF_CLASS: Any = AdRef
+
+
 @dataclass(frozen=True)
 class AdAcc[R: AdRef]:
     r"""Accessor to create :class:`AdRef`\ s (:data:`A`).
@@ -603,7 +627,7 @@ class AdAcc[R: AdRef]:
     See examples below and in :mod:`anndata.acc`.
     """
 
-    ref_class: type[R] = AdRef
+    ref_class: type[R] = _DEFAULT_REF_CLASS
 
     layer_cls: type[LayerAcc] = LayerAcc
     """Class to use for `layers` accessors."""
@@ -823,6 +847,16 @@ def _is_t_list[T: (int, str)](
     if isinstance(idx, pd.Index) and _checks[cls](idx.dtype):
         return True
     return isinstance(idx, list | pd.Index) and all(isinstance(j, cls) for j in idx)
+
+
+def _drop_multi_slice(i: object, /) -> object:
+    """Turn a `[:, i]` index into a plain `i` one."""
+    if not isinstance(i, tuple):
+        return i
+    if len(i) != 2 or i[0] != slice(None):
+        msg = f"Unsupported slice {i!r}"
+        raise ValueError(msg)
+    return i[1]
 
 
 def _is_idx2d_list(idx: Idx2D | Idx2DList) -> TypeGuard[Idx2DList]:

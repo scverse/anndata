@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import singledispatch
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import narwhals as nw
 import pandas as pd
@@ -12,19 +12,34 @@ from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, pandas_as_str
 from ..utils import warn
-from ._dataframe_backend import _ingest_axis_frame, axis_index, set_axis_index
+from ._dataframe_backend import (
+    DataFrameLike,
+    _ingest_axis_frame,
+    axis_index,
+    set_axis_index,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Any, Literal
+    from typing import Literal, TypeAlias
 
-    from ._dataframe_backend import DataFrameLike
+IntoAlignedDf: TypeAlias = (  # noqa: UP040
+    Mapping[str, Iterable[Any]]
+    | pd.DataFrame
+    | pd.Series
+    | pd.Index
+    | XDataset
+    | Dataset2D
+    | DataFrameLike
+    | nw.DataFrame[Any]
+    | nw.LazyFrame[Any]
+    | None
+)
 
 
 @singledispatch
 def _gen_dataframe(
-    anno: Any,
+    anno: IntoAlignedDf,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
@@ -182,13 +197,14 @@ def _reject_pandas_multiindex(anno: pd.DataFrame) -> None:
 def _needs_str_index(index: pd.Index) -> bool:
     """Whether declaring `index` as obs/var names requires coercing it to strings."""
     return (
-        settings.restrict_index_types and not is_string_dtype(index[~index.isna()])
+        settings.restrict_index_types and not is_string_dtype(index[index.notna()])
     ) or pd.api.types.is_integer_dtype(index)
 
 
 def _coerce_pandas_columns(anno: pd.DataFrame) -> pd.DataFrame:
     """Shallow-copy so the caller’s frame is untouched, and stringify empty columns."""
     anno = anno.copy(deep=False)
+
     if not len(anno.columns):
         anno.columns = pandas_as_str(anno.columns)
     return anno

@@ -21,6 +21,7 @@ from anndata._io.specs.registry import IORegistryError
 from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
+from anndata.experimental.backed import Dataset2D
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     as_dense_dask_array,
@@ -33,7 +34,7 @@ from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
-    from typing import Literal
+    from typing import Any, Literal
 
 HERE = Path(__file__).parent
 ARRAY_TYPES = [
@@ -53,7 +54,7 @@ X_sp = csr_matrix([[1, 0, 0], [3, 0, 0], [5, 6, 0], [0, 0, 0], [0, 0, 0]])
 
 X_list = [[1, 0], [3, 0], [5, 6]]  # data matrix of shape n_obs x n_vars
 
-obs_dict = dict(  # annotation of observations / rows
+obs_dict: dict[str, list[Any]] = dict(  # annotation of observations / rows
     row_names=["name1", "name2", "name3"],  # row annotation
     oanno1=["cat1", "cat2", "cat2"],  # categorical annotation
     oanno1b=["cat1", "cat1", "cat1"],  # categorical annotation with one category
@@ -63,7 +64,7 @@ obs_dict = dict(  # annotation of observations / rows
     oanno4=[3.3, 1.1, 2.2],  # float annotation
 )
 
-var_dict = dict(  # annotation of variables / columns
+var_dict: dict[str, list[Any]] = dict(  # annotation of variables / columns
     vanno1=[3.1, 3.2],
     vanno2=["cat1", "cat1"],  # categorical annotation
     vanno3=[2.1, 2.2],  # float annotation
@@ -136,7 +137,7 @@ def test_can_not_write_bad_categorical(
     adata, _ = rw
     adata.var["arrow_categorical_array"] = pd.Categorical.from_codes(
         [i % 2 for i in range(adata.shape[1])],
-        categories=pd.arrays.IntervalArray.from_tuples([(0, 10), (20, 30)]),
+        dtype=pd.CategoricalDtype(pd.IntervalIndex.from_tuples([(0, 10), (20, 30)])),
     )
     assert adata.unwriteable(store_type=store_type)
 
@@ -255,7 +256,13 @@ def test_readwrite_kitchensink(
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
     assert adata.obs["oanno1"].cat.categories.tolist() == ["cat1", "cat2"]
     assert adata.obs["oanno1c"].cat.categories.tolist() == ["cat1"]
+    assert adata.raw is not None
+    assert adata_src.raw is not None
     assert isinstance(adata.raw.var["vanno2"].dtype, pd.CategoricalDtype)
+    assert isinstance(adata.obs, pd.DataFrame)
+    assert isinstance(adata_src.obs, pd.DataFrame)
+    assert isinstance(adata.var, pd.DataFrame)
+    assert isinstance(adata_src.var, pd.DataFrame)
     pd.testing.assert_frame_equal(adata.obs, adata_src.obs)
     pd.testing.assert_frame_equal(adata.var, adata_src.var)
     assert_equal(adata.var.index, adata_src.var.index)
@@ -292,6 +299,8 @@ def test_readwrite_maintain_X_dtype(typ, backing_h5ad: Path) -> None:
     adata = ad.read_h5ad(backing_h5ad)
     if jnp is not None and isinstance(adata_src.X, jnp.ndarray):
         adata_src.X = np.from_dlpack(adata_src.X)
+    assert not isinstance(adata.X, Dataset2D | None)
+    assert not isinstance(adata_src.X, Dataset2D | None)
     assert adata.X.dtype == adata_src.X.dtype
 
 
@@ -515,7 +524,7 @@ def test_zarr_compression(
         ):
             wrongly_compressed.append(key)
 
-    f = zarr.open(pth, mode="r")
+    f = zarr.open_group(pth, mode="r")
     for key, value in f.members(max_depth=None):
         check_compressed(value, key)
     assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
@@ -680,6 +689,8 @@ def test_write_categorical(
             adata_pth, convert_strings_to_categoricals=s2c
         )
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    assert isinstance(orig.obs, pd.DataFrame)
+    assert isinstance(curr.obs, pd.DataFrame)
     assert np.all(orig.obs.notna() == curr.obs.notna())
     assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
     assert curr.obs["str"].dtype == ("category" if s2c else "string")
@@ -886,6 +897,8 @@ def test_scanpy_krumsiek11(
     with ad.settings.override(allow_write_nullable_strings=True):
         curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
     # These categories are constructed manually in scanpy's code so are not "roundtripped" from disk.
+    assert isinstance(orig.obs, pd.DataFrame)
+    assert isinstance(curr.obs, pd.DataFrame)
     orig.obs["cell_type"] = orig.obs["cell_type"].astype(curr.obs["cell_type"].dtype)
     assert_equal(orig, curr, exact=True)
 
@@ -903,6 +916,8 @@ def test_backwards_compat_zarr() -> None:
     import scanpy as sc
 
     pbmc_orig = sc.datasets.pbmc68k_reduced()
+    assert pbmc_orig.raw is not None
+    assert isinstance(pbmc_orig.raw.X, CSMatrix | CSArray)
     # Old zarr writer couldn’t do sparse arrays
     pbmc_orig.raw._X = pbmc_orig.raw.X.toarray()
     del pbmc_orig.uns["neighbors"]
@@ -912,7 +927,7 @@ def test_backwards_compat_zarr() -> None:
 
     # This was written out with anndata=0.6.22.post1
     zarrpth = HERE / "data/pbmc68k_reduced_legacy.zarr.zip"
-    with zarr.ZipStore(zarrpth, mode="r") as z:
+    with zarr.storage.ZipStore(zarrpth, mode="r") as z:
         pbmc_zarr = ad.read_zarr(z)
 
     assert_equal(pbmc_zarr, pbmc_orig)
@@ -981,7 +996,7 @@ def test_h5py_attr_limit(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+    "elem_key", sorted(set(get_literal_members(AnnDataElem)) - {"raw", "X"})
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
 @pytest.mark.parametrize(
@@ -1038,7 +1053,7 @@ def test_forward_slash_key(
 
 
 @pytest.mark.parametrize(
-    "elem_key", set(get_literal_members(AnnDataElem)) - {"raw", "X"}
+    "elem_key", sorted(set(get_literal_members(AnnDataElem)) - {"raw", "X"})
 )
 @pytest.mark.parametrize("store_type", ["zarr", "h5ad"])
 @pytest.mark.parametrize("key", ["/", "/y"])
@@ -1087,11 +1102,13 @@ def test_read_lazy_import_error(func, tmp_path):
 @pytest.mark.zarr_io
 def test_write_elem_consolidated(tmp_path: Path):
     ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = zarr.open(tmp_path)
+    g = zarr.open_group(tmp_path)
+    obs = g["obs"]
+    assert isinstance(obs, zarr.Group)
     with pytest.raises(
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
-        ad.io.write_elem(g["obs"], "foo", np.arange(10))
+        ad.io.write_elem(obs, "foo", np.arange(10))
 
 
 @pytest.mark.zarr_io

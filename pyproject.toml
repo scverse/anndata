@@ -1,12 +1,16 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatchling", "hatch-vcs" ]
+requires = [ "hatch-vcs", "hatchling" ]
 
 [project]
 name = "anndata"
 description = "Annotated data."
-requires-python = ">=3.12"
+readme = "README.md"
 license = "BSD-3-Clause"
+maintainers = [
+    { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
+    { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
+]
 authors = [
     { name = "Philipp Angerer" },
     { name = "Alex Wolf" },
@@ -14,11 +18,7 @@ authors = [
     { name = "Sergei Rybakov" },
     { name = "Ilan Gold" },
 ]
-maintainers = [
-    { name = "Philipp Angerer", email = "philipp.angerer@helmholtz-munich.de" },
-    { name = "Ilan Gold", email = "ilan.gold@helmholtz-munich.de" },
-]
-readme = "README.md"
+requires-python = ">=3.12"
 classifiers = [
     "Environment :: Console",
     "Framework :: Jupyter",
@@ -28,136 +28,248 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
-]
-dependencies = [
-    "pandas >=2.3",
-    "numpy>=2.1",
-    "scipy >=1.14,!=1.17.0",
-    "h5py>=3.11",
-    "natsort",
-    "packaging>=24.2",
-    "array-api-compat>=1.7.1",
-    "legacy-api-wrap",
-    "zarr >=3.1",
-    "typing-extensions>=4.16; python_version<='3.14'",
-    "scverse-misc[settings]>=0.1.0",
-    "narwhals>=2.24.0",
+    "Typing :: Typed",
 ]
 dynamic = [ "version" ]
-
-[project.urls]
-Documentation = "https://anndata.readthedocs.io/"
-Source = "https://github.com/scverse/anndata"
-Home-page = "https://github.com/scverse/anndata"
+dependencies = [
+    "array-api-compat>=1.7.1",
+    "h5py>=3.11",
+    "legacy-api-wrap",
+    "narwhals>=2.24",
+    "natsort",
+    "numpy>=2.1",
+    "packaging>=24.2",
+    "pandas>=2.3",
+    "scipy>=1.14,!=1.17",
+    "scverse-misc[settings]>=0.1.3",
+    # `typing_extensions.sentinel`, see `anndata.acc`
+    "typing-extensions>=4.16; python_version<'3.15'",
+    "zarr>=3.1",
+]
+optional-dependencies.cu11 = [ "cupy-cuda11x" ]
+optional-dependencies.cu12 = [ "cupy-cuda12x" ]
+optional-dependencies.cu13 = [ "cupy-cuda13x" ]
+# https://github.com/dask/dask/issues/11290
+# https://github.com/dask/dask/issues/11752
+optional-dependencies.dask = [
+    "dask!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+    "dask[array]>=2024.5.1",
+]
+optional-dependencies.gpu = [ "cupy" ]
+# requests and aiohttp needed for zarr remote data
+optional-dependencies.lazy = [ "aiohttp", "anndata[dask]", "requests", "xarray>=2025.6.1" ]
+urls.Documentation = "https://anndata.readthedocs.io/"
+urls.Home-page = "https://github.com/scverse/anndata"
+urls.Source = "https://github.com/scverse/anndata"
+entry-points."narwhals.plugins".anndata = "anndata._core.xarray"
 
 [dependency-groups]
 dev = [
     { include-group = "dev-doc" },
+    { include-group = "typing" },
+]
+test = [
+    "anndata[lazy]",
+    "fast-array-utils>=1.2.3",
+    { include-group = "test-min" },
+]
+dev-doc = [
+    "towncrier>=24.8", # release notes tool
+    "types-array-api", # for dev and linking in the docs
 ]
 doc = [
-    "sphinx>=9.1.0",
-    "sphinx-book-theme>=1.1.0",
-    "sphinx-autodoc-typehints>=3.6.2",
-    "sphinx-issues>=5.0.1",
-    "sphinx-copybutton",
-    "sphinxext.opengraph",
-    "myst-nb>=1.4",
-    "scanpydoc[theme,typehints] >=0.17.1",
-    "scverse-misc[sphinx]",
-    "awkward>=2.6.3",
-    "IPython",                             # For syntax highlighting in notebooks
-    "myst-parser",
-    "sphinx-design",
     "anndata[dask]",
+    "awkward>=2.6.3",
+    "ipython",                            # For syntax highlighting in notebooks
+    "mudata",
+    "myst-nb>=1.4",
+    "myst-parser",
     "pandas>=3",
     "pyarrow",
-    "mudata",
+    "scanpydoc[theme,typehints]>=0.17.1",
+    "scverse-misc[sphinx]",
+    "sphinx>=9.1",
+    "sphinx-autodoc-typehints>=3.13.2",
+    "sphinx-book-theme>=1.1",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-issues>=5.0.1",
+    "sphinxext-opengraph",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]
-dev-doc = [
-    "towncrier>=24.8.0", # release notes tool
-    "types-array-api",   # for dev and linking in the docs
-]
-test = [
-    "fast-array-utils>=1.2.3",
-    "anndata[lazy]",
-    { include-group = "test-min" },
-]
-test-min = [
-    "pytest",
-    "pytest-cov",           # only for VS Code
-    "pytest-randomly",
-    "pytest-memray",
-    "pytest-mock",
-    "pytest-xdist[psutil]",
-    "filelock",
-    "jsonschema",
-    "matplotlib",
-    "scikit-learn",
-    "openpyxl",
-    "joblib",
-    "boltons",
-    "scanpy>=1.10",
-    "dask[distributed]",
-    "awkward>=2.6.3",
-    "pyarrow",
-    "polars",
-    "pooch",
-    "anndata[dask]",
-]
 test-array-api = [
-    { include-group = "test-min" },
     { include-group = "test-jax" },
+    { include-group = "test-min" },
 ]
 test-jax = [
-    "jax>=0.6.0",
-    "jaxlib>=0.6.0",
+    "jax>=0.6",
+    "jaxlib>=0.6",
 ]
-[project.optional-dependencies]
-gpu = [ "cupy" ]
-cu13 = [ "cupy-cuda13x" ]
-cu12 = [ "cupy-cuda12x" ]
-cu11 = [ "cupy-cuda11x" ]
-# requests and aiohttp needed for zarr remote data
-lazy = [ "xarray>=2025.06.1", "aiohttp", "requests", "anndata[dask]" ]
-# https://github.com/dask/dask/issues/11290
-# https://github.com/dask/dask/issues/11752
-dask = [
-    "dask[array]>=2024.5.1,!=2024.8.*,!=2024.9.*,!=2025.2.*,!=2025.3.*,!=2025.4.*,!=2025.5.*,!=2025.6.*,!=2025.7.*,!=2025.8.*",
+test-min = [
+    "anndata[dask]",
+    "awkward>=2.6.3",
+    "boltons",
+    "dask[distributed]",
+    "filelock",
+    "joblib",
+    "jsonschema",
+    "matplotlib",
+    "openpyxl",
+    "polars",
+    "pooch",
+    "pyarrow",
+    "pytest",
+    "pytest-cov",           # only for VS Code
+    "pytest-memray",
+    "pytest-mock",
+    "pytest-randomly",
+    "pytest-xdist[psutil]",
+    "scanpy>=1.10",
+    "scikit-learn",
+]
+typing = [
+    "docutils-stubs",
+    "mudata",           # `anndata.acc`
+    "pandas-stubs",
+    "scipy-stubs",
+    "types-boltons",
+    "types-jsonschema",
+    "types-psutil",
+    "types-tqdm",
 ]
 
-[project.entry-points."narwhals.plugins"]
-anndata = "anndata._core.xarray"
+[tool.hatch]
+version.source = "vcs"
+version.raw-options.version_scheme = "release-branch-semver"
+build.targets.wheel.packages = [ "src/anndata", "src/testing" ]
 
-[tool.hatch.version]
-source = "vcs"
-raw-options.version_scheme = "release-branch-semver"
-[tool.hatch.build.targets.wheel]
-packages = [ "src/anndata", "src/testing" ]
-
-[tool.coverage.run]
-data_file = "test-data/raw-coverage"
-source_pkgs = [ "anndata" ]
-omit = [ "src/anndata/_version.py", "**/test_*.py" ]
-patch = [ "subprocess" ]
-[tool.coverage.xml]
-output = "test-data/coverage.xml"
-[tool.coverage.paths]
-source = [ "./src", "**/site-packages" ]
-[tool.coverage.report]
-exclude_also = [
-    "if TYPE_CHECKING:",
+[tool.ruff]
+src = [ "src" ]
+format.preview = true
+format.docstring-code-format = true
+lint.select = [
+    "ANN",  # Annotations
+    "B",    # Likely bugs and design issues
+    "BLE",  # Blind except
+    "C4",   # Comprehensions
+    "E",    # Error detected by Pycodestyle
+    "EM",   # Traceback-friendly error messages
+    "F",    # Errors detected by Pyflakes
+    "FBT",  # Boolean positional arguments
+    "I",    # isort
+    "ICN",  # Follow import conventions
+    "ISC",  # Implicit string concatenation
+    "PERF", # Performance
+    "PIE",  # Syntax simplifications
+    "PL",   # Pylint
+    "PT",   # Pytest conventions
+    "PTH",  # Pathlib instead of os.path
+    "PYI",  # Typing
+    "RUF",  # Unused noqa
+    "SIM",  # Code simplifications
+    "TC",   # manage type checking blocks
+    "TID",  # Banned imports
+    "UP",   # pyupgrade
+    "W",    # Warning detected by Pycodestyle
 ]
+lint.ignore = [
+    # TODO: fix these
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN201",
+    "ANN202",
+    "ANN204",
+    "C408",    # dict() syntax is preferable for dicts used as kwargs
+    "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
+    "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
+    "E741",    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
+    "PLC0415", # We use a lot of non-top-level imports
+    "PLR2004", # “2” is often not too “magic” a number
+    "PLW2901", # Shadowing loop variables isn’t a big deal
+    "TID252",  # We use relative imports from parent modules
+]
+# PLR0913, PLR0917: tests can use a lot of “arguments” that are actually fixtures
+lint.per-file-ignores."tests/**/*.py" = [ "PLR0913", "PLR0917" ]
+# E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
+lint.per-file-ignores."tests/test_readwrite.py" = [ "E721" ]
+lint.allowed-confusables = [ "×", "–", "’", "α" ]
+lint.flake8-bugbear.extend-immutable-calls = [ "slice" ]
+lint.flake8-type-checking.exempt-modules = []
+lint.flake8-type-checking.runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
+lint.flake8-type-checking.strict = true
+lint.isort.known-first-party = [ "anndata" ]
+lint.isort.required-imports = [ "from __future__ import annotations" ]
+lint.pylint.max-args = 7
+lint.pylint.max-positional-args = 5
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
+"subprocess.call".msg = "Use `subprocess.run([…])` instead"
+"subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
+"subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
+"warnings.warn".msg = "Use anndata.utils.warn instead"
+
+[tool.codespell]
+ignore-words-list = "theis,coo,homogenous,GroupT,scarches"
+# base64 blobs (e.g. images in notebook outputs)
+ignore-regex = "[A-Za-z0-9+/]{100,}={0,2}"
+skip = ".git,*.pdf,*.svg"
+
+[tool.pyproject-fmt]
+indent = 4
+table_format = "short"
+expand_tables = [
+    "tool.ruff.lint.flake8-tidy-imports.banned-api",
+]
+
+[tool.mypy]
+mypy_path = [ "src" ]
+explicit_package_bases = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Installed, but shipping no `py.typed` marker:
+# infer types from their source instead of falling back to `Any`.
+[[tool.mypy.overrides]]
+module = [
+    "awkward.*",
+    "h5py.*",
+    "joblib.*",
+    "mudata.*",
+    "numcodecs.*",
+    "pyarrow.*",
+    "scanpy.*",
+    "sklearn.*",
+]
+follow_untyped_imports = true
+
+# Dependencies that ship no type information (absent or `Incomplete` annotations).
+[[tool.mypy.overrides]]
+module = [
+    "array_api_compat.*",
+    "cudf.*",
+    "cupy.*",
+    "cupyx.*",
+    "jax.*",
+    "loompy.*",
+    "memory_profiler",
+    "modin.*",
+    "pooch",
+    "sphinx.*",
+    "torch.*",
+    "zappy.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest]
-strict = true
 addopts = [
     "--import-mode=importlib",
     "--doctest-modules",
@@ -168,11 +280,15 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
+    # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
-    "ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':DeprecationWarning:matplotlib",
+    """\
+    ignore:.*'(oneOf|parseString|resetCache|enablePackrat)'.*'(one_of|parse_string|reset_cache|enable_packrat)':Depreca\
+    tionWarning:matplotlib\
+    """,
     # TODO: remove when https://github.com/scikit-hep/awkward/issues/4078 is resolved
     "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
 ]
@@ -188,15 +304,6 @@ filterwarnings_when_strict = [
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
     "default:Writing zarr v2:UserWarning",
 ]
-python_files = [ "test_*.py" ]
-testpaths = [
-    "anndata",      # docstrings (module name due to --pyargs)
-    "./tests",      # unit tests
-    "./ci/scripts", # CI script tests
-    # further doctests
-    "./docs/accessors.rst",
-    "./docs/tutorials/concatenation.rst",
-]
 # For some reason this effects how logging is shown when tests are run
 markers = [
     "gpu: mark test to run on GPU",
@@ -204,93 +311,43 @@ markers = [
     "dask_distributed: tests that need a distributed client with multiple processes",
     "array_api: tests specific to the array-api",
 ]
-
-[tool.ruff]
-src = [ "src" ]
-
-[tool.ruff.format]
-preview = true
-docstring-code-format = true
-
-[tool.ruff.lint]
-select = [
-    "B",    # Likely bugs and design issues
-    "BLE",  # Blind except
-    "C4",   # Comprehensions
-    "E",    # Error detected by Pycodestyle
-    "EM",   # Traceback-friendly error messages
-    "F",    # Errors detected by Pyflakes
-    "FBT",  # Boolean positional arguments
-    "I",    # isort
-    "ICN",  # Follow import conventions
-    "ISC",  # Implicit string concatenation
-    "PERF", # Performance
-    "PIE",  # Syntax simplifications
-    "PTH",  # Pathlib instead of os.path
-    "PT",   # Pytest conventions
-    "PL",   # Pylint
-    "PYI",  # Typing
-    "RUF",  # Unused noqa
-    "SIM",  # Code simplifications
-    "TC",   # manage type checking blocks
-    "TID",  # Banned imports
-    "UP",   # pyupgrade
-    "W",    # Warning detected by Pycodestyle
-]
-ignore = [
-    "C408",    # dict() syntax is preferable for dicts used as kwargs
-    "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
-    "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
-    "E741",    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
-    "TID252",  # We use relative imports from parent modules
-    "PLC0415", # We use a lot of non-top-level imports
-    "PLR2004", # “2” is often not too “magic” a number
-    "PLW2901", # Shadowing loop variables isn’t a big deal
-]
-allowed-confusables = [ "×", "’", "–", "α" ]
-[tool.ruff.lint.per-file-ignores]
-# E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
-"tests/test_readwrite.py" = [ "E721" ]
-# PLR0913, PLR0917: tests can use a lot of “arguments” that are actually fixtures
-"tests/**/*.py" = [ "PLR0913", "PLR0917" ]
-[tool.ruff.lint.isort]
-known-first-party = [ "anndata" ]
-required-imports = [ "from __future__ import annotations" ]
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = [ "slice" ]
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"subprocess.call".msg = "Use `subprocess.run([…])` instead"
-"subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
-"subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
-"legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
-"warnings.warn".msg = "Use anndata.utils.warn instead"
-[tool.ruff.lint.flake8-type-checking]
-exempt-modules = [  ]
-runtime-evaluated-base-classes = [ "scverse_misc.Settings" ]
+python_files = [ "test_*.py" ]
 strict = true
-[tool.ruff.lint.pylint]
-max-args = 7
-max-positional-args = 5
+testpaths = [
+    "anndata",                            # docstrings (module name due to --pyargs)
+    "./tests",                            # unit tests
+    "./ci/scripts",                       # CI script tests
+    # further doctests
+    "./docs/accessors.rst",
+    "./docs/tutorials/concatenation.rst",
+]
 
-[tool.codespell]
-skip = ".git,*.pdf,*.svg"
-ignore-words-list = "theis,coo,homogenous,GroupT"
+[tool.coverage]
+run.source_pkgs = [ "anndata" ]
+run.omit = [ "**/test_*.py", "src/anndata/_version.py" ]
+run.data_file = "test-data/raw-coverage"
+run.patch = [ "subprocess" ]
+paths.source = [ "./src", "**/site-packages" ]
+report.exclude_also = [
+    "if TYPE_CHECKING:",
+]
+xml.output = "test-data/coverage.xml"
 
 [tool.towncrier]
 package = "anndata"
+package_dir = "src"
 directory = "docs/release-notes"
 filename = "docs/release-notes/{version}.md"
-single_file = false
-package_dir = "src"
-issue_format = "{{pr}}`{issue}`"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
+issue_format = "{{pr}}`{issue}`"
+single_file = false
 # Valid fragments should be a subset of conventional commit types (except for `breaking`):
 # https://github.com/commitizen/conventional-commit-types/blob/master/index.json
 # style, refactor, test, build, ci: should not go into changelog
+fragment.breaking.name = "Breaking changes"  # add `!` to commit type (e.g. “feature!:”)
+fragment.chore.name = "Miscellaneous changes"
+fragment.docs.name = "Documentation"
 fragment.feat.name = "Features"
 fragment.fix.name = "Bug fixes"
-fragment.docs.name = "Documentation"
 fragment.perf.name = "Performance"
-fragment.chore.name = "Miscellaneous changes"
 fragment.revert.name = "Revert"
-fragment.breaking.name = "Breaking changes"   # add `!` to commit type (e.g. “feature!:”)
