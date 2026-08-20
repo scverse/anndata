@@ -36,6 +36,8 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.layers["a"]["cell-77", :], ["layers", "a", "cell-77", None]),
     (A.obsm["umap"][0], ["obsm", "umap", 0]),
     (A.obsm["umap"][1], ["obsm", "umap", 1]),
+    (A.varm["df"][:, "a"], ["varm", "df", "a"]),
+    (A.varm["df"][:, 0], ["varm", "df", 0]),
     (A.varp["cons"][:, :], ["varp", "cons", None, None]),
     (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
     (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
@@ -149,7 +151,7 @@ def test_match(*, obj: object, expected: object) -> None:
         pytest.param(lambda a: a.obs[1], id="obs-nostr"),
         pytest.param(lambda a: a.obsm[0], id="obsms-nostr"),
         pytest.param(lambda a: a.obsm["a"][:3, 0], id="obsm-partslice"),
-        pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
+        pytest.param(lambda a: a.obsm["a"][0.0], id="obsm-noint"),
         pytest.param(lambda a: a.varp[0], id="varps-nostr"),
         pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
         pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),
@@ -247,7 +249,6 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.layers["b"],
         A.obsm["umap"][:, 3],
         A.obsm["b"],
-        A.varm,
         A.obsp,
         A.varp["cons"]["cell-1", :],  # not a var name
         A.varp["cons"][:, "cell-2"],  # not a var name either
