@@ -230,6 +230,8 @@ def test_special[C](
         A.layers["a"],
         A.obsm,
         A.obsm["umap"],
+        A.obsm["umap"][-1],  # negative indices count from the end, as in numpy
+        A.obsm["umap"][-2],
         A.varp,
         A.varp["cons"],
     ],
@@ -246,6 +248,7 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.layers["a"][:, "cell-3"],  # not a var name
         A.layers["b"],
         A.obsm["umap"][:, 3],
+        A.obsm["umap"][:, -3],
         A.obsm["b"],
         A.varm,
         A.obsp,
