@@ -737,19 +737,58 @@ class AdAcc[R: AdRef]:
             object.__setattr__(self, f"{dim}m", multi)
             object.__setattr__(self, f"{dim}p", graphs)
 
-    def to_json(self, ref: R) -> list[str | int | None]:
-        """Serialize :class:`AdRef` to a JSON-compatible list.
+    def to_json(
+        self, ref: R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]
+    ) -> list[str | int | None]:
+        """Serialize an :class:`AdRef` or a whole container accessor to a JSON-compatible list.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
+        (`#/$defs/ref` matches vectors, `#/$defs/acc` whole containers)
+
+        Examples
+        --------
+        >>> A.to_json(A.obsm["pca"][0])
+        ['obsm', 'pca', 0]
+        >>> A.to_json(A.obsm["pca"])
+        ['obsm', 'pca']
+        >>> A.to_json(A.X)
+        ['layers', None]
         """
         from ._parse_json import to_json
 
         return to_json(ref)
 
-    def from_json(self, data: Sequence[str | int | None]) -> R:
-        """Create :class:`AdRef` from a JSON sequence.
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: Literal[True]
+    ) -> R: ...
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: Literal[False]
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: bool | None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]:
+        """Create an :class:`AdRef` or a whole container accessor from a JSON sequence.
+
+        `vec` works like in :meth:`resolve`:
+        if `True`, `data` must refer to a vector (:class:`AdRef`),
+        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`),
+        and if unset, both are accepted.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
+        (`#/$defs/ref` matches vectors, `#/$defs/acc` whole containers)
+
+        Examples
+        --------
+        >>> A.from_json(["obsm", "pca", 0])
+        A.obsm['pca'][:, 0]
+        >>> A.from_json(["obsm", "pca"])
+        A.obsm['pca']
 
         Raises
         ------
@@ -759,9 +798,9 @@ class AdAcc[R: AdRef]:
         from ._parse_json import parse_json
 
         try:
-            return parse_json(self, data)
+            return parse_json(self, data, vec=vec)
         except Exception as e:
-            msg = f"Failed to parse {data!r}"
+            msg = f"Failed to parse {data!r}: {e}"
             raise ValueError(msg) from e
 
     @overload

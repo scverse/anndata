@@ -17,13 +17,25 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Any, Literal
 
-    from anndata.acc import AdRef, MapAcc, MultiMapAcc
+    from anndata.acc import AdRef, GraphAcc, LayerAcc, MapAcc, MultiAcc, MultiMapAcc
+
+    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc
 
 
 type AdRefSer = Sequence[str | int | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
+
+
+def sub_schema(name: Literal["ref", "acc"]) -> dict[str, Any]:
+    """Get a schema validating only vectors (`ref`) or only whole containers (`acc`)."""
+    return {
+        "$schema": SCHEMA["$schema"],
+        "$defs": SCHEMA["$defs"],
+        "$ref": f"#/$defs/{name}",
+    }
+
 
 PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.X[:, :], ["layers", None, None, None]),
@@ -82,6 +94,57 @@ def test_serialization(
 
 def test_serialization_schema(ad_serialized: AdRefSer) -> None:
     jsonschema.validate(ad_serialized, SCHEMA)
+    jsonschema.validate(ad_serialized, sub_schema("ref"))
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(ad_serialized, sub_schema("acc"))
+
+
+MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
+    (A.X, ["layers", None]),
+    (A.layers["a"], ["layers", "a"]),
+    (A.obsm["umap"], ["obsm", "umap"]),
+    (A.varm["PCs"], ["varm", "PCs"]),
+    (A.obsp["conn"], ["obsp", "conn"]),
+    (A.varp["cons"], ["varp", "cons"]),
+]
+
+
+@pytest.mark.parametrize(
+    ("acc", "serialized"), MATRICES, ids=[str(m[0]) for m in MATRICES]
+)
+@pytest.mark.parametrize("vec", [None, False], ids=["vec=None", "vec=False"])
+def test_serialization_matrix(
+    acc: MatrixAcc, serialized: AdRefSer, *, vec: Literal[False] | None
+) -> None:
+    jsonschema.validate(serialized, SCHEMA)
+    jsonschema.validate(serialized, sub_schema("acc"))
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(serialized, sub_schema("ref"))
+    assert A.to_json(acc) == serialized
+    assert A.from_json(serialized, vec=vec) == acc
+
+
+@pytest.mark.parametrize(
+    ("serialized", "vec"),
+    [
+        pytest.param(["layers", None], True, id="x-matrix-as-vec"),
+        pytest.param(["layers", None, None, None], False, id="x-vec-as-matrix"),
+        pytest.param(["obs", "type"], False, id="obs-as-matrix"),
+        pytest.param(["obsm", "umap"], True, id="obsm-matrix-as-vec"),
+        pytest.param(["obsm", "umap", 0], False, id="obsm-vec-as-matrix"),
+        pytest.param(["varp", "cons"], True, id="varp-matrix-as-vec"),
+    ],
+)
+def test_from_json_vec_mismatch(
+    serialized: AdRefSer, *, vec: Literal[True, False]
+) -> None:
+    with pytest.raises(ValueError, match="vec"):
+        A.from_json(serialized, vec=vec)
+
+
+def test_to_json_unsupported() -> None:
+    with pytest.raises(TypeError, match=r"Unsupported accessor A\.obs"):
+        A.to_json(A.obs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
