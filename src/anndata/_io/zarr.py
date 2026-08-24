@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import os
 import warnings
 from contextlib import contextmanager, nullcontext
 from importlib.util import find_spec
+from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import zarr
 from scipy import sparse
+from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
 from .._settings import settings
@@ -20,6 +24,7 @@ from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from typing import Any
 
     from zarr.core.common import AccessModeLiteral
@@ -95,6 +100,23 @@ def write_zarr(
                 zarr.consolidate_metadata(f.store)
 
 
+# Suffixes of paths that hold a whole store in a single file.
+# `zarr.open_group` treats such a path as a directory store and finds no group in
+# it, so the user has to wrap it in the matching store class themselves.
+_PACKED_STORE_CLASSES: Mapping[str, str] = MappingProxyType({
+    ".zip": "zarr.storage.ZipStore"
+})
+
+
+def _add_packed_store_note(e: BaseException, store: StoreLike) -> None:
+    """Suggest the store class to use if `store` looks like a single-file store."""
+    if not isinstance(store, os.PathLike | str):
+        return
+    path = os.fspath(store)
+    if (cls_name := _PACKED_STORE_CLASSES.get(Path(path).suffix)) is not None:
+        e.add_note(f"Did you mean `read_zarr({cls_name}({path!r}))`?")
+
+
 def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
@@ -124,7 +146,14 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
         return func(elem)
 
     with zarrs_context():
-        f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode="r")
+        if isinstance(store, zarr.Group):
+            f = store
+        else:
+            try:
+                f = zarr.open_group(store, mode="r")
+            except GroupNotFoundError as e:
+                _add_packed_store_note(e, store)
+                raise
         adata = read_dispatched(f, callback=callback)
         if not isinstance(adata, AnnData):
             msg = f"Expected an AnnData at the store root, got {type(adata).__name__}"
