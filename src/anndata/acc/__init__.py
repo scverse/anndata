@@ -462,9 +462,9 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
 
     def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
         m: AxisArrays = getattr(data, f"{self.dim}m")
-        if self.k not in m:
+        if (arr := m.get(self.k)) is None:
             return False
-        return idx is None or idx in range(m[self.k].shape[1])
+        return idx is None or -arr.shape[1] <= idx < m[self.k].shape[1]
 
     @overload
     def get(self, data: MuData | AnnData, /) -> FullArray: ...
@@ -476,6 +476,13 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
         full: FullArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
+        n_cols: int = full.shape[1]
+        if not -n_cols <= i < n_cols:
+            msg = (
+                f"Column index `{i}` is out of range for {self} with {n_cols} columns."
+            )
+            raise IndexError(msg)
+        i += n_cols * (i < 0)
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
 

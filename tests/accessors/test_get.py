@@ -30,6 +30,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Literal
 
     from anndata import AnnData
     from anndata.acc import AdRef, InMemoryArray
@@ -47,6 +48,8 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.layers["a"]["cell-77", :], lambda ad: ad["cell-77"].layers["a"]),
     (A.obsm["umap"][0], lambda ad: asarray(ad.obsm["umap"])[:, 0]),
     (A.obsm["umap"][1], lambda ad: asarray(ad.obsm["umap"])[:, 1]),
+    (A.obsm["umap"][-1], lambda ad: asarray(ad.obsm["umap"])[:, -1]),
+    (A.obsm["umap"][-2], lambda ad: asarray(ad.obsm["umap"])[:, -2]),
     (A.varp["cons"][:, :], lambda ad: asarray(ad.varp["cons"])),
     (A.varp["cons"]["gene-46", :], lambda ad: asarray(ad.varp["cons"])[46, :]),
     (A.varp["cons"][:, "gene-46"], lambda ad: asarray(ad.varp["cons"])[:, 46]),
@@ -197,3 +200,17 @@ def test_get_values(
     assert isinstance(vals, type_expected)
     vals_np = asarray(vals)
     np.testing.assert_array_equal(vals_np, expected, strict=True)
+
+
+@pytest.mark.parametrize("i", [2, 99, -3], ids=str)
+@pytest.mark.parametrize("dim", ["obs", "var"], ids=str)
+def test_get_multi_out_of_range(
+    adata: AnnData, dim: Literal["obs", "var"], i: int
+) -> None:
+    """Out-of-range column indices raise instead of yielding an empty array."""
+    adata.varm["pcs"] = np.zeros((adata.n_vars, 2))  # `obsm["umap"]` also has 2 columns
+    ad_ref = getattr(A, f"{dim}m")["umap" if dim == "obs" else "pcs"][i]
+    assert ad_ref not in adata
+    msg = rf"Column index `{i}` is out of range for A\.{dim}m\[.+\] with 2 columns\."
+    with pytest.raises(IndexError, match=msg):
+        adata[ad_ref]
