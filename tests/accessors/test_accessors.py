@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import jsonschema
 import pandas as pd
 import pytest
+from referencing import Registry, Resource
 
 from anndata import AnnData
 from anndata.acc import A
@@ -27,14 +28,14 @@ type AdRefSer = Sequence[str | int | None]
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
 
+REGISTRY = Resource.from_contents(SCHEMA) @ Registry()
+"""Resolves the schema’s `$id` to its contents, so JSON pointers into it work offline."""
 
-def sub_schema(name: Literal["ref", "acc"]) -> dict[str, Any]:
-    """Get a schema validating only vectors (`ref`) or only whole containers (`acc`)."""
-    return {
-        "$schema": SCHEMA["$schema"],
-        "$defs": SCHEMA["$defs"],
-        "$ref": f"#/$defs/{name}",
-    }
+
+def validate(data: AdRefSer, pointer: str = "") -> None:
+    """Validate against the schema or a JSON pointer into it, e.g. `/$defs/ref`."""
+    schema = {"$ref": f"{SCHEMA['$id']}#{pointer}"}
+    jsonschema.validate(data, schema, registry=REGISTRY)
 
 
 PATHS: list[tuple[AdRef, AdRefSer]] = [
@@ -93,10 +94,10 @@ def test_serialization(
 
 
 def test_serialization_schema(ad_serialized: AdRefSer) -> None:
-    jsonschema.validate(ad_serialized, SCHEMA)
-    jsonschema.validate(ad_serialized, sub_schema("ref"))
+    validate(ad_serialized)
+    validate(ad_serialized, "/$defs/ref")
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(ad_serialized, sub_schema("acc"))
+        validate(ad_serialized, "/$defs/acc")
 
 
 MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
@@ -116,10 +117,10 @@ MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
 def test_serialization_matrix(
     acc: MatrixAcc, serialized: AdRefSer, *, vec: Literal[False] | None
 ) -> None:
-    jsonschema.validate(serialized, SCHEMA)
-    jsonschema.validate(serialized, sub_schema("acc"))
+    validate(serialized)
+    validate(serialized, "/$defs/acc")
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(serialized, sub_schema("ref"))
+        validate(serialized, "/$defs/ref")
     assert A.to_json(acc) == serialized
     assert A.from_json(serialized, vec=vec) == acc
 
