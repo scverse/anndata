@@ -579,6 +579,10 @@ class Reindexer:
     def _apply_to_df_like(self, el: pd.DataFrame | Dataset2D, *, axis, fill_value=None):
         if fill_value is None:
             fill_value = np.nan
+        # Reindexing with missing values promotes numpy bool columns to object,
+        # which cannot be written to disk, so use pandas' nullable boolean dtype instead.
+        if isinstance(el, pd.DataFrame) and -1 in self.idx:
+            el = np_bool_to_pd_bool_array(el.copy())
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
 
     def _apply_to_dask_array(self, el: DaskArray, *, axis, fill_value=None):
@@ -1177,7 +1181,7 @@ def concat_pairwise_mapping(
 def merge_dataframes(
     dfs: Iterable[pd.DataFrame], new_index, merge_strategy=merge_unique
 ) -> pd.DataFrame:
-    dfs = [df.reindex(index=new_index) for df in dfs]
+    dfs = [Reindexer(df.index, new_index)(df, axis=0) for df in dfs]
     # New dataframe with all shared data
     new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
     return new_df
