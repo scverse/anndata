@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from . import AdRef, GraphAcc, LayerAcc, MetaAcc, MultiAcc
+from ._parse_str import _check_vec
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,15 +26,31 @@ def _as_idx_2d(data: Sequence[str | int | None]) -> Idx2D | None:
             return None
 
 
-def parse_json[R: AdRef](a: AdAcc[R], data: Sequence[str | int | None]) -> R:
+def parse_json[R: AdRef](
+    a: AdAcc[R], data: Sequence[str | int | None], *, vec: bool | None = None
+) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]:
+    parsed = _parse_json(a, data)
+    _check_vec(data, vec=vec, actual=isinstance(parsed, AdRef))
+    return parsed
+
+
+def _parse_json[R: AdRef](  # noqa: PLR0911
+    a: AdAcc[R], data: Sequence[str | int | None]
+) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]:
     match data:
+        case ["layers", str() | None as l]:
+            return a.layers[l]
         case ["layers", str() | None as l, *idx] if idx := _as_idx_2d(idx):
             return a.layers[l][idx]
         case ["obs" | "var" as dim, str() | None as col]:
             acc = a.obs if dim == "obs" else a.var
             return acc.index if col is None else acc[col]
+        case ["obsm" | "varm" as dim, str(col)]:
+            return (a.obsm if dim == "obsm" else a.varm)[col]
         case ["obsm" | "varm" as dim, str(col), int(i)]:
             return (a.obsm if dim == "obsm" else a.varm)[col][i]
+        case ["obsp" | "varp" as dim, str(k)]:
+            return (a.obsp if dim == "obsp" else a.varp)[k]
         case ["obsp" | "varp" as dim, str(k), *idx] if idx := _as_idx_2d(idx):
             return (a.obsp if dim == "obsp" else a.varp)[k][idx]
         case _:
@@ -45,16 +62,22 @@ def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, None] | tuple[None, str]:
     return tuple(i if isinstance(i, str) else None for i in idx)  # type: ignore
 
 
-def to_json(ref: AdRef) -> list[str | int | None]:
-    match ref.acc:
+def to_json(
+    ref: AdRef | LayerAcc | MultiAcc | GraphAcc,
+) -> list[str | int | None]:
+    match ref:
+        case AdRef(LayerAcc() | GraphAcc() as acc, idx):
+            return [*to_json(acc), *_idx_2d_ser(idx)]
+        case AdRef(MetaAcc(dim), idx):
+            return [dim, idx]
+        case AdRef(MultiAcc() as acc, i):
+            return [*to_json(acc), i]
         case LayerAcc(k):
-            return ["layers", k, *_idx_2d_ser(ref.idx)]
-        case MetaAcc(dim):
-            return [dim, ref.idx]
+            return ["layers", k]
         case MultiAcc(dim, k):
-            return [f"{dim}m", k, ref.idx]
+            return [f"{dim}m", k]
         case GraphAcc(dim, k):
-            return [f"{dim}p", k, *_idx_2d_ser(ref.idx)]
+            return [f"{dim}p", k]
         case _:
-            msg = f"Unsupported vector accessor {ref.acc!r}"
-            raise AssertionError(msg)
+            msg = f"Unsupported accessor {ref!r}"
+            raise TypeError(msg)
