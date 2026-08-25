@@ -1417,6 +1417,25 @@ def test_bool_promotion():
     assert result.obs["bool"].dtype == np.dtype(bool)
 
 
+def test_bool_promotion_alt_axis(tmp_path):
+    # https://github.com/scverse/anndata/issues/1505
+    # Outer join with a union merge strategy reindexes alt-axis annotations,
+    # which promoted numpy bool columns to object and made the result unwritable.
+    a = AnnData(
+        np.ones((3, 2)),
+        var=pd.DataFrame({"bool": [True, False]}, index=["g1", "g2"]),
+    )
+    b = AnnData(
+        np.ones((3, 2)),
+        var=pd.DataFrame({"bool": [True, True]}, index=["g2", "g3"]),
+    )
+    result = concat([a, b], join="outer", merge="first")
+
+    assert pd.api.types.is_bool_dtype(result.var["bool"])
+    assert pd.isnull(result.var.loc["g3", "bool"])
+    result.write_h5ad(tmp_path / "result.h5ad")
+
+
 @pytest.mark.parametrize(
     ("index_unique", "expect_unique"),
     [
