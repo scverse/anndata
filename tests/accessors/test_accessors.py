@@ -214,6 +214,8 @@ def test_match(*, obj: object, expected: object) -> None:
         pytest.param(lambda a: a.obsm[0], id="obsms-nostr"),
         pytest.param(lambda a: a.obsm["a"][:3, 0], id="obsm-partslice"),
         pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
+        pytest.param(lambda a: a.obsm["a"][True], id="obsm-bool"),
+        pytest.param(lambda a: a.obsm["a"][[True, False]], id="obsm-bool-list"),
         pytest.param(lambda a: a.varp[0], id="varps-nostr"),
         pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
         pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),

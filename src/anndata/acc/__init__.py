@@ -443,7 +443,8 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
 
     @staticmethod
     def process_idx(i: object, /) -> int:
-        if not isinstance(i := _drop_multi_slice(i), int):
+        # bool is an int subclass, but boolean indexing isn’t supported
+        if not isinstance(i := _drop_multi_slice(i), int) or isinstance(i, bool):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
