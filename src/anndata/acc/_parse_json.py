@@ -67,14 +67,12 @@ def to_json(  # noqa: PLR0911
     ref: AdRef | LayerAcc | MultiAcc | GraphAcc,
 ) -> list[str | int | None]:
     match ref:
-        case AdRef(LayerAcc(k), idx):
-            return ["layers", k, *_idx_2d_ser(idx)]
+        case AdRef(LayerAcc() | GraphAcc() as acc, idx):
+            return [*to_json(acc), *_idx_2d_ser(idx)]
         case AdRef(MetaAcc(dim), idx):
             return [dim, idx]
-        case AdRef(MultiAcc(dim, k), i):
-            return [f"{dim}m", k, i]
-        case AdRef(GraphAcc(dim, k), idx):
-            return [f"{dim}p", k, *_idx_2d_ser(idx)]
+        case AdRef(MultiAcc() as acc, i):
+            return [*to_json(acc), i]
         case LayerAcc(k):
             return ["layers", k]
         case MultiAcc(dim, k):
