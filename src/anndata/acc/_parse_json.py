@@ -63,7 +63,7 @@ def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
     return (i if isinstance(i, str) else None, j if isinstance(j, str) else None)
 
 
-def to_json(  # noqa: PLR0911
+def to_json(
     ref: AdRef | LayerAcc | MultiAcc | GraphAcc,
 ) -> list[str | int | None]:
     match ref:
