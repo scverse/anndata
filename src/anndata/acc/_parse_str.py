@@ -87,7 +87,7 @@ def _parse_dotted[P: AdRef](
     raise AssertionError(msg)  # pragma: no cover
 
 
-def _check_vec(spec: str, *, vec: bool | None, actual: bool) -> None:
+def _check_vec(spec: object, *, vec: bool | None, actual: bool) -> None:
     if vec is not None and vec != actual:
         kind = "a vector/`AdRef`" if actual else "a whole container"
         msg = f"Accessor {spec!r} refers to {kind}, but {vec=} was requested"
