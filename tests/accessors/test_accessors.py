@@ -408,6 +408,18 @@ def test_resolve_vec_mismatch(spec: str, *, vec: bool) -> None:
 
 
 @pytest.mark.parametrize(
+    ("spec", "pat"),
+    [
+        pytest.param("Xenon", r"Unknown accessor name", id="x-like"),
+        pytest.param("Xenon[:,:]", r"Unknown accessor name", id="x-vec-like"),
+    ],
+)
+def test_resolve_errors(spec: str, *, pat: str) -> None:
+    with pytest.raises(ValueError, match=pat):
+        A.resolve(spec)
+
+
+@pytest.mark.parametrize(
     ("spec", "vec"),
     [("X", True), ("X[:,:]", False)],
     ids=["as-vec", "as-matrix"],
