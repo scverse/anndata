@@ -17,6 +17,7 @@ from ..utils import (
     raise_value_error_if_multiindex_columns,
     warn,
 )
+from .views import ArrayView
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -78,6 +79,10 @@ def coerce_array(
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
+    if isinstance(value, ArrayView):
+        # An element must not be a view of some other AnnData:
+        # writing to it would warn about, and actualize, that one instead of this one.
+        value = value.copy() if value._view_args is not None else value._detach()
     if isinstance(value, pd.DataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)

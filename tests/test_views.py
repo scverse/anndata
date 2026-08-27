@@ -5,7 +5,7 @@ from copy import deepcopy
 from functools import partial
 from importlib.metadata import version
 from importlib.util import find_spec
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import joblib
 import numpy as np
@@ -16,6 +16,7 @@ from packaging.version import Version
 from scipy import sparse
 
 import anndata as ad
+from anndata import ImplicitModificationWarning
 from anndata._core.index import (
     _from_array,
     _from_int,
@@ -34,7 +35,6 @@ from anndata._core.views import (
     SparseCSRArrayView,
     SparseCSRMatrixView,
 )
-from anndata._warnings import ImplicitModificationWarning
 from anndata.compat import DaskArray, XDataArray
 from anndata.tests.helpers import (
     BASE_MATRIX_PARAMS,
@@ -675,6 +675,61 @@ def test_double_index(subset_func, subset_func2):
     assert np.all(v1.var == v2.var)
 
 
+@pytest.mark.parametrize(
+    "derive",
+    [
+        pytest.param(lambda el: el[1:3], id="slice"),
+        pytest.param(lambda el: el[::2], id="strided"),
+        pytest.param(lambda el: el[1], id="row"),
+        pytest.param(lambda el: el.T, id="transpose"),
+        pytest.param(lambda el: el.reshape(-1), id="reshape"),
+        pytest.param(lambda el: el[[1, 3]], id="fancy"),
+        pytest.param(lambda el: el[np.arange(5) % 2 == 1], id="mask"),
+    ],
+)
+def test_derived_view_write_error(derive: Callable[[ArrayView], ArrayView]) -> None:
+    """`_view_args` rides along every subclass-preserving op, not just `__getitem__`.
+
+    Writing through such a derived array would land on the wrong cells
+    (https://github.com/scverse/anndata/pull/2582#pullrequestreview-4856369546),
+    so it errors instead.
+    """
+    a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
+
+    target = derive(cast("ArrayView", a[:5, :].obsm["o"]))
+
+    with pytest.raises(ValueError, match=r"through a derived array"):
+        target[0] = 777
+
+    np.testing.assert_array_equal(
+        a.obsm["o"], np.arange(40).reshape(10, 4), err_msg="parent must not be mutated"
+    )
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(slice(None, 5), id="slice"),
+        pytest.param([0, 1], id="fancy"),
+    ],
+)
+def test_element_write(index: slice | list[int]) -> None:
+    """Writing to the element itself works and doesn’t touch the parent."""
+    a = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40).reshape(10, 4)})
+
+    view = a[index, :]
+    element = cast("ArrayView", view.obsm["o"])
+    with pytest.warns(ImplicitModificationWarning):
+        element[1, 0] = 777
+
+    expected = np.arange(40).reshape(10, 4)[index]
+    expected[1, 0] = 777
+    np.testing.assert_array_equal(np.asarray(view.obsm["o"]), expected)
+    np.testing.assert_array_equal(
+        a.obsm["o"], np.arange(40).reshape(10, 4), err_msg="parent must not be mutated"
+    )
+
+
 def test_view_different_type_indices(matrix_type):
     orig = gen_adata((30, 30), X_type=matrix_type)
     boolean_array_mask = np.random.randint(0, 2, 30).astype("bool")
@@ -707,6 +762,21 @@ def test_view_retains_ndarray_subclass():
 
     assert isinstance(view.obsm["foo"], NDArraySubclass)
     assert view.obsm["foo"].shape == (5, 5)
+
+
+def test_element_is_never_a_foreign_view() -> None:
+    """`coerce_array` detaches views, so no element is a view of another AnnData.
+
+    A view’s element shares memory with the viewed AnnData,
+    so it has to be copied,
+    otherwise writing to the new element would mutate the old one.
+    """
+    adata = ad.AnnData(np.zeros((10, 10)), obsm={"o": np.arange(40.0).reshape(10, 4)})
+
+    other = ad.AnnData(np.zeros((5, 5)), obsm={"o": adata[:5, :].obsm["o"]})
+
+    assert type(other.obsm["o"]) is np.ndarray
+    assert not np.shares_memory(other.obsm["o"], adata.obsm["o"])
 
 
 def test_modify_uns_in_copy():
