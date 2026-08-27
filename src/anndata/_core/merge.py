@@ -578,11 +578,30 @@ class Reindexer:
             return self._apply_to_dask_array(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, CupyArray):
             return self._apply_to_cupy_array(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, np.ma.MaskedArray):
+            return self._apply_to_masked_array(el, axis=axis, fill_value=fill_value)
         elif has_xp_base(el):
             return self._apply_to_array_api(el, axis=axis, fill_value=fill_value)
         else:  # pragma: no cover
             msg = "Cannot reindex element of unsupported type."
             raise TypeError(msg)
+
+    def _apply_to_masked_array(
+        self,
+        el: np.ma.MaskedArray,
+        *,
+        axis: Literal[0, 1],
+        fill_value: Scalar | None = None,
+    ) -> np.ma.MaskedArray:
+        """Reindex data and mask separately, masking positions that didn’t exist.
+
+        `np.ma` isn’t array-api compatible: `_apply_to_array_api`’s `xp.where`
+        would return a plain array, dropping the mask.
+        """
+        return np.ma.MaskedArray(
+            self.apply(np.ma.getdata(el), axis=axis, fill_value=fill_value),
+            mask=self.apply(np.ma.getmaskarray(el), axis=axis, fill_value=True),
+        )
 
     def _apply_to_df_like(
         self,
@@ -957,6 +976,15 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         )
         return mat
 
+    elif any(isinstance(a, np.ma.MaskedArray) for a in arrays):
+        # `np.concatenate` keeps the type, but only `np.ma.concatenate` merges masks
+        return np.ma.concatenate(
+            [
+                f(x, fill_value=fill_value, axis=1 - axis)
+                for f, x in zip(reindexers, arrays, strict=True)
+            ],
+            axis=axis,
+        )
     elif all(has_xp_base(a) for a in arrays):
         # All arrays are array-api compatible
 
