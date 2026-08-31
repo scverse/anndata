@@ -148,12 +148,12 @@ class ArrayView(_SetItemMixin, np.ndarray):
 
     def __setitem__(self, idx: object, value: object) -> None:
         if (ref := self._view_args) is not None and not self._is_element:
-            # `idx` addresses `self`, not the element, so the copy-on-modify
-            # in `_SetItemMixin.__setitem__` would write to the wrong cells.
+            # Wrong or pointless: `idx` would either write to the wrong cells,
+            # or into a copy that is going to be thrown away.
             msg = (
-                f"Cannot modify `.{ref.attrname}` of a view through a derived array "
-                f"(e.g. `{ref}[…]` or `{ref}.T`). "
-                f"Subset the AnnData instead, or assign to `{ref}` directly."
+                f"Cannot modify `{ref}` of a view through a derived array "
+                f"(e.g. `{ref}[:]` or `{ref}.T`). "
+                f"Index `{ref}` directly, or derive from `{ref}.copy()`."
             )
             raise ValueError(msg)
         super().__setitem__(idx, value)
@@ -201,10 +201,6 @@ class ArrayView(_SetItemMixin, np.ndarray):
     def keys(self) -> tuple[str, ...]:
         # it’s a structured array
         return self.dtype.names or ()
-
-    def _detach(self) -> np.ndarray:
-        """Return `self` as its conventional type, sharing its memory."""
-        return self.view(np.ndarray)
 
     def copy(  # type: ignore[override]
         self, order: Literal["K", "A", "C", "F"] | None = "C"
