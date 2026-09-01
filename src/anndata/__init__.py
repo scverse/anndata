@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import zarr
 
-
 from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
