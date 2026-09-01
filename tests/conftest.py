@@ -62,7 +62,7 @@ def diskfmt(
 
 @pytest.fixture
 def diskfmt2(
-    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt: Literal["zarr"],
 ) -> Literal["zarr", "h5ad"]:
     if diskfmt == "h5ad":
         return "zarr"
