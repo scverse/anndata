@@ -4,28 +4,60 @@ from codecs import decode
 from collections.abc import Mapping
 from enum import Enum, auto
 from functools import partial, singledispatch
+from importlib import import_module
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Protocol, cast, overload
 
 import h5py
 import numpy as np
 import pandas as pd
-import scipy.sparse
+import scipy.sparse as sps
 from legacy_api_wrap import legacy_api  # noqa: TID251
-from zarr import Array as ZarrArray  # noqa: F401
-from zarr import Group as ZarrGroup
 
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 
 from .._warnings import warn
 
 if TYPE_CHECKING:
+    import sys
     from typing import Any, Self, TypeAlias, TypeGuard
+
+    if sys.version_info >= (3, 13):
+        from typing import TypeIs
+    else:
+        from typing_extensions import TypeIs
+
+    import zarr
+
+    from .._core.anndata import AnnData
+
+    type SparseArray[ST: np.number | np.bool] = (
+        sps.bsr_array[ST]
+        | sps.coo_array[ST]
+        | sps.csc_array[ST]
+        | sps.csr_array[ST]
+        | sps.dia_array[ST]
+        | sps.dok_array[ST]
+        | sps.lil_array[ST]
+    )
+    type SparseMatrix[ST: np.number | np.bool] = (
+        sps.bsr_matrix[ST]
+        | sps.coo_matrix[ST]
+        | sps.csc_matrix[ST]
+        | sps.csr_matrix[ST]
+        | sps.dia_matrix[ST]
+        | sps.dok_matrix[ST]
+        | sps.lil_matrix[ST]
+    )
 
 
 #############################
 # scipy sparse array comapt #
 #############################
+
+
+CSMatrix: TypeAlias = sps.csr_matrix | sps.csc_matrix  # noqa: UP040
+CSArray: TypeAlias = sps.csr_array | sps.csc_array  # noqa: UP040
 
 
 class IndexManager:
@@ -92,17 +124,9 @@ class IndexManager:
         return self._manager[device]
 
 
-CSMatrix: TypeAlias = scipy.sparse.csr_matrix | scipy.sparse.csc_matrix  # noqa: UP040
-CSArray: TypeAlias = scipy.sparse.csr_array | scipy.sparse.csc_array  # noqa: UP040
-
-
 class Empty(Enum):
     TOKEN = auto()
 
-
-H5Group = h5py.Group
-H5Array = h5py.Dataset
-H5File = h5py.File
 
 # h5py recommends using .astype("T") over .asstr() when using numpy ≥2
 if TYPE_CHECKING:
@@ -133,7 +157,7 @@ else:
 
     class AwkArray:
         @staticmethod
-        def __repr__():
+        def __repr__() -> str:
             return "mock awkward.highlevel.Array"
 
 
@@ -143,7 +167,7 @@ else:
 
     class ZappyArray:
         @staticmethod
-        def __repr__():
+        def __repr__() -> str:
             return "mock zappy.base.ZappyArray"
 
 
@@ -153,7 +177,7 @@ else:
     DaskArray = type("Array", (), dict(__module__="dask.array"))
 
 
-if find_spec("xarray") or TYPE_CHECKING:
+if TYPE_CHECKING or find_spec("xarray"):
     import xarray
     from xarray import DataArray as XDataArray
     from xarray import Dataset as XDataset
@@ -200,7 +224,7 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
-CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+CupyCSMatrix: TypeAlias = CupyCSCMatrix | CupyCSRMatrix  # noqa: UP040
 
 old_positionals = partial(legacy_api, category=FutureWarning)
 
@@ -210,23 +234,39 @@ old_positionals = partial(legacy_api, category=FutureWarning)
 #############################
 
 
+def _optional_pandas_array_type(
+    module: str, name: str
+) -> type[pd.api.extensions.ExtensionArray] | None:
+    """Look up an array class that only exists in some pandas versions."""
+    return getattr(import_module(module), name, None)
+
+
 PANDAS_STRING_ARRAY_TYPES: list[type[pd.api.extensions.ExtensionArray]] = [
-    pd.arrays.StringArray,
-    pd.arrays.ArrowStringArray,
+    typ
+    for typ in (
+        pd.arrays.StringArray,
+        pd.arrays.ArrowStringArray,
+        # these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
+        _optional_pandas_array_type(
+            "pandas.core.arrays.string_", "StringArrayNumpySemantics"
+        ),
+        _optional_pandas_array_type(
+            "pandas.core.arrays.string_arrow", "ArrowStringArrayNumpySemantics"
+        ),
+    )
+    if typ is not None
 ]
-# these are removed in favor of the above classes: https://github.com/pandas-dev/pandas/pull/62149
-try:
-    from pandas.core.arrays.string_ import StringArrayNumpySemantics
-except ImportError:
-    pass
-else:
-    PANDAS_STRING_ARRAY_TYPES += [StringArrayNumpySemantics]
-try:
-    from pandas.core.arrays.string_arrow import ArrowStringArrayNumpySemantics
-except ImportError:
-    pass
-else:
-    PANDAS_STRING_ARRAY_TYPES += [ArrowStringArrayNumpySemantics]
+
+
+class SparseFrameAccessor(Protocol):
+    """The part of :attr:`pandas.DataFrame.sparse` we use, which pandas-stubs declares as an untyped `...`."""
+
+    def to_coo(self) -> sps.coo_matrix: ...
+
+
+def pandas_sparse(df: pd.DataFrame) -> SparseFrameAccessor:
+    """Access :attr:`pandas.DataFrame.sparse` with type information."""
+    return cast("SparseFrameAccessor", df.sparse)
 
 
 @overload
@@ -248,30 +288,20 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
     return a if pd.options.future.infer_string else a.astype(object)
 
 
-@overload
-def _read_attr[V, T](
-    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
-) -> V: ...
-
-
-@overload
-def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
-
-
 @singledispatch
-def _read_attr[V, T](
+def _read_attr_dispatch[V, T](
     attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
 ) -> V | T:
     if default is Empty.TOKEN:
         return attrs[name]
     else:
-        return attrs.get(name, default=default)
+        return attrs.get(name, default)
 
 
-@_read_attr.register(h5py.AttributeManager)
+@_read_attr_dispatch.register(h5py.AttributeManager)
 def _read_attr_hdf5[T](
     attrs: h5py.AttributeManager, name: str, default: T | Empty = Empty.TOKEN
-) -> str | T:
+) -> str | list[str] | T:
     """
     Read an HDF5 attribute and perform all necessary conversions.
 
@@ -291,6 +321,29 @@ def _read_attr_hdf5[T](
         return attr.decode("utf-8")
     else:  # NumPy array
         return [decode(s, "utf-8") for s in attr]
+
+
+# `singledispatch` can’t carry the overloads, so they live on this thin wrapper
+@overload
+def _read_attr[V](
+    attrs: Mapping[str, V], name: str, default: Empty = Empty.TOKEN
+) -> V: ...
+@overload
+def _read_attr[V, T](attrs: Mapping[str, V], name: str, default: T) -> V | T: ...
+def _read_attr[V, T](
+    attrs: Mapping[str, V], name: str, default: T | Empty = Empty.TOKEN
+) -> V | T:
+    return _read_attr_dispatch(attrs, name, default)
+
+
+def _dtype_fields(
+    dtype: np.dtype,
+) -> Mapping[str, tuple[np.dtype, int] | tuple[np.dtype, int, Any]]:
+    """The fields of a structured `dtype`."""
+    if (fields := dtype.fields) is None:
+        msg = f"Expected a structured dtype, got {dtype}"
+        raise ValueError(msg)
+    return fields
 
 
 def _from_fixed_length_strings(value):
@@ -338,7 +391,8 @@ def _decode_structured_array(
         dtype = arr.dtype
     # codecs.decode is 2x slower than this lambda, go figure
     decode = np.frompyfunc(lambda x: x.decode("utf-8"), 1, 1)
-    for k, (dt, _) in dtype.fields.items():
+    # fields with a title are 3-tuples, the rest are 2-tuples
+    for k, (dt, *_) in _dtype_fields(dtype).items():
         check = h5py.check_string_dtype(dt)
         if check is not None and check.encoding == "utf-8":
             decode(arr[k], out=arr[k])
@@ -356,8 +410,8 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
     But if we didn't do this conversion, we would have to use a special codec in v2
     for objects and v3 doesn't support objects at all.  So we leave this function as-is.
     """
-    new_dtype = []
-    for dt_name, (dt_type, dt_offset) in value.dtype.fields.items():
+    new_dtype: list[tuple[str, np.dtype | tuple[str, int]]] = []
+    for dt_name, (dt_type, dt_offset, *_) in _dtype_fields(value.dtype).items():
         if dt_type.kind == "O":
             #  Assuming the objects are str
             size = max(len(x.encode()) for x in value.getfield("O", dt_offset))
@@ -369,13 +423,21 @@ def _to_fixed_length_strings(value: np.ndarray) -> np.ndarray:
 
 # TODO: This is a workaround for https://github.com/scverse/anndata/issues/874
 # See https://github.com/h5py/h5py/pull/2311#issuecomment-1734102238 for why this is done this way.
-def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
-    f: Group_T, name: str, df: pd.DataFrame, *args, **kwargs
-) -> Group_T:
-    if len(df.columns) > 5_000 and isinstance(f, H5Group):
+@overload
+def _require_group_write_dataframe(
+    f: zarr.Group, name: str, df: pd.DataFrame
+) -> zarr.Group: ...
+@overload
+def _require_group_write_dataframe(
+    f: h5py.Group, name: str, df: pd.DataFrame
+) -> h5py.Group: ...
+def _require_group_write_dataframe(
+    f: zarr.Group | h5py.Group, name: str, df: pd.DataFrame
+) -> zarr.Group | h5py.Group:
+    if len(df.columns) > 5_000 and isinstance(f, h5py.Group):
         # actually 64kb is the limit, but this should be a conservative estimate
-        return f.create_group(name, *args, track_order=True, **kwargs)
-    return f.require_group(name, *args, **kwargs)
+        return f.create_group(name, track_order=True)
+    return f.require_group(name)
 
 
 #############################
@@ -383,7 +445,7 @@ def _require_group_write_dataframe[Group_T: ZarrGroup | h5py.Group](
 #############################
 
 
-def _clean_uns(adata: AnnData):  # noqa: F821
+def _clean_uns(adata: AnnData) -> None:
     """
     Compat function for when categorical keys were stored in uns.
     This used to be buggy because when storing categorical columns in obs and var with
@@ -418,7 +480,7 @@ def _move_adj_mtx(d) -> None:
     for k in ("distances", "connectivities"):
         if (
             (k in n)
-            and isinstance(n[k], scipy.sparse.spmatrix | np.ndarray)
+            and isinstance(n[k], sps.spmatrix | np.ndarray)
             and len(n[k].shape) == 2
         ):
             msg = (
@@ -434,7 +496,7 @@ def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
     for k, v in d.items():
         if isinstance(v, Mapping):
             _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif scipy.sparse.issparse(v) and v.shape == (n, n):
+        elif isinstance(v, CSMatrix | CSArray) and v.shape == (n, n):
             paths.append((*keys, k))
     return paths
 
@@ -460,15 +522,20 @@ def _safe_transpose(x):
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
 
-    if isinstance(x, DaskArray) and scipy.sparse.issparse(x._meta):
+    if isinstance(x, DaskArray) and sps.issparse(x._meta):
         return _transpose_by_block(x)
     else:
         return x.T
 
 
-def has_xp_base(x) -> TypeGuard[SupportsArrayApiBase]:
+def has_xp_base(x: object) -> TypeGuard[SupportsArrayApiBase]:
     return isinstance(x, SupportsArrayApiBase)
 
 
-def has_xp(x) -> TypeGuard[SupportsArrayApi]:
+def has_xp(x: object) -> TypeGuard[SupportsArrayApi]:
     return isinstance(x, SupportsArrayApi)
+
+
+def is_scipy_sparse(obj: object) -> TypeIs[SparseArray[Any] | SparseMatrix[Any]]:
+    # https://github.com/scipy/scipy/issues/22432#issuecomment-5205755178
+    return isinstance(obj, sps.sparray | sps.spmatrix)

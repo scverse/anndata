@@ -15,7 +15,7 @@ import anndata as ad
 from anndata.io import write_elem
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
 
@@ -25,11 +25,15 @@ WhichAttr = Literal["X", "layers"]
 
 
 def _construct_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
-    return ad.AnnData(X=arr3d).X
+    x = ad.AnnData(X=arr3d).X
+    assert isinstance(x, np.ndarray)
+    return x
 
 
 def _construct_layer(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
-    return ad.AnnData(X=arr2d, layers={"L": arr3d}).layers["L"]
+    layer = ad.AnnData(X=arr2d, layers={"L": arr3d}).layers["L"]
+    assert isinstance(layer, np.ndarray)
+    return layer
 
 
 def _set_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
@@ -41,13 +45,18 @@ def _set_x(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
 def _set_layer_item(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
     adata = ad.AnnData(X=arr2d)
     adata.layers["L"] = arr3d
-    return adata.layers["L"]
+    layer = adata.layers["L"]
+    assert isinstance(layer, np.ndarray)
+    return layer
 
 
 def _set_layers_bulk(arr2d: np.ndarray, arr3d: np.ndarray) -> np.ndarray:
-    adata = ad.AnnData(X=arr2d)
-    adata.layers = {"M": arr3d}
-    return adata.layers["M"]
+    adata = ad.AnnData(shape=arr2d.shape)
+    layers: Mapping[str | None, np.ndarray] = {"M": arr3d}
+    adata.layers = layers
+    layer = adata.layers["M"]
+    assert isinstance(layer, np.ndarray)
+    return layer
 
 
 @pytest.mark.parametrize(
@@ -174,6 +183,7 @@ def test_read_with_non_2d_warns(
     pth = _make_non_conforming(tmp_path, arr2d, arr3d, diskfmt=diskfmt, which=which)
     with pytest.warns(UserWarning, match=MSG_PATTERN) as record:
         adata = _read(pth, diskfmt)
+    assert adata.X is not None
     if which == "X":
         assert adata.X.shape == arr3d.shape
         # The 2-D layers entry doesn't exist on this file, so nothing more to check.
@@ -182,7 +192,9 @@ def test_read_with_non_2d_warns(
         assert not any("Layer" in str(w.message) for w in record)
     else:  # "layers"
         assert adata.X.shape == arr2d.shape  # untouched
-        assert adata.layers["L"].shape == arr3d.shape
+        layer = adata.layers["L"]
+        assert layer is not None
+        assert layer.shape == arr3d.shape
         assert any("Layer 'L'" in str(w.message) for w in record)
         assert not any("X must be" in str(w.message) for w in record)
 

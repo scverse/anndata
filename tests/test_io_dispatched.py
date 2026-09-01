@@ -5,13 +5,14 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import h5py
+import pandas as pd
 import pytest
 import scipy.sparse as sp
 import zarr
 
 import anndata as ad
 from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, ZarrGroup
+from anndata.compat import CSArray, CSMatrix
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -40,9 +41,11 @@ def test_read_dispatched_w_regex(tmp_path: Path):
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
-        z = zarr.open(z.store)
+    if isinstance(z, zarr.Group):
+        z = zarr.open_group(z.store)
 
+    assert isinstance(adata.obs, pd.DataFrame)
+    assert isinstance(adata.var, pd.DataFrame)
     expected = ad.AnnData(obs=adata.obs, var=adata.var)
     actual = read_dispatched(z, read_only_axis_dfs)
 
@@ -71,10 +74,11 @@ def test_read_dispatched_dask(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
-        z = zarr.open(z.store)
+    if isinstance(z, zarr.Group):
+        z = zarr.open_group(z.store)
 
     dask_adata = read_dispatched(z, read_as_dask_array)
+    assert isinstance(dask_adata, ad.AnnData)
 
     assert isinstance(dask_adata.layers["array"], da.Array)
     assert isinstance(dask_adata.obsm["array"], da.Array)
@@ -92,8 +96,8 @@ def test_read_dispatched_null_case(tmp_path: Path):
     z = open_write_group(tmp_path)
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(z, ZarrGroup):
-        z = zarr.open(z.store)
+    if isinstance(z, zarr.Group):
+        z = zarr.open_group(z.store)
     expected = ad.io.read_elem(z)
     actual = read_dispatched(z, lambda _, __, x, **___: ad.io.read_elem(x))
 
@@ -110,12 +114,14 @@ def test_write_dispatched_csr_dataset(
         "/",
         sp.random(10, 10, format=sparse_format),
     )
-    X = ad.io.sparse_dataset(zarr.open(tmp_path / "arr.zarr"))
+    X = ad.io.sparse_dataset(zarr.open_group(tmp_path / "arr.zarr"))
 
     def zarr_writer(func, store, elem_name: str, elem, iospec, dataset_kwargs):
         assert iospec.encoding_type == f"{sparse_format}_matrix"
 
-    write_dispatched(zarr.open(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer)
+    write_dispatched(
+        zarr.open_group(tmp_path / "check.zarr", mode="w"), "/X", X, zarr_writer
+    )
 
 
 @pytest.mark.zarr_io
@@ -170,7 +176,7 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
-    def check_chunking(k: str, v: ZarrGroup | zarr.Array):
+    def check_chunking(k: str, v: zarr.Group | zarr.Array):
         if (
             not isinstance(v, zarr.Array)
             or v.shape == ()
@@ -187,10 +193,10 @@ def test_write_dispatched_chunks(tmp_path: Path):
 
 @pytest.mark.zarr_io
 def test_io_dispatched_keys(tmp_path: Path):
-    h5ad_write_keys = []
-    zarr_write_keys = []
-    h5ad_read_keys = []
-    zarr_read_keys = []
+    h5ad_write_keys: list[str] = []
+    zarr_write_keys: list[str] = []
+    h5ad_read_keys: list[str] = []
+    zarr_read_keys: list[str] = []
 
     h5ad_path = tmp_path / "test.h5ad"
     zarr_path = tmp_path / "test.zarr"

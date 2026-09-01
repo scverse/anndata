@@ -21,7 +21,12 @@ def test_make_index_unique() -> None:
         ["val", "val-2", pd.NA, "val-1", "val-1-1", pd.NA], dtype="string"
     )
     pd.testing.assert_index_equal(result, expected)
-    assert result[~result.isna()].is_unique
+    assert result[result.notna()].is_unique
+
+
+def assert_df_index_equal(df: object, expected: pd.Index) -> None:
+    assert isinstance(df, pd.DataFrame)
+    pd.testing.assert_index_equal(df.index, expected)
 
 
 def test_adata_unique_indices() -> None:
@@ -37,8 +42,8 @@ def test_adata_unique_indices() -> None:
         varm={"df": gen_typed_df(n, index=var_index)},
     )
 
-    pd.testing.assert_index_equal(adata.obsm["df"].index, adata.obs_names)
-    pd.testing.assert_index_equal(adata.varm["df"].index, adata.var_names)
+    assert_df_index_equal(adata.obsm["df"], adata.obs_names)
+    assert_df_index_equal(adata.varm["df"], adata.var_names)
 
     adata.var_names_make_unique()
     adata.obs_names_make_unique()
@@ -49,13 +54,13 @@ def test_adata_unique_indices() -> None:
     assert len(pd.unique(adata.obs_names)) == m
     assert len(pd.unique(adata.var_names)) == n
 
-    pd.testing.assert_index_equal(adata.obsm["df"].index, adata.obs_names)
-    pd.testing.assert_index_equal(adata.varm["df"].index, adata.var_names)
+    assert_df_index_equal(adata.obsm["df"], adata.obs_names)
+    assert_df_index_equal(adata.varm["df"], adata.var_names)
 
     v = adata[:5, :5]
 
     assert v.obs_names.name == "obs"
     assert v.var_names.name == "var"
 
-    pd.testing.assert_index_equal(v.obsm["df"].index, v.obs_names)
-    pd.testing.assert_index_equal(v.varm["df"].index, v.var_names)
+    assert_df_index_equal(v.obsm["df"], v.obs_names)
+    assert_df_index_equal(v.varm["df"], v.var_names)

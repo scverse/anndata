@@ -55,9 +55,9 @@ from anndata.utils import asarray
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import EllipsisType, FunctionType
-    from typing import Literal
+    from typing import Any, Literal
 
-    from anndata.compat import CSMatrix
+    from anndata.compat import CSArray, CSMatrix
     from anndata.typing import Index
 
 
@@ -186,15 +186,16 @@ def test_modify_view_component(
     request: pytest.FixtureRequest,
     subtests: pytest.Subtests,
 ):
-    adata = ad.AnnData(
-        np.zeros((10, 10)),
-        **{mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))},
-    )
+    mapping: dict[str, Any] = {
+        mapping_name: dict(m=matrix_type(asarray(sparse.random(10, 10))))
+    }
+    adata = ad.AnnData(np.zeros((10, 10)), **mapping)
     # jax immutability case
     is_jax = jnp is not None and isinstance(
         getattr(adata, mapping_name)["m"], jnp.ndarray
     )
 
+    hash_func: Callable[..., str]
     # Fix if and when dask supports tokenizing GPU arrays
     # https://github.com/dask/dask/issues/6718
     if isinstance(matrix_type(np.zeros((1, 1))), DaskArray):
@@ -324,7 +325,8 @@ def test_set_obsm(adata):
     subset_idx = np.random.choice(adata.obs_names, dim0_size, replace=False)
 
     subset = adata[subset_idx, :]
-    assert subset.is_view
+    if not TYPE_CHECKING:
+        assert subset.is_view
     subset.obsm = dict(o=np.ones((dim0_size, dim1_size)))
     assert not subset.is_view
     assert np.all(orig_obsm_val == adata.obsm["o"])  # Checking for mutation
@@ -549,7 +551,14 @@ def test_view_delattr(attr, subset_func):
     orig_hash = tokenize(base)
     subset = base[subset_func(base.obs_names), subset_func(base.var_names)]
     empty = ad.AnnData(obs=subset.obs[[]], var=subset.var[[]])
-    with pytest.warns(ad.ImplicitModificationWarning) if attr == "X" else nullcontext():
+    if attr == "X":
+        ctx = pytest.warns(ad.ImplicitModificationWarning)
+    elif attr == "layers":
+        # deleting `.layers` currently keeps `.X` (the `None` key) and warns
+        ctx = pytest.warns(FutureWarning, match=r"future release may drop")
+    else:
+        ctx = nullcontext()
+    with ctx:
         delattr(subset, attr)
 
     assert not subset.is_view
@@ -763,7 +772,7 @@ spmat = [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_arra
 
 
 @pytest.mark.parametrize("spmat", spmat)
-def test_deepcopy_subset(adata, spmat: type):
+def test_deepcopy_subset(adata, spmat: type[CSMatrix | CSArray]):
     adata.obsp["arr"] = np.zeros((adata.n_obs, adata.n_obs))
     adata.obsp["spmat"] = spmat((adata.n_obs, adata.n_obs))
 
@@ -774,10 +783,12 @@ def test_deepcopy_subset(adata, spmat: type):
     np.testing.assert_array_equal(adata.obsp["arr"].shape, (10, 10))
 
     assert isinstance(adata.obsp["spmat"], spmat)
-    view_type = (
-        SparseCSRMatrixView if spmat is sparse.csr_matrix else SparseCSCMatrixView
-    )
-    view_type = SparseCSRArrayView if spmat is sparse.csr_array else SparseCSCArrayView
+    view_type = {
+        sparse.csr_matrix: SparseCSRMatrixView,
+        sparse.csc_matrix: SparseCSCMatrixView,
+        sparse.csr_array: SparseCSRArrayView,
+        sparse.csc_array: SparseCSCArrayView,
+    }[spmat]
     assert not isinstance(
         adata.obsp["spmat"],
         view_type,
@@ -870,7 +881,7 @@ def test_dataframe_view_index_setting():
     assert a2.obs.index.values.tolist() == ["a", "b"]
 
 
-def _n(t: type | FunctionType) -> str:
+def _n(t: Callable[..., Any]) -> str:
     match t.__module__.split(".")[0], t.__name__:
         case "pandas", name:
             return f"pd.{name}"
@@ -878,6 +889,10 @@ def _n(t: type | FunctionType) -> str:
             return f"np.{name}"
         case mod, name:
             return f"{mod}.{name}"
+
+
+_IDX_TYPES: list[Callable[..., Any]] = [np.array, pd.Index, pd.Series, pd.array]
+_BOOL_IDX_TYPES: list[Callable[..., Any]] = [pd.Index, pd.Series, pd.array]
 
 
 # only test 1D since 2D is tested by all the other tests
@@ -893,7 +908,7 @@ def _n(t: type | FunctionType) -> str:
             pytest.param(
                 partial(t, [0, 2], dtype=dt), [[1, 2], [5, 6]], id=f"{_n(t)}-{dt}"
             )
-            for t in [np.array, pd.Index, pd.Series, pd.array]
+            for t in _IDX_TYPES
             for dt in [
                 "int",
                 *(["T"] if t is np.array else ["string[python]", "string[pyarrow]"]),
@@ -903,7 +918,7 @@ def _n(t: type | FunctionType) -> str:
             pytest.param(
                 partial(t, [False, True, False], dtype=dt), [[3, 4]], id=f"{_n(t)}-{dt}"
             )
-            for t in [pd.Index, pd.Series, pd.array]
+            for t in _BOOL_IDX_TYPES
             for dt in ["bool", *([] if t is np.array else ["bool[pyarrow]"])]
         ),
     ],
@@ -960,6 +975,7 @@ def test_index_float_sequence_raises_error(
 
 @pytest.mark.array_api
 def test_unsupported_jax_dtype() -> None:
+    assert jnp is not None
     index_jax = jnp.array([1 + 2j, 3 + 4j])
     adata = gen_adata((10, 10))
     with pytest.raises(
@@ -971,6 +987,7 @@ def test_unsupported_jax_dtype() -> None:
 @pytest.mark.array_api
 @pytest.mark.parametrize("dtype", [np.int32, np.float32])
 def test_jax_indexer(dtype: np.dtype) -> None:
+    assert jnp is not None
     index = np.array([0, 3, 6], dtype=dtype)
     index_jax = jnp.array(index)
     adata = gen_adata((10, 10))
@@ -1006,6 +1023,7 @@ def test_jax_indexer(dtype: np.dtype) -> None:
 def test_index_into_jax(
     index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, ...],
 ) -> None:
+    assert jnp is not None
     X = np.random.default_rng().random((10, 10))
     adata = ad.AnnData(X=X)
     adata_as_jax = ad.AnnData(X=jnp.array(X))
@@ -1014,9 +1032,11 @@ def test_index_into_jax(
 
 @pytest.mark.array_api
 def test_normalize_index_jax_boolean() -> None:
+    assert jnp is not None
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     mask = jnp.array([True, False] * 5)
     out = _normalize_index(mask, index)
+    assert isinstance(out, jnp.ndarray)
     assert out.shape == (10,)
     assert out.dtype == jnp.bool_
 
@@ -1052,20 +1072,23 @@ def test_normalize_index_dispatch(typ: type, expected_dispatch: FunctionType) ->
 
 @pytest.mark.array_api
 def test_normalize_index_jax_float_valid() -> None:
+    assert jnp is not None
     index = pd.Index([f"cell_{i:02d}" for i in range(10)])
     idx = jnp.array([0, 2, 4], dtype="float32")
     out = _normalize_index(idx, index)
+    assert isinstance(out, jnp.ndarray)
     assert out.tolist() == [0, 2, 4]
 
 
 @pytest.mark.array_api
 @pytest.mark.parametrize("expanded_dim", [0, 1], ids=["row", "col"])
 def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]) -> None:
+    assert jnp is not None
     index = pd.Index([f"cell_{i}" for i in range(5)])
     idx_col = jnp.arange(5).reshape((5, 1) if expanded_dim == 1 else (1, 5))
     out_col = _normalize_index(idx_col, index)
-    assert out_col.shape == (5,)
     assert isinstance(out_col, jnp.ndarray)
+    assert out_col.shape == (5,)
     assert (out_col == jnp.array([0, 1, 2, 3, 4])).all()
 
 
@@ -1081,6 +1104,7 @@ def test_normalize_index_jax_flatten_2d(expanded_dim: Literal[0, 1]) -> None:
     ids=["with_numpy", "pure_jax"],
 )
 def test_double_index_jax(*, to_bool: bool, mixed: bool) -> None:
+    assert jnp is not None
     adata = gen_adata((10, 10), X_type=jnp.array)
     subset = [0, 1, 3, 4]
     v1 = adata[subset, :]
