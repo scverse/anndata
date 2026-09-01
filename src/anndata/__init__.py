@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from importlib.metadata import version
+from packaging.version import Version
+
 import zarr
 
 from ._core.anndata import AnnData
