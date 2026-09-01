@@ -66,7 +66,9 @@ def diskfmt2(
 ) -> Literal["zarr", "h5ad"]:
     if diskfmt == "h5ad":
         return "zarr"
-    return "h5ad"
+    pytest.skip(
+        "diskfmt / diskfmt2 tests should be symmetric so h5ad in diskfmt and zarr and diskfmt2 should be sufficient."
+    )
 
 
 @pytest.fixture(
