@@ -942,7 +942,7 @@ def test_h5_unchunked(
 def test_write_auto_sharded(tmp_path: Path):
     path = tmp_path / "check.zarr"
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+    with ad.settings.override(auto_shard_zarr_v3=True):
         adata.write_zarr(path)
 
     check_all_sharded(zarr.open_group(path))

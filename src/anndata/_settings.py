@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 import scverse_misc
 from pydantic import Field
@@ -13,19 +13,8 @@ class Settings(scverse_misc.Settings):
     check_uniqueness: bool = True
     """Whether or not to check uniqueness of the `obs` indices on `__init__` of :class:`~anndata.AnnData`."""
 
-    copy_on_write_X: Annotated[
-        bool,
-        Field(
-            deprecated="This will be removed in 0.14 (deprecated in 0.13) and copy-on-write will be default",
-        ),
-    ] = True
-    """Whether to copy-on-write X. Currently `my_adata_view[subset].X = value` will write back to the original AnnData object at the `subset` location. `X` is the only element where this behavior is implemented though."""
-
     allow_write_nullable_strings: bool | None = None
     """Whether or not to allow writing of `pd.arrays.[Arrow]StringArray`. When set to `None`, it will be inferred from `pd.options.future.infer_string`. When set to `False` explicitly, we will try writing `string` arrays in the old, non-nullable format."""
-
-    zarr_write_format: Literal[2, 3] = 3
-    """Which version of zarr to write to when anndata must internally open a write-able zarr group."""
 
     use_sparse_array_on_read: bool = False
     """Whether or not to use :class:`scipy.sparse.sparray` as the default class when reading in data"""

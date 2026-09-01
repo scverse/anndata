@@ -50,14 +50,19 @@ def subgroup(
     return elem
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
-    return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+@pytest.mark.zarr_io
+def zarr_write_format(request) -> Literal[2, 3]:
+    return request.param
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_separator():
-    return "" if ad.settings.zarr_write_format == 2 else "/c"
+@pytest.fixture
+def zarr_metadata_key(zarr_write_format) -> Literal[".zarray", "zarr.json"]:
+    return ".zarray" if zarr_write_format == 2 else "zarr.json"
+
+
+@pytest.fixture
+def zarr_separator(zarr_write_format):
+    return "" if zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
@@ -517,6 +522,7 @@ def test_data_access(
     open_func: Callable[[zarr.Group], CSRDataset | CSCDataset | DaskArray],
     zarr_metadata_key: str,
     zarr_separator: str,
+    zarr_write_format: Literal[2, 3],
     *,
     read_data: bool,
 ):
@@ -561,9 +567,7 @@ def test_data_access(
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
-    if ad.settings.zarr_write_format == 2 and (
-        read_data or open_func is not sparse_dataset
-    ):
+    if zarr_write_format == 2 and (read_data or open_func is not sparse_dataset):
         exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(

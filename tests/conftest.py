@@ -51,28 +51,22 @@ def which(request: pytest.FixtureRequest) -> Literal["X", "layers"]:
 
 
 @pytest.fixture(
-    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
-    ids=["h5ad", "zarr2", "zarr3"],
+    params=["h5ad", "zarr"],
+    ids=["h5ad", "zarr"],
 )
 def diskfmt(
     request: pytest.FixtureRequest,
-) -> Generator[Literal["h5ad", "zarr"], None, None]:
-    if (fmt := request.param[0]) == "h5ad":
-        yield fmt
-    else:
-        with ad.settings.override(zarr_write_format=request.param[1]):
-            yield fmt
+) -> Literal["h5ad", "zarr"]:
+    return request.param
 
 
 @pytest.fixture
 def diskfmt2(
     diskfmt: Literal["h5ad", "zarr"],
-) -> Generator[Literal["zarr", "h5ad"], None, None]:
+) -> Literal["zarr", "h5ad"]:
     if diskfmt == "h5ad":
-        with ad.settings.override(zarr_write_format=2):
-            yield "zarr"
-    else:
-        yield "h5ad"
+        return "zarr"
+    return "h5ad"
 
 
 @pytest.fixture(
