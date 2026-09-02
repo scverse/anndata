@@ -51,6 +51,7 @@ def subgroup(
 
 
 @pytest.mark.zarr_io
+@pytest.fixture
 def zarr_write_format(request) -> Literal[2, 3]:
     return request.param
 
