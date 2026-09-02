@@ -71,6 +71,7 @@ _STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
     zarr.Group,
 )
 
+
 ####################
 # Dispatch methods #
 ####################
@@ -566,7 +567,6 @@ _REGISTRY.register_write(zarr.Group, CupyArray, IOSpec("array", "0.2.0"))(
 @_REGISTRY.register_write(zarr.Group, DaskArray, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(h5py.Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_write(h5py.Group, DaskArray, IOSpec("array", "0.2.0"))
-@suppress_autoshard_warning
 def write_basic_dask_dask_dense(
     f: zarr.Group | h5py.Group,
     k: str,
@@ -578,14 +578,18 @@ def write_basic_dask_dask_dense(
     import dask.array as da
 
     dataset_kwargs = dict(dataset_kwargs)
+    if "chunks" not in dataset_kwargs:
+        min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
+        # zarr requires min chunk size 1
+        dataset_kwargs["chunks"] = tuple(
+            max(c[0], min_chunk_value) for c in elem.chunks
+        )
+
     if isinstance(f, h5py.Group):
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        with zarr_v3_sharding(
-            dataset_kwargs, format=f.metadata.zarr_format
-        ) as dataset_kwargs:
-            g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     da.store(elem, g, scheduler="threads")
 
 
