@@ -316,10 +316,10 @@ testpaths = [
 ]
 
 [tool.coverage]
-run.data_file = "test-data/raw-coverage"
-run.omit = [ "**/test_*.py", "src/anndata/_version.py" ]
-run.patch = [ "subprocess" ]
 run.source_pkgs = [ "anndata" ]
+run.omit = [ "**/test_*.py", "src/anndata/_version.py" ]
+run.data_file = "test-data/raw-coverage"
+run.patch = [ "subprocess" ]
 paths.source = [ "./src", "**/site-packages" ]
 report.exclude_also = [
     "if TYPE_CHECKING:",
