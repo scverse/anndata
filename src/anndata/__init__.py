@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from importlib.metadata import version
-from packaging.version import Version
 
 import zarr
+from packaging.version import Version
 
 from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
