@@ -405,6 +405,7 @@ def test_dataset_append_disk(
 def test_lazy_array_cache(
     tmp_path: Path,
     sparse_format: type[CSMatrix],
+    zarr_write_format: Literal[2, 3],
     zarr_metadata_key: Literal[".zarray", "zarr.json"],
     *,
     should_cache_indptr: bool,
@@ -412,7 +413,7 @@ def test_lazy_array_cache(
     elems = {"indptr", "indices", "data"}
     path = tmp_path / "test.zarr"
     a = sparse_format(sparse.random(10, 10))
-    f = open_write_group(path, mode="a")
+    f = open_write_group(path, mode="a", zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(path, read_only=True)
     for elem in elems:
@@ -423,7 +424,10 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    c_expected = 2 if should_cache_indptr else 5
+    # 2 added for v2 data because zgroup/zattrs
+    c_expected = (2 if should_cache_indptr else 5) + (
+        2 if zarr_write_format == 2 else 0
+    )
     assert store.get_access_count("X/indptr") == c_expected
     for elem_not_indptr in elems - {"indptr"}:
         assert (
