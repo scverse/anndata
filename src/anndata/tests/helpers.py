@@ -1258,6 +1258,9 @@ class AccessTrackingStore(LocalStore):
         prototype: BufferPrototype | None = None,
         byte_range: ByteRequest | None = None,
     ) -> Buffer | None:
+        if Version(version("zarr")) < Version("3.3"):  # pragma: no-cover
+            msg = "zarr-python does not implement `Store.get_sync` below 3.3."
+            raise NotImplementedError(msg)
         self._check_and_track_key(key)
         return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 
