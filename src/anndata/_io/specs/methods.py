@@ -578,9 +578,21 @@ def write_basic_dask_dask_dense(
     import dask.array as da
 
     dataset_kwargs = dict(dataset_kwargs)
+
     if "chunks" not in dataset_kwargs:
-        min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
+        # logic based on code in da.to_zarr
+        if not da.core._check_regular_chunks(elem.chunks):
+            warn(
+                "The array uses irregular chunk sizes. Rechunking to regular (uniform) chunks "
+                "to ensure the data can be written safely. If you want to avoid this automatic "
+                "rechunking, manually rechunk the array so that all chunks, except possibly the "
+                "final chunk, in each dimension—have the same size (e.g., arr = arr.rechunk(...)).",
+                UserWarning,
+            )
+
+            elem = elem.rechunk(tuple(map(max, elem.chunks)))
         # zarr requires min chunk size 1
+        min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
         dataset_kwargs["chunks"] = tuple(
             max(c[0], min_chunk_value) for c in elem.chunks
         )
