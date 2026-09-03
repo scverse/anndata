@@ -40,25 +40,23 @@ from packaging.version import Version
 
 @contextmanager
 def fast_zarr_context():
+    # We are going to be "guinea pigs" for this new pipeline because it should be much faster
+    # and we're shortchanging our users otherwise.
+    # So we change the pipeline if it has not been changed by the user i.e.,
+    # it is the old BatchedCodecPipeline.
+    # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
     old_pipeline = zarr.config.get("codec_pipeline.path")
     with (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if "Batched" in old_pipeline and Version(version("zarr")) >= Version("3.3")
+        else nullcontext(),
         (
             zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
             if find_spec("zarrs")
-            # We are going to be "guinea pigs" for this new pipeline because it should be much faster
-            # and we're shortchanging our users otherwise.
-            # So we change the pipeline if it has not been changed by the user i.e.,
-            # it is the old BatchedCodecPipeline.
-            # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
-            else (
-                zarr.config.set({
-                    "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-                    "codec_pipeline.max_workers": None,
-                })
-                if "Batched" in old_pipeline
-                and Version(version("zarr")) >= Version("3.3")
-                else nullcontext()
-            )
+            else nullcontext()
         ),
         warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
     ):

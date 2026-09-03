@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import importlib
+import sys
+import types
 from contextlib import AbstractContextManager, nullcontext
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import h5py
@@ -8,10 +12,12 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
+from anndata._io.zarr import fast_zarr_context
 from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
 
@@ -153,3 +159,20 @@ def test_to_writeable_does_not_recurse() -> None:
     result = to_writeable(x)
     # since dict is not supported, it should return unchanged
     assert result is x
+
+
+@pytest.mark.parametrize("use_zarrs", [True, False], ids=["zarrs", "zarr-python"])
+def test_zarr_context(monkeypatch, *, use_zarrs: bool):
+    if use_zarrs:
+        fake_module = types.ModuleType("zarrs")
+        fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
+
+        monkeypatch.setitem(sys.modules, "zarrs", fake_module)
+    with fast_zarr_context():
+        pipeline = zarr.config.get("codec_pipeline.path")
+        if use_zarrs:
+            assert "Zarrs" in pipeline
+        elif Version(version("zarr")) >= Version("3.3"):
+            assert "Fused" in pipeline
+        else:
+            assert "Batched" in pipeline
