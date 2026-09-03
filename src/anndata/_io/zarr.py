@@ -33,14 +33,32 @@ if TYPE_CHECKING:
     from .._types import _GroupStorageType
     from ..typing import RWAble
 
+from importlib.metadata import version
+
+from packaging.version import Version
+
 
 @contextmanager
-def zarrs_context():
+def fast_zarr_context():
+    old_pipeline = zarr.config.get("codec_pipeline.path")
     with (
         (
             zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
             if find_spec("zarrs")
-            else nullcontext()
+            # We are going to be "guinea pigs" for this new pipeline because it should be much faster
+            # and we're shortchanging our users otherwise.
+            # So we change the pipeline if it has not been changed by the user i.e.,
+            # it is the old BatchedCodecPipeline.
+            # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
+            else (
+                zarr.config.set({
+                    "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+                    "codec_pipeline.max_workers": None,
+                })
+                if "Batched" in old_pipeline
+                and Version(version("zarr")) >= Version("3.3")
+                else nullcontext()
+            )
         ),
         warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
     ):
@@ -80,7 +98,7 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with zarrs_context():
+    with fast_zarr_context():
         # TODO: Use spec writing system for this
         f = open_write_group(store)
         f.attrs.setdefault("encoding-type", "anndata")
@@ -145,7 +163,7 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with zarrs_context():
+    with fast_zarr_context():
         if isinstance(store, zarr.Group):
             f = store
         else:

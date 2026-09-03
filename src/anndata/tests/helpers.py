@@ -1257,7 +1257,7 @@ class AccessTrackingStore(LocalStore):
         key: str,
         prototype: BufferPrototype | None = None,
         byte_range: ByteRequest | None = None,
-    ) -> object:
+    ) -> Buffer | None:
         self._check_and_track_key(key)
         return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 

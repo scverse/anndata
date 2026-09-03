@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from importlib.metadata import version
-from packaging.version import Version
-
-import zarr
-
 from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
@@ -26,19 +21,6 @@ from . import abc, acc, experimental, io, types, typing  # isort: skip
 
 # We use these in tests by attribute access
 from . import logging  # noqa: F401  # isort: skip
-
-# We are going to be "guinea pigs" for this new pipeline because it should be much faster
-# and we're shortchanging our users otherwise.
-# So we change the pipeline if it has not been changed by the user i.e.,
-# it is the old BatchedCodecPipeline.
-# This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
-
-old_pipeline = zarr.config.get("codec_pipeline.path")
-if "Batched" in old_pipeline and Version(version("zarr")) >= Version("3.3"):
-    zarr.config.set({
-        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-        "codec_pipeline.max_workers": None,
-    })
 
 __all__ = [
     "AnnData",
