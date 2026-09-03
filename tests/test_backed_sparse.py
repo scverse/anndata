@@ -50,8 +50,7 @@ def subgroup(
     return elem
 
 
-@pytest.mark.zarr_io
-@pytest.fixture
+@pytest.fixture(params=[pytest.param(e, marks=pytest.mark.zarr_io) for e in (2, 3)])
 def zarr_write_format(request) -> Literal[2, 3]:
     return request.param
 
@@ -539,7 +538,7 @@ def test_data_access(
     ]
     path = tmp_path / "test.zarr"
     a = sparse_format(np.eye(10, 10))
-    f = open_write_group(path, mode="a")
+    f = open_write_group(path, mode="a", zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     data_arr = f["X/data"]
     assert isinstance(data_arr, zarr.Array)
