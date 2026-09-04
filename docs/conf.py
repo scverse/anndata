@@ -161,13 +161,6 @@ qualname_overrides = {
     },
     # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
     "anndata._types.StorageType": "anndata.experimental.StorageType",
-    # https://github.com/theislab/scanpydoc/issues/254
-    "anndata.typing.Index1D": "anndata.typing.Index1D",
-    "anndata.typing.Index": "anndata.typing.Index",
-    "anndata.typing.RWAble": "anndata.typing.RWAble",
-    "anndata.typing.Storable": "anndata.typing.Storable",
-    "anndata.typing.InMemoryArray": "anndata.typing.InMemoryArray",
-    "anndata.typing.AlignedArray": "anndata.typing.AlignedArray",
     #### zarr
     "zarr.core.group.StoreLike": "zarr.storage.StoreLike",
     #### h5py
@@ -195,8 +188,6 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
-    # leaked into public signatures as the bound of `anndata.typing`’s `_M`
-    ("py:class", "anndata.compat.IndexManager"),
     #### these happen when a `type` or `class` is generic
     ("py:obj", "typing.R"),
     ("py:class", "_M"),

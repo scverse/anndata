@@ -146,6 +146,10 @@ version.source = "vcs"
 version.raw-options.version_scheme = "release-branch-semver"
 build.targets.wheel.packages = [ "src/anndata", "src/testing" ]
 
+[tool.uv]
+# TODO: drop once https://github.com/tox-dev/sphinx-autodoc-typehints/pull/766 is released
+sources.sphinx-autodoc-typehints = { git = "https://github.com/tox-dev/sphinx-autodoc-typehints", rev = "refs/pull/766/head" }
+
 [tool.ruff]
 src = [ "src" ]
 format.preview = true
