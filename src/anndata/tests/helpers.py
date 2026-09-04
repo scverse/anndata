@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
-    from zarr.core.buffer import BufferPrototype
+    from zarr.core.buffer import Buffer, BufferPrototype
 
     from anndata.compat import CupyCSMatrix
 
