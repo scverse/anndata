@@ -222,7 +222,7 @@ def test_zarr_context(
             g = mk_group(tmp_path)
             if not use_zarrs:
                 g["foo"] = np.ones((2, 3))
-                pipeline = str(g["foo"].async_array.codec_pipeline)
+                pipeline = str(g["foo"]._async_array.codec_pipeline)
             else:
                 # we don't install zarrs, so just check that the context sets it
                 # instead of fallback behavior
