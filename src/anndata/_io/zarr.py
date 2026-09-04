@@ -62,11 +62,11 @@ def fast_zarr_context():
 
         @contextmanager
         def context():
-            with zarr_context:
-                with zarr.config.set({
-                    "codec_pipeline.path": "zarrs.ZarrsCodecPipeline"
-                }):
-                    yield
+            with (
+                zarr_context,
+                zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}),
+            ):
+                yield
 
     else:
         context = zarr_context
