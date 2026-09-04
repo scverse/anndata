@@ -17,6 +17,7 @@ from ..utils import (
     raise_value_error_if_multiindex_columns,
     warn,
 )
+from .views import _SetItemMixin
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -78,6 +79,12 @@ def coerce_array(
     # If value is a scalar and we allow that, return it
     if allow_array_like and np.isscalar(value):
         return value
+    if isinstance(value, _SetItemMixin):
+        from .aligned_mapping import _copy_value
+
+        # An element must not be a view of some other AnnData:
+        # writing to it would warn about, and actualize, that one instead of this one.
+        value = _copy_value(value)
     if isinstance(value, pd.DataFrame):
         if allow_df:
             raise_value_error_if_multiindex_columns(value, name)
