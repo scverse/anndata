@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 import zarr
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from zarr.storage import StoreLike
+
+    from anndata._types import _GroupStorageType
 
 HERE = Path(__file__).parent
 ARRAY_TYPES = [
@@ -107,9 +110,9 @@ def rw(backing_h5ad) -> tuple[ad.AnnData, ad.AnnData]:
 
 @contextmanager
 def open_store(
-    path: Path, diskfmt: Literal["h5ad", "zarr"]
+    store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> Generator[h5py.File | zarr.Group, None, None]:
-    f = zarr.open_group(path) if diskfmt == "zarr" else h5py.File(path, "r")
+    f = zarr.open_group(store) if diskfmt == "zarr" else h5py.File(store, "r")
     with f if isinstance(f, h5py.File) else nullcontext():
         yield f
 
@@ -194,13 +197,11 @@ def test_unwriteable_non_2d(
 
 
 @pytest.mark.parametrize("typ", ARRAY_TYPES)
-def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
-    pth1 = tmp_path / f"first.{diskfmt}"
-    write1 = lambda x: getattr(x, f"write_{diskfmt}")(pth1)
-    read1 = lambda: getattr(ad, f"read_{diskfmt}")(pth1)
-    pth2 = tmp_path / f"second.{diskfmt2}"
-    write2 = lambda x: getattr(x, f"write_{diskfmt2}")(pth2)
-    read2 = lambda: getattr(ad, f"read_{diskfmt2}")(pth2)
+def test_readwrite_roundtrip(typ, diskfmt, diskfmt2, diskfmt_store, diskfmt2_store):
+    write1 = lambda x: getattr(x, f"write_{diskfmt}")(diskfmt_store)
+    read1 = lambda: getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    write2 = lambda x: getattr(x, f"write_{diskfmt2}")(diskfmt2_store)
+    read2 = lambda: getattr(ad, f"read_{diskfmt2}")(diskfmt2_store)
 
     adata1 = ad.AnnData(typ(X_list), obs=obs_dict, var=var_dict, uns=uns_dict)
     write1(adata1)
@@ -214,17 +215,17 @@ def test_readwrite_roundtrip(typ, tmp_path, diskfmt, diskfmt2):
 
 
 @pytest.mark.zarr_io
-def test_readwrite_roundtrip_async(tmp_path):
+def test_readwrite_roundtrip_async():
     import asyncio
 
     async def _do_test():
-        zarr_path = tmp_path / "first.zarr"
+        store = MemoryStore()
 
         adata1 = ad.AnnData(
             csr_matrix(X_list), obs=obs_dict, var=var_dict, uns=uns_dict
         )
-        adata1.write_zarr(zarr_path)
-        adata2 = ad.read_zarr(zarr_path)
+        adata1.write_zarr(store)
+        adata2 = ad.read_zarr(store)
 
         assert_equal(adata2, adata1)
 
@@ -252,8 +253,9 @@ def test_readwrite_kitchensink(
         adata_mid.write(tmp_path / "mid.h5ad", **dataset_kwargs)
         adata = ad.read_h5ad(tmp_path / "mid.h5ad")
     else:
-        adata_src.write_zarr(tmp_path / "test_zarr_dir")
-        adata = ad.read_zarr(tmp_path / "test_zarr_dir")
+        store = MemoryStore()
+        adata_src.write_zarr(store)
+        adata = ad.read_zarr(store)
     assert isinstance(adata.obs["oanno1"].dtype, pd.CategoricalDtype)
     assert not isinstance(adata.obs["oanno2"].dtype, pd.CategoricalDtype)
     assert adata.obs.index.tolist() == ["name1", "name2", "name3"]
@@ -371,46 +373,42 @@ def test_readwrite_backed(typ, backing_h5ad: Path) -> None:
 )
 def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
     h5ad_pth = tmp_path / "adata.h5ad"
-    zarr_pth = tmp_path / "adata.zarr"
 
     M, N = 100, 101
     adata = gen_adata((M, N), X_type=typ, **GEN_ADATA_NO_XARRAY_ARGS)
     assert not adata.unwriteable()
 
     adata.raw = adata.copy()
-
+    store_mem = MemoryStore()
+    store_disk = tmp_path / "adata.zarr"
     adata.write_h5ad(h5ad_pth)
-    adata.write_zarr(zarr_pth)
+    adata.write_zarr(store_mem)
+    adata.write_zarr(store_disk)
     from_h5ad = ad.read_h5ad(h5ad_pth)
-    from_zarr = ad.read_zarr(zarr_pth)
+    from_zarr_mem = ad.read_zarr(store_mem)
+    from_zarr_disk = ad.read_zarr(store_disk)
 
-    assert_equal(from_h5ad, from_zarr, exact=True)
+    assert_equal(from_h5ad, from_zarr_mem, exact=True)
+    assert_equal(from_h5ad, from_zarr_disk, exact=True)
 
 
 @contextmanager
-def store_context(path: Path):
-    if path.suffix == ".zarr":
-        store = open_write_group(path, mode="r+")
-    else:
-        file = h5py.File(path, "r+")
-        store = file["/"]
-    yield store
-    if "file" in locals():
-        file.close()
+def store_context(store: Path | MemoryStore) -> Generator[_GroupStorageType]:
+    if isinstance(store, MemoryStore):
+        yield open_write_group(store, mode="r+")
+        return
+    with h5py.File(store, "r+") as file:
+        yield file["/"]
 
 
-@pytest.mark.parametrize(
-    ("name", "read", "write"),
-    [
-        ("adata.h5ad", ad.read_h5ad, ad.AnnData.write_h5ad),
-        ("adata.zarr", ad.read_zarr, ad.AnnData.write_zarr),
-    ],
-)
-def test_read_full_io_error(tmp_path, name, read, write):
+# Not the `diskfmt` fixture: the consolidated-metadata canary below only
+# applies to zarr v3, and which zarr format is written is beside the point here.
+@pytest.mark.parametrize("store_type", ["h5ad", "zarr"])
+def test_read_full_io_error(tmp_path: Path, store_type: Literal["h5ad", "zarr"]):
+    store_loc = tmp_path / "adata.h5ad" if store_type == "h5ad" else MemoryStore()
     adata = gen_adata((4, 3), **GEN_ADATA_NO_XARRAY_ARGS)
-    path = tmp_path / name
-    write(adata, path)
-    with store_context(path) as store:
+    getattr(adata, f"write_{store_type}")(store_loc)
+    with store_context(store_loc) as store:
         if isinstance(store, zarr.Group):
             # see https://github.com/zarr-developers/zarr-python/issues/2716 for the issue
             # with re-opening without syncing attributes explicitly
@@ -435,7 +433,7 @@ def test_read_full_io_error(tmp_path, name, read, write):
         IORegistryError,
         match=r"raised while reading key 'obs'.*from /$",
     ) as exc_info:
-        read(path)
+        getattr(ad, f"read_{store_type}")(store_loc)
     assert re.search(
         r"No read method registered for IOSpec\(encoding_type='invalid', encoding_version='0.2.0'\)",
         str(exc_info.value),
@@ -491,11 +489,9 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
 @pytest.mark.parametrize(
     "use_compression", [True, False], ids=["compressed", "uncompressed"]
 )
-def test_zarr_compression(
-    tmp_path: Path, zarr_write_format: Literal[2, 3], *, use_compression: bool
-):
+def test_zarr_compression(zarr_write_format: Literal[2, 3], *, use_compression: bool):
     ad.settings.zarr_write_format = zarr_write_format
-    pth = str(Path(tmp_path) / "adata.zarr")
+    store = MemoryStore()
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
     if not use_compression:
         compressor = None
@@ -511,7 +507,7 @@ def test_zarr_compression(
         compressor = ZstdCodec(level=3, checksum=True)
     wrongly_compressed = []
 
-    ad.io.write_zarr(pth, adata, compressor=compressor)
+    ad.io.write_zarr(store, adata, compressor=compressor)
 
     def check_compressed(value, key):
         if not isinstance(value, zarr.Array) or value.shape == ():
@@ -527,18 +523,16 @@ def test_zarr_compression(
         ):
             wrongly_compressed.append(key)
 
-    f = zarr.open_group(pth, mode="r")
+    f = zarr.open_group(store, mode="r")
     for key, value in f.members(max_depth=None):
         check_compressed(value, key)
     assert not wrongly_compressed, "Some elements were not (un)compressed correctly"
 
-    expected = ad.read_zarr(pth)
+    expected = ad.read_zarr(store)
     assert_equal(adata, expected)
 
 
-def test_changed_obs_var_names(tmp_path, diskfmt):
-    filepth = tmp_path / f"test.{diskfmt}"
-
+def test_changed_obs_var_names(diskfmt, diskfmt_store):
     orig = gen_adata((10, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.obs_names = orig.obs_names.rename("obs")
     orig.var_names = orig.var_names.rename("var")
@@ -546,8 +540,8 @@ def test_changed_obs_var_names(tmp_path, diskfmt):
     modified.obs_names = modified.obs_names.rename("cells")
     modified.var_names = modified.var_names.rename("genes")
 
-    getattr(orig, f"write_{diskfmt}")(filepth)
-    read = getattr(ad, f"read_{diskfmt}")(filepth)
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
 
     assert_equal(orig, read, exact=True)
     assert orig.var.index.name == "var"
@@ -638,20 +632,13 @@ def test_write_csv_view(typ, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("read", "write", "name"),
-    [
-        pytest.param(ad.read_h5ad, ad.io.write_h5ad, "test_empty.h5ad"),
-        pytest.param(ad.read_zarr, ad.io.write_zarr, "test_empty.zarr"),
-    ],
-)
-@pytest.mark.parametrize(
     "xp_array",
     [np.array, pytest.param(jnp_array_or_idempotent, marks=pytest.mark.array_api)],
 )
-def test_readwrite_empty(read, write, name: str, tmp_path: Path, xp_array) -> None:
+def test_readwrite_empty(diskfmt, diskfmt_store, xp_array) -> None:
     adata = ad.AnnData(uns=dict(empty=xp_array([]).astype(float)))
-    write(tmp_path / name, adata)
-    ad_read = read(tmp_path / name)
+    getattr(ad.io, f"write_{diskfmt}")(diskfmt_store, adata)
+    ad_read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert ad_read.uns["empty"] is not None
     assert ad_read.uns["empty"].shape == (0,)
 
@@ -678,9 +665,11 @@ def test_read_umi_tools():
 
 @pytest.mark.parametrize("s2c", [True, False], ids=["str2cat", "preserve"])
 def test_write_categorical(
-    *, tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], s2c: bool
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    s2c: bool,
 ) -> None:
-    adata_pth = tmp_path / f"adata.{diskfmt}"
     obs = dict(
         str=pd.array(["a", "a", "b", pd.NA, pd.NA], dtype="string"),
         cat=pd.Categorical(["a", "a", "b", np.nan, np.nan]),
@@ -689,9 +678,9 @@ def test_write_categorical(
     orig = ad.AnnData(obs=pd.DataFrame(obs))
     with ad.settings.override(allow_write_nullable_strings=True):
         getattr(orig, f"write_{diskfmt}")(
-            adata_pth, convert_strings_to_categoricals=s2c
+            diskfmt_store, convert_strings_to_categoricals=s2c
         )
-    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert isinstance(orig.obs, pd.DataFrame)
     assert isinstance(curr.obs, pd.DataFrame)
     assert np.all(orig.obs.notna() == curr.obs.notna())
@@ -700,13 +689,12 @@ def test_write_categorical(
     assert curr.obs["cat"].dtype == "category"
 
 
-def test_write_categorical_index(tmp_path, diskfmt):
-    adata_pth = tmp_path / f"adata.{diskfmt}"
+def test_write_categorical_index(diskfmt, diskfmt_store):
     orig = ad.AnnData(
         uns={"df": pd.DataFrame({}, index=pd.Categorical(list("aabcd")))},
     )
-    getattr(orig, f"write_{diskfmt}")(adata_pth)
-    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    curr = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     # Also covered by next assertion, but checking this value specifically
     pd.testing.assert_index_equal(
         orig.uns["df"].index, curr.uns["df"].index, exact=True
@@ -716,8 +704,7 @@ def test_write_categorical_index(tmp_path, diskfmt):
 
 @pytest.mark.parametrize("colname", ["_index"])
 @pytest.mark.parametrize("attr", ["obs", "varm_df"])
-def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
-    adata_pth = tmp_path / f"adata.{diskfmt}"
+def test_dataframe_reserved_columns(diskfmt, diskfmt_store, colname, attr):
     orig = ad.AnnData(
         obs=pd.DataFrame(index=np.arange(5)), var=pd.DataFrame(index=np.arange(5))
     )
@@ -732,10 +719,10 @@ def test_dataframe_reserved_columns(tmp_path, diskfmt, colname, attr):
     else:
         pytest.fail(f"Unexpected attr: {attr}")
     with pytest.raises(ValueError, match=rf"{colname}.*reserved name"):
-        getattr(to_write, f"write_{diskfmt}")(adata_pth)
+        getattr(to_write, f"write_{diskfmt}")(diskfmt_store)
 
 
-def test_write_large_categorical(tmp_path, diskfmt):
+def test_write_large_categorical(diskfmt, diskfmt_store):
     M = 30_000
     N = 1000
     ls = np.array(list(ascii_letters))
@@ -750,7 +737,6 @@ def test_write_large_categorical(tmp_path, diskfmt):
         return cats
 
     cats = np.array(sorted(random_cats(10_000)))
-    adata_pth = tmp_path / f"adata.{diskfmt}"
     n_cats = len(np.unique(cats))
     orig = ad.AnnData(
         csr_matrix(([1], ([0], [0])), shape=(M, N)),
@@ -759,18 +745,18 @@ def test_write_large_categorical(tmp_path, diskfmt):
             cat2=pd.Categorical.from_codes(np.random.choice(n_cats, M), cats),
         ),
     )
-    getattr(orig, f"write_{diskfmt}")(adata_pth)
-    curr = getattr(ad, f"read_{diskfmt}")(adata_pth)
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    curr = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert_equal(orig, curr)
 
 
-def test_write_string_type_error(tmp_path, diskfmt):
+def test_write_string_type_error(diskfmt, diskfmt_store):
     adata = ad.AnnData(obs=dict(obs_names=list("abc")))
     adata.obs[b"c"] = np.zeros(3)
 
     # This should error, and tell you which key is at fault
     with pytest.raises(TypeError, match=r"writing key 'obs'") as exc_info:
-        getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata.{diskfmt}")
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store)
 
     assert "b'c'" in str(exc_info.value)
 
@@ -795,24 +781,25 @@ def test_hdf5_attribute_conversion(tmp_path, teststring, encoding, length):
 
 
 @pytest.mark.zarr_io
-def test_zarr_chunk_X(tmp_path):
-    zarr_pth = Path(tmp_path) / "test.zarr"
+def test_zarr_chunk_X():
+    store = MemoryStore()
     adata = gen_adata((100, 100), X_type=np.array, **GEN_ADATA_NO_XARRAY_ARGS)
-    adata.write_zarr(zarr_pth, chunks=(10, 10))
+    adata.write_zarr(store, chunks=(10, 10))
 
-    z = zarr.open(zarr_pth)
+    z = zarr.open(store)
     assert z["X"].chunks == (10, 10)
-    from_zarr = ad.read_zarr(zarr_pth)
+    from_zarr = ad.read_zarr(store)
     assert_equal(from_zarr, adata)
 
 
-def test_write_x_none(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
+def test_write_x_none(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
     adata = ad.AnnData(shape=(10, 10), obs={"a": np.ones(10)}, var={"b": np.ones(10)})
-    p = tmp_path / f"adata.{diskfmt}"
     write = getattr(adata, f"write_{diskfmt}")
 
-    write(p)
-    with open_store(p, diskfmt) as f:
+    write(diskfmt_store)
+    with open_store(diskfmt_store, diskfmt) as f:
         root_keys = list(f.keys())
 
     assert "X" not in root_keys
@@ -824,16 +811,16 @@ def test_write_x_none(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
 
 
 def _do_roundtrip(
-    adata: ad.AnnData, pth: Path, diskfmt: Literal["h5ad", "zarr"]
+    adata: ad.AnnData, store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> ad.AnnData:
-    getattr(adata, f"write_{diskfmt}")(pth)
-    return getattr(ad, f"read_{diskfmt}")(pth)
+    getattr(adata, f"write_{diskfmt}")(store)
+    return getattr(ad, f"read_{diskfmt}")(store)
 
 
 @pytest.fixture
 def roundtrip(
     diskfmt: Literal["h5ad", "zarr"],
-) -> Callable[[ad.AnnData, Path], ad.AnnData]:
+) -> Callable[[ad.AnnData, Path | MemoryStore], ad.AnnData]:
     return partial(_do_roundtrip, diskfmt=diskfmt)
 
 
@@ -842,10 +829,8 @@ def roundtrip2(diskfmt2):
     return partial(_do_roundtrip, diskfmt=diskfmt2)
 
 
-def test_write_string_types(tmp_path, diskfmt, roundtrip):
+def test_write_string_types(diskfmt_store, roundtrip):
     # https://github.com/scverse/anndata/issues/456
-    adata_pth = tmp_path / f"adata.{diskfmt}"
-
     adata = ad.AnnData(
         obs=pd.DataFrame(
             np.ones((3, 2)),
@@ -854,13 +839,13 @@ def test_write_string_types(tmp_path, diskfmt, roundtrip):
         ),
     )
 
-    from_disk = roundtrip(adata, adata_pth)
+    from_disk = roundtrip(adata, diskfmt_store)
 
     assert_equal(adata, from_disk)
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
+def test_scanpy_pbmc68k(roundtrip, roundtrip2, diskfmt_store, diskfmt2_store):
     import scanpy as sc
 
     # TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
@@ -872,9 +857,9 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
         pbmc = sc.datasets.pbmc68k_reduced()
 
     # Do we read okay
-    from_disk1 = roundtrip(pbmc, tmp_path / f"test1.{diskfmt}")
+    from_disk1 = roundtrip(pbmc, diskfmt_store)
     # Can we round trip
-    from_disk2 = roundtrip2(from_disk1, tmp_path / f"test2.{diskfmt2}")
+    from_disk2 = roundtrip2(from_disk1, diskfmt2_store)
 
     assert_equal(pbmc, from_disk1)  # Not expected to be exact due to `nan`s
     assert_equal(pbmc, from_disk2)
@@ -883,9 +868,8 @@ def test_scanpy_pbmc68k(tmp_path, diskfmt, roundtrip, diskfmt2, roundtrip2):
 @pytest.mark.filterwarnings(r"ignore:Observation names are not unique:UserWarning")
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
 def test_scanpy_krumsiek11(
-    tmp_path: Path,
-    diskfmt: Literal["h5ad", "zarr"],
-    roundtrip: Callable[[ad.AnnData, Path], ad.AnnData],
+    diskfmt_store: Path | MemoryStore,
+    roundtrip: Callable[[ad.AnnData, Path | MemoryStore], ad.AnnData],
 ) -> None:
     import scanpy as sc
 
@@ -898,7 +882,7 @@ def test_scanpy_krumsiek11(
     # Depending on pd.options.future.infer_string, this becomes either `object` or `'string'`
     orig.var.columns = orig.var.columns.astype(str)
     with ad.settings.override(allow_write_nullable_strings=True):
-        curr = roundtrip(orig, tmp_path / f"test.{diskfmt}")
+        curr = roundtrip(orig, diskfmt_store)
     # These categories are constructed manually in scanpy's code so are not "roundtripped" from disk.
     assert isinstance(orig.obs, pd.DataFrame)
     assert isinstance(curr.obs, pd.DataFrame)
@@ -966,7 +950,7 @@ def _empty_dir_store(tmp_path: Path) -> Path:
     "make_store",
     [
         pytest.param(_empty_dir_store, id="dir"),
-        pytest.param(lambda _: zarr.storage.MemoryStore(), id="memory"),
+        pytest.param(lambda _: MemoryStore(), id="memory"),
     ],
 )
 def test_read_zarr_suggests_nothing(
@@ -979,9 +963,7 @@ def test_read_zarr_suggests_nothing(
     assert not any("Did you mean" in note for note in notes)
 
 
-def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
-    pth = tmp_path / f"adatas_in_uns.{diskfmt}"
-
+def test_adata_in_uns(diskfmt_store, roundtrip):
     orig = gen_adata((4, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"] = {
         "a": gen_adata((1, 2), **GEN_ADATA_NO_XARRAY_ARGS),
@@ -991,7 +973,7 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
     another_one.raw = gen_adata((2, 7), **GEN_ADATA_NO_XARRAY_ARGS)
     orig.uns["adatas"]["b"].uns["another_one"] = another_one
 
-    curr = roundtrip(orig, pth)
+    curr = roundtrip(orig, diskfmt_store)
 
     assert_equal(orig, curr)
 
@@ -1008,14 +990,12 @@ def test_adata_in_uns(tmp_path, diskfmt, roundtrip):
         ),
     ],
 )
-def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
+def test_none_dict_value_in_uns(diskfmt_store, roundtrip, uns_val):
     if callable(uns_val):
         uns_val = uns_val()
-    pth = tmp_path / f"adata_dtype.{diskfmt}"
-
     orig = ad.AnnData(np.ones((3, 4)), uns=dict(val=uns_val))
     with ad.settings.override(allow_write_nullable_strings=True):
-        curr = roundtrip(orig, pth)
+        curr = roundtrip(orig, diskfmt_store)
 
     if isinstance(orig.uns["val"], pd.DataFrame):
         pd.testing.assert_frame_equal(curr.uns["val"], orig.uns["val"])
@@ -1023,11 +1003,9 @@ def test_none_dict_value_in_uns(diskfmt, tmp_path, roundtrip, uns_val):
         assert curr.uns["val"] == orig.uns["val"]
 
 
-def test_io_dtype(tmp_path, diskfmt, dtype, roundtrip):
-    pth = tmp_path / f"adata_dtype.{diskfmt}"
-
+def test_io_dtype(diskfmt_store, dtype, roundtrip):
     orig = ad.AnnData(np.ones((5, 8), dtype=dtype))
-    curr = roundtrip(orig, pth)
+    curr = roundtrip(orig, diskfmt_store)
 
     assert curr.X.dtype == dtype
 
@@ -1061,7 +1039,7 @@ def test_forward_slash_key(
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
-    path = tmp_path / f"test.{store_type}"
+    store = tmp_path / "test.h5ad" if store_type == "h5ad" else MemoryStore()
     is_default = disallow_forward_slash_in_h5ad is None
     # default case of unset parameter is to not allow writing of forward slashes as of anndata 0.13
     can_write_slash_key = (
@@ -1083,10 +1061,10 @@ def test_forward_slash_key(
         if can_write_slash_key
         else pytest.raises(ValueError, match=r"Forward slashes"),
     ):
-        getattr(a, f"write_{store_type}")(path)
+        getattr(a, f"write_{store_type}")(store)
 
     # read and check that bad keys were only written if allowed
-    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    elem = getattr(getattr(ad, f"read_{store_type}")(store), elem_key)
     if can_write_slash_key:
         if elem_key in {"obs", "var"}:
             assert "bad/key" in elem
@@ -1114,14 +1092,14 @@ def test_leading_slash_error(
     getattr(a, elem_key)[key] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
-    path = tmp_path / f"test.{store_type}"
+    store = tmp_path / "test.h5ad" if store_type == "h5ad" else MemoryStore()
 
     # “not in the subpath” is raised by e.g. `write_elem(g["z"], "/y", ...)`,
     # while “Forward slashes” is raised earlier by `write_anndata`/`write_h5ad`
     with pytest.raises(ValueError, match=r"not in the subpath|Forward slashes"):
-        getattr(a, f"write_{store_type}")(path)
+        getattr(a, f"write_{store_type}")(store)
 
-    elem = getattr(getattr(ad, f"read_{store_type}")(path), elem_key)
+    elem = getattr(getattr(ad, f"read_{store_type}")(store), elem_key)
     if elem_key in {"obs", "var"}:
         assert set(elem.columns) == {"_index"}
     else:
@@ -1135,20 +1113,18 @@ def test_leading_slash_error(
 @pytest.mark.parametrize(
     "func", [ad.experimental.read_lazy, ad.experimental.read_elem_lazy]
 )
-def test_read_lazy_import_error(func, tmp_path):
-    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
+def test_read_lazy_import_error(func):
+    ad.AnnData(np.ones((10, 10))).write_zarr(store := MemoryStore())
+    g = zarr.open(store)
     with pytest.raises(ImportError, match="xarray"):
-        func(
-            zarr.open(
-                tmp_path if func is ad.experimental.read_lazy else tmp_path / "obs"
-            )
-        )
+        func(g if func is ad.experimental.read_lazy else g["obs"])
 
 
 @pytest.mark.zarr_io
-def test_write_elem_consolidated(tmp_path: Path):
-    ad.AnnData(np.ones((10, 10))).write_zarr(tmp_path)
-    g = zarr.open_group(tmp_path)
+def test_write_elem_consolidated():
+    store = MemoryStore()
+    ad.AnnData(np.ones((10, 10))).write_zarr(store)
+    g = zarr.open_group(store)
     obs = g["obs"]
     assert isinstance(obs, zarr.Group)
     with pytest.raises(
@@ -1158,11 +1134,10 @@ def test_write_elem_consolidated(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_elem_version_mismatch(tmp_path: Path):
-    zarr_path = tmp_path / "foo.zarr"
+def test_write_elem_version_mismatch():
     adata = ad.AnnData(np.ones((10, 10)))
     g = zarr.open_group(
-        zarr_path,
+        MemoryStore(),
         mode="w",
         zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
     )

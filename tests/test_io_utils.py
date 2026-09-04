@@ -56,9 +56,8 @@ def test_key_error(
             read_attr(group["group"])
 
 
-def test_write_error_info(diskfmt, tmp_path):
-    pth = tmp_path / f"failed_write.{diskfmt}"
-    write = lambda x: getattr(x, f"write_{diskfmt}")(pth)
+def test_write_error_info(diskfmt, diskfmt_store):
+    write = lambda x: getattr(x, f"write_{diskfmt}")(diskfmt_store)
 
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})

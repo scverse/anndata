@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._core.file_backing import to_memory
@@ -18,7 +19,6 @@ pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not inst
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
-    from pathlib import Path
     from typing import Literal
 
     from numpy.typing import NDArray
@@ -344,10 +344,10 @@ def test_concat_df_ds_mixed_types(
     assert_equal(mixed_concatenated, in_memory_concatenated)
 
 
-def test_concat_bad_mixed_types(tmp_path: Path):
+def test_concat_bad_mixed_types():
     orig = gen_adata((100, 200), np.array, **GEN_ADATA_NO_XARRAY_ARGS)
-    orig.write_zarr(tmp_path)
-    remote = read_lazy(tmp_path)
+    orig.write_zarr(store := MemoryStore())
+    remote = read_lazy(store)
     orig.obsm["df"] = orig.obsm["array"]
     with pytest.raises(ValueError, match=r"Cannot concatenate a Dataset2D*"):
         ad.concat([remote, orig], join="outer")

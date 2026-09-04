@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 from importlib.util import find_spec
-from pathlib import Path
 
 import h5py
 import numpy as np
@@ -22,14 +21,12 @@ READER = dict(h5ad=h5py.File, zarr=zarr.open)
 
 
 @pytest.mark.parametrize("typ", [np.asarray, csr_matrix])
-def test_read_partial_X(tmp_path, typ, diskfmt):
+def test_read_partial_X(diskfmt_store, typ, diskfmt):
     adata = AnnData(X=typ(X))
 
-    path = Path(tmp_path) / ("test_tp_X." + diskfmt)
+    WRITER[diskfmt](diskfmt_store, adata)
 
-    WRITER[diskfmt](path, adata)
-
-    store = READER[diskfmt](path, mode="r")
+    store = READER[diskfmt](diskfmt_store, mode="r")
     if diskfmt == "zarr":
         X_part = read_elem_partial(store["X"], indices=([1, 2], [0, 1]))
     else:
@@ -42,7 +39,7 @@ def test_read_partial_X(tmp_path, typ, diskfmt):
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_read_partial_adata(tmp_path, diskfmt):
+def test_read_partial_adata(diskfmt_store, diskfmt):
     import scanpy as sc
 
     with warnings.catch_warnings():
@@ -51,14 +48,12 @@ def test_read_partial_adata(tmp_path, diskfmt):
         )
         adata = sc.datasets.pbmc68k_reduced()
 
-    path = Path(tmp_path) / ("test_rp." + diskfmt)
-
     # we’re not adding things to read_partial anymore, so it can only read non-nullable strings.
     # therefore force writing old format here
     with settings.override(allow_write_nullable_strings=False):
-        WRITER[diskfmt](path, adata)
+        WRITER[diskfmt](diskfmt_store, adata)
 
-    storage = READER[diskfmt](path, mode="r")
+    storage = READER[diskfmt](diskfmt_store, mode="r")
 
     obs_idx = [1, 2]
     var_idx = [0, 3]

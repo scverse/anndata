@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from numpy.typing import NDArray
+    from zarr.storage import MemoryStore
 
 
 pytest.importorskip("dask.array")
@@ -83,11 +84,10 @@ def test_dask_X_view():
     view.copy()
 
 
-def test_dask_write(adata, tmp_path, diskfmt):
+def test_dask_write(adata, diskfmt_store, diskfmt):
     import dask.array as da
     import numpy as np
 
-    pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = getattr(ad, f"read_{diskfmt}")
 
@@ -97,8 +97,8 @@ def test_dask_write(adata, tmp_path, diskfmt):
     adata.varm["a"] = da.random.random((N, 10))
 
     orig = adata
-    write(orig, pth)
-    curr = read(pth)
+    write(orig, diskfmt_store)
+    curr = read(diskfmt_store)
 
     with pytest.raises(AssertionError):
         assert_equal(curr.obsm["a"], curr.obsm["b"])
@@ -135,6 +135,8 @@ def test_dask_distributed_write(
     import numpy as np
 
     assert isinstance(adata.X, DaskArray)
+    # A real path, not an in-memory store: the dask workers are separate
+    # processes and have to see the same store as this one.
     pth = tmp_path / f"test_write.{diskfmt}"
     with as_group(pth, mode="w") as g, dd.Client(local_cluster_addr):
         M, N = adata.X.shape
@@ -166,11 +168,10 @@ def test_dask_distributed_write(
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
+def test_dask_to_memory_check_array_types(adata, diskfmt_store, diskfmt):
     import dask.array as da
     import numpy as np
 
-    pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = getattr(ad, f"read_{diskfmt}")
 
@@ -180,8 +181,8 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     adata.varm["a"] = da.random.random((N, 10))
 
     orig = adata
-    write(orig, pth)
-    curr = read(pth)
+    write(orig, diskfmt_store)
+    curr = read(diskfmt_store)
 
     assert isinstance(orig.X, DaskArray)
     assert isinstance(orig.obsm["a"], DaskArray)
@@ -208,11 +209,10 @@ def test_dask_to_memory_check_array_types(adata, tmp_path, diskfmt):
     assert isinstance(orig.varm["a"], DaskArray)
 
 
-def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
+def test_dask_to_memory_copy_check_array_types(adata, diskfmt_store, diskfmt):
     import dask.array as da
     import numpy as np
 
-    pth = tmp_path / f"test_write.{diskfmt}"
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = getattr(ad, f"read_{diskfmt}")
 
@@ -222,8 +222,8 @@ def test_dask_to_memory_copy_check_array_types(adata, tmp_path, diskfmt):
     adata.varm["a"] = da.random.random((N, 10))
 
     orig = adata
-    write(orig, pth)
-    curr = read(pth)
+    write(orig, diskfmt_store)
+    curr = read(diskfmt_store)
 
     mem = orig.to_memory(copy=True)
 
@@ -337,7 +337,7 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 def test_dask_to_disk_view(
     to_dask: Callable[[NDArray], DaskArray],
     diskfmt: Literal["h5ad", "zarr"],
-    tmp_path: Path,
+    diskfmt_store: Path | MemoryStore,
 ) -> None:
     random_state = np.random.default_rng()
     arr = random_state.binomial(100, 0.005, (20, 15)).astype("float32")
@@ -345,9 +345,8 @@ def test_dask_to_disk_view(
     # TODO: need to change type for cupy
     orig = ad.AnnData(to_dask(arr))
     orig = orig[orig.shape[0] // 2]
-    path = tmp_path / f"test.{diskfmt}"
-    getattr(orig, f"write_{diskfmt}")(path)
-    roundtrip = getattr(ad.io, f"read_{diskfmt}")(path)
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    roundtrip = getattr(ad.io, f"read_{diskfmt}")(diskfmt_store)
     assert_equal(roundtrip, orig)
 
 

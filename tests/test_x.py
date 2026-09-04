@@ -151,16 +151,15 @@ def test_copy_view():
 ############
 
 
-def test_io_missing_X(tmp_path, diskfmt):
-    file_pth = tmp_path / f"x_none_adata.{diskfmt}"
+def test_io_missing_X(diskfmt_store, diskfmt):
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = getattr(ad, f"read_{diskfmt}")
 
     adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
 
-    write(adata, file_pth)
-    from_disk = read(file_pth)
+    write(adata, diskfmt_store)
+    from_disk = read(diskfmt_store)
 
     assert_equal(from_disk, adata)
 

@@ -18,14 +18,17 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from zarr.storage import MemoryStore
+
 
 @pytest.fixture
-def file(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | zarr.Group:
-    path = tmp_path / f"test.{diskfmt}"
+def file(
+    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> h5py.File | zarr.Group:
     if diskfmt == "zarr":
-        return open_write_group(path, mode="a")
+        return open_write_group(diskfmt_store, mode="a")
     if diskfmt == "h5ad":
-        return h5py.File(path, "a")
+        return h5py.File(diskfmt_store, "a")
     pytest.fail(f"Unknown diskfmt: {diskfmt}")
 
 
