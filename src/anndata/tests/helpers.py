@@ -1286,16 +1286,6 @@ class AccessTrackingStore(WrapperStore[Store]):
             prototype = default_buffer_prototype()
         return await self._store.get(key, prototype, byte_range)
 
-    def get_sync(
-        self,
-        key: str,
-        *,
-        prototype: BufferPrototype | None = None,
-        byte_range: ByteRequest | None = None,
-    ) -> Buffer | None:
-        self._check_and_track_key(key)
-        return super().get_sync(key, prototype=prototype, byte_range=byte_range)
-
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
             if tracked in key:
