@@ -164,15 +164,28 @@ def test_to_writeable_does_not_recurse() -> None:
 @pytest.mark.parametrize(
     ("mk_group", "use_zarrs", "set_fused"),
     [
-        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True, True), id="local_group_triggers_fused_when_set", marks=pytest.mark.skipif(Version(version("zarr")) < Version("3.3"), reason="No fused pipeline to set")),
-        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True, False), id="local_group_triggers_zarrs"),
+        pytest.param(
+            (lambda tmp_path: zarr.Group(tmp_path), True, True),
+            id="local_group_triggers_fused_when_set",
+            marks=pytest.mark.skipif(
+                Version(version("zarr")) < Version("3.3"),
+                reason="No fused pipeline to set",
+            ),
+        ),
+        pytest.param(
+            (lambda tmp_path: zarr.Group(tmp_path), True, False),
+            id="local_group_triggers_zarrs",
+        ),
         # zarrs cannot handle memory stores, so it falls back to zarr-python
         pytest.param(
-            (lambda x: zarr.Group(zarr.storage.MemoryStore()), False, False), id="mem_group_triggers_fused"
+            (lambda x: zarr.Group(zarr.storage.MemoryStore()), False, False),
+            id="mem_group_triggers_fused",
         ),
     ],
 )
-def test_zarr_context(monkeypatch, tmp_path, mk_group, *, use_zarrs: bool, set_fused: bool):
+def test_zarr_context(
+    monkeypatch, tmp_path, mk_group, *, use_zarrs: bool, set_fused: bool
+):
     if use_zarrs:
         fake_module = types.ModuleType("zarrs")
         fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)

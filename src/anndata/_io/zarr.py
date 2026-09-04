@@ -51,10 +51,14 @@ def fast_zarr_context():
     )
     # Switch to zarrs if the old pipeline is just the default
     use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
-    zarr_context = zarr.config.set({
-        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-        "codec_pipeline.max_workers": None,
-    }) if use_zarr_fused else nullcontext()
+    zarr_context = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if use_zarr_fused
+        else nullcontext()
+    )
     if use_zarrs:
 
         @contextmanager
