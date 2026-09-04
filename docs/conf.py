@@ -94,6 +94,14 @@ def setup(app: Sphinx) -> None:
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
 
+    # https://github.com/mkdocstrings/python/issues/339
+    from sphinx.domains import ObjType
+    from sphinx.domains.python import PythonDomain
+
+    PythonDomain.object_types.setdefault(
+        "typealias", ObjType("type alias", "type", "obj")
+    )
+
     # TODO: move to scanpydoc
     if TYPE_CHECKING:
         from docutils.nodes import TextElement, reference
@@ -160,6 +168,8 @@ qualname_overrides = {
     "anndata.typing.Storable": "anndata.typing.Storable",
     "anndata.typing.InMemoryArray": "anndata.typing.InMemoryArray",
     "anndata.typing.AlignedArray": "anndata.typing.AlignedArray",
+    #### zarr
+    "zarr.core.group.StoreLike": "zarr.storage.StoreLike",
     #### h5py
     "h5py._hl.group.Group": "h5py.Group",
     "h5py._hl.files.File": "h5py.File",
@@ -185,6 +195,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "pandas.api.typing.NAType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    # leaked into public signatures as the bound of `anndata.typing`’s `_M`
+    ("py:class", "anndata.compat.IndexManager"),
     #### these happen when a `type` or `class` is generic
     ("py:obj", "typing.R"),
     ("py:class", "_M"),
