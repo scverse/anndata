@@ -33,18 +33,51 @@ if TYPE_CHECKING:
     from .._types import _GroupStorageType
     from ..typing import RWAble
 
+from importlib.metadata import version
+
+from packaging.version import Version
+
 
 @contextmanager
-def zarrs_context():
+def fast_zarr_context():
+    # We are going to be "guinea pigs" for this new pipeline because it should be much faster
+    # and we're shortchanging our users otherwise.
+    # So we change the pipeline if it has not been changed by the user i.e.,
+    # it is the old BatchedCodecPipeline.
+    # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
+    old_pipeline = zarr.config.get("codec_pipeline.path")
+    use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
+        "3.3"
+    )
+    # Switch to zarrs if the old pipeline is just the default
+    use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
+    zarr_context = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if use_zarr_fused
+        else nullcontext()
+    )
+    if use_zarrs:
+
+        @contextmanager
+        def _context():
+            with (
+                zarr_context,
+                zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}),
+            ):
+                yield
+
+        context = _context()
+
+    else:
+        context = zarr_context
     with (
-        (
-            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-            if find_spec("zarrs")
-            else nullcontext()
-        ),
-        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+        context,
+        warnings.catch_warnings() if use_zarrs else nullcontext(),
     ):
-        if find_spec("zarrs"):
+        if use_zarrs:
             warnings.filterwarnings(
                 "ignore",
                 message=r".*unsupported by ZarrsCodecPipeline.*",
@@ -80,7 +113,7 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with zarrs_context():
+    with fast_zarr_context():
         # TODO: Use spec writing system for this
         f = open_write_group(store)
         f.attrs.setdefault("encoding-type", "anndata")
@@ -145,7 +178,7 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with zarrs_context():
+    with fast_zarr_context():
         if isinstance(store, zarr.Group):
             f = store
         else:
