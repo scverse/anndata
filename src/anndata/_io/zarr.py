@@ -39,7 +39,7 @@ from packaging.version import Version
 
 
 @contextmanager
-def fast_zarr_context(store: StoreLike):
+def fast_zarr_context():
     # We are going to be "guinea pigs" for this new pipeline because it should be much faster
     # and we're shortchanging our users otherwise.
     # So we change the pipeline if it has not been changed by the user i.e.,
@@ -49,19 +49,19 @@ def fast_zarr_context(store: StoreLike):
     use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
         "3.3"
     )
-    use_zarrs = find_spec("zarrs") and isinstance(
-        store.store if isintance(store, zarr.Group) else store,
-        str | Path | zarr.storage.LocalStore,
-    )
+    use_zarrs = find_spec("zarrs")
+    zarr_context = zarr.config.set({
+        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+        "codec_pipeline.max_workers": None,
+    }) if use_zarr_fused else nullcontext()
     if use_zarrs:
-        context = zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-    elif use_zarr_fused:
-        context = zarr.config.set({
-            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-            "codec_pipeline.max_workers": None,
-        })
+        @contextmanager
+        def context():
+            with zarr_context:
+                with zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}):
+                    yield
     else:
-        context = nullcontext()
+        context = zarr_context
     with (
         context,
         warnings.catch_warnings() if use_zarrs else nullcontext(),
@@ -102,7 +102,7 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with fast_zarr_context(store):
+    with fast_zarr_context():
         # TODO: Use spec writing system for this
         f = open_write_group(store)
         f.attrs.setdefault("encoding-type", "anndata")
@@ -167,7 +167,7 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with fast_zarr_context(store):
+    with fast_zarr_context():
         if isinstance(store, zarr.Group):
             f = store
         else:
