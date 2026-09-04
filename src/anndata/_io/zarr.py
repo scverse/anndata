@@ -50,16 +50,24 @@ def fast_zarr_context():
         "3.3"
     )
     use_zarrs = find_spec("zarrs")
-    zarr_context = zarr.config.set({
-        "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
-        "codec_pipeline.max_workers": None,
-    }) if use_zarr_fused else nullcontext()
+    zarr_context = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if use_zarr_fused
+        else nullcontext()
+    )
     if use_zarrs:
+
         @contextmanager
         def context():
             with zarr_context:
-                with zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}):
+                with zarr.config.set({
+                    "codec_pipeline.path": "zarrs.ZarrsCodecPipeline"
+                }):
                     yield
+
     else:
         context = zarr_context
     with (
