@@ -6,7 +6,7 @@ from contextlib import ExitStack, contextmanager
 from functools import singledispatch
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -17,16 +17,19 @@ from scipy.sparse import csc_matrix, csr_matrix
 from .._core.file_backing import to_memory
 from .._core.merge import (
     MissingVal,
+    Reindexer,
     _other_axis,
     _resolve_axis,
     concat_arrays,
     gen_inner_reindexers,
+    gen_outer_reindexers,
     gen_reindexer,
     intersect_keys,
     merge_dataframes,
     merge_indices,
     resolve_merge_strategy,
     unify_dtypes,
+    union_keys,
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
@@ -34,12 +37,12 @@ from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Generator, Iterator, Sequence
-    from typing import Literal
+    from typing import Any, Literal
 
     from pandas.api.typing.aliases import Scalar
     from zarr.core.common import AccessModeLiteral
 
-    from .._core.merge import Reindexer, StrategiesLiteral
+    from .._core.merge import StrategiesLiteral
     from .._types import Join_T, StorageType
     from ..compat import CSMatrix
 
@@ -71,14 +74,37 @@ def _indices_equal(indices: Sequence[pd.Index]) -> bool:
     return all(np.array_equal(init_elem, elem) for elem in indices[1:])
 
 
-def _gen_slice_to_append(
+def _sparse_fill_block(
+    n: int, width: int, *, axis: Literal[0, 1], fill_value: Scalar | None = None
+) -> CSMatrix:
+    """A sparse fill block for a key missing from one object under an outer join.
+
+    Shaped so it can be stacked directly onto the other (reindexed) blocks. The common
+    ``fill_value`` of ``0`` yields an empty matrix that stores nothing, so a missing key
+    never materializes a dense block regardless of ``width``.
+    """
+    sparse_cls = (csr_matrix, csc_matrix)[axis]
+    shape = (n, width) if axis == 0 else (width, n)
+    if fill_value in (None, 0):
+        return sparse_cls(shape)
+    return sparse_cls(np.broadcast_to(np.asarray(fill_value), shape).copy())
+
+
+def _gen_slice_to_append(  # noqa: PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     reindexers: Sequence[AnyReindexer],
     max_loaded_elems: int,
     axis: Literal[0, 1] = 0,
     fill_value: Scalar | None = None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ) -> Generator[CSMatrix]:
-    for ds, ri in zip(datasets, reindexers, strict=False):
+    for i, (ds, ri) in enumerate(zip(datasets, reindexers, strict=False)):
+        if ds is MissingVal:
+            assert ns is not None
+            assert width is not None
+            yield _sparse_fill_block(ns[i], width, axis=axis, fill_value=fill_value)
+            continue
         n_slices = ds.shape[axis] * ds.shape[1 - axis] // max_loaded_elems
         if n_slices < 2:
             yield (csr_matrix, csc_matrix)[axis](
@@ -207,31 +233,37 @@ def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
 ###################
 
 
-def write_concat_dense(  # noqa: PLR0917
+def write_concat_dense(  # noqa: PLR0913, PLR0917
     arrays: Sequence[zarr.Array | h5py.Dataset],
     output_group: zarr.Group | h5py.Group,
     output_path: str,
     axis: Literal[0, 1] = 0,
     reindexers: Sequence[AnyReindexer] = (),
     fill_value: Scalar | None = None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ):
     """
     Writes the concatenation of given dense arrays to disk using dask.
+
+    Under an outer join an entry may be ``MissingVal`` when the key is absent from that
+    object; it contributes a lazily-created fill block so the present arrays are never
+    brought into memory.
     """
     import dask.array as da
 
-    darrays = (
-        da.from_array(a, chunks="auto" if a.chunks is None else a.chunks)
-        for a in arrays
-    )
+    blocks = []
+    for i, (a, ri) in enumerate(zip(arrays, reindexers, strict=True)):
+        if a is MissingVal:
+            assert ns is not None
+            assert width is not None
+            shape = (ns[i], width) if axis == 0 else (width, ns[i])
+            blocks.append(da.full(shape, np.nan if fill_value is None else fill_value))
+        else:
+            darray = da.from_array(a, chunks="auto" if a.chunks is None else a.chunks)
+            blocks.append(ri(darray, axis=_other_axis(axis), fill_value=fill_value))
 
-    res = da.concatenate(
-        [
-            ri(a, axis=_other_axis(axis), fill_value=fill_value)
-            for a, ri in zip(darrays, reindexers, strict=False)
-        ],
-        axis=axis,
-    )
+    res = da.concatenate(blocks, axis=axis)
     write_elem(output_group, output_path, res)
     output_group[output_path].attrs.update({
         "encoding-type": "array",
@@ -239,7 +271,7 @@ def write_concat_dense(  # noqa: PLR0917
     })
 
 
-def write_concat_sparse(  # noqa: PLR0917
+def write_concat_sparse(  # noqa: PLR0913, PLR0917
     datasets: Sequence[BaseCompressedSparseDataset],
     output_group: zarr.Group | h5py.Group,
     output_path: str,
@@ -247,13 +279,16 @@ def write_concat_sparse(  # noqa: PLR0917
     axis: Literal[0, 1] = 0,
     reindexers: Sequence[AnyReindexer] = (),
     fill_value: Scalar | None = None,
+    ns: Sequence[int] | None = None,
+    width: int | None = None,
 ) -> None:
     """Writes and concatenates sparse datasets into a single output dataset.
 
     Parameters
     ----------
     datasets
-        A sequence of BaseCompressedSparseDataset objects to be concatenated.
+        A sequence of BaseCompressedSparseDataset objects to be concatenated. Under an
+        outer join an entry may be ``MissingVal`` when the key is absent from that object.
     output_group
         The output group where the concatenated dataset will be written.
     output_path
@@ -266,15 +301,22 @@ def write_concat_sparse(  # noqa: PLR0917
         A reindexer object that defines the reindexing operation to be applied.
     fill_value
         The fill value to use for missing elements. Defaults to None.
+    ns
+        Size of each object along ``axis``, used to shape fills for ``MissingVal`` entries.
+    width
+        Size of the concatenated result along the other axis, used to shape those fills.
     """
+    has_missing = any(d is MissingVal for d in datasets)
     elems: Iterator[BaseCompressedSparseDataset | CSMatrix]
-    if all(ri.no_change for ri in reindexers):
+    if all(ri.no_change for ri in reindexers) and not has_missing:
         elems = iter(datasets)
     else:
         elems = _gen_slice_to_append(
-            datasets, reindexers, max_loaded_elems, axis, fill_value
+            datasets, reindexers, max_loaded_elems, axis, fill_value, ns=ns, width=width
         )
-    number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
+    number_non_zero = sum(
+        d.group["indices"].shape[0] for d in datasets if d is not MissingVal
+    )
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
     write_elem(
@@ -293,34 +335,76 @@ def write_concat_sparse(  # noqa: PLR0917
 def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     mappings: Collection[dict],
     output_group: zarr.Group | h5py.Group,
-    keys: Collection[str],
     output_path: str,
     max_loaded_elems: int,
+    ns: Sequence[int],
     axis: Literal[0, 1] = 0,
     index: pd.Index | None = None,
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
+    join: Join_T = "inner",
 ):
     """
-    Write a list of mappings to a zarr/h5 group.
+    Write a list of mappings (e.g. ``.obsm``/``.varm`` or ``.layers``) to a zarr/h5 group.
+
+    Mirrors the in-memory :func:`~anndata._core.merge.inner_concat_aligned_mapping` /
+    :func:`~anndata._core.merge.outer_concat_aligned_mapping`: for ``join="inner"`` the
+    intersection of keys is kept, while for ``join="outer"`` the union is kept and keys
+    missing from some objects are filled with ``fill_value``. ``ns`` gives the size of each
+    object along the concatenation axis, used to shape those fills. Every key streams
+    through :func:`_write_concat_sequence`; a key absent from an object contributes a
+    lazily-built fill block rather than reading the present objects into memory.
     """
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",
         "encoding-version": "0.1.0",
     })
+    keys = union_keys(mappings) if join == "outer" else intersect_keys(mappings)
     for k in keys:
-        elems = [m[k] for m in mappings]
+        elems = [m.get(k, MissingVal) for m in mappings]
+        if reindexers is not None:
+            cur_reindexers = reindexers
+        elif join == "outer":
+            # Only `.{axis_name}m` generates its own reindexers, and it is always passed
+            # the concatenated index; `.layers` arrives with `reindexers` already set.
+            assert index is not None
+            cur_reindexers = gen_outer_reindexers(elems, ns, new_index=index, axis=axis)
+        else:
+            cur_reindexers = gen_inner_reindexers(elems, new_index=index, axis=axis)
         _write_concat_sequence(
             elems,
             output_group=mapping_group,
             output_path=k,
             axis=axis,
             index=index,
-            reindexers=reindexers,
+            reindexers=cur_reindexers,
             fill_value=fill_value,
             max_loaded_elems=max_loaded_elems,
+            join=join,
+            ns=ns,
         )
+
+
+def _target_free_width(
+    arrays: Sequence[Any], reindexers: Sequence[AnyReindexer], axis: Literal[0, 1]
+) -> int:
+    """Width of the concatenated result along the axis orthogonal to ``axis``.
+
+    Taken from the first present array: an active reindexer knows the target width, an
+    unchanged one leaves the array's own free axis. Used to shape fills for missing keys.
+    """
+    free_axis = _other_axis(axis)
+    for a, r in zip(arrays, reindexers, strict=True):
+        if a is MissingVal:
+            continue
+        if isinstance(r, Reindexer) and not r.no_change:
+            return len(r.new_idx)
+        return a.shape[free_axis]
+    # Unreachable: a key only reaches here from union/intersect of the mappings, so at
+    # least one object always carries it.
+    msg = "Cannot infer output width: every element is missing."
+    raise ValueError(msg)  # pragma: no cover
 
 
 def _write_concat_arrays(  # noqa: PLR0913, PLR0917
@@ -332,10 +416,16 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
     join: Join_T = "inner",
+    ns: Sequence[int] | None = None,
 ):
-    init_type = type(arrays[0])
-    if not all(isinstance(a, init_type) for a in arrays):
-        msg = f"All elements must be the same type instead got types: {[type(a) for a in arrays]}"
+    # Under an outer join some entries are MissingVal placeholders. They carry no type
+    # and are shaped from `ns`/`width` further down, so every check here runs over the
+    # elements that are actually present, while the full sequence (placeholders
+    # included) is what gets passed on, to stay aligned with `reindexers` and `ns`.
+    present = [a for a in arrays if a is not MissingVal]
+    init_type = type(present[0])
+    if not all(isinstance(a, init_type) for a in present):
+        msg = f"All elements must be the same type instead got types: {[type(a) for a in present]}"
         raise NotImplementedError(msg)
 
     if reindexers is None:
@@ -345,25 +435,33 @@ def _write_concat_arrays(  # noqa: PLR0913, PLR0917
             msg = "Cannot reindex arrays with outer join."
             raise NotImplementedError(msg)
 
-    sparse_datasets = [a for a in arrays if isinstance(a, BaseCompressedSparseDataset)]
+    width = _target_free_width(arrays, reindexers, axis)
+
+    # Every present element shares `init_type` by the check above, so the whole sequence
+    # is homogeneous apart from the MissingVal placeholders the callee fills in itself.
+    sparse_datasets = [a for a in present if isinstance(a, BaseCompressedSparseDataset)]
     if not sparse_datasets:
         write_concat_dense(
-            [a for a in arrays if not isinstance(a, BaseCompressedSparseDataset)],
+            cast("Sequence[zarr.Array | h5py.Dataset]", arrays),
             output_group,
             output_path,
             axis,
             reindexers,
             fill_value,
+            ns=ns,
+            width=width,
         )
     elif all(a.format == ("csr", "csc")[axis] for a in sparse_datasets):
         write_concat_sparse(
-            sparse_datasets,
+            cast("Sequence[BaseCompressedSparseDataset]", arrays),
             output_group,
             output_path,
             max_loaded_elems,
             axis,
             reindexers,
             fill_value,
+            ns=ns,
+            width=width,
         )
     else:
         msg = (
@@ -384,6 +482,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
     join: Join_T = "inner",
+    ns: Sequence[int] | None = None,
 ):
     """
     array, dataframe, csc_matrix, csc_matrix
@@ -408,7 +507,8 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
         )
         write_elem(output_group, output_path, df)
     elif all(
-        isinstance(a, BaseCompressedSparseDataset | h5py.Dataset | zarr.Array)
+        a is MissingVal
+        or isinstance(a, BaseCompressedSparseDataset | h5py.Dataset | zarr.Array)
         for a in non_dfs
     ):
         _write_concat_arrays(
@@ -420,6 +520,7 @@ def _write_concat_sequence(  # noqa: PLR0913, PLR0917
             reindexers,
             fill_value,
             join,
+            ns=ns,
         )
     else:
         msg = f"Concatenation of these types is not yet implemented: {[type(a) for a in arrays]} with axis={axis}."
@@ -781,7 +882,16 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         max_loaded_elems=max_loaded_elems,
     )
 
-    # Write Layers and {axis_name}m
+    # Number of elements each object contributes along the concatenation axis,
+    # used to build fills for keys missing from some objects under an outer join.
+    ns = [x.shape[axis] for x in Xs]
+
+    # Write Layers and {axis_name}m.
+    # `.{axis_name}m` reindexes along its own free (feature) axis, so its reindexers are
+    # generated per-key (``None``) whenever reindexing can bite: either the alt indices
+    # differ, or an outer join has to align keys that only some objects carry. Otherwise
+    # every key is already aligned and reindexing can be skipped. `.layers` shares the
+    # alt-axis with `X`, so it reuses the same reindexers as `X`.
     mapping_names: list[
         tuple[str, pd.Index | None, Literal[0, 1], Sequence[AnyReindexer] | None]
     ] = [
@@ -789,7 +899,9 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             f"{axis_name}m",
             concat_indices,
             0,
-            None if use_reindexing else [IdentityReindexer()] * len(groups),
+            None
+            if use_reindexing or join == "outer"
+            else [IdentityReindexer()] * len(groups),
         ),
         ("layers", None, axis, reindexers),
     ]
@@ -798,11 +910,12 @@ def _concat_on_disk_inner(  # noqa: PLR0913
         _write_concat_mappings(
             maps,
             output_group,
-            intersect_keys(maps),
             m,
             max_loaded_elems=max_loaded_elems,
+            ns=ns,
             axis=m_axis,
             index=m_index,
             reindexers=m_reindexers,
             fill_value=fill_value,
+            join=join,
         )
