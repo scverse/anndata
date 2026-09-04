@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import zarr
 from scipy.sparse import csc_matrix, csr_matrix
+from zarr.abc.store import Store
 
 from .._core.file_backing import to_memory
 from .._core.merge import (
@@ -38,12 +39,15 @@ if TYPE_CHECKING:
 
     from pandas.api.typing.aliases import Scalar
     from zarr.core.common import AccessModeLiteral
+    from zarr.storage import StoreLike
 
     from .._core.merge import Reindexer, StrategiesLiteral
     from .._types import Join_T, StorageType
     from ..compat import CSMatrix
 
     type AnyReindexer = Reindexer | IdentityReindexer
+
+type ConcatOnDiskTarget = PathLike[str] | str | Store | h5py.Group | zarr.Group
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -116,6 +120,12 @@ def as_group(store, *, mode: AccessModeLiteral) -> Generator[zarr.Group | h5py.G
     raise NotImplementedError(msg)
 
 
+@as_group.register(Store)
+@contextmanager
+def _(store: Store, *, mode: AccessModeLiteral) -> Generator[zarr.Group]:
+    yield _open_zarr_group(store, mode=mode)
+
+
 @as_group.register(PathLike)
 @as_group.register(str)
 @contextmanager
@@ -131,13 +141,16 @@ def _(
             yield f
         finally:
             f.close()
-
-    elif mode == "r":  # others all write: r+, a, w, w-
-        yield zarr.open_group(store, mode=mode)
     else:
-        from anndata._io.zarr import open_write_group
+        yield _open_zarr_group(store, mode=mode)
 
-        yield open_write_group(store, mode=mode)
+
+def _open_zarr_group(store: StoreLike, *, mode: AccessModeLiteral) -> zarr.Group:
+    if mode == "r":  # others all write: r+, a, w, w-
+        return zarr.open_group(store, mode=mode)
+    from anndata._io.zarr import open_write_group
+
+    return open_write_group(store, mode=mode)
 
 
 @as_group.register(zarr.Group)
@@ -493,9 +506,8 @@ def _write_alt_pairwise(
 
 
 def concat_on_disk(  # noqa: PLR0913
-    in_files: Collection[PathLike[str] | str | h5py.Group | zarr.Group]
-    | Mapping[str, PathLike[str] | str | h5py.Group | zarr.Group],
-    out_file: PathLike[str] | str | h5py.Group | zarr.Group,
+    in_files: Collection[ConcatOnDiskTarget] | Mapping[str, ConcatOnDiskTarget],
+    out_file: ConcatOnDiskTarget,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,

@@ -20,7 +20,9 @@ from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from pandas.core.arrays.integer import IntegerDtype
 from scipy import sparse
-from zarr.storage import LocalStore
+from zarr.abc.store import Store
+from zarr.core.buffer import default_buffer_prototype
+from zarr.storage import WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -1241,13 +1243,22 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 
-class AccessTrackingStore(LocalStore):
+class AccessTrackingStore(WrapperStore[Store]):
+    """Wraps a store to count reads of (prefixes of) keys.
+
+    Wrap the store a fixture wrote to, e.g. ``AccessTrackingStore(store)``,
+    to get a fresh set of counters over the same data.
+
+    The wrapper is always read-only: `zarr` re-wraps a writable store when
+    opened with ``mode="r"``, which would silently reset the counters.
+    """
+
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, store: Store) -> None:
+        super().__init__(store.with_read_only(read_only=True))
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
@@ -1271,7 +1282,9 @@ class AccessTrackingStore(LocalStore):
         byte_range: ByteRequest | None = None,
     ) -> Buffer | None:
         self._check_and_track_key(key)
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
+        if prototype is None:  # concrete stores default it, the ABC does not
+            prototype = default_buffer_prototype()
+        return await self._store.get(key, prototype, byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:

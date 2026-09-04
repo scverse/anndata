@@ -13,6 +13,7 @@ import zarr
 from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
@@ -61,22 +62,25 @@ def adata_on_disk(
     diskfmt: Literal["h5ad", "zarr"],
     adata: AnnData,
     tmp_path_factory: pytest.TempPathFactory,
-) -> Path:
-    path = (
+) -> tuple[Path | MemoryStore, bool]:
+    store = (
         tmp_path_factory.mktemp("disk_backed")
-        / f"{'sparse' if adata is adata_sparse else 'dense'}.{diskfmt}"
+        / f"{'sparse' if adata is adata_sparse else 'dense'}.h5ad"
+        if diskfmt == "h5ad"
+        else MemoryStore()
     )
-    getattr(adata, f"write_{diskfmt}")(path)
-    return path
+    getattr(adata, f"write_{diskfmt}")(store)
+    return store, adata is adata_sparse
 
 
 @pytest.mark.parametrize("elem_name", ["X", "obsm", "layers"])
 def test_cant_copy_disk_backed(
-    adata_on_disk: Path, elem_name: Literal["X", "obsm", "layers"]
+    adata_on_disk: tuple[Path | MemoryStore, bool],
+    elem_name: Literal["X", "obsm", "layers"],
 ):
-    is_sparse = "sparse" in str(adata_on_disk)
-    is_zarr = adata_on_disk.suffix == ".zarr"
-    root = (zarr.open if is_zarr else h5py.File)(adata_on_disk)
+    store, is_sparse = adata_on_disk
+    is_zarr = isinstance(store, MemoryStore)
+    root = (zarr.open if is_zarr else h5py.File)(store)
     assert isinstance(root, zarr.Group | h5py.File)
     elem = root["X"]
     X: object
@@ -907,9 +911,9 @@ def test_transpose_errors_with_backed_arrays(
     tmp_path: Path, storage: str, *, is_sparse: bool, in_x: bool
 ):
     adata = AnnData(X=csr_matrix(np.ones((3, 4))) if is_sparse else np.ones((3, 4)))
-    path = tmp_path / f"test.{storage}"
-    getattr(adata, f"write_{storage}")(path)
-    f = (h5py.File if storage == "h5ad" else zarr.open)(path)
+    store = tmp_path / "test.h5ad" if storage == "h5ad" else MemoryStore()
+    getattr(adata, f"write_{storage}")(store)
+    f = (h5py.File if storage == "h5ad" else zarr.open)(store)
     assert isinstance(f, zarr.Group | h5py.File)
     elem = f["X"]
     raw_array: object

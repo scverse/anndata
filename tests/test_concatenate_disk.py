@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 import zarr
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata import AnnData, concat
@@ -72,19 +73,29 @@ def max_loaded_elems(request) -> int:
     return request.param
 
 
-def _adatas_to_paths(
+def _make_store(
+    tmp_path: Path, file_format: str, name: str, *, on_disk_zarr: bool
+) -> Path | MemoryStore:
+    if file_format == "h5ad" or on_disk_zarr:
+        return tmp_path / f"{name}.{file_format}"
+    return MemoryStore()
+
+
+def _adatas_to_stores(
     adatas: Mapping[str, AnnData] | Collection[AnnData],
     tmp_path: Path,
     file_format: str,
-) -> dict[str, Path] | list[Path]:
-    """Gets list of adatas, writes them and returns their paths as zarr."""
-    paths: dict[str, Path] = {}
+    *,
+    on_disk_zarr: bool,
+) -> dict[str, Path | MemoryStore] | list[Path | MemoryStore]:
+    """Gets list of adatas, writes them and returns their stores."""
+    stores: dict[str, Path | MemoryStore] = {}
     for k, v in adatas.items() if isinstance(adatas, Mapping) else enumerate(adatas):
-        p = tmp_path / f"{k}.{file_format}"
-        with as_group(p, mode="a") as f:
+        store = _make_store(tmp_path, file_format, str(k), on_disk_zarr=on_disk_zarr)
+        with as_group(store, mode="a") as f:
             write_elem(f, "/", v)
-        paths[str(k)] = p
-    return paths if isinstance(adatas, Mapping) else list(paths.values())
+        stores[str(k)] = store
+    return stores if isinstance(adatas, Mapping) else list(stores.values())
 
 
 def assert_eq_concat_on_disk(
@@ -94,19 +105,23 @@ def assert_eq_concat_on_disk(
     max_loaded_elems: int | None = None,
     *args,
     merge_strategy: merge.StrategiesLiteral | None = None,
+    on_disk_zarr: bool = False,
     **kwargs,
-):
+) -> Path | MemoryStore:
+    """Concatenate on disk and compare to the in-memory result, returning the output store."""
     # create one from the concat function
     res1 = concat(adatas, *args, merge=merge_strategy, **kwargs)
     # create one from the on disk concat function
-    paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / f"out.{file_format}"
+    stores = _adatas_to_stores(adatas, tmp_path, file_format, on_disk_zarr=on_disk_zarr)
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
-    with as_group(out_name, mode="r") as rg:
+
+    out = _make_store(tmp_path, file_format, "out", on_disk_zarr=on_disk_zarr)
+    concat_on_disk(stores, out, *args, merge=merge_strategy, **kwargs)
+    with as_group(out, mode="r") as rg:
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
+    return out
 
 
 def get_array_type(array_type, axis):
@@ -257,15 +272,19 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
 
 
 def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
-    assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
-    g = zarr.open(tmp_path)
+    out = assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
+    g = zarr.open(out)
     assert g.metadata.zarr_format == 3
 
     check_all_sharded(g)
 
 
 def test_singleton(xxxm_adatas, tmp_path, file_format):
-    assert_eq_concat_on_disk(xxxm_adatas[:1], tmp_path, file_format=file_format)
+    # A single input written to a path takes the `shutil` copy shortcut,
+    # so this test needs the file system.
+    assert_eq_concat_on_disk(
+        xxxm_adatas[:1], tmp_path, file_format=file_format, on_disk_zarr=True
+    )
 
 
 def test_output_dir_exists(tmp_path):
@@ -307,21 +326,22 @@ def test_no_open_h5_file_handles_after_error(tmp_path):
 
 
 def test_write_using_groups(tmp_path, file_format):
-    in_pth = tmp_path / f"in.{file_format}"
-    in_pth2 = tmp_path / f"in2.{file_format}"
-    out_pth = tmp_path / f"out.{file_format}"
+    in_store, in_store2, out_store = (
+        _make_store(tmp_path, file_format, name, on_disk_zarr=False)
+        for name in ["in", "in2", "out"]
+    )
 
     adata = AnnData(X=np.ones((2, 1)))
-    getattr(adata, f"write_{file_format}")(in_pth)
-    getattr(adata, f"write_{file_format}")(in_pth2)
+    getattr(adata, f"write_{file_format}")(in_store)
+    getattr(adata, f"write_{file_format}")(in_store2)
 
     with (
-        as_group(in_pth, mode="r") as f1,
-        as_group(in_pth2, mode="r") as f2,
-        as_group(out_pth, mode="w") as fout,
+        as_group(in_store, mode="r") as f1,
+        as_group(in_store2, mode="r") as f2,
+        as_group(out_store, mode="w") as fout,
     ):
         concat_on_disk([f1, f2], fout)
-    adata_out = getattr(ad, f"read_{file_format}")(out_pth)
+    adata_out = getattr(ad, f"read_{file_format}")(out_store)
     assert_equal(adata_out, concat([adata, adata]))
 
 
