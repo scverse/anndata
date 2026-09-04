@@ -160,7 +160,21 @@ def test_to_writeable_does_not_recurse() -> None:
     # since dict is not supported, it should return unchanged
     assert result is x
 
-@pytest.mark.parametrize(("mk_store", "use_zarrs"), [pytest.param((lambda tmp_path: zarr.Group(tmp_path), True), id="local_group"), pytest.param((lambda tmp_path: tmp_path, True), id="path"), pytest.param((lambda tmp_path: zarr.storage.LocalStore(tmp_path), True), id="local_store"), pytest.param((lambda x: zarr.storage.MemoryStore(), False), id="mem_store"), pytest.param((lambda x: zarr.Group(zarr.storage.MemoryStore()), False), id="mem_group")])
+
+@pytest.mark.parametrize(
+    ("mk_store", "use_zarrs"),
+    [
+        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True), id="local_group"),
+        pytest.param((lambda tmp_path: tmp_path, True), id="path"),
+        pytest.param(
+            (lambda tmp_path: zarr.storage.LocalStore(tmp_path), True), id="local_store"
+        ),
+        pytest.param((lambda x: zarr.storage.MemoryStore(), False), id="mem_store"),
+        pytest.param(
+            (lambda x: zarr.Group(zarr.storage.MemoryStore()), False), id="mem_group"
+        ),
+    ],
+)
 def test_zarr_context(monkeypatch, tmp_path, mk_store, *, use_zarrs: bool):
     if use_zarrs:
         fake_module = types.ModuleType("zarrs")

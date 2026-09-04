@@ -46,8 +46,13 @@ def fast_zarr_context(store: StoreLike):
     # it is the old BatchedCodecPipeline.
     # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
     old_pipeline = zarr.config.get("codec_pipeline.path")
-    use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version("3.3")
-    use_zarrs = find_spec("zarrs") and isinstance(store.store if isintance(store, zarr.Group) else store, str | Path | zarr.storage.LocalStore)
+    use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
+        "3.3"
+    )
+    use_zarrs = find_spec("zarrs") and isinstance(
+        store.store if isintance(store, zarr.Group) else store,
+        str | Path | zarr.storage.LocalStore,
+    )
     if use_zarrs:
         context = zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
     elif use_zarr_fused:
