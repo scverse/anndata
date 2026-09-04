@@ -189,3 +189,5 @@ def test_zarr_context(monkeypatch, tmp_path, mk_store, *, use_zarrs: bool):
             assert "Fused" in pipeline
         else:
             assert "Batched" in pipeline
+    # context works and does not leak state i.e., old pipeline returns
+    assert "Batched" in pipeline
