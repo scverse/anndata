@@ -1,6 +1,6 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format` via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`, with the exception of structured arrays.
+`anndata` now uses the much improved {mod}`zarr` v3 package and format.
 Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.
 Here is a quick guide on some of our learnings so far:
 
