@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
+import dask.array as da
 import h5py
 import numpy as np
 import pandas as pd
@@ -153,3 +154,17 @@ def test_to_writeable_does_not_recurse() -> None:
     result = to_writeable(x)
     # since dict is not supported, it should return unchanged
     assert result is x
+
+
+@pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
+def test_write_chunk_size(tmp_path, output_format) -> None:
+    pth = tmp_path / f"test.{output_format}"
+    adata = ad.AnnData(X=da.ones((6, 6)).rechunk((2, 2)))
+    if output_format == "zarr":
+        adata.write_zarr(pth)
+        store = zarr.open(pth, mode="r")
+        assert store["X"].chunks == adata.X.chunksize
+    else:
+        adata.write_h5ad(pth)
+        with h5py.File(pth, mode="r") as store:
+            assert store["X"].chunks == adata.X.chunksize
