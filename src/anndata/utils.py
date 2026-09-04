@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
     from anndata.typing import AlignedArray
 
+    from ._core._dataframe_backend import DataFrameLike
     from ._core.aligned_mapping import AlignedMapping
     from ._core.raw import Raw
     from ._types import AnnDataElem
@@ -513,7 +514,7 @@ def iter_outer(
 ) -> Generator[
     tuple[
         AnnDataElem,
-        pd.DataFrame | Dataset2D | MutableMapping | AlignedMapping | Raw | None,
+        DataFrameLike | MutableMapping | AlignedMapping | Raw | None,
     ]
 ]:
     """Iterate over key-value pairs of the parent "elems" like aw, obs, varp etc"""

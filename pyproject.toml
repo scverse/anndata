@@ -41,6 +41,7 @@ dependencies = [
     "array-api-compat>=1.7.1",
     "h5py>=3.11",
     "legacy-api-wrap",
+    "narwhals>=2.24",
     "natsort",
     "numpy>=2.1",
     "packaging>=24.2",
@@ -66,6 +67,7 @@ optional-dependencies.lazy = [ "aiohttp", "anndata[dask]", "requests", "xarray>=
 urls.Documentation = "https://anndata.readthedocs.io/"
 urls.Home-page = "https://github.com/scverse/anndata"
 urls.Source = "https://github.com/scverse/anndata"
+entry-points."narwhals.plugins".anndata = "anndata._core.xarray"
 
 [dependency-groups]
 dev = [
@@ -89,6 +91,7 @@ doc = [
     "myst-nb>=1.4",
     "myst-parser",
     "pandas>=3",
+    "pyarrow",
     "scanpydoc[theme,typehints]>=0.17.1",
     "scverse-misc[sphinx]",
     "sphinx>=9.1",
@@ -120,6 +123,7 @@ test-min = [
     "jsonschema",
     "matplotlib",
     "openpyxl",
+    "polars",
     "pooch",
     "pyarrow",
     "pytest",
@@ -252,11 +256,13 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = [
     "array_api_compat.*",
+    "cudf.*",
     "cupy.*",
     "cupyx.*",
     "jax.*",
     "loompy.*",
     "memory_profiler",
+    "modin.*",
     "pooch",
     "sphinx.*",
     "torch.*",

@@ -1,25 +1,47 @@
+"""
+:class:`Dataset2D`, the lazy dataframe AnnData stores as ``obs``/``var``.
+
+Alongside it sit the conversions to pandas (:meth:`Dataset2D.to_memory`) and to dask
+(:meth:`Dataset2D.to_dask_dataframe`), the inverse of the latter, and the narwhals plugin
+handing narwhals whichever of the two applies.
+"""
+
 from __future__ import annotations
 
 import warnings
 from collections.abc import Hashable, Mapping, Sized
 from dataclasses import dataclass
-from functools import wraps
+from functools import partial, wraps
+from itertools import accumulate, pairwise
 from typing import TYPE_CHECKING, overload
 
+import narwhals as nw
 import numpy as np
 import pandas as pd
 
 from anndata._warnings import warn
 
-from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
+from ..compat import DaskArray, XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Iterator, KeysView
-    from typing import Any, Literal
+    from typing import Any, Literal, Self
 
+    from dask.dataframe import DataFrame as DaskDataFrame
+    from narwhals._dask.dataframe import DaskLazyFrame
+    from narwhals._pandas_like.dataframe import PandasLikeDataFrame
+    from narwhals.utils import Version
     from pandas.api.typing.aliases import Scalar
 
     from .._types import Dataset2DIlocIndexer
+
+
+NULLABLE_STRING_ATTR = "is_nullable_string"
+"""Variable attribute marking values standing in for a pandas nullable-string array.
+
+xarray cannot hold such an array, so whoever builds the variable stores the values some
+other way and sets this flag; :meth:`Dataset2D.to_memory` reads it to convert them back.
+"""
 
 
 def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
@@ -99,6 +121,16 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             del self.ds.attrs["is_backed"]
         else:
             self.ds.attrs["is_backed"] = isbacked
+
+    @property
+    def is_lazy(self) -> bool:
+        """Whether any column still defers its data to dask.
+
+        Unlike :attr:`is_backed`, which records where the data came from, this reports
+        whether anything is left to compute: a store-backed dataset whose columns were all
+        read eagerly (as categoricals always are) is not lazy.
+        """
+        return any(isinstance(column.data, DaskArray) for _, column in self._items())
 
     @property
     def index_dim(self) -> str:
@@ -261,7 +293,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         non_nullable_string_cols = {
             col
             for col in all_columns
-            if not self[col].attrs.get("is_nullable_string", False)
+            if not self[col].attrs.get(NULLABLE_STRING_ATTR, False)
         }
         df = self.ds.to_dataframe()
         for col in all_columns - non_nullable_string_cols:
@@ -278,6 +310,65 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             df.index.name = None  # matches old AnnData object
         return df
 
+    def to_dask_dataframe(self) -> DaskDataFrame:
+        """Convert to a :class:`dask.dataframe.DataFrame` without reading anything.
+
+        Partitions follow the chunking of the lazy columns and are read through
+        :meth:`to_memory`, so computing the result gives back what reading the whole thing
+        at once would, index and dtypes included.
+
+        Returns
+        -------
+            :class:`dask.dataframe.DataFrame` deferring to the same storage this does.
+        """
+        import dask.dataframe as dd
+
+        # An empty slice reports every categorical column as having no categories, which
+        # would not match the partitions dask validates against this metadata.
+        meta = _partition_to_memory(self, (0, 0)).astype({
+            name: dtype
+            for name in self.columns
+            if isinstance(dtype := self[name].dtype, pd.CategoricalDtype)
+        })
+        return dd.from_map(
+            partial(_partition_to_memory, self), _partition_bounds(self), meta=meta
+        )
+
+    @classmethod
+    def from_dask_dataframe(cls, frame: DaskDataFrame, *, dim_name: str) -> Self:
+        """Wrap a :class:`dask.dataframe.DataFrame`, reading as little as it takes.
+
+        The inverse of :meth:`to_dask_dataframe`. The axis names have to be in memory,
+        since xarray keeps coordinates there: they come from the ``dim_name`` column when
+        ``frame`` has one and from its index otherwise. Extension-dtype columns are read as
+        well, as xarray can only hold those eagerly and rendering them as dask arrays would
+        flatten categories and nulls into ``object``. Everything else stays deferred.
+
+        Parameters
+        ----------
+        frame
+            The dataframe to wrap.
+        dim_name
+            Name of the index dimension, and the column to take the names from if present.
+
+        Returns
+        -------
+            :class:`Dataset2D` deferring to the same storage ``frame`` does.
+        """
+        if dim_name in frame.columns:
+            index = pd.Index(frame[dim_name].compute().to_numpy(), name=dim_name)
+            frame = frame.drop(columns=[dim_name])
+        else:
+            index = frame.index.compute().rename(dim_name)
+        lengths = tuple(frame.map_partitions(len).compute())
+        variables = {
+            str(column): _dask_variable(
+                frame[column], dim_name=dim_name, lengths=lengths
+            )
+            for column in frame.columns
+        }
+        return cls(XDataset(variables, coords={dim_name: index}))
+
     @property
     def columns(self) -> pd.Index:
         """
@@ -287,10 +378,10 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         -------
         :class:`pandas.Index` that represents the "columns."
         """
-        columns = set(self.ds.keys())
+        columns = list(self.ds.keys())
         index_key = self.ds.attrs.get("indexing_key", None)
-        if index_key is not None:
-            columns.discard(index_key)
+        if index_key in columns:
+            columns.remove(index_key)
         return pd.Index(columns)
 
     @columns.setter
@@ -446,6 +537,46 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             yield col, self[col]
 
 
+def _dask_variable(
+    column: Any,  # noqa: ANN401
+    *,
+    dim_name: str,
+    lengths: tuple[int, ...],
+) -> XVariable:
+    """One column of a dask dataframe, read eagerly only where xarray cannot defer it."""
+    dtype = column.dtype
+    if isinstance(dtype, pd.StringDtype):
+        # xarray rejects the Arrow-backed array pandas gives a string column, so hold it
+        # as NumPy strings and mark it for `to_memory` to convert back.
+        return XVariable(
+            [dim_name],
+            column.compute().to_numpy(dtype=np.dtypes.StringDType(na_object=pd.NA)),
+            attrs={NULLABLE_STRING_ATTR: True},
+        )
+    if pd.api.types.is_extension_array_dtype(dtype):
+        return XVariable([dim_name], column.compute().array)
+    return XVariable([dim_name], column.to_dask_array(lengths=lengths))
+
+
+def _partition_bounds(ds: Dataset2D) -> list[tuple[int, int]]:
+    """Row ranges to read one at a time, following the chunking of the lazy columns."""
+    chunks = next(
+        (
+            column.data.chunks[0]
+            for _, column in ds._items()
+            if isinstance(column.data, DaskArray)
+            and column.data.ndim == 1
+            and not any(np.isnan(chunk) for chunk in column.data.chunks[0])
+        ),
+        (ds.shape[0],),
+    )
+    return list(pairwise(accumulate(chunks, initial=0)))
+
+
+def _partition_to_memory(ds: Dataset2D, bounds: tuple[int, int]) -> pd.DataFrame:
+    return ds.iloc[slice(*bounds)].to_memory()
+
+
 @dataclass(frozen=True)
 class IlocGetter:
     _ds: XDataset
@@ -457,3 +588,57 @@ class IlocGetter:
         if isinstance(idx, tuple) and len(idx) == 1:
             idx = idx[0]
         return Dataset2D(self._ds.isel(**{self._coord: idx}))
+
+
+###################
+# Narwhals plugin
+###################
+
+# Narwhals finds this module through the `narwhals.plugins` entry point in `pyproject.toml`
+# and looks up the three names below on it. Nothing in anndata calls them.
+
+NATIVE_PACKAGE = "anndata"
+
+
+def is_native(native_object: object, /) -> bool:
+    """Return whether ``native_object`` is a :class:`Dataset2D`."""
+    return isinstance(native_object, Dataset2D)
+
+
+class Dataset2DNamespace:
+    """Routes a :class:`Dataset2D` to a compliant frame over one of its conversions.
+
+    Narwhals already supports both dataframes a ``Dataset2D`` converts to, so we hand it a
+    compliant frame over one of those rather than reimplementing the protocol.
+    :attr:`~Dataset2D.is_lazy` picks which: a lazy dataset goes through
+    :meth:`~Dataset2D.to_dask_dataframe` and becomes a :class:`narwhals.LazyFrame`, so
+    wrapping it reads nothing, while an in-memory one goes through
+    :meth:`~Dataset2D.to_memory` and becomes a :class:`narwhals.DataFrame` keeping its row
+    labels as the index, recoverable via :func:`narwhals.maybe_get_index`.
+
+    Both ``from_native`` constructors read ``_implementation`` and ``_version`` off their
+    ``context``, so this namespace doubles as that context.
+    """
+
+    _implementation: nw.Implementation = nw.Implementation.PANDAS
+
+    def __init__(self, *, version: Version) -> None:
+        self._version = version
+
+    def from_native(
+        self, native_object: Dataset2D, /
+    ) -> PandasLikeDataFrame | DaskLazyFrame:
+        if native_object.is_lazy:
+            from narwhals._dask.dataframe import DaskLazyFrame
+
+            return DaskLazyFrame.from_native(
+                native_object.to_dask_dataframe(), context=self
+            )
+        from narwhals._pandas_like.dataframe import PandasLikeDataFrame
+
+        return PandasLikeDataFrame.from_native(native_object.to_memory(), context=self)
+
+
+def __narwhals_namespace__(version: Version) -> Dataset2DNamespace:
+    """Return the compliant namespace narwhals uses to wrap a :class:`Dataset2D`."""
+    return Dataset2DNamespace(version=version)
