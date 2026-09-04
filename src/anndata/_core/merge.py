@@ -604,6 +604,10 @@ class Reindexer:
     ):
         if fill_value is None:
             fill_value = np.nan
+        # Reindexing with missing values promotes numpy bool columns to object,
+        # which cannot be written to disk, so use pandas' nullable boolean dtype instead.
+        if isinstance(el, pd.DataFrame) and -1 in self.idx:
+            el = np_bool_to_pd_bool_array(el.copy())
         # axis=1 is not supported for Dataset2D, but it will throw an error
         axis = cast("Literal[0]", axis)
         return el.reindex(self.new_idx, axis=axis, fill_value=fill_value)
@@ -1226,7 +1230,7 @@ def concat_pairwise_mapping(
 def merge_dataframes(
     dfs: Iterable[pd.DataFrame], new_index, merge_strategy=merge_unique
 ) -> pd.DataFrame:
-    dfs = [df.reindex(index=new_index) for df in dfs]
+    dfs = [Reindexer(df.index, new_index)(df, axis=0) for df in dfs]
     # New dataframe with all shared data
     new_df = pd.DataFrame(merge_strategy(dfs), index=new_index)
     return new_df

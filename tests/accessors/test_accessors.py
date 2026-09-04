@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import jsonschema
 import pandas as pd
 import pytest
+from referencing import Registry, Resource
 
 from anndata import AnnData
 from anndata.acc import A
@@ -17,13 +18,25 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Any, Literal
 
-    from anndata.acc import AdRef, MapAcc, MultiMapAcc
+    from anndata.acc import AdRef, GraphAcc, LayerAcc, MapAcc, MultiAcc, MultiMapAcc
+
+    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc
 
 
 type AdRefSer = Sequence[str | int | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
+
+REGISTRY = Resource.from_contents(SCHEMA) @ Registry()
+"""Resolves the schema’s `$id` to its contents, so JSON pointers into it work offline."""
+
+
+def validate(data: AdRefSer, pointer: str = "") -> None:
+    """Validate against the schema or a JSON pointer into it, e.g. `/$defs/ref`."""
+    schema = {"$ref": f"{SCHEMA['$id']}#{pointer}"}
+    jsonschema.validate(data, schema, registry=REGISTRY)
+
 
 PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.X[:, :], ["layers", None, None, None]),
@@ -81,7 +94,58 @@ def test_serialization(
 
 
 def test_serialization_schema(ad_serialized: AdRefSer) -> None:
-    jsonschema.validate(ad_serialized, SCHEMA)
+    validate(ad_serialized)
+    validate(ad_serialized, "/$defs/ref")
+    with pytest.raises(jsonschema.ValidationError):
+        validate(ad_serialized, "/$defs/acc")
+
+
+MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
+    (A.X, ["layers", None]),
+    (A.layers["a"], ["layers", "a"]),
+    (A.obsm["umap"], ["obsm", "umap"]),
+    (A.varm["PCs"], ["varm", "PCs"]),
+    (A.obsp["conn"], ["obsp", "conn"]),
+    (A.varp["cons"], ["varp", "cons"]),
+]
+
+
+@pytest.mark.parametrize(
+    ("acc", "serialized"), MATRICES, ids=[str(m[0]) for m in MATRICES]
+)
+@pytest.mark.parametrize("vec", [None, False], ids=["vec=None", "vec=False"])
+def test_serialization_matrix(
+    acc: MatrixAcc, serialized: AdRefSer, *, vec: Literal[False] | None
+) -> None:
+    validate(serialized)
+    validate(serialized, "/$defs/acc")
+    with pytest.raises(jsonschema.ValidationError):
+        validate(serialized, "/$defs/ref")
+    assert A.to_json(acc) == serialized
+    assert A.from_json(serialized, vec=vec) == acc
+
+
+@pytest.mark.parametrize(
+    ("serialized", "vec"),
+    [
+        pytest.param(["layers", None], True, id="x-matrix-as-vec"),
+        pytest.param(["layers", None, None, None], False, id="x-vec-as-matrix"),
+        pytest.param(["obs", "type"], False, id="obs-as-matrix"),
+        pytest.param(["obsm", "umap"], True, id="obsm-matrix-as-vec"),
+        pytest.param(["obsm", "umap", 0], False, id="obsm-vec-as-matrix"),
+        pytest.param(["varp", "cons"], True, id="varp-matrix-as-vec"),
+    ],
+)
+def test_from_json_vec_mismatch(
+    serialized: AdRefSer, *, vec: Literal[True, False]
+) -> None:
+    with pytest.raises(ValueError, match="vec"):
+        A.from_json(serialized, vec=vec)
+
+
+def test_to_json_unsupported() -> None:
+    with pytest.raises(TypeError, match=r"Unsupported accessor A\.obs"):
+        A.to_json(A.obs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -150,6 +214,8 @@ def test_match(*, obj: object, expected: object) -> None:
         pytest.param(lambda a: a.obsm[0], id="obsms-nostr"),
         pytest.param(lambda a: a.obsm["a"][:3, 0], id="obsm-partslice"),
         pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
+        pytest.param(lambda a: a.obsm["a"][True], id="obsm-bool"),
+        pytest.param(lambda a: a.obsm["a"][[True, False]], id="obsm-bool-list"),
         pytest.param(lambda a: a.varp[0], id="varps-nostr"),
         pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
         pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),
@@ -230,6 +296,8 @@ def test_special[C](
         A.layers["a"],
         A.obsm,
         A.obsm["umap"],
+        A.obsm["umap"][-1],  # negative indices count from the end, as in numpy
+        A.obsm["umap"][-2],
         A.varp,
         A.varp["cons"],
     ],
@@ -246,6 +314,7 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.layers["a"][:, "cell-3"],  # not a var name
         A.layers["b"],
         A.obsm["umap"][:, 3],
+        A.obsm["umap"][:, -3],
         A.obsm["b"],
         A.varm,
         A.obsp,
@@ -343,6 +412,18 @@ def test_resolve_matrix(
 def test_resolve_vec_mismatch(spec: str, *, vec: Literal[True, False]) -> None:
     with pytest.raises(ValueError, match="vec"):
         A.resolve(spec, vec=vec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "pat"),
+    [
+        pytest.param("Xenon", r"Unknown accessor name", id="x-like"),
+        pytest.param("Xenon[:,:]", r"Unknown accessor name", id="x-vec-like"),
+    ],
+)
+def test_resolve_errors(spec: str, *, pat: str) -> None:
+    with pytest.raises(ValueError, match=pat):
+        A.resolve(spec)
 
 
 @pytest.mark.parametrize(

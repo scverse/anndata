@@ -57,7 +57,14 @@ def _parse[P: AdRef](
 ) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P]:
     if spec.startswith("X"):
         _check_vec(spec, vec=vec, actual=(do_vec := "[" in spec))
-        return _parse_path_2d(lambda _: a.X, spec) if do_vec else a.X
+
+        def _get_x(name: str, /) -> LayerAcc[P]:
+            if name != "X":
+                msg = f"Unknown accessor name {name!r}"
+                raise ValueError(msg)
+            return a.X
+
+        return _parse_path_2d(_get_x, spec) if do_vec else _get_x(spec)
     if "." not in spec:
         msg = (
             f"Cannot parse accessor {spec!r} that isn’t period-separated, "
@@ -96,7 +103,7 @@ def _parse_dotted[P: AdRef](
     raise AssertionError(msg)  # pragma: no cover
 
 
-def _check_vec(spec: str, *, vec: bool | None, actual: bool) -> None:
+def _check_vec(spec: object, *, vec: bool | None, actual: bool) -> None:
     if vec is not None and vec != actual:
         kind = "a vector/`AdRef`" if actual else "a whole container"
         msg = f"Accessor {spec!r} refers to {kind}, but {vec=} was requested"
