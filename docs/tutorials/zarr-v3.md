@@ -39,7 +39,7 @@ There are two ways of opening remote `zarr` stores from the `zarr-python` packag
 [`obstore` claims] to be more performant out-of-the-box, but notes that this claim has not been benchmarked with the `uvloop` event loop, which itself claims to be 2× more performant than the default event loop for `python`.
 
 {mod}`zarr` ships a `FusedCodecPipeline` that is likely *much* (~2-4x) faster for some use-cases, like small chunks, and is no worse than the current default.
-We strongly encourage users to switch to it via `zarr.config.set({"codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"})` for remote data. If {mod}`zarr` is new enough, it will be used *by default* for {func}`~anndata.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
+We strongly encourage users to switch to it via `zarr.config.set({"codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"})` for remote data. If {mod}`zarr` is new enough, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
 
 ## Local data
 
@@ -96,7 +96,7 @@ zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
 However, this pipeline is not compatible with all types of zarr store, especially remote stores and there are limitations on where rust can give a performance boost for indexing.
 We therefore recommend this pipeline for writing full datasets and reading contiguous regions of said written data locally.
-If installed, it will be used *by default* for {func}`~anndata.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
+If installed, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
 
 ## Codecs
 
