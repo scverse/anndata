@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
-    from zarr.core.buffer import BufferPrototype
+    from zarr.core.buffer import Buffer, BufferPrototype
 
     from anndata.compat import CupyCSMatrix
 
@@ -1214,6 +1214,18 @@ class AccessTrackingStore(LocalStore):
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+    def get_sync(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> Buffer | None:
+        if Version(version("zarr")) < Version("3.3"):  # pragma: no-cover
+            msg = "zarr-python does not implement `Store.get_sync` below 3.3."
+            raise NotImplementedError(msg)
+        self._check_and_track_key(key)
+        return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 
     async def get(
         self,
