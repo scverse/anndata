@@ -1,4 +1,4 @@
-name: autofix.ci
+name: CI
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
       - &setup-uv
-        uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
       - id: get-envs
@@ -121,32 +121,16 @@ jobs:
           python -m build --sdist --wheel .
           twine check dist/*
 
-  lint:
-    name: Pre-commit checks
-    runs-on: ubuntu-latest
-    permissions: {}
-    steps:
-      - *clone
-      - *setup-uv
-      - run: uv tool install hatch
-      - name: Run pre-commit hooks
-        run: uvx prek run --all-files --show-diff-on-failure --color=always
-        env:
-          SKIP: no-commit-to-branch
-      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
-        if: ${{ !cancelled() }}
-
   check:
     if: always()
     needs:
       - get-environments
       - test
       - build
-      - lint
     permissions:
       actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}
