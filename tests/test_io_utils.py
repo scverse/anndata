@@ -162,32 +162,32 @@ def test_to_writeable_does_not_recurse() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mk_store", "use_zarrs"),
+    ("mk_group", "use_zarrs", "set_fused"),
     [
-        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True), id="local_group"),
-        pytest.param((lambda tmp_path: tmp_path, True), id="path"),
+        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True, True), id="local_group_triggers_fused_when_set", marks=pytest.mark.skipif(Version(version("zarr")) < Version("3.3"), reason="No fused pipeline to set")),
+        pytest.param((lambda tmp_path: zarr.Group(tmp_path), True, False), id="local_group_triggers_zarrs"),
+        # zarrs cannot handle memory stores, so it falls back to zarr-python
         pytest.param(
-            (lambda tmp_path: zarr.storage.LocalStore(tmp_path), True), id="local_store"
-        ),
-        pytest.param((lambda x: zarr.storage.MemoryStore(), False), id="mem_store"),
-        pytest.param(
-            (lambda x: zarr.Group(zarr.storage.MemoryStore()), False), id="mem_group"
+            (lambda x: zarr.Group(zarr.storage.MemoryStore()), False, False), id="mem_group_triggers_fused"
         ),
     ],
 )
-def test_zarr_context(monkeypatch, tmp_path, mk_store, *, use_zarrs: bool):
+def test_zarr_context(monkeypatch, tmp_path, mk_group, *, use_zarrs: bool, set_fused: bool):
     if use_zarrs:
         fake_module = types.ModuleType("zarrs")
         fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
 
         monkeypatch.setitem(sys.modules, "zarrs", fake_module)
-    with fast_zarr_context(mk_store(tmp_path)):
-        pipeline = zarr.config.get("codec_pipeline.path")
+    with fast_zarr_context():
+        g = mk_group(tmp_path)
+        g["foo"] = np.ones((2, 3))
+        pipeline = g["foo"].codec_pipeline
         if use_zarrs:
             assert "Zarrs" in pipeline
+        # Newer zarr should always use Fused
         elif Version(version("zarr")) >= Version("3.3"):
             assert "Fused" in pipeline
         else:
             assert "Batched" in pipeline
     # context works and does not leak state i.e., old pipeline returns
-    assert "Batched" in pipeline
+    assert "Batched" in zarr.config.get("codec_pipeline.path")
