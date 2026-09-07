@@ -11,6 +11,7 @@ from importlib.util import find_spec
 from io import BytesIO
 from string import ascii_letters
 from typing import TYPE_CHECKING, TypedDict, overload
+from uuid import uuid4
 
 import h5py
 import numpy as np
@@ -1244,16 +1245,24 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 
+@overload
+def in_memory_store(diskfmt: Literal["h5ad"]) -> h5py.File: ...
+@overload
+def in_memory_store(diskfmt: Literal["zarr"]) -> MemoryStore: ...
 def in_memory_store(diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | MemoryStore:
     """Create a store that never touches the file system."""
     if diskfmt == "zarr":
         return MemoryStore()
-    # no subclass to hold the buffer: our IO registry dispatches on the exact type
-    f = h5py.File(buffer := BytesIO(), "w")
-    f.buffer = buffer  # type: ignore[attr-defined]  # h5py doesn’t hand it back
-    return f
+    if Version(version("h5py")) >= Version("3.13"):
+        return h5py.File.in_memory()
+    # the name is never used on disk, but has to be unique
+    return h5py.File(f"{uuid4()}.h5ad", "w", driver="core", backing_store=False)
 
 
+@overload
+def open_store(store: h5py.File, /, mode: Literal["r", "a"] = "a") -> h5py.File: ...
+@overload
+def open_store(store: MemoryStore, /, mode: Literal["r", "a"] = "a") -> zarr.Group: ...
 def open_store(
     store: h5py.File | MemoryStore, /, mode: Literal["r", "a"] = "a"
 ) -> h5py.File | zarr.Group:
@@ -1269,10 +1278,8 @@ def open_store(
     # h5py normalizes "a" to "r+"
     if store.mode == ("r+" if mode == "a" else mode):
         return store
-    store.flush()  # the buffer is a valid file image only once flushed
-    buffer = getattr(store, "buffer", None)
-    assert isinstance(buffer, BytesIO)
-    return h5py.File(buffer, mode)
+    store.flush()  # the image is only a valid file once flushed
+    return h5py.File(BytesIO(store.id.get_file_image()), mode)
 
 
 class AccessTrackingStore(WrapperStore[Store]):

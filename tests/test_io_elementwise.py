@@ -34,6 +34,7 @@ from anndata.tests.helpers import (
     assert_equal,
     check_all_sharded,
     gen_adata,
+    in_memory_store,
     open_store,
     visititems_zarr,
 )
@@ -210,9 +211,7 @@ def create_sparse_store[G: h5py.Group | zarr.Group](
             id="zarr_dense_array",
         ),
         pytest.param(
-            create_dense_store(
-                h5py.File("test1.h5", mode="w", driver="core", backing_store=False)
-            )["X"],
+            create_dense_store(in_memory_store("h5ad"))["X"],
             "array",
             id="h5_dense_array",
         ),
