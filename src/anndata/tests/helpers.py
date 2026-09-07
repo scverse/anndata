@@ -1263,12 +1263,13 @@ def open_store(
 
         return (
             open_write_group(store, mode=mode)
-            if mode == "a"
+            if mode == "a"  # unlike "r+", creates group if necessary
             else zarr.open_group(store, mode=mode)
         )
-    if mode == store.mode:
+    # h5py normalizes "a" to "r+"
+    if store.mode == ("r+" if mode == "a" else mode):
         return store
-    store.flush()
+    store.flush()  # the buffer is a valid file image only once flushed
     buffer = getattr(store, "buffer", None)
     assert isinstance(buffer, BytesIO)
     return h5py.File(buffer, mode)
