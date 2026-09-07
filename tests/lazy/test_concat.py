@@ -19,6 +19,7 @@ pytestmark = pytest.mark.skipif(not find_spec("xarray"), reason="xarray not inst
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
+    from pathlib import Path
     from typing import Literal
 
     from numpy.typing import NDArray
@@ -245,12 +246,19 @@ def test_concat_to_memory_var(
 @pytest.mark.xdist_group("dask")
 @pytest.mark.dask_distributed
 def test_concat_data_with_cluster_to_memory(
-    adata_remote: AnnData, join: Join_T, local_cluster_addr: str
+    *,
+    adata_remote_orig_path: Path,
+    join: Join_T,
+    local_cluster_addr: str,
+    load_annotation_index: bool,
 ) -> None:
     import dask.distributed as dd
 
+    remote = read_lazy(
+        adata_remote_orig_path, load_annotation_index=load_annotation_index
+    )
     with dd.Client(local_cluster_addr):
-        ad.concat([adata_remote, adata_remote], join=join).to_memory()
+        ad.concat([remote, remote], join=join).to_memory()
 
 
 @pytest.mark.parametrize(

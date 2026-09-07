@@ -24,6 +24,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Literal
 
     import h5py
@@ -105,6 +106,22 @@ def adata_remote(
 ) -> AnnData:
     orig_store, _ = adata_remote_orig_with_store
     return read_lazy(orig_store, load_annotation_index=load_annotation_index)
+
+
+@pytest.fixture(scope="session")
+def adata_remote_orig_path(
+    tmp_path_factory: pytest.TempPathFactory,
+    adata_remote_orig_with_store: tuple[h5py.File | MemoryStore, AnnData],
+    diskfmt: Literal["h5ad", "zarr"],
+) -> Path:
+    """On-disk copy: separate processes (e.g. dask workers) can’t see in-memory stores."""
+    _, orig = adata_remote_orig_with_store
+    orig_path = tmp_path_factory.mktemp("orig") / f"orig.{diskfmt}"
+    with ad.settings.override(allow_write_nullable_strings=True):
+        getattr(ad.io, f"write_{diskfmt}")(
+            orig_path, orig, convert_strings_to_categoricals=False
+        )
+    return orig_path
 
 
 @pytest.fixture
