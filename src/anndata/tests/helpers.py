@@ -8,9 +8,9 @@ from collections.abc import Mapping
 from functools import partial, singledispatch, wraps
 from importlib.metadata import version
 from importlib.util import find_spec
+from io import BytesIO
 from string import ascii_letters
 from typing import TYPE_CHECKING, TypedDict, overload
-from uuid import uuid4
 
 import h5py
 import numpy as np
@@ -1248,19 +1248,30 @@ def in_memory_store(diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | MemoryStore
     """Create a store that never touches the file system."""
     if diskfmt == "zarr":
         return MemoryStore()
-    if Version(version("h5py")) >= Version("3.13"):
-        return h5py.File.in_memory()
-    # the name is never used on disk, but has to be unique
-    return h5py.File(f"{uuid4()}.h5ad", "w", driver="core", backing_store=False)
+    # no subclass to hold the buffer: our IO registry dispatches on the exact type
+    f = h5py.File(buffer := BytesIO(), "w")
+    f.buffer = buffer  # type: ignore[attr-defined]  # h5py doesn’t hand it back
+    return f
 
 
-def open_write_store(store: h5py.File | MemoryStore) -> h5py.File | zarr.Group:
-    """Open a store from :func:`in_memory_store` as a writable group."""
-    from anndata._io.zarr import open_write_group
+def open_store(
+    store: h5py.File | MemoryStore, /, mode: Literal["r", "a"] = "a"
+) -> h5py.File | zarr.Group:
+    """Open a store from :func:`in_memory_store` as a group, re-wrapping it if `mode` doesn’t match."""
+    if isinstance(store, MemoryStore):
+        from anndata._io.zarr import open_write_group
 
-    if isinstance(store, h5py.File):
+        return (
+            open_write_group(store, mode=mode)
+            if mode == "a"
+            else zarr.open_group(store, mode=mode)
+        )
+    if mode == store.mode:
         return store
-    return open_write_group(store, mode="a")
+    store.flush()
+    buffer = getattr(store, "buffer", None)
+    assert isinstance(buffer, BytesIO)
+    return h5py.File(buffer, mode)
 
 
 class AccessTrackingStore(WrapperStore[Store]):

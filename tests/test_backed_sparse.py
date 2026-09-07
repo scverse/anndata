@@ -24,7 +24,7 @@ from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import (
     AccessTrackingStore,
     assert_equal,
-    open_write_store,
+    open_store,
     subset_func,
 )
 from anndata.utils import get_literal_members
@@ -305,7 +305,7 @@ def test_dataset_append_memory(
 ):
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
     assert isinstance(diskmtx, BaseCompressedSparseDataset)
@@ -322,7 +322,7 @@ def test_append_array_cache_bust(
     diskfmt_store: h5py.File | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ):
     a = sparse.random(100, 100, format="csr")
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.io.write_elem(f, "mtx_2", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
@@ -359,7 +359,7 @@ def test_read_array(
     a = sparse_format(sparse.random(100, 100))
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
     ad.settings.use_sparse_array_on_read = True
@@ -384,7 +384,7 @@ def test_dataset_append_disk(
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "a", a)
     ad.io.write_elem(f, "b", b)
     a_disk = sparse_dataset(subgroup(f, "a"))
@@ -610,7 +610,7 @@ def test_reset_group(
 ):
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(subgroup(f, "base"))
@@ -662,7 +662,7 @@ def test_anndata_sparse_compat(
 ):
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(subgroup(f, "/")))
@@ -674,7 +674,7 @@ def test_write(
 ):
     base = sparse.random(10, 10, format="csr")
 
-    f = open_write_store(diskfmt_store)
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "a_sparse_matrix", base)
     adata = ad.AnnData(sparse_dataset(subgroup(f, "a_sparse_matrix")))

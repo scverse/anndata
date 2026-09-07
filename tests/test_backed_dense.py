@@ -11,7 +11,7 @@ import zarr
 
 from anndata import AnnData
 from anndata.io import write_elem
-from anndata.tests.helpers import assert_equal, open_write_store
+from anndata.tests.helpers import assert_equal, open_store
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def file(diskfmt_store: h5py.File | MemoryStore) -> h5py.File | zarr.Group:
-    return open_write_store(diskfmt_store)
+    return open_store(diskfmt_store)
 
 
 @pytest.mark.parametrize("assign", ["init", "assign"])

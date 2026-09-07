@@ -34,6 +34,7 @@ from anndata.tests.helpers import (
     assert_equal,
     check_all_sharded,
     gen_adata,
+    open_store,
     visititems_zarr,
 )
 
@@ -854,16 +855,11 @@ def test_io_pd_cow(
 
 
 def test_read_sparse_array(
-    diskfmt_store: Path | MemoryStore,
+    diskfmt_store: h5py.File | MemoryStore,
     sparse_format: Literal["csr", "csc"],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
     a = sparse.random(100, 100, format=sparse_format)
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
