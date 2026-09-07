@@ -87,14 +87,14 @@ class CategoricalArray[K: (h5py.Dataset, zarr.Array)](XBackendArray):
     _codes: ZarrOrHDF5Wrapper[K]
     _categories: K
     shape: tuple[int, ...]
-    base_path_or_zarr_group: Path | zarr.Group
+    base_path_or_zarr_group: Path | h5py.File | zarr.Group
     elem_name: str
 
     def __init__(
         self,
         codes: K,
         categories: K,
-        base_path_or_zarr_group: Path | zarr.Group,
+        base_path_or_zarr_group: Path | h5py.File | zarr.Group,
         elem_name: str,
         *args,
         ordered: bool,
@@ -141,7 +141,7 @@ class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
     _values: ZarrOrHDF5Wrapper[K]
     _dtype_str: Literal["nullable-integer", "nullable-boolean", "nullable-string-array"]
     shape: tuple[int, ...]
-    base_path_or_zarr_group: Path | zarr.Group
+    base_path_or_zarr_group: Path | h5py.File | zarr.Group
     elem_name: str
 
     def __init__(
@@ -151,7 +151,7 @@ class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
             "nullable-integer", "nullable-boolean", "nullable-string-array"
         ],
         mask: K,
-        base_path_or_zarr_group: Path | zarr.Group,
+        base_path_or_zarr_group: Path | h5py.File | zarr.Group,
         elem_name: str,
     ):
         self._mask = ZarrOrHDF5Wrapper(mask)

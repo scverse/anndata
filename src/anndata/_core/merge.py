@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
+    import h5py
     import zarr
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
@@ -1295,7 +1296,7 @@ def make_dask_col_from_extension_dtype(
     from anndata.compat import xarray as xr
     from anndata.experimental import read_elem_lazy
 
-    base_path_or_zarr_group: Path | zarr.Group | None = col.attrs.get(
+    base_path_or_zarr_group: Path | h5py.File | zarr.Group | None = col.attrs.get(
         "base_path_or_zarr_group"
     )
     elem_name: str | None = col.attrs.get("elem_name")

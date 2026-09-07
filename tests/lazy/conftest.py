@@ -20,11 +20,13 @@ from anndata.tests.helpers import (
     as_dense_dask_array,
     gen_adata,
     gen_typed_df,
+    in_memory_store,
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
     from typing import Literal
+
+    import h5py
 
 
 @pytest.fixture(
@@ -75,16 +77,10 @@ def simple_subset_func(request):
 
 @pytest.fixture(scope="session")
 def adata_remote_orig_with_store(
-    tmp_path_factory,
-    diskfmt: str,
-    mtx_format,
-    worker_id: str = "serial",
-) -> tuple[Path | MemoryStore, AnnData]:
+    diskfmt: Literal["h5ad", "zarr"], mtx_format
+) -> tuple[h5py.File | MemoryStore, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
-    if diskfmt == "h5ad":
-        orig_store = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig_{worker_id}.h5ad"
-    else:
-        orig_store = MemoryStore()
+    orig_store = in_memory_store(diskfmt)
     orig = gen_adata(
         (100, 110),
         mtx_format,
@@ -103,7 +99,7 @@ def adata_remote_orig_with_store(
 
 @pytest.fixture
 def adata_remote(
-    adata_remote_orig_with_store: tuple[Path | MemoryStore, AnnData],
+    adata_remote_orig_with_store: tuple[h5py.File | MemoryStore, AnnData],
     *,
     load_annotation_index: bool,
 ) -> AnnData:
@@ -113,7 +109,7 @@ def adata_remote(
 
 @pytest.fixture
 def adata_orig(
-    adata_remote_orig_with_store: tuple[Path | MemoryStore, AnnData],
+    adata_remote_orig_with_store: tuple[h5py.File | MemoryStore, AnnData],
 ) -> AnnData:
     _, orig = adata_remote_orig_with_store
     return orig

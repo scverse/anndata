@@ -18,16 +18,21 @@ else:
 
 from filelock import FileLock
 from scipy import sparse
-from zarr.storage import MemoryStore
 
 import anndata as ad
-from anndata.tests.helpers import subset_func  # noqa: F401
+from anndata.tests.helpers import (
+    in_memory_store,
+    subset_func,  # noqa: F401
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
     from types import EllipsisType
     from typing import Literal
+
+    import h5py
+    from zarr.storage import MemoryStore
 
 
 @pytest.fixture
@@ -76,26 +81,14 @@ def diskfmt2(
         yield "h5ad"
 
 
-def _store_for(tmp_path: Path, diskfmt: str, name: str) -> Path | MemoryStore:
-    """Where to write: a file path for `h5ad`, an in-memory store for `zarr`.
-
-    Tests should not touch the file system unless that is what they test.
-    """
-    return tmp_path / f"{name}.h5ad" if diskfmt == "h5ad" else MemoryStore()
+@pytest.fixture
+def diskfmt_store(diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | MemoryStore:
+    return in_memory_store(diskfmt)
 
 
 @pytest.fixture
-def diskfmt_store(
-    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
-) -> Path | MemoryStore:
-    return _store_for(tmp_path, diskfmt, "test")
-
-
-@pytest.fixture
-def diskfmt2_store(
-    tmp_path: Path, diskfmt2: Literal["h5ad", "zarr"]
-) -> Path | MemoryStore:
-    return _store_for(tmp_path, diskfmt2, "test2")
+def diskfmt2_store(diskfmt2: Literal["h5ad", "zarr"]) -> h5py.File | MemoryStore:
+    return in_memory_store(diskfmt2)
 
 
 @pytest.fixture(

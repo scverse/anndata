@@ -10,6 +10,7 @@ from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
 from typing import TYPE_CHECKING, TypedDict, overload
+from uuid import uuid4
 
 import h5py
 import numpy as np
@@ -22,7 +23,7 @@ from pandas.core.arrays.integer import IntegerDtype
 from scipy import sparse
 from zarr.abc.store import Store
 from zarr.core.buffer import default_buffer_prototype
-from zarr.storage import WrapperStore
+from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -1241,6 +1242,25 @@ DASK_CUPY_MATRIX_PARAMS = [
         as_cupy_sparse_dask_array, id="cupy_csr_dask_array", marks=pytest.mark.gpu
     ),
 ]
+
+
+def in_memory_store(diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | MemoryStore:
+    """Create a store that never touches the file system."""
+    if diskfmt == "zarr":
+        return MemoryStore()
+    if Version(version("h5py")) >= Version("3.13"):
+        return h5py.File.in_memory()
+    # the name is never used on disk, but has to be unique
+    return h5py.File(f"{uuid4()}.h5ad", "w", driver="core", backing_store=False)
+
+
+def open_write_store(store: h5py.File | MemoryStore) -> h5py.File | zarr.Group:
+    """Open a store from :func:`in_memory_store` as a writable group."""
+    from anndata._io.zarr import open_write_group
+
+    if isinstance(store, h5py.File):
+        return store
+    return open_write_group(store, mode="a")
 
 
 class AccessTrackingStore(WrapperStore[Store]):

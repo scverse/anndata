@@ -35,11 +35,16 @@ if TYPE_CHECKING:
     ]
 
 
+def h5_path_or_file(elem: h5py.Dataset | h5py.Group, /) -> Path | h5py.File:
+    """Prefer a path: dask tasks re-open the file (see :issue:`1105`), which in-memory files can’t."""
+    return path if (path := Path(filename(elem))).is_file() else elem.file
+
+
 @overload
 @contextmanager
 def maybe_open_h5(
     path: Path | h5py.File, /, elem_name: str
-) -> Generator[h5py.File]: ...
+) -> Generator[h5py.Dataset | h5py.Group]: ...
 @overload
 @contextmanager  # D actually accepts anything, but that’d confuse the type checker
 def maybe_open_h5[D: (zarr.Group, CSRDataset, CSCDataset)](
@@ -50,7 +55,10 @@ def maybe_open_h5(
     path_or_other: Path | h5py.File | zarr.Group | CSRDataset | CSCDataset,
     /,
     elem_name: str,
-) -> Generator[h5py.File | zarr.Group | CSRDataset | CSCDataset]:
+) -> Generator[h5py.Dataset | h5py.Group | zarr.Group | CSRDataset | CSCDataset]:
+    if isinstance(path_or_other, h5py.File):  # in-memory: reuse and don’t close
+        yield path_or_other[elem_name]
+        return
     if not isinstance(path_or_other, Path):
         yield path_or_other
         return
@@ -80,7 +88,7 @@ def compute_chunk_layout_for_axis_size(
 
 
 def make_dask_chunk(
-    path_or_sparse_dataset: Path | CSRDataset | CSCDataset,
+    path_or_sparse_dataset: Path | h5py.File | CSRDataset | CSCDataset,
     elem_name: str,
     block_info: BlockInfo | None = None,
 ) -> CSMatrix | CSArray | np.typing.NDArray:
@@ -94,7 +102,7 @@ def make_dask_chunk(
 
 
 def _compute_chunk(
-    f: h5py.File | CSRDataset | CSCDataset, block_info: BlockInfo
+    f: h5py.Dataset | h5py.Group | CSRDataset | CSCDataset, block_info: BlockInfo
 ) -> CSMatrix | CSArray | np.typing.NDArray:
     # See https://github.com/scverse/anndata/pull/2005 for why
     # should_cache_indptr is False.
@@ -137,9 +145,9 @@ def read_sparse_as_dask(
 ) -> DaskArray:
     import dask.array as da
 
-    path_or_sparse_dataset: Path | CSRDataset | CSCDataset
+    path_or_sparse_dataset: Path | h5py.File | CSRDataset | CSCDataset
     if isinstance(elem, h5py.Group):
-        path_or_sparse_dataset = Path(filename(elem))
+        path_or_sparse_dataset = h5_path_or_file(elem)
         dtype = elem["data"].dtype
     else:
         path_or_sparse_dataset = ad.io.sparse_dataset(elem, should_cache_indptr=False)
@@ -221,7 +229,7 @@ def read_h5_array(
 ) -> DaskArray:
     import dask.array as da
 
-    path = Path(elem.file.filename)
+    path = h5_path_or_file(elem)
     elem_name: str = elem.name
     shape = tuple(elem.shape)
     dtype = elem.dtype
@@ -352,7 +360,7 @@ def read_categorical(
     del chunks  # ignored when reading groups
 
     base_path_or_zarr_group = (
-        Path(filename(elem)) if isinstance(elem, h5py.Group) else elem
+        h5_path_or_file(elem) if isinstance(elem, h5py.Group) else elem
     )
     elem_name = get_elem_name(elem)
     attrs: Mapping[str, Any] = elem.attrs
@@ -380,7 +388,7 @@ def read_nullable(
     del chunks  # ignored when reading groups
 
     base_path_or_zarr_group = (
-        Path(filename(elem)) if isinstance(elem, h5py.Group) else elem
+        h5_path_or_file(elem) if isinstance(elem, h5py.Group) else elem
     )
     elem_name = get_elem_name(elem)
     if encoding_type == "nullable-string-array" and isinstance(elem, h5py.Group):

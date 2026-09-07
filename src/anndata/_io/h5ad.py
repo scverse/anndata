@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import MutableMapping
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
@@ -39,6 +40,7 @@ from .utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Container, Mapping, Sequence
+    from contextlib import AbstractContextManager
     from os import PathLike
     from typing import Any, Literal
 
@@ -47,9 +49,19 @@ if TYPE_CHECKING:
     from ..typing import RWAble
 
 
+def _open_h5(
+    file_or_path: h5py.File | PathLike[str] | str, mode: Literal["a", "r", "w"]
+) -> tuple[Path | None, AbstractContextManager[h5py.File]]:
+    """Get the file to use and its path, if any."""
+    if isinstance(file_or_path, h5py.File):
+        return None, nullcontext(file_or_path)  # the caller owns it, don’t close it
+    path = Path(file_or_path)
+    return path, h5py.File(path, mode)
+
+
 @no_write_dataset_2d
 def write_h5ad(
-    filepath: PathLike[str] | str,
+    file_or_path: h5py.File | PathLike[str] | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
@@ -76,16 +88,16 @@ def write_h5ad(
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
-    filepath = Path(filepath)
-    mode = "a" if adata.isbacked else "w"
+    mode: Literal["a", "w"] = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
 
-    with h5py.File(filepath, mode) as f:
+    file_path, ctx = _open_h5(file_or_path, mode)
+    with ctx as file:
         # TODO: Use spec writing system for this
         # Currently can't use write_dispatched here because this function is also called to do an
         # inplace update of a backed object, which would delete "/"
-        f = cast("h5py.Group", f["/"])
+        f = cast("h5py.Group", file["/"])
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
@@ -104,7 +116,7 @@ def write_h5ad(
                     _write_x(
                         f,
                         adata,  # accessing adata.X reopens adata.file if it’s backed
-                        is_backed=adata.isbacked and adata.filename == filepath,
+                        is_backed=adata.isbacked and adata.filename == file_path,
                         as_dense=as_dense,
                         dataset_kwargs=dataset_kwargs,
                     )
@@ -217,7 +229,7 @@ def read_h5ad_backed(
 
 
 def read_h5ad(
-    filename: PathLike[str] | str,
+    filename: h5py.File | PathLike[str] | str,
     backed: Literal["r", "r+"] | bool | None = None,  # noqa: FBT001
     *,
     as_sparse: Sequence[str] = (),
@@ -260,6 +272,9 @@ def read_h5ad(
         if mode is True:
             mode = "r+"
         assert mode in {"r", "r+"}
+        if isinstance(filename, h5py.File):
+            msg = "`backed` mode re-opens the file by name on demand, so it needs a path, not an open `h5py.File`."
+            raise ValueError(msg)
         return read_h5ad_backed(filename, mode)
 
     if as_sparse_fmt not in (sparse.csr_matrix, sparse.csc_matrix):
@@ -277,7 +292,8 @@ def read_h5ad(
         read_dense_as_sparse, sparse_format=as_sparse_fmt, axis_chunk=chunk_size
     )
 
-    with h5py.File(filename, "r") as f:
+    _, ctx = _open_h5(filename, "r")
+    with ctx as f:
 
         def callback(read_func, elem_name: str, elem: StorageType, iospec: IOSpec):
             if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
