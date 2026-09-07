@@ -22,7 +22,7 @@ from pandas.core.arrays.integer import IntegerDtype
 from scipy import sparse
 from zarr.abc.store import Store
 from zarr.core.buffer import default_buffer_prototype
-from zarr.storage import WrapperStore
+from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -47,6 +47,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, MutableMapping
+    from pathlib import Path
     from types import ModuleType
     from typing import Any, Literal, TypeGuard
 
@@ -1241,6 +1242,25 @@ DASK_CUPY_MATRIX_PARAMS = [
         as_cupy_sparse_dask_array, id="cupy_csr_dask_array", marks=pytest.mark.gpu
     ),
 ]
+
+
+@overload
+def open_store(store: Path, /, mode: Literal["r", "a"] = "a") -> h5py.File: ...
+@overload
+def open_store(store: MemoryStore, /, mode: Literal["r", "a"] = "a") -> zarr.Group: ...
+def open_store(
+    store: Path | MemoryStore, /, mode: Literal["r", "a"] = "a"
+) -> h5py.File | zarr.Group:
+    """Open a `diskfmt_store`: a `Path` for h5, a `MemoryStore` for zarr."""
+    if not isinstance(store, MemoryStore):
+        return h5py.File(store, mode)
+    from anndata._io.zarr import open_write_group
+
+    return (
+        open_write_group(store, mode=mode)
+        if mode == "a"
+        else zarr.open_group(store, mode=mode)
+    )
 
 
 class AccessTrackingStore(WrapperStore[Store]):

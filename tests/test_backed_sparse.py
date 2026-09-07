@@ -21,7 +21,12 @@ from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
+from anndata.tests.helpers import (
+    AccessTrackingStore,
+    assert_equal,
+    open_store,
+    subset_func,
+)
 from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
@@ -296,15 +301,10 @@ def test_dataset_append_memory(
     diskfmt_store: Path | MemoryStore,
     sparse_format: type[CSMatrix | CSArray],
     append_method: Callable[[list[CSMatrix | CSArray]], CSMatrix | CSArray],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
     assert isinstance(diskmtx, BaseCompressedSparseDataset)
@@ -317,15 +317,9 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
-def test_append_array_cache_bust(
-    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
-):
+def test_append_array_cache_bust(diskfmt_store: Path | MemoryStore):
     a = sparse.random(100, 100, format="csr")
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.io.write_elem(f, "mtx_2", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
@@ -355,18 +349,13 @@ def test_append_array_cache_bust(
 def test_read_array(
     diskfmt_store: Path | MemoryStore,
     sparse_format: type[CSMatrix],
-    diskfmt: Literal["h5ad", "zarr"],
     subset_func,
     subset_func2,
 ):
     a = sparse_format(sparse.random(100, 100))
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     diskmtx = sparse_dataset(subgroup(f, "mtx"))
     ad.settings.use_sparse_array_on_read = True
@@ -386,16 +375,11 @@ def test_dataset_append_disk(
     diskfmt_store: Path | MemoryStore,
     sparse_format: type[CSMatrix],
     append_method: Callable[[list[CSMatrix]], CSMatrix],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "a", a)
     ad.io.write_elem(f, "b", b)
     a_disk = sparse_dataset(subgroup(f, "a"))
@@ -616,16 +600,10 @@ def test_wrong_shape(
         a_disk.append(b_disk)
 
 
-def test_reset_group(
-    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
-):
+def test_reset_group(diskfmt_store: Path | MemoryStore):
     base = sparse.random(100, 100, format="csr")
 
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(subgroup(f, "base"))
@@ -672,30 +650,20 @@ def test_wrong_formats(tmp_path: Path):
     assert not np.any(diff.toarray())
 
 
-def test_anndata_sparse_compat(
-    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
-):
+def test_anndata_sparse_compat(diskfmt_store: Path | MemoryStore):
     base = sparse.random(100, 100, format="csr")
 
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "/", base)
     adata = ad.AnnData(sparse_dataset(subgroup(f, "/")))
     assert_equal(adata.X, base)
 
 
-def test_write(diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]):
+def test_write(diskfmt_store: Path | MemoryStore):
     base = sparse.random(10, 10, format="csr")
 
-    f = (
-        open_write_group(diskfmt_store, mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(diskfmt_store, "a")
-    )
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "a_sparse_matrix", base)
     adata = ad.AnnData(sparse_dataset(subgroup(f, "a_sparse_matrix")))

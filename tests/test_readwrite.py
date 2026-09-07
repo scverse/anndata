@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 import zipfile
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from functools import partial
 from importlib.util import find_spec
 from pathlib import Path
@@ -31,6 +31,7 @@ from anndata.tests.helpers import (
     gen_adata,
     jnp,
     jnp_array_or_idempotent,
+    open_store,
 )
 from anndata.utils import get_literal_members
 
@@ -106,15 +107,6 @@ def rw(backing_h5ad) -> tuple[ad.AnnData, ad.AnnData]:
     orig.write(backing_h5ad)
     curr = ad.read_h5ad(backing_h5ad)
     return curr, orig
-
-
-@contextmanager
-def open_store(
-    store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
-) -> Generator[h5py.File | zarr.Group, None, None]:
-    f = zarr.open_group(store) if diskfmt == "zarr" else h5py.File(store, "r")
-    with f if isinstance(f, h5py.File) else nullcontext():
-        yield f
 
 
 @pytest.fixture(params=[np.uint8, np.int32, np.int64, np.float32, np.float64])
@@ -799,10 +791,8 @@ def test_write_x_none(
     write = getattr(adata, f"write_{diskfmt}")
 
     write(diskfmt_store)
-    with open_store(diskfmt_store, diskfmt) as f:
-        root_keys = list(f.keys())
 
-    assert "X" not in root_keys
+    assert "X" not in open_store(diskfmt_store, "r")
 
 
 ################################
