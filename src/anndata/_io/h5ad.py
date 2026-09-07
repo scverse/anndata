@@ -62,6 +62,7 @@ def _open_h5(
 @no_write_dataset_2d
 def write_h5ad(
     file_or_path: h5py.File | PathLike[str] | str,
+    /,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),

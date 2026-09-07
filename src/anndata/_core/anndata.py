@@ -1667,7 +1667,8 @@ class AnnData:  # noqa: PLW1641
     @old_positionals("compression", "compression_opts", "as_dense")
     def write_h5ad(
         self,
-        filename: PathLike[str] | str | None = None,
+        file_or_path: PathLike[str] | str | h5py.File | None = None,
+        /,
         *,
         convert_strings_to_categoricals: bool = True,
         compression: Literal["gzip", "lzf"] | None = None,
@@ -1691,7 +1692,7 @@ class AnnData:  # noqa: PLW1641
 
         Parameters
         ----------
-        filename
+        file_or_path
             Filename of data file. Defaults to backing file.
         convert_strings_to_categoricals
             Convert string columns to categorical.
@@ -1740,15 +1741,18 @@ class AnnData:  # noqa: PLW1641
         """
         from ..io import write_h5ad
 
-        if filename is None and not self.isbacked:
+        if file_or_path is None and not self.isbacked:
             msg = "Provide a filename!"
             raise ValueError(msg)
-        if filename is None:
-            filename = self.filename
-        assert filename is not None  # `isbacked` implies a filename
+        if isinstance(file_or_path, h5py.File) and self.isbacked:
+            msg = "Cannot write backed AnnData to `h5py.File` object"
+            raise TypeError(msg)
+        if file_or_path is None:
+            file_or_path = self.filename
+        assert file_or_path is not None  # `isbacked` implies a filename
 
         write_h5ad(
-            Path(filename),
+            file_or_path,
             self,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             compression=compression,
@@ -1757,7 +1761,8 @@ class AnnData:  # noqa: PLW1641
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
-            self.file.filename = filename
+            assert not isinstance(file_or_path, h5py.File)
+            self.file.filename = file_or_path
 
     write = write_h5ad  # a shortcut and backwards compat
 
