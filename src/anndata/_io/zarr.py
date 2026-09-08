@@ -15,6 +15,7 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
+from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import StoreLike
 
+    from .._settings import WriteCompat
     from .._types import _GroupStorageType
     from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
@@ -99,6 +101,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
     use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    compat: WriteCompat | str | None = None,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -118,7 +121,10 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with fast_zarr_context():
+    with (
+        nullcontext() if compat is None else settings.override(write_compat=compat),
+        fast_zarr_context(),
+    ):
         # TODO: Use spec writing system for this
         if use is not None:
             # stale consolidated metadata would hide the newly written element

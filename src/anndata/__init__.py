@@ -6,7 +6,7 @@ from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._settings import settings
+from ._settings import WriteCompat, settings
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
@@ -28,6 +28,7 @@ __all__ = [
     "ImplicitModificationWarning",
     "OldFormatWarning",
     "Raw",
+    "WriteCompat",
     "WriteWarning",
     "abc",
     "acc",
