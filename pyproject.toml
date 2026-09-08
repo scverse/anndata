@@ -296,7 +296,6 @@ filterwarnings_when_strict = [
     "default::dask.array.core.PerformanceWarning",
     # TODO: Remove when https://github.com/zarr-developers/zarr-python/pull/3979 becomes min
     "default:.*FixedLengthUTF32:zarr.core.dtype.common.UnstableSpecificationWarning",
-    "default:Writing zarr v2:UserWarning",
 ]
 # For some reason this effects how logging is shown when tests are run
 markers = [
