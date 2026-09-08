@@ -268,7 +268,10 @@ Types used by the former:
    settings
    settings.override
    settings.reset
+   WriteCompat
 ```
+
+See {doc}`/write-compat` for what the compatibility profiles do.
 
 (types-api)=
 

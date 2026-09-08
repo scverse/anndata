@@ -12,6 +12,7 @@ See {doc}`/release-notes/index`.
 tutorials/index
 api
 fileformat-prose
+write-compat
 interoperability
 contributing
 release-notes/index
