@@ -74,3 +74,44 @@ All benchmarks:
 ### View in the browser:
 
 You can view the benchmarks in the browser with `asv publish` followed by `asv preview`. If you want to include benchmarks of a local branch, I think you'll have to add that branch to the `"branches"` list in `asv.conf.json`.
+
+## Dask Chunk Default Exploration
+
+Issue [#2036](https://github.com/scverse/anndata/issues/2036) needs benchmark data for choosing more sensible virtual Dask chunk defaults when reading chunked HDF5/Zarr arrays lazily. The script below creates dense `X` arrays with controlled on-disk chunks, reads them through `anndata.experimental.read_elem_lazy`, runs a small set of Dask and Scanpy-style workloads, and writes one CSV row per grid point. Rows include runtime package versions, store size, task count, elapsed time, and coarse process/worker memory readings.
+
+Run a small local smoke benchmark:
+
+```bash
+uv run --group test-min python benchmarks/scripts/dask_chunk_grid.py \
+  --shape 1000,250 \
+  --store-types h5ad zarr \
+  --on-disk-chunks 100,250 \
+  --dask-chunks default \
+  --dask-chunks 500,-1 \
+  --workers 1 \
+  --threads-per-worker 1 \
+  --workloads sum_axis0 normalize_log1p_slice scanpy_normalize_log1p \
+  --repeats 1 \
+  --force
+```
+
+Run a larger grid for analysis:
+
+```bash
+uv run --group test-min python benchmarks/scripts/dask_chunk_grid.py \
+  --shape 12000,3000 \
+  --store-types h5ad zarr \
+  --on-disk-chunks 256,1024 \
+  --on-disk-chunks 1024,1024 \
+  --dask-chunks default \
+  --dask-chunks 1024,-1 \
+  --dask-chunks 4096,-1 \
+  --workers 1 \
+  --workers 4 \
+  --threads-per-worker 1 \
+  --workloads sum_axis0 sum_axis1 normalize_log1p_slice scanpy_normalize_log1p \
+  --repeats 3 \
+  --force
+```
+
+By default, results are written to `benchmarks/results/dask_chunk_grid.csv`. Use `benchmarks/notebooks/dask_chunk_grid_analysis.ipynb` to compare elapsed time, task counts, and coarse memory readings across the grid.
