@@ -16,7 +16,12 @@ class Settings(scverse_misc.Settings):
     copy_on_write_X: Annotated[
         bool,
         Field(
-            deprecated="This will be removed in 0.14 (deprecated in 0.13) and copy-on-write will be default",
+            deprecated=scverse_misc.deprecated(
+                scverse_misc.Deprecation(
+                    "0.13",
+                    "This will be removed in 0.14 (deprecated in 0.13) and copy-on-write will be default",
+                )
+            )
         ),
     ] = True
     """Whether to copy-on-write X. Currently `my_adata_view[subset].X = value` will write back to the original AnnData object at the `subset` location. `X` is the only element where this behavior is implemented though."""
@@ -27,7 +32,12 @@ class Settings(scverse_misc.Settings):
     zarr_write_format: Annotated[
         Literal[2, 3],
         Field(
-            deprecated="This setting will be removed in 0.14 (deprecated in 0.13) and zarr v3 will be the default",
+            deprecated=scverse_misc.deprecated(
+                scverse_misc.Deprecation(
+                    "0.12.3",
+                    "This setting will be removed in 0.14 (deprecated in 0.13) and zarr v3 will be the default",
+                )
+            )
         ),
     ] = 3
     """Which version of zarr to write to when anndata must internally open a write-able zarr group."""
