@@ -12,7 +12,6 @@ import zarr
 from zarr.storage import MemoryStore
 
 import anndata as ad
-from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix
 from anndata.experimental import read_dispatched, write_dispatched
 from anndata.tests.helpers import (
@@ -38,7 +37,7 @@ def test_read_dispatched_w_regex():
             return None
 
     adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    z = open_write_group(MemoryStore())
+    z = zarr.open_group(MemoryStore(), mode="w")
 
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
@@ -72,7 +71,7 @@ def test_read_dispatched_dask():
             return func(elem)
 
     adata = gen_adata((1000, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    z = open_write_group(MemoryStore())
+    z = zarr.open_group(MemoryStore(), mode="w")
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(z, zarr.Group):
@@ -94,7 +93,7 @@ def test_read_dispatched_dask():
 @pytest.mark.zarr_io
 def test_read_dispatched_null_case():
     adata = gen_adata((100, 100), **GEN_ADATA_NO_XARRAY_ARGS)
-    z = open_write_group(MemoryStore())
+    z = zarr.open_group(MemoryStore(), mode="w")
     ad.io.write_elem(z, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
     if isinstance(z, zarr.Group):
@@ -110,7 +109,7 @@ def test_read_dispatched_null_case():
 def test_write_dispatched_csr_dataset(sparse_format: Literal["csr", "csc"]):
     store = MemoryStore()
     ad.io.write_elem(
-        open_write_group(store),
+        zarr.open_group(store, mode="w"),
         "/",
         sp.random(10, 10, format=sparse_format),
     )
@@ -170,7 +169,7 @@ def test_write_dispatched_chunks():
         else:
             func(store, k, elem, dataset_kwargs=dataset_kwargs)
 
-    z = open_write_group(MemoryStore())
+    z = zarr.open_group(MemoryStore(), mode="w")
 
     write_dispatched(z, "/", adata, callback=write_chunked)
 
@@ -212,7 +211,7 @@ def test_io_dispatched_keys(tmp_path: Path):
         write_dispatched(f, "/", adata, callback=partial(writer, keys=h5ad_write_keys))
         _ = read_dispatched(f, partial(reader, keys=h5ad_read_keys))
 
-    f = open_write_group(MemoryStore())
+    f = zarr.open_group(MemoryStore(), mode="w")
     write_dispatched(f, "/", adata, callback=partial(writer, keys=zarr_write_keys))
     _ = read_dispatched(f, partial(reader, keys=zarr_read_keys))
 

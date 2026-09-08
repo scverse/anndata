@@ -128,8 +128,6 @@ def test_dask_distributed_write(
     *,
     auto_shard_zarr_v3: bool,
 ) -> None:
-    if auto_shard_zarr_v3 and ad.settings.zarr_write_format == 2:
-        pytest.skip(reason="Cannot shard v2 data")
     import dask.array as da
     import dask.distributed as dd
     import numpy as np
