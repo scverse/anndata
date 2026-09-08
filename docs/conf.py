@@ -110,6 +110,7 @@ intersphinx_mapping = intersphinx("mudata", core=False) | dict(
     kvikio=("https://docs.rapids.ai/api/kvikio/stable/", None),
     loompy=("https://linnarssonlab.org/loompy", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
+    packaging=("https://packaging.pypa.io/en/stable/", None),
     scverse_misc=("https://scverse-misc.readthedocs.io/stable", None),
     sklearn=("https://scikit-learn.org/stable", None),
     xarray=("https://docs.xarray.dev/en/stable", None),
@@ -130,6 +131,8 @@ xref_overrides = {
     },
     # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
     "anndata._types.StorageType": "anndata.experimental.StorageType",
+    #### packaging (unqualified `:class:`Version`` in inherited `Version` docstrings)
+    "Version": "packaging.version.Version",
     #### zarr
     "zarr.core.group.StoreLike": "zarr.storage.StoreLike",
     #### h5py
