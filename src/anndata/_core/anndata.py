@@ -24,7 +24,7 @@ from anndata._core.access import ElementRef
 from anndata.types import SupportsArrayApiBase
 
 from .. import utils
-from .._settings import settings
+from .._settings import WriteCompat, settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import (
     AwkArray,
@@ -70,7 +70,11 @@ from .index import (
 )
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import _non_2d_message, coerce_array
+from .storage import (
+    _check_x_and_layers_are_2d_on_write,
+    _non_2d_message,
+    coerce_array,
+)
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -1542,13 +1546,21 @@ class AnnData:  # noqa: PLW1641
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
-    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None = None) -> bool:
+    def unwriteable(
+        self,
+        *,
+        store_type: Literal["h5", "zarr"] | None = None,
+        compat: WriteCompat | str | None = None,
+    ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
         Parameters
         ----------
         store_type
             Which backing store - `None` indicates that it can be writeable to either.
+        compat
+            Which anndata version’s write behavior to check against,
+            overriding :attr:`anndata.settings.write_compat` for this call.
 
         Returns
         -------
@@ -1557,12 +1569,12 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-
-        if _non_2d_message(self.X, name="X") is not None:
+        if isinstance(compat, str):
+            compat = WriteCompat(compat)
+        try:
+            _check_x_and_layers_are_2d_on_write(self, compat=compat)
+        except ValueError:
             return True
-        for value in self.layers.values():
-            if _non_2d_message(value, name="layer") is not None:
-                return True
 
         from anndata._io.specs.registry import _REGISTRY
 
@@ -1711,6 +1723,7 @@ class AnnData:  # noqa: PLW1641
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        compat: WriteCompat | str | None = None,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1780,6 +1793,9 @@ class AnnData:  # noqa: PLW1641
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
+        compat
+            Which anndata version’s write behavior to target,
+            overriding :attr:`anndata.settings.write_compat` for this call.
         """
         from ..io import write_h5ad
 
@@ -1798,6 +1814,7 @@ class AnnData:  # noqa: PLW1641
             compression_opts=compression_opts,
             as_dense=as_dense,
             use=use,
+            compat=compat,
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
@@ -1860,6 +1877,7 @@ class AnnData:  # noqa: PLW1641
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        compat: WriteCompat | str | None = None,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1879,6 +1897,9 @@ class AnnData:  # noqa: PLW1641
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
+        compat
+            Which anndata version’s write behavior to target,
+            overriding :attr:`anndata.settings.write_compat` for this call.
         """
         from ..io import write_zarr
 
@@ -1896,6 +1917,7 @@ class AnnData:  # noqa: PLW1641
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             consolidate_metadata=consolidate_metadata,
             use=use,
+            compat=compat,
         )
 
     def chunked_X(self, chunk_size: int | None = None):
