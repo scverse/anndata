@@ -16,7 +16,6 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
-from anndata._io.zarr import open_write_group
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
@@ -411,7 +410,7 @@ def test_lazy_array_cache(
     elems = {"indptr", "indices", "data"}
     orig_store = MemoryStore()
     a = sparse_format(sparse.random(10, 10))
-    f = open_write_group(orig_store, mode="a", zarr_format=zarr_write_format)
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(orig_store)
     for elem in elems:
@@ -539,7 +538,7 @@ def test_data_access(
     ]
     orig_store = MemoryStore()
     a = sparse_format(np.eye(10, 10))
-    f = open_write_group(orig_store, mode="a", zarr_format=zarr_write_format)
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     data_arr = f["X/data"]
     assert isinstance(data_arr, zarr.Array)

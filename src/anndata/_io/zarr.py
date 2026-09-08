@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
@@ -114,7 +113,7 @@ def write_zarr(
 
     with fast_zarr_context():
         # TODO: Use spec writing system for this
-        f = open_write_group(store)
+        f = zarr.open_group(store, mode="w")
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -244,12 +243,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> RWAble:
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
-
-
-def open_write_group(
-    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
-) -> zarr.Group:
-    return zarr.open_group(store, mode=mode, **kwargs)
 
 
 def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:

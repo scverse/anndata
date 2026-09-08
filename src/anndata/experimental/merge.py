@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
     from pandas.api.typing.aliases import Scalar
     from zarr.core.common import AccessModeLiteral
-    from zarr.storage import StoreLike
 
     from .._core.merge import Reindexer, StrategiesLiteral
     from .._types import Join_T, StorageType
@@ -123,7 +122,7 @@ def as_group(store, *, mode: AccessModeLiteral) -> Generator[zarr.Group | h5py.G
 @as_group.register(Store)
 @contextmanager
 def _(store: Store, *, mode: AccessModeLiteral) -> Generator[zarr.Group]:
-    yield _open_zarr_group(store, mode=mode)
+    yield zarr.open_group(store, mode=mode)
 
 
 @as_group.register(PathLike)
@@ -142,15 +141,7 @@ def _(
         finally:
             f.close()
     else:
-        yield _open_zarr_group(store, mode=mode)
-
-
-def _open_zarr_group(store: StoreLike, *, mode: AccessModeLiteral) -> zarr.Group:
-    if mode == "r":  # others all write: r+, a, w, w-
-        return zarr.open_group(store, mode=mode)
-    from anndata._io.zarr import open_write_group
-
-    return open_write_group(store, mode=mode)
+        yield zarr.open_group(store, mode=mode)
 
 
 @as_group.register(zarr.Group)

@@ -20,7 +20,6 @@ from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental.backed import Dataset2D
@@ -387,7 +386,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
 @contextmanager
 def store_context(store: Path | MemoryStore) -> Generator[_GroupStorageType]:
     if isinstance(store, MemoryStore):
-        yield open_write_group(store, mode="r+")
+        yield zarr.open_group(store, mode="r+")
         return
     with h5py.File(store, "r+") as file:
         yield file["/"]
