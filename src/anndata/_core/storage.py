@@ -8,6 +8,7 @@ from scipy import sparse
 
 from anndata.compat import CSArray, CSMatrix
 
+from .._settings import WriteCompat, settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, has_xp_base
 from ..utils import (
@@ -21,6 +22,9 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from .anndata import AnnData
+
+
+_COMPAT_HINT = 'Pass `compat="0.12"` to the write function to write it anyway.'
 
 
 def _non_2d_message(value: object, *, name: str) -> str | None:
@@ -45,23 +49,33 @@ def _non_2d_message(value: object, *, name: str) -> str | None:
     )
 
 
-def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
+def _check_x_and_layers_are_2d_on_write(
+    adata: AnnData, compat: WriteCompat | None = None
+) -> None:
     """Reject writing AnnData objects whose ``X`` or ``layers`` are not 2D.
 
     AnnData's spec requires ``X`` and ``layers`` entries on disk to be
     2-dimensional. In-memory we do not block higher-dimensional values, but
     a 3D+ array would propagate the spec violation onto disk, so we hard-fail
     at the IO boundary.
+
+    ``compat`` defaults to :attr:`~anndata.settings.write_compat`.
     """
+    if compat is None:
+        compat = settings.write_compat
+    if compat < WriteCompat.V0_13:
+        return  # anndata < 0.13 wrote these, so `write_compat` opts back into it
     if (X := adata.layers.get(None)) is not None:
         msg = _non_2d_message(X, name="X")
         if msg is not None:
+            msg = f"{msg} {_COMPAT_HINT}"
             raise ValueError(msg)
     for key, value in adata.layers.items():
         if key is None:
             continue
         msg = _non_2d_message(value, name=f"Layer {key!r}")
         if msg is not None:
+            msg = f"{msg} {_COMPAT_HINT}"
             raise ValueError(msg)
 
 
