@@ -9,7 +9,7 @@ from functools import partial, singledispatch, wraps
 from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import h5py
 import numpy as np
@@ -19,7 +19,9 @@ import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from scipy import sparse
-from zarr.storage import LocalStore
+from zarr.abc.store import Store
+from zarr.core.buffer import default_buffer_prototype
+from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -44,6 +46,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
+    from pathlib import Path
     from typing import Literal, TypeGuard
 
     from numpy.typing import NDArray
@@ -1204,13 +1207,41 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 
-class AccessTrackingStore(LocalStore):
+@overload
+def open_store(store: Path, /, mode: Literal["r", "a"] = "a") -> h5py.File: ...
+@overload
+def open_store(store: MemoryStore, /, mode: Literal["r", "a"] = "a") -> zarr.Group: ...
+def open_store(
+    store: Path | MemoryStore, /, mode: Literal["r", "a"] = "a"
+) -> h5py.File | zarr.Group:
+    """Open a `diskfmt_store`: a `Path` for h5, a `MemoryStore` for zarr."""
+    if not isinstance(store, MemoryStore):
+        return h5py.File(store, mode)
+    from anndata._io.zarr import open_write_group
+
+    return (
+        open_write_group(store, mode=mode)
+        if mode == "a"
+        else zarr.open_group(store, mode=mode)
+    )
+
+
+class AccessTrackingStore(WrapperStore[Store]):
+    """Wraps a store to count reads of (prefixes of) keys.
+
+    Wrap the store a fixture wrote to, e.g. ``AccessTrackingStore(store)``,
+    to get a fresh set of counters over the same data.
+
+    The wrapper is always read-only: `zarr` re-wraps a writable store when
+    opened with ``mode="r"``, which would silently reset the counters.
+    """
+
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, store: Store) -> None:
+        super().__init__(store.with_read_only(read_only=True))
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
@@ -1234,7 +1265,9 @@ class AccessTrackingStore(LocalStore):
         byte_range: ByteRequest | None = None,
     ) -> object:
         self._check_and_track_key(key)
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
+        if prototype is None:  # concrete stores default it, the ABC does not
+            prototype = default_buffer_prototype()
+        return await self._store.get(key, prototype, byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
