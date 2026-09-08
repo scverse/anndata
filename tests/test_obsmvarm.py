@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import TYPE_CHECKING
 
 import joblib
 import numpy as np
@@ -8,10 +9,14 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
+import anndata as ad
 from anndata import AnnData
 from anndata.compat import CupyArray
-from anndata.tests.helpers import as_cupy, get_multiindex_columns_df, jnp
+from anndata.tests.helpers import as_cupy, assert_equal, get_multiindex_columns_df, jnp
 from anndata.utils import asarray
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 M, N = (100, 100)
 
@@ -182,3 +187,10 @@ def test_1d_declaration(array_type):
 def test_1d_set(adata, array_type):
     adata.varm["1d-array"] = array_type(np.ones(adata.shape[1]))
     assert adata.varm["1d-array"].shape == (adata.shape[1], 1)
+
+
+def test_roundtrips_df_with_different_index(tmp_path: Path, adata: AnnData):
+    adata.obsm["df"] = pd.DataFrame(index=[f"not_{i}" for i in range(adata.shape[0])])
+    adata.write_h5ad(tmp_path / "foo.h5ad")
+    roundtripped = ad.read_h5ad(tmp_path / "foo.h5ad")
+    assert_equal(adata, roundtripped)
