@@ -17,6 +17,7 @@ import pytest
 import zarr
 from packaging.version import Version
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
@@ -33,6 +34,7 @@ from anndata.tests.helpers import (
     assert_equal,
     check_all_sharded,
     gen_adata,
+    open_store,
     visititems_zarr,
 )
 
@@ -61,7 +63,7 @@ def store(
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("h5py.Group", file["/"])
     elif diskfmt == "zarr":
-        store = open_write_group(tmp_path / "test.zarr")
+        store = open_write_group(MemoryStore())
     else:
         pytest.fail(f"Unknown store type: {diskfmt}")
 
@@ -760,12 +762,12 @@ def test_write_to_root(store: _GroupStorageType, value):
     "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
 )
 @pytest.mark.zarr_io
-def test_read_zarr_from_group(tmp_path, consolidated):
+def test_read_zarr_from_group(consolidated):
     # https://github.com/scverse/anndata/issues/1056
-    pth = tmp_path / "test.zarr"
+    store = MemoryStore()
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
-    z = open_write_group(pth)
+    z = open_write_group(store)
     write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
@@ -780,7 +782,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
 
     read_func = zarr.open_consolidated if consolidated else zarr.open
 
-    z = read_func(pth)
+    z = read_func(store)
     expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 
@@ -840,13 +842,11 @@ def test_io_pd_cow(
 
 
 def test_read_sparse_array(
-    tmp_path: Path,
+    diskfmt_store: Path | MemoryStore,
     sparse_format: Literal["csr", "csc"],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
@@ -923,13 +923,13 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_auto_sharded():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        adata.write_zarr(path)
+        adata.write_zarr(store)
 
-    check_all_sharded(zarr.open(path))
+    check_all_sharded(zarr.open(store))
 
 
 @pytest.mark.zarr_io
@@ -937,9 +937,8 @@ def test_write_auto_sharded(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size(tmp_path: Path):
-    path = tmp_path / "check_shards.zarr"
-    z = zarr.open(path)
+def test_write_auto_sharded_size():
+    z = zarr.open(MemoryStore())
     ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
     # i.e., there are at most two shards since one shard will contain two chunks,
     # and the other the last elements, since the target size is 1GB uncompressed.
@@ -947,12 +946,12 @@ def test_write_auto_sharded_size(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_shards_by_default(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_shards_by_default():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     ad.settings.reset("auto_shard_zarr_v3")
-    adata.write_zarr(path)
-    check_all_sharded(zarr.open(path))
+    adata.write_zarr(store)
+    check_all_sharded(zarr.open(store))
 
 
 @pytest.mark.zarr_io
@@ -960,9 +959,8 @@ def test_write_shards_by_default(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size_sparse(tmp_path: Path):
-    path = "memory://check_shards.zarr"
-    z = zarr.open(path)
+def test_write_auto_sharded_size_sparse():
+    z = zarr.open(MemoryStore())
     mat = sparse.random(
         1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)
     )
@@ -977,8 +975,8 @@ def test_write_auto_sharded_size_sparse(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_does_not_override(tmp_path: Path):
-    z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
+def test_write_auto_sharded_does_not_override():
+    z = open_write_group(MemoryStore(), zarr_format=3)
     X = sparse.random(
         100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )

@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 import pytest
 import zarr
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata import AnnData, Raw
 from anndata._core.sparse_dataset import sparse_dataset
 from anndata.compat import CupyCSRMatrix
 from anndata.tests.helpers import assert_equal
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @pytest.mark.gpu
@@ -71,12 +67,12 @@ def test_raw_gpu():
         slice(3, 10),
     ],
 )
-def test_get_with_zarr_gpu(tmp_path: Path, index: slice | np.ndarray):
+def test_get_with_zarr_gpu(index: slice | np.ndarray):
     adata = AnnData(X=sparse.random(50, 100, format="csr"))
-    zarr_path = tmp_path / "gpu_adata.zarr"
+    store = MemoryStore()
     # compressor None because there are no GPU compressors right now
-    ad.io.write_zarr(zarr_path, adata, compressor=None)
-    g = zarr.open_group(zarr_path, mode="r")
+    ad.io.write_zarr(store, adata, compressor=None)
+    g = zarr.open_group(store, mode="r")
     adata = AnnData(X=sparse_dataset(g["X"]))
     expected = AnnData(X=ad.io.read_elem(g["X"]))
     assert isinstance(adata.X[index], sparse.csr_matrix)
