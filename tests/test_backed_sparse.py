@@ -16,7 +16,6 @@ import anndata as ad
 from anndata._core.anndata import AnnData
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
-from anndata._io.zarr import open_write_group
 from anndata.abc import CSCDataset, CSRDataset
 from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
@@ -56,14 +55,19 @@ def subgroup(
     return elem
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
-    return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+@pytest.fixture(params=[pytest.param(e, marks=pytest.mark.zarr_io) for e in (2, 3)])
+def zarr_write_format(request) -> Literal[2, 3]:
+    return request.param
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_separator():
-    return "" if ad.settings.zarr_write_format == 2 else "/c"
+@pytest.fixture
+def zarr_metadata_key(zarr_write_format) -> Literal[".zarray", "zarr.json"]:
+    return ".zarray" if zarr_write_format == 2 else "zarr.json"
+
+
+@pytest.fixture
+def zarr_separator(zarr_write_format):
+    return "" if zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
@@ -398,6 +402,7 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("should_cache_indptr", [True, False])
 def test_lazy_array_cache(
     sparse_format: type[CSMatrix],
+    zarr_write_format: Literal[2, 3],
     zarr_metadata_key: Literal[".zarray", "zarr.json"],
     *,
     should_cache_indptr: bool,
@@ -405,7 +410,7 @@ def test_lazy_array_cache(
     elems = {"indptr", "indices", "data"}
     orig_store = MemoryStore()
     a = sparse_format(sparse.random(10, 10))
-    f = open_write_group(orig_store, mode="a")
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     store = AccessTrackingStore(orig_store)
     for elem in elems:
@@ -416,7 +421,10 @@ def test_lazy_array_cache(
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    c_expected = 2 if should_cache_indptr else 5
+    # 2 added for v2 data because zgroup/zattrs
+    c_expected = (2 if should_cache_indptr else 5) + (
+        2 if zarr_write_format == 2 else 0
+    )
     assert store.get_access_count("X/indptr") == c_expected
     for elem_not_indptr in elems - {"indptr"}:
         assert (
@@ -514,6 +522,7 @@ def test_data_access(
     open_func: Callable[[zarr.Group], CSRDataset | CSCDataset | DaskArray],
     zarr_metadata_key: str,
     zarr_separator: str,
+    zarr_write_format: Literal[2, 3],
     *,
     read_data: bool,
 ):
@@ -529,7 +538,7 @@ def test_data_access(
     ]
     orig_store = MemoryStore()
     a = sparse_format(np.eye(10, 10))
-    f = open_write_group(orig_store, mode="a")
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
     data_arr = f["X/data"]
     assert isinstance(data_arr, zarr.Array)
@@ -559,9 +568,7 @@ def test_data_access(
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
-    if ad.settings.zarr_write_format == 2 and (
-        read_data or open_func is not sparse_dataset
-    ):
+    if zarr_write_format == 2 and (read_data or open_func is not sparse_dataset):
         exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
