@@ -17,6 +17,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
 M, N = (100, 100)
 
@@ -84,26 +85,6 @@ def test_setting_ndarray(adata: AnnData):
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = np.ones((int(N * 2), 10))
     assert h == joblib.hash(adata)
-
-
-def test_setting_dataframe(adata: AnnData):
-    obsm_df = pd.DataFrame(dict(b_1=np.ones(M), b_2=["a"] * M), index=adata.obs_names)
-    varm_df = pd.DataFrame(dict(b_1=np.ones(N), b_2=["a"] * N), index=adata.var_names)
-
-    adata.obsm["b"] = obsm_df
-    assert np.all(adata.obsm["b"] == obsm_df)
-    adata.varm["b"] = varm_df
-    assert np.all(adata.varm["b"] == varm_df)
-
-    bad_obsm_df = obsm_df.copy()
-    bad_obsm_df.reset_index(inplace=True)
-    with pytest.raises(ValueError, match=r"index does not match.*obs names"):
-        adata.obsm["c"] = bad_obsm_df
-
-    bad_varm_df = varm_df.copy()
-    bad_varm_df.reset_index(inplace=True)
-    with pytest.raises(ValueError, match=r"index does not match.*var names"):
-        adata.varm["c"] = bad_varm_df
 
 
 def test_setting_sparse(adata: AnnData):
@@ -189,8 +170,13 @@ def test_1d_set(adata, array_type):
     assert adata.varm["1d-array"].shape == (adata.shape[1], 1)
 
 
-def test_roundtrips_df_with_different_index(tmp_path: Path, adata: AnnData):
-    adata.obsm["df"] = pd.DataFrame(index=[f"not_{i}" for i in range(adata.shape[0])])
+@pytest.mark.parametrize("axis", ["obs", "var"])
+def test_roundtrips_df_with_different_index(
+    tmp_path: Path, adata: AnnData, axis: Literal["obs", "var"]
+):
+    getattr(adata, f"{axis}m")["df"] = pd.DataFrame(
+        index=[f"not_{i}" for i in range(getattr(adata, axis).shape[0])]
+    )
     adata.write_h5ad(tmp_path / "foo.h5ad")
     roundtripped = ad.read_h5ad(tmp_path / "foo.h5ad")
     assert_equal(adata, roundtripped)
