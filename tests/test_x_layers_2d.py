@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata.io import write_elem
@@ -109,7 +110,7 @@ def _make_non_conforming(
     *,
     diskfmt: Literal["h5ad", "zarr"],
     which: WhichAttr,
-) -> Path:
+) -> Path | MemoryStore:
     """Build a syntactically-valid AnnData file where exactly one of ``X`` /
     ``layers["L"]`` is non-2-D.
 
@@ -120,6 +121,7 @@ def _make_non_conforming(
     n_obs, n_var = arr3d.shape[:2]
     obs = pd.DataFrame(index=[f"o{i}" for i in range(n_obs)])
     var = pd.DataFrame(index=[f"v{i}" for i in range(n_var)])
+    pth: Path | MemoryStore
     if diskfmt == "h5ad":
         pth = tmp_path / "non_conforming.h5ad"
         # Start from a conforming file so obs/var/encoding are well-formed,
@@ -133,7 +135,7 @@ def _make_non_conforming(
                 write_elem(f, "layers", {"L": arr3d})
         return pth
     if diskfmt == "zarr":
-        pth = tmp_path / "non_conforming.zarr"
+        pth = MemoryStore()
         f = zarr.open_group(pth, mode="w")
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
@@ -157,13 +159,17 @@ def _make_non_conforming(
     raise ValueError(msg)
 
 
-def _read(pth: Path, diskfmt: Literal["h5ad", "zarr"]) -> ad.AnnData:
-    return ad.read_h5ad(pth) if diskfmt == "h5ad" else ad.read_zarr(pth)
-
-
-def _write(adata: ad.AnnData, pth: Path, diskfmt: Literal["h5ad", "zarr"]) -> None:
+def _read(pth: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]) -> ad.AnnData:
     if diskfmt == "h5ad":
-        adata.write_h5ad(pth)
+        return ad.read_h5ad(cast("Path", pth))
+    return ad.read_zarr(pth)
+
+
+def _write(
+    adata: ad.AnnData, pth: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> None:
+    if diskfmt == "h5ad":
+        adata.write_h5ad(cast("Path", pth))
     else:
         adata.write_zarr(pth)
 
@@ -200,7 +206,7 @@ def test_read_with_non_2d_warns(
 
 
 def test_write_with_non_2d_raises(
-    tmp_path: Path,
+    diskfmt_store: Path | MemoryStore,
     arr2d: np.ndarray,
     arr3d: np.ndarray,
     diskfmt: Literal["h5ad", "zarr"],
@@ -212,9 +218,8 @@ def test_write_with_non_2d_raises(
     # we're only interested in the write-side raise here.
     with pytest.warns(UserWarning, match=MSG_PATTERN):
         _set_non_2d(adata, which, arr3d)
-    out = tmp_path / f"out.{diskfmt}"
     with pytest.raises(ValueError, match=MSG_PATTERN):
-        _write(adata, out, diskfmt)
+        _write(adata, diskfmt_store, diskfmt)
 
 
 def _set_non_2d(adata: ad.AnnData, which: WhichAttr, value: np.ndarray) -> None:

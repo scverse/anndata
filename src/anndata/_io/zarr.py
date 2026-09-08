@@ -15,7 +15,6 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
-from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
@@ -115,7 +113,7 @@ def write_zarr(
 
     with fast_zarr_context():
         # TODO: Use spec writing system for this
-        f = open_write_group(store)
+        f = zarr.open_group(store, mode="w")
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -245,14 +243,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> RWAble:
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
-
-
-def open_write_group(
-    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
-) -> zarr.Group:
-    if "zarr_format" not in kwargs:
-        kwargs["zarr_format"] = settings.zarr_write_format
-    return zarr.open_group(store, mode=mode, **kwargs)
 
 
 def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:
