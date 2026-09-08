@@ -20,7 +20,6 @@ from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.zarr import open_write_group
 from anndata._types import AnnDataElem
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.tests.helpers import (
@@ -378,7 +377,7 @@ def test_readwrite_equivalent_h5ad_zarr(tmp_path: Path, typ) -> None:
 @contextmanager
 def store_context(store: Path | MemoryStore) -> Generator[_GroupStorageType]:
     if isinstance(store, MemoryStore):
-        yield open_write_group(store, mode="r+")
+        yield zarr.open_group(store, mode="r+")
         return
     with h5py.File(store, "r+") as file:
         yield file["/"]
@@ -468,26 +467,17 @@ def test_hdf5_compression_opts(tmp_path, compression, compression_opts):
     assert_equal(adata, expected)
 
 
-@pytest.mark.parametrize("zarr_write_format", [2, 3])
 @pytest.mark.parametrize(
     "use_compression", [True, False], ids=["compressed", "uncompressed"]
 )
-def test_zarr_compression(zarr_write_format: Literal[2, 3], *, use_compression: bool):
-    ad.settings.zarr_write_format = zarr_write_format
+def test_zarr_compression(*, use_compression: bool):
     store = MemoryStore()
     adata = gen_adata((10, 8), **GEN_ADATA_NO_XARRAY_ARGS)
-    if not use_compression:
-        compressor = None
-    elif zarr_write_format == 2:
-        from numcodecs import Blosc
+    from zarr.codecs import ZstdCodec
 
-        compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-    else:
-        from zarr.codecs import ZstdCodec
-
-        # Don't use Blosc since it's defaults can change:
-        # https://github.com/zarr-developers/zarr-python/pull/3545
-        compressor = ZstdCodec(level=3, checksum=True)
+    # Don't use Blosc since it's defaults can change:
+    # https://github.com/zarr-developers/zarr-python/pull/3545
+    compressor = ZstdCodec(level=3, checksum=True) if use_compression else None
     wrongly_compressed = []
 
     ad.io.write_zarr(store, adata, compressor=compressor)
@@ -496,10 +486,6 @@ def test_zarr_compression(zarr_write_format: Literal[2, 3], *, use_compression: 
         if not isinstance(value, zarr.Array) or value.shape == ():
             return None
         (read_compressor,) = value.compressors or [None]
-        if zarr_write_format == 2:
-            if read_compressor != compressor:
-                wrongly_compressed.append(key)
-            return None
         if (compressor is None and read_compressor is not None) or (
             None not in {compressor, read_compressor}
             and read_compressor.to_dict() != compressor.to_dict()
@@ -1104,16 +1090,3 @@ def test_write_elem_consolidated():
         ValueError, match="Cannot overwrite/edit a store with consolidated metadata"
     ):
         ad.io.write_elem(g["obs"], "foo", np.arange(10))
-
-
-@pytest.mark.zarr_io
-def test_write_elem_version_mismatch():
-    adata = ad.AnnData(np.ones((10, 10)))
-    g = zarr.open_group(
-        MemoryStore(),
-        mode="w",
-        zarr_format=2 if ad.settings.zarr_write_format == 3 else 3,
-    )
-    ad.io.write_elem(g, "/", adata)
-    adata_roundtripped = ad.read_zarr(g)
-    assert_equal(adata_roundtripped, adata)

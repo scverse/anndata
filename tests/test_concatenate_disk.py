@@ -347,3 +347,14 @@ def test_write_using_groups(tmp_path, file_format):
 def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
+
+
+def test_zarr_write_format_deprecated():
+    store1 = MemoryStore()
+    store2 = MemoryStore()
+    store_out = MemoryStore()
+    ad.AnnData(np.ones((10, 10))).write_zarr(store1)
+    ad.AnnData(np.ones((10, 10))).write_zarr(store2)
+    ad.settings.zarr_write_format = 2
+    with pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"):
+        ad.experimental.concat_on_disk([store1, store2], store_out)

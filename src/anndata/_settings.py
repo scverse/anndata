@@ -24,7 +24,12 @@ class Settings(scverse_misc.Settings):
     allow_write_nullable_strings: bool | None = None
     """Whether or not to allow writing of `pd.arrays.[Arrow]StringArray`. When set to `None`, it will be inferred from `pd.options.future.infer_string`. When set to `False` explicitly, we will try writing `string` arrays in the old, non-nullable format."""
 
-    zarr_write_format: Literal[2, 3] = 3
+    zarr_write_format: Annotated[
+        Literal[2, 3],
+        Field(
+            deprecated="This setting will be removed in 0.14 (deprecated in 0.13) and zarr v3 will be the default",
+        ),
+    ] = 3
     """Which version of zarr to write to when anndata must internally open a write-able zarr group."""
 
     use_sparse_array_on_read: bool = False
