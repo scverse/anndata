@@ -355,10 +355,8 @@ def test_zarr_write_format_deprecated():
     store_out = MemoryStore()
     ad.AnnData(np.ones((10, 10))).write_zarr(store1)
     ad.AnnData(np.ones((10, 10))).write_zarr(store2)
-    # use a context so we don't trigger the warning when the setting resets
-    with (
-        pytest.warns(DeprecationWarning, match="zarr v3 will be the default"),
-        ad.settings.override(zarr_write_format=2),
-        pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"),
-    ):
+    # assign instead of `override`: only reading the setting warns, and the
+    # autouse fixture resets it afterwards
+    ad.settings.zarr_write_format = 2
+    with pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"):
         ad.experimental.concat_on_disk([store1, store2], store_out)

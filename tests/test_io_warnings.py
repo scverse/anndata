@@ -52,10 +52,8 @@ def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
 
 def test_zarr_write_format_deprecated():
     store = MemoryStore()
-    # use a context so we don't trigger the warning when the setting resets
-    with (
-        pytest.warns(DeprecationWarning, match="zarr v3 will be the default"),
-        ad.settings.override(zarr_write_format=2),
-        pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"),
-    ):
+    # assign instead of `override`: only reading the setting warns, and the
+    # autouse fixture resets it afterwards
+    ad.settings.zarr_write_format = 2
+    with pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"):
         ad.AnnData(np.ones((10, 10))).write_zarr(store)
