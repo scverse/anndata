@@ -162,7 +162,6 @@ def test_to_writeable_does_not_recurse() -> None:
     assert result is x
 
 
-
 has_fused = Version(version("zarr")) >= Version("3.3")
 
 
@@ -234,7 +233,8 @@ def test_zarr_context(
             assert "Fused" in zarr.config.get("codec_pipeline.path")
         else:
             assert "Batched" in zarr.config.get("codec_pipeline.path")
-            
+
+
 @pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
 def test_write_chunk_size(tmp_path, output_format) -> None:
     pth = tmp_path / f"test.{output_format}"
