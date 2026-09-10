@@ -4,7 +4,9 @@ import re
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pytest
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
@@ -46,3 +48,12 @@ def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
         pytest.fail(
             f"Warnings were thrown when they shouldn't be. Got:\n\n{msg_content}"
         )
+
+
+def test_zarr_write_format_deprecated():
+    store = MemoryStore()
+    # assign instead of `override`: only reading the setting warns, and the
+    # autouse fixture resets it afterwards
+    ad.settings.zarr_write_format = 2
+    with pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"):
+        ad.AnnData(np.ones((10, 10))).write_zarr(store)

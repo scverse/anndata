@@ -245,7 +245,14 @@ def open_write_group(
     store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
 ) -> zarr.Group:
     if "zarr_format" not in kwargs:
-        kwargs["zarr_format"] = settings.zarr_write_format
+        # bypass the descriptor, as our own read shouldn’t emit its deprecation warning
+        if (zarr_format := settings.__dict__["zarr_write_format"]) == 2:
+            warn(
+                "zarr v3 will become the only option in 0.14 anndata for `{read,write}_zarr`. "
+                "This setting (`anndata.settings.zarr_write_format`) will be removed in 0.14.",
+                DeprecationWarning,
+            )
+        kwargs["zarr_format"] = zarr_format
     return zarr.open_group(store, mode=mode, **kwargs)
 
 

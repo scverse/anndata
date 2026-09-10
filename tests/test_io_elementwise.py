@@ -22,7 +22,6 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.zarr import open_write_group
 from anndata.compat import CSArray, CSMatrix, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -63,7 +62,7 @@ def store(
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("h5py.Group", file["/"])
     elif diskfmt == "zarr":
-        store = open_write_group(MemoryStore())
+        store = zarr.open_group(MemoryStore(), mode="w")
     else:
         pytest.fail(f"Unknown store type: {diskfmt}")
 
@@ -767,7 +766,7 @@ def test_read_zarr_from_group(consolidated):
     store = MemoryStore()
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
-    z = open_write_group(store)
+    z = zarr.open_group(store, mode="w")
     write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
@@ -926,7 +925,7 @@ def test_h5_unchunked(
 def test_write_auto_sharded():
     store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
+    with ad.settings.override(auto_shard_zarr_v3=True):
         adata.write_zarr(store)
 
     check_all_sharded(zarr.open(store))
@@ -976,7 +975,7 @@ def test_write_auto_sharded_size_sparse():
 
 @pytest.mark.zarr_io
 def test_write_auto_sharded_does_not_override():
-    z = open_write_group(MemoryStore(), zarr_format=3)
+    z = zarr.open_group(MemoryStore(), mode="w", zarr_format=3)
     X = sparse.random(
         100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )

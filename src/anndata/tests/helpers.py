@@ -1217,13 +1217,7 @@ def open_store(
     """Open a `diskfmt_store`: a `Path` for h5, a `MemoryStore` for zarr."""
     if not isinstance(store, MemoryStore):
         return h5py.File(store, mode)
-    from anndata._io.zarr import open_write_group
-
-    return (
-        open_write_group(store, mode=mode)
-        if mode == "a"
-        else zarr.open_group(store, mode=mode)
-    )
+    return zarr.open_group(store, mode=mode)
 
 
 class AccessTrackingStore(WrapperStore[Store]):
