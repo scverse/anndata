@@ -32,7 +32,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from typing import Any, ClassVar
+    from typing import Any, ClassVar, Self
 
     from numpy.typing import NDArray
 
@@ -125,21 +125,38 @@ _UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", 
 
 
 class ArrayView(_SetItemMixin, np.ndarray):
+    _is_element: bool
+    """Whether `self` is `_view_args`’ referent, rather than derived from it."""
+
     def __new__(
-        cls,
-        input_array: Sequence[Any],
-        view_args: ViewArgs | None = None,
-    ):
+        cls, input_array: Sequence[Any], view_args: ViewArgs | None = None
+    ) -> Self:
         arr = np.asanyarray(input_array).view(cls)
 
         if view_args is not None:
             view_args = ElementRef(*view_args)
         arr._view_args = view_args
+        arr._is_element = True
         return arr
 
-    def __array_finalize__(self, obj: np.ndarray | None):
+    def __array_finalize__(self, obj: np.ndarray | None) -> None:
+        # Derivatives (e.g. `el.T`, `el[1:3]`, …) inherit `_view_args`,
+        # but aren’t what it refers to
+        self._is_element = False
         if obj is not None:
             self._view_args = getattr(obj, "_view_args", None)
+
+    def __setitem__(self, idx: object, value: object) -> None:
+        if (ref := self._view_args) is not None and not self._is_element:
+            # Wrong or pointless: `idx` would either write to the wrong cells,
+            # or into a copy that is going to be thrown away.
+            msg = (
+                f"Cannot modify `{ref}` of a view through a derived array "
+                f"(e.g. `{ref}[:]` or `{ref}.T`). "
+                f"Index `{ref}` directly, or derive from `{ref}.copy()`."
+            )
+            raise ValueError(msg)
+        super().__setitem__(idx, value)
 
     def __array_ufunc__(
         self: ArrayView,
