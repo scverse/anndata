@@ -8,6 +8,12 @@ import pandas as pd
 from ..compat import CupyArray, CupySparseMatrix
 from ..types import SupportsArrayApiBase
 from ..utils import asarray
+from ._dataframe_backend import (
+    axis_index,
+    copy_frame,
+    frame_annotation_columns,
+    subset_frame,
+)
 from .aligned_df import _gen_dataframe
 from .aligned_mapping import (
     AlignedMappingProperty,
@@ -30,9 +36,9 @@ if TYPE_CHECKING:
     from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef
     from ..typing import Index, InMemoryArray, _Index1DNorm
+    from ._dataframe_backend import DataFrameLike
     from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
-    from .xarray import Dataset2D
 
 
 # TODO: Implement views for Raw
@@ -53,7 +59,7 @@ class Raw:
         self,
         adata: AnnData,
         X: InMemoryArray | None = None,
-        var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
+        var: DataFrameLike | Mapping[str, Sequence] | None = None,
         varm: Mapping[str, AlignedArray] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:
@@ -82,10 +88,7 @@ class Raw:
                 self._X = adata.X.get()
             else:
                 self._X = _copy_array(adata.X)
-            if not isinstance(var_df := adata.var, pd.DataFrame):
-                msg = "Cannot create `.raw` from an AnnData with a lazy `var`"
-                raise NotImplementedError(msg)
-            self._var = var_df.copy()
+            self._var = copy_frame(adata.var)
             self.varm = adata.varm.copy()
         elif adata.isbacked:
             msg = "Cannot specify X if adata is backed"
@@ -126,7 +129,7 @@ class Raw:
         return self.n_obs, self.n_vars
 
     @property
-    def var(self) -> pd.DataFrame:
+    def var(self) -> DataFrameLike:
         return self._var
 
     @property
@@ -143,7 +146,7 @@ class Raw:
 
     @property
     def var_names(self) -> pd.Index[str]:
-        return self.var.index
+        return axis_index(self.var, dim="var")
 
     @property
     def obs_names(self) -> pd.Index[str]:
@@ -186,7 +189,7 @@ class Raw:
             else _subset(self._X, (oidx, vidx))
         )
 
-        var = self._var.iloc[_as_numpy_idx(vidx)]
+        var = subset_frame(self._var, vidx)
         new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
@@ -197,7 +200,12 @@ class Raw:
     def __str__(self) -> str:
         descr = f"Raw AnnData with n_obs × n_vars = {self.n_obs} × {self.n_vars}"
         for attr in ["var", "varm"]:
-            keys = getattr(self, attr).keys()
+            value = getattr(self, attr)
+            keys = (
+                frame_annotation_columns(value, dim="var")
+                if attr == "var"
+                else value.keys()
+            )
             if len(keys) > 0:
                 descr += f"\n    {attr}: {str(list(keys))[1:-1]}"
         return descr
@@ -207,7 +215,7 @@ class Raw:
             self._adata,
             # a backed `.X` lives in the file and cannot be passed to `Raw`
             X=None if self._adata.isbacked or self._X is None else _copy_array(self._X),
-            var=self.var.copy(),
+            var=copy_frame(self.var),
             varm=dict(self._varm),
         )
 
@@ -217,9 +225,9 @@ class Raw:
 
         return AnnData(
             X=None if (X := self.X) is None else _copy_array(X),
-            var=self.var.copy(),
+            var=copy_frame(self.var),
             varm=dict(self._varm),
-            obs=self._adata.obs.copy(),
+            obs=copy_frame(self._adata.obs),
             obsm=self._adata.obsm.copy(),
             obsp=self._adata.obsp.copy(),
             uns=dict(self._adata.uns),

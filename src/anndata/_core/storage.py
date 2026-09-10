@@ -17,6 +17,7 @@ from ..utils import (
     raise_value_error_if_multiindex_columns,
     warn,
 )
+from ._dataframe_backend import DataFrameLike
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -65,6 +66,18 @@ def _check_x_and_layers_are_2d_on_write(adata: AnnData) -> None:
             raise ValueError(msg)
 
 
+def _coerce_dataframe(value: DataFrameLike, *, name: str, allow_df: bool) -> object:
+    """Validate a stored frame, or reject it where only homogeneous arrays are allowed."""
+    if allow_df:
+        if isinstance(value, pd.DataFrame):
+            raise_value_error_if_multiindex_columns(value, name)
+        return value
+    if isinstance(value, pd.DataFrame):
+        return ensure_df_homogeneous(value, name)
+    msg = f"{name} cannot be a dataframe here; convert it to an array first."
+    raise ValueError(msg)
+
+
 def coerce_array(
     value: object,
     *,
@@ -104,6 +117,8 @@ def coerce_array(
     if any(is_non_csc_r_array_or_matrix):
         msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
         raise ValueError(msg)
+    if isinstance(value, DataFrameLike):
+        return _coerce_dataframe(value, name=name, allow_df=allow_df)
     # if value is an array-like object, try to convert it
     e = None
     if allow_array_like:

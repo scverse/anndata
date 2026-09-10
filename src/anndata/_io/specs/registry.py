@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
 
+    from ..._core._dataframe_backend import Dim
     from ..._core.xarray import Dataset2D
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
@@ -338,6 +339,26 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
+_DIM_BY_PATH: Mapping[str, Dim] = {"/obs": "obs", "/var": "var", "/raw/var": "var"}
+_DIM_BY_PARENT: Mapping[str, Dim] = {
+    "/obsm": "obs",
+    "/varm": "var",
+    "/raw/varm": "var",
+}
+
+
+def _dim_for_element(store: _GroupStorageType, key: str) -> Dim | None:
+    """The dimension a written element holds axis names for, going by its location.
+
+    `obs` and `var` are matched on their full path, so that an unrelated element sharing
+    the name (`uns["obs"]`, say) is not mistaken for one. Aligned dataframes are matched on
+    the mapping they live in.
+    """
+    return _DIM_BY_PATH.get(f"{store.name.rstrip('/')}/{key}") or _DIM_BY_PARENT.get(
+        store.name
+    )
+
+
 class Writer:
     def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
         self.registry = registry
@@ -353,6 +374,28 @@ class Writer:
                 )
         # Raises IORegistryError
         return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
+
+    def _resolve_write_func(
+        self,
+        dest_type: type,
+        elem: Any,
+        modifiers: frozenset[str],
+        *,
+        dim: Dim | None = None,
+    ) -> tuple[Write, Any]:
+        """Find the writer for `elem`, converting a frame of another backend on a miss.
+
+        Returns the write function and `elem`, which may have been converted. Only a miss
+        goes through narwhals, so ordinary array/mapping/… writes are untouched.
+        """
+        try:
+            return self.find_write_func(dest_type, elem, modifiers), elem
+        except IORegistryError:
+            from anndata._core._dataframe_backend import _ingest_as_pandas
+
+            if (coerced := _ingest_as_pandas(elem, dim=dim)) is None:
+                raise
+            return self.find_write_func(dest_type, coerced, modifiers), coerced
 
     @report_write_key_on_error
     def write_elem(
@@ -410,7 +453,9 @@ class Writer:
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func = self.find_write_func(type(store), elem, modifiers)
+        write_func, elem = self._resolve_write_func(
+            type(store), elem, modifiers, dim=_dim_for_element(store, k)
+        )
 
         if self.callback is None:
             return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)

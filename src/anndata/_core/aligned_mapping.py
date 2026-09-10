@@ -26,6 +26,16 @@ from ..utils import (
     warn,
     warn_once,
 )
+from ._dataframe_backend import (
+    DataFrameLike,
+    IndexedDataFrameLike,
+    _ingest_lazy,
+    axis_index,
+    copy_frame,
+    set_axis_index,
+    to_backend,
+    unwrap_narwhals,
+)
 from .access import ElementRef
 from .file_backing import to_memory
 from .index import Idx1D, _subset
@@ -35,7 +45,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
-    from typing import ClassVar, Literal, Self, TypeAlias
+    from typing import Any, ClassVar, Literal, Self, TypeAlias
 
     from ..compat import ZappyArray
     from ..typing import AlignedArray, InMemoryArray
@@ -43,7 +53,7 @@ if TYPE_CHECKING:
     from .raw import Raw
     from .sparse_dataset import BaseCompressedSparseDataset
 
-    type _AlignedAny = AlignedArray | pd.DataFrame
+    type _AlignedAny = AlignedArray | DataFrameLike
 
 
 OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
@@ -59,7 +69,9 @@ def _copy_value[V: _AlignedAny](v: V) -> V:
         return v  # on-disk arrays can’t be copied
     if isinstance(v, AwkArray):
         return copy(v)  # immutable buffers, so a shallow copy is enough
-    if isinstance(v, pd.DataFrame | Dataset2D | XDataArray):
+    if isinstance(v, DataFrameLike):
+        return cast("V", copy_frame(v))
+    if isinstance(v, XDataArray):
         return cast("V", v.copy())
     return _copy_array(v)
 
@@ -124,6 +136,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _Aligne
 
     def _validate_value(self, val: _AlignedAny, key: K) -> V:
         """Raises an error if value is invalid"""
+        val = unwrap_narwhals(val)
         if isinstance(val, AwkArray):
             msg = (
                 "Support for Awkward Arrays is currently experimental. "
@@ -131,7 +144,7 @@ class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _Aligne
             )
             warn_once(msg, ExperimentalFeatureWarning)
         elif isinstance(val, np.ndarray | CupyArray) and len(val.shape) == 1:
-            val = val.reshape((val.shape[0], 1))
+            val = cast("Any", val).reshape((val.shape[0], 1))
         elif isinstance(val, XDataset):
             val = Dataset2D(val)
         own_axes: tuple[Literal[0, 1], ...] = (0, 1) if len(self.axes) == 2 else (0,)
@@ -325,7 +338,7 @@ class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
     """
 
     _allow_df: ClassVar = True
-    _dimnames: ClassVar = ("obs", "var")
+    _dimnames: ClassVar[tuple[Literal["obs"], Literal["var"]]] = ("obs", "var")
 
     _axis: Literal[0, 1]
 
@@ -339,7 +352,7 @@ class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
         return (self._axis,)
 
     @property
-    def dim(self) -> str:
+    def dim(self) -> Literal["obs", "var"]:
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 
@@ -347,26 +360,38 @@ class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
         """Convert to pandas dataframe."""
         df = pd.DataFrame(index=self.dim_names)
         for key in self.keys():
-            for icolumn, column in enumerate(asarray(self[key]).T):
+            value = self[key]
+            if isinstance(value, DataFrameLike):
+                value = to_backend(value, "pandas", dim=self.dim).to_numpy()
+            else:
+                value = asarray(value)
+            for icolumn, column in enumerate(value.T):
                 df[f"{key}{icolumn + 1}"] = column
         return df
 
     def _validate_value(self, val: _AlignedAny, key: str) -> V:
-        if isinstance(val, pd.DataFrame):
-            raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
-            if not val.index.equals(self.dim_names):
+        val = unwrap_narwhals(val)
+        if (ingested := _ingest_lazy(val, dim=self.dim)) is not None:
+            val = cast("_AlignedAny", ingested)
+        if isinstance(val, DataFrameLike):
+            if isinstance(val, pd.DataFrame):
+                raise_value_error_if_multiindex_columns(
+                    val, f"{self.attrname}[{key!r}]"
+                )
+            val_index = axis_index(val, dim=self.dim)
+            if not val_index.equals(self.dim_names):
                 # Could probably also re-order index if it’s contained
                 try:
-                    pd.testing.assert_index_equal(val.index, self.dim_names)
+                    pd.testing.assert_index_equal(
+                        val_index, self.dim_names, exact=False, check_names=False
+                    )
                 except AssertionError as e:
                     msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
                     raise ValueError(msg) from None
-                else:
-                    msg = "Index.equals and pd.testing.assert_index_equal disagree"
-                    raise AssertionError(msg)
-            val.index.name = (
-                self.dim_names.name
-            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
+                val = set_axis_index(val, self.dim_names, dim=self.dim)
+            elif isinstance(val, IndexedDataFrameLike):
+                # consistent with AnnData.obsm.setter and AnnData.varm.setter
+                val.index.name = self.dim_names.name
         return super()._validate_value(val, key)
 
     @property
@@ -519,7 +544,7 @@ class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, "AlignedArray"]):
     """
 
     _allow_df: ClassVar = False
-    _dimnames: ClassVar = ("obs", "var")
+    _dimnames: ClassVar[tuple[Literal["obs"], Literal["var"]]] = ("obs", "var")
 
     _axis: Literal[0, 1]
 
@@ -533,7 +558,7 @@ class PairwiseArraysBase(AlignedMappingBase[OneDIdx, str, "AlignedArray"]):
         return (0, 0) if self._axis == 0 else (1, 1)
 
     @property
-    def dim(self) -> str:
+    def dim(self) -> Literal["obs", "var"]:
         """Name of the dimension this aligned to."""
         return self._dimnames[self._axis]
 

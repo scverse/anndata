@@ -32,6 +32,15 @@ from ..compat import (
     has_xp_base,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
+from ._dataframe_backend import (
+    DataFrameLike,
+    column_backed_dim,
+    frame_annotation_columns,
+    frame_equal,
+    native_backend,
+    to_backend,
+    true_axis_index,
+)
 from .anndata import AnnData
 from .index import _subset, make_slice
 from .xarray import Dataset2D
@@ -41,6 +50,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
+    import narwhals as nw
     import zarr
     from numpy.typing import NDArray
     from pandas.api.extensions import ExtensionDtype
@@ -50,6 +60,7 @@ if TYPE_CHECKING:
 
     from ..compat import XDataArray
     from ..types import SupportsArrayApiBase
+    from ._dataframe_backend import Dim
     from .raw import Raw
 
 
@@ -132,11 +143,10 @@ def equal(a, b) -> bool:
     return np.array_equal(a_na, b_na) and np.array_equal(a[~a_na], b[~b_na])
 
 
-@equal.register(pd.DataFrame)
-@equal.register(Dataset2D)
+@equal.register(DataFrameLike)
 @equal.register(pd.Series)
 def equal_dataframe(a, b) -> bool:
-    return a.equals(b)
+    return a.equals(b) if isinstance(a, pd.Series) else frame_equal(a, b)
 
 
 @equal.register(DaskArray)
@@ -335,16 +345,17 @@ def try_unifying_dtype(
     return None
 
 
-def check_combinable_cols(cols: list[pd.Index], join: Join_T):
+def check_combinable_cols(cols: Iterable[Iterable[str]], join: Join_T):
     """Given columns for a set of dataframes, checks if the can be combined.
 
     Looks for if there are duplicated column names that would show up in the result.
     """
+    indexes = [pd.Index(col) for col in cols]
     repeated_cols: set[str] = reduce(
-        lambda x, y: x.union(y[y.duplicated()]), cols, set()
+        lambda x, y: x.union(y[y.duplicated()]), indexes, set()
     )
     if join == "inner":
-        intersecting_cols = intersect_keys(cols)
+        intersecting_cols = intersect_keys(indexes)
         problem_cols = repeated_cols.intersection(intersecting_cols)
     elif join == "outer":
         problem_cols = repeated_cols
@@ -882,24 +893,31 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             raise ValueError(msg)
         else:
             return concat_dataset2d_on_annot_axis(
-                arrays, join="outer", force_lazy=force_lazy
+                arrays,
+                join="outer",
+                force_lazy=force_lazy,
+                concat_indices=index,
             )
-    if any(isinstance(a, pd.DataFrame) for a in arrays):
+    if any(isinstance(a, DataFrameLike) for a in arrays):
         # TODO: This is hacky, 0 is a sentinel for outer_concat_aligned_mapping
         if not all(
-            isinstance(a, pd.DataFrame) or a is MissingVal or 0 in a.shape
+            isinstance(a, DataFrameLike) or a is MissingVal or 0 in a.shape
             for a in arrays
         ):
             msg = "Cannot concatenate a dataframe with other array types."
             raise NotImplementedError(msg)
-        # TODO: behaviour here should be chosen through a merge strategy
-        df = pd.concat(
-            unify_dtypes(f(x) for f, x in zip(reindexers, arrays, strict=True)),
-            axis=axis,
-            ignore_index=True,
-        )
-        df.index = index
-        return df
+
+        def concat_in_pandas(values: Sequence[Any]) -> pd.DataFrame:
+            # TODO: behaviour here should be chosen through a merge strategy
+            df = pd.concat(
+                unify_dtypes(f(x) for f, x in zip(reindexers, values, strict=True)),
+                axis=axis,
+                ignore_index=True,
+            )
+            df.index = index
+            return df
+
+        return _via_pandas(arrays, concat_in_pandas, dim=_discover_dim(arrays))
     elif any(isinstance(a, AwkArray) for a in arrays):
         from ..compat import awkward as ak
 
@@ -1012,12 +1030,13 @@ def inner_concat_aligned_mapping(
 
 def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reindexer]:
     alt_axis = 1 - axis
+    df_indices: Callable[[DataFrameLike], pd.Index]
     if axis == 0:
-        df_indices = lambda x: x.columns
+        df_indices = _concat_frame_columns
     elif axis == 1:
-        df_indices = lambda x: x.indices
+        df_indices = lambda x: cast("pd.Index", cast("Any", x).indices)
 
-    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+    if all(isinstance(el, DataFrameLike) for el in els if not_missing(el)):
         common_ind = reduce(
             lambda x, y: x.intersection(y), (df_indices(el) for el in els)
         )
@@ -1045,7 +1064,7 @@ def gen_inner_reindexers(els, new_index, axis: Literal[0, 1] = 0) -> list[Reinde
 
 
 def gen_outer_reindexers(els, shapes, new_index: pd.Index, *, axis=0):
-    if all(isinstance(el, pd.DataFrame) for el in els if not_missing(el)):
+    if all(isinstance(el, DataFrameLike) for el in els if not_missing(el)):
         reindexers = [
             (lambda x: x)
             if not_missing(el)
@@ -1261,11 +1280,56 @@ def _resolve_axis(
 def axis_indices(adata: AnnData, axis: Literal["obs", 0, "var", 1]) -> pd.Index:
     """Helper function to get adata.{dim}_names."""
     _, axis_name = _resolve_axis(axis)
-    attr = getattr(adata, axis_name)
-    if isinstance(attr, Dataset2D):
-        return attr.true_index
-    else:
-        return attr.index
+    return true_axis_index(getattr(adata, axis_name), dim=axis_name)
+
+
+def _common_native_backend(
+    frames: Sequence[DataFrameLike],
+) -> nw.Implementation | None:
+    """The backend shared by all of `frames`, if they are index-less frames of one."""
+    backends = {native_backend(frame) for frame in frames}
+    # Indexed frames answer `None`, which is not a backend to convert back to.
+    if len(backends) != 1 or None in backends:
+        return None
+    return backends.pop()
+
+
+def _discover_dim(values: Iterable[Any]) -> Dim | None:
+    """The dimension index-less frames among `values` keep their axis names for."""
+    return next(
+        (
+            dim
+            for value in values
+            if isinstance(value, DataFrameLike)
+            and (dim := column_backed_dim(value)) is not None
+        ),
+        None,
+    )
+
+
+def _via_pandas[T](
+    values: Sequence[T],
+    run: Callable[[Sequence[T | pd.DataFrame]], pd.DataFrame],
+    *,
+    dim: Dim | None,
+) -> DataFrameLike:
+    """Run a pandas-only algorithm over `values`, restoring a shared native backend after.
+
+    Concat and merge are implemented against pandas, so every frame is converted first.
+    Where the inputs were all index-less frames of one backend, the result is converted
+    back, so the representation survives the round trip. Non-frames pass through untouched.
+    """
+    frames = [v for v in values if isinstance(v, DataFrameLike)]
+    backend = _common_native_backend(frames)
+    result = run([
+        to_backend(v, "pandas", dim=dim) if isinstance(v, DataFrameLike) else v
+        for v in values
+    ])
+    return result if backend is None else to_backend(result, backend, dim=dim)
+
+
+def _concat_frame_columns(frame: DataFrameLike) -> pd.Index:
+    return pd.Index(frame_annotation_columns(frame, dim=column_backed_dim(frame)))
 
 
 def make_dask_col_from_extension_dtype(
@@ -1761,43 +1825,46 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     ]
 
     # Annotation for concatenation axis
-    check_combinable_cols([getattr(a, axis_name).columns for a in adatas], join=join)
     annotations = [getattr(a, axis_name) for a in adatas]
-    are_any_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in annotations
+    check_combinable_cols(
+        [frame_annotation_columns(a, dim=axis_name) for a in annotations],
+        join=join,
     )
-    concat_annot: pd.DataFrame | Dataset2D
-    if are_any_annotations_dataframes:
-        annotations_in_memory = (
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in annotations
-        )
-        concat_annot = pd.concat(
-            unify_dtypes(annotations_in_memory),
-            join=join,
-            ignore_index=True,
-        )
-        concat_annot.index = concat_indices
+
+    def add_label(
+        annot: pd.DataFrame | Dataset2D,
+    ) -> pd.DataFrame | Dataset2D:
+        # Before any conversion back, as index-less frames have no item assignment.
+        if label is not None:
+            annot[label] = label_col
+        return annot
+
+    if not all(isinstance(a, Dataset2D) for a in annotations):
+
+        def concat_in_pandas(frames: Sequence[pd.DataFrame]) -> pd.DataFrame:
+            out = pd.concat(unify_dtypes(frames), join=join, ignore_index=True)
+            out.index = concat_indices
+            return cast("pd.DataFrame", add_label(out))
+
+        concat_annot = _via_pandas(annotations, concat_in_pandas, dim=axis_name)
     else:
-        concat_annot = concat_dataset2d_on_annot_axis(
-            annotations,
-            join,
-            force_lazy=force_lazy,
-            concat_indices=concat_indices,
+        concat_annot = add_label(
+            concat_dataset2d_on_annot_axis(
+                annotations,
+                join,
+                force_lazy=force_lazy,
+                concat_indices=concat_indices,
+            )
         )
-    if label is not None:
-        concat_annot[label] = label_col
 
     # Annotation for other axis
     alt_annotations = [getattr(a, alt_axis_name) for a in adatas]
-    are_any_alt_annotations_dataframes = any(
-        isinstance(a, pd.DataFrame) for a in alt_annotations
-    )
-    alt_annot: pd.DataFrame | Dataset2D
-    if are_any_alt_annotations_dataframes:
-        alt_annotations_in_memory = [
-            to_memory(a) if isinstance(a, Dataset2D) else a for a in alt_annotations
-        ]
-        alt_annot = merge_dataframes(alt_annotations_in_memory, alt_indices, merge)
+    if not all(isinstance(a, Dataset2D) for a in alt_annotations):
+        alt_annot = _via_pandas(
+            alt_annotations,
+            lambda frames: merge_dataframes(frames, alt_indices, merge),
+            dim=alt_axis_name,
+        )
     else:
         # TODO: figure out mapping of our merge to theirs instead of just taking first, although this appears to be
         # the only "lazy" setting so I'm not sure we really want that.

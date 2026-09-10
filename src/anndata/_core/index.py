@@ -24,6 +24,7 @@ from ..compat import (
     has_xp_base,
 )
 from ..types import SupportsArrayApiBase
+from ._dataframe_backend import DataFrameLike, frame_annotation_columns, subset_frame
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -494,6 +495,12 @@ def _subset_df(df: pd.DataFrame, subset_idx: NumpySubsetIdx) -> pd.DataFrame:
     return df.iloc[subset_idx[0], subset_idx[1]]
 
 
+@_subset_dispatch.register(DataFrameLike)
+@_ensure_numpy_idx
+def _subset_frame[T: DataFrameLike](df: T, subset_idx: NumpySubsetIdx) -> T:
+    return cast("T", subset_frame(df, subset_idx))
+
+
 @_subset_dispatch.register(Dataset2D)
 @_ensure_numpy_idx
 def _subset_dataset2d(ds: Dataset2D, subset_idx: NumpySubsetIdx) -> Dataset2D:
@@ -638,7 +645,8 @@ def _get_vector_ambiguous(
     from ..acc import A
 
     idxdim = "var" if dim == "obs" else "obs"
-    match (k in getattr(adata, dim), k in getattr(adata, f"{idxdim}_names")):
+    in_annotation = k in frame_annotation_columns(getattr(adata, dim), dim=dim)
+    match (in_annotation, k in getattr(adata, f"{idxdim}_names")):
         case True, True:
             msg = f"Key {k} could be found in both .{idxdim}_names and .{dim}.columns"
             raise ValueError(msg)
