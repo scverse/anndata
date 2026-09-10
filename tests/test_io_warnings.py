@@ -52,9 +52,9 @@ def test_old_format_warning_not_thrown(tmp_path: Path) -> None:
 
 def test_zarr_write_format_deprecated():
     store = MemoryStore()
-    # pydantic doesn't warn on setting, just accessing?
-    # also, use a context so we don't trigger the warning when the setting resets
+    # use a context so we don't trigger the warning when the setting resets
     with (
+        pytest.warns(DeprecationWarning, match="zarr v3 will be the default"),
         ad.settings.override(zarr_write_format=2),
         pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"),
     ):

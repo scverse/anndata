@@ -247,9 +247,7 @@ def open_write_group(
     if "zarr_format" not in kwargs:
         with warnings.catch_warnings():
             warnings.filterwarnings(
-                "ignore",
-                r"This setting will be removed in 0.14",
-                DeprecationWarning,
+                "ignore", r"This setting will be removed in 0.14", DeprecationWarning
             )
             if settings.zarr_write_format == 2:
                 warn(
