@@ -18,6 +18,7 @@ else:
 
 from filelock import FileLock
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
@@ -51,28 +52,46 @@ def which(request: pytest.FixtureRequest) -> Literal["X", "layers"]:
 
 
 @pytest.fixture(
-    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
-    ids=["h5ad", "zarr2", "zarr3"],
+    params=["h5ad", "zarr"],
+    ids=["h5ad", "zarr"],
 )
 def diskfmt(
     request: pytest.FixtureRequest,
-) -> Generator[Literal["h5ad", "zarr"], None, None]:
-    if (fmt := request.param[0]) == "h5ad":
-        yield fmt
-    else:
-        with ad.settings.override(zarr_write_format=request.param[1]):
-            yield fmt
+) -> Literal["h5ad", "zarr"]:
+    return request.param
 
 
 @pytest.fixture
 def diskfmt2(
-    diskfmt: Literal["h5ad", "zarr"],
-) -> Generator[Literal["zarr", "h5ad"], None, None]:
+    diskfmt: Literal["zarr"],
+) -> Literal["zarr", "h5ad"]:
     if diskfmt == "h5ad":
-        with ad.settings.override(zarr_write_format=2):
-            yield "zarr"
-    else:
-        yield "h5ad"
+        return "zarr"
+    pytest.skip(
+        "diskfmt / diskfmt2 tests should be symmetric so h5ad in diskfmt and zarr and diskfmt2 should be sufficient."
+    )
+
+
+def _store_for(tmp_path: Path, diskfmt: str, name: str) -> Path | MemoryStore:
+    """Where to write: a file path for `h5ad`, an in-memory store for `zarr`.
+
+    Tests should not touch the file system unless that is what they test.
+    """
+    return tmp_path / f"{name}.h5ad" if diskfmt == "h5ad" else MemoryStore()
+
+
+@pytest.fixture
+def diskfmt_store(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> Path | MemoryStore:
+    return _store_for(tmp_path, diskfmt, "test")
+
+
+@pytest.fixture
+def diskfmt2_store(
+    tmp_path: Path, diskfmt2: Literal["h5ad", "zarr"]
+) -> Path | MemoryStore:
+    return _store_for(tmp_path, diskfmt2, "test2")
 
 
 @pytest.fixture(

@@ -15,7 +15,6 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
-from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
@@ -27,24 +26,56 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
 
-    from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
     from ..typing import RWAble
 
+from importlib.metadata import version
+
+from packaging.version import Version
+
 
 @contextmanager
-def zarrs_context():
+def fast_zarr_context():
+    # We are going to be "guinea pigs" for this new pipeline because it should be much faster
+    # and we're shortchanging our users otherwise.
+    # So we change the pipeline if it has not been changed by the user i.e.,
+    # it is the old BatchedCodecPipeline.
+    # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
+    old_pipeline = zarr.config.get("codec_pipeline.path")
+    use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
+        "3.3"
+    )
+    # Switch to zarrs if the old pipeline is just the default
+    use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
+    zarr_context = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if use_zarr_fused
+        else nullcontext()
+    )
+    if use_zarrs:
+
+        @contextmanager
+        def _context():
+            with (
+                zarr_context,
+                zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}),
+            ):
+                yield
+
+        context = _context()
+
+    else:
+        context = zarr_context
     with (
-        (
-            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-            if find_spec("zarrs")
-            else nullcontext()
-        ),
-        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+        context,
+        warnings.catch_warnings() if use_zarrs else nullcontext(),
     ):
-        if find_spec("zarrs"):
+        if use_zarrs:
             warnings.filterwarnings(
                 "ignore",
                 message=r".*unsupported by ZarrsCodecPipeline.*",
@@ -80,9 +111,9 @@ def write_zarr(
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with zarrs_context():
+    with fast_zarr_context():
         # TODO: Use spec writing system for this
-        f = open_write_group(store)
+        f = zarr.open_group(store, mode="w")
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -145,7 +176,7 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with zarrs_context():
+    with fast_zarr_context():
         if isinstance(store, zarr.Group):
             f = store
         else:
@@ -212,14 +243,6 @@ def read_dataframe(group: zarr.Group | zarr.Array) -> RWAble:
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
-
-
-def open_write_group(
-    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
-) -> zarr.Group:
-    if "zarr_format" not in kwargs:
-        kwargs["zarr_format"] = settings.zarr_write_format
-    return zarr.open_group(store, mode=mode, **kwargs)
 
 
 def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:

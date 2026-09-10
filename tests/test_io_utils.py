@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import importlib
+import sys
+import types
 from contextlib import AbstractContextManager, nullcontext
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import dask.array as da
@@ -9,16 +13,19 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
+from anndata._io.zarr import fast_zarr_context
 from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.mark.parametrize(
@@ -57,9 +64,8 @@ def test_key_error(
             read_attr(group["group"])
 
 
-def test_write_error_info(diskfmt, tmp_path):
-    pth = tmp_path / f"failed_write.{diskfmt}"
-    write = lambda x: getattr(x, f"write_{diskfmt}")(pth)
+def test_write_error_info(diskfmt, diskfmt_store):
+    write = lambda x: getattr(x, f"write_{diskfmt}")(diskfmt_store)
 
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
@@ -156,15 +162,90 @@ def test_to_writeable_does_not_recurse() -> None:
     assert result is x
 
 
+
+has_fused = Version(version("zarr")) >= Version("3.3")
+
+
+@pytest.mark.parametrize(
+    ("mk_group", "use_zarrs", "set_fused", "expected"),
+    [
+        pytest.param(
+            zarr.create_group,
+            True,
+            True,
+            "Fused",
+            id="local_group_triggers_fused_when_set",
+            marks=pytest.mark.skipif(
+                not has_fused,
+                reason="No fused pipeline to set",
+            ),
+        ),
+        pytest.param(
+            zarr.create_group,
+            True,
+            False,
+            "Zarrs",
+            id="local_group_triggers_zarrs",
+        ),
+        # zarrs cannot handle memory stores, so it falls back to zarr-python
+        pytest.param(
+            lambda x: zarr.create_group(zarr.storage.MemoryStore()),
+            False,
+            False,
+            "Fused" if has_fused else "Batched",
+            id="mem_group_triggers_fused",
+        ),
+    ],
+)
+def test_zarr_context(
+    monkeypatch,
+    tmp_path,
+    mk_group,
+    expected: Literal["Fused", "Batched", "Zarrs"],
+    *,
+    use_zarrs: bool,
+    set_fused: bool,
+):
+    if use_zarrs:
+        fake_module = types.ModuleType("zarrs")
+        fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
+
+        monkeypatch.setitem(sys.modules, "zarrs", fake_module)
+    outer_ctx = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"
+        })
+        if set_fused
+        else nullcontext()
+    )
+    with outer_ctx:
+        with fast_zarr_context():
+            g = mk_group(tmp_path)
+            if not use_zarrs:
+                g["foo"] = np.ones((2, 3))
+                pipeline = str(g["foo"]._async_array.codec_pipeline)
+            else:
+                # we don't install zarrs, so just check that the context sets it
+                # instead of fallback behavior
+                pipeline = zarr.config.get("codec_pipeline.path")
+            assert expected in pipeline
+        # `fast_zarr_context` context works and does not leak state i.e., old pipeline returns
+        if set_fused:
+            assert "Fused" in zarr.config.get("codec_pipeline.path")
+        else:
+            assert "Batched" in zarr.config.get("codec_pipeline.path")
+            
 @pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
 def test_write_chunk_size(tmp_path, output_format) -> None:
     pth = tmp_path / f"test.{output_format}"
-    adata = ad.AnnData(X=da.ones((6, 6)).rechunk((2, 2)))
+    adata = ad.AnnData(X=da.arange(36).reshape((6, 6)).rechunk((2, 2)))
     if output_format == "zarr":
         adata.write_zarr(pth)
         store = zarr.open(pth, mode="r")
         assert store["X"].chunks == adata.X.chunksize
+        np.testing.assert_array_equal(store["X"], adata.X)
     else:
         adata.write_h5ad(pth)
         with h5py.File(pth, mode="r") as store:
             assert store["X"].chunks == adata.X.chunksize
+            np.testing.assert_array_equal(store["X"], adata.X)
