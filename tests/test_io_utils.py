@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager, nullcontext
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+import dask.array as da
 import h5py
 import numpy as np
 import pandas as pd
@@ -232,3 +233,19 @@ def test_zarr_context(
             assert "Fused" in zarr.config.get("codec_pipeline.path")
         else:
             assert "Batched" in zarr.config.get("codec_pipeline.path")
+
+
+@pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
+def test_write_chunk_size(tmp_path, output_format) -> None:
+    pth = tmp_path / f"test.{output_format}"
+    adata = ad.AnnData(X=da.arange(36).reshape((6, 6)).rechunk((2, 2)))
+    if output_format == "zarr":
+        adata.write_zarr(pth)
+        store = zarr.open(pth, mode="r")
+        assert store["X"].chunks == adata.X.chunksize
+        np.testing.assert_array_equal(store["X"], adata.X)
+    else:
+        adata.write_h5ad(pth)
+        with h5py.File(pth, mode="r") as store:
+            assert store["X"].chunks == adata.X.chunksize
+            np.testing.assert_array_equal(store["X"], adata.X)
