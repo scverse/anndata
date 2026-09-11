@@ -22,7 +22,6 @@ from ..utils import (
     axis_len,
     convert_to_dict,
     deprecation_msg,
-    raise_value_error_if_multiindex_columns,
     warn,
     warn_once,
 )
@@ -350,24 +349,6 @@ class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
             for icolumn, column in enumerate(asarray(self[key]).T):
                 df[f"{key}{icolumn + 1}"] = column
         return df
-
-    def _validate_value(self, val: _AlignedAny, key: str) -> V:
-        if isinstance(val, pd.DataFrame):
-            raise_value_error_if_multiindex_columns(val, f"{self.attrname}[{key!r}]")
-            if not val.index.equals(self.dim_names):
-                # Could probably also re-order index if it’s contained
-                try:
-                    pd.testing.assert_index_equal(val.index, self.dim_names)
-                except AssertionError as e:
-                    msg = f"value.index does not match parent’s {self.dim} names:\n{e}"
-                    raise ValueError(msg) from None
-                else:
-                    msg = "Index.equals and pd.testing.assert_index_equal disagree"
-                    raise AssertionError(msg)
-            val.index.name = (
-                self.dim_names.name
-            )  # this is consistent with AnnData.obsm.setter and AnnData.varm.setter
-        return super()._validate_value(val, key)
 
     @property
     def dim_names(self) -> pd.Index:
