@@ -579,7 +579,7 @@ def write_basic_dask_dask_dense(
 
     dataset_kwargs = dict(dataset_kwargs)
 
-    if "chunks" not in dataset_kwargs:
+    if "shards" not in dataset_kwargs and "chunks" not in dataset_kwargs:
         # logic based on code in da.to_zarr
 
         if not da.core._check_regular_chunks(elem.chunks):

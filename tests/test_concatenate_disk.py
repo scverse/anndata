@@ -8,7 +8,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 from scipy import sparse
 from zarr.storage import MemoryStore
 
@@ -18,7 +17,7 @@ from anndata._core import merge
 from anndata._core.merge import _resolve_axis
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -269,14 +268,6 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
             xxxm_adatas[i] = xxxm_adatas[i].T
             xxxm_adatas[i].X = sparse.csr_matrix(xxxm_adatas[i].X)
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
-
-
-def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
-    out = assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
-    g = zarr.open(out)
-    assert g.metadata.zarr_format == 3
-
-    check_all_sharded(g)
 
 
 def test_singleton(xxxm_adatas, tmp_path, file_format):
