@@ -316,10 +316,10 @@ def test_concat_on_disk_pairwise_missing_keys(tmp_path, file_format, join_type):
 def test_concat_on_disk_pairwise_not_written_by_default(tmp_path, file_format):
     """Without ``pairwise=True`` the concatenation-axis pairwise group is left out."""
     adatas = [_pairwise_adata(0, 3, ["conn"]), _pairwise_adata(1, 2, ["conn"])]
-    paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / f"out.{file_format}"
-    concat_on_disk(paths, out_name)
-    with as_group(out_name, mode="r") as rg:
+    stores = _adatas_to_stores(adatas, tmp_path, file_format, on_disk_zarr=False)
+    out = _make_store(tmp_path, file_format, "out", on_disk_zarr=False)
+    concat_on_disk(stores, out)
+    with as_group(out, mode="r") as rg:
         assert "obsp" not in dict(rg)
 
 
