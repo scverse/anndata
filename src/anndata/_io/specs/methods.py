@@ -579,11 +579,7 @@ def write_basic_dask_dask_dense(
 
     dataset_kwargs = dict(dataset_kwargs)
 
-    if "shards" not in dataset_kwargs and "chunks" not in dataset_kwargs:
-        # logic based on code in da.to_zarr
-
-        if not da.core._check_regular_chunks(elem.chunks):
-            elem = elem.rechunk(tuple(map(max, elem.chunks)))
+    if "shards" not in dataset_kwargs and "chunks" not in dataset_kwargs and da.core._check_regular_chunks(elem.chunks):
         # zarr requires min chunk size 1
         min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
         dataset_kwargs["chunks"] = tuple(
