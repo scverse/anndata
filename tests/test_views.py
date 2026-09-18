@@ -951,8 +951,16 @@ def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: 
     [
         pytest.param(sparse.csr_matrix(np.random.random((1, 10))), id="sparse"),
         pytest.param([1.2, 3.4], id="list"),
+        pytest.param([1.2, 3.0], id="list-partially-integral"),
         *(
             pytest.param(np.array([1.2, 2.3], dtype=dtype), id=f"ndarray-{dtype}")
+            for dtype in [np.float32, np.float64]
+        ),
+        *(
+            pytest.param(
+                np.array([1.2, 3.0], dtype=dtype),
+                id=f"ndarray-partially-integral-{dtype}",
+            )
             for dtype in [np.float32, np.float64]
         ),
     ],
@@ -963,6 +971,13 @@ def test_index_float_sequence_raises_error(
     adata = gen_adata((10, 10))
     with pytest.raises(IndexError, match=r"has floating point values"):
         adata[index]
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_index_integral_float_sequence(dtype: type[np.floating]) -> None:
+    adata = gen_adata((10, 10))
+    subset = adata[np.array([1.0, 3.0], dtype=dtype)]
+    assert subset.obs_names.equals(adata.obs_names[[1, 3]])
 
 
 @pytest.mark.array_api
