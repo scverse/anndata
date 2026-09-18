@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable, Mapping, Sized
 from dataclasses import dataclass
 from functools import wraps
-from typing import TYPE_CHECKING, Self, overload
+from typing import TYPE_CHECKING, overload
 
 import numpy as np
 import pandas as pd
@@ -14,8 +14,10 @@ from anndata._warnings import warn
 from ..compat import XDataArray, XDataset, XVariable, pandas_as_str
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Iterator
+    from collections.abc import Callable, Collection, Iterable, Iterator, KeysView
     from typing import Any, Literal
+
+    from pandas.api.typing.aliases import Scalar
 
     from .._types import Dataset2DIlocIndexer
 
@@ -33,7 +35,7 @@ def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     return wrapper
 
 
-class Dataset2D(Mapping[Hashable, XDataArray | Self]):
+class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
     r"""
     A wrapper class meant to enable working with lazy dataframe data according to
     :class:`~anndata.AnnData`'s internal API.  This class ensures that "dataframe-invariants"
@@ -51,7 +53,7 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     """
 
     @staticmethod
-    def _validate_shape_invariants(ds: XDataset):
+    def _validate_shape_invariants(ds: XDataset) -> None:
         """
         Validate that the dataset has only one dimension, which is the index dimension.
         This is a requirement for 2D datasets.
@@ -80,8 +82,8 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         """The underlying :class:`xarray.Dataset`."""
         return self._ds
 
-    def keys(self) -> list[Hashable]:
-        return list(iter(self.ds))
+    def keys(self) -> KeysView[Hashable]:
+        return self.ds.keys()
 
     @property
     def is_backed(self) -> bool:
@@ -104,7 +106,10 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         if len(self.ds.sizes) != 1:
             msg = f"xarray Dataset should not have more than 1 dims, found {len(self.ds.sizes)} {self.ds.sizes}, {self}"
             raise ValueError(msg)
-        return next(iter(self.ds.coords.keys()))
+        if not isinstance(dim := next(iter(self.ds.coords.keys())), str):
+            msg = f"Index dimension should be a string, found {dim!r}"
+            raise ValueError(msg)
+        return dim
 
     @property
     def true_index_dim(self) -> str:
@@ -214,7 +219,9 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
         ret = self.ds.__getitem__(key)
-        if is_empty := (len(key) == 0 and not isinstance(key, tuple)):  # empty Dataset
+        if is_empty := (
+            isinstance(key, Sized) and len(key) == 0 and not isinstance(key, tuple)
+        ):
             ret.coords[self.index_dim] = self.xr_index
         if isinstance(ret, XDataset):
             # If we get an xarray Dataset, we return a Dataset2D
@@ -297,7 +304,7 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         )
 
     def __setitem__(
-        self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
+        self, key: Hashable | Iterable[Hashable] | Mapping, value: object
     ) -> None:
         """
         Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
@@ -386,13 +393,16 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         """Thin wrapper around :meth:`xarray.Dataset.equals`"""
         if isinstance(b, Dataset2D):
             b = b.ds
+        if not isinstance(b, XDataset):
+            msg = f"Cannot compare a Dataset2D to {type(b).__name__}"
+            raise TypeError(msg)
         return self.ds.equals(b)
 
     def reindex(
         self,
         index: pd.Index | None = None,
         axis: Literal[0] = 0,
-        fill_value: Any | None = np.nan,
+        fill_value: Scalar | None = np.nan,
     ) -> Dataset2D:
         """Reindex the current object against a new index.
 

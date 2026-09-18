@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import importlib
+import sys
+import types
 from contextlib import AbstractContextManager, nullcontext
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import h5py
@@ -8,16 +12,19 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from packaging.version import Version
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
+from anndata._io.zarr import fast_zarr_context
 from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
     from pathlib import Path
+    from typing import Literal
 
 
 @pytest.mark.parametrize(
@@ -56,9 +63,8 @@ def test_key_error(
             read_attr(group["group"])
 
 
-def test_write_error_info(diskfmt, tmp_path):
-    pth = tmp_path / f"failed_write.{diskfmt}"
-    write = lambda x: getattr(x, f"write_{diskfmt}")(pth)
+def test_write_error_info(diskfmt, diskfmt_store):
+    write = lambda x: getattr(x, f"write_{diskfmt}")(diskfmt_store)
 
     # Assuming we don't define a writer for tuples
     a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
@@ -121,12 +127,13 @@ def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | 
     assert result is x
 
 
-def get_gpu_devices() -> Iterator:
-    return (
+def get_gpu_devices() -> list:
+    assert jnp is not None
+    return [
         d
         for d in jnp.__array_namespace_info__().devices()
         if d is not None and d.device_kind == "GPU"
-    )
+    ]
 
 
 skip_if_no_jax_gpu = pytest.mark.skipif(
@@ -138,6 +145,7 @@ skip_if_no_jax_gpu = pytest.mark.skipif(
 @skip_if_no_jax_gpu
 @pytest.mark.array_api
 def test_to_writeable_jax_gpu_array() -> None:
+    assert jnp is not None
     x = jnp.asarray([1.0, 2.0], device=get_gpu_devices()[0])
     result = to_writeable(x)
     assert isinstance(result, np.ndarray)
@@ -146,7 +154,81 @@ def test_to_writeable_jax_gpu_array() -> None:
 
 @pytest.mark.array_api
 def test_to_writeable_does_not_recurse() -> None:
+    assert jnp is not None
     x = {"a": jnp.array([1.0, 2.0])}
     result = to_writeable(x)
     # since dict is not supported, it should return unchanged
     assert result is x
+
+
+has_fused = Version(version("zarr")) >= Version("3.3")
+
+
+@pytest.mark.parametrize(
+    ("mk_group", "use_zarrs", "set_fused", "expected"),
+    [
+        pytest.param(
+            zarr.create_group,
+            True,
+            True,
+            "Fused",
+            id="local_group_triggers_fused_when_set",
+            marks=pytest.mark.skipif(
+                not has_fused,
+                reason="No fused pipeline to set",
+            ),
+        ),
+        pytest.param(
+            zarr.create_group,
+            True,
+            False,
+            "Zarrs",
+            id="local_group_triggers_zarrs",
+        ),
+        # zarrs cannot handle memory stores, so it falls back to zarr-python
+        pytest.param(
+            lambda x: zarr.create_group(zarr.storage.MemoryStore()),
+            False,
+            False,
+            "Fused" if has_fused else "Batched",
+            id="mem_group_triggers_fused",
+        ),
+    ],
+)
+def test_zarr_context(
+    monkeypatch,
+    tmp_path,
+    mk_group,
+    expected: Literal["Fused", "Batched", "Zarrs"],
+    *,
+    use_zarrs: bool,
+    set_fused: bool,
+):
+    if use_zarrs:
+        fake_module = types.ModuleType("zarrs")
+        fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
+
+        monkeypatch.setitem(sys.modules, "zarrs", fake_module)
+    outer_ctx = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"
+        })
+        if set_fused
+        else nullcontext()
+    )
+    with outer_ctx:
+        with fast_zarr_context():
+            g = mk_group(tmp_path)
+            if not use_zarrs:
+                g["foo"] = np.ones((2, 3))
+                pipeline = str(g["foo"]._async_array.codec_pipeline)
+            else:
+                # we don't install zarrs, so just check that the context sets it
+                # instead of fallback behavior
+                pipeline = zarr.config.get("codec_pipeline.path")
+            assert expected in pipeline
+        # `fast_zarr_context` context works and does not leak state i.e., old pipeline returns
+        if set_fused:
+            assert "Fused" in zarr.config.get("codec_pipeline.path")
+        else:
+            assert "Batched" in zarr.config.get("codec_pipeline.path")

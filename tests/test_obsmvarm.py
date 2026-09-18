@@ -11,6 +11,7 @@ from scipy import sparse
 from anndata import AnnData
 from anndata.compat import CupyArray
 from anndata.tests.helpers import as_cupy, get_multiindex_columns_df, jnp
+from anndata.utils import asarray
 
 M, N = (100, 100)
 
@@ -40,14 +41,14 @@ def adata():
 
 
 def test_assignment_dict(adata: AnnData):
-    d_obsm = dict(
+    d_obsm: dict[str, pd.DataFrame | np.ndarray] = dict(
         a=pd.DataFrame(
             dict(a1=np.ones(M), a2=[f"a{i}" for i in range(M)]),
             index=adata.obs_names,
         ),
         b=np.zeros((M, 2)),
     )
-    d_varm = dict(
+    d_varm: dict[str, pd.DataFrame | np.ndarray] = dict(
         a=pd.DataFrame(
             dict(a1=np.ones(N), a2=[f"a{i}" for i in range(N)]),
             index=adata.var_names,
@@ -102,20 +103,24 @@ def test_setting_dataframe(adata: AnnData):
 
 def test_setting_sparse(adata: AnnData):
     obsm_sparse = sparse.random(M, 100, format="csr")
+    assert isinstance(obsm_sparse, sparse.csr_matrix)
     adata.obsm["a"] = obsm_sparse
-    assert not np.any((adata.obsm["a"] != obsm_sparse).data)
+    assert not np.any(asarray(adata.obsm["a"]) != asarray(obsm_sparse))
 
     varm_sparse = sparse.random(N, 100, format="csr")
+    assert isinstance(varm_sparse, sparse.csr_matrix)
     adata.varm["a"] = varm_sparse
-    assert not np.any((adata.varm["a"] != varm_sparse).data)
+    assert not np.any(asarray(adata.varm["a"]) != asarray(varm_sparse))
 
     h = joblib.hash(adata)
 
     bad_obsm_sparse = sparse.random(M * 2, M, format="csr")
+    assert isinstance(bad_obsm_sparse, sparse.csr_matrix)
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsm["b"] = bad_obsm_sparse
 
     bad_varm_sparse = sparse.random(N * 2, N, format="csr")
+    assert isinstance(bad_varm_sparse, sparse.csr_matrix)
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varm["b"] = bad_varm_sparse
 
@@ -146,6 +151,7 @@ def test_setting_daskarray(adata: AnnData):
 
 @pytest.mark.array_api
 def test_setting_jax(adata: AnnData) -> None:
+    assert jnp is not None
     adata.obsm["jax"] = jnp.ones((adata.shape[0], 10))
     assert isinstance(adata.obsm["jax"], jnp.ndarray)
 

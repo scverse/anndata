@@ -59,6 +59,8 @@ class SparseCSRContiguousSlice:
 
     def setup(self, index: str, use_dask: bool):  # noqa: FBT001
         g = zarr.open(self.filepath)
+        assert isinstance(g, zarr.Group), g
+        assert isinstance(g["X"], zarr.Group), g["X"]
         self.x = read_elem_lazy(g["X"]) if use_dask else sparse_dataset(g["X"])
         self.adata = AnnData(self.x)
         self.index = self._indexers[index]

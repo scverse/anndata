@@ -13,6 +13,7 @@ import zarr
 from numpy import ma
 from scipy import sparse as sp
 from scipy.sparse import csr_matrix, issparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata import AnnData, ImplicitModificationWarning
@@ -27,13 +28,15 @@ from anndata.tests.helpers import (
     get_multiindex_columns_df,
     jnp,
 )
+from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Literal
+    from typing import Any, Literal
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
+assert isinstance(adata_dense.X, np.ndarray)
 adata_dense.layers["test"] = adata_dense.X
 adata_sparse = AnnData(
     csr_matrix([[0, 2, 3], [0, 5, 6]]),
@@ -59,27 +62,39 @@ def adata_on_disk(
     diskfmt: Literal["h5ad", "zarr"],
     adata: AnnData,
     tmp_path_factory: pytest.TempPathFactory,
-) -> Path:
-    path = (
+) -> tuple[Path | MemoryStore, bool]:
+    store = (
         tmp_path_factory.mktemp("disk_backed")
-        / f"{'sparse' if adata is adata_sparse else 'dense'}.{diskfmt}"
+        / f"{'sparse' if adata is adata_sparse else 'dense'}.h5ad"
+        if diskfmt == "h5ad"
+        else MemoryStore()
     )
-    getattr(adata, f"write_{diskfmt}")(path)
-    return path
+    getattr(adata, f"write_{diskfmt}")(store)
+    return store, adata is adata_sparse
 
 
 @pytest.mark.parametrize("elem_name", ["X", "obsm", "layers"])
 def test_cant_copy_disk_backed(
-    adata_on_disk: Path, elem_name: Literal["X", "obsm", "layers"]
+    adata_on_disk: tuple[Path | MemoryStore, bool],
+    elem_name: Literal["X", "obsm", "layers"],
 ):
-    is_sparse = "sparse" in str(adata_on_disk)
-    is_zarr = adata_on_disk.suffix == ".zarr"
-    root = (zarr.open if is_zarr else h5py.File)(adata_on_disk)
-    X = ad.io.sparse_dataset(root["X"]) if is_sparse else root["X"]
-    adata = AnnData(**{elem_name: (X if elem_name == "X" else {"X": X})})
+    store, is_sparse = adata_on_disk
+    is_zarr = isinstance(store, MemoryStore)
+    root = (zarr.open if is_zarr else h5py.File)(store)
+    assert isinstance(root, zarr.Group | h5py.File)
+    elem = root["X"]
+    X: object
+    if is_sparse:
+        assert isinstance(elem, zarr.Group | h5py.Group)
+        X = ad.io.sparse_dataset(elem)
+    else:
+        X = elem
+    kwargs: dict[str, Any] = {elem_name: (X if elem_name == "X" else {"X": X})}
+    adata = AnnData(**kwargs)
     with pytest.raises(NotImplementedError, match=r"Copy is not implemented"):
         adata.copy()
     if not is_zarr:
+        assert isinstance(root, h5py.File)
         root.close()
 
 
@@ -410,34 +425,39 @@ def test_slicing(xp) -> None:
 
     # assert adata[:, 0].X.tolist() == adata.X[:, 0].tolist()  # No longer the case
 
-    assert adata[0, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
-    assert adata[0, :].X.tolist() == xp.reshape(xp.array([1, 2, 3]), (1, 3)).tolist()
-    assert adata[:, 0].X.tolist() == xp.reshape(xp.array([1, 4]), (2, 1)).tolist()
+    assert asarray(adata[0, 0].X).tolist() == xp.reshape(1, (1, 1)).tolist()
+    assert (
+        asarray(adata[0, :].X).tolist()
+        == xp.reshape(xp.array([1, 2, 3]), (1, 3)).tolist()
+    )
+    assert (
+        asarray(adata[:, 0].X).tolist() == xp.reshape(xp.array([1, 4]), (2, 1)).tolist()
+    )
 
-    assert adata[:, [0, 1]].X.tolist() == [[1, 2], [4, 5]]
-    assert adata[:, xp.array([0, 2])].X.tolist() == [[1, 3], [4, 6]]
-    assert adata[:, xp.array([False, True, True])].X.tolist() == [
+    assert asarray(adata[:, [0, 1]].X).tolist() == [[1, 2], [4, 5]]
+    assert asarray(adata[:, xp.array([0, 2])].X).tolist() == [[1, 3], [4, 6]]
+    assert asarray(adata[:, xp.array([False, True, True])].X).tolist() == [
         [2, 3],
         [5, 6],
     ]
     assert (
-        adata[xp.array([0]), xp.array([0, 2])].X.tolist()
-        == adata[xp.array([0]), :][:, xp.array([0, 2])].X.tolist()
+        asarray(adata[xp.array([0]), xp.array([0, 2])].X).tolist()
+        == asarray(adata[xp.array([0]), :][:, xp.array([0, 2])].X).tolist()
     )
-    assert adata[:, 1:3].X.tolist() == [[2, 3], [5, 6]]
+    assert asarray(adata[:, 1:3].X).tolist() == [[2, 3], [5, 6]]
 
-    assert adata[0:2, :][:, 0:2].X.tolist() == [[1, 2], [4, 5]]
+    assert asarray(adata[0:2, :][:, 0:2].X).tolist() == [[1, 2], [4, 5]]
     assert (
-        adata[0:1, :][:, 0:2].X.tolist()
+        asarray(adata[0:1, :][:, 0:2].X).tolist()
         == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
     )
-    assert adata[0, :][:, 0].X.tolist() == xp.reshape(1, (1, 1)).tolist()
-    assert adata[:, 0:2][0:2, :].X.tolist() == [[1, 2], [4, 5]]
+    assert asarray(adata[0, :][:, 0].X).tolist() == xp.reshape(1, (1, 1)).tolist()
+    assert asarray(adata[:, 0:2][0:2, :].X).tolist() == [[1, 2], [4, 5]]
     assert (
-        adata[:, 0:2][0:1, :].X.tolist()
+        asarray(adata[:, 0:2][0:1, :].X).tolist()
         == xp.reshape(xp.array([1, 2]), (1, 2)).tolist()
     )
-    assert adata[:, 0][0, :].X.tolist() == xp.reshape(1, (1, 1)).tolist()
+    assert asarray(adata[:, 0][0, :].X).tolist() == xp.reshape(1, (1, 1)).tolist()
 
 
 def test_boolean_slicing():
@@ -705,11 +725,13 @@ def test_to_df_dense():
 @pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning")
 def test_convenience(subtests: pytest.Subtests) -> None:
     adata = adata_sparse.copy()
+    assert isinstance(adata.X, csr_matrix)
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
     adata.raw = adata.copy()
     adata.X = adata.X / 2
     adata_dense = adata.copy()
+    assert isinstance(adata_dense.X, csr_matrix)
     adata_dense.X = adata_dense.X.toarray()
 
     def assert_same_op_result(a1, a2, op, /, *args, label: str = "", **kwargs) -> None:
@@ -722,13 +744,14 @@ def test_convenience(subtests: pytest.Subtests) -> None:
             assert np.all(r1 == r2)
             assert type(r1) is type(r2)
 
+    assert adata.raw is not None
     with subtests.test("obs_vector"):
-        assert np.allclose(adata.obs_vector("b"), np.array([1.0, 2.5]))
-        assert np.allclose(adata.raw.obs_vector("c"), np.array([3, 6]))
+        assert np.allclose(asarray(adata.obs_vector("b")), np.array([1.0, 2.5]))
+        assert np.allclose(asarray(adata.raw.obs_vector("c")), np.array([3, 6]))
         assert np.all(adata.obs_vector("anno1") == np.array(["c1", "c2"]))
     with subtests.test("var_vector"):
-        assert np.allclose(adata.var_vector("s1"), np.array([0, 1.0, 1.5]))
-        assert np.allclose(adata.raw.var_vector("s2"), np.array([0, 5, 6]))
+        assert np.allclose(asarray(adata.var_vector("s1")), np.array([0, 1.0, 1.5]))
+        assert np.allclose(asarray(adata.raw.var_vector("s2")), np.array([0, 5, 6]))
 
     for obs_k, layer in product(["a", "b", "c", "anno1"], [None, "x2"]):
         assert_same_op_result(
@@ -788,6 +811,7 @@ def test_1d_slice_dtypes(subtests: pytest.Subtests) -> None:
 def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
+    assert df[df.columns[0]].dtype == pd.SparseDtype(np.int64, 0)
     assert df.values.tolist() == X.tolist()
 
 
@@ -872,7 +896,8 @@ def test_create_adata_from_single_axis_elem(
     d = dict(
         a=np.zeros((10, 10)),
     )
-    in_memory = AnnData(**{f"{axis}{elem_type}": d})
+    kwargs: dict[str, Any] = {f"{axis}{elem_type}": d}
+    in_memory = AnnData(**kwargs)
     assert in_memory.shape == (10, 0) if axis == "obs" else (0, 10)
     in_memory.write_h5ad(tmp_path / "adata.h5ad")
     from_disk = ad.read_h5ad(tmp_path / "adata.h5ad")
@@ -886,14 +911,22 @@ def test_transpose_errors_with_backed_arrays(
     tmp_path: Path, storage: str, *, is_sparse: bool, in_x: bool
 ):
     adata = AnnData(X=csr_matrix(np.ones((3, 4))) if is_sparse else np.ones((3, 4)))
-    path = tmp_path / f"test.{storage}"
-    getattr(adata, f"write_{storage}")(path)
-    f = (h5py.File if storage == "h5ad" else zarr.open)(path)
-    raw_array = sparse_dataset(f["X"]) if is_sparse else f["X"]
+    store = tmp_path / "test.h5ad" if storage == "h5ad" else MemoryStore()
+    getattr(adata, f"write_{storage}")(store)
+    f = (h5py.File if storage == "h5ad" else zarr.open)(store)
+    assert isinstance(f, zarr.Group | h5py.File)
+    elem = f["X"]
+    raw_array: object
+    if is_sparse:
+        assert isinstance(elem, zarr.Group | h5py.Group)
+        raw_array = sparse_dataset(elem)
+    else:
+        raw_array = elem
 
     adata = AnnData(**({"X": raw_array} if in_x else {"layers": {"test": raw_array}}))
 
     with pytest.raises(ValueError, match=r"Cannot transpose anndata object"):
         adata.transpose()
     if storage == "h5ad":
+        assert isinstance(f, h5py.File)
         f.close()

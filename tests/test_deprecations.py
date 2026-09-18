@@ -24,6 +24,7 @@ def adata() -> AnnData:
         var=dict(var_names=["a", "b", "c"]),
     )
     adata.raw = adata.copy()
+    assert isinstance(adata.X, sparse.csr_matrix)
     adata.layers["x2"] = adata.X * 2
     adata.var["anno2"] = ["p1", "p2", "p3"]
     adata.X = adata.X / 2

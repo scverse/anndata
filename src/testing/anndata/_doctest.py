@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast
 
 if TYPE_CHECKING:
     from warnings import _ActionKind
@@ -10,11 +10,19 @@ if TYPE_CHECKING:
     type WarningFilter = tuple[_ActionKind, str, type[Warning], str, int]
 
 
+class _NeedsMarked(Protocol):
+    _doctest_needs: str
+
+
+class _FilterwarningsMarked(Protocol):
+    _doctest_warning_filter: list[WarningFilter]
+
+
 def doctest_needs[F: Callable](mod: str) -> Callable[[F], F]:
     """Mark function with doctest dependency."""
 
     def decorator(func: F) -> F:
-        func._doctest_needs = mod
+        cast("_NeedsMarked", func)._doctest_needs = mod
         return func
 
     return decorator
@@ -31,9 +39,10 @@ def doctest_filterwarnings[F: Callable](
     filter: WarningFilter = (action, message, category, module, lineno)
 
     def decorator(func: F) -> F:
+        marked = cast("_FilterwarningsMarked", func)
         if not hasattr(func, "_doctest_warning_filter"):
-            func._doctest_warning_filter = []
-        func._doctest_warning_filter.insert(0, filter)
+            marked._doctest_warning_filter = []
+        marked._doctest_warning_filter.insert(0, filter)
         return func
 
     return decorator

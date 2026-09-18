@@ -139,12 +139,12 @@ def test_index_setting_from_different_true_index_overrides_index(
 
 def test_set_index_from_outside_dataset(dataset2d: Dataset2D) -> None:
     alphabet = np.asarray([*string.ascii_letters, *string.digits, *string.punctuation])
-    new_idx = set()
-    while len(new_idx) < dataset2d.shape[0]:  # if we get duplicates, we just try again
-        new_idx.add("".join(np.random.choice(alphabet, size=10)))
-    new_idx = pd.Index(new_idx, name="test_index")
+    idx_vals: set[str] = set()
+    while len(idx_vals) < dataset2d.shape[0]:  # if we get duplicates, we just try again
+        idx_vals.add("".join(np.random.choice(alphabet, size=10)))
+    new_idx = pd.Index(idx_vals, name="test_index")
 
-    col = next(iter(dataset2d.keys()))
+    col = cast("str", next(iter(dataset2d.keys())))
     dataset2d.true_index_dim = col
 
     dataset2d.index = new_idx

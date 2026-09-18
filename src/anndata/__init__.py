@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Any
-
 from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
@@ -59,7 +54,7 @@ _DEPRECATED_IO = (
 _DEPRECATED = {method: f"io.{method}" for method in _DEPRECATED_IO}
 
 
-def __getattr__(attr_name: str) -> Any:
+def __getattr__(attr_name: str) -> object:
     if attr_name == "__version__":
         from importlib.metadata import version
 

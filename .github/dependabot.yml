@@ -1,5 +1,18 @@
 version: 2
 updates:
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - no milestone
+      - skip-gpu-ci
+    cooldown:
+      default-days: 7
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -9,3 +22,7 @@ updates:
       - skip-gpu-ci
     cooldown:
       default-days: 7
+    groups:
+      actions-deps:
+        patterns:
+          - "*"

@@ -17,12 +17,12 @@ import pytest
 import zarr
 from packaging.version import Version
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, H5Group, ZarrGroup, _read_attr
+from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
@@ -33,6 +33,7 @@ from anndata.tests.helpers import (
     assert_equal,
     check_all_sharded,
     gen_adata,
+    open_store,
     visititems_zarr,
 )
 
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from anndata._types import _GroupStorageType
-    from anndata.compat import H5Group
 
 
 PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
@@ -57,12 +57,13 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 @pytest.fixture
 def store(
     diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
-) -> Generator[H5Group | ZarrGroup, None, None]:
+) -> Generator[h5py.Group | zarr.Group, None, None]:
+    store: h5py.Group | zarr.Group
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
-        store = cast("H5Group", file["/"])
+        store = cast("h5py.Group", file["/"])
     elif diskfmt == "zarr":
-        store = open_write_group(tmp_path / "test.zarr")
+        store = zarr.open_group(MemoryStore(), mode="w")
     else:
         pytest.fail(f"Unknown store type: {diskfmt}")
 
@@ -84,15 +85,15 @@ def sparse_format(request: pytest.FixtureRequest) -> Literal["csr", "csc"]:
 
 
 def create_dense_store(
-    store: H5Group | ZarrGroup, *, shape: tuple[int, ...] = DEFAULT_SHAPE
-) -> H5Group | ZarrGroup:
+    store: h5py.Group | zarr.Group, *, shape: tuple[int, ...] = DEFAULT_SHAPE
+) -> h5py.Group | zarr.Group:
     X = np.random.randn(*shape)
 
     write_elem(store, "X", X)
     return store
 
 
-def create_sparse_store[G: (H5Group, ZarrGroup)](
+def create_sparse_store[G: h5py.Group | zarr.Group](
     sparse_format: Literal["csc", "csr"], store: G, shape=DEFAULT_SHAPE
 ) -> G:
     """Returns a store
@@ -247,7 +248,7 @@ def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     ],
 )
 def test_io_spec_compressed_scalars(
-    store: H5Group | ZarrGroup, value: np.ndarray, encoding_type: str
+    store: h5py.Group | zarr.Group, value: np.ndarray, encoding_type: str
 ):
     key = f"key_for_{encoding_type}"
     write_elem(
@@ -345,17 +346,26 @@ def test_read_lazy_2d_dask(sparse_format, store):
         (2, (40, None)),
     ],
 )
-def test_read_lazy_subsets_nd_dask(store: H5Group | ZarrGroup, n_dims, chunks) -> None:
+def test_read_lazy_subsets_nd_dask(
+    store: h5py.Group | zarr.Group, n_dims, chunks
+) -> None:
     arr_store = create_dense_store(store, shape=DEFAULT_SHAPE[:n_dims])
     X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
     X_from_disk = read_elem(arr_store["X"])
+    assert isinstance(X_from_disk, np.ndarray)
+    assert isinstance(X_dask_from_disk, DaskArray)
     assert_equal(X_from_disk, X_dask_from_disk)
 
     random_int_indices = np.random.randint(0, SIZE, (SIZE // 10,))
     random_int_indices.sort()
     random_bool_mask = np.random.randn(SIZE) > 0
     index_slice = slice(0, SIZE // 10)
-    for index in [random_int_indices, index_slice, random_bool_mask]:
+    indices: list[np.ndarray | slice] = [
+        random_int_indices,
+        index_slice,
+        random_bool_mask,
+    ]
+    for index in indices:
         assert_equal(X_from_disk[index], X_dask_from_disk[index])
 
 
@@ -377,10 +387,11 @@ def test_read_lazy_h5_cluster(
         assert_equal(X_from_disk, X_dask_from_disk)
 
 
-def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
+def test_undersized_shape_to_default(store: h5py.Group | zarr.Group) -> None:
     shape = (1000, 50)
     arr_store = create_dense_store(store, shape=shape)
     X_dask_from_disk = read_elem_lazy(arr_store["X"])
+    assert isinstance(X_dask_from_disk, DaskArray)
     assert all(c <= s for c, s in zip(X_dask_from_disk.chunksize, shape, strict=True))
     assert X_dask_from_disk.shape == shape
 
@@ -404,9 +415,9 @@ def test_undersized_shape_to_default(store: H5Group | ZarrGroup) -> None:
     ],
 )
 def test_read_lazy_2d_chunk_kwargs(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     arr_type: Literal["csr", "csc", "dense"],
-    chunks: None | tuple[int | None, int | None],
+    chunks: tuple[int | None, int | None] | None,
     expected_chunksize: tuple[int, int],
 ) -> None:
     if arr_type == "dense":
@@ -415,6 +426,7 @@ def test_read_lazy_2d_chunk_kwargs(
     else:
         arr_store = create_sparse_store(arr_type, store)
         X_dask_from_disk = read_elem_lazy(arr_store["X"], chunks=chunks)
+    assert isinstance(X_dask_from_disk, DaskArray)
     assert X_dask_from_disk.chunksize == expected_chunksize
     X_from_disk = read_elem(arr_store["X"])
     assert_equal(X_from_disk, X_dask_from_disk)
@@ -519,7 +531,7 @@ def test_write_indptr_dtype_override(store, sparse_format):
 )
 @pytest.mark.parametrize("format", ["csr", "csc"])
 def test_write_indices_min(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     num_minor_axis: int,
     expected_dtype: np.dtype,
     format: Literal["csr", "csc"],
@@ -540,9 +552,12 @@ def test_write_indices_min(
     with ad.settings.override(write_csr_csc_indices_with_min_possible_dtype=True):
         write_elem(store, "X", X)
 
-    assert store["X/indices"].dtype == expected_dtype
+    indices = store["X/indices"]
+    assert isinstance(indices, h5py.Dataset | zarr.Array)
+    assert indices.dtype == expected_dtype
     with ad.settings.override(use_sparse_array_on_read=True):
         result = read_elem(store["X"])
+    assert isinstance(result, CSArray)
     assert_equal(result.data, X.data)
     assert_equal(result.indices, X.indices)
     assert_equal(result.indptr, X.indptr)
@@ -574,8 +589,8 @@ def test_write_anndata_to_root(store):
 
     write_elem(store, "/", adata)
     # TODO: see https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup):
-        store = zarr.open(store.store)
+    if isinstance(store, zarr.Group):
+        store = zarr.open_group(store.store)
     from_disk = read_elem(store)
 
     assert _read_attr(store.attrs, "encoding-type") == "anndata"
@@ -698,7 +713,7 @@ def test_override_specification():
     with pytest.raises(TypeError):
 
         @registry.register_write(
-            ZarrGroup, ad.AnnData, IOSpec("some new type", "0.1.0")
+            zarr.Group, ad.AnnData, IOSpec("some new type", "0.1.0")
         )
         def _(store, key, adata):
             pass
@@ -748,8 +763,8 @@ def test_write_to_root(store: _GroupStorageType, value):
         value = value()
     write_elem(store, "/", value)
     # See: https://github.com/zarr-developers/zarr-python/issues/2716
-    if isinstance(store, ZarrGroup):
-        store = zarr.open(store.store)
+    if isinstance(store, zarr.Group):
+        store = zarr.open_group(store.store)
     result = read_elem(store)
 
     assert_equal(result, value)
@@ -759,12 +774,12 @@ def test_write_to_root(store: _GroupStorageType, value):
     "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
 )
 @pytest.mark.zarr_io
-def test_read_zarr_from_group(tmp_path, consolidated):
+def test_read_zarr_from_group(consolidated):
     # https://github.com/scverse/anndata/issues/1056
-    pth = tmp_path / "test.zarr"
+    store = MemoryStore()
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
-    z = open_write_group(pth)
+    z = zarr.open_group(store, mode="w")
     write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
@@ -779,7 +794,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
 
     read_func = zarr.open_consolidated if consolidated else zarr.open
 
-    z = read_func(pth)
+    z = read_func(store)
     expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 
@@ -839,13 +854,11 @@ def test_io_pd_cow(
 
 
 def test_read_sparse_array(
-    tmp_path: Path,
+    diskfmt_store: Path | MemoryStore,
     sparse_format: Literal["csr", "csc"],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
@@ -861,14 +874,15 @@ def test_read_sparse_array(
     "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
 )
 def test_chunking_1d_array(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     arr: np.ndarray,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
     write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
-    arr = read_elem_lazy(store["foo"], chunks=chunks)
-    assert arr.chunksize == expected_chunks
+    lazy_arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert isinstance(lazy_arr, DaskArray)
+    assert lazy_arr.chunksize == expected_chunks
 
 
 @pytest.mark.parametrize(
@@ -887,7 +901,7 @@ def test_chunking_1d_array(
     ],
 )
 def test_chunking_2d_array(
-    store: H5Group | ZarrGroup,
+    store: h5py.Group | zarr.Group,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
 ):
@@ -898,6 +912,7 @@ def test_chunking_2d_array(
         dataset_kwargs={"chunks": (25, 25)},
     )
     arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert isinstance(arr, DaskArray)
     assert arr.chunksize == expected_chunks
 
 
@@ -918,17 +933,18 @@ def test_h5_unchunked(
             np.arange(shape[0] * shape[1]).reshape(shape),
         )
         arr = read_elem_lazy(f["foo"])
+    assert isinstance(arr, DaskArray)
     assert arr.chunksize == expected_chunks
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_auto_sharded():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        adata.write_zarr(path)
+    with ad.settings.override(auto_shard_zarr_v3=True):
+        adata.write_zarr(store)
 
-    check_all_sharded(zarr.open(path))
+    check_all_sharded(zarr.open_group(store))
 
 
 @pytest.mark.zarr_io
@@ -936,22 +952,24 @@ def test_write_auto_sharded(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size(tmp_path: Path):
-    path = tmp_path / "check_shards.zarr"
-    z = zarr.open(path)
+def test_write_auto_sharded_size():
+    z = zarr.open_group(MemoryStore())
     ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
+    two_shards = z["two_shards"]
+    assert isinstance(two_shards, zarr.Array)
+    assert two_shards.shards is not None
     # i.e., there are at most two shards since one shard will contain two chunks,
     # and the other the last elements, since the target size is 1GB uncompressed.
-    assert (z["two_shards"].shape[0] / z["two_shards"].shards[0]) < 2
+    assert (two_shards.shape[0] / two_shards.shards[0]) < 2
 
 
 @pytest.mark.zarr_io
-def test_write_shards_by_default(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_shards_by_default():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     ad.settings.reset("auto_shard_zarr_v3")
-    adata.write_zarr(path)
-    check_all_sharded(zarr.open(path))
+    adata.write_zarr(store)
+    check_all_sharded(zarr.open_group(store))
 
 
 @pytest.mark.zarr_io
@@ -959,31 +977,36 @@ def test_write_shards_by_default(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size_sparse(tmp_path: Path):
-    path = "memory://check_shards.zarr"
-    z = zarr.open(path)
+def test_write_auto_sharded_size_sparse():
+    z = zarr.open_group(MemoryStore())
     mat = sparse.random(
         1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)
     )
     ad.io.write_elem(z, "two_shards_per_sub_element", mat)
+    group = z["two_shards_per_sub_element"]
+    assert isinstance(group, zarr.Group)
     # i.e., there are at most two shards since one shard will contain two chunks,
     # and the other the last elements, since the target size is 1GB uncompressed.
     for sub_element in ["indices", "data", "indptr"]:
-        assert (
-            z["two_shards_per_sub_element"][sub_element].shape[0]
-            / z["two_shards_per_sub_element"][sub_element].shards[0]
-        ) < 2, sub_element
+        arr = group[sub_element]
+        assert isinstance(arr, zarr.Array)
+        assert arr.shards is not None
+        assert (arr.shape[0] / arr.shards[0]) < 2, sub_element
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_does_not_override(tmp_path: Path):
-    z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
+def test_write_auto_sharded_does_not_override():
+    z = zarr.open_group(MemoryStore(), mode="w", zarr_format=3)
     X = sparse.random(
         100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
     ad.io.write_elem(z, "X_default", X)
-    shards_default = z["X_default"]["indices"].shards
-    new_shards = shards_default[0] // 2
+    x_default = z["X_default"]
+    assert isinstance(x_default, zarr.Group)
+    indices_default = x_default["indices"]
+    assert isinstance(indices_default, zarr.Array)
+    assert indices_default.shards is not None
+    new_shards = indices_default.shards[0] // 2
     new_shards = int(new_shards - new_shards % 2)
     ad.io.write_elem(
         z,
@@ -995,7 +1018,10 @@ def test_write_auto_sharded_does_not_override(tmp_path: Path):
         },
     )
 
-    def visitor(key: str, array: zarr.Array):
+    def visitor(key: str, array: zarr.Group | zarr.Array) -> None:
+        assert isinstance(array, zarr.Array)
         assert array.shards == (new_shards,)
 
-    visititems_zarr(z["X_manually_set"], visitor)
+    x_manually_set = z["X_manually_set"]
+    assert isinstance(x_manually_set, zarr.Group)
+    visititems_zarr(x_manually_set, visitor)

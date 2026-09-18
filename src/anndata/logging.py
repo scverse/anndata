@@ -27,10 +27,7 @@ def get_memory_usage() -> tuple[float, float]:
     import psutil
 
     process = psutil.Process(os.getpid())
-    try:
-        meminfo = process.memory_info()
-    except AttributeError:
-        meminfo = process.get_memory_info()
+    meminfo = process.memory_info()
     mem = meminfo[0] / 2**30  # output in GB
     mem_diff = mem
     global _previous_memory_usage  # noqa: PLW0603
@@ -43,7 +40,7 @@ def get_memory_usage() -> tuple[float, float]:
 @old_positionals("newline")
 def format_memory_usage(
     mem_usage: tuple[float, float], msg: str = "", *, newline: bool = False
-):
+) -> str:
     nl = "\n" if newline else ""
     more = " \n... " if msg != "" else ""
     mem, diff = mem_usage
@@ -53,5 +50,5 @@ def format_memory_usage(
 
 
 @old_positionals("newline")
-def print_memory_usage(msg: str = "", *, newline: bool = False):
-    print(format_memory_usage(get_memory_usage(), msg, newline))
+def print_memory_usage(msg: str = "", *, newline: bool = False) -> None:
+    print(format_memory_usage(get_memory_usage(), msg, newline=newline))

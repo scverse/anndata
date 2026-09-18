@@ -179,6 +179,38 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.Idx2D
     generated/anndata.acc.NO_IDX
 
+Serialization
+-------------
+
+:term:`reference`\ s round-trip through JSON-compatible lists
+via :meth:`AdAcc.to_json` and :meth:`AdAcc.from_json`:
+
+>>> A.to_json(A.obsm["pca"][:, 0])
+['obsm', 'pca', 0]
+>>> A.from_json(["obsm", "pca", 0])
+A.obsm['pca'][:, 0]
+
+So do the :term:`reference accessor`\ s they came from,
+as the same lists without the trailing index:
+
+>>> A.to_json(A.obsm["pca"])
+['obsm', 'pca']
+>>> A.from_json(["layers", None])
+A.X
+
+Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
+to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
+like :meth:`AdAcc.resolve` does for strings.
+:class:`MetaAcc` (i.e. :attr:`~AdAcc.obs`/:attr:`~AdAcc.var`) is the exception:
+only its :term:`reference`\ s are serializable, as it has no array of its own.
+
+Both are described by `acc-schema-v1.json <acc-schema-v1.json>`_,
+as separate subschemas you can validate against independently
+using JSON pointers into it:
+`#/$defs/ref` matches :term:`reference`\ s,
+`#/$defs/acc` :term:`reference accessor`\ s,
+and the schema itself either.
+
 .. _extending accessors:
 
 Extending accessors

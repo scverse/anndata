@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from natsort import natsorted
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
@@ -179,7 +180,7 @@ def test_arrow_index_write():
         IORegistryError,
         match=r"No method registered for writing <class 'pandas",
     ):
-        adata.write_zarr("foo.zarr")
+        adata.write_zarr(MemoryStore())
 
 
 @pytest.mark.parametrize(

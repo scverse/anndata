@@ -11,6 +11,8 @@ from scipy import sparse as sp
 
 from anndata.acc import A
 from anndata.compat import (
+    CSArray,
+    CSMatrix,
     CupyArray,
     CupyCSRMatrix,
     CupySparseMatrix,
@@ -18,6 +20,7 @@ from anndata.compat import (
     XDataArray,
     XDataset,
     XVariable,
+    is_scipy_sparse,
 )
 from anndata.tests.helpers import (
     DASK_CAN_SPARRAY,
@@ -30,9 +33,11 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Literal
 
     from anndata import AnnData
     from anndata.acc import AdRef, InMemoryArray
+    from anndata.compat import SparseArray, SparseMatrix
 
 
 needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installed.")
@@ -47,6 +52,8 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.layers["a"]["cell-77", :], lambda ad: ad["cell-77"].layers["a"]),
     (A.obsm["umap"][0], lambda ad: asarray(ad.obsm["umap"])[:, 0]),
     (A.obsm["umap"][1], lambda ad: asarray(ad.obsm["umap"])[:, 1]),
+    (A.obsm["umap"][-1], lambda ad: asarray(ad.obsm["umap"])[:, -1]),
+    (A.obsm["umap"][-2], lambda ad: asarray(ad.obsm["umap"])[:, -2]),
     (A.varp["cons"][:, :], lambda ad: asarray(ad.varp["cons"])),
     (A.varp["cons"]["gene-46", :], lambda ad: asarray(ad.varp["cons"])[46, :]),
     (A.varp["cons"][:, "gene-46"], lambda ad: asarray(ad.varp["cons"])[:, 46]),
@@ -120,7 +127,7 @@ def convert_ndarrays(
     adata: AnnData, array_conv: Callable[[InMemoryArray], InMemoryArray], /
 ) -> None:
     def conv(v: InMemoryArray) -> InMemoryArray:
-        if isinstance(v, sp.sparray | sp.spmatrix):
+        if isinstance(v, CSMatrix | CSArray):
             v = v.toarray()
         return array_conv(v)
 
@@ -137,18 +144,22 @@ def convert_ndarrays(
 
 
 def convert_dataframes(
-    adata: AnnData, df_conv: Callable[[pd.Series], InMemoryArray], /
+    adata: AnnData, df_conv: Callable[[pd.DataFrame], pd.DataFrame | XDataset], /
 ) -> None:
+    assert isinstance(adata.obs, pd.DataFrame)
     adata.obs = df_conv(adata.obs)
+    assert isinstance(adata.var, pd.DataFrame)
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:
+def _expected2np(
+    expected: InMemoryArray | SparseArray | SparseMatrix, ad_ref: AdRef, /
+) -> np.ndarray:
     ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
             return expected.flatten() if ndim == 1 else expected
-        case sp.sparray() | sp.spmatrix():
+        case _ if is_scipy_sparse(expected):
             return _expected2np(expected.toarray(), ad_ref)
         case pd.Series() | pd.Index() | XDataArray():
             return expected.to_numpy()
@@ -197,3 +208,17 @@ def test_get_values(
     assert isinstance(vals, type_expected)
     vals_np = asarray(vals)
     np.testing.assert_array_equal(vals_np, expected, strict=True)
+
+
+@pytest.mark.parametrize("i", [2, 99, -3], ids=str)
+@pytest.mark.parametrize("dim", ["obs", "var"], ids=str)
+def test_get_multi_out_of_range(
+    adata: AnnData, dim: Literal["obs", "var"], i: int
+) -> None:
+    """Out-of-range column indices raise instead of yielding an empty array."""
+    adata.varm["pcs"] = np.zeros((adata.n_vars, 2))  # `obsm["umap"]` also has 2 columns
+    ad_ref = getattr(A, f"{dim}m")["umap" if dim == "obs" else "pcs"][i]
+    assert ad_ref not in adata
+    msg = rf"Column index `{i}` is out of range for A\.{dim}m\[.+\] with 2 columns\."
+    with pytest.raises(IndexError, match=msg):
+        adata[ad_ref]

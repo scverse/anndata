@@ -30,7 +30,7 @@ Let's start off with an example:
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
         obsp: ...
-        layers: None (.X)
+        layers: ...None (.X)
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
@@ -43,7 +43,7 @@ If we split this object up by clusters of observations, then stack those subsets
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
-        layers: None (.X)
+        layers: ...None (.X)
 
 Note that we concatenated along the observations by default, and that most elements aligned to the observations were concatenated as well.
 A notable exception is :attr:`~anndata.AnnData.obsp`, which can be re-enabled with the `pairwise` keyword argument.

@@ -3,23 +3,29 @@ from __future__ import annotations
 import re
 from functools import partial
 from itertools import product
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import h5py
 import numpy as np
 import pytest
 import zarr
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._core.anndata import AnnData
-from anndata._core.sparse_dataset import sparse_dataset
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from anndata._io.specs.registry import read_elem_lazy
-from anndata._io.zarr import open_write_group
-from anndata.compat import CSArray, CSMatrix, DaskArray, ZarrGroup
+from anndata.abc import CSCDataset, CSRDataset
+from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
-from anndata.tests.helpers import AccessTrackingStore, assert_equal, subset_func
+from anndata.tests.helpers import (
+    AccessTrackingStore,
+    assert_equal,
+    open_store,
+    subset_func,
+)
 from anndata.utils import get_literal_members
 
 if TYPE_CHECKING:
@@ -28,10 +34,8 @@ if TYPE_CHECKING:
     from types import EllipsisType
 
     from _pytest.mark import ParameterSet
-    from numpy.typing import ArrayLike, NDArray
+    from numpy.typing import NDArray
     from pytest_mock import MockerFixture
-
-    from anndata.abc import CSCDataset, CSRDataset
 
     type Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
@@ -43,44 +47,58 @@ M = 50
 N = 50
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_metadata_key() -> Literal[".zarray", "zarr.json"]:
-    return ".zarray" if ad.settings.zarr_write_format == 2 else "zarr.json"
+def subgroup(
+    f: zarr.Group | h5py.File | h5py.Group, key: str
+) -> zarr.Group | h5py.Group:
+    elem = f[key]
+    assert isinstance(elem, zarr.Group | h5py.Group)
+    return elem
 
 
-@pytest.fixture(params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def zarr_separator():
-    return "" if ad.settings.zarr_write_format == 2 else "/c"
+@pytest.fixture(params=[pytest.param(e, marks=pytest.mark.zarr_io) for e in (2, 3)])
+def zarr_write_format(request) -> Literal[2, 3]:
+    return request.param
+
+
+@pytest.fixture
+def zarr_metadata_key(zarr_write_format) -> Literal[".zarray", "zarr.json"]:
+    return ".zarray" if zarr_write_format == 2 else "zarr.json"
+
+
+@pytest.fixture
+def zarr_separator(zarr_write_format):
+    return "" if zarr_write_format == 2 else "/c"
 
 
 @pytest.fixture
 def ondisk_equivalent_adata(
     tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
 ) -> tuple[AnnData, AnnData, AnnData, AnnData]:
-    csr_path = tmp_path / f"csr.{diskfmt}"
-    csc_path = tmp_path / f"csc.{diskfmt}"
-    dense_path = tmp_path / f"dense.{diskfmt}"
+    make_store = lambda name: (
+        tmp_path / f"{name}.h5ad" if diskfmt == "h5ad" else MemoryStore()
+    )
+    csr_store, csc_store, dense_store = map(make_store, ["csr", "csc", "dense"])
 
     write = lambda x, pth, **kwargs: getattr(x, f"write_{diskfmt}")(pth, **kwargs)
 
     csr_mem = ad.AnnData(X=sparse.random(M, N, format="csr", density=0.1))
+    assert isinstance(csr_mem.X, sparse.csr_matrix)
     csc_mem = ad.AnnData(X=csr_mem.X.tocsc())
     dense_mem = ad.AnnData(X=csr_mem.X.toarray())
 
-    write(csr_mem, csr_path)
-    write(csc_mem, csc_path)
-    # write(csr_mem, dense_path, as_dense="X")
-    write(dense_mem, dense_path)
+    write(csr_mem, csr_store)
+    write(csc_mem, csc_store)
+    # write(csr_mem, dense_store, as_dense="X")
+    write(dense_mem, dense_store)
     if diskfmt == "h5ad":
-        csr_disk = ad.read_h5ad(csr_path, backed="r")
-        csc_disk = ad.read_h5ad(csc_path, backed="r")
-        dense_disk = ad.read_h5ad(dense_path, backed="r")
+        csr_disk, csc_disk, dense_disk = (
+            ad.read_h5ad(cast("Path", store), backed="r")
+            for store in [csr_store, csc_store, dense_store]
+        )
     else:
 
-        def read_zarr_backed(path):
-            path = str(path)
-
-            f = zarr.open(path, mode="r")
+        def read_zarr_backed(store):
+            f = zarr.open(store, mode="r")
 
             # Read with handling for backwards compat
             def callback(func, elem_name, elem, iospec):
@@ -96,9 +114,9 @@ def ondisk_equivalent_adata(
 
             return adata
 
-        csr_disk = read_zarr_backed(csr_path)
-        csc_disk = read_zarr_backed(csc_path)
-        dense_disk = read_zarr_backed(dense_path)
+        csr_disk = read_zarr_backed(csr_store)
+        csc_disk = read_zarr_backed(csc_store)
+        dense_disk = read_zarr_backed(dense_store)
 
     return csr_mem, csr_disk, csc_disk, dense_disk
 
@@ -111,6 +129,9 @@ def test_empty_backed_indexing(
     empty_mask,
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    assert isinstance(csr_mem.X, CSMatrix)
+    assert isinstance(csr_disk.X, CSRDataset)
+    assert isinstance(csc_disk.X, CSCDataset)
 
     assert_equal(csr_mem.X[empty_mask], csr_disk.X[empty_mask])
     assert_equal(csr_mem.X[:, empty_mask], csc_disk.X[:, empty_mask])
@@ -128,6 +149,8 @@ def test_backed_indexing(
     subset_func2,
 ):
     csr_mem, csr_disk, csc_disk, dense_disk = ondisk_equivalent_adata
+    assert isinstance(csr_mem.X, CSMatrix)
+    assert isinstance(csc_disk.X, CSCDataset)
 
     obs_idx = subset_func(csr_mem.obs_names)
     var_idx = subset_func2(csr_mem.var_names)
@@ -146,6 +169,9 @@ def test_backed_ellipsis_indexing(
     equivalent_ellipsis_index: tuple[slice, slice],
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    assert isinstance(csr_mem.X, CSMatrix)
+    assert isinstance(csr_disk.X, CSRDataset)
+    assert isinstance(csc_disk.X, CSCDataset)
 
     assert_equal(csr_mem.X[equivalent_ellipsis_index], csr_disk.X[ellipsis_index])
     assert_equal(csr_mem.X[equivalent_ellipsis_index], csc_disk.X[ellipsis_index])
@@ -217,6 +243,8 @@ def test_consecutive_bool(
         Whether or not a given mask should trigger the optimized behavior.
     """
     _, csr_disk, csc_disk, _ = ondisk_equivalent_adata
+    assert isinstance(csr_disk.X, CSRDataset)
+    assert isinstance(csc_disk.X, CSCDataset)
     mask = make_bool_mask(csr_disk.shape[0])
 
     # indexing needs to be on `X` directly to trigger the optimization.
@@ -274,17 +302,16 @@ def test_consecutive_bool(
     ],
 )
 def test_dataset_append_memory(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
-    append_method: Callable[[list[CSMatrix]], CSMatrix],
-    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    sparse_format: type[CSMatrix | CSArray],
+    append_method: Callable[[list[CSMatrix | CSArray]], CSMatrix | CSArray],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(100, 100))
     b = sparse_format(sparse.random(100, 100))
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
-    diskmtx = sparse_dataset(f["mtx"])
+    diskmtx = sparse_dataset(subgroup(f, "mtx"))
+    assert isinstance(diskmtx, BaseCompressedSparseDataset)
 
     diskmtx.append(b)
     fromdisk = diskmtx.to_memory()
@@ -294,18 +321,18 @@ def test_dataset_append_memory(
     assert_equal(fromdisk, frommem)
 
 
-def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+def test_append_array_cache_bust(diskfmt_store: Path | MemoryStore):
     a = sparse.random(100, 100, format="csr")
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.io.write_elem(f, "mtx_2", a)
-    diskmtx = sparse_dataset(f["mtx"])
+    diskmtx = sparse_dataset(subgroup(f, "mtx"))
+    assert isinstance(diskmtx, BaseCompressedSparseDataset)
     old_array_shapes = {}
     array_names = ["indptr", "indices", "data"]
     for name in array_names:
         old_array_shapes[name] = getattr(diskmtx, f"_{name}").shape
-    diskmtx.append(sparse_dataset(f["mtx_2"]))
+    diskmtx.append(sparse_dataset(subgroup(f, "mtx_2")))
     for name in array_names:
         assert old_array_shapes[name] != getattr(diskmtx, f"_{name}").shape
 
@@ -324,19 +351,17 @@ def test_append_array_cache_bust(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"
     ),
 )
 def test_read_array(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
-    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    sparse_format: type[CSMatrix],
     subset_func,
     subset_func2,
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(100, 100))
     obs_idx = subset_func(np.arange(100))
     var_idx = subset_func2(np.arange(100))
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
-    diskmtx = sparse_dataset(f["mtx"])
+    diskmtx = sparse_dataset(subgroup(f, "mtx"))
     ad.settings.use_sparse_array_on_read = True
     assert issubclass(type(diskmtx[obs_idx, var_idx]), CSArray)
     ad.settings.use_sparse_array_on_read = False
@@ -351,20 +376,19 @@ def test_read_array(
     ],
 )
 def test_dataset_append_disk(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
+    diskfmt_store: Path | MemoryStore,
+    sparse_format: type[CSMatrix],
     append_method: Callable[[list[CSMatrix]], CSMatrix],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse_format(sparse.random(10, 10))
     b = sparse_format(sparse.random(10, 10))
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "a", a)
     ad.io.write_elem(f, "b", b)
-    a_disk = sparse_dataset(f["a"])
-    b_disk = sparse_dataset(f["b"])
+    a_disk = sparse_dataset(subgroup(f, "a"))
+    b_disk = sparse_dataset(subgroup(f, "b"))
+    assert isinstance(a_disk, BaseCompressedSparseDataset)
 
     a_disk.append(b_disk)
     fromdisk = a_disk.to_memory()
@@ -377,27 +401,30 @@ def test_dataset_append_disk(
 @pytest.mark.parametrize("sparse_format", [sparse.csr_matrix, sparse.csc_matrix])
 @pytest.mark.parametrize("should_cache_indptr", [True, False])
 def test_lazy_array_cache(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
+    sparse_format: type[CSMatrix],
+    zarr_write_format: Literal[2, 3],
     zarr_metadata_key: Literal[".zarray", "zarr.json"],
     *,
     should_cache_indptr: bool,
 ):
     elems = {"indptr", "indices", "data"}
-    path = tmp_path / "test.zarr"
+    orig_store = MemoryStore()
     a = sparse_format(sparse.random(10, 10))
-    f = open_write_group(path, mode="a")
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
-    store = AccessTrackingStore(path, read_only=True)
+    store = AccessTrackingStore(orig_store)
     for elem in elems:
         store.initialize_key_trackers([f"X/{elem}"])
     f = zarr.open_group(store, mode="r")
-    a_disk = sparse_dataset(f["X"], should_cache_indptr=should_cache_indptr)
+    a_disk = sparse_dataset(subgroup(f, "X"), should_cache_indptr=should_cache_indptr)
     a_disk[:1]
     a_disk[3:5]
     a_disk[6:7]
     a_disk[8:9]
-    c_expected = 2 if should_cache_indptr else 5
+    # 2 added for v2 data because zgroup/zattrs
+    c_expected = (2 if should_cache_indptr else 5) + (
+        2 if zarr_write_format == 2 else 0
+    )
     assert store.get_access_count("X/indptr") == c_expected
     for elem_not_indptr in elems - {"indptr"}:
         assert (
@@ -441,9 +468,8 @@ def width_idx_kinds(
     *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
 ) -> Generator[ParameterSet, None, None]:
     """Convert major (first) index into various identical kinds of indexing."""
-    for (idx_maj_raw, idx_min, exp), maj_kind in product(
-        idxs, get_literal_members(Kind)
-    ):
+    kinds: tuple[Kind, ...] = get_literal_members(Kind)
+    for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, kinds):
         if (idx_maj := mk_idx_kind(idx_maj_raw, kind=maj_kind, l=l)) is None:
             continue
         id_ = "-".join(map(idify, [idx_maj_raw, idx_min, maj_kind]))
@@ -489,14 +515,14 @@ def width_idx_kinds(
 )
 @pytest.mark.parametrize("read_data", [True, False], ids=["read", "no_read"])
 def test_data_access(
-    tmp_path: Path,
-    sparse_format: Callable[[ArrayLike], CSMatrix],
+    sparse_format: type[CSMatrix],
     idx_maj: Idx,
     idx_min: Idx,
     exp: list[str],
-    open_func: Callable[[ZarrGroup], CSRDataset | CSCDataset | DaskArray],
+    open_func: Callable[[zarr.Group], CSRDataset | CSCDataset | DaskArray],
     zarr_metadata_key: str,
     zarr_separator: str,
+    zarr_write_format: Literal[2, 3],
     *,
     read_data: bool,
 ):
@@ -510,23 +536,28 @@ def test_data_access(
         )
         and not (open_func is sparse_dataset and not read_data)
     ]
-    path = tmp_path / "test.zarr"
+    orig_store = MemoryStore()
     a = sparse_format(np.eye(10, 10))
-    f = open_write_group(path, mode="a")
+    f = zarr.open_group(orig_store, zarr_format=zarr_write_format)
     ad.io.write_elem(f, "X", a)
-    data = f["X/data"][...]
+    data_arr = f["X/data"]
+    assert isinstance(data_arr, zarr.Array)
+    data = data_arr[...]
     del f["X/data"]
     # chunk one at a time to count properly
     zarr.array(
         data,
-        store=path / "X" / "data",
+        store=orig_store,
+        path="X/data",
         chunks=(1,),
         zarr_format=f.metadata.zarr_format,
     )
-    store = AccessTrackingStore(path, read_only=True)
+    store = AccessTrackingStore(orig_store)
     store.initialize_key_trackers(["X/data"])
     f = zarr.open_group(store, mode="r")
-    a_disk = AnnData(X=open_func(f["X"]))
+    x_group = f["X"]
+    assert isinstance(x_group, zarr.Group)
+    a_disk = AnnData(X=open_func(x_group))
     subset = (
         a_disk[idx_maj, :][:, idx_min]
         if a.format == "csr"
@@ -537,9 +568,7 @@ def test_data_access(
         subset.X.compute(scheduler="single-threaded")
     # zarr v2 fetches all and not just metadata for that node in 3.X.X python package
     # TODO: https://github.com/zarr-developers/zarr-python/discussions/2760
-    if ad.settings.zarr_write_format == 2 and (
-        read_data or open_func is not sparse_dataset
-    ):
+    if zarr_write_format == 2 and (read_data or open_func is not sparse_dataset):
         exp = [*exp, "X/data/.zgroup", "X/data/.zattrs"]
 
     assert store.get_access_count("X/data") == len(exp), store.get_accessed_keys(
@@ -572,19 +601,20 @@ def test_wrong_shape(
     ad.io.write_elem(f, "b", b_mem)
     a_disk = sparse_dataset(f["a"])
     b_disk = sparse_dataset(f["b"])
+    assert isinstance(a_disk, BaseCompressedSparseDataset)
 
     with pytest.raises(AssertionError):
         a_disk.append(b_disk)
 
 
-def test_reset_group(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = tmp_path / "test.zarr"
+def test_reset_group(diskfmt_store: Path | MemoryStore):
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "base", base)
-    disk_mtx = sparse_dataset(f["base"])
+    disk_mtx = sparse_dataset(subgroup(f, "base"))
+    assert isinstance(disk_mtx, BaseCompressedSparseDataset)
     with pytest.raises(AttributeError):
         disk_mtx.group = f
 
@@ -597,15 +627,18 @@ def test_wrong_formats(tmp_path: Path):
 
     ad.io.write_elem(f, "base", base)
     disk_mtx = sparse_dataset(f["base"])
+    assert isinstance(disk_mtx, BaseCompressedSparseDataset)
     pre_checks = disk_mtx.to_memory()
 
+    csc = sparse.random(100, 100, format="csc")
+    assert isinstance(csc, sparse.csc_matrix)
     with pytest.raises(ValueError, match="must have same format"):
-        disk_mtx.append(sparse.random(100, 100, format="csc"))
+        disk_mtx.append(csc)
     with pytest.raises(ValueError, match="must have same format"):
-        disk_mtx.append(sparse.random(100, 100, format="coo"))
+        disk_mtx.append(cast("CSMatrix", sparse.random(100, 100, format="coo")))
     with pytest.raises(NotImplementedError):
-        disk_mtx.append(np.random.random((100, 100)))
-    if isinstance(f, ZarrGroup):
+        disk_mtx.append(cast("CSMatrix", np.random.random((100, 100))))
+    if isinstance(f, zarr.Group):
         data = np.random.random((100, 100))
         disk_dense = f.create_array("dense", shape=(100, 100), dtype=data.dtype)
         disk_dense[...] = data
@@ -619,33 +652,31 @@ def test_wrong_formats(tmp_path: Path):
     post_checks = disk_mtx.to_memory()
 
     # Check nothing changed
-    assert not np.any((pre_checks != post_checks).toarray())
+    diff = pre_checks != post_checks
+    assert isinstance(diff, CSMatrix | CSArray)
+    assert not np.any(diff.toarray())
 
 
-def test_anndata_sparse_compat(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
+def test_anndata_sparse_compat(diskfmt_store: Path | MemoryStore):
     base = sparse.random(100, 100, format="csr")
 
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "/", base)
-    adata = ad.AnnData(sparse_dataset(f["/"]))
+    adata = ad.AnnData(sparse_dataset(subgroup(f, "/")))
     assert_equal(adata.X, base)
 
 
-def test_write(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]):
+def test_write(diskfmt_store: Path | MemoryStore):
     base = sparse.random(10, 10, format="csr")
 
-    f = (
-        open_write_group(tmp_path / f"parent_store.{diskfmt}", mode="a")
-        if diskfmt == "zarr"
-        else h5py.File(tmp_path / f"parent_store.{diskfmt}", "a")
-    )
+    f = open_store(diskfmt_store)
 
     ad.io.write_elem(f, "a_sparse_matrix", base)
-    adata = ad.AnnData(sparse_dataset(f["a_sparse_matrix"]))
+    adata = ad.AnnData(sparse_dataset(subgroup(f, "a_sparse_matrix")))
     ad.io.write_elem(f, "adata", adata)
     adata_roundtripped = ad.io.read_elem(f["adata"])
+    assert isinstance(adata_roundtripped, AnnData)
     assert_equal(adata_roundtripped.X, base)
 
 

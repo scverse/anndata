@@ -9,7 +9,7 @@ from functools import partial, singledispatch, wraps
 from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict, overload
 
 import h5py
 import numpy as np
@@ -18,8 +18,11 @@ import pytest
 import zarr
 from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
+from pandas.core.arrays.integer import IntegerDtype
 from scipy import sparse
-from zarr.storage import LocalStore
+from zarr.abc.store import Store
+from zarr.core.buffer import default_buffer_prototype
+from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -37,36 +40,28 @@ from anndata.compat import (
     DaskArray,
     XDataArray,
     XDataset,
-    ZarrArray,
-    ZarrGroup,
     has_xp_base,
 )
 from anndata.types import SupportsArrayApiBase
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable
-    from typing import Literal, TypeGuard
+    from collections.abc import Callable, Collection, Iterable, MutableMapping
+    from pathlib import Path
+    from types import ModuleType
+    from typing import Any, Literal, TypeGuard
 
+    from array_api.latest import ArrayNamespace
     from numpy.typing import NDArray
     from zarr.abc.store import ByteRequest
-    from zarr.core.buffer import BufferPrototype
+    from zarr.core.buffer import Buffer, BufferPrototype
 
-    from anndata.compat import CupyCSMatrix
+    from anndata.compat import CupyCSMatrix, SparseArray, SparseMatrix
 
     from .._types import _ArrayStorageType
     from ..typing import Index1D
 
     type _SubsetFunc = Callable[[pd.Index[str], int], Index1D]
-
-
-try:
-    from pandas.core.arrays.integer import IntegerDtype
-except ImportError:
-    IntegerDtype = (
-        *(pd.Int8Dtype, pd.Int16Dtype, pd.Int32Dtype, pd.Int64Dtype),
-        *(pd.UInt8Dtype, pd.UInt16Dtype, pd.UInt32Dtype, pd.UInt64Dtype),
-    )
 
 
 def _or_none[T](thing: T) -> T | None:
@@ -89,7 +84,7 @@ def jnp_array_or_idempotent(x):
 
 
 try:
-    import fast_array_utils as _
+    import fast_array_utils  # noqa: F401
 except ImportError:
     # dask natively supports sparray since https://github.com/dask/dask/pull/11750
     DASK_CAN_SPARRAY = Version(version("dask")) >= Version("2025.3.0")
@@ -118,14 +113,23 @@ DEFAULT_COL_TYPES = (
 )
 
 
+class GenAdataAlignedTypes(TypedDict):
+    obsm_types: Collection[type]
+    varm_types: Collection[type]
+
+
+class GenAdataTypes(GenAdataAlignedTypes):
+    layers_types: Collection[type]
+
+
 # Give this to gen_adata when dask array support is expected.
-GEN_ADATA_DASK_ARGS = dict(
+GEN_ADATA_DASK_ARGS: GenAdataTypes = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     varm_types=(*DEFAULT_KEY_TYPES, DaskArray),
     layers_types=(*DEFAULT_KEY_TYPES, DaskArray),
 )
 
-GEN_ADATA_NO_XARRAY_ARGS = dict(
+GEN_ADATA_NO_XARRAY_ARGS: GenAdataAlignedTypes = dict(
     obsm_types=(*DEFAULT_KEY_TYPES, AwkArray), varm_types=(*DEFAULT_KEY_TYPES, AwkArray)
 )
 
@@ -141,16 +145,24 @@ def gen_vstr_recarray(m, n, dtype=None):
     )
 
 
-def issubdtype[DT](
-    a: np.dtype | pd.api.extensions.ExtensionDtype, b: type[DT] | tuple[type[DT], ...]
-) -> TypeGuard[DT]:
+@overload
+def issubdtype[ED: pd.api.extensions.ExtensionDtype](
+    a: np.dtype | pd.api.extensions.ExtensionDtype, b: type[ED] | tuple[type[ED], ...]
+) -> TypeGuard[ED]: ...
+@overload
+def issubdtype[ST: np.generic](
+    a: np.dtype | pd.api.extensions.ExtensionDtype, b: type[ST] | tuple[type[ST], ...]
+) -> TypeGuard[np.dtype[ST]]: ...
+def issubdtype(
+    a: np.dtype | pd.api.extensions.ExtensionDtype,
+    b: type[pd.api.extensions.ExtensionDtype | np.generic]
+    | tuple[type[pd.api.extensions.ExtensionDtype | np.generic], ...],
+) -> bool:
     assert not isinstance(a, type)
-    if isinstance(b, tuple):
-        return any(issubdtype(a, t) for t in b)
     if isinstance(a, pd.api.extensions.ExtensionDtype):
         return isinstance(a, b)
     try:
-        return np.issubdtype(a, b)
+        return any(np.issubdtype(a, t) for t in (b if isinstance(b, tuple) else (b,)))
     except TypeError:  # pragma: no cover
         pytest.fail(f"issubdtype can’t handle everything yet: {a} {b}")
 
@@ -175,7 +187,8 @@ def gen_random_column(  # noqa: PLR0911
             ),
         )
     if issubdtype(dtype, IntegerDtype):
-        name, values = gen_random_column(n, dtype.numpy_dtype)
+        name, values = gen_random_column(n, np.dtype(dtype.type))
+        assert isinstance(values, np.ndarray)
         mask = np.random.randint(0, 2, size=n, dtype=bool)
         return f"nullable-{name}", pd.arrays.IntegerArray(values, mask)
     if issubdtype(dtype, pd.StringDtype):
@@ -285,24 +298,32 @@ def gen_typed_df_t2_size(m, n, index=None, columns=None) -> pd.DataFrame:
     return df
 
 
-def maybe_add_sparse_array(
-    mapping: Mapping,
+def _gen_sparse_array(
+    shape: tuple[int, int],
+    format: Literal["csr", "csc"],
+    random_state: np.random.Generator,
+) -> sparse.csr_array:
+    mat = sparse.random(*shape, format=format, random_state=random_state)
+    assert isinstance(mat, CSMatrix)  # `sparse.random` is typed as returning `spmatrix`
+    return sparse.csr_array(mat)
+
+
+def maybe_add_sparse_array[M: MutableMapping[str, Any]](
+    mapping: M,
     types: Collection[type],
     format: Literal["csr", "csc"],
     random_state: np.random.Generator,
     shape: tuple[int, int],
-):
+) -> M:
     if sparse.csr_array in types or sparse.csr_matrix in types:
-        mapping["sparse_array"] = sparse.csr_array(
-            sparse.random(*shape, format=format, random_state=random_state)
-        )
+        mapping["sparse_array"] = _gen_sparse_array(shape, format, random_state)
     return mapping
 
 
 # TODO: Use hypothesis for this?
 def gen_adata(  # noqa: PLR0913
     shape: tuple[int, int],
-    X_type: Callable[[np.ndarray], object] = sparse.csr_matrix,
+    X_type: Callable[[np.ndarray], object] | None = sparse.csr_matrix,
     *,
     obs_dtypes: Collection[
         np.dtype | pd.api.extensions.ExtensionDtype
@@ -364,6 +385,8 @@ def gen_adata(  # noqa: PLR0913
         if var_xdataset:
             var = XDataset.from_dataframe(var)
 
+    X: object | None
+    xp: ArrayNamespace[Any, Any, Any] | ModuleType
     if X_type is None:
         X = None
         xp = np
@@ -426,16 +449,12 @@ def gen_adata(  # noqa: PLR0913
         array=xp.asarray(random_state.random((M, M))),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),
     )
-    obsp["sparse_array"] = sparse.csr_array(
-        sparse.random(M, M, format=sparse_fmt, random_state=random_state)
-    )
+    obsp["sparse_array"] = _gen_sparse_array((M, M), sparse_fmt, random_state)
     varp = dict(
         array=xp.asarray(random_state.random((N, N))),
         sparse=sparse.random(N, N, format=sparse_fmt, random_state=random_state),
     )
-    varp["sparse_array"] = sparse.csr_array(
-        sparse.random(N, N, format=sparse_fmt, random_state=random_state)
-    )
+    varp["sparse_array"] = _gen_sparse_array((N, N), sparse_fmt, random_state)
     uns = dict(
         O_recarray=gen_vstr_recarray(N, 5),
         nested=dict(
@@ -447,7 +466,7 @@ def gen_adata(  # noqa: PLR0913
         awkward_regular=gen_awkward((10, 5)),
         awkward_ragged=gen_awkward((12, None, None)),
         df=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
-        df_int_index=gen_typed_df(10, index=pd.Index(list(range(10)))),
+        df_int_index=gen_typed_df(10, index=pd.Index(list(map(str, range(10))))),
         # U_recarray=gen_vstr_recarray(N, 5, "U4")
     )
     with warnings.catch_warnings():
@@ -593,15 +612,15 @@ def report_name(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            if _elem_name is not None and not hasattr(e, "_name_attached"):
+            if _elem_name is not None and "_name_attached" not in e.__dict__:
                 msg = format_msg(_elem_name)
-                args = list(e.args)
-                if len(args) == 0:
-                    args = [msg]
+                new_args = list(e.args)
+                if len(new_args) == 0:
+                    new_args = [msg]
                 else:
-                    args[0] = f"{args[0]}\n\n{msg}"
-                e.args = tuple(args)
-                e._name_attached = True
+                    new_args[0] = f"{new_args[0]}\n\n{msg}"
+                e.args = tuple(new_args)
+                e.__dict__["_name_attached"] = True
             raise e
 
     return func_wrapper
@@ -633,12 +652,15 @@ def assert_equal_array_api(
     if not np.isscalar(a):
         xp = a.__array_namespace__()
         # really force it on b
-        b = xp.array(asarray(b))
+        b = xp.asarray(asarray(b))
         if exact:
             assert xp.all(a == b)
         else:
-            # for padding with NaN
-            assert xp.allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=True)
+            # `allclose` isn’t part of the array API standard, so compare on the host.
+            # `equal_nan` is necessary for padding with NaN
+            assert np.allclose(
+                asarray(a), asarray(b), rtol=1e-5, atol=1e-8, equal_nan=True
+            )
     else:
         assert a == b
 
@@ -654,27 +676,29 @@ def assert_equal_cupy(
 def assert_equal_ndarray(
     a: np.ndarray, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    b = asarray(b)
-    if not exact and is_numeric_dtype(a) and is_numeric_dtype(b):
-        assert a.shape == b.shape, format_msg(elem_name)
-        np.testing.assert_allclose(a, b, equal_nan=True, err_msg=format_msg(elem_name))
+    b_arr = asarray(b)
+    if not exact and is_numeric_dtype(a) and is_numeric_dtype(b_arr):
+        assert a.shape == b_arr.shape, format_msg(elem_name)
+        np.testing.assert_allclose(
+            a, b_arr, equal_nan=True, err_msg=format_msg(elem_name)
+        )
     elif (  # Structured dtype
         not exact
         and hasattr(a, "dtype")
-        and hasattr(b, "dtype")
-        and len(a.dtype) > 1
-        and len(b.dtype) > 0
+        and hasattr(b_arr, "dtype")
+        and len(a.dtype.names or ()) > 1
+        and len(b_arr.dtype) > 0
     ):
         # Reshaping to allow >2d arrays
-        assert a.shape == b.shape, format_msg(elem_name)
+        assert a.shape == b_arr.shape, format_msg(elem_name)
         assert_equal(
             pd.DataFrame(a.reshape(-1)),
-            pd.DataFrame(b.reshape(-1)),
+            pd.DataFrame(b_arr.reshape(-1)),
             exact=exact,
             elem_name=elem_name,
         )
     else:
-        assert np.all(a == b), format_msg(elem_name)
+        assert np.all(a == b_arr), format_msg(elem_name)
 
 
 @assert_equal.register(ArrayView)
@@ -685,16 +709,22 @@ def assert_equal_arrayview(
 
 
 @assert_equal.register(BaseCompressedSparseDataset)
-@assert_equal.register(sparse.spmatrix)
-@assert_equal.register(CSArray)
+@assert_equal.register(sparse.sparray | sparse.spmatrix)
 def assert_equal_sparse(
-    a: BaseCompressedSparseDataset | sparse.spmatrix | CSArray,
+    a: BaseCompressedSparseDataset | SparseArray | SparseMatrix,
     b: object,
     *,
     exact: bool = False,
     elem_name: str | None = None,
 ):
-    if exact and sparse.issparse(b) and hasattr(a, "indptr") and hasattr(b, "indptr"):
+    if (
+        exact
+        and sparse.issparse(b)
+        and hasattr(a, "indptr")
+        and hasattr(a, "indices")
+        and hasattr(b, "indptr")
+        and hasattr(b, "indices")
+    ):
         assert a.indptr.dtype == b.indptr.dtype, f"{elem_name}: indptr dtype mismatch"
         assert a.indices.dtype == b.indices.dtype, (
             f"{elem_name}: indices dtype mismatch"
@@ -712,7 +742,7 @@ def assert_equal_cupy_sparse(
 
 
 @assert_equal.register(h5py.Dataset)
-@assert_equal.register(ZarrArray)
+@assert_equal.register(zarr.Array)
 def assert_equal_h5py_dataset(
     a: _ArrayStorageType,
     b: object,
@@ -793,7 +823,10 @@ def assert_equal_aligned_mapping(
     b_indices = (b.parent.obs_names, b.parent.var_names)
     for axis_idx in a.axes:
         assert_equal(
-            a_indices[axis_idx], b_indices[axis_idx], exact=exact, elem_name=axis_idx
+            a_indices[axis_idx],
+            b_indices[axis_idx],
+            exact=exact,
+            elem_name=("obs_names", "var_names")[axis_idx],
         )
     assert a.attrname == b.attrname, format_msg(elem_name)
     assert_equal_mapping(a, b, exact=exact, elem_name=elem_name)
@@ -881,7 +914,7 @@ def assert_adata_equal(
     assert_equal(a.var_names, b.var_names, exact=exact, elem_name=fmt_name("var_names"))
     if not exact:
         # Reorder all elements if necessary
-        idx = [slice(None), slice(None)]
+        idx: list[Index1D] = [slice(None), slice(None)]
         # Since it’s a pain to compare a list of pandas objects
         change_flag = False
         if not (a.obs_names == b.obs_names).all():
@@ -993,19 +1026,24 @@ def _(
     typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
 ) -> DaskArray:
+    import dask.array as da
+
     assert chunks is None  # TODO: if needed we can add a .rechunk(chunks)
-    return a.map_blocks(_as_sparse_dask_inner, typ=typ, dtype=a.dtype, meta=typ((2, 2)))
+    return da.map_blocks(
+        _as_sparse_dask_inner, a, typ=typ, dtype=a.dtype, meta=typ((2, 2))
+    )
 
 
 def _as_sparse_dask_inner(
     a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix | CupyCSMatrix]
-) -> CSArray | CSMatrix:
+) -> CSArray | CSMatrix | CupyCSMatrix:
     """Convert into a a sparse container that dask supports (or complain)."""
     if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
     if issubclass(typ, CupySparseMatrix):
-        a = as_cupy(a)  # Cupy sparse constructors don’t accept numpy ndarrays
+        # Cupy sparse constructors don’t accept numpy ndarrays
+        return typ(as_cupy(a))
     return typ(a)
 
 
@@ -1206,25 +1244,61 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 
-class AccessTrackingStore(LocalStore):
+@overload
+def open_store(store: Path, /, mode: Literal["r", "a"] = "a") -> h5py.File: ...
+@overload
+def open_store(store: MemoryStore, /, mode: Literal["r", "a"] = "a") -> zarr.Group: ...
+def open_store(
+    store: Path | MemoryStore, /, mode: Literal["r", "a"] = "a"
+) -> h5py.File | zarr.Group:
+    """Open a `diskfmt_store`: a `Path` for h5, a `MemoryStore` for zarr."""
+    if not isinstance(store, MemoryStore):
+        return h5py.File(store, mode)
+    return zarr.open_group(store, mode=mode)
+
+
+class AccessTrackingStore(WrapperStore[Store]):
+    """Wraps a store to count reads of (prefixes of) keys.
+
+    Wrap the store a fixture wrote to, e.g. ``AccessTrackingStore(store)``,
+    to get a fresh set of counters over the same data.
+
+    The wrapper is always read-only: `zarr` re-wraps a writable store when
+    opened with ``mode="r"``, which would silently reset the counters.
+    """
+
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, store: Store) -> None:
+        super().__init__(store.with_read_only(read_only=True))
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+    def get_sync(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> Buffer | None:
+        if Version(version("zarr")) < Version("3.3"):  # pragma: no-cover
+            msg = "zarr-python does not implement `Store.get_sync` below 3.3."
+            raise NotImplementedError(msg)
+        self._check_and_track_key(key)
+        return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 
     async def get(
         self,
         key: str,
         prototype: BufferPrototype | None = None,
         byte_range: ByteRequest | None = None,
-    ) -> object:
+    ) -> Buffer | None:
         self._check_and_track_key(key)
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
+        if prototype is None:  # concrete stores default it, the ABC does not
+            prototype = default_buffer_prototype()
+        return await self._store.get(key, prototype, byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:
@@ -1281,21 +1355,19 @@ def get_multiindex_columns_df(shape: tuple[int, int]) -> pd.DataFrame:
     )
 
 
-def visititems_zarr(
-    z: ZarrGroup, visitor: Callable[[str, ZarrGroup | zarr.Array], None]
-) -> None:
+def visititems_zarr(z: zarr.Group, visitor: Callable[[str, zarr.Array], None]) -> None:
     for key in z:
         maybe_group = z[key]
-        if isinstance(maybe_group, ZarrGroup):
+        if isinstance(maybe_group, zarr.Group):
             visititems_zarr(maybe_group, visitor)
         else:
             visitor(key, maybe_group)
 
 
-def check_all_sharded(g: ZarrGroup):
-    def visit(key: str, arr: zarr.Array | zarr.Group):
+def check_all_sharded(g: zarr.Group):
+    def visit(key: str, arr: zarr.Array):
         # Check for recarray via https://numpy.org/doc/stable/user/basics.rec.html#manipulating-and-displaying-structured-datatypes
-        if isinstance(arr, zarr.Array) and arr.shape != () and arr.dtype.names is None:
+        if arr.shape != () and arr.dtype.names is None:
             assert arr.shards is not None
 
     visititems_zarr(g, visitor=visit)

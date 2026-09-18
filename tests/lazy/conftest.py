@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 import zarr
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata import AnnData
@@ -73,18 +74,17 @@ def simple_subset_func(request):
 
 
 @pytest.fixture(scope="session")
-def adata_remote_orig_with_path(
+def adata_remote_orig_with_store(
     tmp_path_factory,
     diskfmt: str,
     mtx_format,
     worker_id: str = "serial",
-) -> tuple[Path, AnnData]:
+) -> tuple[Path | MemoryStore, AnnData]:
     """Create remote fixtures, one without a range index and the other with"""
-    file_name = f"orig_{worker_id}.{diskfmt}"
     if diskfmt == "h5ad":
-        orig_path = tmp_path_factory.mktemp("h5ad_file_dir") / file_name
+        orig_store = tmp_path_factory.mktemp("h5ad_file_dir") / f"orig_{worker_id}.h5ad"
     else:
-        orig_path = tmp_path_factory.mktemp(file_name)
+        orig_store = MemoryStore()
     orig = gen_adata(
         (100, 110),
         mtx_format,
@@ -96,32 +96,32 @@ def adata_remote_orig_with_path(
     orig.raw = orig.copy()
     with ad.settings.override(allow_write_nullable_strings=True):
         getattr(ad.io, f"write_{diskfmt}")(
-            orig_path, orig, convert_strings_to_categoricals=False
+            orig_store, orig, convert_strings_to_categoricals=False
         )
-    return orig_path, orig
+    return orig_store, orig
 
 
 @pytest.fixture
 def adata_remote(
-    adata_remote_orig_with_path: tuple[Path, AnnData], *, load_annotation_index: bool
+    adata_remote_orig_with_store: tuple[Path | MemoryStore, AnnData],
+    *,
+    load_annotation_index: bool,
 ) -> AnnData:
-    orig_path, _ = adata_remote_orig_with_path
-    return read_lazy(orig_path, load_annotation_index=load_annotation_index)
+    orig_store, _ = adata_remote_orig_with_store
+    return read_lazy(orig_store, load_annotation_index=load_annotation_index)
 
 
 @pytest.fixture
-def adata_orig(adata_remote_orig_with_path: tuple[Path, AnnData]) -> AnnData:
-    _, orig = adata_remote_orig_with_path
+def adata_orig(
+    adata_remote_orig_with_store: tuple[Path | MemoryStore, AnnData],
+) -> AnnData:
+    _, orig = adata_remote_orig_with_store
     return orig
 
 
 @pytest.fixture(scope="session", params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def adata_remote_with_store_tall_skinny_path(
-    tmp_path_factory,
-    mtx_format,
-    worker_id: str = "serial",
-) -> Path:
-    orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}.zarr")
+def adata_remote_tall_skinny_orig_store(mtx_format) -> MemoryStore:
+    orig_store = MemoryStore()
     M = 1000
     N = 5
     # One named, one unnamed
@@ -135,8 +135,8 @@ def adata_remote_with_store_tall_skinny_path(
         X=mtx_format(np.random.binomial(100, 0.005, (M, N)).astype(np.float32)),
     )
     orig.raw = orig.copy()
-    orig.write_zarr(orig_path)
-    g = zarr.open_group(orig_path, mode="a", use_consolidated=False)
+    orig.write_zarr(orig_store)
+    g = zarr.open_group(orig_store, mode="a", use_consolidated=False)
     ad.io.write_elem(
         g,
         "obs",
@@ -150,22 +150,22 @@ def adata_remote_with_store_tall_skinny_path(
         match=r"Consolidated metadata",
     ):
         zarr.consolidate_metadata(g.store)
-    return orig_path
+    return orig_store
 
 
 @pytest.fixture(scope="session", params=[pytest.param(None, marks=pytest.mark.zarr_io)])
-def adatas_paths_var_indices_for_concatenation(
-    tmp_path_factory, *, are_vars_different: bool, worker_id: str = "serial"
-) -> tuple[list[AnnData], list[Path], list[pd.Index]]:
+def adatas_stores_var_indices_for_concatenation(
+    *, are_vars_different: bool
+) -> tuple[list[AnnData], list[MemoryStore], list[pd.Index]]:
     adatas = []
     var_indices = []
-    paths = []
+    stores = []
     M = 1000
     N = 50
     n_datasets = 3
     for dataset_index in range(n_datasets):
-        orig_path = tmp_path_factory.mktemp(f"orig_{worker_id}_{dataset_index}.zarr")
-        paths.append(orig_path)
+        orig_store = MemoryStore()
+        stores.append(orig_store)
         obs_names = pd.Index(f"cell_{dataset_index}_{i}" for i in range(M))
         var_names = pd.Index(
             f"gene_{i}{f'_{dataset_index}_ds' if are_vars_different and (i % 2) else ''}"
@@ -179,33 +179,33 @@ def adatas_paths_var_indices_for_concatenation(
             var=var,
             X=np.random.binomial(100, 0.005, (M, N)).astype(np.float32),
         )
-        orig.write_zarr(orig_path)
+        orig.write_zarr(orig_store)
         adatas.append(orig)
-    return adatas, paths, var_indices
+    return adatas, stores, var_indices
 
 
 @pytest.fixture
 def var_indices_for_concat(
-    adatas_paths_var_indices_for_concatenation,
+    adatas_stores_var_indices_for_concatenation,
 ) -> list[pd.Index]:
-    _, _, var_indices = adatas_paths_var_indices_for_concatenation
+    _, _, var_indices = adatas_stores_var_indices_for_concatenation
     return var_indices
 
 
 @pytest.fixture
 def adatas_for_concat(
-    adatas_paths_var_indices_for_concatenation,
+    adatas_stores_var_indices_for_concatenation,
 ) -> list[AnnData]:
-    adatas, _, _ = adatas_paths_var_indices_for_concatenation
+    adatas, _, _ = adatas_stores_var_indices_for_concatenation
     return adatas
 
 
 @pytest.fixture
 def stores_for_concat(
-    adatas_paths_var_indices_for_concatenation,
+    adatas_stores_var_indices_for_concatenation,
 ) -> list[AccessTrackingStore]:
-    _, paths, _ = adatas_paths_var_indices_for_concatenation
-    return [AccessTrackingStore(path, read_only=True) for path in paths]
+    _, stores, _ = adatas_stores_var_indices_for_concatenation
+    return [AccessTrackingStore(store) for store in stores]
 
 
 @pytest.fixture
@@ -220,20 +220,18 @@ def lazy_adatas_for_concat(
 
 @pytest.fixture
 def adata_remote_with_store_tall_skinny(
-    adata_remote_with_store_tall_skinny_path: Path,
+    adata_remote_tall_skinny_orig_store: MemoryStore,
 ) -> tuple[AnnData, AccessTrackingStore]:
-    store = AccessTrackingStore(
-        adata_remote_with_store_tall_skinny_path, read_only=True
-    )
+    store = AccessTrackingStore(adata_remote_tall_skinny_orig_store)
     remote = read_lazy(store)
     return remote, store
 
 
 @pytest.fixture
 def remote_store_tall_skinny(
-    adata_remote_with_store_tall_skinny_path: Path,
+    adata_remote_tall_skinny_orig_store: MemoryStore,
 ) -> AccessTrackingStore:
-    return AccessTrackingStore(adata_remote_with_store_tall_skinny_path, read_only=True)
+    return AccessTrackingStore(adata_remote_tall_skinny_orig_store)
 
 
 @pytest.fixture

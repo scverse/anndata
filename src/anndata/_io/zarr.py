@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import os
 import warnings
 from contextlib import contextmanager, nullcontext
 from importlib.util import find_spec
+from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import zarr
 from scipy import sparse
+from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
-from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
@@ -20,26 +23,59 @@ from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-    from os import PathLike
+    from collections.abc import Mapping
+    from typing import Any
 
-    from zarr.core.common import AccessModeLiteral
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
+    from ..typing import RWAble
+
+from importlib.metadata import version
+
+from packaging.version import Version
 
 
 @contextmanager
-def zarrs_context():
+def fast_zarr_context():
+    # We are going to be "guinea pigs" for this new pipeline because it should be much faster
+    # and we're shortchanging our users otherwise.
+    # So we change the pipeline if it has not been changed by the user i.e.,
+    # it is the old BatchedCodecPipeline.
+    # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
+    old_pipeline = zarr.config.get("codec_pipeline.path")
+    use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
+        "3.3"
+    )
+    # Switch to zarrs if the old pipeline is just the default
+    use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
+    zarr_context = (
+        zarr.config.set({
+            "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
+            "codec_pipeline.max_workers": None,
+        })
+        if use_zarr_fused
+        else nullcontext()
+    )
+    if use_zarrs:
+
+        @contextmanager
+        def _context():
+            with (
+                zarr_context,
+                zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}),
+            ):
+                yield
+
+        context = _context()
+
+    else:
+        context = zarr_context
     with (
-        (
-            zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-            if find_spec("zarrs")
-            else nullcontext()
-        ),
-        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+        context,
+        warnings.catch_warnings() if use_zarrs else nullcontext(),
     ):
-        if find_spec("zarrs"):
+        if use_zarrs:
             warnings.filterwarnings(
                 "ignore",
                 message=r".*unsupported by ZarrsCodecPipeline.*",
@@ -53,7 +89,7 @@ def write_zarr(
     store: StoreLike,
     adata: AnnData,
     *,
-    chunks: tuple[int, ...] | None = None,
+    chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
     **ds_kwargs,
@@ -69,15 +105,15 @@ def write_zarr(
     ) -> None:
         if (
             chunks is not None
-            and not isinstance(elem, sparse.spmatrix)
+            and not isinstance(elem, sparse.sparray | sparse.spmatrix)
             and elem_name.lstrip("/") == "X"
         ):
             dataset_kwargs = dict(dataset_kwargs, chunks=chunks)
         write_func(store, elem_name, elem, dataset_kwargs=dataset_kwargs)
 
-    with zarrs_context():
+    with fast_zarr_context():
         # TODO: Use spec writing system for this
-        f = open_write_group(store)
+        f = zarr.open_group(store, mode="w")
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
 
@@ -95,7 +131,24 @@ def write_zarr(
                 zarr.consolidate_metadata(f.store)
 
 
-def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnData:
+# Suffixes of paths that hold a whole store in a single file.
+# `zarr.open_group` treats such a path as a directory store and finds no group in
+# it, so the user has to wrap it in the matching store class themselves.
+_PACKED_STORE_CLASSES: Mapping[str, str] = MappingProxyType({
+    ".zip": "zarr.storage.ZipStore"
+})
+
+
+def _add_packed_store_note(e: BaseException, store: StoreLike) -> None:
+    """Suggest the store class to use if `store` looks like a single-file store."""
+    if not isinstance(store, os.PathLike | str):
+        return
+    path = os.fspath(store)
+    if (cls_name := _PACKED_STORE_CLASSES.get(Path(path).suffix)) is not None:
+        e.add_note(f"Did you mean `read_zarr({cls_name}({path!r}))`?")
+
+
+def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 
@@ -108,11 +161,12 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
     def callback(func, elem_name: str, elem, iospec):
         """Read with handling for backwards compat"""
         if iospec.encoding_type == "anndata" or elem_name.endswith("/"):
-            return AnnData(**{
+            attrs: dict[str, Any] = {
                 k: read_dispatched(v, callback)
                 for k, v in dict(elem).items()
                 if not k.startswith("raw.")
-            })
+            }
+            return AnnData(**attrs)
         elif elem_name.startswith("/raw."):
             return None
         elif elem_name in {"/obs", "/var"}:
@@ -122,9 +176,19 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
             return _read_legacy_raw(f, func(elem), read_dataframe, func)
         return func(elem)
 
-    with zarrs_context():
-        f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+    with fast_zarr_context():
+        if isinstance(store, zarr.Group):
+            f = store
+        else:
+            try:
+                f = zarr.open_group(store, mode="r")
+            except GroupNotFoundError as e:
+                _add_packed_store_note(e, store)
+                raise
         adata = read_dispatched(f, callback=callback)
+        if not isinstance(adata, AnnData):
+            msg = f"Expected an AnnData at the store root, got {type(adata).__name__}"
+            raise ValueError(msg)
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
@@ -143,7 +207,7 @@ def read_zarr(store: PathLike[str] | str | MutableMapping | zarr.Group) -> AnnDa
 def read_dataset(dataset: zarr.Array):
     """Legacy method for reading datasets without encoding_type."""
     value = dataset[...]
-    if not hasattr(value, "dtype"):
+    if not isinstance(value, np.ndarray):  # scalars have no dtype to inspect
         return value
     elif isinstance(value.dtype, str):
         pass
@@ -172,20 +236,13 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
 
 
 @report_read_key_on_error
-def read_dataframe(group: zarr.Group | zarr.Array) -> pd.DataFrame:
+def read_dataframe(group: zarr.Group | zarr.Array) -> RWAble:
+    """Read `obs`/`var`, which is a `DataFrame` unless it was written as a plain mapping."""
     # Fast paths
     if isinstance(group, zarr.Array):
         return read_dataframe_legacy(group)
     else:
         return read_elem(group)
-
-
-def open_write_group(
-    store: StoreLike, *, mode: AccessModeLiteral = "w", **kwargs
-) -> zarr.Group:
-    if "zarr_format" not in kwargs:
-        kwargs["zarr_format"] = settings.zarr_write_format
-    return zarr.open_group(store, mode=mode, **kwargs)
 
 
 def is_group_consolidated(group: _GroupStorageType, *, strict: bool = True) -> bool:

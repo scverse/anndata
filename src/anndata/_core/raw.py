@@ -1,40 +1,60 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
-import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import issparse
 
 from ..compat import CupyArray, CupySparseMatrix
+from ..types import SupportsArrayApiBase
+from ..utils import asarray
 from .aligned_df import _gen_dataframe
-from .aligned_mapping import AlignedMappingProperty, AxisArrays
-from .index import _get_vector_ambiguous, _normalize_index, _subset, unpack_index
-from .sparse_dataset import sparse_dataset
+from .aligned_mapping import (
+    AlignedMappingProperty,
+    AxisArrays,
+    _copy_array,
+    _on_disk_x,
+)
+from .index import (
+    _as_numpy_idx,
+    _get_vector_ambiguous,
+    _normalize_index,
+    _subset,
+    unpack_index,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping, MutableMapping, Sequence
     from typing import ClassVar
 
+    from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef
-    from ..compat import CSMatrix
     from ..typing import Index, InMemoryArray, _Index1DNorm
-    from .aligned_mapping import AxisArraysView
+    from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
-    from .sparse_dataset import BaseCompressedSparseDataset
+    from .xarray import Dataset2D
 
 
 # TODO: Implement views for Raw
 class Raw:
+    # `Raw` parents its `varm` like a non-view `AnnData` does, and never is a view
     is_view: ClassVar = False
+    _adata_ref: ClassVar[None] = None
+    _oidx: ClassVar[None] = None
+    _vidx: ClassVar[None] = None
+
+    _varm: MutableMapping[str, AlignedArray]
+    """Backing store for the `varm` `AlignedMappingProperty`."""
+
+    _X: InMemoryArray | None
+    """In-memory `.X`; `None` if the parent `AnnData` is backed."""
 
     def __init__(
         self,
         adata: AnnData,
-        X: np.ndarray | CSMatrix | None = None,
-        var: pd.DataFrame | Mapping[str, Sequence] | None = None,
-        varm: AxisArrays | Mapping[str, np.ndarray] | None = None,
+        X: InMemoryArray | None = None,
+        var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
+        varm: Mapping[str, AlignedArray] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:
             msg = f"X has {X.shape[0]} rows, but n_obs is {adata.n_obs}"
@@ -61,8 +81,11 @@ class Raw:
             elif isinstance(adata.X, CupyArray | CupySparseMatrix):
                 self._X = adata.X.get()
             else:
-                self._X = adata.X.copy()
-            self._var = adata.var.copy()
+                self._X = _copy_array(adata.X)
+            if not isinstance(var_df := adata.var, pd.DataFrame):
+                msg = "Cannot create `.raw` from an AnnData with a lazy `var`"
+                raise NotImplementedError(msg)
+            self._var = var_df.copy()
             self.varm = adata.varm.copy()
         elif adata.isbacked:
             msg = "Cannot specify X if adata is backed"
@@ -74,7 +97,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> BaseCompressedSparseDataset | np.ndarray | CSMatrix:
+    def X(self) -> InMemoryArray | CSRDataset | CSCDataset | None:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -82,24 +105,21 @@ class Raw:
             self._adata.file.open()
         # Handle legacy file formats:
         if "raw/X" in self._adata.file:
-            X = self._adata.file["raw/X"]
+            X = _on_disk_x(self._adata.file["raw/X"])
         elif "raw.X" in self._adata.file:
-            X = self._adata.file["raw.X"]  # Backwards compat
+            X = _on_disk_x(self._adata.file["raw.X"])  # Backwards compat
         else:
             msg = (
                 f"Could not find dataset for raw X in file: "
                 f"{self._adata.file.filename}."
             )
             raise AttributeError(msg)
-        if isinstance(X, h5py.Group):
-            X = sparse_dataset(X)
         # Check if we need to subset
-        if self._adata.is_view:
+        if (oidx := self._adata._oidx) is not None:  # i.e. `self._adata.is_view`
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
-            return _subset(X, (self._adata._oidx, slice(None)))
-        else:
-            return X
+            return _subset(X, (oidx, slice(None)))
+        return X
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -117,7 +137,7 @@ class Raw:
     def n_obs(self) -> int:
         return self._n_obs
 
-    varm: AlignedMappingProperty[AxisArrays | AxisArraysView, str] = (
+    varm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (
         AlignedMappingProperty(AxisArrays, 1)
     )
 
@@ -140,15 +160,16 @@ class Raw:
         from .anndata import AnnData
 
         if isinstance(index, AdRef):
-            return index.acc.get(self, index.idx)  # type: ignore  # no official Raw support here
+            # `RefAcc.get` has no official `Raw` support, but works for the accessors it has
+            return index.acc.get(self, index.idx)
 
         if (
             isinstance(index, tuple)
             and len(index) == 2
-            and isinstance(index[0], AnnData)
+            and isinstance(parent := index[0], AnnData)
         ):
-            adata, index = index
-            oidx, vidx = self._normalize_indices(index)
+            adata = parent
+            oidx, vidx = self._normalize_indices(index[1])
         else:
             oidx, vidx = self._normalize_indices(index)
             adata = self._adata[oidx]
@@ -159,13 +180,18 @@ class Raw:
         if isinstance(oidx, int | np.integer):
             oidx = slice(oidx, oidx + 1, 1)
 
-        X = _subset(self.X, (oidx, vidx)) if not self._adata.isbacked else None
+        X = (
+            None
+            if self._adata.isbacked or self._X is None
+            else _subset(self._X, (oidx, vidx))
+        )
 
-        var = self._var.iloc[vidx]
+        var = self._var.iloc[_as_numpy_idx(vidx)]
         new = Raw(adata, X=X, var=var)
         if self.varm is not None:
             # Since there is no view of raws
-            new.varm = self.varm._view(_RawViewHack(self, vidx), (vidx,)).copy()
+            hack = cast("AnnData", _RawViewHack(self, vidx))
+            new.varm = self.varm._view(hack, (vidx,)).copy()
         return new
 
     def __str__(self) -> str:
@@ -179,9 +205,10 @@ class Raw:
     def copy(self) -> Raw:
         return Raw(
             self._adata,
-            X=self.X.copy(),
+            # a backed `.X` lives in the file and cannot be passed to `Raw`
+            X=None if self._adata.isbacked or self._X is None else _copy_array(self._X),
             var=self.var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
+            varm=dict(self._varm),
         )
 
     def to_adata(self) -> AnnData:
@@ -189,13 +216,13 @@ class Raw:
         from anndata import AnnData
 
         return AnnData(
-            X=None if self.X is None else self.X.copy(),
+            X=None if (X := self.X) is None else _copy_array(X),
             var=self.var.copy(),
-            varm=None if self._varm is None else self._varm.copy(),
+            varm=dict(self._varm),
             obs=self._adata.obs.copy(),
             obsm=self._adata.obsm.copy(),
             obsp=self._adata.obsp.copy(),
-            uns=self._adata.uns.copy(),
+            uns=dict(self._adata.uns),
         )
 
     def _normalize_indices(
@@ -222,17 +249,25 @@ class Raw:
 
     def obs_vector(self, k: str, /) -> InMemoryArray:
         # TODO decorator to copy AnnData.obs_vector docstring
-        idx = self._normalize_indices((slice(None), k))
-        a = self.X[idx]
-        if issparse(a):
-            a = a.toarray()
-        return np.ravel(a)
+        if (X := self.X) is None:
+            msg = f"Cannot get vector {k!r} from a `Raw` without `X`."
+            raise ValueError(msg)
+        # non-unique names resolve to a slice or a mask rather than a position
+        idx = self.var_names.get_loc(k)
+        # a scalar position would drop the dimension we want to ravel
+        a = _subset(X, (slice(None), np.array([idx]) if isinstance(idx, int) else idx))
+        if isinstance(a, np.ndarray):
+            return np.ravel(a)
+        if isinstance(a, SupportsArrayApiBase):
+            # the array API standard has no `ravel`, and we stay in the namespace
+            return a.__array_namespace__().reshape(a, (a.size,))
+        return np.ravel(asarray(a))
 
 
 # This exists to accommodate AlignedMappings,
 # until we implement a proper RawView or get rid of Raw in favor of modes.
 class _RawViewHack:
-    def __init__(self, raw: Raw, vidx: slice | np.ndarray):
+    def __init__(self, raw: Raw, vidx: _Index1DNorm):
         self.parent_raw = raw
         self.vidx = vidx
 
@@ -246,7 +281,7 @@ class _RawViewHack:
 
     @property
     def var_names(self) -> pd.Index:
-        return self.parent_raw.var_names[self.vidx]
+        return self.parent_raw.var_names[_as_numpy_idx(self.vidx)]
 
 
 class IndexDimError(IndexError):

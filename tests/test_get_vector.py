@@ -6,6 +6,7 @@ import pytest
 from scipy import sparse
 
 import anndata as ad
+from anndata.utils import asarray
 
 pytestmark = [
     pytest.mark.filterwarnings("ignore:.*Use anndata.acc.A instead of.*:FutureWarning"),
@@ -49,11 +50,13 @@ def test_amgibuous_keys_obs(adata: ad.AnnData, key: str) -> None:
     with pytest.raises(ValueError, match=r".*obs_names.*var\.columns"):
         adata.var_vector(key, layer="layer")
 
-    assert list(adata.obs[key]) == list(adata.obs_vector(key))
-    assert list(adata.obs[key]) == list(adata.obs_vector(key, layer="layer"))
+    assert list(adata.obs[key]) == list(asarray(adata.obs_vector(key)))
+    assert list(adata.obs[key]) == list(asarray(adata.obs_vector(key, layer="layer")))
 
+    raw = adata.raw
+    assert raw is not None
     with pytest.raises(ValueError, match=r".*obs_names.*var\.columns*"):
-        adata.raw.var_vector(key)
+        raw.var_vector(key)
 
 
 @pytest.mark.parametrize("key", VAR_KEYS)
@@ -67,7 +70,11 @@ def test_amgibuous_keys_var(adata: ad.AnnData, key: str) -> None:
     with pytest.raises(ValueError, match=r".*var_names.*obs\.columns.*"):
         adata.obs_vector(key, layer="layer")
 
-    assert list(adata.var[key]) == list(adata.var_vector(key))
-    assert list(adata.var[key]) == list(adata.var_vector(key, layer="layer"))
+    assert list(adata.var[key]) == list(asarray(adata.var_vector(key)))
+    assert list(adata.var[key]) == list(asarray(adata.var_vector(key, layer="layer")))
 
-    assert list(adata.raw.var[key]) == list(adata.raw.var_vector(key))
+    raw = adata.raw
+    assert raw is not None
+    vec = raw.var_vector(key)
+    assert isinstance(vec, np.ndarray | pd.api.extensions.ExtensionArray)
+    assert list(raw.var[key]) == list(vec)

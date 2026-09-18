@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from functools import reduce
 from itertools import chain, pairwise
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -18,14 +18,14 @@ from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
 from ...compat import old_positionals
-from ...utils import warn
+from ...utils import set_module, warn
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-    from typing import Literal
+    from collections.abc import Callable, Iterable, Sequence, Sized
+    from typing import Literal, TypeAlias
 
     from ..._types import Join_T
-    from ...typing import Index
+    from ...typing import Index, _Index1DNorm
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -127,6 +127,13 @@ class _ConcatViewMixin:
 
 
 class _IterateViewMixin:
+    if TYPE_CHECKING:
+
+        @property
+        def shape(self) -> tuple[int, int]: ...
+        # `LazyAttrData` yields arrays here, so only `len` is common to all mixin users
+        def __getitem__(self, index: Index, /) -> Sized: ...
+
     @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(
         self,
@@ -190,7 +197,10 @@ class MapObsView:
         self.dtypes = dtypes
         self.obs_names = obs_names
 
-    def __getitem__(self, key: str, *, use_convert: bool = True):
+    def __getitem__(self, key: str):
+        return self._get(key)
+
+    def _get(self, key: str, *, use_convert: bool = True):
         if self._keys is not None and key not in self._keys:
             msg = f"No {key} in {self.attr} view"
             raise KeyError(msg)
@@ -206,10 +216,12 @@ class MapObsView:
 
             if isinstance(arr, pd.DataFrame):
                 arrs.append(arr.iloc[idx])
+            elif isinstance(arr, pd.Series):  # only in `obs`, i.e. without `vidx`
+                arrs.append(arr.iloc[oidx])
             else:
                 if vidx is not None:
                     idx = np.ix_(*idx) if not isinstance(idx[1], slice) else idx
-                arrs.append(arr.iloc[idx] if isinstance(arr, pd.Series) else arr[idx])
+                arrs.append(arr[idx])
 
         if len(arrs) > 1:
             _arr = _merge(arrs)
@@ -236,7 +248,7 @@ class MapObsView:
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
-            dct[key] = self.__getitem__(key, use_convert=use_convert)
+            dct[key] = self._get(key, use_convert=use_convert)
         return dct
 
     @property
@@ -250,6 +262,7 @@ class MapObsView:
         return descr
 
 
+@set_module("anndata.experimental")
 class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
     """\
     An object to access the observation attributes of `adatas` in AnnCollection.
@@ -575,8 +588,8 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-DictCallable = dict[str, Callable]
-ConvertType = Callable | dict[str, Callable | DictCallable]
+# a `type` alias would hand the docs build a `TypeAliasType`, which would loop infinitely
+ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
 
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
@@ -707,6 +720,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             adatas = list(adatas)
 
         # check if the variables are the same in all adatas
+        self.adatas_vidx: list[_Index1DNorm | int | np.integer | pd.MultiIndex | None]
         self.adatas_vidx = [None for adata in adatas]
         vars_names_list = [adata.var_names for adata in adatas]
         vars_eq = all(adatas[0].var_names.equals(vrs) for vrs in vars_names_list[1:])
@@ -733,14 +747,14 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
             [pd.Series(a.obs_names) for a in adatas], ignore_index=True
         )
         if keys is None:
-            keys = np.arange(len(adatas)).astype(str)
+            keys = list(map(str, range(len(adatas))))
         label_col = pd.Categorical.from_codes(
             np.repeat(np.arange(len(adatas)), [a.shape[0] for a in adatas]),
-            categories=keys,
+            categories=pd.Index(keys),
         )
         if index_unique is not None:
             concat_indices = concat_indices.str.cat(
-                label_col.map(str, na_action="ignore"), sep=index_unique
+                list(label_col.map(str, na_action="ignore")), sep=index_unique
             )
         self.obs_names = pd.Index(concat_indices)
 
@@ -755,9 +769,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         if join_obs is not None:
             view_attrs.remove("obs")
             self._attrs.append("obs")
-            concat_annot = pd.concat(
-                [a.obs for a in adatas], join=join_obs, ignore_index=True
-            )
+            # `pd.concat` can’t deal with the lazy `Dataset2D` variant of `obs`
+            obs_dfs = [cast("pd.DataFrame", a.obs) for a in adatas]
+            concat_annot = pd.concat(obs_dfs, join=join_obs, ignore_index=True)
             concat_annot.index = self.obs_names
             self._obs = concat_annot
         else:
@@ -775,7 +789,9 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 [a.obsm for a in adatas], index=self.obs_names
             )
             self._obsm = (
-                AxisArrays(self, axis=0, store={}) if self._obsm == {} else self._obsm
+                AxisArrays(cast("AnnData", self), axis=0, store={})
+                if self._obsm == {}
+                else self._obsm
             )
 
         # process inner join of views

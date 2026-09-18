@@ -66,8 +66,7 @@ def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     assert diff_proc.returncode == 0, diff_proc.stdout
 
 
-def test_clean_uns_backwards_compat(tmp_path, diskfmt):
-    pth = tmp_path / f"test_write.{diskfmt}"
+def test_clean_uns_backwards_compat(diskfmt_store, diskfmt):
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = getattr(ad, f"read_{diskfmt}")
 
@@ -83,7 +82,7 @@ def test_clean_uns_backwards_compat(tmp_path, diskfmt):
         },
     )
 
-    write(orig, pth)
-    from_disk = read(pth)
+    write(orig, diskfmt_store)
+    from_disk = read(diskfmt_store)
 
     assert_equal(orig, from_disk)
