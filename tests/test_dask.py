@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -26,7 +25,6 @@ from anndata.tests.helpers import (
     as_sparse_dask_array,
     as_sparse_dask_matrix,
     assert_equal,
-    check_all_sharded,
     gen_adata,
 )
 
@@ -116,17 +114,11 @@ def test_dask_write(adata, diskfmt_store, diskfmt):
 
 @pytest.mark.xdist_group("dask")
 @pytest.mark.dask_distributed
-@pytest.mark.parametrize(
-    "auto_shard_zarr_v3",
-    [pytest.param(True, id="shard"), pytest.param(False, id="no-shard")],
-)
 def test_dask_distributed_write(
     adata: AnnData,
     tmp_path: Path,
     diskfmt: Literal["h5ad", "zarr"],
     local_cluster_addr: str,
-    *,
-    auto_shard_zarr_v3: bool,
 ) -> None:
     import dask.array as da
     import dask.distributed as dd
@@ -142,12 +134,9 @@ def test_dask_distributed_write(
         adata.obsm["b"] = da.random.random((M, 10))
         adata.varm["a"] = da.random.random((N, 10))
         orig = adata
-        with ad.settings.override(auto_shard_zarr_v3=auto_shard_zarr_v3):
-            ad.io.write_elem(g, "/", orig)
+        ad.io.write_elem(g, "/", orig)
         # TODO: See https://github.com/zarr-developers/zarr-python/issues/2716
         with as_group(pth, mode="r") as g:
-            if auto_shard_zarr_v3 and isinstance(g, zarr.Group):
-                check_all_sharded(g)
             curr = ad.io.read_elem(g)
 
     assert isinstance(curr, AnnData)
