@@ -38,7 +38,10 @@ _RST_FILTERS: Sequence[WarningFilter] = (
 def setup_env() -> None:
     import anndata
 
-    anndata.settings.reset(*anndata.settings.model_fields_set)
+    with warnings.catch_warnings():
+        # resetting reads every set setting, deprecated ones included
+        warnings.simplefilter("ignore", DeprecationWarning)
+        anndata.settings.reset(*anndata.settings.model_fields_set)
 
     if IS_PRE:
         # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
