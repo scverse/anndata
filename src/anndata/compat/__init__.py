@@ -119,7 +119,13 @@ class IndexManager:
             existing_xp = existing.__array_namespace__()
             if existing_xp is xp:
                 return existing
-            return xp.from_dlpack(existing)
+            try:
+                return xp.from_dlpack(existing)
+            except BufferError:
+                # Some old Array API implementations don’t support DLPack 1.0 (e.g. DLPACK_FLAG_BITMASK_READ_ONLY)
+                # E.g. https://github.com/jax-ml/jax/issues/40789
+                # See “Notes” at the end of https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html
+                return xp.asarray(existing)
         self.add_array(xp.from_dlpack(src_arr, copy=True))
         return self._manager[device]
 
