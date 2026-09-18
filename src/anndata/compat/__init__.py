@@ -90,7 +90,8 @@ class IndexManager:
             try:
                 return xp.from_dlpack(existing)
             except BufferError:
-                # numpy#20742: read-only arrays can’t be exported via DLPack
+                # Some APIs don’t set DLPACK_FLAG_BITMASK_READ_ONLY and need copying
+                # See “Notes” at the end of https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html
                 return xp.asarray(existing)
         self.add_array(xp.from_dlpack(src_arr, copy=True))
         return self._manager[device]
