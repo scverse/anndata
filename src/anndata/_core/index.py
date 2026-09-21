@@ -185,7 +185,7 @@ def _from_array(
         # if it is a float array or something along those lines, convert it to integers
         if XArrayDtype.Float(indexer):
             indexer_int = xp.astype(indexer, xp.int64)
-            if xp.all((indexer - indexer_int) != 0):
+            if xp.any((indexer - indexer_int) != 0):
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
             return indexer_int
