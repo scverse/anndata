@@ -25,8 +25,9 @@ i.e. encodings that version can’t read are disallowed.
   - This is the default.
 * - `"0.14"`
   - unreleased
-  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors.
-    Older versions can’t read it.
+  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors,
+    and {ref}`escapes keys <escaped-keys>` that a file system may choke on, e.g. `/` and `:`.
+    Older versions can’t read either.
 ```
 
 ## Picking individual features
