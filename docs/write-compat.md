@@ -23,6 +23,12 @@ i.e. encodings that version can’t read are disallowed.
 * - `"0.13"`
   - 2026-07-07
   - This is the default.
+* - `"0.14"`
+  - unreleased
+  - Enables the {ref}`sequence <sequence>` and {ref}`accessor <accessor>` encodings,
+    i.e. writing heterogeneous, ragged and nested sequences in `uns` ({issue}`1979`)
+    as well as {mod}`anndata.acc` accessors.
+    Older versions can’t read either.
 ```
 
 ## Checking before writing
@@ -37,7 +43,7 @@ if adata.unwriteable(compat="0.13"):
 
 ## The default profile
 
-The default is {attr}`anndata.WriteCompat.DEFAULT`.
+The default is {attr}`anndata.WriteCompat.DEFAULT`, later features are disabled.
 
 The default keeps lagging behind the newest profile by roughly a year,
 so files stay readable by the anndata versions people are likely to have.
