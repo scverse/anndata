@@ -17,6 +17,18 @@ class WriteCompat(Version, Enum):
     V0_13 = "0.13"
     """anndata 0.13 (2026-07-07)."""
 
+    V0_14 = "0.14"
+    """anndata 0.14 (unreleased).
+
+    Enables
+
+    - the `sequence` encoding, which stores a sequence’s elements individually instead
+      of converting it to an array. That allows writing heterogeneous, ragged and
+      nested sequences, i.e. arbitrary JSON-like structures in
+      :attr:`~anndata.AnnData.uns`.
+    - the `accessor` encoding for :mod:`anndata.acc` accessors.
+    """
+
     DEFAULT = V0_13
     """Alias for the profile write functions use by default, currently :attr:`V0_13`."""
 
@@ -25,5 +37,5 @@ class WriteCompat(Version, Enum):
         def __init__(self, value: WriteCompat | WriteCompatStr, /) -> None: ...
 
 
-type WriteCompatStr = Literal["0.13"]
+type WriteCompatStr = Literal["0.13", "0.14"]
 """The values of :class:`WriteCompat`, which write functions also accept."""

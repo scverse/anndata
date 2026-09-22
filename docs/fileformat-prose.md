@@ -332,6 +332,67 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 * Each mapping MUST be its own group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
+(sequences)=
+## Sequences
+
+Python sequences –
+any {class}`~collections.abc.Sequence` except {class}`str` and {class}`bytes`,
+e.g. a {class}`list` or {class}`tuple` –
+are stored as {ref}`dense arrays <dense-arrays>` if an array can hold them unchanged.
+Heterogeneous sequences or sequences holding non-scalars
+are instead stored as a group whose keys are the element indices,
+each element encoded on its own.
+Together with mappings,
+this allows storing arbitrary JSON-like structures in `uns`,
+with leaves of any encodable type.
+
+Writing these requires the `"0.14"` {doc}`write compatibility profile <write-compat>`,
+since older anndata versions cannot read them.
+
+```python
+>>> store["uns/hetero"].visititems(print)  # uns["hetero"] == [1, "b", df]
+0 <HDF5 dataset "0": shape (), type "<i8">
+1 <HDF5 dataset "1": shape (), type "|O">
+2 <HDF5 group "/uns/hetero/2" (2 members)>
+2/_index <HDF5 dataset "_index": shape (2,), type "|O">
+2/a <HDF5 dataset "a": shape (2,), type "<i8">
+```
+
+(sequence)=
+### Sequence specifications (v0.1.0)
+
+* Each sequence MUST be its own group
+* The group's metadata MUST contain the encoding metadata `"encoding-type": "sequence"`, `"encoding-version": "0.1.0"`
+* The group MUST contain exactly the keys `"0"` … `"n-1"` for a sequence of length `n`,
+  each holding the element at that index
+
+A sequence is always read back as a `list`,
+since the encoding does not distinguish a `list` from a `tuple`.
+
+(acc-encoding)=
+## Accessors
+
+{mod}`anndata.acc` accessors –
+references to a vector or container within an `AnnData`, such as `A.obsm["pca"][0]` –
+are stored as their {meth}`~anndata.acc.AdAcc.to_json` form,
+which is a sequence of strings, integers and nulls
+described by [`acc-schema-v1.json`](acc-schema-v1.json){.external}.
+
+```python
+>>> store["uns/ref"].visititems(print)  # uns["ref"] == A.obsm["pca"][0]
+0 <HDF5 dataset "0": shape (), type "|O">
+1 <HDF5 dataset "1": shape (), type "|O">
+2 <HDF5 dataset "2": shape (), type "<i8">
+```
+
+(accessor)=
+### Accessor specifications (v0.1.0)
+
+* Each accessor MUST be its own group, laid out like a {ref}`sequence <sequence>`
+* The group's metadata MUST contain the encoding metadata `"encoding-type": "accessor"`, `"encoding-version": "0.1.0"`
+* The elements MUST validate against `#/$defs/ref` or `#/$defs/acc`
+  of [`acc-schema-v1.json`](acc-schema-v1.json){.external}
+
 (scalars)=
 ## Scalars
 
