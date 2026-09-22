@@ -446,7 +446,11 @@ class Writer:
                     isinstance(store, zarr.Group)
                     or settings.disallow_forward_slash_in_h5ad
                 ):
-                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                    msg = (
+                        f"Forward slashes are not allowed in keys in {type(store)}. "
+                        'Pass `compat="0.14"` to the write function to escape them in `uns` keys, '
+                        "`obs`/`var` column names and other mapping keys"
+                    )
                     raise ValueError(msg)
                 msg = "Forward slashes will be written differently in a future anndata version"
                 warn(msg, FutureWarning)

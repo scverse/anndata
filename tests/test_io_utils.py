@@ -17,7 +17,13 @@ from packaging.version import Version
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
-from anndata._io.utils import report_read_key_on_error
+from anndata._io.utils import (
+    UNSAFE_KEY_CHARS,
+    _is_reserved_key,
+    escape_key,
+    report_read_key_on_error,
+    unescape_key,
+)
 from anndata._io.zarr import fast_zarr_context
 from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
@@ -249,3 +255,90 @@ def test_write_chunk_size(tmp_path, output_format):
         with h5py.File(pth, mode="r") as store:
             assert store["X"].chunks == adata.X.chunksize
             np.testing.assert_array_equal(store["X"], adata.X)
+
+
+AWKWARD_KEYS = [
+    # reserved by the zarr v3 spec
+    "",
+    ".",
+    "..",
+    "...",
+    "__x",
+    "zarr.json",
+    # Windows device names, with and without an extension
+    "CON",
+    "con",
+    "NUL",
+    "COM1",
+    "COM¹",
+    "CONIN$",
+    "NUL.txt",
+    "nul.tar.gz",
+    "CON.csv",
+    # trailing period/space
+    "foo.",
+    "foo ",
+    "NUL ",
+    # unsafe characters
+    "a/b",
+    "a:b",
+    "100%",
+    'q"?*<>|\\',
+    "x\x00y",
+    # literals that look like they were already escaped
+    "a%2Fb",
+    "CON%",
+    "NUL%.txt",
+    # innocent
+    "plain",
+    "x.NUL",
+]
+
+
+@pytest.mark.parametrize("key", AWKWARD_KEYS, ids=repr)
+def test_unconditional_wrapping_reads_back_the_same(key: str) -> None:
+    """The spec lets a simple writer wrap every key; a reader cannot tell."""
+    # a writer that needs none of the reserved-key rules
+    chars = "".join(f"%{ord(c):02X}" if c in UNSAFE_KEY_CHARS else c for c in key)
+    escaped = f"%{chars}%"
+
+    assert not _is_reserved_key(escaped)
+    assert unescape_key(escaped) == key
+
+
+@pytest.mark.parametrize("key", AWKWARD_KEYS, ids=repr)
+def test_escape_key_is_usable_and_reversible(key: str) -> None:
+    """Escaping always yields a usable key that says which key it came from."""
+    escaped = escape_key(key)
+    assert not _is_reserved_key(escaped)
+    assert not (UNSAFE_KEY_CHARS - {"%"}) & set(escaped)
+    assert unescape_key(escaped) == key
+
+
+def test_escape_key_is_injective() -> None:
+    """Distinct keys never escape to the same child key."""
+    escaped = [escape_key(k) for k in AWKWARD_KEYS]
+    assert len(set(escaped)) == len(escaped)
+
+
+@pytest.mark.parametrize(
+    ("key", "escaped"),
+    [
+        pytest.param("plain", "plain", id="left-alone"),
+        pytest.param("a/b", "a%2Fb", id="unsafe-char"),
+        pytest.param("100%", "100%25", id="literal-percent"),
+        pytest.param("CON", "%CON%", id="device"),
+        pytest.param("zarr.json", "%zarr.json%", id="zarr-metadata"),
+        # the two rules that match a *prefix*, which appending alone would not fix:
+        # `NUL.txt` names the `NUL` device whatever follows the period,
+        # and `__x` keeps the reserved `__`
+        pytest.param("NUL.txt", "%NUL.txt%", id="device-with-extension"),
+        pytest.param("__x", "%__x%", id="reserved-prefix"),
+        pytest.param("", "%%", id="empty"),
+        pytest.param("CON%", "CON%25", id="looks-wrapped-but-is-literal"),
+    ],
+)
+def test_escape_key(key: str, escaped: str) -> None:
+    """A reserved key is wrapped rather than mangled, so it stays legible."""
+    assert escape_key(key) == escaped
+    assert unescape_key(escaped) == key
