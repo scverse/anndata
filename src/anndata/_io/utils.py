@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import sys
 from collections.abc import Callable, Mapping
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
@@ -9,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._write_compat import WriteCompat
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -280,14 +283,96 @@ def report_write_key_on_error(func):
     return func_wrapper
 
 
-def _check_has_no_slash_key(attr: str, elem: object) -> None:
+def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteCompat) -> None:
     """Only attempt to write slash keys where people rely on it for backwards compatibility."""
+
     if attr in {"obs", "var", "uns", "raw"}:
-        return  # separate check for `settings.disallow_forward_slash_in_h5ad` is done in `write_elem`
+        return  # `write_elem` checks these against `settings.disallow_forward_slash_in_h5ad`
+    if compat >= WriteCompat.V0_14:
+        return  # keys get escaped, see `escape_key`
     assert isinstance(elem, Mapping)
     if any("/" in k for k in elem if k not in {"/", None}):
         msg = f"Forward slashes are not allowed in keys in {attr}"
         raise ValueError(msg)
+
+
+# The characters Windows forbids in file names, per “Naming Files, Paths, and Namespaces”:
+# https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
+# That is a superset of what POSIX (`/` and NUL) and macOS (those plus `:`, the classic
+# HFS separator) forbid, so escaping these makes a key safe as a path segment on any of
+# them – which matters for zarr stores that map keys to real files.
+# `%` is in there because it introduces an escape sequence.
+UNSAFE_KEY_CHARS = frozenset('%/\\:*?"<>|') | frozenset(map(chr, range(32)))
+_ESCAPE_RE = re.compile("%([0-9A-F]{2})")
+
+if sys.version_info >= (3, 13):
+    from ntpath import isreserved as _is_reserved_win
+else:  # pragma: no cover
+    _WIN_DEVICE_NAMES = frozenset(
+        {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+        | {f"{dev}{n}" for dev in ("COM", "LPT") for n in "123456789¹²³"}
+    )
+
+    def _is_reserved_win(name: str) -> bool:
+        """Backport of `ntpath.isreserved`, minus its check for the characters we escape."""
+        if name[-1:] in (".", " "):  # trailing dots and spaces are reserved
+            return name not in (".", "..")
+        return name.partition(".")[0].rstrip(" ").upper() in _WIN_DEVICE_NAMES
+
+
+def _is_reserved_key(key: str) -> bool:
+    """Whether `key` is unusable as a child key even though its characters are safe.
+
+    The first four are reserved by the `zarr` v3 spec
+    (https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html#node-names),
+    the last one catches Windows device names like `CON` and trailing dots/spaces.
+    """
+    return (
+        not key
+        or set(key) == {"."}  # `.`, `..`, `...`, …
+        or key.startswith("__")
+        or key == "zarr.json"
+        or _is_reserved_win(key)
+    )
+
+
+def key_needs_escaping(key: str) -> bool:
+    """Whether `key` is unusable as a child key as-is."""
+    return not UNSAFE_KEY_CHARS.isdisjoint(key) or _is_reserved_key(key)
+
+
+def escape_key(key: str) -> str:
+    """Make `key` usable as a child key.
+
+    Characters a file system may choke on are percent-escaped,
+    and a key that is reserved even without them is wrapped in a `%` on either end.
+    That `%` cannot be mistaken for an escape sequence,
+    as those are always a `%` followed by two hexadecimal digits.
+    Wrapping unconditionally would be just as readable back,
+    but we only do it where needed, so that keys stay legible on disk.
+
+    >>> escape_key("foo/bar")
+    'foo%2Fbar'
+    >>> escape_key("CON")  # a Windows device name
+    '%CON%'
+    >>> escape_key("NUL.txt")  # `NUL` stays the device whatever follows the period
+    '%NUL.txt%'
+    >>> [unescape_key(escape_key(k)) for k in ["100%/day", "CON", "..", "__x", ""]]
+    ['100%/day', 'CON', '..', '__x', '']
+    """
+    escaped = "".join(f"%{ord(c):02X}" if c in UNSAFE_KEY_CHARS else c for c in key)
+    # escaping can neither create nor remove a reserved key, so this is stable.
+    # Wrapping breaks every rule at once: the result is non-empty, is not all periods,
+    # starts with neither `__` nor a device name, ends in neither a period nor a space,
+    # and is not `zarr.json` – so it is never reserved itself, whatever `key` was.
+    return f"%{escaped}%" if _is_reserved_key(escaped) else escaped
+
+
+def unescape_key(key: str) -> str:
+    """Invert :func:`escape_key`."""
+    if key.endswith("%"):  # a `%` can never be the 2nd or 3rd character of an escape
+        key = key[1:-1]
+    return _ESCAPE_RE.sub(lambda m: chr(int(m[1], 16)), key)
 
 
 # -------------------------------------------------------------------------------
