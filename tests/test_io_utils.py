@@ -67,8 +67,8 @@ def test_key_error(
 def test_write_error_info(diskfmt, diskfmt_store):
     write = lambda x: getattr(x, f"write_{diskfmt}")(diskfmt_store)
 
-    # Assuming we don't define a writer for tuples
-    a = ad.AnnData(uns={"a": {"b": {"c": (1, 2, 3)}}})
+    # Assuming we don't define a writer for sets
+    a = ad.AnnData(uns={"a": {"b": {"c": {1, 2, 3}}}})
     assert a.unwriteable()
 
     with pytest.raises(
