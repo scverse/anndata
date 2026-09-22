@@ -29,6 +29,9 @@ from anndata._core.storage import _check_x_and_layers_are_2d_on_write
 from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,
+    escape_key,
+    key_needs_escaping,
+    unescape_key,
     zero_dim_array_as_scalar,
 )
 from anndata._types import StorageType
@@ -53,7 +56,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Generator, Iterable, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -71,6 +74,15 @@ _STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
     h5py.Group,
     zarr.Group,
 )
+
+
+def escaping_keys(keys: Iterable[str], *, compat: WriteCompat) -> bool:
+    """Whether a group’s child keys must be percent-escaped to be file-system safe.
+
+    All of a group’s keys are escaped as soon as one of them needs it,
+    so that an escape sequence can never be mistaken for a literal key.
+    """
+    return compat >= WriteCompat.V0_14 and any(key_needs_escaping(k) for k in keys)
 
 
 ####################
@@ -339,7 +351,7 @@ def write_anndata(
     for sub_key, elem in iter_outer(adata):
         if sub_key == "X" and elem is None:
             continue
-        _check_has_no_slash_key(sub_key, elem)
+        _check_has_no_slash_key(sub_key, elem, compat=_writer.compat)
         if sub_key == "layers":
             assert isinstance(elem, MutableMapping)
             layers: Mapping[Any, Any] = elem
@@ -438,6 +450,14 @@ def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Stora
     return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
+@_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.2.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.2.0"))
+def read_mapping_escaped(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> dict[str, Storable]:
+    return {unescape_key(k): _reader.read_elem(v) for k, v in dict(elem).items()}
+
+
 @_REGISTRY.register_write(h5py.Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(zarr.Group, dict, IOSpec("dict", "0.1.0"))
 @suppress_autoshard_warning
@@ -450,8 +470,16 @@ def write_mapping(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
+    if escape := escaping_keys(v, compat=_writer.compat):
+        # `write_spec` only sets this if absent, so this wins
+        g.attrs["encoding-version"] = "0.2.0"
     for sub_k, sub_v in v.items():
-        _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+        _writer.write_elem(
+            g,
+            escape_key(sub_k) if escape else sub_k,
+            sub_v,
+            dataset_kwargs=dataset_kwargs,
+        )
 
 
 #############
@@ -1157,7 +1185,6 @@ def write_dataframe(
         msg = f"Found repeated column names: {duplicates}. Column names must be unique."
         raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
-    group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
         if df.index.name in col_names and not pd.Series(
@@ -1172,7 +1199,17 @@ def write_dataframe(
         index_name = df.index.name
     else:
         index_name = "_index"
-    group.attrs["_index"] = check_key(index_name)
+    index_name = check_key(index_name)
+
+    # `column-order` and `_index` name the child keys, so they are escaped too –
+    # h5ad attributes are VLEN strings and could not hold e.g. an embedded NUL.
+    if escape := escaping_keys([*col_names, index_name], compat=_writer.compat):
+        # `write_spec` only sets this if absent, so this wins
+        group.attrs["encoding-version"] = "0.3.0"
+    esc = escape_key if escape else lambda k: k
+
+    group.attrs["column-order"] = [esc(c) for c in col_names]
+    group.attrs["_index"] = esc(index_name)
 
     if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
         assert isinstance(df.index.array, pd.arrays.ExtensionArray)
@@ -1182,50 +1219,57 @@ def write_dataframe(
         if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
         else df.index.array
     )
-    _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
-    for colname, series in df.items():
+    _writer.write_elem(
+        group, esc(index_name), index_values, dataset_kwargs=dataset_kwargs
+    )
+    # `col_names` are `df.columns` checked to be `str`, in the same order
+    for colname, (_, series) in zip(col_names, df.items(), strict=True):
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
         _writer.write_elem(
-            group, colname, series._values, dataset_kwargs=dataset_kwargs
+            group, esc(colname), series._values, dataset_kwargs=dataset_kwargs
         )
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.3.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     attrs: Mapping[str, Any] = elem.attrs
+    # the attributes name the child keys, which are escaped from v0.3.0 on
     columns = list(_read_attr(attrs, "column-order"))
     idx_key = _read_attr(attrs, "_index")
+    unesc = (lambda k: k) if attrs["encoding-version"] == "0.2.0" else unescape_key
     df = pd.DataFrame(
-        {k: _reader.read_elem(elem[k]) for k in columns},
+        {unesc(k): _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
-        columns=columns if columns else None,
+        columns=[unesc(k) for k in columns] if columns else None,
     )
     if idx_key != "_index":
-        df.index.name = idx_key
+        df.index.name = unesc(idx_key)
     return df
 
 
 # TODO: Figure out what indices is allowed to be at each element
 @_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.3.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe_partial(
     elem, *, items=None, indices=(slice(None, None), slice(None, None))
 ):
+    unesc = (lambda k: k) if elem.attrs["encoding-version"] == "0.2.0" else unescape_key
+    columns = list(_read_attr(elem.attrs, "column-order"))
     if items is not None:
-        columns = [
-            col for col in _read_attr(elem.attrs, "column-order") if col in items
-        ]
-    else:
-        columns = list(_read_attr(elem.attrs, "column-order"))
+        columns = [col for col in columns if unesc(col) in items]
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
-        {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
+        {unesc(k): read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=columns if columns else None,
+        columns=[unesc(k) for k in columns] if columns else None,
     )
     if idx_key != "_index":
-        df.index.name = idx_key
+        df.index.name = unesc(idx_key)
     return df
 
 
