@@ -236,7 +236,7 @@ def test_zarr_context(
 
 
 @pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
-def test_write_chunk_size(tmp_path, output_format) -> None:
+def test_write_chunk_size(tmp_path, output_format):
     pth = tmp_path / f"test.{output_format}"
     adata = ad.AnnData(X=da.arange(36).reshape((6, 6)).rechunk((2, 2)))
     if output_format == "zarr":
