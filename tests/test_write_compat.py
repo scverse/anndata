@@ -1,8 +1,8 @@
-"""Tests for :attr:`anndata.settings.write_compat` and the `compat` write argument."""
+"""Tests for :class:`anndata.WriteCompat` and the `compat` write argument."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, get_args
 
 import h5py
 import numpy as np
@@ -35,34 +35,37 @@ def test_write_compat_compares_as_versions() -> None:
     assert Version("0.12") == ad.WriteCompat.V0_12
 
 
-def test_settings_takes_str() -> None:
-    with ad.settings.override(write_compat="0.12"):
-        assert ad.settings.write_compat is ad.WriteCompat.V0_12
+def test_literal_matches_enum() -> None:
+    assert get_args(ad.WriteCompatStr.__value__) == tuple(
+        str(c) for c in ad.WriteCompat
+    )
+
+
+def test_default_is_alias() -> None:
+    assert ad.WriteCompat.DEFAULT in ad.WriteCompat
+    assert "DEFAULT" not in {c.name for c in ad.WriteCompat}
+
+
+def test_takes_str() -> None:
+    assert ad.WriteCompat("0.12") is ad.WriteCompat.V0_12
     # this anndata version can’t write anything older than 0.12
-    with pytest.raises(ValueError, match=r"write_compat"):
-        ad.settings.write_compat = cast("ad.WriteCompat", "0.11")
+    with pytest.raises(ValueError, match=r"0\.11"):
+        ad.AnnData().unwriteable(compat="0.11")  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("via", ["arg", "setting"])
 def test_non_2d_layer(
     *,
     diskfmt_store: Path | MemoryStore,
     diskfmt: Literal["h5ad", "zarr"],
     arr2d: np.ndarray,
     arr3d: np.ndarray,
-    via: Literal["arg", "setting"],
 ) -> None:
     """`compat="0.12"` writes 3-D layers, which 0.13 banned."""
     adata = ad.AnnData(X=arr2d)
     with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
         adata.layers["L"] = arr3d
 
-    write = getattr(adata, f"write_{diskfmt}")
-    if via == "arg":
-        write(diskfmt_store, compat="0.12")
-    else:
-        with ad.settings.override(write_compat="0.12"):
-            write(diskfmt_store)
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.12")
 
     assert _shape_on_disk(diskfmt_store, diskfmt, "layers/L") == arr3d.shape
 
@@ -87,8 +90,6 @@ def test_unwriteable(arr2d: np.ndarray, arr3d: np.ndarray) -> None:
         adata.layers["L"] = arr3d
     assert adata.unwriteable()
     assert not adata.unwriteable(compat="0.12")
-    with ad.settings.override(write_compat="0.12"):
-        assert not adata.unwriteable()
 
 
 def _write_h5(
@@ -130,19 +131,19 @@ def test_slash_key_zarr_error() -> None:
 
 
 @pytest.mark.parametrize(
-    ("compat", "disallow"), [("0.12", True), (None, False)], ids=["disallow", "allow"]
+    ("compat", "disallow"), [("0.12", True), ("0.13", False)], ids=["disallow", "allow"]
 )
 @pytest.mark.filterwarnings(
-    "ignore:This will be removed in 0.15.*use `write_compat`:DeprecationWarning"
+    "ignore:This will be removed in 0.15.*pass `compat=`:DeprecationWarning"
 )
 def test_deprecated_setting_wins(
-    *, tmp_path: Path, disallow: bool, compat: str | None
+    *, tmp_path: Path, disallow: bool, compat: ad.WriteCompatStr
 ) -> None:
     adata = ad.AnnData(shape=(3, 4), uns={"bad/key": np.ones(3)})
     ctx = (
-        pytest.warns(FutureWarning, match=r"Forward slashes")
-        if compat is None
-        else pytest.raises(ValueError, match=r"Forward slashes")
+        pytest.raises(ValueError, match=r"Forward slashes")
+        if disallow
+        else pytest.warns(FutureWarning, match=r"Forward slashes")
     )
     with ad.settings.override(disallow_forward_slash_in_h5ad=disallow), ctx:
         adata.write_h5ad(tmp_path / "test.h5ad", compat=compat)

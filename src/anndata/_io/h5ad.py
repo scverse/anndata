@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import MutableMapping
-from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from types import MappingProxyType
@@ -19,7 +18,7 @@ from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from .._core.storage import _check_x_and_layers_are_2d_on_write
-from .._settings import settings
+from .._write_compat import WriteCompat
 from ..compat import (
     CSMatrix,
     _clean_uns,
@@ -45,8 +44,8 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._core.raw import Raw
-    from .._settings import WriteCompat
     from .._types import StorageType
+    from .._write_compat import WriteCompatStr
     from ..typing import RWAble
 
 
@@ -58,29 +57,12 @@ def write_h5ad(
     as_dense: Sequence[str] = (),
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteCompat | str | None = None,
+    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
-    with nullcontext() if compat is None else settings.override(write_compat=compat):
-        _write_h5ad(
-            filepath,
-            adata,
-            as_dense=as_dense,
-            convert_strings_to_categoricals=convert_strings_to_categoricals,
-            dataset_kwargs={**dataset_kwargs, **kwargs},
-        )
-
-
-def _write_h5ad(
-    filepath: PathLike[str] | str,
-    adata: AnnData,
-    *,
-    as_dense: Sequence[str],
-    convert_strings_to_categoricals: bool,
-    dataset_kwargs: Mapping[str, Any],
-) -> None:
-    _check_x_and_layers_are_2d_on_write(adata)
+    compat = WriteCompat(compat)
+    _check_x_and_layers_are_2d_on_write(adata, compat=compat)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:
@@ -97,6 +79,7 @@ def _write_h5ad(
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
+    dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
@@ -115,7 +98,11 @@ def _write_h5ad(
             if k == "raw":
                 if adata.raw is not None:
                     _write_raw(
-                        f, adata.raw, as_dense=as_dense, dataset_kwargs=dataset_kwargs
+                        f,
+                        adata.raw,
+                        as_dense=as_dense,
+                        dataset_kwargs=dataset_kwargs,
+                        compat=compat,
                     )
                 continue
 
@@ -128,6 +115,7 @@ def _write_h5ad(
                         is_backed=adata.isbacked and adata.filename == filepath,
                         as_dense=as_dense,
                         dataset_kwargs=dataset_kwargs,
+                        compat=compat,
                     )
                 elem = {k: v for k, v in elem.items() if k is not None}
 
@@ -136,6 +124,7 @@ def _write_h5ad(
                 k,
                 dict(elem) if isinstance(elem, MutableMapping) else elem,
                 dataset_kwargs=dataset_kwargs,
+                compat=compat,
             )
 
 
@@ -146,6 +135,7 @@ def _write_x(
     is_backed: bool,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
+    compat: WriteCompat,
 ) -> None:
     if "X" in as_dense and isinstance(adata.X, CSMatrix | BaseCompressedSparseDataset):
         write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
@@ -154,7 +144,7 @@ def _write_x(
     elif adata.X is None:
         f.pop("X", None)
     else:
-        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "X", adata.X, dataset_kwargs=dataset_kwargs, compat=compat)
 
 
 def _write_raw(
@@ -163,16 +153,19 @@ def _write_raw(
     *,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
+    compat: WriteCompat,
 ) -> None:
     if "raw/X" in as_dense and isinstance(
         raw.X, CSMatrix | BaseCompressedSparseDataset
     ):
         g = f.require_group("raw")
         write_sparse_as_dense(g, "X", raw.X, dataset_kwargs=dataset_kwargs)
-        write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs)
-        write_elem(g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs)
+        write_elem(g, "var", raw.var, dataset_kwargs=dataset_kwargs, compat=compat)
+        write_elem(
+            g, "varm", dict(raw.varm), dataset_kwargs=dataset_kwargs, compat=compat
+        )
     else:
-        write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs)
+        write_elem(f, "raw", raw, dataset_kwargs=dataset_kwargs, compat=compat)
 
 
 @report_write_key_on_error

@@ -333,7 +333,7 @@ def write_anndata(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    _check_x_and_layers_are_2d_on_write(adata)
+    _check_x_and_layers_are_2d_on_write(adata, compat=_writer.compat)
     g = f.require_group(k)
     for sub_key, elem in iter_outer(adata):
         if sub_key == "X" and elem is None:
