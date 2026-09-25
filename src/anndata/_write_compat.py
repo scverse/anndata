@@ -27,6 +27,7 @@ class WriteCompat(Version, Enum):
       nested sequences, i.e. arbitrary JSON-like structures in
       :attr:`~anndata.AnnData.uns`.
     - the `accessor` encoding for :mod:`anndata.acc` accessors.
+    - escaping keys that a file system may choke on, e.g. `a/b`, `a:b`, or `NUL`.
     """
 
     DEFAULT = V0_13
