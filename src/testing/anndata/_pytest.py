@@ -33,10 +33,7 @@ _RST_FILTERS: Sequence[WarningFilter] = (
 def setup_env() -> None:
     import anndata
 
-    with warnings.catch_warnings():
-        # resetting reads every set setting, deprecated ones included
-        warnings.simplefilter("ignore", DeprecationWarning)
-        anndata.settings.reset(*anndata.settings.model_fields_set)
+    anndata.settings.reset(*anndata.settings.model_fields_set)
 
 
 @pytest.fixture(scope="session", autouse=True)

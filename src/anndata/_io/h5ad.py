@@ -62,7 +62,7 @@ def write_h5ad(
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
     compat = WriteCompat(compat)
-    _check_x_and_layers_are_2d_on_write(adata, compat=compat)
+    _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
     if "raw.X" in as_dense:

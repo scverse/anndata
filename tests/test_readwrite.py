@@ -1002,30 +1002,33 @@ def test_h5py_attr_limit(tmp_path):
 @pytest.mark.parametrize(
     "disallow_forward_slash_in_h5ad",
     [True, False, None],
-    ids=["ban_slash", "allow_slash", "unset"],
-)
-@pytest.mark.filterwarnings(
-    "ignore:This will be removed in 0.15.*pass `compat=`:DeprecationWarning"
+    ids=["ban_slash", "allow_slash", "default"],
 )
 def test_forward_slash_key(
     *,
     tmp_path: Path,
     elem_key: AnnDataElem,
     store_type: Literal["zarr", "h5ad"],
-    disallow_forward_slash_in_h5ad: bool | None,
+    disallow_forward_slash_in_h5ad: bool,
 ) -> None:
     a = ad.AnnData(shape=(10, 10))
     getattr(a, elem_key)["bad/key"] = np.ones(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
     store = tmp_path / "test.h5ad" if store_type == "h5ad" else MemoryStore()
-    # `None` derives the ban from the `compat` argument, which defaults to disallowing
+    is_default = disallow_forward_slash_in_h5ad is None
+    # default case of unset parameter is to not allow writing of forward slashes as of anndata 0.13
     can_write_slash_key = (
         elem_key in {"uns", "obs", "var"}
         and store_type == "h5ad"
-        and disallow_forward_slash_in_h5ad is False
+        and (not disallow_forward_slash_in_h5ad and not is_default)
     )
     # try to write bad key and make sure we warn or throw an error
+    disallow_forward_slash_in_h5ad = (
+        ad.settings.disallow_forward_slash_in_h5ad
+        if is_default
+        else disallow_forward_slash_in_h5ad
+    )
     with (
         ad.settings.override(
             disallow_forward_slash_in_h5ad=disallow_forward_slash_in_h5ad
