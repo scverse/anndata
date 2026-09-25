@@ -26,6 +26,7 @@ from anndata.types import SupportsArrayApiBase
 from .. import utils
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
+from .._write_compat import WriteCompat
 from ..compat import (
     AwkArray,
     CSArray,
@@ -84,6 +85,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
+    from .._write_compat import WriteCompatStr
     from ..acc import (
         AdRef,
         Array,
@@ -1511,13 +1513,21 @@ class AnnData:  # noqa: PLW1641
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
-    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None = None) -> bool:
+    def unwriteable(
+        self,
+        *,
+        store_type: Literal["h5", "zarr"] | None = None,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+    ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
         Parameters
         ----------
         store_type
             Which backing store - `None` indicates that it can be writeable to either.
+        compat
+            Which anndata version’s write behavior to check against,
+            see :class:`~anndata.WriteCompat`.
 
         Returns
         -------
@@ -1526,7 +1536,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-
+        WriteCompat(compat)  # validate: no profile changes this check yet
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
@@ -1673,6 +1683,7 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1737,6 +1748,8 @@ class AnnData:  # noqa: PLW1641
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
+        compat
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_h5ad
 
@@ -1754,6 +1767,7 @@ class AnnData:  # noqa: PLW1641
             compression=compression,
             compression_opts=compression_opts,
             as_dense=as_dense,
+            compat=compat,
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
@@ -1815,6 +1829,7 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1829,6 +1844,8 @@ class AnnData:  # noqa: PLW1641
             Convert string columns to categorical.
         consolidate_metadata
             Whether to consolidate the metadata of the store after writing.
+        compat
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_zarr
 
@@ -1845,6 +1862,7 @@ class AnnData:  # noqa: PLW1641
             chunks=chunks,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             consolidate_metadata=consolidate_metadata,
+            compat=compat,
         )
 
     def chunked_X(self, chunk_size: int | None = None):

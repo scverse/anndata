@@ -13,6 +13,7 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
+from ._write_compat import WriteCompat, WriteCompatStr
 from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect, warn
 
@@ -28,6 +29,8 @@ __all__ = [
     "ImplicitModificationWarning",
     "OldFormatWarning",
     "Raw",
+    "WriteCompat",
+    "WriteCompatStr",
     "WriteWarning",
     "abc",
     "acc",

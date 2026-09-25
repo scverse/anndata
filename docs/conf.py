@@ -136,6 +136,7 @@ intersphinx_mapping = dict(
     loompy=("https://linnarssonlab.org/loompy", None),
     numpy=("https://numpy.org/doc/stable", None),
     obstore=("https://developmentseed.org/obstore/latest/", None),
+    packaging=("https://packaging.pypa.io/en/stable/", None),
     pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
     python=("https://docs.python.org/3", None),
     scipy=("https://docs.scipy.org/doc/scipy", None),
@@ -161,6 +162,8 @@ qualname_overrides = {
     },
     # Can’t use `set_module` for `type`s. When moving out of .experimental, define in actual location.
     "anndata._types.StorageType": "anndata.experimental.StorageType",
+    #### packaging (unqualified `:class:`Version`` in inherited `Version` docstrings)
+    "Version": "packaging.version.Version",
     #### zarr
     "zarr.core.group.StoreLike": "zarr.storage.StoreLike",
     #### h5py
