@@ -32,7 +32,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Visualization",
     "Typing :: Typed",
@@ -222,6 +221,7 @@ skip = ".git,*.pdf,*.svg"
 
 [tool.pyproject-fmt]
 indent = 4
+max_supported_python = "3.14"
 table_format = "short"
 expand_tables = [
     "tool.ruff.lint.flake8-tidy-imports.banned-api",
