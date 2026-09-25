@@ -4,7 +4,6 @@ from typing import Annotated
 
 import scverse_misc
 from pydantic import Field
-from scverse_misc import Deprecation, deprecated
 
 
 class Settings(scverse_misc.Settings):
@@ -23,21 +22,8 @@ class Settings(scverse_misc.Settings):
     min_rows_for_chunked_h5_copy: Annotated[int, Field(gt=0)] = 1000
     """Minimum number of rows at a time to copy when writing out an H5 Dataset to a new location"""
 
-    disallow_forward_slash_in_h5ad: Annotated[
-        bool | None,
-        Field(
-            deprecated=deprecated(
-                Deprecation(
-                    "0.14",
-                    "This will be removed in 0.15, pass `compat=` to write functions instead.",
-                )
-            ),
-        ),
-    ] = None
-    """Whether or not to disallow the `/` character in keys for h5ad files.
-
-    `None` derives it from the write functions’ `compat` argument,
-    i.e. disallows it for `"0.13"` and newer, see :class:`~anndata.WriteCompat`."""
+    disallow_forward_slash_in_h5ad: bool = True
+    """Whether or not to disallow the `/` character in keys for h5ad files"""
 
     write_csr_csc_indices_with_min_possible_dtype: bool = False
     """Write a csr or csc matrix with the minimum possible data type for `indices`, always unsigned integer."""
