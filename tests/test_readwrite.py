@@ -1005,7 +1005,7 @@ def test_h5py_attr_limit(tmp_path):
     ids=["ban_slash", "allow_slash", "unset"],
 )
 @pytest.mark.filterwarnings(
-    "ignore:This will be removed in 0.15.*use `write_compat`:DeprecationWarning"
+    "ignore:This will be removed in 0.15.*pass `compat=`:DeprecationWarning"
 )
 def test_forward_slash_key(
     *,
@@ -1019,7 +1019,7 @@ def test_forward_slash_key(
         (10,) if elem_key in ["obs", "var"] else (10, 10)
     )
     store = tmp_path / "test.h5ad" if store_type == "h5ad" else MemoryStore()
-    # `None` derives the ban from `settings.write_compat`, which defaults to disallowing
+    # `None` derives the ban from the `compat` argument, which defaults to disallowing
     can_write_slash_key = (
         elem_key in {"uns", "obs", "var"}
         and store_type == "h5ad"

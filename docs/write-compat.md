@@ -4,8 +4,8 @@ Every so often, `anndata` changes what it writes to disk:
 it starts using an encoding that older versions can’t read,
 or it starts rejecting output that violates the {doc}`on-disk spec <fileformat-prose>`.
 
-{attr}`anndata.settings.write_compat` selects which anndata version’s write behavior to target,
-and every write function takes a `compat` argument to override it for a single call:
+Every write function takes a `compat` argument selecting which anndata version’s write behavior to target,
+as a {class}`~anndata.WriteCompat` member or its string value ({data}`~anndata.WriteCompatStr`):
 
 ```python
 adata.write_h5ad("old.h5ad", compat="0.12")
@@ -36,7 +36,7 @@ Choosing an old one therefore does two things:
 ```
 
 Both relaxations produce files that violate the spec – anndata wrote such files before 0.13
-and still reads them, but other implementations may not.
+and still reads them, but other older implementations may not.
 `/` in keys becomes a nested group on disk, which is why 0.13 banned it,
 and `zarr` never allowed it in the first place.
 
@@ -56,12 +56,9 @@ if adata.unwriteable(compat="0.12"):
 
 ## The default profile
 
-The default is `"0.13"`, which currently also happens to be the newest profile,
-so nothing is relaxed and nothing is disabled.
+The default is {attr}`anndata.WriteCompat.DEFAULT`.
 
-That stops being the case as soon as a release introduces an encoding
-older versions can’t read: it gets a profile of its own,
-while the default keeps lagging behind by roughly a year,
+The default keeps lagging behind the newest profile by roughly a year,
 so files stay readable by the anndata versions people are likely to have.
-Set {attr}`anndata.settings.write_compat` to the newest profile
+Pass the newest profile as `compat`
 to opt into everything the installed anndata can write.
