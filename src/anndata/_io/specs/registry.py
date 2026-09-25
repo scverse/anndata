@@ -11,8 +11,9 @@ import numpy as np
 import zarr
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata._write_compat import WriteCompat, forward_slash_disallowed
+from anndata._write_compat import WriteCompat
 from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
@@ -339,13 +340,6 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
-def _forward_slash_msg(store: _GroupStorageType) -> str:
-    msg = f"Forward slashes are not allowed in keys in {type(store)}"
-    if isinstance(store, zarr.Group):
-        return msg  # zarr never allowed them, so no compat profile can
-    return f'{msg}. Pass `compat="0.12"` to the write function to allow them.'
-
-
 class Writer:
     def __init__(
         self,
@@ -410,10 +404,12 @@ class Writer:
             # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
             # for AnnData elements other than `obs`, `var`, and `uns`.
             if "/" in k:
-                if isinstance(store, zarr.Group) or forward_slash_disallowed(
-                    self.compat
+                if (
+                    isinstance(store, zarr.Group)
+                    or settings.disallow_forward_slash_in_h5ad
                 ):
-                    raise ValueError(_forward_slash_msg(store))
+                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                    raise ValueError(msg)
                 msg = "Forward slashes will be written differently in a future anndata version"
                 warn(msg, FutureWarning)
 
