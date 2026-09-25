@@ -70,11 +70,7 @@ from .index import (
 )
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
-from .storage import (
-    _check_x_and_layers_are_2d_on_write,
-    _non_2d_message,
-    coerce_array,
-)
+from .storage import _non_2d_message, coerce_array
 from .views import DictView, _resolve_idxs, as_view
 from .xarray import Dataset2D
 
@@ -1540,11 +1536,12 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        compat = WriteCompat(compat)
-        try:
-            _check_x_and_layers_are_2d_on_write(self, compat=compat)
-        except ValueError:
+        WriteCompat(compat)  # validate: no profile changes this check yet
+        if _non_2d_message(self.X, name="X") is not None:
             return True
+        for value in self.layers.values():
+            if _non_2d_message(value, name="layer") is not None:
+                return True
 
         from anndata._io.specs.registry import _REGISTRY
 
