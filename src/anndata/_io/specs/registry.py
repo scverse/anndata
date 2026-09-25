@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Mapping
-from contextlib import nullcontext
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
@@ -12,8 +11,8 @@ import numpy as np
 import zarr
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
-from anndata._settings import forward_slash_disallowed, settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._write_compat import WriteCompat, forward_slash_disallowed
 from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
@@ -22,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
     from typing import Any
 
-    from anndata._settings import WriteCompat
     from anndata._types import (
         ReadCallback,
         StorageType,
@@ -31,6 +29,7 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
+    from anndata._write_compat import WriteCompatStr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.typing import RWAble
 
@@ -348,9 +347,16 @@ def _forward_slash_msg(store: _GroupStorageType) -> str:
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
+    def __init__(
+        self,
+        registry: IORegistry,
+        callback: WriteCallback | None = None,
+        *,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+    ):
         self.registry = registry
         self.callback = callback
+        self.compat = WriteCompat(compat)
 
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
@@ -404,7 +410,9 @@ class Writer:
             # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
             # for AnnData elements other than `obs`, `var`, and `uns`.
             if "/" in k:
-                if isinstance(store, zarr.Group) or forward_slash_disallowed():
+                if isinstance(store, zarr.Group) or forward_slash_disallowed(
+                    self.compat
+                ):
                     raise ValueError(_forward_slash_msg(store))
                 msg = "Forward slashes will be written differently in a future anndata version"
                 warn(msg, FutureWarning)
@@ -532,7 +540,7 @@ def write_elem(
     elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteCompat | str | None = None,
+    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.
@@ -552,11 +560,11 @@ def write_elem(
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
     compat
-        Which anndata version’s write behavior to target,
-        overriding :attr:`anndata.settings.write_compat` for this call.
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
     """
-    with nullcontext() if compat is None else settings.override(write_compat=compat):
-        Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
+    Writer(_REGISTRY, compat=compat).write_elem(
+        store, k, elem, dataset_kwargs=dataset_kwargs
+    )
 
 
 # TODO: If all items would be read, just call normal read method

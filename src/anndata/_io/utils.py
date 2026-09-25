@@ -283,7 +283,7 @@ def report_write_key_on_error(func):
 def _check_has_no_slash_key(attr: str, elem: object) -> None:
     """Only attempt to write slash keys where people rely on it for backwards compatibility."""
     if attr in {"obs", "var", "uns", "raw"}:
-        return  # `write_elem` checks these against `settings.write_compat` instead
+        return  # `write_elem` checks these against its `compat` instead
     assert isinstance(elem, Mapping)
     if any("/" in k for k in elem if k not in {"/", None}):
         msg = f"Forward slashes are not allowed in keys in {attr}"
