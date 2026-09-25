@@ -5,6 +5,8 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+from collections import UserList
+from collections.abc import Sequence
 from contextlib import ExitStack, nullcontext
 from importlib.metadata import version
 from pathlib import Path
@@ -22,6 +24,7 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
+from anndata.acc import A
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -38,9 +41,9 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
-    from typing import Literal
+    from typing import Any, Literal
 
     from anndata._types import _GroupStorageType
 
@@ -259,6 +262,81 @@ def test_io_spec_compressed_scalars(
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+
+
+class _MySeq(Sequence):
+    """An arbitrary `Sequence`, i.e. neither a `list` nor a `tuple`."""
+
+    def __init__(self, *items: object) -> None:
+        self._items = list(items)
+
+    def __getitem__(self, i: int) -> object:  # type: ignore[override]
+        return self._items[i]
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+@pytest.mark.parametrize(
+    ("value", "encoding_type"),
+    [
+        # an array holds these unchanged, so they are written as one
+        pytest.param([1, 2, 3], "array", id="ints"),
+        pytest.param(["a", "b"], "string-array", id="strs"),
+        pytest.param([[1, 2], [3, 4]], "array", id="rectangular"),
+        pytest.param([], "array", id="empty"),
+        # an array would mangle these, so each element is encoded on its own
+        pytest.param([1, "b"], "sequence", id="mixed-scalars"),
+        pytest.param([{"a": 1}, None], "sequence", id="nesting"),
+        # `str`/`bytes` are not sequences, so they keep their scalar encodings
+        pytest.param("abc", "string", id="str"),
+    ],
+)
+def test_sequence_io(store: _GroupStorageType, value, encoding_type: str) -> None:
+    """Which encoding a sequence gets depends on whether an array can hold it."""
+    write_elem(store, "k", value, compat="0.14")
+    assert _read_attr(store["k"].attrs, "encoding-type") == encoding_type
+    assert_equal(read_elem(store["k"]), value)
+
+
+def test_sequence_io_nested(store: _GroupStorageType) -> None:
+    """Sequence elements are encoded on their own, so leaves can be of any type."""
+    df = pd.DataFrame({"a": [1, 2]}, index=["x", "y"])
+    write_elem(
+        store, "k", {"hetero": [1, "b", df], "ragged": [[1, 2], [3]]}, compat="0.14"
+    )
+
+    from_disk = cast("dict[str, Any]", read_elem(store["k"]))
+    assert from_disk["hetero"][:2] == [1, "b"]
+    pd.testing.assert_frame_equal(from_disk["hetero"][2], df)
+    # inner sequences read back as arrays, so compare structurally
+    assert [list(sub) for sub in from_disk["ragged"]] == [[1, 2], [3]]
+
+
+@pytest.mark.parametrize(
+    "cls", [list, tuple, _MySeq, UserList], ids=lambda c: c.__name__
+)
+def test_any_sequence_is_writeable(store: _GroupStorageType, cls: type) -> None:
+    """Dispatch falls back to the `Sequence` ABC, and everything reads back as a list."""
+    make: Callable[..., Sequence] = (
+        (lambda *i: cls(i)) if cls in {list, tuple, UserList} else cls
+    )
+    write_elem(store, "arr", make(1, 2, 3), compat="0.14")
+    write_elem(store, "het", make(1, "b"), compat="0.14")
+    assert cast("np.ndarray", read_elem(store["arr"])).tolist() == [1, 2, 3]
+    assert read_elem(store["het"]) == [1, "b"]
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    ids=str,
+)
+def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
+    """`anndata.acc` accessors round-trip via their `to_json` form."""
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
+    assert read_elem(store["ref"]) == ref
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
@@ -620,7 +698,7 @@ def test_read_iospec_not_found(store, attribute, value):
 
 @pytest.mark.parametrize(
     "obj",
-    [(b"x",)],
+    [{b"x"}],  # a set: not a sequence, so nothing is registered for it
 )
 def test_write_io_error(store, obj):
     full_pattern = re.compile(

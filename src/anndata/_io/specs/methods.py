@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping, Sequence
 from contextlib import contextmanager, nullcontext
 from copy import copy
 from functools import partial, wraps
@@ -20,7 +20,7 @@ from scipy import sparse
 from zarr.core.dtype import VariableLengthUTF8
 
 import anndata as ad
-from anndata import AnnData, Raw
+from anndata import AnnData, Raw, acc
 from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
@@ -47,6 +47,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
+from ..._write_compat import WriteCompat
 from ...compat import PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -453,23 +454,118 @@ def write_mapping(
         _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
 
 
-##############
-# np.ndarray #
-##############
+#############
+# Sequences #
+#############
 
 
-@_REGISTRY.register_write(h5py.Group, list, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(zarr.Group, list, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, Sequence, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, Sequence, IOSpec("array", "0.2.0"))
 @suppress_autoshard_warning
-def write_list(
+def write_sequence(
     f: _GroupStorageType,
     k: str,
-    elem: list[Storable],
+    elem: Sequence[Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     _writer.write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_read(h5py.Group, IOSpec("sequence", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("sequence", "0.1.0"))
+def read_sequence(elem: _GroupStorageType, *, _reader: Reader) -> list[Storable]:
+    return [_reader.read_elem(elem[str(i)]) for i in range(len(elem))]
+
+
+@_REGISTRY.register_write(h5py.Group, (Sequence, "O"), IOSpec("sequence", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, (Sequence, "O"), IOSpec("sequence", "0.1.0"))
+@suppress_autoshard_warning
+def write_sequence_elemwise(
+    f: _GroupStorageType,
+    k: str,
+    elem: Sequence[Storable],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write a sequence numpy can’t represent, e.g. a heterogeneous or ragged one."""
+    if _writer.compat < WriteCompat.V0_14:
+        msg = (
+            f"Cannot write {type(elem).__name__} with heterogeneous or nested contents "
+            'as an array. Pass `compat="0.14"` to the write function to write it '
+            "as a `sequence` group instead."
+        )
+        raise ValueError(msg)
+    _write_sequence_group(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
+
+
+def _write_sequence_group(
+    f: _GroupStorageType,
+    k: str,
+    elem: Sequence[Storable],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any],
+) -> None:
+    g = f.require_group(k)
+    for i, sub_v in enumerate(elem):
+        _writer.write_elem(g, str(i), sub_v, dataset_kwargs=dataset_kwargs)
+
+
+#############
+# Accessors #
+#############
+
+
+def write_accessor(
+    f: _GroupStorageType,
+    k: str,
+    elem: acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write an :mod:`anndata.acc` accessor as its :meth:`~anndata.acc.AdAcc.to_json` form."""
+    if _writer.compat < WriteCompat.V0_14:
+        msg = (
+            f"Cannot write {type(elem).__name__}. "
+            'Pass `compat="0.14"` to the write function to write it '
+            "as an `accessor` group."
+        )
+        raise ValueError(msg)
+    _write_sequence_group(
+        f, k, acc.A.to_json(elem), _writer=_writer, dataset_kwargs=dataset_kwargs
+    )
+
+
+# `MetaAcc` (e.g. `A.obs`) is missing on purpose: `to_json` cannot serialize it
+for store_type, acc_type in product(
+    _STORE_TYPES, [acc.AdRef, acc.LayerAcc, acc.MultiAcc, acc.GraphAcc]
+):
+    _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
+        write_accessor
+    )
+del store_type, acc_type
+
+
+@_REGISTRY.register_read(h5py.Group, IOSpec("accessor", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("accessor", "0.1.0"))
+def read_accessor(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    # `parse_json` matches on `str`/`int`, which `np.str_` satisfies but `np.int64` does not
+    data = [
+        v.item() if isinstance(v, np.generic) else v
+        for v in read_sequence(elem, _reader=_reader)
+    ]
+    return acc.A.from_json(data)
+
+
+##############
+# np.ndarray #
+##############
 
 
 # TODO: Is this the right behavior for MaskedArrays?

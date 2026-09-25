@@ -68,6 +68,7 @@ myst_enable_extensions = [
     "html_image",  # So README.md can be used on github and sphinx docs
     "colon_fence",
     "dollarmath",
+    "attrs_inline",  # So `{.external}` can link files from `html_extra_path`
 ]
 myst_heading_anchors = 3
 nb_execution_mode = "off"
