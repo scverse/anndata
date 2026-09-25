@@ -24,8 +24,9 @@ from anndata._core.access import ElementRef
 from anndata.types import SupportsArrayApiBase
 
 from .. import utils
-from .._settings import WriteCompat, settings
+from .._settings import settings
 from .._warnings import ImplicitModificationWarning
+from .._write_compat import WriteCompat
 from ..compat import (
     AwkArray,
     CSArray,
@@ -89,6 +90,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
+    from .._write_compat import WriteCompatStr
     from ..acc import (
         AdRef,
         Array,
@@ -1550,7 +1552,7 @@ class AnnData:  # noqa: PLW1641
         self,
         *,
         store_type: Literal["h5", "zarr"] | None = None,
-        compat: WriteCompat | str | None = None,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
@@ -1560,7 +1562,7 @@ class AnnData:  # noqa: PLW1641
             Which backing store - `None` indicates that it can be writeable to either.
         compat
             Which anndata version’s write behavior to check against,
-            overriding :attr:`anndata.settings.write_compat` for this call.
+            see :class:`~anndata.WriteCompat`.
 
         Returns
         -------
@@ -1569,8 +1571,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        if isinstance(compat, str):
-            compat = WriteCompat(compat)
+        compat = WriteCompat(compat)
         try:
             _check_x_and_layers_are_2d_on_write(self, compat=compat)
         except ValueError:
@@ -1723,7 +1724,7 @@ class AnnData:  # noqa: PLW1641
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-        compat: WriteCompat | str | None = None,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1794,8 +1795,7 @@ class AnnData:  # noqa: PLW1641
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
-            Which anndata version’s write behavior to target,
-            overriding :attr:`anndata.settings.write_compat` for this call.
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_h5ad
 
@@ -1877,7 +1877,7 @@ class AnnData:  # noqa: PLW1641
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-        compat: WriteCompat | str | None = None,
+        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1898,8 +1898,7 @@ class AnnData:  # noqa: PLW1641
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
-            Which anndata version’s write behavior to target,
-            overriding :attr:`anndata.settings.write_compat` for this call.
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_zarr
 
