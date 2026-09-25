@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from anndata._write_compat import WriteCompat
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Any
@@ -13,6 +15,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _GroupStorageType,
     )
+    from anndata._write_compat import WriteCompatStr
     from anndata.typing import RWAble
 
 
@@ -46,6 +49,7 @@ def write_dispatched(
     callback: WriteCallback,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write elem to store, recursively calling callback at each sub-element.
@@ -62,6 +66,8 @@ def write_dispatched(
         Function called when writing each element.
     dataset_kwargs
         Keyword arguments to pass to the dataset creation function.
+    compat
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
 
     See Also
     --------
@@ -69,6 +75,6 @@ def write_dispatched(
     """
     from anndata._io.specs import _REGISTRY, Writer
 
-    writer = Writer(_REGISTRY, callback=callback)
+    writer = Writer(_REGISTRY, callback=callback, compat=compat)
 
     writer.write_elem(store, key, elem, dataset_kwargs=dataset_kwargs)

@@ -6,13 +6,14 @@ from ._core.anndata import AnnData
 from ._core.extensions import register_anndata_namespace
 from ._core.merge import concat
 from ._core.raw import Raw
-from ._settings import WriteCompat, settings
+from ._settings import settings
 from ._warnings import (
     ExperimentalFeatureWarning,
     ImplicitModificationWarning,
     OldFormatWarning,
     WriteWarning,
 )
+from ._write_compat import WriteCompat, WriteCompatStr
 from .io import read_h5ad, read_zarr
 from .utils import module_get_attr_redirect, warn
 
@@ -29,6 +30,7 @@ __all__ = [
     "OldFormatWarning",
     "Raw",
     "WriteCompat",
+    "WriteCompatStr",
     "WriteWarning",
     "abc",
     "acc",
