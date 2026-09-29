@@ -754,6 +754,21 @@ def test_viewness_propagation_nan():
     v[np.isnan(v)] = 0
 
 
+def test_arrayview_as_dataframe_column():
+    """Regression test for https://github.com/scverse/anndata/issues/2348"""
+    adata = ad.AnnData(X=np.array([[0, 1], [2, 3]]))
+    view_arr = adata[:, 1].X.flatten()
+    assert isinstance(view_arr, ArrayView)
+    adata.obs["new_col"] = view_arr
+    np.testing.assert_array_equal(adata.obs["new_col"], [1, 3])
+    assert not hasattr(view_arr, "keys")
+
+
+def test_arrayview_structured_keys():
+    arr = np.zeros(3, dtype=[("a", "f4"), ("b", "i4")])
+    assert ArrayView(arr).keys() == ("a", "b")
+
+
 def test_viewness_propagation_allclose(adata):
     """Regression test for https://github.com/scverse/anndata/issues/191"""
     adata.varm["o"][4:10] = np.tile(np.nan, (10 - 4, adata.varm["o"].shape[1]))
