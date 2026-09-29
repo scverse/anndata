@@ -5,6 +5,7 @@ Tests that each element in an anndata is written correctly
 from __future__ import annotations
 
 import re
+import warnings
 from contextlib import ExitStack, nullcontext
 from importlib.metadata import version
 from pathlib import Path
@@ -22,6 +23,7 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
+from anndata._warnings import WriteWarning
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -826,6 +828,40 @@ def test_dataframe_column_uniqueness(store):
     result = read_elem(store["index_shared_okay"])
 
     assert_equal(result, index_shared_okay)
+
+
+def test_dataframe_columns_differing_by_case(store, diskfmt):
+    """Zarr members collide on case-insensitive filesystems, h5ad keys don't. See #2576."""
+    case_only = pd.DataFrame(
+        {"study": [1, 2, 3], "Study": [4, 5, 6]},
+        index=pd.Index([0, 1, 2], name="idx"),
+    )
+
+    if diskfmt == "zarr":
+        with pytest.warns(
+            WriteWarning, match=r"differ only by case: \[\['study', 'Study'\]\]"
+        ):
+            write_elem(store, "case_only", case_only)
+    else:
+        write_elem(store, "case_only", case_only)
+
+    assert_equal(read_elem(store["case_only"]), case_only)
+
+
+def test_dataframe_columns_differing_by_case_dont_warn(store, diskfmt):
+    """Names that are distinct ignoring case stay silent, and so do prefixes."""
+    if diskfmt != "zarr":
+        pytest.skip("Only zarr is at risk of case collisions.")
+    distinct = pd.DataFrame(
+        {"study": [1, 2, 3], "StudyID": [4, 5, 6]},
+        index=pd.Index([0, 1, 2], name="idx"),
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", WriteWarning)
+        write_elem(store, "distinct", distinct)
+
+    assert_equal(read_elem(store["distinct"]), distinct)
 
 
 @pytest.mark.parametrize(
