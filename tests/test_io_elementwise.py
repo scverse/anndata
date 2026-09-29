@@ -692,6 +692,44 @@ def test_write_nullable_string(
         assert store["el"].attrs["encoding-type"] == expected
 
 
+@pytest.mark.parametrize(
+    ("arr", "n_bad", "types", "pos"),
+    [
+        pytest.param(np.array(["a", 1], dtype=object), 1, "int", "(1,)", id="int"),
+        pytest.param(
+            np.array(["a", None, "b"], dtype=object), 1, "NoneType", "(1,)", id="none"
+        ),
+        pytest.param(
+            np.array([["a", "b"], ["c", np.nan]], dtype=object),
+            1,
+            "float",
+            "(1, 1)",
+            id="nan-2d",
+        ),
+        pytest.param(
+            np.array([1, "a", 2.5], dtype=object), 2, "float, int", "(0,)", id="mixed"
+        ),
+    ],
+)
+def test_write_object_array_with_non_strings(
+    store: _GroupStorageType, arr: np.ndarray, n_bad: int, types: str, pos: str
+) -> None:
+    """Object arrays with non-``str`` items get an error naming the offending items.
+
+    h5py only says “Can't implicitly convert non-string objects to strings”;
+    zarr silently coerces the items to strings instead.
+    """
+    if isinstance(store, zarr.Group):
+        pytest.skip("zarr coerces non-string objects to strings")
+    msg = (
+        rf"{n_bad} of {arr.size} elements are not str \(found types: {re.escape(types)}\), "
+        rf"e\.g\. element {re.escape(pos)} is "
+    )
+    with pytest.raises(TypeError, match=msg) as exc_info:
+        write_elem(store, "el", arr)
+    assert isinstance(exc_info.value.__cause__, TypeError)
+
+
 def test_categorical_order_type(store):
     # https://github.com/scverse/anndata/issues/853
     cat = pd.Categorical([0, 1], ordered=True)
