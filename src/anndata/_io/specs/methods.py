@@ -590,7 +590,6 @@ def write_basic_dask_dask_dense(
     if is_h5:
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
-
         if (
             "shards" not in dataset_kwargs
             and "chunks" not in dataset_kwargs
