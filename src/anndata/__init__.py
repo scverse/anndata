@@ -43,7 +43,6 @@ __all__ = [
 ]
 
 _DEPRECATED_IO = (
-    "read_loom",
     "read_hdf",
     "read_excel",
     "read_umi_tools",

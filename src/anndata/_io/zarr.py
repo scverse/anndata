@@ -16,7 +16,7 @@ from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
 from .._warnings import OldFormatWarning
-from ..compat import _clean_uns, _from_fixed_length_strings
+from ..compat import _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from ..utils import warn
 from .specs import read_elem
@@ -195,10 +195,6 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
             raw.obs_names = adata.obs_names
             adata.raw = raw
-
-        # Backwards compat for <0.7
-        if isinstance(f["obs"], zarr.Array):
-            _clean_uns(adata)
 
     return adata
 

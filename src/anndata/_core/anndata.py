@@ -33,7 +33,6 @@ from ..compat import (
     Empty,
     IndexManager,
     XDataset,
-    _move_adj_mtx,
     has_xp,
     old_positionals,
     pandas_as_str,
@@ -225,25 +224,7 @@ class AnnData:  # noqa: PLW1641
     .. _scikit-learn: http://scikit-learn.org/
     """
 
-    _DONT_HIDE_DEPRECATED: ClassVar = {"concatenate"}
-
     _BACKED_ATTRS: ClassVar[list[str]] = ["X", "raw.X"]
-
-    # backwards compat
-    _H5_ALIASES: ClassVar[dict[str, set[str]]] = dict(
-        X={"X", "_X", "data", "_data"},
-        obs={"obs", "_obs", "smp", "_smp"},
-        var={"var", "_var"},
-        uns={"uns"},
-        obsm={"obsm", "_obsm", "smpm", "_smpm"},
-        varm={"varm", "_varm"},
-        layers={"layers", "_layers"},
-    )
-
-    _H5_ALIASES_NAMES: ClassVar[dict[str, set[str]]] = dict(
-        obs={"obs_names", "smp_names", "row_names", "index"},
-        var={"var_names", "col_names", "index"},
-    )
 
     _accessors: ClassVar[set[str]] = set()
 
@@ -513,8 +494,6 @@ class AnnData:  # noqa: PLW1641
         self.obsp = obsp
         self.varp = varp
 
-        # Backwards compat for connectivities matrices in uns["neighbors"]
-        _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
         self._check_dimensions()
         if settings.check_uniqueness:
             self._check_uniqueness()
@@ -525,9 +504,6 @@ class AnnData:  # noqa: PLW1641
             )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **(raw or {}))
-
-        # clean up old formats
-        self._clean_up_old_format(uns)
 
         # layers
         self.layers = layers
@@ -1123,23 +1099,8 @@ class AnnData:  # noqa: PLW1641
         for k in df_full:
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
-            all_categories = df_full[k].cat.categories
             with pandas_no_chained_assignment_warning():
                 df_sub[k] = df_sub[k].cat.remove_unused_categories()
-            # also correct the colors...
-            color_key = f"{k}_colors"
-            if color_key not in uns:
-                continue
-            color_vec = uns[color_key]
-            if np.array(color_vec).ndim == 0:
-                # Make 0D arrays into 1D ones
-                uns[color_key] = np.array(color_vec)[(None,)]
-            elif len(color_vec) != len(all_categories):
-                # Reset colors
-                del uns[color_key]
-            else:
-                idx = np.where(np.isin(all_categories, df_sub[k].cat.categories))[0]
-                uns[color_key] = np.array(color_vec)[(idx,)]
 
     @_remove_unused_categories.register(Dataset2D)
     @staticmethod
@@ -1148,16 +1109,18 @@ class AnnData:  # noqa: PLW1641
     ) -> None:
         pass  # this is handled automatically by the categorical arrays themselves i.e., they dedup upon access.
 
+    @deprecated(
+        Deprecation(
+            "0.14",
+            "Use `adata.obs[key] = adata.obs[key].cat.rename_categories(categories)` instead.",
+        )
+    )
     def rename_categories(self, key: str, categories: Sequence[Any]):
         """\
         Rename categories of annotation `key` in :attr:`obs`, :attr:`var`,
         and :attr:`uns`.
 
         Only supports passing a list/array-like `categories` argument.
-
-        Besides calling `self.obs[key].cat.categories = categories` –
-        similar for :attr:`var` - this also renames categories in unstructured
-        annotation that uses the categorical annotation `key`.
 
         Parameters
         ----------
@@ -1170,35 +1133,12 @@ class AnnData:  # noqa: PLW1641
             msg = "Only list-like `categories` is supported."
             raise ValueError(msg)
         if key in self.obs:
-            old_categories = self.obs[key].cat.categories.tolist()
             self.obs[key] = self.obs[key].cat.rename_categories(categories)
         elif key in self.var:
-            old_categories = self.var[key].cat.categories.tolist()
             self.var[key] = self.var[key].cat.rename_categories(categories)
         else:
             msg = f"{key} is neither in `.obs` nor in `.var`."
             raise ValueError(msg)
-        # this is not a good solution
-        # but depends on the scanpy conventions for storing the categorical key
-        # as `groupby` in the `params` slot
-        for k1, v1 in self.uns.items():
-            if not (
-                isinstance(v1, Mapping)
-                and "params" in v1
-                and "groupby" in v1["params"]
-                and v1["params"]["groupby"] == key
-            ):
-                continue
-            for k2, v2 in v1.items():
-                # picks out the recarrays that are named according to the old
-                # categories
-                if isinstance(v2, np.ndarray) and v2.dtype.names is not None:
-                    if list(v2.dtype.names) == old_categories:
-                        self.uns[k1][k2].dtype.names = categories
-                    else:
-                        logger.warning(
-                            f"Omitting {k1}/{k2} as old categories do not match."
-                        )
 
     def strings_to_categoricals(self, df: pd.DataFrame | None = None):
         """\
@@ -1255,8 +1195,6 @@ class AnnData:  # noqa: PLW1641
                     raise RuntimeError(msg)
                 frame[key] = c
                 logger.info(f"... storing {key!r} as categorical")
-
-    _sanitize = strings_to_categoricals  # backwards compat
 
     def _inplace_subset_var(self, index: Index1D):
         """\
@@ -1931,42 +1869,6 @@ class AnnData:  # noqa: PLW1641
         if (adata_ref := self._adata_ref) is None:  # i.e. not a view
             return self.X is not None
         return adata_ref.X is not None
-
-    # --------------------------------------------------------------------------
-    # all of the following is for backwards compat
-    # --------------------------------------------------------------------------
-
-    @property
-    @deprecated(Deprecation("0.7.2", deprecation_msg("isview", "is_view")))
-    def isview(self) -> bool:
-        """Whether or not this object is a view."""
-        return self.is_view
-
-    def _clean_up_old_format(self, uns):
-        # multicolumn keys
-        # all of the rest is only for backwards compat
-        for bases in [["obs", "smp"], ["var"]]:
-            axis = bases[0]
-            for k in [f"{p}{base}_keys_multicol" for p in ["", "_"] for base in bases]:
-                if uns and k in uns:
-                    keys = list(uns[k])
-                    del uns[k]
-                    break
-            else:
-                keys = []
-            # now, for compat, fill the old multicolumn entries into obsm and varm
-            # and remove them from obs and var
-            m_attr = getattr(self, f"_{axis}m")
-            for key in keys:
-                m_attr[key] = self._get_and_delete_multicol_field(axis, key)
-
-    def _get_and_delete_multicol_field(self, a, key_multicol):
-        df: pd.DataFrame = getattr(self, a)
-        keys = [k for k in df.columns if k.startswith(key_multicol)]
-        values = df[keys].values
-        for k in keys:
-            del df[k]
-        return values
 
 
 def _widen_layers_type[T](

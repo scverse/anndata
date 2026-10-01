@@ -586,7 +586,7 @@ def test_slicing_remove_unused_categories():
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
     )
-    adata._sanitize()
+    adata.strings_to_categoricals()
     assert adata[2:4].obs["k"].cat.categories.tolist() == ["b"]
 
 
@@ -595,7 +595,7 @@ def test_slicing_dont_remove_unused_categories():
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
         )
-        adata._sanitize()
+        adata.strings_to_categoricals()
         assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
 
 

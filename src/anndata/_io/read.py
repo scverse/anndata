@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import bz2
 import gzip
-from collections import OrderedDict
 from importlib.metadata import version
 from os import PathLike, fspath
 from pathlib import Path
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import h5py
@@ -14,12 +12,10 @@ import numpy as np
 import pandas as pd
 from packaging.version import Version
 from scipy import sparse
-from scverse_misc import Deprecation, deprecated
 
 from .. import AnnData
 from .._settings import settings
 from ..compat import old_positionals, pandas_as_str
-from ..utils import warn
 from .utils import is_float
 
 if TYPE_CHECKING:
@@ -166,171 +162,6 @@ def _fmt_loom_axis_attrs(
         axis_df = axis_df.set_index(idx_name, drop=True)
 
     return axis_df, axis_mapping
-
-
-@deprecated(
-    Deprecation(
-        "0.13",
-        "Deprecated in favor of other formats, e.g. (`write_h5ad` and then) `read_h5ad`. "
-        "Loom isn’t well-maintained and supports only a subset of anndata features.",
-    )
-)
-@old_positionals(
-    "sparse",
-    "cleanup",
-    "X_name",
-    "obs_names",
-    "obsm_names",
-    "var_names",
-    "varm_names",
-    "dtype",
-    "obsm_mapping",
-    "varm_mapping",
-)
-def read_loom(  # noqa: PLR0912, PLR0913
-    filename: PathLike[str] | str,
-    *,
-    sparse: bool = True,
-    cleanup: bool = False,
-    X_name: str = "spliced",
-    obs_names: str = "CellID",
-    obsm_names: Mapping[str, Iterable[str]] | None = None,
-    var_names: str = "Gene",
-    varm_names: Mapping[str, Iterable[str]] | None = None,
-    dtype: str = "float32",
-    obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
-    varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
-    **kwargs,
-) -> AnnData:
-    """\
-    Read `.loom`-formatted hdf5 file.
-
-    This reads the whole file into memory.
-
-    Beware that you have to explicitly state when you want to read the file as
-    sparse data.
-
-    Parameters
-    ----------
-    filename
-        The filename.
-    sparse
-        Whether to read the data matrix as sparse.
-    cleanup
-        Whether to collapse all obs/var fields that only store
-        one unique value into `.uns['loom-.']`.
-    X_name
-        Loompy key with which the data matrix :attr:`~anndata.AnnData.X` is initialized.
-    obs_names
-        Loompy key where the observation/cell names are stored.
-    obsm_mapping
-        Loompy keys which will be constructed into observation matrices
-    var_names
-        Loompy key where the variable/gene names are stored.
-    varm_mapping
-        Loompy keys which will be constructed into variable matrices
-    **kwargs:
-        Arguments to loompy.connect
-
-    Example
-    -------
-
-    .. code:: python
-
-        pbmc = anndata.io.read_loom(
-            "pbmc.loom",
-            sparse=True,
-            X_name="lognorm",
-            obs_names="cell_names",
-            var_names="gene_names",
-            obsm_mapping={
-                "X_umap": ["umap_1", "umap_2"]
-            }
-        )
-    """
-    # Deprecations
-    if obsm_names is not None:
-        msg = (
-            "Argument obsm_names has been deprecated in favour of `obsm_mapping`. "
-            "In 0.9 this will be an error."
-        )
-        warn(msg, FutureWarning)
-        if obsm_mapping != {}:
-            msg = (
-                "Received values for both `obsm_names` and `obsm_mapping`. This is "
-                "ambiguous, only pass `obsm_mapping`."
-            )
-            raise ValueError(msg)
-        obsm_mapping = obsm_names
-    if varm_names is not None:
-        msg = (
-            "Argument varm_names has been deprecated in favour of `varm_mapping`. "
-            "In 0.9 this will be an error."
-        )
-        warn(msg, FutureWarning)
-        if varm_mapping != {}:
-            msg = (
-                "Received values for both `varm_names` and `varm_mapping`. This is "
-                "ambiguous, only pass `varm_mapping`."
-            )
-            raise ValueError(msg)
-        varm_mapping = varm_names
-
-    filename = fspath(filename)  # allow passing pathlib.Path objects
-    from loompy import connect
-
-    if TYPE_CHECKING:
-        from loompy import LoomConnection
-
-    lc: LoomConnection
-    with connect(filename, "r", **kwargs) as lc:
-        assert lc.layers is not None
-
-        if X_name not in lc.layers:
-            X_name = ""
-        X = lc.layers[X_name].sparse().T.tocsr() if sparse else lc.layers[X_name][()].T
-        X = X.astype(dtype, copy=False)
-
-        layers = OrderedDict()
-        if X_name != "":
-            layers["matrix"] = (
-                lc.layers[""].sparse().T.tocsr() if sparse else lc.layers[""][()].T
-            )
-        for key, layer in lc.layers.items():
-            if key != "":
-                layers[key] = layer.sparse().T.tocsr() if sparse else layer[()].T
-
-        # TODO: Figure out the singleton obs elements
-        obs, obsm = _fmt_loom_axis_attrs(dict(lc.col_attrs), obs_names, obsm_mapping)
-        var, varm = _fmt_loom_axis_attrs(dict(lc.row_attrs), var_names, varm_mapping)
-
-        uns = {}
-        if cleanup:
-            uns_obs = {}
-            for key in obs.columns:
-                if len(obs[key].unique()) == 1:
-                    uns_obs[key] = obs[key].iloc[0]
-                    del obs[key]
-            if uns_obs:
-                uns["loom-obs"] = uns_obs
-            uns_var = {}
-            for key in var.columns:
-                if len(var[key].unique()) == 1:
-                    uns_var[key] = var[key].iloc[0]
-                    del var[key]
-            if uns_var:
-                uns["loom-var"] = uns_var
-
-        adata = AnnData(
-            X,
-            obs=obs,
-            var=var,
-            layers=layers,
-            obsm=obsm if obsm else None,
-            varm=varm if varm else None,
-            uns=uns,
-        )
-    return adata
 
 
 def read_mtx(filename: PathLike[str] | str, dtype: str = "float32") -> AnnData:

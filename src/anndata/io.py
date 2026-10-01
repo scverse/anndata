@@ -6,7 +6,6 @@ from ._io.read import (
     read_csv,
     read_excel,
     read_hdf,
-    read_loom,  # noqa: F401
     read_mtx,
     read_text,
     read_umi_tools,

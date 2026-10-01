@@ -19,7 +19,6 @@ import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
 from anndata._io.utils import report_read_key_on_error
 from anndata._io.zarr import fast_zarr_context
-from anndata.compat import _clean_uns
 from anndata.tests.helpers import jnp
 
 if TYPE_CHECKING:
@@ -75,21 +74,6 @@ def test_write_error_info(diskfmt, diskfmt_store):
         IORegistryError, match=r"Error raised while writing key 'c'.*to /uns/a/b"
     ):
         write(a)
-
-
-def test_clean_uns():
-    adata = ad.AnnData(
-        uns=dict(species_categories=["a", "b"]),
-        obs=pd.DataFrame({"species": [0, 1, 0]}, index=["a", "b", "c"]),
-        var=pd.DataFrame({"species": [0, 1, 0, 2]}, index=["a", "b", "c", "d"]),
-    )
-    _clean_uns(adata)
-    assert "species_categories" not in adata.uns
-    assert isinstance(adata.obs["species"].dtype, pd.CategoricalDtype)
-    assert adata.obs["species"].tolist() == ["a", "b", "a"]
-    # var’s categories were overwritten by obs’s,
-    # which we can detect here because var has too high codes
-    assert pd.api.types.is_integer_dtype(adata.var["species"])
 
 
 @pytest.mark.parametrize(

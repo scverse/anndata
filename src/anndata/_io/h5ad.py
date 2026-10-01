@@ -20,7 +20,6 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from .._core.storage import _check_x_and_layers_are_2d_on_write
 from ..compat import (
     CSMatrix,
-    _clean_uns,
     _decode_structured_array,
     _from_fixed_length_strings,
 )
@@ -209,10 +208,6 @@ def read_h5ad_backed(
     adata = AnnData(**d)
     assert adata.file._file is f
 
-    # Backwards compat to <0.7
-    if isinstance(f["obs"], h5py.Dataset):
-        _clean_uns(adata)
-
     return adata
 
 
@@ -313,10 +308,6 @@ def read_h5ad(
             raw = AnnData(**_read_raw(f, as_sparse, rdasp))
             raw.obs_names = adata.obs_names
             adata.raw = raw
-
-        # Backwards compat to <0.7
-        if isinstance(f["obs"], h5py.Dataset):
-            _clean_uns(adata)
 
     return adata
 
