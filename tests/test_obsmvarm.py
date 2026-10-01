@@ -89,13 +89,11 @@ def test_setting_dataframe(adata: AnnData):
     adata.varm["b"] = varm_df
     assert np.all(adata.varm["b"] == varm_df)
 
-    bad_obsm_df = obsm_df.copy()
-    bad_obsm_df.reset_index(inplace=True)
+    bad_obsm_df = obsm_df.reset_index()
     with pytest.raises(ValueError, match=r"index does not match.*obs names"):
         adata.obsm["c"] = bad_obsm_df
 
-    bad_varm_df = varm_df.copy()
-    bad_varm_df.reset_index(inplace=True)
+    bad_varm_df = varm_df.reset_index()
     with pytest.raises(ValueError, match=r"index does not match.*var names"):
         adata.varm["c"] = bad_varm_df
 

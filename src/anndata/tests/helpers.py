@@ -356,8 +356,8 @@ def gen_adata(  # noqa: PLR0913
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
-    obs.rename(columns=dict(cat="obs_cat"), inplace=True)
-    var.rename(columns=dict(cat="var_cat"), inplace=True)
+    obs = obs.rename(columns=dict(cat="obs_cat"))
+    var = var.rename(columns=dict(cat="var_cat"))
 
     if has_xr := find_spec("xarray"):
         if obs_xdataset:

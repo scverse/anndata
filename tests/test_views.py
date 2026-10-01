@@ -299,6 +299,8 @@ def test_set_var(adata, subset_func):
     assert joblib.hash(adata) == init_hash
 
 
+# DataFrameView.drop passes inplace=True through to pandas, which deprecates it in 3.1
+@pytest.mark.filterwarnings("ignore:The inplace keyword:DeprecationWarning")
 def test_drop_obs_column():
     adata = ad.AnnData(np.array(X_list, dtype="int32"), obs=obs_dict)
 
