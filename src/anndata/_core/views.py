@@ -25,6 +25,7 @@ from ..compat import (
     ZappyArray,
     has_xp,
     has_xp_base,
+    pandas_no_chained_assignment_warning,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -357,8 +358,7 @@ def remove_unused_categories(df: pd.DataFrame, col: Hashable) -> None:
     counts = np.bincount(codes + 1, minlength=len(df[col].cat.categories) + 1)
     if counts[1:].all():
         return
-    # TODO: this mode is going away
-    with pd.option_context("mode.chained_assignment", None):
+    with pandas_no_chained_assignment_warning():
         df[col] = df[col].cat.remove_unused_categories()
 
 

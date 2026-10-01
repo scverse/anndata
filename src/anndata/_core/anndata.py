@@ -1953,9 +1953,11 @@ class AnnData:  # noqa: PLW1641
                 m_attr[key] = self._get_and_delete_multicol_field(axis, key)
 
     def _get_and_delete_multicol_field(self, a, key_multicol):
-        keys = [k for k in getattr(self, a).columns if k.startswith(key_multicol)]
-        values = getattr(self, a)[keys].values
-        getattr(self, a).drop(keys, axis=1, inplace=True)
+        df: pd.DataFrame = getattr(self, a)
+        keys = [k for k in df.columns if k.startswith(key_multicol)]
+        values = df[keys].values
+        for k in keys:
+            del df[k]
         return values
 
 
