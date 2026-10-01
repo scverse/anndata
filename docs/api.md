@@ -99,7 +99,6 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
     .. autosummary::
        :toctree: generated/
 
-       io.read_loom
        AnnData.write_loom
        io.write_h5ad
        io.write_zarr
@@ -107,7 +106,6 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
 .. toctree::
    :hidden:
 
-   generated/anndata.io.read_loom
    generated/anndata.AnnData.write_loom
    generated/anndata.io.write_h5ad
    generated/anndata.io.write_zarr
