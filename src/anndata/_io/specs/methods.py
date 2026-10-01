@@ -784,11 +784,11 @@ def write_cs(
     _writer: Writer,
     dataset_kwargs=MappingProxyType({}),
 ) -> None:
-    if len(value.indptr) != value.shape[0 if value.format == "csr" else 1] + 1:
+    if value.indptr.shape[0] != value.shape[0 if value.format == "csr" else 1] + 1:
         maj = "row" if value.format == "csr" else "column"
         msg = f"Corrupt sparse array: the number of {maj}s does not match the index pointer size."
         raise ValueError(msg)
-    if len(value.indices) != len(value.data):
+    if value.indices.shape != value.data.shape:
         msg = "Corrupt sparse array: indices and data should have the same size."
         raise ValueError(msg)
 
