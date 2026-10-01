@@ -163,7 +163,7 @@ def _fmt_loom_axis_attrs(
             axis_df[k] = v
 
     if idx_name in axis_df:
-        axis_df.set_index(idx_name, drop=True, inplace=True)
+        axis_df = axis_df.set_index(idx_name, drop=True)
 
     return axis_df, axis_mapping
 

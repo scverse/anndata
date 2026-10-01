@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping
+from contextlib import nullcontext
 from enum import Enum, auto
 from functools import partial, singledispatch
 from importlib import import_module
@@ -22,6 +23,7 @@ from .._warnings import warn
 
 if TYPE_CHECKING:
     import sys
+    from contextlib import AbstractContextManager
     from typing import Any, Self, TypeAlias, TypeGuard
 
     if sys.version_info >= (3, 13):
@@ -297,6 +299,16 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
     dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
     a = a.astype(dtype)
     return a if PANDAS_3 or pd.options.future.infer_string else a.astype(object)
+
+
+def pandas_no_chained_assignment_warning() -> AbstractContextManager[object]:
+    """Silence `SettingWithCopyWarning` in pandas < 3.
+
+    pandas 3 removed that warning, and pandas 3.1 deprecates the option.
+    """
+    if PANDAS_3:
+        return nullcontext()
+    return pd.option_context("mode.chained_assignment", None)
 
 
 @singledispatch
