@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Literal
+from functools import total_ordering
+from typing import TYPE_CHECKING
 
 from packaging.version import Version
 
+if TYPE_CHECKING:
+    from .types import WriteCompatStr
 
-class WriteCompat(Version, Enum):
+
+@total_ordering
+class WriteCompat(Enum):
     """Which anndata version’s write behavior to target.
 
     Each member is the oldest anndata version whose I/O behavior we promise to be
@@ -20,10 +25,35 @@ class WriteCompat(Version, Enum):
     DEFAULT = V0_13
     """Alias for the profile write functions use by default, currently :attr:`V0_13`."""
 
-    if TYPE_CHECKING:
-        # the enum lookup also takes members, but type checkers see `Version.__init__(str)`
-        def __init__(self, value: WriteCompat | WriteCompatStr, /) -> None: ...
+    _version: Version
 
+    if TYPE_CHECKING:  # https://github.com/python/mypy/issues/16712
 
-type WriteCompatStr = Literal["0.13"]
-"""The values of :class:`WriteCompat`, which write functions also accept."""
+        def __init__(self, version: WriteCompat | WriteCompatStr, /) -> None: ...
+
+    else:
+
+        def __init__(self, version: str, /) -> None:
+            self._version = Version(version)
+
+    def __str__(self) -> str:
+        return str(self._version)
+
+    @staticmethod
+    def _coerce(other: object) -> Version | None:
+        if isinstance(other, Version):
+            return other
+        if isinstance(other, WriteCompat):
+            return other._version
+        return None
+
+    def __eq__(self, other: object) -> bool:
+        v = self._coerce(other)
+        return NotImplemented if v is None else self._version == v
+
+    def __lt__(self, other: object) -> bool:
+        v = self._coerce(other)
+        return NotImplemented if v is None else self._version < v
+
+    def __hash__(self) -> int:
+        return hash(self._version)

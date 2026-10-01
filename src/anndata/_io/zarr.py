@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
-    from .._write_compat import WriteCompatStr
+    from ..types import WriteCompatStr
     from ..typing import RWAble
 
 from importlib.metadata import version
