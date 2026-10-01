@@ -452,6 +452,49 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.fixture(params=["indices-data", "shape"])
+def bad_sparray(request: pytest.FixtureRequest):
+    m = sparse.random_array((100, 100), format="csr", density=0.1)
+    match request.param:
+        case "indices-data":
+            m.indices = np.zeros(len(m.indices) * 2, dtype=m.indices.dtype)
+        case "shape":
+            m._shape = (10**11, m.shape[1])  # type: ignore[attr-defined]
+        case _:
+            pytest.fail(f"Unknown matrix type: {request.param}")
+    return m
+
+
+def test_write_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.write_elem(f, "mtx", bad_sparray)
+
+
+def test_read_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+    x = f.create_group("mtx")
+    x.attrs["encoding-type"] = "csr_matrix"
+    x.attrs["encoding-version"] = "0.1.0"
+    x.attrs["shape"] = bad_sparray.shape
+    c = x.create_dataset if isinstance(x, h5py.Group) else x.create_array
+    c("data", data=bad_sparray.data)
+    c("indices", data=bad_sparray.indices)
+    c("indptr", data=bad_sparray.indptr)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.read_elem(f["mtx"])
+
+
 @pytest.mark.parametrize(
     ("num_minor_axis", "expected_dtype"),
     [
