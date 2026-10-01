@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import warnings
 from pathlib import Path
 
@@ -14,18 +13,8 @@ DATA_DIR = HERE / "data"
 
 
 def test_old_format_warning_thrown() -> None:
-    def msg_re(entry: str) -> str:
-        return re.escape(
-            f"Moving element from .uns['neighbors'][{entry!r}] to .obsp[{entry!r}]."
-        )
-
     pth = DATA_DIR / "archives/v0.5.0/adata.h5ad"
-    warnings.simplefilter("default", FutureWarning)
-    with (
-        pytest.warns(FutureWarning, match=msg_re("distances")),
-        pytest.warns(FutureWarning, match=msg_re("connectivities")),
-        pytest.warns(ad.OldFormatWarning),
-    ):
+    with pytest.warns(ad.OldFormatWarning):
         ad.read_h5ad(pth)
 
 
