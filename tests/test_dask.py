@@ -401,14 +401,7 @@ def test_to_memory_copy_raw():
     assert isinstance(curr.raw.varm["da"], np.ndarray)
 
 
-@pytest.mark.parametrize(
-    "fmt",
-    [
-        pytest.param("csr", id="csr"),
-        pytest.param("csc", id="csc"),
-        pytest.param(None, id="dense"),
-    ],
-)
+@pytest.mark.parametrize("fmt", ["csr", "csc", None], ids=["csr", "csc", "dense"])
 @pytest.mark.parametrize("index", ["bool", "int"])
 def test_subset_unchunked_axis_blockwise(fmt, index):
     import dask.array as da
