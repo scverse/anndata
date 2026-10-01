@@ -15,6 +15,7 @@ import anndata as ad
 from anndata import AnnData, concat
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import assert_equal, gen_adata
@@ -339,3 +340,34 @@ def test_write_using_groups(tmp_path, file_format):
 def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
+
+
+def test_max_loaded_elems_without_reindexing(tmp_path, file_format, monkeypatch):
+    # identical var means nothing is reindexed, which must not bypass chunking
+    n_obs, n_vars, max_loaded_elems = 40, 10, 50
+    adatas = [
+        gen_adata(
+            (n_obs, n_vars),
+            X_type=sparse.csr_matrix,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **GEN_ADATA_OOC_CONCAT_ARGS,
+        )
+        for _ in range(3)
+    ]
+    for a in adatas:
+        a.var_names = adatas[0].var_names
+
+    appended_rows: list[int] = []
+    append = BaseCompressedSparseDataset.append
+
+    def spy(self, sparse_matrix):
+        appended_rows.append(sparse_matrix.shape[0])
+        return append(self, sparse_matrix)
+
+    monkeypatch.setattr(BaseCompressedSparseDataset, "append", spy)
+    assert_eq_concat_on_disk(
+        adatas, tmp_path, file_format, max_loaded_elems, axis=0, join="inner"
+    )
+    assert appended_rows
+    assert max(appended_rows) * n_vars <= max_loaded_elems
