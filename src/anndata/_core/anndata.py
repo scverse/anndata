@@ -37,6 +37,7 @@ from ..compat import (
     has_xp,
     old_positionals,
     pandas_as_str,
+    pandas_no_chained_assignment_warning,
 )
 from ..logging import anndata_logger as logger
 from ..utils import (
@@ -1123,8 +1124,7 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            # TODO: this mode is going away
-            with pd.option_context("mode.chained_assignment", None):
+            with pandas_no_chained_assignment_warning():
                 df_sub[k] = df_sub[k].cat.remove_unused_categories()
             # also correct the colors...
             color_key = f"{k}_colors"
@@ -1961,9 +1961,11 @@ class AnnData:  # noqa: PLW1641
                 m_attr[key] = self._get_and_delete_multicol_field(axis, key)
 
     def _get_and_delete_multicol_field(self, a, key_multicol):
-        keys = [k for k in getattr(self, a).columns if k.startswith(key_multicol)]
-        values = getattr(self, a)[keys].values
-        getattr(self, a).drop(keys, axis=1, inplace=True)
+        df: pd.DataFrame = getattr(self, a)
+        keys = [k for k in df.columns if k.startswith(key_multicol)]
+        values = df[keys].values
+        for k in keys:
+            del df[k]
         return values
 
 

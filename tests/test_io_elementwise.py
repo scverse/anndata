@@ -678,6 +678,9 @@ def test_write_io_error(store, obj):
 
 
 PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
+ALWAYS_INFER_STRING = pytest.mark.skipif(
+    PANDAS_3, reason="Can’t disable `future.infer_string` in pandas 3+."
+)
 
 
 @pytest.mark.parametrize(
@@ -692,6 +695,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
                 (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
                 "string-array",
                 id=f"off-explicit-{int(pd_ignored)}",
+                marks=() if pd_ignored else ALWAYS_INFER_STRING,
             )
             for pd_ignored in [False, True]
         ),
@@ -702,10 +706,17 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
             (RuntimeError, PAT_IMPLICIT),
             (RuntimeError, PAT_IMPLICIT),
             id="off-implicit",
+            marks=ALWAYS_INFER_STRING,
         ),
         # when enabled, we expect arrays to be written in the nullable format
         pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
-        pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
+        pytest.param(
+            True,
+            False,
+            *(["nullable-string-array"] * 2),
+            id="on-explicit-0",
+            marks=ALWAYS_INFER_STRING,
+        ),
         pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
     ],
 )
@@ -722,7 +733,11 @@ def test_write_nullable_string(
     expected = expected_missing if missing else expected_no_missing
     with (
         ad.settings.override(allow_write_nullable_strings=ad_setting),
-        pd.option_context("future.infer_string", pd_setting),
+        (  # `future.infer_string` defaults to True in pandas 3, and setting it is deprecated in pandas 3.1
+            nullcontext()
+            if PANDAS_3
+            else pd.option_context("future.infer_string", pd_setting)
+        ),
         (
             nullcontext()
             if isinstance(expected, str)
