@@ -30,8 +30,8 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from anndata._write_compat import WriteCompatStr
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+    from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
 
     from ..._core.xarray import Dataset2D

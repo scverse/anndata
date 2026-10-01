@@ -3,7 +3,7 @@
 Every so often, the python package `anndata` starts using an on-disk encoding that older versions of packages in python and elsewhere won't be able to read.
 
 Every write function takes a `compat` argument selecting which anndata version’s write behavior to target,
-as a {class}`~anndata.WriteCompat` member or its string value ({data}`~anndata.WriteCompatStr`):
+as a {class}`~anndata.WriteCompat` member or its string value ({data}`~anndata.types.WriteCompatStr`):
 
 ```python
 adata.write_h5ad("old.h5ad", compat="0.13")

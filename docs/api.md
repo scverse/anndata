@@ -127,9 +127,16 @@ All of these take a `compat` argument, see {doc}`/write-compat` for what the com
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
+   :template: class-minimal
 
    WriteCompat
-   WriteCompatStr
+```
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.WriteCompatStr
 ```
 
 Writing formats that cannot represent all aspects of {class}`AnnData` objects.

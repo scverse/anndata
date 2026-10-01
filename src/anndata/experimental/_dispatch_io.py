@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _GroupStorageType,
     )
-    from anndata._write_compat import WriteCompatStr
+    from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
 
 
