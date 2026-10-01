@@ -47,7 +47,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES
+from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
@@ -1274,6 +1274,7 @@ def write_nullable(
         # if implicitly set to `False`, we error out
         if (
             settings.allow_write_nullable_strings is None
+            and not PANDAS_3
             and not pd.options.future.infer_string
         ):
             msg = (
