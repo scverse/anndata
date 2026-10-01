@@ -86,7 +86,6 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
-    from .._write_compat import WriteCompatStr
     from ..acc import (
         AdRef,
         Array,
@@ -98,6 +97,7 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
+    from ..types import WriteCompatStr
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
