@@ -70,7 +70,13 @@ from .index import (
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
-from .views import DictView, _resolve_idxs, as_view
+from .views import (
+    DataFrameView,
+    DictView,
+    _resolve_idxs,
+    as_view,
+    remove_unused_categories,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -367,9 +373,9 @@ class AnnData:  # noqa: PLW1641
         if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
-        # set attributes
-        self._obs = as_view(obs_sub, view_args=(self, "obs"))
-        self._var = as_view(var_sub, view_args=(self, "var"))
+        # set attributes; categories are fixed already, so skip `as_view_df` doing it again
+        self._obs = _df_view(obs_sub, view_args=(self, "obs"))
+        self._var = _df_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
@@ -1123,9 +1129,7 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            # TODO: this mode is going away
-            with pd.option_context("mode.chained_assignment", None):
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            remove_unused_categories(df_sub, k)
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
@@ -1605,15 +1609,9 @@ class AnnData:  # noqa: PLW1641
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self) -> None:
-        if (
-            settings.restrict_index_types
-            and self.obs.index[self.obs.index.notna()].has_duplicates
-        ):
+        if settings.restrict_index_types and _has_duplicates(self.obs.index):
             utils.warn_names_duplicates("obs")
-        if (
-            settings.restrict_index_types
-            and self.var.index[self.var.index.notna()].has_duplicates
-        ):
+        if settings.restrict_index_types and _has_duplicates(self.var.index):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
@@ -2030,3 +2028,19 @@ def _infer_shape(
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
     return a[subset_idx]
+
+
+def _df_view(df: pd.DataFrame | Dataset2D, view_args) -> DataFrameView | Dataset2D:
+    return (
+        DataFrameView(df, view_args=view_args)
+        if isinstance(df, pd.DataFrame)
+        else as_view(df, view_args=view_args)
+    )
+
+
+def _has_duplicates(index: pd.Index) -> bool:
+    # `has_duplicates` is cached on the index (and passed on to slices of it),
+    # so only build a new index if there are missing values to exclude
+    if index.hasnans:
+        index = index[index.notna()]
+    return index.has_duplicates

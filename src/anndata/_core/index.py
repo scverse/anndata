@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from enum import Enum
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
 from itertools import repeat
 from types import EllipsisType
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
 
 import h5py
 import numpy as np
@@ -29,7 +29,7 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     import sys
     from collections.abc import Callable
-    from typing import TypeAlias
+    from typing import Self, TypeAlias
 
     if sys.version_info >= (3, 13):
         from typing import TypeIs
@@ -449,11 +449,43 @@ def _subset[T: AlignedArray](
 @_subset_dispatch.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(a: DaskArray, subset_idx: NumpySubsetIdx) -> DaskArray:
-    if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
-        if isinstance(a._meta, sparse.csc_matrix | sparse.csc_array):
-            return a[:, subset_idx[1]][subset_idx[0], :]
-        return a[subset_idx[0], :][:, subset_idx[1]]
-    return a[subset_idx]
+    if len(subset_idx) == 1:
+        return _subset_dask_axis(a, subset_idx[0], axis=0)
+    rows, cols = subset_idx
+    # subset the axis that is not chunked first (the minor axis of sparse chunks)
+    if isinstance(a._meta, sparse.csc_matrix | sparse.csc_array):
+        return _subset_dask_axis(_subset_dask_axis(a, cols, axis=1), rows, axis=0)
+    return _subset_dask_axis(_subset_dask_axis(a, rows, axis=0), cols, axis=1)
+
+
+def _subset_dask_axis(
+    a: DaskArray, idx: NumpyIdx1D, *, axis: Literal[0, 1]
+) -> DaskArray:
+    if isinstance(idx, slice) and idx == slice(None):
+        return a
+    sel = (slice(None),) * axis + (idx,)
+    if isinstance(idx, slice) or a.numblocks[axis] > 1:
+        return a[sel]
+    # Every chunk holds the whole axis, so subset each chunk on its own.
+    # Dask’s own fancy indexing makes all output chunks depend on a single task,
+    # which e.g. `dask.distributed` then places on a single worker, together with all their inputs.
+    import dask.array as da
+
+    n = int(np.count_nonzero(idx)) if idx.dtype == bool else len(idx)
+    chunks = tuple((n,) if i == axis else c for i, c in enumerate(a.chunks))
+    return da.map_blocks(
+        partial(_getitem_chunk, sel=sel), a, chunks=chunks, dtype=a.dtype, meta=a._meta
+    )
+
+
+class _Subsettable(Protocol):
+    def __getitem__(self, sel: tuple[slice | np.ndarray, ...], /) -> Self: ...
+
+
+def _getitem_chunk[C: _Subsettable](
+    chunk: C, *, sel: tuple[slice | np.ndarray, ...]
+) -> C:
+    return chunk[sel]
 
 
 @_subset_dispatch.register(CSMatrix)
