@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping
 from contextlib import nullcontext
 from enum import Enum, auto
 from functools import partial, singledispatch
@@ -23,6 +22,7 @@ from .._warnings import warn
 
 if TYPE_CHECKING:
     import sys
+    from collections.abc import Mapping
     from contextlib import AbstractContextManager
     from typing import Any, Self, TypeAlias, TypeGuard
 
@@ -32,8 +32,6 @@ if TYPE_CHECKING:
         from typing_extensions import TypeIs
 
     import zarr
-
-    from .._core.anndata import AnnData
 
     type SparseArray[ST: np.number | np.bool] = (
         sps.bsr_array[ST]
@@ -461,67 +459,6 @@ def _require_group_write_dataframe(
         # actually 64kb is the limit, but this should be a conservative estimate
         return f.create_group(name, track_order=True)
     return f.require_group(name)
-
-
-#############################
-# Dealing with uns
-#############################
-
-
-def _clean_uns(adata: AnnData) -> None:
-    """
-    Compat function for when categorical keys were stored in uns.
-    This used to be buggy because when storing categorical columns in obs and var with
-    the same column name, only one `<colname>_categories` is retained.
-    """
-    k_to_delete = set()
-    for cats_name, cats in adata.uns.items():
-        if not cats_name.endswith("_categories"):
-            continue
-        name = cats_name.replace("_categories", "")
-        # fix categories with a single category
-        if isinstance(cats, str | int):
-            cats = [cats]
-        for ann in [adata.obs, adata.var]:
-            if name not in ann:
-                continue
-            codes: np.ndarray = ann[name].values
-            # hack to maybe find the axis the categories were for
-            if not np.all(codes < len(cats)):
-                continue
-            ann[name] = pd.Categorical.from_codes(codes, cats)
-            k_to_delete.add(cats_name)
-    for cats_name in k_to_delete:
-        del adata.uns[cats_name]
-
-
-def _move_adj_mtx(d) -> None:
-    """Read-time fix for moving adjacency matrices from uns to obsp."""
-    n = d.get("uns", {}).get("neighbors", {})
-    obsp = d.setdefault("obsp", {})
-
-    for k in ("distances", "connectivities"):
-        if (
-            (k in n)
-            and isinstance(n[k], sps.spmatrix | np.ndarray)
-            and len(n[k].shape) == 2
-        ):
-            msg = (
-                f"Moving element from .uns['neighbors'][{k!r}] to .obsp[{k!r}].\n\n"
-                "This is where adjacency matrices should go now."
-            )
-            warn(msg, FutureWarning)
-            obsp[k] = n.pop(k)
-
-
-def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
-    """Find paths to sparse matrices with shape (n, n)."""
-    for k, v in d.items():
-        if isinstance(v, Mapping):
-            _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif isinstance(v, CSMatrix | CSArray) and v.shape == (n, n):
-            paths.append((*keys, k))
-    return paths
 
 
 def _transpose_by_block(dask_array: DaskArray) -> DaskArray:

@@ -33,7 +33,6 @@ from ..compat import (
     Empty,
     IndexManager,
     XDataset,
-    _move_adj_mtx,
     has_xp,
     old_positionals,
     pandas_as_str,
@@ -513,8 +512,6 @@ class AnnData:  # noqa: PLW1641
         self.obsp = obsp
         self.varp = varp
 
-        # Backwards compat for connectivities matrices in uns["neighbors"]
-        _move_adj_mtx({"uns": self._uns, "obsp": self._obsp})
         self._check_dimensions()
         if settings.check_uniqueness:
             self._check_uniqueness()
@@ -525,9 +522,6 @@ class AnnData:  # noqa: PLW1641
             )
             if {"raw", "raw.X"} & set(self.file):
                 raw = dict(X=None, **(raw or {}))
-
-        # clean up old formats
-        self._clean_up_old_format(uns)
 
         # layers
         self.layers = layers
@@ -1931,42 +1925,6 @@ class AnnData:  # noqa: PLW1641
         if (adata_ref := self._adata_ref) is None:  # i.e. not a view
             return self.X is not None
         return adata_ref.X is not None
-
-    # --------------------------------------------------------------------------
-    # all of the following is for backwards compat
-    # --------------------------------------------------------------------------
-
-    @property
-    @deprecated(Deprecation("0.7.2", deprecation_msg("isview", "is_view")))
-    def isview(self) -> bool:
-        """Whether or not this object is a view."""
-        return self.is_view
-
-    def _clean_up_old_format(self, uns):
-        # multicolumn keys
-        # all of the rest is only for backwards compat
-        for bases in [["obs", "smp"], ["var"]]:
-            axis = bases[0]
-            for k in [f"{p}{base}_keys_multicol" for p in ["", "_"] for base in bases]:
-                if uns and k in uns:
-                    keys = list(uns[k])
-                    del uns[k]
-                    break
-            else:
-                keys = []
-            # now, for compat, fill the old multicolumn entries into obsm and varm
-            # and remove them from obs and var
-            m_attr = getattr(self, f"_{axis}m")
-            for key in keys:
-                m_attr[key] = self._get_and_delete_multicol_field(axis, key)
-
-    def _get_and_delete_multicol_field(self, a, key_multicol):
-        df: pd.DataFrame = getattr(self, a)
-        keys = [k for k in df.columns if k.startswith(key_multicol)]
-        values = df[keys].values
-        for k in keys:
-            del df[k]
-        return values
 
 
 def _widen_layers_type[T](
