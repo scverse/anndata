@@ -1435,13 +1435,15 @@ def write_hdf5_scalar(
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-for numeric_scalar_type in [
+_NUMERIC_SCALAR_TYPES: list[type] = [
     *(bool, np.bool_),
     *(np.uint8, np.uint16, np.uint32, np.uint64),
     *(int, np.int8, np.int16, np.int32, np.int64),
-    *(float, *np.floating.__subclasses__()),
+    float,
+    *np.floating.__subclasses__(),
     *np.complexfloating.__subclasses__(),
-]:
+]
+for numeric_scalar_type in _NUMERIC_SCALAR_TYPES:
     _REGISTRY.register_write(
         h5py.Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
     )(write_hdf5_scalar)

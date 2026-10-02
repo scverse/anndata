@@ -879,8 +879,8 @@ def test_dataframe_view_index_setting():
         a2.obs.index = a2.obs.index.map(lambda x: x[-1])
     assert not isinstance(a2.obs, ad._core.views.DataFrameView)
     assert isinstance(a2.obs, pd.DataFrame)
-    assert a1.obs.index.array.tolist() == ["aa", "bb"]
-    assert a2.obs.index.array.tolist() == ["a", "b"]
+    assert a1.obs.index.tolist() == ["aa", "bb"]
+    assert a2.obs.index.tolist() == ["a", "b"]
 
 
 def _n(t: Callable[..., Any]) -> str:
