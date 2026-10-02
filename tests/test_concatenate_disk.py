@@ -172,7 +172,7 @@ def test_anndatas(
             **kw,
         )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names = getattr(a, f"{off_axis_name}_names").array.copy()
         off_names[1::2] = f"{i}-" + off_names[1::2]
         setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
