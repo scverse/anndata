@@ -307,10 +307,10 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
         if not inplace:
             return self.copy().drop(*args, **kw)
         if self._view_args is None:
-            super().drop(*args, inplace=True, **kw)
+            super().drop(*args, inplace=True, **kw)  # noqa: PD002
             return
         with view_update(*self._view_args) as df:
-            df.drop(*args, inplace=True, **kw)
+            df.drop(*args, inplace=True, **kw)  # noqa: PD002
 
     def __setattr__(self, key: str, value: object) -> None:
         if key == "index" and self._view_args is not None:

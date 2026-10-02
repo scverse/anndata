@@ -485,7 +485,7 @@ def _clean_uns(adata: AnnData) -> None:
         for ann in [adata.obs, adata.var]:
             if name not in ann:
                 continue
-            codes: np.ndarray = ann[name].values
+            codes = ann[name].to_numpy()
             # hack to maybe find the axis the categories were for
             if not np.all(codes < len(cats)):
                 continue
