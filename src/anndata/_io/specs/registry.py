@@ -460,6 +460,12 @@ def read_elem_lazy(
        `(adata.shape[0], 1000)` for CSC sparse,
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
+    meta
+       Sparse matrices only: an (empty) matrix of the type the chunks will have,
+       e.g. a :class:`cupyx.scipy.sparse.csr_matrix` when :mod:`zarr` reads into GPU memory on the Dask workers.
+       Only its type is used.
+       Defaults to :mod:`cupyx` if :mod:`zarr` reads into GPU memory in this process
+       (see :func:`zarr.config.enable_gpu`), and to :mod:`scipy` otherwise.
 
     Returns
     -------
