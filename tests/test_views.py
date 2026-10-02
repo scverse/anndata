@@ -311,7 +311,7 @@ def test_drop_obs_column():
     assert subset.obs.drop(columns=["oanno1"]).columns.tolist() == ["oanno2", "oanno3"]
     assert subset.is_view
     # would modify obs, so it should actualize subset and not modify adata
-    subset.obs.drop(columns=["oanno1"], inplace=True)
+    subset.obs.drop(columns=["oanno1"], inplace=True)  # noqa: PD002
     assert not subset.is_view
     assert subset.obs.columns.tolist() == ["oanno2", "oanno3"]
 
@@ -879,8 +879,8 @@ def test_dataframe_view_index_setting():
         a2.obs.index = a2.obs.index.map(lambda x: x[-1])
     assert not isinstance(a2.obs, ad._core.views.DataFrameView)
     assert isinstance(a2.obs, pd.DataFrame)
-    assert a1.obs.index.values.tolist() == ["aa", "bb"]
-    assert a2.obs.index.values.tolist() == ["a", "b"]
+    assert a1.obs.index.tolist() == ["aa", "bb"]
+    assert a2.obs.index.tolist() == ["a", "b"]
 
 
 def _n(t: Callable[..., Any]) -> str:
@@ -1132,8 +1132,8 @@ def test_double_index_jax(*, to_bool: bool, mixed: bool) -> None:
         if mixed:
             bool_mask[subset2] = True
         else:
-            bool_mask = bool_mask.at[subset2].set(True)
-        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][bool_mask, :]
+            bool_mask = bool_mask.at[subset2].set(True)  # noqa: PD008
+        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][bool_mask, :]  # noqa: PD008
     else:
         v2 = adata[subset1, :][subset2, :]
 

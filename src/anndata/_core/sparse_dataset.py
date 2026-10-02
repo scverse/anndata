@@ -630,16 +630,20 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
             indptr=self._indptr,
             shape=self.shape,
         )
-        mtx = backed_class.memory_format(self.shape, dtype=self.dtype)
-        mtx.data = _read_dense(self._data, ...)
         indices = _read_dense(self._indices, ...)
         # Compact on-disk index types (e.g. uint16 for < 65,536 columns) are fine to store,
         # but scipy and cuSPARSE only operate on signed 32 or 64 bit indices.
         if (idx_dtype := np.result_type(indices.dtype, np.int32)) != indices.dtype:
             indices = indices.astype(idx_dtype)
-        mtx.indices = indices
-        mtx.indptr = _read_dense(self._indptr, ...)
-        return mtx
+        return backed_class.memory_format(
+            (
+                _read_dense(self._data, ...),
+                indices,
+                _read_dense(self._indptr, ...),
+            ),
+            shape=self.shape,
+            dtype=self.dtype,
+        )
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):
