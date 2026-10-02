@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -295,3 +295,19 @@ def test_nullable_string_index_decoding(tmp_path: Path):
 
     assert obs_names == expected_obs
     assert var_names == expected_var
+
+
+def test_escaped_keys() -> None:
+    """Column and index names escaped by `compat="0.14"` are unescaped when read."""
+    index = pd.Index(["c1", "c2"], name="cell/id")
+    adata = AnnData(
+        np.zeros((2, 3)), obs=pd.DataFrame({"a/b": [1, 2], "c:d": [3, 4]}, index=index)
+    )
+    write_zarr(store := MemoryStore(), adata, compat="0.14")
+
+    lazy = read_lazy(store)
+    assert set(lazy.obs.columns) == {"a/b", "c:d"}
+    assert lazy.obs.index.name == "cell/id"
+    pd.testing.assert_frame_equal(
+        cast("pd.DataFrame", lazy.to_memory().obs), cast("pd.DataFrame", adata.obs)
+    )

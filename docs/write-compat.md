@@ -27,7 +27,8 @@ i.e. encodings that version can’t read are disallowed.
   - unreleased
   - Enables the {ref}`sequence <sequence>` and {ref}`accessor <accessor>` encodings,
     i.e. writing heterogeneous, ragged and nested sequences in `uns` ({issue}`1979`)
-    as well as {mod}`anndata.acc` accessors.
+    as well as {mod}`anndata.acc` accessors,
+    and {ref}`escapes keys <escaped-keys>` that a file system may choke on, e.g. `/` and `:`.
     Older versions can’t read either.
 ```
 
