@@ -1963,7 +1963,7 @@ class AnnData:  # noqa: PLW1641
     def _get_and_delete_multicol_field(self, a, key_multicol):
         df: pd.DataFrame = getattr(self, a)
         keys = [k for k in df.columns if k.startswith(key_multicol)]
-        values = df[keys].values
+        values = df[keys].to_numpy()
         for k in keys:
             del df[k]
         return values

@@ -230,14 +230,14 @@ class Raw:
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
-            packed_index = packed_index.values
+            packed_index = packed_index.array
         if isinstance(packed_index, tuple):
             if len(packed_index) != 2:
                 raise IndexDimError(len(packed_index))
             if isinstance(packed_index[1], pd.Series):
-                packed_index = packed_index[0], packed_index[1].values
+                packed_index = packed_index[0], packed_index[1].array
             if isinstance(packed_index[0], pd.Series):
-                packed_index = packed_index[0].values, packed_index[1]
+                packed_index = packed_index[0].array, packed_index[1]
         obs, var = unpack_index(packed_index)
         obs = _normalize_index(obs, self._adata.obs_names)
         var = _normalize_index(var, self.var_names)
