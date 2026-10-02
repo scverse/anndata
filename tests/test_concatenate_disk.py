@@ -342,21 +342,37 @@ def test_failure_w_no_args(tmp_path):
         concat_on_disk([], tmp_path / "out.h5ad")
 
 
-def test_max_loaded_elems_without_reindexing(tmp_path, file_format, monkeypatch):
-    # identical var means nothing is reindexed, which must not bypass chunking
+@pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+@pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
+def test_max_loaded_elems_chunks_sparse_x(
+    tmp_path, file_format, join_type, reindex, monkeypatch
+):
+    # chunking must not depend on whether the inputs need to be reindexed
     n_obs, n_vars, max_loaded_elems = 40, 10, 50
-    adatas = [
-        gen_adata(
+    kw = (
+        GEN_ADATA_OOC_CONCAT_ARGS
+        if not reindex
+        else dict(
+            obsm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            varm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
+        )
+    )
+    adatas = []
+    for i in range(3):
+        a = gen_adata(
             (n_obs, n_vars),
             X_type=sparse.csr_matrix,
             obs_dtypes=[pd.CategoricalDtype(ordered=False)],
             var_dtypes=[pd.CategoricalDtype(ordered=False)],
-            **GEN_ADATA_OOC_CONCAT_ARGS,
+            **kw,
         )
-        for _ in range(3)
-    ]
-    for a in adatas:
-        a.var_names = adatas[0].var_names
+        # some names overlap, others do not, so that inner/outer is tested
+        var_names = np.array([f"var{j}" for j in range(n_vars)], dtype=object)
+        if reindex:
+            var_names[1::2] = f"{i}-" + var_names[1::2]
+        a.var_names = var_names
+        adatas.append(a)
 
     appended_rows: list[int] = []
     append = BaseCompressedSparseDataset.append
@@ -367,7 +383,7 @@ def test_max_loaded_elems_without_reindexing(tmp_path, file_format, monkeypatch)
 
     monkeypatch.setattr(BaseCompressedSparseDataset, "append", spy)
     assert_eq_concat_on_disk(
-        adatas, tmp_path, file_format, max_loaded_elems, axis=0, join="inner"
+        adatas, tmp_path, file_format, max_loaded_elems, axis=0, join=join_type
     )
     assert appended_rows
     assert max(appended_rows) * n_vars <= max_loaded_elems
