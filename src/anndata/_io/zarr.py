@@ -228,8 +228,7 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
     )
     warn(msg, OldFormatWarning)
     df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
-    df.set_index(df.columns[0], inplace=True)
-    return df
+    return df.set_index(df.columns[0])
 
 
 @report_read_key_on_error
