@@ -11,13 +11,10 @@ from __future__ import annotations
 
 import re
 import warnings
-from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, cast
 
-import pandas as pd
 import pytest
-from packaging.version import Version
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
@@ -25,8 +22,6 @@ if TYPE_CHECKING:
 
     from ._doctest import WarningFilter
 
-# Use a marker present in the environment so VS Code’s tests behave identical
-IS_PRE = Version(version("zarr")).is_prerelease
 
 # Hack, but I didn’t feel like adding rST syntax to define warning filters
 # TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
@@ -45,10 +40,6 @@ def setup_env() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         anndata.settings.reset(*anndata.settings.model_fields_set)
-
-    if IS_PRE:
-        # https://pandas.pydata.org/docs/whatsnew/v2.3.0.html#upcoming-changes-in-pandas-3-0
-        pd.options.future.infer_string = True
 
 
 @pytest.fixture(scope="session", autouse=True)

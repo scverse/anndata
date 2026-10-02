@@ -387,9 +387,8 @@ def test_concat_mixed_types(key, arrays, expected, join):
         tmp_adata.var_names = pd.RangeIndex(prev_gene_id, gene_id).astype(str)
         if a is not None:
             if isinstance(a, pd.DataFrame):
-                a.set_index(
-                    tmp_adata.obs_names if key == "obsm" else tmp_adata.var_names,
-                    inplace=True,
+                a = a.set_index(
+                    tmp_adata.obs_names if key == "obsm" else tmp_adata.var_names
                 )
             getattr(tmp_adata, key)["test"] = a
 
