@@ -574,11 +574,15 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType, ArrayT: _ArrayStora
             indptr=self._indptr,
             shape=self.shape,
         )
-        mtx = backed_class.memory_format(self.shape, dtype=self.dtype)
-        mtx.data = self._data[...]
-        mtx.indices = self._indices[...]
-        mtx.indptr = self._indptr
-        return mtx
+        return backed_class.memory_format(
+            (
+                self._data[...],
+                self._indices[...],
+                self._indptr,
+            ),
+            shape=self.shape,
+            dtype=self.dtype,
+        )
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):

@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 # TODO: remove filters (here and elsewhere) once https://github.com/scverse/scanpy/issues/3879 is fixed
 _RST_FILTERS: Sequence[WarningFilter] = (
     ("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning, "", 0),
+    # TODO: remove once a scanpy prerelease > 1.13.0a2 contains scverse/scanpy#4372
+    ("ignore", r"unclosed file.*10x_pbmc68k_reduced", ResourceWarning, "", 0),
 )
 
 
