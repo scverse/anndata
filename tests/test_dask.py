@@ -399,3 +399,40 @@ def test_to_memory_copy_raw():
     assert isinstance(with_raw.raw.varm["da"], DaskArray)
     assert isinstance(curr.raw.X, np.ndarray)
     assert isinstance(curr.raw.varm["da"], np.ndarray)
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc", None], ids=["csr", "csc", "dense"])
+@pytest.mark.parametrize("index", ["bool", "int"])
+def test_subset_unchunked_axis_blockwise(fmt, index):
+    import dask.array as da
+    from dask.core import flatten
+    from scipy import sparse
+
+    rng = np.random.default_rng(0)
+    x = rng.random((40, 30)) * (rng.random((40, 30)) > 0.7)
+    # chunked along one axis only, like sparse matrices read with `read_elem_lazy`
+    major = 1 if fmt == "csc" else 0
+    chunks = (10, -1) if major == 0 else (-1, 10)
+    arr = da.from_array(x, chunks=chunks)
+    if fmt is not None:
+        cls = getattr(sparse, f"{fmt}_matrix")
+        arr = arr.map_blocks(cls, meta=cls((0, 0)))
+    adata = AnnData(arr)
+    mask = rng.random(x.shape[1 - major]) > 0.5
+    idx = mask if index == "bool" else np.flatnonzero(mask)
+    sub = (adata[:, idx] if major == 0 else adata[idx, :]).X
+
+    # every output block only depends on the input block it is computed from:
+    # no single task that all blocks (and therefore all their inputs) have to meet at
+    graph = sub.__dask_graph__()
+    deps = graph.get_all_dependencies()
+    for key in flatten(sub.__dask_keys__()):
+        stack = [key]
+        while stack:
+            k = stack.pop()
+            assert isinstance(k, tuple), f"{key} depends on the shared task {k}"
+            stack.extend(deps.get(k, ()))
+
+    expected = x[:, mask] if major == 0 else x[mask, :]
+    result = sub.compute()
+    np.testing.assert_array_equal(result.toarray() if fmt else result, expected)
