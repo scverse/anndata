@@ -464,8 +464,10 @@ def _subset_dask_axis(
     if isinstance(idx, slice) and idx == slice(None):
         return a
     sel = (slice(None),) * axis + (idx,)
-    if isinstance(idx, slice) or a.numblocks[axis] > 1:
+    if isinstance(idx, slice):
         return a[sel]
+    if a.numblocks[axis] > 1:
+        return _subset_chunked_axis(a, idx, axis=axis)
     # Every chunk holds the whole axis, so subset each chunk on its own.
     # Dask’s own fancy indexing makes all output chunks depend on a single task,
     # which e.g. `dask.distributed` then places on a single worker, together with all their inputs.
@@ -476,6 +478,52 @@ def _subset_dask_axis(
     return da.map_blocks(
         partial(_getitem_chunk, sel=sel), a, chunks=chunks, dtype=a.dtype, meta=a._meta
     )
+
+
+def _subset_chunked_axis(
+    a: DaskArray, idx: NumpyIdx1D, *, axis: Literal[0, 1]
+) -> DaskArray:
+    """Subset an axis split into several chunks, keeping every chunk’s own selected items.
+
+    Dask’s own fancy indexing evens out the output chunks, so each is assembled from pieces of
+    several input chunks, which stay in memory (and move between workers) until all their output
+    chunks are done. An order-preserving selection does not need that.
+    """
+    import dask.array as da
+
+    if idx.dtype == bool:
+        mask = idx
+    elif np.all(idx[1:] > idx[:-1]):
+        mask = np.zeros(a.shape[axis], dtype=bool)
+        mask[idx] = True
+    else:
+        return a[(slice(None),) * axis + (idx,)]
+    bounds = np.cumsum((0, *a.chunks[axis]))
+    counts = np.diff(np.concatenate(([0], np.cumsum(mask)))[bounds])
+    blocks = np.flatnonzero(counts)
+    if len(blocks) < len(counts):
+        # chunks without selected items are not read at all (only then: the extra layer
+        # keeps dask from fusing each chunk’s read and subset into one task)
+        a = a.blocks[(slice(None),) * axis + (blocks,)]
+        mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks] or [mask[:0]])
+    ind = "ij"[: a.ndim]
+    return da.blockwise(
+        partial(_getitem_chunk_mask, axis=axis),
+        ind,
+        a,
+        ind,
+        da.from_array(mask, chunks=(a.chunks[axis],)),
+        ind[axis],
+        adjust_chunks={ind[axis]: tuple(counts[blocks].tolist())},
+        dtype=a.dtype,
+        meta=a._meta,
+    )
+
+
+def _getitem_chunk_mask[C: _Subsettable](
+    chunk: C, mask: np.ndarray, *, axis: Literal[0, 1]
+) -> C:
+    return _getitem_chunk(chunk, sel=(slice(None),) * axis + (np.flatnonzero(mask),))
 
 
 class _Subsettable(Protocol):
