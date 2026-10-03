@@ -505,7 +505,9 @@ def _subset_chunked_axis(
         # chunks without selected items are not read at all (only then: the extra layer
         # keeps dask from fusing each chunk’s read and subset into one task)
         a = a.blocks[(slice(None),) * axis + (blocks,)]
-        mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks] or [mask[:0]])
+        mask = np.concatenate(
+            [mask[bounds[i] : bounds[i + 1]] for i in blocks] or [mask[:0]]
+        )
     ind = "ij"[: a.ndim]
     return da.blockwise(
         partial(_getitem_chunk_mask, axis=axis),
