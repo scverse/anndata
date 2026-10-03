@@ -657,7 +657,40 @@ def write_vlen_string_array(
 ):
     """Write methods which underlying library handles nativley."""
     str_dtype = h5py.special_dtype(vlen=str)
-    f.create_dataset(k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs)
+    try:
+        f.create_dataset(
+            k, data=elem.astype(str_dtype), dtype=str_dtype, **dataset_kwargs
+        )
+    except TypeError as e:
+        # h5py only reports “Can't implicitly convert non-string objects to strings”,
+        # which does not say which elements are the problem. Find them and say so.
+        _raise_for_non_string_elements(elem, e)
+        raise
+
+
+def _raise_for_non_string_elements(elem: np.ndarray, cause: TypeError) -> None:
+    """Raise a helpful :class:`TypeError` if an object array holds non-``str`` items.
+
+    Does nothing if ``elem`` is not an object array or all of its items are strings,
+    so that the original error can be re-raised by the caller.
+    """
+    if elem.dtype.kind != "O":
+        return
+    flat = elem.ravel()
+    bad_idx = [i for i, v in enumerate(flat) if not isinstance(v, str)]
+    if not bad_idx:
+        return
+    first = bad_idx[0]
+    first_pos = tuple(int(i) for i in np.unravel_index(first, elem.shape))
+    bad_types = sorted({type(flat[i]).__name__ for i in bad_idx})
+    msg = (
+        f"Cannot write object array as string array: {len(bad_idx)} of {flat.size} "
+        f"elements are not str (found types: {', '.join(bad_types)}), e.g. element "
+        f"{first_pos} is {flat[first]!r}. "
+        "Convert the array to str before writing. For missing values, use a "
+        "categorical or a nullable pandas string dtype instead of None/nan."
+    )
+    raise TypeError(msg) from cause
 
 
 @_REGISTRY.register_write(
