@@ -321,10 +321,13 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         compressed_vectors = self._get_contiguous_compressed_slice(
             slice(major_index.start, major_index.stop)
         )
-        return self.memory_format(
-            compressed_vectors,
-            shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        return self._minor_subset(
+            self.memory_format(
+                compressed_vectors,
+                shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
+            ),
+            minor_index,
+        )
 
     @_get.register
     def _get_arrayXslice(
@@ -339,9 +342,22 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         if isinstance(major_index, np.ndarray) and major_index.dtype == bool:
             major_index = np.flatnonzero(major_index)
         out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
-        return self.memory_format(
-            self.get_compressed_vectors(major_index), shape=out_shape
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        return self._minor_subset(
+            self.memory_format(
+                self.get_compressed_vectors(major_index), shape=out_shape
+            ),
+            minor_index,
+        )
+
+    def _minor_subset(
+        self, mtx: SparseMatrixType, minor_index: slice
+    ) -> SparseMatrixType:
+        """`mtx` subset along the minor axis, without the copy that selecting all of it makes."""
+        if minor_index.step in {None, 1} and (
+            slice_len(minor_index, self.minor_axis_size) == self.minor_axis_size
+        ):
+            return mtx
+        return mtx[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
