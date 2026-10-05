@@ -362,6 +362,7 @@ def test_zarr_write_format_deprecated():
     with pytest.warns(DeprecationWarning, match="zarr v3 will become the only option"):
         ad.experimental.concat_on_disk([store1, store2], store_out)
 
+
 @pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
 @pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
 def test_max_loaded_elems_chunks_sparse_x(
