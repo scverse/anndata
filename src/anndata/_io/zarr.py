@@ -18,7 +18,7 @@ from .._core.anndata import AnnData
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
-from ..utils import warn
+from ..utils import warn, warn_convert_strings_to_categoricals
 from .specs import read_elem
 from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
 
@@ -96,6 +96,7 @@ def write_zarr(
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
     if convert_strings_to_categoricals:
+        warn_convert_strings_to_categoricals()
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)

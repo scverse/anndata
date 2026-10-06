@@ -668,6 +668,20 @@ def test_write_categorical(
     assert curr.obs["cat"].dtype == "category"
 
 
+def test_convert_strings_to_categoricals_deprecation(diskfmt, diskfmt_store):
+    orig = ad.AnnData(obs=pd.DataFrame({"str": ["a", "b"]}))
+    with pytest.warns(
+        FutureWarning, match=r"convert_strings_to_categoricals=True` will change"
+    ):
+        getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        getattr(orig, f"write_{diskfmt}")(
+            diskfmt_store, convert_strings_to_categoricals=False
+        )
+
+
 def test_write_categorical_index(diskfmt, diskfmt_store):
     orig = ad.AnnData(
         uns={"df": pd.DataFrame({}, index=pd.Categorical(list("aabcd")))},
