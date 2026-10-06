@@ -1513,3 +1513,37 @@ Emoji: 💀💀💀💀💀
 
         v.assert_html_well_formed()
         v.assert_element_exists(".anndata-readme__icon")
+
+
+class TestFailuresAreVisible:
+    """Failures are shown in the output, not only emitted as Python warnings."""
+
+    def test_failing_section_formatter_renders_error(self):
+        from anndata._repr import SectionFormatter, register_formatter
+
+        @register_formatter
+        class Broken(SectionFormatter):
+            section_name = "_broken_section"
+
+            def get_entries(self, obj, context):
+                msg = "no entries for you"
+                raise RuntimeError(msg)
+
+        with pytest.warns(UserWarning, match="no entries for you"):
+            html = AnnData(np.zeros((2, 2)))._repr_html_()
+        assert html is not None
+        assert 'data-section="_broken_section"' in html
+        assert "RuntimeError: no entries for you" in html
+
+    def test_broken_x_shows_message(self):
+        from anndata._repr.core import render_x_entry
+        from anndata._repr.registry import FormatterContext
+
+        class BrokenX:
+            @property
+            def X(self):
+                msg = "disk on fire"
+                raise RuntimeError(msg)
+
+        html = render_x_entry(BrokenX(), FormatterContext())
+        assert "RuntimeError: disk on fire" in html

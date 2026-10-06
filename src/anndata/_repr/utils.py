@@ -377,6 +377,8 @@ def get_column_colors(
         colors = uns[color_key]
         if isinstance(colors, str | bytes) or not hasattr(colors, "__len__"):
             return None
+        if limit == 0:
+            return ColumnColors(n_total=len(colors), head=[])
         head = colors[:limit]
         if hasattr(head, "compute"):  # dask (lazy AnnData)
             head = head.compute()
@@ -496,6 +498,8 @@ def format_number(n: object) -> str:
     if not isinstance(n, int | float | np.integer | np.floating):
         return str(n)
     if isinstance(n, float | np.floating):
+        if not np.isfinite(n):
+            return str(n)
         if n == int(n):
             n = int(n)
         else:
@@ -614,8 +618,8 @@ def preview_number(value: float | np.integer | np.floating) -> str:
         return str(value)
     if isinstance(value, (int, np.integer)):
         return str(value)
-    # Float - format nicely
-    if value == int(value):
+    # Float - format nicely (nan/inf have no integer form)
+    if np.isfinite(value) and value == int(value):
         return str(int(value))
     return f"{value:.6g}"
 

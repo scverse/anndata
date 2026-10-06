@@ -432,14 +432,15 @@ def _render_custom_section(
     try:
         entries = formatter.get_entries(adata, context)
     except Exception as e:  # noqa: BLE001
-        # Intentional broad catch: custom formatters shouldn't crash the entire repr
+        # Intentional broad catch: custom formatters shouldn't crash the entire
+        # repr. Show the failure like for built-in sections, and warn for debugging.
         from .._warnings import warn
 
         warn(
             f"Custom section formatter '{formatter.section_name}' failed: {e}",
             UserWarning,
         )
-        return ""
+        return render_error_section(formatter.section_name, f"{type(e).__name__}: {e}")
 
     if not entries:
         return ""
@@ -506,9 +507,16 @@ def _render_header(
         )
     )
 
-    # Check for extension type (not standard AnnData)
+    # Mark subclasses (the type name itself is already shown above)
     if type_name != "AnnData":
-        parts.append(render_badge(type_name, CSS_BADGE_EXTENSION))
+        cls = type(adata)
+        parts.append(
+            render_badge(
+                "AnnData subclass",
+                CSS_BADGE_EXTENSION,
+                f"{cls.__module__}.{cls.__qualname__}",
+            )
+        )
 
     # README icon if uns["README"] exists with a string
     readme_content = adata.uns.get("README") if hasattr(adata, "uns") else None

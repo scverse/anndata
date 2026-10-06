@@ -266,9 +266,11 @@ def render_x_entry(obj: AnnData | Raw, context: FormatterContext) -> str:
         X = obj.X
     except Exception as e:  # noqa: BLE001
         # Handle missing or broken X attribute gracefully
-        error_msg = f"error: {type(e).__name__}"
+        error_msg = f"error: {type(e).__name__}: {e}"
+        if len(error_msg) > ERROR_TRUNCATE_LENGTH:
+            error_msg = error_msg[:ERROR_TRUNCATE_LENGTH] + "..."
         parts.append(
-            f'<span class="{CSS_TEXT_MUTED}"><em>({escape_html(error_msg)})</em></span>'
+            f'<span class="{CSS_TEXT_ERROR}"><em>({escape_html(error_msg)})</em></span>'
         )
         parts.append("</div>")
         return "\n".join(parts)
@@ -279,8 +281,9 @@ def render_x_entry(obj: AnnData | Raw, context: FormatterContext) -> str:
         # Format the X matrix (formatter includes all info like sparsity, on disk, etc.)
         try:
             output = formatter_registry.format_value(X, context)
+            type_name = escape_html(output.type_name)
             parts.append(
-                f'<span class="{output.css_class}">{escape_html(output.type_name)}</span>'
+                f'<span class="{output.css_class}" title="{type_name}">{type_name}</span>'
             )
         except Exception as e:  # noqa: BLE001
             error_msg = f"error formatting: {type(e).__name__}"

@@ -1073,3 +1073,78 @@ class TestObsmVarmPreviewConsistency:
         result = formatter.format(arr, FormatterContext(section="obsm"))
         # format_number adds thousands separators
         assert "12,345" in result.preview or "12345" in result.preview
+
+
+class TestScalarAndObjectEdgeCases:
+    """Regressions found with the visual inspection page."""
+
+    @pytest.mark.parametrize(
+        ("value", "type_name", "preview"),
+        [
+            pytest.param(np.float32(1.5), "float", "1.5", id="np.float32"),
+            pytest.param(np.int64(3), "int", "3", id="np.int64"),
+            pytest.param(float("nan"), "float", "nan", id="nan"),
+            pytest.param(-np.inf, "float", "-inf", id="-inf"),
+        ],
+    )
+    def test_uns_scalars(self, value, type_name, preview):
+        """numpy scalars are scalars (not array-API arrays); nan/inf don't crash."""
+        from anndata._repr.registry import FormatterContext, formatter_registry
+
+        out = formatter_registry.format_value(
+            value, FormatterContext(section="uns", key="k")
+        )
+        assert out.type_name == type_name
+        assert out.preview == preview
+        assert out.error is None
+
+    @pytest.mark.parametrize(
+        "values", [[1, "a", None, 2.5], [1, 2, None, 3]], ids=["mixed", "ints"]
+    )
+    def test_object_column_with_non_strings_warns(self, values):
+        """Object columns with non-string values cannot be written to h5ad."""
+        adata = AnnData(np.zeros((4, 2)))
+        adata.obs["m"] = pd.Series(values, index=adata.obs_names, dtype=object)
+        html = adata._repr_html_()
+        assert html is not None
+        assert "write_h5ad fails" in html
+
+    def test_object_string_column_no_h5ad_warning(self):
+        adata = AnnData(np.zeros((4, 2)))
+        adata.obs["s"] = pd.Series(
+            ["a", None, "b", "c"], index=adata.obs_names, dtype=object
+        )
+        html = adata._repr_html_()
+        assert html is not None
+        assert "write_h5ad fails" not in html
+
+    def test_color_array_from_disk_is_colors(self):
+        """Colors read back from disk are string arrays, still shown as colors."""
+        adata = AnnData(np.zeros((3, 2)))
+        adata.obs["c"] = pd.Categorical(["a", "b", "a"])
+        adata.uns["c_colors"] = np.array(["#ff0000", "#00ff00"], dtype=object)
+        html = adata._repr_html_()
+        assert html is not None
+        assert "colors (2)" in html
+        assert "anndata-colors__swatch" in html
+
+    @pytest.mark.skipif(not HAS_DASK, reason="dask not installed")
+    def test_dask_sparse_chunks_marked(self):
+        import dask.array as da
+
+        adata = AnnData(np.zeros((10, 4)))
+        adata.obsm["d"] = da.from_array(
+            sp.random(10, 6, density=0.5, format="csr"), chunks=(5, 6)
+        )
+        html = adata._repr_html_()
+        assert html is not None
+        assert "dask.array (10 × 6) float64 · sparse chunks" in html
+
+    def test_subclass_badge_not_duplicating_name(self):
+        class MySubclass(AnnData):
+            pass
+
+        html = MySubclass(np.zeros((2, 2)))._repr_html_()
+        assert html is not None
+        assert "AnnData subclass" in html
+        assert html.count(">MySubclass<") == 1

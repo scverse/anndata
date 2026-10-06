@@ -270,8 +270,9 @@ def _render_uns_entry(
     2. Unhandled type hint (show import suggestion)
     3. Default formatter
     """
-    # Pass key to context for key-based detection (e.g., color lists)
-    key_context = replace(context, key=key)
+    # Section and key for section-restricted formatters and key-based
+    # detection (e.g., color lists)
+    key_context = replace(context, section="uns", key=key)
 
     # 1. Try formatter first - handles type hints, color lists, AnnData
     output = formatter_registry.format_value(value, key_context)
@@ -432,12 +433,12 @@ def _get_raw_meta_parts(raw: object) -> list[str]:
     meta_parts = []
     try:
         if hasattr(raw, "var") and raw.var is not None and len(raw.var.columns) > 0:
-            meta_parts.append(f"var: {len(raw.var.columns)} cols")
+            meta_parts.append(f"var: {pluralize(len(raw.var.columns), 'column')}")
     except Exception:  # noqa: BLE001
         pass
     try:
         if hasattr(raw, "varm") and raw.varm is not None and len(raw.varm) > 0:
-            meta_parts.append(f"varm: {len(raw.varm)}")
+            meta_parts.append(f"varm: {pluralize(len(raw.varm), 'item')}")
     except Exception:  # noqa: BLE001
         pass
     return meta_parts

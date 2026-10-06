@@ -845,7 +845,8 @@ class TestLazyRenderingCost:
         return ad.experimental.read_lazy(tmp_path / "colors.zarr")
 
     def test_colors_computed_once_per_column(self, lazy_with_colors, monkeypatch):
-        """Colors are read once per categorical column (display, count and checks)."""
+        """Colors are read once per categorical column (display, count and checks),
+        plus once for each color row's swatches in uns."""
         import dask.array as da
 
         n_computes = 0
@@ -860,7 +861,7 @@ class TestLazyRenderingCost:
         html = lazy_with_colors._repr_html_()
         assert html is not None
         assert "#ff0000" in html
-        assert n_computes == 2
+        assert n_computes == 2 + 2
 
     def test_footer_omits_memory_for_lazy(self, lazy_with_colors):
         """__sizeof__ of a lazy AnnData is meaningless, so it is not shown."""
@@ -869,3 +870,21 @@ class TestLazyRenderingCost:
         footer = html.split('<div class="anndata-footer">')[1].split("</div>")[0]
         assert "~" not in footer
         assert "anndata v" in footer
+
+    def test_lazy_colors_and_obsm_dataframe(self, lazy_with_colors, tmp_path):
+        """Lazy uns colors render as swatches; obsm DataFrames as lazy Dataset2D."""
+        html = lazy_with_colors._repr_html_()
+        assert html is not None
+        assert "colors (3)" in html
+        assert "colors (2)" in html
+
+        adata = AnnData(np.zeros((4, 2)))
+        adata.obsm["df"] = pd.DataFrame(
+            {"a": np.arange(4), "b": np.arange(4)}, index=adata.obs_names
+        )
+        adata.write_zarr(tmp_path / "df.zarr")
+        lazy = ad.experimental.read_lazy(tmp_path / "df.zarr")
+        html = lazy._repr_html_()
+        assert html is not None
+        assert "Dataset2D (4 × 2, lazy)" in html
+        assert "Unknown type" not in html

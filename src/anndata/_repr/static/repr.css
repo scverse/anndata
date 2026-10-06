@@ -36,7 +36,9 @@
     [data-jp-theme-light="true"] &,
     .jp-Theme-Light &,
     body.vscode-light &,
-    body[data-vscode-theme-kind="vscode-light"] & {
+    body.vscode-high-contrast-light &,
+    body[data-vscode-theme-kind="vscode-light"] &,
+    body[data-vscode-theme-kind="vscode-high-contrast-light"] & {
         color-scheme: light;
     }
 
@@ -46,8 +48,17 @@
     [data-jp-theme-light="false"] &,
     .jp-Theme-Dark &,
     body.vscode-dark &,
-    body[data-vscode-theme-kind="vscode-dark"] & {
+    body.vscode-high-contrast:not(.vscode-high-contrast-light) &,
+    body[data-vscode-theme-kind="vscode-dark"] &,
+    body[data-vscode-theme-kind="vscode-high-contrast"] & {
         color-scheme: dark;
+    }
+
+    /* Themes in "auto" mode (e.g. Furo) follow the OS preference */
+    @media (prefers-color-scheme: dark) {
+        [data-theme="auto"] & {
+            color-scheme: dark;
+        }
     }
 
     /* CSS Variables — each defined once via light-dark(light, dark) */
@@ -681,6 +692,8 @@
         color: var(--anndata-text-secondary, #6c757d);
         text-align: left;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         padding: 6px 12px;
         align-self: center;
     }
@@ -1006,15 +1019,21 @@
         border-bottom: 1px solid var(--anndata-border-light, #e9ecef);
         color: var(--anndata-text-secondary, #6c757d);
 
+        /* Align the type with the entries' type column: row padding (12px) +
+           this width + gap (12px) = name column width + cell padding (12px) */
         > span:first-child {
             font-family: var(--anndata-font-mono);
             font-weight: 600;
-            min-width: 60px;
+            flex: 0 0 calc(var(--anndata-name-col-width, 150px) - 12px);
         }
 
         > span:last-child {
             font-family: var(--anndata-font-mono);
             font-size: 11px;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
     }
 

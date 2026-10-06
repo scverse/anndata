@@ -999,3 +999,25 @@ class TestRegistrationSemantics:
         )
         assert "PREVIEW" not in html
         assert "it &lt;broke&gt;" in html
+
+    def test_uns_restricted_formatter_applies_in_uns(self):
+        """A formatter with sections=("uns",) is used for uns entries only."""
+        from anndata._repr import FormattedOutput, TypeFormatter, register_formatter
+
+        @register_formatter
+        class UnsOnly(TypeFormatter):
+            priority = 1000
+            sections = ("uns",)
+
+            def can_format(self, obj, context):
+                return isinstance(obj, str) and obj == "MARK"
+
+            def format(self, obj, context):
+                return FormattedOutput(type_name="marked-by-uns-formatter")
+
+        adata = AnnData(np.zeros((2, 2)))
+        adata.uns["k"] = "MARK"
+        adata.obs["k"] = ["MARK", "MARK"]
+        html = adata._repr_html_()
+        assert html is not None
+        assert html.count("marked-by-uns-formatter") == 2  # data-dtype + label
