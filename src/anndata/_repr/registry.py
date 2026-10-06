@@ -829,10 +829,10 @@ class FormatterRegistry:
         >>> for f in formatter_registry.list_formatters()[:5]:
         ...     print(f"{f['priority']:4d} {f['name']}")
          150 AnnDataFormatter
+         125 ColorListFormatter
          120 DaskArrayFormatter
          120 AwkwardArrayFormatter
          110 NumpyMaskedArrayFormatter
-         110 CategoricalFormatter
         """
         return [
             {
