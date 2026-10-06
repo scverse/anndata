@@ -1,20 +1,46 @@
 """
-Visual inspection script for AnnData HTML representation.
+Visual inspection script for the AnnData HTML representation (``_repr_html_``).
 
-Run this script to generate an HTML file that can be opened in a browser
-to visually inspect the _repr_html_ output.
+Generates one self-contained HTML page with every scenario below, for manual
+review in a browser (light/dark, with/without JS/CSS, embedded themes, ...).
 
-Usage:
-    python tests/visual_inspect_repr_html.py
+Usage::
 
-Then open tests/repr_html_visual_test.html in your browser.
+    python tests/visual_inspect_repr_html.py              # all cases
+    python tests/visual_inspect_repr_html.py --list       # list cases, don't render
+    python tests/visual_inspect_repr_html.py --only lazy --only 5.   # filter
+    python tests/visual_inspect_repr_html.py -o /tmp/repr.html --strict
+    python tests/visual_inspect_repr_html.py --only theme --browser-check  # headless Chrome
 
-Key extensibility examples:
-- Test 12: Uns type hints (TypeFormatter for tagged data in uns)
-- Test 14: TreeData custom sections (SectionFormatter for new sections)
-- Test 19: MuData (SectionFormatter for .mod section)
-- Test 20: SpatialData (custom _repr_html_ using building blocks)
-- Test 25: Ecosystem package extensibility (TypeFormatter for obs/var columns)
+Then open ``tests/repr_html_visual_test.html`` in a browser.
+
+Each case is a small function registered with ``@case(category, title, ...)``.
+It returns the HTML to show and declares what the reviewer should look for
+(``expect``). Cases are numbered ``<category>.<n>`` in registration order;
+anchors use the explicit ``slug`` so links stay stable when cases are added.
+A case that raises shows its traceback in the page instead of aborting the run;
+missing optional dependencies show as "skipped". ``[[slug]]`` in ``expect``
+or ``notes`` renders as a link to that case.
+
+Theme cases embed the repr in iframes that mimic each host page; OS dark mode
+is simulated per iframe, and each pane self-reports PASS/FAIL. The summary at
+the top collects them, and ``--browser-check`` prints them from headless Chrome.
+
+Categories:
+
+1. Core structure: full/empty/minimal objects, ``X`` vs ``layers[None]``, raw,
+   nested AnnData, README.
+2. Data types: dense/sparse, pandas extension dtypes, categoricals & colors,
+   dask, awkward, array-API devices, ``uns`` value types.
+3. Storage states: views, backed h5ad, ``read_lazy`` (h5ad and zarr).
+4. Scale & truncation: folding, many columns/categories/entries, wide DataFrames,
+   huge shapes, long names, README size limit.
+5. Environments & theming: no JS, no CSS, HTML repr disabled, Jupyter, VS Code,
+   Furo, pydata-sphinx-theme, theme-less pages in OS light/dark mode.
+6. Robustness & security: XSS, broken properties, failing formatters,
+   serialization warnings, the "evil" AnnData.
+7. Extensibility / ecosystem: uns type hints, TreeData/MuData/SpatialData,
+   ecosystem TypeFormatter, AnnData subclasses, custom array types.
 
 See also:
 - src/anndata/_repr/registry.py: TypeFormatter and SectionFormatter APIs
@@ -27,9 +53,23 @@ See also:
 
 from __future__ import annotations
 
+import argparse
+import html as html_mod
+import importlib.util
+import platform
+import re
+import shutil
+import sys
 import tempfile
+import time
+import traceback
 import warnings
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 import pandas as pd
@@ -47,12 +87,20 @@ warnings.filterwarnings(
 )
 from anndata import AnnData  # noqa: E402
 from anndata._repr import (  # noqa: E402
+    FormattedEntry,
     FormattedOutput,
+    FormatterContext,
+    SectionFormatter,
     TypeFormatter,
     escape_html,
     extract_uns_type_hint,
+    formatter_registry,
     register_formatter,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
+    from typing import Any, Literal
 
 # Check optional dependencies
 try:
@@ -73,17 +121,20 @@ except ImportError:
 
 try:
     import networkx as nx  # type: ignore[import-untyped]
+
+    HAS_NETWORKX = True
+except (ImportError, AttributeError):
+    # AttributeError can occur on Python 3.14+ with incompatible networkx versions
+    HAS_NETWORKX = False
+
+try:
     from treedata import TreeData  # type: ignore[import-not-found]
 
-    from anndata._repr import (
-        FormattedEntry,
-        FormattedOutput,
-        FormatterContext,
-        SectionFormatter,
-        register_formatter,
-    )
+    HAS_TREEDATA = HAS_NETWORKX
+except (ImportError, AttributeError):
+    HAS_TREEDATA = False
 
-    HAS_TREEDATA = True
+if HAS_NETWORKX:
 
     def _render_tree_svg(
         tree: nx.DiGraph, max_leaves: int = 30, width: int = 300, height: int = 150
@@ -186,7 +237,7 @@ try:
     # TreeData documentation URL
     TREEDATA_DOCS = "https://treedata.readthedocs.io/en/latest/"
 
-    # Register TreeData section formatters
+    # Register TreeData section formatters (what treedata would do at import time)
     @register_formatter
     class ObstSectionFormatter(SectionFormatter):
         """Section formatter for obst (observation trees)."""
@@ -323,8 +374,6 @@ try:
 
         def render_html(self, obj, context: FormatterContext) -> str:
             """Render as a compact line instead of a foldable section."""
-            from anndata._repr.utils import escape_html
-
             pairs = []
             for attr, label in [
                 ("_tree_label", "label"),
@@ -345,21 +394,43 @@ try:
                 "</div>"
             )
 
-except (ImportError, AttributeError):
-    # AttributeError can occur on Python 3.14+ with incompatible networkx versions
-    HAS_TREEDATA = False
+    class TreeDataStandIn(AnnData):
+        """Minimal stand-in exposing TreeData's attributes (``obst``, ``vart``, tree metadata).
+
+        Used when the real ``treedata`` package is missing or incompatible with the
+        installed anndata, so the SectionFormatter demo still renders.
+        """
+
+        def __init__(
+            self,
+            *args,
+            obst: dict[str, nx.DiGraph],
+            vart: dict[str, nx.DiGraph],
+            label: str,
+            alignment: str,
+            allow_overlap: bool,
+            **kwargs,
+        ) -> None:
+            super().__init__(*args, **kwargs)
+            self._obst = obst
+            self._vart = vart
+            self._tree_label = label
+            self._alignment = alignment
+            self._allow_overlap = allow_overlap
+
+        @property
+        def obst(self) -> dict[str, nx.DiGraph]:
+            return self._obst
+
+        @property
+        def vart(self) -> dict[str, nx.DiGraph]:
+            return self._vart
+
 
 # Check for MuData
 try:
     from mudata import MuData
 
-    from anndata._repr import (
-        FormattedEntry,
-        FormattedOutput,
-        FormatterContext,
-        SectionFormatter,
-        register_formatter,
-    )
     from anndata._repr.html import generate_repr_html
     from anndata._repr.utils import format_number
 
@@ -465,13 +536,7 @@ try:
     import uuid
 
     from anndata._repr import (
-        FormattedEntry,
-        FormattedOutput,
-        FormatterContext,
         FormatterRegistry,
-        SectionFormatter,
-        TypeFormatter,
-        escape_html,
         format_number,
         get_css,
         get_javascript,
@@ -924,6 +989,281 @@ except (ImportError, AttributeError):
     HAS_SPATIALDATA_EXAMPLE = False
 
 
+# =============================================================================
+# Case registry
+# =============================================================================
+
+CaseOutput = str | tuple[str, str]
+"""What a case returns: the HTML to show, optionally with a runtime note."""
+
+
+class SkipCase(Exception):
+    """Raise inside a case to skip it; the message is shown in the page."""
+
+
+@dataclass(frozen=True)
+class Category:
+    key: str
+    title: str
+    blurb: str
+
+
+CATEGORIES: tuple[Category, ...] = (
+    Category(
+        "core",
+        "Core structure",
+        "Section layout and ordering for typical objects: X, obs/var, *m, *p, layers, uns, raw.",
+    ),
+    Category(
+        "dtypes",
+        "Data types",
+        "How individual values are typed and previewed in each section.",
+    ),
+    Category(
+        "storage",
+        "Storage states (views, backed, lazy)",
+        "Badges, file paths, and that nothing is loaded or computed just to render.",
+    ),
+    Category(
+        "scale",
+        "Scale & truncation",
+        "Folding, truncation indicators, number formatting and column widths for big objects.",
+    ),
+    Category(
+        "env",
+        "Environments & theming",
+        "Graceful degradation and following the host page's light/dark theme.",
+    ),
+    Category(
+        "robust",
+        "Robustness & security",
+        "Escaping, broken objects, failing formatters: the repr must never crash or execute input.",
+    ),
+    Category(
+        "ext",
+        "Extensibility / ecosystem",
+        "Public extension points used by downstream packages.",
+    ),
+)
+_CATEGORY_INDEX = {c.key: i for i, c in enumerate(CATEGORIES, start=1)}
+
+
+@dataclass
+class Case:
+    slug: str
+    category: str
+    title: str
+    func: Callable[[], CaseOutput]
+    expect: tuple[str, ...]
+    notes: str = ""
+    requires: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    number: str = ""
+
+
+CASES: list[Case] = []
+
+
+def case(
+    category: str,
+    title: str,
+    *,
+    slug: str,
+    expect: Sequence[str],
+    notes: str = "",
+    requires: Sequence[str] = (),
+    tags: Sequence[str] = (),
+) -> Callable[[Callable[[], CaseOutput]], Callable[[], CaseOutput]]:
+    """Register a visual test case.
+
+    Parameters
+    ----------
+    category
+        Key from :data:`CATEGORIES`.
+    title
+        Short human-readable title.
+    slug
+        Stable anchor id (kebab-case). Do not change once published.
+    expect
+        Checklist of what the reviewer should see (HTML allowed, ``[[slug]]`` links).
+    notes
+        Optional longer background (HTML allowed), shown collapsed.
+    requires
+        Importable module names; the case is skipped if any is missing.
+    tags
+        Coverage tags (sections, dtypes, states, ...) for the coverage index.
+    """
+    if category not in _CATEGORY_INDEX:
+        msg = f"Unknown category {category!r}"
+        raise ValueError(msg)
+    if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", slug):
+        msg = f"Slug must be kebab-case: {slug!r}"
+        raise ValueError(msg)
+
+    def decorator(func: Callable[[], CaseOutput]) -> Callable[[], CaseOutput]:
+        if any(c.slug == slug for c in CASES):
+            msg = f"Duplicate case slug {slug!r}"
+            raise ValueError(msg)
+        CASES.append(
+            Case(
+                slug=slug,
+                category=category,
+                title=title,
+                func=func,
+                expect=tuple(expect),
+                notes=notes,
+                requires=tuple(requires),
+                tags=tuple(tags),
+            )
+        )
+        return func
+
+    return decorator
+
+
+def numbered_cases() -> list[Case]:
+    """All cases ordered by category, numbered ``<category>.<n>``."""
+    ordered = sorted(CASES, key=lambda c: _CATEGORY_INDEX[c.category])
+    counters: dict[str, int] = {}
+    for c in ordered:
+        counters[c.category] = counters.get(c.category, 0) + 1
+        c.number = f"{_CATEGORY_INDEX[c.category]}.{counters[c.category]}"
+    return ordered
+
+
+@dataclass
+class CaseResult:
+    case: Case
+    status: Literal["ok", "skipped", "failed"]
+    html: str = ""
+    note: str = ""
+    reason: str = ""
+    seconds: float = 0.0
+    warnings: list[str] = field(default_factory=list)
+
+
+def run_case(c: Case) -> CaseResult:
+    """Run one case, capturing skips, exceptions and emitted warnings."""
+    missing = [m for m in c.requires if importlib.util.find_spec(m) is None]
+    if missing:
+        return CaseResult(
+            c, "skipped", reason=f"skipped: {', '.join(missing)} not installed"
+        )
+    start = time.perf_counter()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        warnings.filterwarnings("ignore", message="Transforming to str index")
+        try:
+            out = c.func()
+        except SkipCase as e:
+            result = CaseResult(c, "skipped", reason=f"skipped: {e}")
+        except Exception:  # noqa: BLE001
+            result = CaseResult(c, "failed", reason=traceback.format_exc())
+        else:
+            html_out, note = out if isinstance(out, tuple) else (out, "")
+            result = CaseResult(c, "ok", html=html_out, note=note)
+    result.seconds = time.perf_counter() - start
+    counts: dict[str, int] = {}
+    for w in caught:
+        msg = f"{w.category.__name__}: {str(w.message)[:300]}"
+        counts[msg] = counts.get(msg, 0) + 1
+    result.warnings = [f"{m} (×{n})" if n > 1 else m for m, n in counts.items()]
+    return result
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+
+class _HasReprHtml(Protocol):
+    def _repr_html_(self) -> str | None: ...
+
+
+def render(obj: _HasReprHtml) -> str:
+    """Return ``obj._repr_html_()``, failing loudly if it returned ``None``."""
+    out = obj._repr_html_()
+    if out is None:
+        msg = f"{type(obj).__name__}._repr_html_() returned None"
+        raise RuntimeError(msg)
+    return out
+
+
+def strip_script_tags(html: str) -> str:
+    """Remove <script>...</script> tags from HTML to simulate no-JS environment."""
+    return re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
+
+
+def strip_style_and_script_tags(html: str) -> str:
+    """Remove <style> and <script> tags to simulate GitHub/untrusted notebook rendering."""
+    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
+    return strip_script_tags(html)
+
+
+def iframe(doc: str, *, title: str, style: str = "") -> str:
+    """Embed a full HTML document in an auto-sized, CSS-isolated ``<iframe srcdoc>``.
+
+    The harness page script resizes ``iframe.vt-frame`` to its content.
+    """
+    return (
+        f'<iframe class="vt-frame" title="{html_mod.escape(title)}" '
+        f'srcdoc="{html_mod.escape(doc, quote=True)}" style="{style}"></iframe>'
+    )
+
+
+@contextmanager
+def temporarily_registered(
+    formatter: TypeFormatter | SectionFormatter,
+) -> Iterator[None]:
+    """Register a formatter instance for the duration of one case.
+
+    Real packages register at import time with ``@register_formatter``; scoping
+    it here keeps one case's formatter from leaking into later cases.
+    """
+    register_formatter(formatter)
+    try:
+        yield
+    finally:
+        if isinstance(formatter, TypeFormatter):
+            formatter_registry.unregister_type_formatter(formatter)
+        else:
+            unregister = getattr(
+                formatter_registry, "unregister_section_formatter", None
+            )
+            for name in formatter.section_names:
+                if unregister is not None:
+                    unregister(name)
+                else:  # older registry without the public method
+                    formatter_registry._section_formatters.pop(name, None)
+
+
+@contextmanager
+def tmp_path(suffix: str) -> Iterator[Path]:
+    """Yield a path in a fresh temporary directory, removed afterwards."""
+    d = Path(tempfile.mkdtemp(prefix="anndata-repr-visual-"))
+    try:
+        yield d / f"data{suffix}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def palette(n: int) -> list[str]:
+    """``n`` distinct hex colors (tab20 + set1-ish, cycled)."""
+    base = [
+        "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33", "#a65628",
+        "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854",
+        "#ffd92f", "#e5c494", "#b3b3b3", "#1b9e77", "#d95f02", "#7570b3", "#e7298a",
+        "#66a61e", "#e6ab02", "#a6761d", "#666666", "#8dd3c7", "#ffffb3", "#bebada",
+        "#fb8072", "#80b1d3",
+    ]  # fmt: skip
+    return [base[i % len(base)] for i in range(n)]
+
+
+# =============================================================================
+# Shared test data factories
+# =============================================================================
+
+
 def create_test_mudata():
     """Create a comprehensive test MuData with multiple modalities."""
     if not HAS_MUDATA:
@@ -982,8 +1322,6 @@ def create_test_mudata():
     )
 
     # Create MuData
-    import warnings
-
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         mdata = MuData({"rna": rna, "atac": atac, "prot": prot})
@@ -995,10 +1333,14 @@ def create_test_mudata():
     return mdata
 
 
-def create_test_treedata():
-    """Create a TreeData object with observation and variable trees."""
-    if not HAS_TREEDATA:
-        return None
+def create_test_treedata() -> tuple[AnnData, str]:
+    """Create a TreeData object with observation and variable trees.
+
+    Falls back to :class:`TreeDataStandIn` if ``treedata`` is missing or
+    incompatible; the second return value then explains why.
+    """
+    if not HAS_NETWORKX:
+        raise SkipCase("networkx not installed")
 
     np.random.seed(42)
     n_obs = 24  # Small enough for SVG preview (< 30 leaves)
@@ -1036,8 +1378,7 @@ def create_test_treedata():
         parent = ["module_1", "module_2", "module_3", "module_4", "module_5"][i % 5]
         var_tree.add_edge(parent, name)
 
-    # Create TreeData with explicit metadata values
-    tdata = TreeData(
+    kwargs: dict[str, Any] = dict(
         X=np.random.randn(n_obs, n_vars).astype(np.float32),
         obs=pd.DataFrame(
             {"cell_type": pd.Categorical(["T cell", "B cell"] * (n_obs // 2))},
@@ -1050,13 +1391,28 @@ def create_test_treedata():
         alignment="leaves",
         allow_overlap=False,
     )
+    note = ""
+    tdata: AnnData
+    if HAS_TREEDATA:
+        try:
+            tdata = TreeData(**kwargs)
+        except Exception as e:  # noqa: BLE001
+            note = (
+                f"Real <code>treedata</code> failed with this anndata "
+                f"(<code>{escape_html(f'{type(e).__name__}: {e}')}</code>); "
+                "rendering <code>TreeDataStandIn</code> instead."
+            )
+            tdata = TreeDataStandIn(**kwargs)
+    else:
+        note = "treedata not installed; rendering <code>TreeDataStandIn</code>."
+        tdata = TreeDataStandIn(**kwargs)
 
     # Add standard annotations
     tdata.uns["cell_type_colors"] = ["#e41a1c", "#377eb8"]
     tdata.obsm["X_pca"] = np.random.randn(n_obs, 10).astype(np.float32)
     tdata.layers["raw"] = np.random.randn(n_obs, n_vars).astype(np.float32)
 
-    return tdata
+    return tdata, note
 
 
 def create_test_anndata() -> AnnData:
@@ -1117,7 +1473,6 @@ def create_test_anndata() -> AnnData:
     )
 
     # === Color annotations ===
-    # Matching colors for cell_type (5 categories)
     adata.uns["cell_type_colors"] = [
         "#FF6B6B",
         "#4ECDC4",
@@ -1125,7 +1480,6 @@ def create_test_anndata() -> AnnData:
         "#96CEB4",
         "#FFEAA7",
     ]
-    # Matching colors for louvain (8 clusters)
     adata.uns["louvain_colors"] = [
         "#1f77b4",
         "#ff7f0e",
@@ -1231,1003 +1585,108 @@ def create_test_anndata() -> AnnData:
     return adata
 
 
-def create_html_page(sections: list[tuple[str, str, str | None]]) -> str:
-    """Create a full HTML page with multiple test cases.
-
-    Parameters
-    ----------
-    sections
-        List of (title, html_content, description) tuples.
-        Description can be None for no description box.
-    """
-    # Generate TOC entries
-    toc_items = []
-    for item in sections:
-        title = item[0]
-        # Create anchor ID from title
-        anchor_id = title.lower().replace(" ", "-").replace("(", "").replace(")", "")
-        anchor_id = "".join(c for c in anchor_id if c.isalnum() or c == "-")
-        toc_items.append(f'<a href="#{anchor_id}">{title}</a>')
-
-    toc_html = "\n            ".join(toc_items)
-
-    html_parts = [
-        f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https:; style-src 'self' 'unsafe-inline';">
-    <title>AnnData _repr_html_ Visual Test</title>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            margin-left: 230px;
-            margin-right: 20px;
-            padding: 20px;
-            background: #f5f5f5;
-        }}
-        h1 {{
-            color: #333;
-            border-bottom: 2px solid #0d6efd;
-            padding-bottom: 10px;
-        }}
-        h2 {{
-            color: #555;
-            margin-top: 40px;
-        }}
-        .test-case {{
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        .test-case h3 {{
-            margin-top: 0;
-            color: #0d6efd;
-        }}
-        .description {{
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
-        }}
-        /* TOC sidebar */
-        .toc {{
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            width: 180px;
-            max-height: calc(100vh - 40px);
-            overflow-y: auto;
-            background: white;
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            font-size: 12px;
-            z-index: 100;
-        }}
-        .toc a {{
-            display: block;
-            padding: 4px 0;
-            color: #555;
-            text-decoration: none;
-            border-bottom: 1px solid #eee;
-        }}
-        .toc a:last-child {{
-            border-bottom: none;
-        }}
-        .toc a:hover {{
-            color: #0d6efd;
-        }}
-        /* Dark mode toggle */
-        .dark-mode-toggle {{
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            background: #333;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }}
-        body.dark-mode {{
-            background: #1a1a1a;
-            color: #e0e0e0;
-        }}
-        body.dark-mode h1, body.dark-mode h2 {{
-            color: #e0e0e0;
-        }}
-        body.dark-mode .test-case {{
-            background: #2d2d2d;
-        }}
-        body.dark-mode .description {{
-            background: #333;
-            color: #aaa;
-        }}
-        body.dark-mode .toc {{
-            background: #2d2d2d;
-        }}
-        body.dark-mode .toc a {{
-            color: #aaa;
-            border-bottom-color: #444;
-        }}
-        body.dark-mode .toc a:hover {{
-            color: #6ea8fe;
-        }}
-    </style>
-</head>
-<body>
-    <nav class="toc">
-        {toc_html}
-    </nav>
-
-    <button class="dark-mode-toggle" onclick="document.body.classList.toggle('dark-mode')">
-        Toggle Dark Mode
-    </button>
-
-    <h1>AnnData _repr_html_ Visual Test</h1>
-    <p>This page displays various AnnData configurations to visually verify the HTML representation.</p>
-"""
-    ]
-
-    for item in sections:
-        title = item[0]
-        html_content = item[1]
-        description = item[2] if len(item) > 2 else None
-
-        # Create anchor ID from title (same logic as TOC generation)
-        anchor_id = title.lower().replace(" ", "-").replace("(", "").replace(")", "")
-        anchor_id = "".join(c for c in anchor_id if c.isalnum() or c == "-")
-
-        desc_html = ""
-        if description:
-            desc_html = f'<div class="description">{description}</div>'
-
-        html_parts.append(f"""
-    <div id="{anchor_id}" class="test-case">
-        <h3>{title}</h3>
-        {desc_html}
-        <div class="repr-output">
-            {html_content}
-        </div>
-    </div>
-""")
-
-    html_parts.append("""
-</body>
-</html>
-""")
-
-    return "".join(html_parts)
-
-
-def strip_script_tags(html: str) -> str:
-    """Remove <script>...</script> tags from HTML to simulate no-JS environment."""
-    import re
-
-    return re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
-
-
-def strip_style_and_script_tags(html: str) -> str:
-    """Remove <style> and <script> tags to simulate GitHub/untrusted notebook rendering."""
-    import re
-
-    html = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
-    html = re.sub(r"<script>.*?</script>", "", html, flags=re.DOTALL)
-    return html
-
-
-def main():  # noqa: PLR0915, PLR0912
-    """Generate visual test HTML file."""
-    print("Generating visual test cases...")
-
-    sections = []
-
-    # Test 1: Full AnnData
-    print("  1. Full AnnData with all features")
-    adata_full = create_test_anndata()
-    sections.append((
-        "1. Full AnnData (all features)",
-        adata_full._repr_html_(),
-        (
-            "A comprehensive AnnData with all standard attributes populated: X (sparse matrix), "
-            "obs/var with multiple columns including categoricals with colors, "
-            "obsm/varm with embeddings, uns with nested data, layers, and obsp/varp. "
-            "Use this as the baseline reference for a typical annotated dataset. "
-            "Each section header has a <b>?</b> icon that links to the relevant anndata documentation, "
-            "and hovering over the section name shows a tooltip describing that attribute."
-        ),
-    ))
-
-    # Test 2: Empty AnnData
-    print("  2. Empty AnnData")
-    adata_empty = AnnData()
-    sections.append((
-        "2. Empty AnnData",
-        adata_empty._repr_html_(),
-        (
-            "An AnnData with no data (0 × 0). Tests graceful handling of the edge case "
-            "where all sections are empty. Should show the header with shape and no sections."
-        ),
-    ))
-
-    # Test 3: Minimal AnnData
-    print("  3. Minimal AnnData (just X)")
-    adata_minimal = AnnData(np.zeros((10, 5)))
-    sections.append((
-        "3. Minimal AnnData (just X matrix)",
-        adata_minimal._repr_html_(),
-        (
-            "Only an X matrix with no annotations. Tests the minimal case where only X section "
-            "is shown. obs/var exist with default integer indices but have no columns."
-        ),
-    ))
-
-    # Test 4: View
-    print("  4. AnnData View")
-    view = adata_full[0:20, 0:10]
-    sections.append((
-        "4. AnnData View (subset)",
-        view._repr_html_(),
-        (
-            "A view (subset) of Test 1. Should display a 'View' badge in the header indicating "
-            "this is a reference to underlying data, not a copy. The shape shows the subset dimensions."
-        ),
-    ))
-
-    # Test 5: Dense matrix
-    print("  5. Dense matrix")
-    adata_dense = AnnData(np.random.randn(50, 30).astype(np.float32))
-    adata_dense.obs["cluster"] = pd.Categorical(["A", "B", "C", "D", "E"] * 10)
-    adata_dense.uns["cluster_colors"] = [
-        "#e41a1c",
-        "#377eb8",
-        "#4daf4a",
-        "#984ea3",
-        "#ff7f00",
-    ]
-    sections.append((
-        "5. Dense Matrix with Categories",
-        adata_dense._repr_html_(),
-        (
-            "Dense numpy array X (not sparse). The X section shows 'ndarray' instead of CSR/CSC. "
-            "Also demonstrates categorical column with associated colors from uns (color dots appear)."
-        ),
-    ))
-
-    # Test 6: Many columns (collapsed sections)
-    print("  6. Many columns (tests folding)")
-    adata_many = AnnData(np.zeros((20, 10)))
-    for i in range(15):
-        adata_many.obs[f"column_{i}"] = list(range(20))
-    for i in range(12):
-        adata_many.obsm[f"X_embedding_{i}"] = np.random.randn(20, 2).astype(np.float32)
-    sections.append((
-        "6. Many Columns (tests auto-folding)",
-        adata_many._repr_html_(),
-        (
-            "Sections with many entries (15 obs columns, 12 obsm embeddings) to test auto-folding. "
-            "Sections with >8 items collapse by default and show a fold indicator. "
-            "Click the section header or fold icon to expand/collapse."
-        ),
-    ))
-
-    # Test 7: Special characters
-    print("  7. Special characters in names")
-    adata_special = AnnData(np.zeros((5, 3)))
-    adata_special.obs["column<with>html"] = list(range(5))
-    adata_special.obs["column&ampersand"] = list(range(5))
-    adata_special.uns["key\"with'quotes"] = "value"
-    adata_special.uns["unicode_日本語"] = "japanese"
-    sections.append((
-        "7. Special Characters (XSS/Unicode test)",
-        adata_special._repr_html_(),
-        (
-            "Tests proper HTML escaping and Unicode handling. Column names with &lt;html&gt; tags, "
-            "ampersands, quotes, and Japanese characters should render correctly without breaking "
-            "the layout or causing XSS vulnerabilities."
-        ),
-    ))
-
-    # Test 8a: Dask array (if available) - demonstrates lazy loading safety
-    if HAS_DASK:
-        print("  8a. Dask array (lazy loading safety)")
-        # Create Dask arrays in multiple sections to show lazy handling
-        X_dask = da.random.random((1000, 500), chunks=(100, 100))
-        adata_dask = AnnData(X_dask)
-        adata_dask.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 333 + ["A"])
-        adata_dask.var["gene_name"] = [f"gene_{i}" for i in range(500)]
-        # Dask arrays in layers and obsm
-        adata_dask.layers["counts"] = da.random.randint(
-            0, 100, (1000, 500), chunks=(100, 100)
-        )
-        adata_dask.obsm["X_pca"] = da.random.random((1000, 50), chunks=(100, 50))
-        adata_dask.varm["loadings"] = da.random.random((500, 50), chunks=(100, 50))
-        sections.append((
-            "8a. Dask Arrays (Lazy Loading Safety)",
-            adata_dask._repr_html_(),
-            (
-                "<strong>Regular AnnData with Dask arrays — no <code>.compute()</code> triggered!</strong><br>"
-                "<p style='margin: 5px 0;'>This is a normal (in-memory) AnnData where X, layers, obsm, and varm "
-                "are Dask arrays. The repr reads only metadata attributes:</p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li><code>X</code>: shape, dtype, chunks from Dask's lazy metadata</li>"
-                "<li><code>layers['counts']</code>: Same — no computation</li>"
-                "<li><code>obsm['X_pca']</code>, <code>varm['loadings']</code>: shape from <code>.shape</code></li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>Key distinction from 8b/8c:</b> This object is not backed by "
-                "a file. The obs/var DataFrames are regular pandas objects in memory. "
-                "The 'lazy' aspect here refers only to Dask not computing array values.</p>"
-            ),
-        ))
-
-    # Test 8b: Lazy AnnData (experimental) - fully lazy obs/var
-    # Tests the lazy category loading behavior:
-    # - Categorical columns with few categories: load and display categories
-    # - Categorical columns with too many categories: show "(lazy)" to avoid loading
-    # - Categorical columns with colors in uns: display color swatches
-    # - Non-categorical columns: show "(lazy)" for all
-    if HAS_XARRAY:
-        print("  8b. Lazy AnnData (experimental read_lazy)")
-        with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
-            tmp_path = tmp.name
-        adata_lazy = None
-        h5_file = None
-        try:
-            import h5py
-
-            # Create a comprehensive test file for lazy loading behavior
-            adata_to_save = AnnData(
-                sp.random(1000, 500, density=0.1, format="csr", dtype=np.float32)
-            )
-
-            # --- Categorical columns ---
-            # 1. Small categorical WITH colors (should show categories + color dots)
-            adata_to_save.obs["cell_type"] = pd.Categorical(
-                np.random.choice(["T cell", "B cell", "Monocyte", "NK cell"], 1000)
-            )
-            adata_to_save.uns["cell_type_colors"] = [
-                "#e41a1c",  # T cell - red
-                "#377eb8",  # B cell - blue
-                "#4daf4a",  # Monocyte - green
-                "#984ea3",  # NK cell - purple
-            ]
-
-            # 2. Small categorical WITHOUT colors (should show categories only)
-            adata_to_save.obs["cluster"] = pd.Categorical(
-                np.random.choice(["C0", "C1", "C2", "C3", "C4"], 1000)
-            )
-
-            # 3. Medium categorical (50 cats) - will show truncation with max_lazy_categories=30
-            medium_categories = [f"sample_{i}" for i in range(50)]
-            adata_to_save.obs["sample_id"] = pd.Categorical(
-                np.random.choice(medium_categories, 1000),
-                categories=medium_categories,  # Ensure all 50 categories exist
-            )
-
-            # --- Non-categorical columns (all should show "(lazy)") ---
-            adata_to_save.obs["n_genes"] = np.random.randint(500, 5000, 1000)
-            adata_to_save.obs["total_counts"] = np.random.randint(1000, 50000, 1000)
-
-            # --- var columns ---
-            adata_to_save.var["gene_symbol"] = [f"GENE{i}" for i in range(500)]
-            adata_to_save.var["highly_variable"] = np.random.choice([True, False], 500)
-            adata_to_save.var["mean_expression"] = np.random.uniform(0, 10, 500)
-
-            # --- obsm/varm ---
-            adata_to_save.obsm["X_pca"] = np.random.randn(1000, 50).astype(np.float32)
-            adata_to_save.obsm["X_umap"] = np.random.randn(1000, 2).astype(np.float32)
-            adata_to_save.varm["PCs"] = np.random.randn(500, 50).astype(np.float32)
-
-            # --- uns with array (to show dask array WITH size in uns) ---
-            adata_to_save.uns["neighbors"] = {
-                "connectivities_key": "connectivities",
-                "distances_key": "distances",
-            }
-            adata_to_save.uns["pca_variance"] = np.random.rand(50).astype(np.float32)
-
-            adata_to_save.write_h5ad(tmp_path)
-
-            # Read with experimental lazy loading
-            h5_file = h5py.File(tmp_path, "r")
-            adata_lazy = read_lazy(h5_file)
-
-            # Use setting to demonstrate truncation behavior (default is 100)
-            # - cell_type (4 cats): all shown
-            # - cluster (5 cats): all shown
-            # - sample_id (50 cats): first 30 shown + "...+20"
-            original_max_lazy_cats = ad.settings.repr_html_max_lazy_categories
-            ad.settings.repr_html_max_lazy_categories = 30
-            custom_lazy_html = adata_lazy._repr_html_()
-            ad.settings.repr_html_max_lazy_categories = original_max_lazy_cats
-
-            sections.append((
-                "8b. Lazy AnnData (Experimental)",
-                custom_lazy_html,
-                (
-                    "<code>anndata.experimental.read_lazy()</code><br>"
-                    "<p style='margin: 5px 0;'><b>File-backed lazy AnnData — category labels loaded from disk!</b></p>"
-                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                    "The header shows a <b>Lazy (H5AD)</b> badge and the <b>file path</b> (similar to backed mode). "
-                    "Unlike 8a (in-memory) and 8c (metadata-only), this repr <b>actually reads data from the HDF5 file</b>:</p>"
-                    "<p style='margin: 5px 0;'><b>What IS loaded from disk:</b></p>"
-                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                    "<li><b>cell_type</b>: 4 category labels + 4 colors from <code>uns</code></li>"
-                    "<li><b>cluster</b>: 5 category labels (no colors)</li>"
-                    "<li><b>sample_id</b>: first 30 of 50 category labels (truncated by <code>max_lazy_categories=30</code>)</li>"
-                    "</ul>"
-                    "<p style='margin: 5px 0;'><b>What is NOT loaded:</b></p>"
-                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                    "<li>Numeric data (dask arrays not computed)</li>"
-                    "<li>Category codes (only labels, not which cell has which category)</li>"
-                    "<li>Categories beyond the <code>max_lazy_categories</code> limit</li>"
-                    "<li>Non-categorical column values (show as '(lazy)')</li>"
-                    "</ul>"
-                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                    "<b>Compare with 8c</b> to see the same object with zero disk I/O.</p>"
-                ),
-            ))
-
-            # Test 8c: Lazy AnnData with max_lazy_categories=0 (metadata-only mode)
-            print("  8c. Lazy AnnData (metadata-only mode)")
-
-            # Use setting to disable category loading (instead of parameter)
-            original_max_lazy_cats = ad.settings.repr_html_max_lazy_categories
-            ad.settings.repr_html_max_lazy_categories = 0
-            metadata_only_html = adata_lazy._repr_html_()
-            ad.settings.repr_html_max_lazy_categories = original_max_lazy_cats
-
-            sections.append((
-                "8c. Lazy AnnData (Metadata-Only Mode)",
-                metadata_only_html,
-                (
-                    "<code>ad.settings.repr_html_max_lazy_categories = 0</code><br>"
-                    "<p style='margin: 5px 0;'><b>Same object as 8b, but with zero disk I/O!</b></p>"
-                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                    "Compare this output to 8b — this is the exact same lazy AnnData object, "
-                    "but with <code>max_lazy_categories=0</code> to prevent any data loading. "
-                    "The header still shows the <b>Lazy (H5AD)</b> badge and <b>file path</b>.</p>"
-                    "<p style='margin: 5px 0;'><b>What's NOT loaded (unlike 8b):</b></p>"
-                    "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                    "<li>Category labels — only shows <code>(N categories)</code> count from dtype metadata</li>"
-                    "<li>Colors from <code>uns</code> — no color dots displayed</li>"
-                    "</ul>"
-                    "<p style='margin: 5px 0;'><b>What IS shown (from already-loaded metadata):</b></p>"
-                    "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                    "<li>Category count (e.g., '4 categories') from the dtype (already in memory)</li>"
-                    "<li>Column names and types</li>"
-                    "<li>Array shapes and dtypes</li>"
-                    "</ul>"
-                    "<p style='margin: 5px 0;'><b>Use case:</b> Fastest possible repr when you want to avoid "
-                    "all disk access (e.g., network-mounted storage, very large files).</p>"
-                ),
-            ))
-
-        except (OSError, ImportError, TypeError) as e:
-            print(f"    Warning: Failed to create lazy example: {e}")
-        finally:
-            if h5_file is not None:
-                h5_file.close()
-            Path(tmp_path).unlink()
-
-        # Test 8d: Lazy AnnData with Zarr format
-        print("  8d. Lazy AnnData (Zarr format)")
-        import shutil
-
-        zarr_path = Path(tempfile.mkdtemp(suffix=".zarr"))
-        try:
-            import zarr
-
-            # Create test data for zarr
-            adata_zarr_save = AnnData(
-                sp.random(800, 400, density=0.1, format="csr", dtype=np.float32)
-            )
-            adata_zarr_save.obs["tissue"] = pd.Categorical(
-                np.random.choice(["Brain", "Heart", "Liver", "Lung", "Kidney"], 800)
-            )
-            adata_zarr_save.uns["tissue_colors"] = [
-                "#e41a1c",
-                "#377eb8",
-                "#4daf4a",
-                "#984ea3",
-                "#ff7f00",
-            ]
-            adata_zarr_save.obs["donor"] = pd.Categorical(
-                np.random.choice([f"D{i}" for i in range(10)], 800)
-            )
-            adata_zarr_save.obs["n_counts"] = np.random.randint(1000, 50000, 800)
-            adata_zarr_save.var["gene_name"] = [f"GENE{i}" for i in range(400)]
-            adata_zarr_save.obsm["X_umap"] = np.random.randn(800, 2).astype(np.float32)
-
-            # Write to zarr
-            adata_zarr_save.write_zarr(zarr_path)
-
-            # Read lazily from zarr
-            zarr_store = zarr.open_group(zarr_path, mode="r")
-            adata_lazy_zarr = read_lazy(zarr_store)
-
-            sections.append((
-                "8d. Lazy AnnData (Zarr Format)",
-                adata_lazy_zarr._repr_html_(),
-                (
-                    "<code>anndata.experimental.read_lazy(zarr_store)</code><br>"
-                    "<p style='margin: 5px 0;'><b>Lazy AnnData backed by Zarr storage</b></p>"
-                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                    "The header shows a <b>Lazy (Zarr)</b> badge and the <b>zarr directory path</b>. "
-                    "Zarr is particularly useful for cloud storage (S3, GCS) and parallel access.</p>"
-                    "<p style='margin: 5px 0;'><b>Same lazy behavior as 8b/8c:</b></p>"
-                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                    "<li>Category labels loaded on demand (respects <code>max_lazy_categories</code>)</li>"
-                    "<li>Numeric columns show '(lazy)'</li>"
-                    "<li>Arrays show shape/dtype without loading data</li>"
-                    "</ul>"
-                    "<p style='margin: 5px 0;'><b>Zarr advantages:</b> chunked storage, cloud-native, "
-                    "supports concurrent reads, consolidatable metadata.</p>"
-                ),
-            ))
-
-        except (OSError, ImportError, TypeError) as e:
-            print(f"    Warning: Failed to create zarr lazy example: {e}")
-        finally:
-            shutil.rmtree(zarr_path, ignore_errors=True)
-    else:
-        print("  8b. Lazy AnnData (skipped - xarray not installed)")
-
-    # Test 9: Backed AnnData (H5AD file) - demonstrates on-disk safety
-    print("  9. Backed AnnData (H5AD file)")
-    with tempfile.NamedTemporaryFile(suffix=".h5ad", delete=False) as tmp:
-        tmp_path = tmp.name
-    adata_backed = None
-    try:
-        adata_to_save = AnnData(
-            sp.random(500, 200, density=0.1, format="csr", dtype=np.float32)
-        )
-        adata_to_save.obs["cluster"] = pd.Categorical(
-            ["A", "B", "C"] * 166 + ["A", "B"]
-        )
-        adata_to_save.obs["n_counts"] = np.random.randint(1000, 10000, 500)
-        adata_to_save.var["gene_name"] = [f"gene_{i}" for i in range(200)]
-        adata_to_save.var["highly_variable"] = np.random.choice([True, False], 200)
-        adata_to_save.obsm["X_pca"] = np.random.randn(500, 50).astype(np.float32)
-        adata_to_save.write_h5ad(tmp_path)
-        adata_backed = ad.read_h5ad(tmp_path, backed="r")
-        sections.append((
-            "9. Backed AnnData (H5AD File)",
-            adata_backed._repr_html_(),
-            (
-                "<strong>File-backed mode via <code>read_h5ad(backed='r')</code></strong><br>"
-                f"<code>{tmp_path}</code><br><br>"
-                "<p style='margin: 5px 0;'><b>Key difference from 8b (lazy):</b> Backed mode loads obs/var "
-                "DataFrames fully into memory, while lazy mode keeps them as dask-backed xarray.</p>"
-                "<p style='margin: 5px 0;'><b>What the repr reads:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li><code>X.shape</code>, <code>X.dtype</code>, <code>X.nnz</code> — from HDF5 attributes</li>"
-                "<li><code>obs</code>/<code>var</code> DataFrames — fully loaded in memory</li>"
-                "<li><code>obsm</code>/<code>varm</code> shapes — from HDF5 dataset attributes</li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>What stays on disk:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li>The actual X matrix data (memory-mapped, not loaded)</li>"
-                "</ul>"
-            ),
-        ))
-    finally:
-        if adata_backed is not None:
-            adata_backed.file.close()
-        Path(tmp_path).unlink()
-
-    # Test 10: Nested AnnData at depth
-    print("  10. Deeply nested AnnData")
-    inner3 = AnnData(np.zeros((3, 2)))
-    inner2 = AnnData(np.zeros((5, 3)))
-    inner2.uns["level3"] = inner3
-    inner1 = AnnData(np.zeros((10, 5)))
-    inner1.uns["level2"] = inner2
-    outer = AnnData(np.zeros((20, 10)))
-    outer.uns["level1"] = inner1
-    sections.append((
-        "10. Deeply Nested AnnData (tests max depth)",
-        outer._repr_html_(),
-        (
-            "AnnData with 3 levels of nesting in uns (outer → level1 → level2 → level3). "
-            "Tests the max_depth limit for nested repr. By default, nesting stops at depth 3, "
-            "so level3 should show as a collapsed entry without further expansion. "
-            "Click expand arrows to drill into the nested structure."
-        ),
-    ))
-
-    # Test 11: Many categories (tests truncation and wrap button)
-    # Default max_categories is 100, but we set it to 20 here to test truncation
-    print("  11. Many categories (tests category truncation)")
-    adata_many_cats = AnnData(np.zeros((100, 10)))
-    # 30 categories - with max_categories=20 should show first 20 + '...+10'
-    many_cat_values = [f"type_{i}" for i in range(30)] * (100 // 30) + [
-        f"type_{i}" for i in range(100 % 30)
-    ]
-    adata_many_cats.obs["cell_type"] = pd.Categorical(many_cat_values)
-    # Add colors for the categories
-    adata_many_cats.uns["cell_type_colors"] = [
-        "#e41a1c",
-        "#377eb8",
-        "#4daf4a",
-        "#984ea3",
-        "#ff7f00",
-        "#ffff33",
-        "#a65628",
-        "#f781bf",
-        "#999999",
-        "#66c2a5",
-        "#fc8d62",
-        "#8da0cb",
-        "#e78ac3",
-        "#a6d854",
-        "#ffd92f",
-        "#e5c494",
-        "#b3b3b3",
-        "#1b9e77",
-        "#d95f02",
-        "#7570b3",
-        "#e7298a",
-        "#66a61e",
-        "#e6ab02",
-        "#a6761d",
-        "#666666",
-        "#8dd3c7",
-        "#ffffb3",
-        "#bebada",
-        "#fb8072",
-        "#80b1d3",
-    ]
-    # Also add a column with exactly 20 categories
-    adata_many_cats.obs["batch"] = pd.Categorical([f"batch_{i}" for i in range(20)] * 5)
-    adata_many_cats.uns["batch_colors"] = [
-        "#1f77b4",
-        "#ff7f0e",
-        "#2ca02c",
-        "#d62728",
-        "#9467bd",
-        "#8c564b",
-        "#e377c2",
-        "#7f7f7f",
-        "#bcbd22",
-        "#17becf",
-        "#aec7e8",
-        "#ffbb78",
-        "#98df8a",
-        "#ff9896",
-        "#c5b0d5",
-        "#c49c94",
-        "#f7b6d2",
-        "#c7c7c7",
-        "#dbdb8d",
-        "#9edae5",
-    ]
-    # Use lower max_categories (default is 100) to demonstrate truncation
-    original_max_cats = ad.settings.repr_html_max_categories
-    ad.settings.repr_html_max_categories = 20
-    sections.append((
-        "11. Many Categories (tests truncation)",
-        adata_many_cats._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Category truncation with <code>max_categories=20</code></b> (default: 100)</p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><b>cell_type</b> (30 cats): shows first 20 with colors, then '...+10' indicator</li>"
-            "<li><b>batch</b> (20 cats): shows all 20 (exactly at limit)</li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'>Click the <b>▼</b> arrow button to expand and see all categories. "
-            "The expand button appears only when categories are truncated. "
-            "Colors are shown for all displayed categories from <code>uns['{col}_colors']</code>.</p>"
-        ),
-    ))
-    ad.settings.repr_html_max_categories = original_max_cats
-
-    # Test 12: Uns value previews and custom TypeFormatter
-    print("  12. Uns value previews and type hints")
-
-    # Register a custom TypeFormatter for tagged data in uns
-    @register_formatter
-    class AnalysisHistoryFormatter(TypeFormatter):
-        """Example TypeFormatter for analysis history data with embedded type hint."""
-
-        priority = 100  # High priority to check before fallback
-
-        def can_format(self, obj, context):
-            hint, _ = extract_uns_type_hint(obj)
-            return hint == "example.history"
-
-        def format(self, obj, context):
-            import json
-
-            _hint, value = extract_uns_type_hint(obj)
-
-            # Parse JSON if string, otherwise use as-is
-            if isinstance(value, str):
-                try:
-                    data = json.loads(value)
-                except json.JSONDecodeError:
-                    data = {"raw": value}
-            else:
-                data = value if isinstance(value, dict) else {"data": value}
-
-            # Build a rich HTML preview
-            runs = data.get("runs", [])
-            params = data.get("params", {})
-
-            html_parts = ['<div style="font-size:11px;">']
-            if runs:
-                html_parts.append(f"<strong>{len(runs)} runs</strong>")
-            if params:
-                param_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
-                if len(params) > 3:
-                    param_str += "..."
-                html_parts.append(f" · params: {param_str}")
-            html_parts.append("</div>")
-
-            return FormattedOutput(
-                type_name="analysis history",
-                preview_html="".join(html_parts),  # Use preview_html for inline preview
-            )
-
-    adata_uns = AnnData(np.zeros((10, 5)))
-    # Simple types with previews
-    adata_uns.uns["string_param"] = "A short string value"
-    adata_uns.uns["long_string"] = (
-        "This is a very long string that should be truncated in the preview because it exceeds the maximum length allowed for display in the meta column"
+def create_theme_demo_anndata() -> AnnData:
+    """Compact AnnData exercising most colored elements (for theme panes)."""
+    rng = np.random.default_rng(0)
+    X = sp.random(40, 12, density=0.2, format="csr", dtype=np.float32, rng=rng)
+    adata = AnnData(
+        X,
+        obs=pd.DataFrame({
+            "cell_type": pd.Categorical(["T", "B", "NK", "Mono"] * 10),
+            "n_counts": rng.integers(100, 1000, 40),
+            "is_doublet": rng.choice([True, False], 40),
+        }),
+        var=pd.DataFrame({
+            "gene_symbol": [f"G{i}" for i in range(12)],
+            "date": pd.to_datetime(["2024-01-01"] * 12),  # serialization warning
+        }),
     )
-    adata_uns.uns["int_param"] = 42
-    adata_uns.uns["float_param"] = 3.14159265359
-    adata_uns.uns["bool_param"] = True
-    adata_uns.uns["none_param"] = None
-    adata_uns.uns["small_list"] = [1, 2, 3]
-    adata_uns.uns["small_dict"] = {"a": 1, "b": 2}
-    adata_uns.uns["larger_dict"] = {
-        "key1": "val1",
-        "key2": "val2",
-        "key3": "val3",
-        "key4": "val4",
-        "key5": "val5",
+    adata.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3"]
+    adata.uns["params"] = {"k": 15, "metric": "cosine"}
+    adata.uns["nested"] = AnnData(np.zeros((3, 2)))
+    adata.uns["README"] = "# Theme demo\n\nREADME icon and modal colors."
+    adata.obsm["X_umap"] = rng.standard_normal((40, 2)).astype(np.float32)
+    adata.layers["counts"] = X.copy()
+    return adata
+
+
+def write_lazy_demo_h5ad(path: Path) -> None:
+    """Write the file used by the lazy h5ad cases."""
+    adata = AnnData(sp.random(1000, 500, density=0.1, format="csr", dtype=np.float32))
+
+    # --- Categorical columns ---
+    # 1. Small categorical WITH colors (should show categories + color dots)
+    adata.obs["cell_type"] = pd.Categorical(
+        np.random.choice(["T cell", "B cell", "Monocyte", "NK cell"], 1000)
+    )
+    adata.uns["cell_type_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3"]
+    # 2. Small categorical WITHOUT colors (should show categories only)
+    adata.obs["cluster"] = pd.Categorical(
+        np.random.choice(["C0", "C1", "C2", "C3", "C4"], 1000)
+    )
+    # 3. Medium categorical (50 cats) - will show truncation with max_lazy_categories=30
+    medium_categories = [f"sample_{i}" for i in range(50)]
+    adata.obs["sample_id"] = pd.Categorical(
+        np.random.choice(medium_categories, 1000),
+        categories=medium_categories,  # Ensure all 50 categories exist
+    )
+    # --- Non-categorical columns (all should show "(lazy)") ---
+    adata.obs["n_genes"] = np.random.randint(500, 5000, 1000)
+    adata.obs["total_counts"] = np.random.randint(1000, 50000, 1000)
+    # --- var columns ---
+    adata.var["gene_symbol"] = [f"GENE{i}" for i in range(500)]
+    adata.var["highly_variable"] = np.random.choice([True, False], 500)
+    adata.var["mean_expression"] = np.random.uniform(0, 10, 500)
+    # --- obsm/varm ---
+    adata.obsm["X_pca"] = np.random.randn(1000, 50).astype(np.float32)
+    adata.obsm["X_umap"] = np.random.randn(1000, 2).astype(np.float32)
+    adata.varm["PCs"] = np.random.randn(500, 50).astype(np.float32)
+    # --- uns with array (to show dask array WITH size in uns) ---
+    adata.uns["neighbors"] = {
+        "connectivities_key": "connectivities",
+        "distances_key": "distances",
     }
+    adata.uns["pca_variance"] = np.random.rand(50).astype(np.float32)
+    adata.write_h5ad(path)
 
-    # Type hint WITH registered renderer (shows custom HTML)
-    adata_uns.uns["analysis_history"] = {
-        "__anndata_repr__": "example.history",
-        "runs": [{"id": 1}, {"id": 2}, {"id": 3}],
-        "params": {"method": "umap", "n_neighbors": 15, "metric": "euclidean"},
-    }
 
-    # Type hint WITHOUT registered renderer (shows fallback with import hint)
-    adata_uns.uns["unregistered_data"] = {
-        "__anndata_repr__": "otherpackage.custom_type",
-        "data": {"some": "data", "values": [1, 2, 3]},
-    }
-    # String format type hint (also unregistered)
-    adata_uns.uns["string_hint"] = (
-        "__anndata_repr__:otherpackage.config::{'setting': 'value'}"
+def write_lazy_demo_zarr(path: Path) -> None:
+    """Write the file used by the lazy zarr case."""
+    adata = AnnData(sp.random(800, 400, density=0.1, format="csr", dtype=np.float32))
+    adata.obs["tissue"] = pd.Categorical(
+        np.random.choice(["Brain", "Heart", "Liver", "Lung", "Kidney"], 800)
     )
-
-    sections.append((
-        "12. Uns Value Previews and Type Hints",
-        adata_uns._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Uns entries with value previews and type hint system</b></p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><b>Simple types:</b> strings, ints, floats, bools, None show inline previews</li>"
-            "<li><b>long_string:</b> truncated with ellipsis when exceeding max length</li>"
-            "<li><b>small_list/dict:</b> shows content preview; larger_dict shows key count</li>"
-            "<li><b>analysis_history:</b> custom <code>TypeFormatter</code> renders '3 runs · params: ...'</li>"
-            "<li><b>unregistered_data:</b> has <code>__anndata_repr__</code> hint but no formatter → shows 'import X to enable'</li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'>The <code>__anndata_repr__</code> type hint system allows packages to register "
-            "custom renderers for their data types stored in uns.</p>"
-        ),
-    ))
-
-    # Test 13: No JavaScript (graceful degradation)
-    print("  13. No JavaScript (graceful degradation)")
-    adata_nojs = AnnData(np.random.randn(30, 15).astype(np.float32))
-    adata_nojs.obs["group"] = pd.Categorical(["X", "Y", "Z"] * 10)
-    adata_nojs.uns["group_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
-    for i in range(8):
-        adata_nojs.obs[f"metric_{i}"] = np.random.randn(30)
-    adata_nojs.obsm["X_pca"] = np.random.randn(30, 10).astype(np.float32)
-    adata_nojs.layers["raw"] = np.random.randn(30, 15).astype(np.float32)
-    # Add nested AnnData to test native <details> expand without JS
-    adata_nojs.uns["nested_adata"] = AnnData(
-        np.zeros((5, 3)),
-        obs=pd.DataFrame({"label": ["A", "B", "C", "D", "E"]}),
+    adata.uns["tissue_colors"] = ["#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00"]
+    adata.obs["donor"] = pd.Categorical(
+        np.random.choice([f"D{i}" for i in range(10)], 800)
     )
-    # Add raw section to test raw rendering without JS
-    adata_nojs.raw = adata_nojs.copy()
-    # Add a DataFrame with many columns to test column list wrapping without JS
-    adata_nojs.obsm["cell_measurements"] = pd.DataFrame(
-        {
-            "area": np.random.rand(30) * 500,
-            "perimeter": np.random.rand(30) * 100,
-            "circularity": np.random.rand(30),
-            "eccentricity": np.random.rand(30),
-            "solidity": np.random.rand(30),
-            "extent": np.random.rand(30),
-            "major_axis_length": np.random.rand(30) * 50,
-            "minor_axis_length": np.random.rand(30) * 30,
-            "orientation": np.random.rand(30) * 180,
-            "mean_intensity": np.random.rand(30) * 255,
-            "max_intensity": np.random.rand(30) * 255,
-            "min_intensity": np.random.rand(30) * 50,
-            "std_intensity": np.random.rand(30) * 30,
-            "centroid_x": np.random.randn(30) * 100,
-            "centroid_y": np.random.randn(30) * 100,
-            "bbox_area": np.random.rand(30) * 600,
-            "convex_area": np.random.rand(30) * 550,
-            "euler_number": np.random.randint(-2, 3, 30),
-            "equivalent_diameter": np.random.rand(30) * 25,
-            "filled_area": np.random.rand(30) * 500,
-        },
-        index=adata_nojs.obs_names,
+    adata.obs["n_counts"] = np.random.randint(1000, 50000, 800)
+    adata.var["gene_name"] = [f"GENE{i}" for i in range(400)]
+    adata.obsm["X_umap"] = np.random.randn(800, 2).astype(np.float32)
+    adata.write_zarr(path)
+
+
+def write_backed_demo_h5ad(path: Path, *, dense: bool = False) -> None:
+    """Write the file used by the backed cases."""
+    X = (
+        np.random.randn(500, 200).astype(np.float32)
+        if dense
+        else sp.random(500, 200, density=0.1, format="csr", dtype=np.float32)
     )
-    # Strip script tags to simulate no-JS environment
-    nojs_html = strip_script_tags(adata_nojs._repr_html_())
-    sections.append((
-        "13. No JavaScript (graceful degradation)",
-        nojs_html,
-        (
-            "This example has script tags removed to simulate environments where JS is disabled. "
-            "All content should be visible, sections should be expanded, category lists and "
-            "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
-            "(fold icons, copy buttons, search, wrap toggle) should be hidden. "
-            "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
-            "Includes a nested AnnData in uns and a raw section — both use native &lt;details&gt; "
-            "for expand/collapse which works without JS."
-        ),
-    ))
-
-    # Test 13b: No CSS (GitHub / untrusted notebook fallback)
-    # Reuse the full AnnData from test 1 (has nested adata, raw, many sections)
-    print("  13b. No CSS (GitHub / untrusted notebook fallback)")
-    nocss_html = strip_style_and_script_tags(adata_full._repr_html_())
-    # Wrap in an iframe (srcdoc) so it's fully isolated from the page's CSS.
-    # Without isolation, the <style> blocks from other test cases would style this too.
-    import html as html_mod
-
-    iframe_srcdoc = html_mod.escape(nocss_html)
-    iframe_html = (
-        f'<iframe srcdoc="{iframe_srcdoc}" '
-        'style="width:100%; border:1px solid #ccc; border-radius:4px; background:white;" '
-        "onload=\"this.style.height = this.contentDocument.documentElement.scrollHeight + 20 + 'px'\">"
-        "</iframe>"
+    adata = AnnData(X)
+    adata.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 166 + ["A", "B"])
+    adata.uns["cluster_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
+    adata.obs["n_counts"] = np.random.randint(1000, 10000, 500)
+    adata.var["gene_name"] = [f"gene_{i}" for i in range(200)]
+    adata.var["highly_variable"] = np.random.choice([True, False], 200)
+    adata.obsm["X_pca"] = np.random.randn(500, 50).astype(np.float32)
+    adata.layers["counts"] = sp.random(
+        500, 200, density=0.1, format="csr", dtype=np.float32
     )
-    sections.append((
-        "13b. No CSS (GitHub / untrusted notebook fallback)",
-        iframe_html,
-        (
-            "Simulates GitHub's notebook renderer which strips &lt;style&gt; and &lt;script&gt; tags. "
-            "Rendered in an iframe for CSS isolation. "
-            "The rich HTML degrades gracefully: inline &lt;span&gt; cells keep entries on one line, "
-            "monospace font, CSS variable column widths, and comma-separated categories. "
-            "Sections fold/unfold via native &lt;details&gt;/&lt;summary&gt;."
-        ),
-    ))
+    adata.write_h5ad(path)
 
-    # Test 14: Custom sections example using TreeData (if available)
-    if HAS_TREEDATA:
-        print("  14. Custom Sections (TreeData example)")
-        tdata = create_test_treedata()
-        sections.append((
-            "14. Custom Sections (TreeData example)",
-            tdata._repr_html_(),
-            (
-                "Demonstrates how to add custom sections using SectionFormatter. "
-                "This example uses <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
-                "to show three custom sections:<br><br>"
-                "<b>Standard sections</b> (via <code>get_entries()</code>):<br>"
-                "<ul>"
-                "<li><b>obst</b> (after obsm) and <b>vart</b> (after varm) — foldable sections with SVG tree previews. "
-                "Click the <b>▼</b> arrow to expand. Trees with &gt;30 leaves show a text message instead.</li>"
-                "</ul>"
-                "<b>Fully custom section</b> (via <code>render_html()</code>):<br>"
-                "<ul>"
-                "<li><b>tree</b> (after X) — a compact non-foldable line showing TreeData's metadata "
-                "(<code>label</code>, <code>alignment</code>, <code>allow_overlap</code>). "
-                "Uses <code>render_html()</code> to bypass the standard entry grid and produce "
-                "raw HTML directly, similar to how the X row is rendered.</li>"
-                "</ul>"
-                "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>)"
-            ),
-        ))
 
-    # Test 15: Expandable DataFrame in obsm
-    print("  15. Expandable DataFrame in obsm")
-    # Enable DataFrame expansion for this test
-    original_expand = ad.settings.repr_html_dataframe_expand
-    ad.settings.repr_html_dataframe_expand = True
-    try:
-        adata_df = AnnData(np.random.randn(30, 10).astype(np.float32))
-        adata_df.obs["group"] = pd.Categorical(["A", "B", "C"] * 10)
-        # Add a wide DataFrame to obsm with many columns
-        adata_df.obsm["spatial_metrics"] = pd.DataFrame(
-            {
-                "x_centroid": np.random.randn(30) * 100,
-                "y_centroid": np.random.randn(30) * 100,
-                "area": np.random.rand(30) * 500,
-                "perimeter": np.random.rand(30) * 100,
-                "circularity": np.random.rand(30),
-                "eccentricity": np.random.rand(30),
-                "solidity": np.random.rand(30),
-                "extent": np.random.rand(30),
-                "major_axis": np.random.rand(30) * 50,
-                "minor_axis": np.random.rand(30) * 30,
-                "orientation": np.random.rand(30) * 180,
-                "intensity_mean": np.random.rand(30) * 255,
-            },
-            index=adata_df.obs_names,
-        )
-        adata_df.obsm["X_pca"] = np.random.randn(30, 5).astype(np.float32)
-        sections.append((
-            "15. Expandable DataFrame in obsm",
-            adata_df._repr_html_(),
-            (
-                "When <code>anndata.settings.repr_html_dataframe_expand = True</code>, "
-                "DataFrames in obsm/varm show an 'Expand' button. Click to see pandas <code>_repr_html_()</code> output "
-                "(styled table with zebra striping and hover). Configure pandas display options: "
-                "<code>pd.set_option('display.max_rows', 10)</code>. "
-                "Column names are shown in the rightmost column (meta column)."
-            ),
-        ))
-    finally:
-        ad.settings.repr_html_dataframe_expand = original_expand
-
-    # Test 16: Very long field names
-    print("  16. Very long field names")
-    adata_long = AnnData(np.random.randn(20, 10).astype(np.float32))
-    # Add columns with very long names to test field name column width calculation
-    adata_long.obs["short"] = np.random.randn(20)
-    adata_long.obs["this_is_a_moderately_long_column_name"] = np.random.randn(20)
-    adata_long.obs[
-        "this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting"
-    ] = np.random.randn(20)
-    adata_long.obs["cell_type_annotation_from_automated_classifier_v2"] = (
-        pd.Categorical(["A", "B"] * 10)
-    )
-    adata_long.obsm["X_pca_computed_with_highly_variable_genes_batch_corrected"] = (
-        np.random.randn(20, 5).astype(np.float32)
-    )
-    adata_long.uns["preprocessing_parameters_for_normalization_and_scaling"] = {
-        "method": "log1p",
-        "scale": True,
-    }
-    adata_long.layers["raw_counts_before_any_preprocessing_steps"] = np.random.randn(
-        20, 10
-    ).astype(np.float32)
-    sections.append((
-        "16. Very Long Field Names",
-        adata_long._repr_html_(),
-        (
-            "Tests the dynamic field name column width calculation. The longest field name is "
-            "'this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting' (77 chars). "
-            "The name column width should expand to fit longer names but be capped by "
-            "<code>repr_html_max_field_width</code> (default: 400px). Names exceeding the max width "
-            "show an ellipsis (...) via CSS text-overflow; hover over truncated names to see the "
-            "full name in a tooltip. The copy button still copies the full field name even when truncated."
-        ),
-    ))
-
-    # Test 17: README icon
-    print("  17. README icon")
-    adata_readme = AnnData(np.random.randn(50, 20).astype(np.float32))
-    adata_readme.obs["cluster"] = pd.Categorical(["A", "B", "C", "D", "E"] * 10)
-    adata_readme.uns["cluster_colors"] = [
-        "#e41a1c",
-        "#377eb8",
-        "#4daf4a",
-        "#984ea3",
-        "#ff7f00",
-    ]
-    adata_readme.obsm["X_pca"] = np.random.randn(50, 10).astype(np.float32)
-    adata_readme.uns["README"] = """# Human Lung Adenocarcinoma - Patient LU-A047
+README_LUNG = """# Human Lung Adenocarcinoma - Patient LU-A047
 
 Single-cell RNA sequencing of a *primary* lung adenocarcinoma tumor sample. This dataset was generated as part of a study investigating **tumor heterogeneity** and ***immune cell infiltration*** patterns in early-stage lung cancer.
 
@@ -2283,125 +1742,147 @@ For questions about this dataset: `genome-lab@example-hospital.org`
 
 > **Note**: All patient identifiers have been de-identified per HIPAA guidelines.
 """
-    sections.append((
-        "17. README Icon",
-        adata_readme._repr_html_(),
-        (
-            "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
-            "Click the icon to open a modal with the README content displayed as plain text "
-            "(raw markdown source, not rendered). Press Escape or click outside to close."
-        ),
-    ))
 
-    # Test 18: README icon in No-JS mode
-    print("  18. README icon in No-JS mode")
-    adata_readme_nojs = AnnData(np.random.randn(20, 10).astype(np.float32))
-    adata_readme_nojs.obs["batch"] = pd.Categorical(["batch1", "batch2"] * 10)
-    adata_readme_nojs.uns["README"] = """# Dataset Information
 
-This dataset contains processed single-cell data.
+# =============================================================================
+# 1. Core structure
+# =============================================================================
 
-## Key Features
-- 20 cells, 10 genes
-- 2 batches
 
-For more details, see the full documentation.
-"""
-    nojs_readme_html = strip_script_tags(adata_readme_nojs._repr_html_())
-    sections.append((
-        "18. README Icon in No-JS Mode",
-        nojs_readme_html,
-        (
-            "In no-JS mode, the README icon still appears but clicking it won't open a modal. "
-            "Instead, **hover over the icon** to see the README content as a tooltip (browser's "
-            "native title attribute). The tooltip shows the first 500 characters of the README."
-        ),
-    ))
+@case(
+    "core",
+    "Full AnnData (all features)",
+    slug="full-anndata",
+    tags=(
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "uns",
+        "raw",
+        "sparse",
+        "colors",
+        "nested-anndata",
+    ),
+    expect=(
+        "Section order: X first, then obs, var, obsm, varm, obsp, varp, layers, raw, uns.",
+        "X appears exactly once; <code>layers</code> lists counts/normalized/log1p only (no <code>None</code> entry).",
+        "Categorical columns show color dots from <code>uns['*_colors']</code>.",
+        "<code>var.annotation_date</code> (datetime) and <code>uns.custom_result</code> are flagged as not serializable.",
+        "Each section header has a <b>?</b> link to the docs; hovering a section name shows a tooltip.",
+    ),
+    notes="Baseline reference for a typical annotated dataset; several other cases reuse this object.",
+)
+def _full_anndata() -> CaseOutput:
+    return render(create_test_anndata())
 
-    # Test 18b: README truncation (large README)
-    print("  18b. README Truncation (large README)")
-    adata_large_readme = ad.AnnData(np.zeros((5, 5)))
-    # Create a README larger than 100KB (default limit)
-    large_readme = (
-        "# Large README\n\n" + "This is a very long README. " * 5000
-    )  # ~150KB
-    adata_large_readme.uns["README"] = large_readme
 
-    large_readme_html = adata_large_readme._repr_html_()
-    sections.append((
-        "18b. README Truncation (Large README)",
-        large_readme_html,
-        (
-            f"Tests README truncation. The original README is ~{len(large_readme):,} characters. "
-            "The default limit is 100,000 characters (configurable via "
-            "<code>anndata.settings.repr_html_max_readme_size</code>). "
-            "Click the ⓘ icon to see the modal - it should show the truncated content with a note "
-            "at the bottom indicating how much was truncated."
-        ),
-    ))
+@case(
+    "core",
+    "Empty AnnData",
+    slug="empty-anndata",
+    tags=("empty",),
+    expect=(
+        "Header shows 0 × 0 and no crash.",
+        "Empty sections are hidden or show 'No entries'; no stray X row with a bogus shape.",
+    ),
+)
+def _empty_anndata() -> CaseOutput:
+    return render(AnnData())
 
-    # Test 19: MuData (multimodal data)
-    # This demonstrates how MuData can reuse anndata's repr by:
-    # 1. Registering a SectionFormatter for the .mod attribute (done at import time above)
-    # 2. Calling generate_repr_html() directly on the MuData object
-    if HAS_MUDATA:
-        print("  19. MuData (multimodal data)")
-        from anndata._repr.html import generate_repr_html
 
-        mdata = create_test_mudata()
-        if mdata is not None:
-            sections.append((
-                "19. MuData (Multimodal Data)",
-                generate_repr_html(mdata),
-                (
-                    "Demonstrates how MuData can reuse anndata's HTML repr machinery by simply "
-                    "registering a <code>SectionFormatter</code> for the <code>.mod</code> attribute. "
-                    "The <code>mod</code> section shows each modality as an expandable nested AnnData "
-                    "(click the arrow to expand). All standard sections (obs, var, obsm, varm, uns, etc.) "
-                    "work automatically. This example has 3 modalities: RNA (100×50), ATAC (100×30), "
-                    "and Protein (80×20)."
-                ),
-            ))
-    else:
-        print("  19. MuData (skipped - mudata not installed)")
+@case(
+    "core",
+    "Minimal AnnData (just X)",
+    slug="minimal-x-only",
+    tags=("X", "dense"),
+    expect=(
+        "Only the X row carries information; obs/var have default integer names and no columns.",
+        "No <code>layers</code> section entry for X (X lives in <code>layers[None]</code> internally).",
+    ),
+)
+def _minimal() -> CaseOutput:
+    return render(AnnData(np.zeros((10, 5))))
 
-    # Test 20: SpatialData (custom _repr_html_ using anndata's building blocks)
-    # This demonstrates how packages with completely different structures can build
-    # their own _repr_html_ while reusing anndata's CSS, JavaScript, and formatters.
-    if HAS_SPATIALDATA_EXAMPLE:
-        print("  20. SpatialData (custom _repr_html_ using anndata's building blocks)")
-        sdata = create_test_spatialdata()
-        sections.append((
-            "20. SpatialData (Custom _repr_html_)",
-            sdata._repr_html_(),
-            (
-                "Demonstrates how packages like <a href='https://spatialdata.scverse.org/' "
-                "target='_blank'>SpatialData</a> can build custom <code>_repr_html_</code> "
-                "using anndata's building blocks: "
-                "<ul>"
-                "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
-                "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
-                "<li><code>render_formatted_entry()</code> with <code>preview_html</code> - table rows with preview column</li>"
-                "<li><code>generate_repr_html()</code> - embed nested AnnData (see 'tables' section)</li>"
-                "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
-                "</ul>"
-                "Note the preview column shows dimension info like <code>[c, y, x]</code>. "
-                "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand). "
-                "Hover over coordinate system names to see associated elements."
-            ),
-        ))
-    else:
-        print("  20. SpatialData (skipped - example failed to load)")
 
-    # Test 21: Raw section with detailed info
-    print("  21. Raw section (unprocessed data)")
-    # Create an AnnData that simulates a typical workflow:
-    # 1. Start with more genes (raw)
-    # 2. Filter to fewer genes (current)
-    n_obs, n_vars_raw = 100, 2000
-    n_vars_filtered = 500
-    adata_raw = AnnData(
-        # Current filtered data
+@case(
+    "core",
+    "X stored as layers[None], with named layers",
+    slug="x-layers-none-with-layers",
+    tags=("X", "layers"),
+    expect=(
+        "X row shown once, at the top, as a dense float32 ndarray.",
+        "<code>layers</code> lists exactly <code>counts</code> and <code>log1p</code> (2 items, not 3).",
+        "No entry named <code>None</code> anywhere; the section count says 2.",
+    ),
+    notes="Since upstream #1707 <code>adata.X is adata.layers[None]</code>; the repr must hide that alias.",
+)
+def _x_layers_none_with_layers() -> CaseOutput:
+    X = np.random.randn(30, 8).astype(np.float32)
+    adata = AnnData(X)
+    adata.layers["counts"] = sp.random(30, 8, density=0.3, format="csr")
+    adata.layers["log1p"] = np.log1p(np.abs(X))
+    assert adata.layers[None] is adata.X
+    return render(adata)
+
+
+@case(
+    "core",
+    "X is None, only named layers",
+    slug="x-none-with-layers",
+    tags=("X", "layers", "empty"),
+    expect=(
+        "X row says <code>None</code> (or is absent); shape in header is still 30 × 8 (from obs/var).",
+        "<code>layers</code> shows <code>spliced</code> and <code>unspliced</code> only.",
+    ),
+)
+def _x_none_with_layers() -> CaseOutput:
+    adata = AnnData(
+        obs=pd.DataFrame(index=[f"c{i}" for i in range(30)]),
+        var=pd.DataFrame(index=[f"g{i}" for i in range(8)]),
+        layers={
+            "spliced": sp.random(30, 8, density=0.3, format="csr"),
+            "unspliced": sp.random(30, 8, density=0.3, format="csr"),
+        },
+    )
+    return render(adata)
+
+
+@case(
+    "core",
+    "Dense matrix with categories",
+    slug="dense-with-categories",
+    tags=("X", "dense", "categorical", "colors"),
+    expect=(
+        "X shows <code>ndarray</code> (not CSR/CSC).",
+        "<code>obs.cluster</code> shows 5 categories with color dots.",
+    ),
+)
+def _dense_categories() -> CaseOutput:
+    adata = AnnData(np.random.randn(50, 30).astype(np.float32))
+    adata.obs["cluster"] = pd.Categorical(["A", "B", "C", "D", "E"] * 10)
+    adata.uns["cluster_colors"] = palette(5)
+    return render(adata)
+
+
+@case(
+    "core",
+    "Raw: dense matrix with var and varm",
+    slug="raw-dense",
+    tags=("raw", "dense"),
+    expect=(
+        "Current shape 100 × 500; the <code>raw</code> row reports 100 × 2,000.",
+        "Expanding raw shows X (dense), var (2 columns) and varm (PCs).",
+    ),
+    notes="Typical workflow: filtered AnnData with <code>.raw</code> preserving all genes.",
+)
+def _raw_dense() -> CaseOutput:
+    n_obs, n_vars_raw, n_vars_filtered = 100, 2000, 500
+    adata = AnnData(
         np.random.randn(n_obs, n_vars_filtered).astype(np.float32),
         obs=pd.DataFrame({
             "cell_type": pd.Categorical(
@@ -2415,8 +1896,6 @@ For more details, see the full documentation.
             "mean_expression": np.random.randn(n_vars_filtered).astype(np.float32),
         }),
     )
-    # Set raw to have more genes (simulating pre-filtering state)
-    raw_X = np.random.randn(n_obs, n_vars_raw).astype(np.float32)
     raw_var = pd.DataFrame(
         {
             "gene_name": [f"gene_{i}" for i in range(n_vars_raw)],
@@ -2424,94 +1903,1195 @@ For more details, see the full documentation.
         },
         index=[f"gene_{i}" for i in range(n_vars_raw)],
     )
-    adata_raw.raw = AnnData(raw_X, var=raw_var)
-    # Add varm to raw
-    adata_raw.raw.varm["PCs"] = np.random.randn(n_vars_raw, 50).astype(np.float32)
-    sections.append((
-        "21a. Raw Section - Dense Matrix with var and varm",
-        adata_raw._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Typical workflow: filtered AnnData with .raw preserving all genes</b></p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><b>Current:</b> 100 × 500 (filtered to highly variable genes)</li>"
-            "<li><b>Raw:</b> 100 × 2,000 (original unfiltered data)</li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'>Click the <b>raw</b> row to expand and see the nested repr with "
-            "X (dense), var (2 columns), and varm (PCs). The raw section header shows the shape difference.</p>"
-        ),
-    ))
+    raw = AnnData(np.random.randn(n_obs, n_vars_raw).astype(np.float32), var=raw_var)
+    raw.varm["PCs"] = np.random.randn(n_vars_raw, 50).astype(np.float32)
+    adata.raw = raw
+    return render(adata)
 
-    # Test 21b: Raw with sparse matrix
-    print("  21b. Raw section (sparse matrix)")
-    adata_sparse_raw = AnnData(
+
+@case(
+    "core",
+    "Raw: sparse matrix",
+    slug="raw-sparse",
+    tags=("raw", "sparse"),
+    expect=(
+        "Both X (10% density) and raw.X (5% density) are CSR; the expanded raw shows CSR type and sparsity.",
+        "Compare with [[raw-dense]].",
+    ),
+)
+def _raw_sparse() -> CaseOutput:
+    n_obs, n_vars_raw, n_vars_filtered = 100, 2000, 500
+    adata = AnnData(
         sp.random(n_obs, n_vars_filtered, density=0.1, format="csr", dtype=np.float32),
         var=pd.DataFrame(index=[f"gene_{i}" for i in range(n_vars_filtered)]),
     )
-    sparse_raw_X = sp.random(
-        n_obs, n_vars_raw, density=0.05, format="csr", dtype=np.float32
+    raw_var = pd.DataFrame(
+        {"gene_name": [f"gene_{i}" for i in range(n_vars_raw)]},
+        index=[f"gene_{i}" for i in range(n_vars_raw)],
     )
-    adata_sparse_raw.raw = AnnData(sparse_raw_X, var=raw_var)
-    sections.append((
-        "21b. Raw Section - Sparse Matrix",
-        adata_sparse_raw._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Raw with sparse CSR matrix</b></p>"
-            "<p style='margin: 5px 0;'>Both current X (10% density) and raw X (5% density) are sparse. "
-            "The expanded raw section should show CSR matrix type and sparsity percentage. "
-            "Compare with 21a which uses dense matrices.</p>"
-        ),
-    ))
+    adata.raw = AnnData(
+        sp.random(n_obs, n_vars_raw, density=0.05, format="csr", dtype=np.float32),
+        var=raw_var,
+    )
+    return render(adata)
 
-    # Test 21c: Raw with no varm (minimal raw)
-    print("  21c. Raw section (minimal - no varm)")
-    adata_minimal_raw = AnnData(
+
+@case(
+    "core",
+    "Raw: minimal (no varm)",
+    slug="raw-minimal",
+    tags=("raw",),
+    expect=("Expanded raw shows only X and var; no empty varm section.",),
+)
+def _raw_minimal() -> CaseOutput:
+    adata = AnnData(
         np.random.randn(50, 100).astype(np.float32),
         var=pd.DataFrame(index=[f"gene_{i}" for i in range(100)]),
     )
-    minimal_raw_var = pd.DataFrame(
-        {"gene_symbol": [f"GENE{i}" for i in range(200)]},
-        index=[f"gene_{i}" for i in range(200)],
-    )
-    adata_minimal_raw.raw = AnnData(
+    adata.raw = AnnData(
         np.random.randn(50, 200).astype(np.float32),
-        var=minimal_raw_var,
-    )
-    sections.append((
-        "21c. Raw Section - Minimal (no varm)",
-        adata_minimal_raw._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Minimal raw: only X and var (no varm)</b></p>"
-            "<p style='margin: 5px 0;'>Tests that raw section renders correctly when varm is empty. "
-            "The expanded raw should show only X and var sections, with no varm section visible. "
-            "Compare with 21a which includes varm['PCs'].</p>"
+        var=pd.DataFrame(
+            {"gene_symbol": [f"GENE{i}" for i in range(200)]},
+            index=[f"gene_{i}" for i in range(200)],
         ),
-    ))
+    )
+    return render(adata)
 
-    # Test 21d: Raw with empty var columns
-    print("  21d. Raw section (empty var columns)")
-    adata_empty_var_raw = AnnData(
+
+@case(
+    "core",
+    "Raw: var without columns",
+    slug="raw-empty-var",
+    tags=("raw", "empty"),
+    expect=(
+        "Raw row shows the shape (30 × 80) but no 'var: 0 cols' text and no empty var section.",
+    ),
+)
+def _raw_empty_var() -> CaseOutput:
+    adata = AnnData(
         np.random.randn(30, 50).astype(np.float32),
         var=pd.DataFrame(index=[f"gene_{i}" for i in range(50)]),
     )
-    empty_raw_var = pd.DataFrame(index=[f"gene_{i}" for i in range(80)])  # No columns
-    adata_empty_var_raw.raw = AnnData(
+    adata.raw = AnnData(
         np.random.randn(30, 80).astype(np.float32),
-        var=empty_raw_var,
+        var=pd.DataFrame(index=[f"gene_{i}" for i in range(80)]),
     )
-    sections.append((
-        "21d. Raw Section - Empty var columns",
-        adata_empty_var_raw._repr_html_(),
-        (
-            "<p style='margin: 5px 0;'><b>Edge case: raw.var has no columns (only index)</b></p>"
-            "<p style='margin: 5px 0;'>Tests graceful handling when raw.var is just an index with no annotation columns. "
-            "The raw meta info should show the shape but not display 'var: 0 cols' or an empty var section. "
-            "This is the minimal valid raw structure (just X data with gene names in the index).</p>"
+    return render(adata)
+
+
+@case(
+    "core",
+    "Deeply nested AnnData (max depth)",
+    slug="nested-max-depth",
+    tags=("uns", "nested-anndata"),
+    expect=(
+        "outer → level1 → level2 expand as nested reprs.",
+        "level3 is beyond <code>repr_html_max_depth</code> (default 3) and shows as a non-expandable entry.",
+    ),
+)
+def _nested_depth() -> CaseOutput:
+    inner3 = AnnData(np.zeros((3, 2)))
+    inner2 = AnnData(np.zeros((5, 3)))
+    inner2.uns["level3"] = inner3
+    inner1 = AnnData(np.zeros((10, 5)))
+    inner1.uns["level2"] = inner2
+    outer = AnnData(np.zeros((20, 10)))
+    outer.uns["level1"] = inner1
+    return render(outer)
+
+
+@case(
+    "core",
+    "README icon",
+    slug="readme-icon",
+    tags=("uns", "readme"),
+    expect=(
+        "A small ⓘ icon in the header; clicking opens a modal with the raw markdown as plain text.",
+        "Escape or clicking outside closes the modal.",
+    ),
+)
+def _readme_icon() -> CaseOutput:
+    adata = AnnData(np.random.randn(50, 20).astype(np.float32))
+    adata.obs["cluster"] = pd.Categorical(["A", "B", "C", "D", "E"] * 10)
+    adata.uns["cluster_colors"] = palette(5)
+    adata.obsm["X_pca"] = np.random.randn(50, 10).astype(np.float32)
+    adata.uns["README"] = README_LUNG
+    return render(adata)
+
+
+# =============================================================================
+# 2. Data types
+# =============================================================================
+
+
+@case(
+    "dtypes",
+    "Sparse formats and numeric dtypes",
+    slug="sparse-formats",
+    tags=("X", "layers", "obsm", "obsp", "sparse", "dense"),
+    expect=(
+        "X: <code>csr_matrix</code>; layers distinguish <code>csc_matrix</code>, <code>csr_array</code>, <code>csc_array</code>.",
+        "Sparse entries show density / '% sparse' and stored count; dense layers show their dtype (int8, uint16, bool, float16, complex64).",
+        "obsm sparse embedding and obsp <code>csr_array</code> render like layers.",
+    ),
+)
+def _sparse_formats() -> CaseOutput:
+    n_obs, n_vars = 60, 40
+    adata = AnnData(sp.random(n_obs, n_vars, density=0.05, format="csr"))
+    adata.layers["csc_matrix"] = sp.random(n_obs, n_vars, density=0.2, format="csc")
+    adata.layers["csr_array"] = sp.csr_array(sp.random(n_obs, n_vars, density=0.5))
+    adata.layers["csc_array_int"] = sp.csc_array(
+        sp.random(n_obs, n_vars, density=0.01, format="csc", dtype=np.float32)
+    ).astype(np.int32)
+    adata.layers["int8"] = np.zeros((n_obs, n_vars), dtype=np.int8)
+    adata.layers["uint16"] = np.ones((n_obs, n_vars), dtype=np.uint16)
+    adata.layers["bool"] = np.zeros((n_obs, n_vars), dtype=bool)
+    adata.layers["float16"] = np.zeros((n_obs, n_vars), dtype=np.float16)
+    adata.layers["complex64"] = np.zeros((n_obs, n_vars), dtype=np.complex64)
+    adata.obsm["sparse_embedding"] = sp.random(n_obs, 100, density=0.01, format="csr")
+    adata.obsp["knn"] = sp.csr_array(sp.random(n_obs, n_obs, density=0.1))
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "pandas extension and nullable dtypes in obs",
+    slug="pandas-dtypes",
+    tags=("obs", "nullable", "extension-dtype", "string", "categorical"),
+    expect=(
+        "Nullable <code>Int64</code>/<code>Float64</code>/<code>boolean</code> and <code>string</code> columns show their pandas dtype names.",
+        "Ordered categorical is distinguishable (or at least renders), unused categories are listed.",
+        "datetime with tz, period, interval and object-mixed columns are flagged as not serializable where writing would fail.",
+        "No crash on an all-NaN categorical.",
+    ),
+)
+def _pandas_dtypes() -> CaseOutput:
+    n = 12
+    adata = AnnData(np.zeros((n, 3)))
+    adata.obs["Int64"] = pd.array([1, None, *range(n - 2)], dtype="Int64")
+    adata.obs["Float64"] = pd.array([0.5, None, *np.arange(n - 2.0)], dtype="Float64")
+    adata.obs["boolean"] = pd.array([True, None] + [False] * (n - 2), dtype="boolean")
+    adata.obs["string"] = pd.array([f"s{i}" for i in range(n)], dtype="string")
+    if importlib.util.find_spec("pyarrow") is not None:
+        adata.obs["string_pyarrow"] = pd.array(
+            [f"s{i % 3}" for i in range(n)], dtype="string[pyarrow]"
+        )
+    adata.obs["ordered_cat"] = pd.Categorical(
+        ["low", "mid", "high"] * (n // 3),
+        categories=["low", "mid", "high"],
+        ordered=True,
+    )
+    adata.obs["unused_cats"] = pd.Categorical(["a"] * n, categories=["a", "b", "c"])
+    adata.obs["int_cats"] = pd.Categorical([1, 2, 3] * (n // 3))
+    adata.obs["bool_cats"] = pd.Categorical([True, False] * (n // 2))
+    adata.obs["all_nan_cat"] = pd.Categorical([np.nan] * n, categories=["x"])
+    adata.obs["datetime_tz"] = pd.date_range(
+        "2024-01-01", periods=n, tz="Europe/Berlin"
+    )
+    adata.obs["period"] = pd.period_range("2024-01", periods=n, freq="M")
+    adata.obs["interval"] = pd.interval_range(0, n)
+    adata.obs["mixed_object"] = pd.Series([1, "a", 2.0, None] * (n // 4), dtype=object)
+    adata.obs["uint8"] = np.arange(n, dtype=np.uint8)
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "Categorical colors: formats and edge cases",
+    slug="categorical-colors",
+    tags=("obs", "var", "categorical", "colors"),
+    expect=(
+        "Hex (#rgb, #rrggbb, #rrggbbaa), named CSS colors, and numpy-array colors all render as dots.",
+        "Colors for a var categorical (<code>var.chrom</code>) are looked up in <code>uns['chrom_colors']</code> too.",
+        "Category with NaN values: NaN is not a category and must not shift colors.",
+    ),
+    notes="Malformed / hostile color arrays are covered in [[evil-anndata]].",
+)
+def _categorical_colors() -> CaseOutput:
+    adata = AnnData(np.zeros((12, 6)))
+    adata.obs["hex_short"] = pd.Categorical(["a", "b", "c"] * 4)
+    adata.uns["hex_short_colors"] = ["#f00", "#0f0", "#00f"]
+    adata.obs["hex_alpha"] = pd.Categorical(["a", "b"] * 6)
+    adata.uns["hex_alpha_colors"] = ["#ff000080", "#0000ff80"]
+    adata.obs["named"] = pd.Categorical(["x", "y", "z", "w"] * 3)
+    adata.uns["named_colors"] = ["tomato", "steelblue", "gold", "black"]
+    adata.obs["np_array_colors"] = pd.Categorical(["p", "q"] * 6)
+    adata.uns["np_array_colors_colors"] = np.array(["#1b9e77", "#d95f02"])
+    adata.obs["with_nan"] = pd.Categorical(["u", np.nan, "v"] * 4)
+    adata.uns["with_nan_colors"] = ["#e41a1c", "#377eb8"]
+    adata.var["chrom"] = pd.Categorical(["chr1", "chr2", "chrX"] * 2)
+    adata.uns["chrom_colors"] = ["#66c2a5", "#fc8d62", "#8da0cb"]
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "Dask arrays (no compute)",
+    slug="dask-arrays",
+    requires=("dask",),
+    tags=("X", "layers", "obsm", "varm", "dask", "sparse"),
+    expect=(
+        "X, layers, obsm and varm show <code>dask.array</code> with shape, dtype and chunks.",
+        "Rendering is fast: nothing is computed (no <code>.compute()</code>).",
+        "<code>layers['sparse_chunks']</code> has CSR chunks: ideally hinted as sparse.",
+    ),
+    notes=(
+        "Regular in-memory AnnData whose arrays are dask arrays. obs/var are plain pandas; "
+        "compare with the file-backed lazy cases in category 3."
+    ),
+)
+def _dask() -> CaseOutput:
+    X_dask = da.random.random((1000, 500), chunks=(100, 100))
+    adata = AnnData(X_dask)
+    adata.obs["cluster"] = pd.Categorical(["A", "B", "C"] * 333 + ["A"])
+    adata.var["gene_name"] = [f"gene_{i}" for i in range(500)]
+    adata.layers["counts"] = da.random.randint(0, 100, (1000, 500), chunks=(100, 100))
+    adata.layers["sparse_chunks"] = da.from_array(
+        sp.random(1000, 500, density=0.01, format="csr"),
+        chunks=(250, 500),
+        asarray=False,
+    )
+    adata.obsm["X_pca"] = da.random.random((1000, 50), chunks=(100, 50))
+    adata.varm["loadings"] = da.random.random((500, 50), chunks=(100, 50))
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "Awkward arrays in obsm",
+    slug="awkward-arrays",
+    requires=("awkward",),
+    tags=("obsm", "awkward"),
+    expect=(
+        "Ragged list and record arrays show <code>awkward.Array</code> with record count (ideally the type, e.g. <code>var * int64</code>).",
+        "No crash; awkward styling distinct from numpy arrays.",
+    ),
+)
+def _awkward() -> CaseOutput:
+    import awkward as ak
+
+    n = 20
+    adata = AnnData(np.zeros((n, 4)))
+    adata.obsm["ragged"] = ak.Array([list(range(i % 4)) for i in range(n)])
+    adata.obsm["records"] = ak.Array([
+        {"x": float(i), "tags": ["a"] * (i % 3)} for i in range(n)
+    ])
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "Array-API arrays with device info",
+    slug="array-api-devices",
+    tags=("obsm", "uns", "array-api"),
+    expect=(
+        "Device appears inline as <code>dtype · device</code> in the type column (no hover needed).",
+        "<code>X_jax_gpu</code> cuda:0, <code>X_jax_tpu</code> tpu:0, <code>X_jax_cpu</code> cpu, <code>X_cupy_gpu</code> GPU:0 (GPU-green), <code>uns['gpu_embedding']</code> cuda:1.",
+    ),
+    notes="Uses mock objects satisfying the <code>SupportsArrayApi</code> protocol; no GPU or JAX needed.",
+)
+def _array_api() -> CaseOutput:
+    def make_mock(module, *, shape, dtype, device="cpu"):
+        """Create a mock array satisfying the SupportsArrayApi protocol."""
+        ns_module = type("Namespace", (), {"__name__": module.split(".")[0]})()
+        cls = type(
+            "MockArrayAPI",
+            (),
+            {
+                "shape": shape,
+                "dtype": dtype,
+                "ndim": len(shape),
+                "size": int(np.prod(shape)),
+                "device": device,
+                "__array_namespace__": lambda self, **kw: ns_module,
+                "to_device": lambda self, dev, /, **kw: self,
+                "__dlpack__": lambda self, **kw: None,
+                "__dlpack_device__": lambda self: (1, 0),
+                "__getitem__": lambda self, k, /: self,
+            },
+        )
+        cls.__module__ = module
+        return cls()
+
+    n_obs, n_vars = 100, 50
+    adata = AnnData(
+        np.random.randn(n_obs, n_vars).astype(np.float32),
+        obs=pd.DataFrame(
+            {"cell_type": pd.Categorical(["T cell", "B cell"] * (n_obs // 2))},
+            index=[f"cell_{i}" for i in range(n_obs)],
         ),
-    ))
+        var=pd.DataFrame(
+            {"gene_name": [f"gene_{i}" for i in range(n_vars)]},
+            index=[f"gene_{i}" for i in range(n_vars)],
+        ),
+    )
+    adata.obsm["X_jax_gpu"] = make_mock(
+        "jax.numpy", shape=(n_obs, 30), dtype=np.dtype("float32"), device="cuda:0"
+    )
+    adata.obsm["X_jax_tpu"] = make_mock(
+        "jax.numpy", shape=(n_obs, 10), dtype=np.dtype("float16"), device="tpu:0"
+    )
+    adata.obsm["X_jax_cpu"] = make_mock(
+        "jax.numpy", shape=(n_obs, 50), dtype=np.dtype("float64"), device="cpu"
+    )
 
-    # Test 22: Unknown sections and error handling
-    print("  22. Unknown sections and error handling")
+    class _MockGPUDevice:
+        id = 0
 
+    adata.obsm["X_cupy_gpu"] = make_mock(
+        "cupy._core.core",
+        shape=(n_obs, 20),
+        dtype=np.dtype("float32"),
+        device=_MockGPUDevice(),
+    )
+    adata.uns["gpu_embedding"] = make_mock(
+        "jax.numpy", shape=(20, 5), dtype=np.dtype("float32"), device="cuda:1"
+    )
+    return render(adata)
+
+
+@case(
+    "dtypes",
+    "uns value types",
+    slug="uns-value-types",
+    tags=("uns", "dense", "sparse", "string"),
+    expect=(
+        "Every entry has a sensible type label and, where cheap, a value preview.",
+        "numpy scalar vs Python scalar, 0-d array, bytes, string array, structured array, DataFrame, sparse matrix, nested list, tuple, set, empty containers.",
+        "Non-serializable values (tuple? set, complex) flagged consistently with what <code>write_h5ad</code> does.",
+    ),
+)
+def _uns_value_types() -> CaseOutput:
+    adata = AnnData(np.zeros((5, 3)))
+    adata.uns["np_float32"] = np.float32(1.5)
+    adata.uns["np_int64"] = np.int64(7)
+    adata.uns["np_bool"] = np.True_
+    adata.uns["py_complex"] = 1 + 2j
+    adata.uns["zero_d_array"] = np.array(3)
+    adata.uns["bytes"] = b"\x00\x01binary"
+    adata.uns["str_array"] = np.array(["a", "bb", "ccc"])
+    adata.uns["object_array"] = np.array(["a", 1, None], dtype=object)
+    adata.uns["structured"] = np.array(
+        [(1, 2.0), (3, 4.0)], dtype=[("a", "i4"), ("b", "f8")]
+    )
+    adata.uns["dataframe"] = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
+    adata.uns["sparse"] = sp.csr_matrix(np.eye(4))
+    adata.uns["nested_list"] = [[1, 2], [3, [4, 5]]]
+    adata.uns["tuple"] = (1, "two", 3.0)
+    adata.uns["set"] = {1, 2, 3}
+    adata.uns["empty_dict"] = {}
+    adata.uns["empty_list"] = []
+    adata.uns["empty_string"] = ""
+    adata.uns["multiline_string"] = "line one\nline two\n\ttabbed"
+    adata.uns["nan"] = float("nan")
+    adata.uns["inf"] = float("-inf")
+    return render(adata)
+
+
+# =============================================================================
+# 3. Storage states (views, backed, lazy)
+# =============================================================================
+
+
+@case(
+    "storage",
+    "AnnData view (subset)",
+    slug="view",
+    tags=("view", "sparse", "raw"),
+    expect=(
+        "Header shows a 'View' badge and the subset shape 20 × 10.",
+        "All sections of [[full-anndata]] are present with subset shapes; raw keeps its own var count.",
+    ),
+)
+def _view() -> CaseOutput:
+    return render(create_test_anndata()[0:20, 0:10])
+
+
+@case(
+    "storage",
+    "View of a view (boolean mask)",
+    slug="view-of-view",
+    tags=("view", "categorical"),
+    expect=(
+        "Still a single 'View' badge; shape reflects both subsets.",
+        "Categoricals keep all categories (unused ones included) and colors stay aligned.",
+    ),
+)
+def _view_of_view() -> CaseOutput:
+    adata = create_test_anndata()
+    first = adata[adata.obs["cell_type"].isin(["T cell", "B cell"])]
+    return render(first[:, 5:25])
+
+
+@case(
+    "storage",
+    "Backed AnnData (h5ad, sparse X)",
+    slug="backed-h5ad",
+    requires=("h5py",),
+    tags=("backed", "sparse", "X", "layers"),
+    expect=(
+        "Header shows a backed/H5AD badge and the file path.",
+        "X is a backed sparse dataset (shape, dtype, nnz from HDF5 metadata; data not loaded).",
+        "obs/var are in memory (regular columns, categories with colors).",
+    ),
+    notes="Backed mode loads obs/var fully, while lazy mode ([[lazy-h5ad]]) keeps them as dask-backed xarray.",
+)
+def _backed_h5ad() -> CaseOutput:
+    with tmp_path(".h5ad") as path:
+        write_backed_demo_h5ad(path)
+        adata = ad.read_h5ad(path, backed="r")
+        try:
+            return render(adata)
+        finally:
+            adata.file.close()
+
+
+@case(
+    "storage",
+    "Backed AnnData (h5ad, dense X)",
+    slug="backed-h5ad-dense",
+    requires=("h5py",),
+    tags=("backed", "dense", "X"),
+    expect=("X shows an h5py Dataset (dense) with shape/dtype, not loaded.",),
+)
+def _backed_h5ad_dense() -> CaseOutput:
+    with tmp_path(".h5ad") as path:
+        write_backed_demo_h5ad(path, dense=True)
+        adata = ad.read_h5ad(path, backed="r")
+        try:
+            return render(adata)
+        finally:
+            adata.file.close()
+
+
+@case(
+    "storage",
+    "View of a backed AnnData",
+    slug="backed-view",
+    requires=("h5py",),
+    tags=("backed", "view"),
+    expect=("Both the backed badge/path and the View badge appear; shape is 50 × 20.",),
+)
+def _backed_view() -> CaseOutput:
+    with tmp_path(".h5ad") as path:
+        write_backed_demo_h5ad(path)
+        adata = ad.read_h5ad(path, backed="r")
+        try:
+            return render(adata[:50, :20])
+        finally:
+            adata.file.close()
+
+
+@case(
+    "storage",
+    "Lazy AnnData (read_lazy, h5ad)",
+    slug="lazy-h5ad",
+    requires=("xarray", "h5py"),
+    tags=("lazy", "categorical", "colors", "lazy-categorical"),
+    expect=(
+        "Header: <b>Lazy (H5AD)</b> badge and file path.",
+        "<code>cell_type</code>: 4 labels + colors; <code>cluster</code>: 5 labels; <code>sample_id</code>: first 30 of 50 (<code>max_lazy_categories=30</code>).",
+        "Non-categorical columns show '(lazy)'; arrays show shape/dtype only.",
+    ),
+    notes=(
+        "Only category labels (and colors from uns) are read from disk; codes, numeric values and "
+        "categories beyond the limit are not. Compare with [[lazy-metadata-only]]."
+    ),
+)
+def _lazy_h5ad() -> CaseOutput:
+    import h5py
+
+    with tmp_path(".h5ad") as path:
+        write_lazy_demo_h5ad(path)
+        with (
+            h5py.File(path, "r") as f,
+            ad.settings.override(repr_html_max_lazy_categories=30),
+        ):
+            return render(read_lazy(f))
+
+
+@case(
+    "storage",
+    "Lazy AnnData, metadata-only (max_lazy_categories=0)",
+    slug="lazy-metadata-only",
+    requires=("xarray", "h5py"),
+    tags=("lazy", "lazy-categorical"),
+    expect=(
+        "Same object as [[lazy-h5ad]], but zero disk I/O for the repr.",
+        "Categoricals only show '(N categories)' from dtype metadata; no labels, no color dots.",
+    ),
+)
+def _lazy_metadata_only() -> CaseOutput:
+    import h5py
+
+    with tmp_path(".h5ad") as path:
+        write_lazy_demo_h5ad(path)
+        with (
+            h5py.File(path, "r") as f,
+            ad.settings.override(repr_html_max_lazy_categories=0),
+        ):
+            return render(read_lazy(f))
+
+
+@case(
+    "storage",
+    "Lazy AnnData (read_lazy, zarr)",
+    slug="lazy-zarr",
+    requires=("xarray", "zarr"),
+    tags=("lazy", "zarr", "lazy-categorical", "colors"),
+    expect=(
+        "Header: <b>Lazy (Zarr)</b> badge and the zarr directory path.",
+        "Same lazy behavior as [[lazy-h5ad]]: labels on demand, numeric columns '(lazy)'.",
+    ),
+)
+def _lazy_zarr() -> CaseOutput:
+    import zarr
+
+    with tmp_path(".zarr") as path:
+        write_lazy_demo_zarr(path)
+        return render(read_lazy(zarr.open_group(path, mode="r")))
+
+
+@case(
+    "storage",
+    "Lazy AnnData subset (view)",
+    slug="lazy-view",
+    requires=("xarray", "h5py"),
+    tags=("lazy", "view"),
+    expect=(
+        "Subset shape 100 × 50 with lazy badges; no data loaded beyond category labels.",
+    ),
+)
+def _lazy_view() -> CaseOutput:
+    import h5py
+
+    with tmp_path(".h5ad") as path:
+        write_lazy_demo_h5ad(path)
+        with h5py.File(path, "r") as f:
+            return render(read_lazy(f)[:100, :50])
+
+
+# =============================================================================
+# 4. Scale & truncation
+# =============================================================================
+
+
+@case(
+    "scale",
+    "Auto-folding sections",
+    slug="auto-folding",
+    tags=("obs", "obsm"),
+    expect=(
+        "Sections with more than <code>repr_html_fold_threshold</code> (default 5) entries start collapsed: obs (15) and obsm (12).",
+        "Clicking the header or fold icon expands/collapses.",
+    ),
+)
+def _auto_folding() -> CaseOutput:
+    adata = AnnData(np.zeros((20, 10)))
+    for i in range(15):
+        adata.obs[f"column_{i}"] = list(range(20))
+    for i in range(12):
+        adata.obsm[f"X_embedding_{i}"] = np.random.randn(20, 2).astype(np.float32)
+    return render(adata)
+
+
+@case(
+    "scale",
+    "Many obs columns (beyond max_items)",
+    slug="many-obs-columns",
+    tags=("obs", "var"),
+    expect=(
+        "obs has 250 columns: only the first <code>repr_html_max_items</code> (200) are listed, then a '… +50 more' indicator.",
+        "Search still finds columns; the section header count says 250.",
+    ),
+)
+def _many_obs_columns() -> CaseOutput:
+    n = 30
+    obs = pd.DataFrame(
+        {f"qc_metric_{i:03d}": np.arange(n, dtype=float) for i in range(250)},
+        index=[f"c{i}" for i in range(n)],
+    )
+    return render(AnnData(np.zeros((n, 4)), obs=obs))
+
+
+@case(
+    "scale",
+    "max_items setting (30 layers, max 10)",
+    slug="max-items-setting",
+    tags=("layers",),
+    expect=(
+        "layers shows 10 entries and a truncation indicator for the remaining 20.",
+    ),
+)
+def _max_items() -> CaseOutput:
+    adata = AnnData(np.zeros((10, 5)))
+    for i in range(30):
+        adata.layers[f"layer_{i:02d}"] = np.zeros((10, 5), dtype=np.float32)
+    with ad.settings.override(repr_html_max_items=10):
+        return render(adata)
+
+
+@case(
+    "scale",
+    "Many categories (truncation)",
+    slug="many-categories",
+    tags=("obs", "categorical", "colors"),
+    expect=(
+        "With <code>max_categories=20</code>: <code>cell_type</code> (30) shows 20 + '…+10'; <code>batch</code> (exactly 20) shows all.",
+        "The ▼ button appears only when truncated and expands the full list.",
+    ),
+)
+def _many_categories() -> CaseOutput:
+    adata = AnnData(np.zeros((100, 10)))
+    values = [f"type_{i}" for i in range(30)] * (100 // 30) + [
+        f"type_{i}" for i in range(100 % 30)
+    ]
+    adata.obs["cell_type"] = pd.Categorical(values)
+    adata.uns["cell_type_colors"] = palette(30)
+    adata.obs["batch"] = pd.Categorical([f"batch_{i}" for i in range(20)] * 5)
+    adata.uns["batch_colors"] = palette(20)[::-1]
+    with ad.settings.override(repr_html_max_categories=20):
+        return render(adata)
+
+
+@case(
+    "scale",
+    "Wide DataFrame in obsm (150 columns)",
+    slug="wide-obsm-dataframe",
+    tags=("obsm", "dataframe"),
+    expect=(
+        "The type column shows <code>DataFrame (40 × 150)</code>.",
+        "The column-name preview lists at most 100 names then '…+50', and is clipped to one line (the wrap toggle expands it).",
+    ),
+)
+def _wide_obsm_df() -> CaseOutput:
+    n = 40
+    adata = AnnData(np.zeros((n, 5)))
+    adata.obsm["morphology"] = pd.DataFrame(
+        np.random.rand(n, 150),
+        columns=[f"feature_{i:03d}_intensity" for i in range(150)],
+        index=adata.obs_names,
+    )
+    adata.obsm["X_pca"] = np.random.rand(n, 10)
+    return render(adata)
+
+
+@case(
+    "scale",
+    "Expandable DataFrame in obsm",
+    slug="expandable-obsm-dataframe",
+    tags=("obsm", "dataframe"),
+    expect=(
+        "With <code>repr_html_dataframe_expand=True</code> the DataFrame row has an 'Expand' control.",
+        "Expanding shows pandas' <code>_repr_html_()</code> table (respects <code>pd.options.display.max_rows</code>).",
+    ),
+)
+def _expandable_df() -> CaseOutput:
+    adata = AnnData(np.random.randn(30, 10).astype(np.float32))
+    adata.obs["group"] = pd.Categorical(["A", "B", "C"] * 10)
+    adata.obsm["spatial_metrics"] = pd.DataFrame(
+        {
+            "x_centroid": np.random.randn(30) * 100,
+            "y_centroid": np.random.randn(30) * 100,
+            "area": np.random.rand(30) * 500,
+            "perimeter": np.random.rand(30) * 100,
+            "circularity": np.random.rand(30),
+            "eccentricity": np.random.rand(30),
+            "solidity": np.random.rand(30),
+            "extent": np.random.rand(30),
+            "major_axis": np.random.rand(30) * 50,
+            "minor_axis": np.random.rand(30) * 30,
+            "orientation": np.random.rand(30) * 180,
+            "intensity_mean": np.random.rand(30) * 255,
+        },
+        index=adata.obs_names,
+    )
+    adata.obsm["X_pca"] = np.random.randn(30, 5).astype(np.float32)
+    with ad.settings.override(repr_html_dataframe_expand=True):
+        return render(adata)
+
+
+@case(
+    "scale",
+    "Large uns containers",
+    slug="large-uns",
+    tags=("uns",),
+    expect=(
+        "A 100,000-element list, a 2,000-key dict and a 1e6-element array render instantly with counts, not full contents.",
+        "Long string preview is truncated with an ellipsis.",
+    ),
+)
+def _large_uns() -> CaseOutput:
+    adata = AnnData(np.zeros((5, 3)))
+    adata.uns["big_list"] = list(range(100_000))
+    adata.uns["big_dict"] = {f"key_{i:04d}": i for i in range(2_000)}
+    adata.uns["big_array"] = np.zeros(1_000_000, dtype=np.float32)
+    adata.uns["list_of_strings"] = [f"sample_{i}" for i in range(5_000)]
+    adata.uns["long_string"] = "lorem ipsum " * 2_000
+    return render(adata)
+
+
+@case(
+    "scale",
+    "Huge shape (millions of cells)",
+    slug="huge-shape",
+    tags=("X", "sparse", "obs"),
+    expect=(
+        "Header shows 1,234,567 × 33,538 with thousands separators.",
+        "Sparse X density/nnz and memory estimate are formatted readably; render stays fast.",
+    ),
+)
+def _huge_shape() -> CaseOutput:
+    n_obs, n_vars = 1_234_567, 33_538
+    X = sp.csr_matrix((n_obs, n_vars), dtype=np.float32)
+    obs = pd.DataFrame(index=pd.RangeIndex(n_obs).astype(str))
+    obs["batch"] = pd.Categorical(
+        np.repeat(["a", "b"], [n_obs // 2, n_obs - n_obs // 2])
+    )
+    var = pd.DataFrame(index=[f"g{i}" for i in range(n_vars)])
+    return render(AnnData(X, obs=obs, var=var))
+
+
+@case(
+    "scale",
+    "Unique-count limit",
+    slug="unique-limit",
+    tags=("obs", "string"),
+    expect=(
+        "With <code>repr_html_unique_limit=100</code> and 1,000 rows, string/numeric columns do not show '(N unique)'.",
+        "Categoricals still show their categories.",
+    ),
+)
+def _unique_limit() -> CaseOutput:
+    n = 1000
+    adata = AnnData(np.zeros((n, 2)))
+    adata.obs["donor"] = [f"d{i % 7}" for i in range(n)]
+    adata.obs["n_counts"] = np.arange(n)
+    adata.obs["cat"] = pd.Categorical(["x", "y"] * (n // 2))
+    with ad.settings.override(repr_html_unique_limit=100):
+        return render(adata)
+
+
+@case(
+    "scale",
+    "Very long field names",
+    slug="long-field-names",
+    tags=("obs", "obsm", "uns", "layers"),
+    expect=(
+        "Name column widens for long names but is capped by <code>repr_html_max_field_width</code> (400px).",
+        "Overlong names end in an ellipsis; hover shows the full name; copy button copies the full name.",
+    ),
+)
+def _long_names() -> CaseOutput:
+    adata = AnnData(np.random.randn(20, 10).astype(np.float32))
+    adata.obs["short"] = np.random.randn(20)
+    adata.obs["this_is_a_moderately_long_column_name"] = np.random.randn(20)
+    adata.obs[
+        "this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting"
+    ] = np.random.randn(20)
+    adata.obs["cell_type_annotation_from_automated_classifier_v2"] = pd.Categorical(
+        ["A", "B"] * 10
+    )
+    adata.obsm["X_pca_computed_with_highly_variable_genes_batch_corrected"] = (
+        np.random.randn(20, 5).astype(np.float32)
+    )
+    adata.uns["preprocessing_parameters_for_normalization_and_scaling"] = {
+        "method": "log1p",
+        "scale": True,
+    }
+    adata.layers["raw_counts_before_any_preprocessing_steps"] = np.random.randn(
+        20, 10
+    ).astype(np.float32)
+    return render(adata)
+
+
+@case(
+    "scale",
+    "README truncation (large README)",
+    slug="readme-truncation",
+    tags=("uns", "readme"),
+    expect=(
+        "The README is ~140,000 characters; the modal shows the first 100,000 (<code>repr_html_max_readme_size</code>) plus a truncation note.",
+    ),
+)
+def _readme_truncation() -> CaseOutput:
+    adata = AnnData(np.zeros((5, 5)))
+    adata.uns["README"] = "# Large README\n\n" + "This is a very long README. " * 5000
+    return render(adata)
+
+
+# =============================================================================
+# 5. Environments & theming
+# =============================================================================
+
+
+@case(
+    "env",
+    "No JavaScript (graceful degradation)",
+    slug="no-javascript",
+    tags=("no-js", "raw", "nested-anndata", "dataframe"),
+    expect=(
+        "All content visible; sections expanded; interactive buttons (fold, copy, search, wrap) hidden.",
+        "Category lists and the 20-column <code>cell_measurements</code> DataFrame column list wrap naturally.",
+        "Nested AnnData in uns and raw still expand via native <code>&lt;details&gt;</code>.",
+        "A small 'interactive features require JavaScript' hint is shown.",
+    ),
+)
+def _no_js() -> CaseOutput:
+    adata = AnnData(np.random.randn(30, 15).astype(np.float32))
+    adata.obs["group"] = pd.Categorical(["X", "Y", "Z"] * 10)
+    adata.uns["group_colors"] = ["#e41a1c", "#377eb8", "#4daf4a"]
+    for i in range(8):
+        adata.obs[f"metric_{i}"] = np.random.randn(30)
+    adata.obsm["X_pca"] = np.random.randn(30, 10).astype(np.float32)
+    adata.layers["raw"] = np.random.randn(30, 15).astype(np.float32)
+    adata.uns["nested_adata"] = AnnData(
+        np.zeros((5, 3)),
+        obs=pd.DataFrame({"label": ["A", "B", "C", "D", "E"]}),
+    )
+    adata.raw = adata.copy()
+    measurements = [
+        "area", "perimeter", "circularity", "eccentricity", "solidity", "extent",
+        "major_axis_length", "minor_axis_length", "orientation", "mean_intensity",
+        "max_intensity", "min_intensity", "std_intensity", "centroid_x", "centroid_y",
+        "bbox_area", "convex_area", "euler_number", "equivalent_diameter", "filled_area",
+    ]  # fmt: skip
+    adata.obsm["cell_measurements"] = pd.DataFrame(
+        np.random.rand(30, len(measurements)),
+        columns=measurements,
+        index=adata.obs_names,
+    )
+    return strip_script_tags(render(adata))
+
+
+@case(
+    "env",
+    "No CSS (GitHub / untrusted notebook)",
+    slug="no-css",
+    tags=("no-css", "no-js"),
+    expect=(
+        "Rendered in an isolated iframe with all &lt;style&gt; and &lt;script&gt; removed.",
+        "Still readable: one entry per line, monospace, comma-separated categories, a 'styled representation available' hint.",
+        "Sections fold/unfold via native <code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code>.",
+    ),
+)
+def _no_css() -> CaseOutput:
+    nocss = strip_style_and_script_tags(render(create_test_anndata()))
+    return iframe(
+        nocss,
+        title="No-CSS repr",
+        style="width:100%;border:1px solid #ccc;border-radius:4px;background:white;",
+    )
+
+
+@case(
+    "env",
+    "README icon without JavaScript",
+    slug="readme-no-js",
+    tags=("no-js", "readme"),
+    expect=(
+        "The ⓘ icon is present but does not open a modal.",
+        "Hovering it shows the first ~500 characters of the README as a native tooltip.",
+    ),
+)
+def _readme_no_js() -> CaseOutput:
+    adata = AnnData(np.random.randn(20, 10).astype(np.float32))
+    adata.obs["batch"] = pd.Categorical(["batch1", "batch2"] * 10)
+    adata.uns["README"] = (
+        "# Dataset Information\n\nThis dataset contains processed single-cell data.\n\n"
+        "## Key Features\n- 20 cells, 10 genes\n- 2 batches\n\n"
+        "For more details, see the full documentation.\n"
+    )
+    return strip_script_tags(render(adata))
+
+
+@case(
+    "env",
+    "HTML repr disabled",
+    slug="html-disabled",
+    tags=("settings",),
+    expect=(
+        "<code>_repr_html_()</code> returns <code>None</code> with <code>repr_html_enabled=False</code>, so Jupyter falls back to the text repr shown below.",
+    ),
+)
+def _html_disabled() -> CaseOutput:
+    adata = create_test_anndata()
+    with ad.settings.override(repr_html_enabled=False):
+        result = adata._repr_html_()
+    if result is not None:
+        return f"<p style='color:#cf222e'>Expected None, got {len(result)} chars of HTML.</p>{result}"
+    return f"<pre>_repr_html_() -> None\n\n{escape_html(repr(adata))}</pre>"
+
+
+@dataclass(frozen=True)
+class ThemeEnv:
+    """A simulated host page for one theme pane."""
+
+    label: str
+    expect: Literal["light", "dark"]
+    os: Literal["light", "dark"] = "light"
+    html_attrs: str = ""
+    body_attrs: str = ""
+    page_css: str = ""
+
+
+_THEME_PROBE_JS = """
+(() => {
+  const probe = document.getElementById("vt-probe");
+  const os = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const repr = document.querySelector(".anndata-repr");
+  let got = "?";
+  if (repr) {
+    const t = document.createElement("span");
+    t.style.color = "var(--anndata-text-primary)";
+    repr.appendChild(t);
+    const m = getComputedStyle(t).color.match(/[\\d.]+/g);
+    if (m) got = (+m[0] * 299 + +m[1] * 587 + +m[2] * 114) / 1000 > 128 ? "dark" : "light";
+    t.remove();
+  }
+  const ok = got === EXPECTED;
+  const sim = os === SIM_OS ? "" : " (OS simulation unsupported, toggle your OS theme)";
+  probe.innerHTML = `OS ${os}${sim} · repr ${got} · expected ${EXPECTED} ` +
+    `<b style="color:${ok ? "#1a7f37" : "#cf222e"}">${ok ? "PASS" : "FAIL"}</b>`;
+})();
+"""
+
+
+def render_theme_panes(envs: Sequence[ThemeEnv], repr_html: str) -> str:
+    """Render ``repr_html`` inside one iframe per simulated host environment.
+
+    OS dark mode is simulated by setting ``color-scheme: dark`` on the iframe
+    element: per CSS Color Adjust, the embedded document's
+    ``prefers-color-scheme`` follows the embedding element's used color scheme.
+    Each pane self-checks whether the repr picked the expected scheme.
+    """
+    panes = []
+    for env in envs:
+        probe = _THEME_PROBE_JS.replace("EXPECTED", repr(env.expect)).replace(
+            "SIM_OS", repr(env.os)
+        )
+        doc = (
+            f"<!doctype html><html {env.html_attrs}><head><meta charset='utf-8'>"
+            "<style>body{margin:0;padding:10px;font:13px system-ui,sans-serif}"
+            "#vt-probe{font:11px ui-monospace,monospace;margin-bottom:6px;opacity:.85}"
+            f"{env.page_css}</style></head><body {env.body_attrs}>"
+            f"<div id='vt-probe'>probe needs JS</div>{repr_html}"
+            f"<script>{probe}</script></body></html>"
+        )
+        panes.append(
+            '<figure class="vt-pane">'
+            f"<figcaption>{escape_html(env.label)} · OS {env.os} · expect {env.expect}</figcaption>"
+            + iframe(doc, title=env.label, style=f"color-scheme:{env.os};")
+            + "</figure>"
+        )
+    return f'<div class="vt-panes">{"".join(panes)}</div>'
+
+
+_THEME_EXPECT_COMMON = (
+    "Each pane prints <b>PASS</b>/<b>FAIL</b>: whether the repr's text color matches the expected scheme.",
+    "Visually: no light repr box on a dark page (or vice versa); category dots, warnings and badges stay legible.",
+)
+
+
+@case(
+    "env",
+    "Jupyter (JupyterLab / Notebook 7)",
+    slug="theme-jupyter",
+    tags=("theme", "dark-mode"),
+    expect=(
+        *_THEME_EXPECT_COMMON,
+        "An explicit light Jupyter theme wins over OS dark mode.",
+    ),
+    notes="JupyterLab sets <code>data-jp-theme-light</code> and <code>jp-Theme-*</code> on <code>&lt;body&gt;</code>.",
+)
+def _theme_jupyter() -> CaseOutput:
+    light = 'data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light" class="jp-Theme-Light"'
+    dark = 'data-jp-theme-light="false" data-jp-theme-name="JupyterLab Dark" class="jp-Theme-Dark"'
+    envs = [
+        ThemeEnv("JupyterLab Light", "light", body_attrs=light, page_css="body{background:#fff;color:#000}"),
+        ThemeEnv("JupyterLab Light", "light", os="dark", body_attrs=light, page_css="body{background:#fff;color:#000}"),
+        ThemeEnv("JupyterLab Dark", "dark", body_attrs=dark, page_css="body{background:#111;color:#ddd}"),
+        ThemeEnv("JupyterLab Dark", "dark", os="dark", body_attrs=dark, page_css="body{background:#111;color:#ddd}"),
+    ]  # fmt: skip
+    return render_theme_panes(envs, render(create_theme_demo_anndata()))
+
+
+@case(
+    "env",
+    "VS Code notebooks",
+    slug="theme-vscode",
+    tags=("theme", "dark-mode"),
+    expect=(
+        *_THEME_EXPECT_COMMON,
+        "High-contrast themes: HC dark should render dark, HC light should render light.",
+    ),
+    notes=(
+        "VS Code webviews set <code>body.vscode-{light,dark,high-contrast,high-contrast-light}</code> "
+        "and <code>data-vscode-theme-kind</code>."
+    ),
+)
+def _theme_vscode() -> CaseOutput:
+    def attrs(kind: str) -> str:
+        return f'class="{kind}" data-vscode-theme-kind="{kind}"'
+
+    envs = [
+        ThemeEnv("VS Code Light+", "light", os="dark", body_attrs=attrs("vscode-light"), page_css="body{background:#fff;color:#3b3b3b}"),
+        ThemeEnv("VS Code Dark+", "dark", body_attrs=attrs("vscode-dark"), page_css="body{background:#1f1f1f;color:#ccc}"),
+        ThemeEnv("VS Code High Contrast (dark)", "dark", body_attrs=attrs("vscode-high-contrast"), page_css="body{background:#000;color:#fff}"),
+        ThemeEnv("VS Code High Contrast Light", "light", os="dark", body_attrs=attrs("vscode-high-contrast-light"), page_css="body{background:#fff;color:#292929}"),
+    ]  # fmt: skip
+    return render_theme_panes(envs, render(create_theme_demo_anndata()))
+
+
+@case(
+    "env",
+    "Sphinx docs: Furo",
+    slug="theme-furo",
+    tags=("theme", "dark-mode"),
+    expect=(
+        *_THEME_EXPECT_COMMON,
+        "Furo 'auto' follows the OS: auto + OS dark is a dark page, so the repr should be dark.",
+    ),
+    notes="Furo sets <code>body[data-theme=light|dark|auto]</code>; 'auto' uses a <code>prefers-color-scheme</code> media query.",
+)
+def _theme_furo() -> CaseOutput:
+    auto_css = (
+        "body{background:#fff;color:#000}"
+        "@media (prefers-color-scheme: dark){body[data-theme=auto]{background:#131416;color:#cfd0d0}}"
+    )
+    envs = [
+        ThemeEnv("Furo light", "light", os="dark", body_attrs='data-theme="light"', page_css="body{background:#fff;color:#000}"),
+        ThemeEnv("Furo dark", "dark", body_attrs='data-theme="dark"', page_css="body{background:#131416;color:#cfd0d0}"),
+        ThemeEnv("Furo auto", "light", body_attrs='data-theme="auto"', page_css=auto_css),
+        ThemeEnv("Furo auto", "dark", os="dark", body_attrs='data-theme="auto"', page_css=auto_css),
+    ]  # fmt: skip
+    return render_theme_panes(envs, render(create_theme_demo_anndata()))
+
+
+@case(
+    "env",
+    "Sphinx docs: pydata-sphinx-theme / sphinx-book-theme",
+    slug="theme-pydata",
+    tags=("theme", "dark-mode"),
+    expect=(*_THEME_EXPECT_COMMON,),
+    notes=(
+        "pydata-sphinx-theme (and sphinx-book-theme, used by scverse docs) resolve 'auto' in JS "
+        "and set <code>html[data-theme=light|dark]</code> plus <code>data-mode</code>."
+    ),
+)
+def _theme_pydata() -> CaseOutput:
+    envs = [
+        ThemeEnv("pydata light", "light", os="dark", html_attrs='data-theme="light" data-mode="light"', page_css="body{background:#fff;color:#222832}"),
+        ThemeEnv("pydata dark", "dark", html_attrs='data-theme="dark" data-mode="dark"', page_css="body{background:#14181e;color:#ced6dd}"),
+    ]  # fmt: skip
+    return render_theme_panes(envs, render(create_theme_demo_anndata()))
+
+
+@case(
+    "env",
+    "Theme-less pages (OS light vs dark)",
+    slug="theme-none",
+    tags=("theme", "dark-mode"),
+    expect=(
+        *_THEME_EXPECT_COMMON,
+        "A page that declares no theme and no <code>color-scheme</code> stays light in OS dark mode (white canvas), so the repr must stay light too.",
+        "A page that opts into <code>color-scheme: light dark</code> turns dark in OS dark mode, so the repr should follow.",
+    ),
+    notes=(
+        "Covers classic Notebook, nbconvert/static HTML, GitHub-like pages and the top of this harness. "
+        "Use the 'Toggle dark mode' button (adds <code>body.dark-mode</code>) to check the harness itself."
+    ),
+)
+def _theme_none() -> CaseOutput:
+    scheme_css = (
+        ":root{color-scheme:light dark}body{background:Canvas;color:CanvasText}"
+    )
+    envs = [
+        ThemeEnv("plain page", "light"),
+        ThemeEnv("plain page", "light", os="dark"),
+        ThemeEnv("page with color-scheme: light dark", "light", page_css=scheme_css),
+        ThemeEnv(
+            "page with color-scheme: light dark", "dark", os="dark", page_css=scheme_css
+        ),
+    ]
+    return render_theme_panes(envs, render(create_theme_demo_anndata()))
+
+
+# =============================================================================
+# 6. Robustness & security
+# =============================================================================
+
+
+@case(
+    "robust",
+    "Special characters in names",
+    slug="special-characters",
+    tags=("obs", "uns", "xss", "unicode"),
+    expect=(
+        "<code>column&lt;with&gt;html</code>, ampersands, quotes and Japanese characters render literally.",
+        "No broken layout and no HTML interpretation.",
+    ),
+)
+def _special_chars() -> CaseOutput:
+    adata = AnnData(np.zeros((5, 3)))
+    adata.obs["column<with>html"] = list(range(5))
+    adata.obs["column&ampersand"] = list(range(5))
+    adata.uns["key\"with'quotes"] = "value"
+    adata.uns["unicode_日本語"] = "japanese"
+    return render(adata)
+
+
+@case(
+    "robust",
+    "Serialization warnings",
+    slug="serialization-warnings",
+    tags=("obs", "var", "layers", "obsm", "uns", "serialization"),
+    expect=(
+        "<b>Red (fails now):</b> obs list/dict/custom-object/tuple-named columns; var datetime/timedelta; <code>layers[('tuple','key')]</code>; uns custom object, lambda, nested bad value.",
+        "<b>Yellow (fails in future):</b> <code>obs['path/slash']</code>, <code>obsm['path/embed']</code>.",
+        "<b>No warning:</b> <code>var['gène_名前']</code>, normal floats/strings, <code>uns.valid_dict</code>.",
+    ),
+)
+def _serialization() -> CaseOutput:
+    class CustomObject:
+        def __repr__(self):
+            return "CustomObject()"
+
+    adata = AnnData(X=np.eye(5))
+
+    def obj_col(values: list[object]) -> pd.Series:
+        return pd.Series(values, index=adata.obs_names, dtype=object)
+
+    adata.obs["list_values"] = obj_col([["a", "b"], ["c"], ["d"], ["e"], ["f"]])
+    adata.obs["dict_values"] = obj_col([{"k": i} for i in range(1, 6)])
+    adata.obs["custom_obj"] = obj_col([CustomObject() for _ in range(5)])
+    adata.obs["path/slash"] = ["a", "b", "c", "d", "e"]
+    adata.obs[("tuple", "name")] = [1, 2, 3, 4, 5]
+    adata.var["datetime_col"] = pd.to_datetime([f"2024-01-0{i}" for i in range(1, 6)])
+    adata.var["timedelta_col"] = pd.to_timedelta([f"{i} days" for i in range(1, 6)])
+    adata.var["gène_名前"] = ["a", "b", "c", "d", "e"]
+    adata.var["normal_col"] = [1.0, 2.0, 3.0, 4.0, 5.0]
+    adata.var["string_col"] = ["a", "b", "c", "d", "e"]
+    adata.layers[("tuple", "key")] = np.eye(5)  # type: ignore[index]  # intentionally invalid key
+    adata.obsm["path/embed"] = np.random.randn(5, 2)
+    adata.uns["custom_obj"] = CustomObject()
+    adata.uns["lambda_func"] = lambda x: x
+    adata.uns["nested_bad"] = {"ok": 1, "bad": CustomObject()}
+    adata.uns["valid_dict"] = {"a": 1, "b": [1, 2, 3]}
+    return render(adata)
+
+
+@case(
+    "robust",
+    "Subclass with unknown and failing attributes",
+    slug="unknown-sections",
+    tags=("custom", "subclass", "errors"),
+    expect=(
+        "The <code>custom_data</code> mapping appears in an 'other' section at the bottom (nothing silently hidden).",
+        "The <code>failing_data</code> property raises; it is shown as inaccessible in 'other', not dropped.",
+    ),
+)
+def _unknown_sections() -> CaseOutput:
     class ExtendedAnnData(AnnData):
         """AnnData subclass with custom mapping attributes."""
 
@@ -2530,39 +3110,36 @@ For more details, see the full documentation.
             msg = "This property intentionally fails for testing"
             raise RuntimeError(msg)
 
-    adata_extended = ExtendedAnnData(
+    adata = ExtendedAnnData(
         np.random.randn(50, 100).astype(np.float32),
         obs=pd.DataFrame({"cluster": pd.Categorical(["A", "B"] * 25)}),
     )
-    # Add some custom data
-    adata_extended._custom_mappings = {
+    adata._custom_mappings = {
         "embedding": np.random.randn(50, 2),
         "config": {"param1": 1, "param2": "value"},
     }
-    sections.append((
-        "22a. Unknown Sections",
-        adata_extended._repr_html_(),
-        (
-            "Demonstrates two important features for scientific accuracy:<br>"
-            "<ol>"
-            "<li><strong>Unknown sections:</strong> The <code>custom_data</code> mapping attribute "
-            "appears in an 'other' section at the bottom, ensuring no data is silently hidden.</li>"
-            "<li><strong>Error handling:</strong> The <code>failing_data</code> property raises an "
-            "error when accessed. Instead of silently hiding it, the repr shows it as 'inaccessible' "
-            "in the 'other' section.</li>"
-            "</ol>"
-            "This ensures researchers always know what data exists, even if it can't be rendered."
-        ),
-    ))
+    return render(adata)
 
-    # Test 22b: Failing section rendering (using real rendering mechanism)
-    # Use unittest.mock to safely patch properties
-    print("  22b. Failing section rendering (real errors)")
+
+@case(
+    "robust",
+    "Failing section accessors (real errors)",
+    slug="failing-sections",
+    tags=("varm", "layers", "errors"),
+    expect=(
+        "obs, var, uns, obsm, obsp, varp render normally.",
+        "<code>varm</code> and <code>layers</code> show an error row with the exception message instead of crashing.",
+        "X lives in <code>layers[None]</code>, so it shows the same I/O error (with its message), not a bare exception type.",
+    ),
+    notes="Uses <code>unittest.mock.patch</code> so the real <code>generate_repr_html</code> pipeline hits the exceptions.",
+)
+def _failing_sections() -> CaseOutput:
     from unittest.mock import PropertyMock, patch
 
-    # Create a mapping-like object that raises an error when accessed
     class FailingMapping:
         """A mapping that raises an error when iterated."""
+
+        isbacked = False  # AnnData.isbacked / .X consult layers since X is layers[None]
 
         def __init__(self, error_msg: str):
             self._error_msg = error_msg
@@ -2576,9 +3153,17 @@ For more details, see the full documentation.
         def __iter__(self):
             raise RuntimeError(self._error_msg)
 
-    # Create a real AnnData with data
+        def __getitem__(self, key):
+            raise RuntimeError(self._error_msg)
+
+        def get(self, key, default=None):
+            raise RuntimeError(self._error_msg)
+
+        def __contains__(self, key):
+            raise RuntimeError(self._error_msg)
+
     rng = np.random.default_rng(42)
-    adata_failing = ad.AnnData(
+    adata = AnnData(
         X=rng.random((100, 50)),
         obs=pd.DataFrame(
             {"cell_type": ["A", "B", "C"] * 33 + ["A"]},
@@ -2594,143 +3179,146 @@ For more details, see the full documentation.
         obsp={"distances": sp.csr_matrix(rng.random((100, 100)))},
         uns={"method": "test", "params": {"k": 10}},
     )
-
-    # Create failing mappings
     failing_varm = FailingMapping(
         "Failed to decompress data block (corrupted zarr chunk)"
     )
     failing_layers = FailingMapping(
         "IOError: [Errno 5] Input/output error reading '/data/counts.h5'"
     )
-
-    # Use unittest.mock.patch to safely patch properties (auto-restores on exit)
     with (
         patch.object(
-            type(adata_failing),
-            "varm",
-            new_callable=PropertyMock,
-            return_value=failing_varm,
+            type(adata), "varm", new_callable=PropertyMock, return_value=failing_varm
         ),
         patch.object(
-            type(adata_failing),
+            type(adata),
             "layers",
             new_callable=PropertyMock,
             return_value=failing_layers,
         ),
     ):
-        # Use the real repr mechanism - this will trigger errors on varm and layers
-        failing_html = adata_failing._repr_html_()
+        return render(adata)
 
-    sections.append((
-        "22b. Failing Section Rendering (Real Errors)",
-        failing_html,
-        (
-            "Demonstrates the <strong>actual error handling mechanism</strong> in the repr. "
-            "This test uses <code>unittest.mock.patch</code> to make <code>varm</code> and "
-            "<code>layers</code> properties raise real exceptions when accessed.<br>"
-            "<ul>"
-            "<li><strong>Normal sections:</strong> X, obs, var, uns, obsm, obsp, varp render correctly</li>"
-            "<li><strong>varm (error):</strong> Real RuntimeError from corrupted data simulation</li>"
-            "<li><strong>layers (error):</strong> Real IOError from I/O failure simulation</li>"
-            "</ul>"
-            "This tests the actual <code>_render_section</code> try/except error handling "
-            "using the real <code>generate_repr_html</code> pipeline."
-        ),
-    ))
 
-    # Test 23: Serialization warnings and edge cases
-    print("  23. Serialization warnings and edge cases")
+class _Exploding:
+    """Marker type routed to the failing formatters below."""
 
-    class CustomObject:
-        def __repr__(self):
-            return "CustomObject()"
+    shape = (3, 3)
+    dtype = np.dtype("float32")
 
-    adata_serial = ad.AnnData(X=np.eye(5))
+    def __repr__(self) -> str:
+        return "_Exploding()"
 
-    # Cases that SHOULD warn (and fail to serialize)
-    # obs: 5 columns (stays expanded)
-    adata_serial.obs["list_values"] = [["a", "b"], ["c"], ["d"], ["e"], ["f"]]
-    adata_serial.obs["dict_values"] = [{"k": 1}, {"k": 2}, {"k": 3}, {"k": 4}, {"k": 5}]
-    adata_serial.obs["custom_obj"] = [CustomObject() for _ in range(5)]
-    adata_serial.obs["path/slash"] = ["a", "b", "c", "d", "e"]  # Slash in name
-    adata_serial.obs[("tuple", "name")] = [1, 2, 3, 4, 5]  # Non-string name
 
-    # var: 5 columns (stays expanded) - includes datetime/timedelta warnings
-    adata_serial.var["datetime_col"] = pd.to_datetime([
-        "2024-01-01",
-        "2024-01-02",
-        "2024-01-03",
-        "2024-01-04",
-        "2024-01-05",
-    ])
-    adata_serial.var["timedelta_col"] = pd.to_timedelta([
-        "1 days",
-        "2 days",
-        "3 days",
-        "4 days",
-        "5 days",
-    ])
-    adata_serial.var["gène_名前"] = ["a", "b", "c", "d", "e"]  # Non-ASCII is OK
-    adata_serial.var["normal_col"] = [1.0, 2.0, 3.0, 4.0, 5.0]  # Normal floats
-    adata_serial.var["string_col"] = ["a", "b", "c", "d", "e"]  # Strings OK
+class _FailingTypeFormatter(TypeFormatter):
+    """A third-party TypeFormatter with a bug in ``format()``."""
 
-    # Mapping sections (layers, obsm, etc.) - same rules apply
-    adata_serial.layers[("tuple", "key")] = np.eye(5)  # Non-string - fails NOW
-    adata_serial.obsm["path/embed"] = np.random.randn(5, 2)  # Slash - deprecated
+    priority = 10_000
 
-    # uns: non-serializable types (common edge cases)
-    adata_serial.uns["custom_obj"] = CustomObject()  # Custom class
-    adata_serial.uns["lambda_func"] = lambda x: x  # Function
-    adata_serial.uns["nested_bad"] = {"ok": 1, "bad": CustomObject()}  # Nested
-    adata_serial.uns["valid_dict"] = {"a": 1, "b": [1, 2, 3]}  # This is fine
+    def can_format(self, obj, context):
+        return isinstance(obj, _Exploding)
 
-    sections.append((
-        "23. Serialization Warnings",
-        adata_serial._repr_html_(),
-        (
-            "<strong>Fails NOW (red):</strong>"
-            "<ul>"
-            "<li><code>obs.list_values</code> - Contains list</li>"
-            "<li><code>obs.dict_values</code> - Contains dict</li>"
-            "<li><code>obs.custom_obj</code> - Contains CustomObject</li>"
-            "<li><code>obs.('tuple', 'name')</code> - Non-string column name</li>"
-            "<li><code>var.datetime_col</code> - datetime64 not serializable</li>"
-            "<li><code>var.timedelta_col</code> - timedelta64 not serializable</li>"
-            "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
-            "<li><code>uns.custom_obj</code> - CustomObject not serializable</li>"
-            "<li><code>uns.lambda_func</code> - Function not serializable</li>"
-            "<li><code>uns.nested_bad</code> - Contains non-serializable nested value</li>"
-            "</ul>"
-            "<strong>Will fail in future (yellow):</strong>"
-            "<ul>"
-            "<li><code>obs.path/slash</code> - Slash in name</li>"
-            "<li><code>obsm.path/embed</code> - Slash in key</li>"
-            "</ul>"
-            "<strong>Serializes fine (no warning):</strong>"
-            "<ul>"
-            "<li><code>var.gène_名前</code> - Non-ASCII is valid UTF-8</li>"
-            "<li><code>var.normal_col</code> - Normal float values</li>"
-            "<li><code>var.string_col</code> - String values</li>"
-            "<li><code>uns.valid_dict</code> - Dict with serializable values</li>"
-            "</ul>"
-        ),
-    ))
+    def format(self, obj, context) -> FormattedOutput:
+        raise ZeroDivisionError("third-party formatter bug <script>alert(1)</script>")
 
-    # Test 24: ULTIMATE EVIL - The WORST possible adversarial robustness test
-    # Includes EVERYTHING that could possibly break a repr:
-    # - XSS injection (script, img onerror, svg onload, javascript:)
-    # - HTML/CSS breakout (</style>, </div>, css expressions)
-    # - Unicode bombs (emoji, CJK, RTL override, Zalgo, null bytes)
-    # - CRASHING OBJECTS (broken __repr__, __len__, __str__, properties)
-    # - Circular references (dict containing itself)
-    # - Infinite-like data (len = 10^18)
-    # - Huge categoricals (10,000 categories!)
-    # - Giant strings (50KB+)
-    # - Deeply nested structures (15+ levels)
-    print("  24. Evil AnnData (Adversarial Robustness)")
 
-    # === DEFINE CRASHING/EVIL OBJECT CLASSES ===
+class _FailingCanFormatFormatter(TypeFormatter):
+    """A third-party TypeFormatter whose ``can_format()`` raises for everything."""
 
+    priority = 10_001
+
+    def can_format(self, obj, context):
+        if isinstance(obj, str) and obj == "trigger-can-format-bug":
+            raise KeyError("can_format bug")
+        return False
+
+    def format(self, obj, context) -> FormattedOutput:  # pragma: no cover
+        raise NotImplementedError
+
+
+class _FailingSectionFormatter(SectionFormatter):
+    """A third-party SectionFormatter whose ``get_entries()`` raises."""
+
+    section_name = "broken_plugin"
+
+    @property
+    def after_section(self) -> str:
+        return "obsm"
+
+    def should_show(self, obj) -> bool:
+        return "broken_plugin_marker" in getattr(obj, "uns", {})
+
+    def get_entries(self, obj, context) -> list[FormattedEntry]:
+        raise RuntimeError("plugin section exploded")
+
+
+@case(
+    "robust",
+    "Failing third-party formatters",
+    slug="failing-formatters",
+    tags=("obsm", "uns", "layers", "custom", "errors", "xss"),
+    expect=(
+        "Entries handled by the buggy TypeFormatter fall back to an error row (or the default formatter), the rest renders.",
+        "The exception message containing <code>&lt;script&gt;</code> is escaped.",
+        "A <code>can_format()</code> that raises does not break other entries.",
+        "The <code>broken_plugin</code> section shows an error instead of aborting the whole repr.",
+    ),
+)
+def _failing_formatters() -> CaseOutput:
+    adata = AnnData(np.zeros((3, 3)))
+    adata.obsm._data["exploding"] = _Exploding()  # type: ignore[union-attr]  # bypass validation
+    adata.layers["fine"] = np.ones((3, 3))
+    adata.uns["exploding"] = _Exploding()
+    adata.uns["triggers_can_format"] = "trigger-can-format-bug"
+    adata.uns["broken_plugin_marker"] = True
+    with (
+        temporarily_registered(_FailingTypeFormatter()),
+        temporarily_registered(_FailingCanFormatFormatter()),
+        temporarily_registered(_FailingSectionFormatter()),
+    ):
+        return render(adata)
+
+
+@case(
+    "robust",
+    "Evil AnnData (adversarial robustness)",
+    slug="evil-anndata",
+    tags=(
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "varp",
+        "layers",
+        "uns",
+        "xss",
+        "unicode",
+        "errors",
+        "colors",
+        "readme",
+        "nested-anndata",
+        "circular",
+    ),
+    expect=(
+        "No crash, no script execution, no layout breakout (the card below stays intact).",
+        "Errors in <span style='color:#dc3545'>red</span>, warnings in <span style='color:#d29922'>orange</span>, rows tinted accordingly.",
+        "All XSS payloads in column names, category values, DataFrame columns, uns keys/values, type and exception names show as literal text.",
+        "Bad colors (too many/few, invalid, CSS/url injection, 1000-char strings) never produce dots with injected styles.",
+        "varp shows 200 of 300 entries plus a truncation indicator; 10k-category column, 50 KB string and 500-item dict are truncated.",
+        "Circular references (dict, self-referencing AnnData) terminate.",
+    ),
+    notes=(
+        "<b>Crashing objects in uns:</b> exploding_repr/len/str, lying_object, infinite_len (10^18), "
+        "exploding_shape/dtype, xss_via_exception, xss_via_type_name, long_error_object_uns, unknown_anndata_type (orange).<br>"
+        "<b>Evil README:</b> displayed via textContent, so nothing can fire; includes script/style tags, RTL override, null bytes, template injection and a 50 KB bomb.<br>"
+        "<b>varm:</b> long_error_object (error should truncate).<br>"
+        "<b>Circular:</b> circular_dict, self_reference, child_with_parent_ref.<br>"
+        "<b>Nesting:</b> deeply_nested_15_levels; nested_adata_with_errors shows tinted rows inside.<br>"
+        "<b>obs names:</b> &lt;script&gt;, &lt;img onerror&gt;, onclick=, &lt;svg onload&gt;, javascript:, emoji, CJK, RTL override, null bytes.<br>"
+        "<b>var names:</b> &lt;/style&gt;&lt;script&gt;, &lt;/div&gt; breakout.<br>"
+        "<b>uns strings:</b> SVG XSS, mutation XSS, UTF-7, BOM prefix."
+    ),
+)
+def _evil() -> CaseOutput:  # noqa: PLR0915
     class ExplodingRepr:
         """Object whose __repr__ crashes."""
 
@@ -2803,8 +3391,7 @@ For more details, see the full documentation.
         def __repr__(self):
             return "ExplodingDtype(.dtype crashes)"
 
-    # === THE EVIL ANNDATA ===
-    adata_evil = ad.AnnData(X=np.random.rand(50, 30).astype(np.float32))
+    adata_evil = AnnData(X=np.random.rand(50, 30).astype(np.float32))
 
     # XSS injection attempts (6 variants)
     adata_evil.obs["normal_column"] = np.random.choice(["A", "B", "C"], size=50)
@@ -2823,7 +3410,6 @@ For more details, see the full documentation.
     adata_evil.obs["null\x00byte\x00col"] = np.random.rand(50)
 
     # XSS in CATEGORY VALUES (not just column names)
-    # Tests that category preview properly escapes malicious category names
     xss_categories = [
         '<script>alert("cat")</script>',
         "<img onerror=alert(1)>",
@@ -2884,11 +3470,10 @@ For more details, see the full documentation.
 
     adata_evil.uns["unknown_anndata_type"] = FakeAnndataType()
 
-    # EVIL README - tests the readme modal with adversarial content.
-    # README is displayed as plain text via textContent (not innerHTML),
-    # so none of these vectors can fire. This just verifies the data-readme
+    # EVIL README - displayed as plain text via textContent (not innerHTML),
+    # so none of these vectors can fire. This verifies the data-readme
     # attribute handles edge-case content without breaking HTML structure.
-    evil_readme = (
+    adata_evil.uns["README"] = (
         """Evil README - XSS and Injection Test
 
 <script>alert('XSS in readme!')</script>
@@ -2907,23 +3492,18 @@ Size bomb below (50KB):
 """
         + "A" * 50000
     )
-    adata_evil.uns["README"] = evil_readme
 
-    # CIRCULAR REFERENCE (dict)
-    circular_dict = {"level1": {"level2": {}}}
+    # CIRCULAR REFERENCES
+    circular_dict: dict = {"level1": {"level2": {}}}
     circular_dict["level1"]["level2"]["back_to_start"] = circular_dict
     adata_evil.uns["circular_dict"] = circular_dict
-
-    # CIRCULAR REFERENCE (AnnData self-reference)
     adata_evil.uns["self_reference"] = adata_evil
-
-    # CIRCULAR REFERENCE (nested AnnData with parent reference)
-    child_adata = ad.AnnData(np.zeros((5, 5)))
+    child_adata = AnnData(np.zeros((5, 5)))
     child_adata.uns["parent_ref"] = adata_evil
     adata_evil.uns["child_with_parent_ref"] = child_adata
 
     # DEEPLY NESTED - 15 levels
-    deeply_nested = {}
+    deeply_nested: dict = {}
     current = deeply_nested
     for i in range(15):
         current[f"level_{i}"] = {}
@@ -2931,107 +3511,62 @@ Size bomb below (50KB):
     current["bottom"] = "reached the bottom!"
     adata_evil.uns["deeply_nested_15_levels"] = deeply_nested
 
-    # XSS in uns keys
+    # XSS in uns keys, size bombs
     adata_evil.uns["<script>evil()</script>"] = "XSS key"
-
-    # GIANT STRING - 50KB
     adata_evil.uns["giant_string_50kb"] = "X" * 50_000
-
-    # MANY ITEMS - 500 items
     adata_evil.uns["many_items_500"] = {f"item_{i:04d}": i for i in range(500)}
-
-    # HUGE categorical (10,000 categories!)
     huge_cats = [f"category_{i:05d}" for i in range(10000)]
     adata_evil.obs["huge_categorical_10k"] = pd.Categorical(
         np.random.choice(huge_cats[:50], size=50), categories=huge_cats
     )
 
-    # === MANY ENTRIES IN ONE SECTION ===
-    # Test that sections with many entries are truncated (default max is 200)
-    # Create one valid entry, then directly populate internal store to skip validation
+    # MANY ENTRIES IN ONE SECTION (default max is 200). Populate the internal
+    # store directly after one validated entry to skip slow validation.
     tiny_sparse = sp.csr_matrix(([1.0], ([0], [0])), shape=(30, 30))
-    adata_evil.varp["varp_000"] = tiny_sparse  # One valid entry to initialize
-    # Directly add to internal store (bypasses slow validation)
+    adata_evil.varp["varp_000"] = tiny_sparse
     for i in range(1, 300):
-        adata_evil.varp._data[f"varp_{i:03d}"] = tiny_sparse
+        adata_evil.varp._data[f"varp_{i:03d}"] = tiny_sparse  # type: ignore[union-attr]
 
     # BAD COLORS - various malformed color arrays
-    # Too many colors (more than categories)
-    adata_evil.obs["cat_too_many_colors"] = pd.Categorical(
-        np.random.choice(["A", "B", "C"], size=50)
-    )
-    adata_evil.uns["cat_too_many_colors_colors"] = [
-        "red",
-        "green",
-        "blue",
-        "yellow",
-        "purple",
-        "orange",
-    ]
-
-    # Too few colors (fewer than categories)
-    adata_evil.obs["cat_too_few_colors"] = pd.Categorical(
-        np.random.choice(["X", "Y", "Z", "W"], size=50)
-    )
-    adata_evil.uns["cat_too_few_colors_colors"] = ["red"]
-
-    # Non-colors (invalid color strings)
-    adata_evil.obs["cat_bad_colors"] = pd.Categorical(
-        np.random.choice(["alpha", "beta"], size=50)
-    )
-    adata_evil.uns["cat_bad_colors_colors"] = ["not_a_color", "also_invalid"]
-
-    # Strange formats
-    adata_evil.obs["cat_strange_colors"] = pd.Categorical(
-        np.random.choice(["one", "two", "three"], size=50)
-    )
-    adata_evil.uns["cat_strange_colors_colors"] = [
-        "#FF0000",  # Valid hex
-        "rgb(0,255,0)",  # Valid RGB
-        "rgba(0,0,255,0.5)",  # Valid RGBA
-    ]
-
-    # Empty colors array
-    adata_evil.obs["cat_empty_colors"] = pd.Categorical(
-        np.random.choice(["p", "q"], size=50)
-    )
-    adata_evil.uns["cat_empty_colors_colors"] = []
-
-    # CSS injection attempts (must be blocked by whitelist)
-    adata_evil.obs["cat_css_injection"] = pd.Categorical(
-        np.random.choice(["x", "y", "z"], size=50)
-    )
-    adata_evil.uns["cat_css_injection_colors"] = [
-        "#ff0000",  # Valid (should render)
-        "blue; } .adata-table { display:none } .x {",  # CSS injection
-        "red; background-image: url(https://evil.com/steal)",  # Data exfil
-    ]
-
-    # URL/expression injection (must be blocked)
-    adata_evil.obs["cat_url_injection"] = pd.Categorical(
-        np.random.choice(["a", "b"], size=50)
-    )
-    adata_evil.uns["cat_url_injection_colors"] = [
-        "url(https://evil.com/track)",  # URL injection
-        "expression(alert(1))",  # IE expression injection
-    ]
-
-    # Very long color strings (DoS protection)
-    adata_evil.obs["cat_long_colors"] = pd.Categorical(
-        np.random.choice(["m", "n"], size=50)
-    )
-    adata_evil.uns["cat_long_colors_colors"] = [
-        "red" + "x" * 1000,  # Very long string
-        "blue",
-    ]
+    bad_colors: dict[str, tuple[list[str], list[str]]] = {
+        "cat_too_many_colors": (
+            ["A", "B", "C"],
+            ["red", "green", "blue", "yellow", "purple", "orange"],
+        ),
+        "cat_too_few_colors": (["X", "Y", "Z", "W"], ["red"]),
+        "cat_bad_colors": (["alpha", "beta"], ["not_a_color", "also_invalid"]),
+        "cat_strange_colors": (
+            ["one", "two", "three"],
+            ["#FF0000", "rgb(0,255,0)", "rgba(0,0,255,0.5)"],
+        ),
+        "cat_empty_colors": (["p", "q"], []),
+        # CSS injection attempts (must be blocked by whitelist)
+        "cat_css_injection": (
+            ["x", "y", "z"],
+            [
+                "#ff0000",
+                "blue; } .adata-table { display:none } .x {",
+                "red; background-image: url(https://evil.com/steal)",
+            ],
+        ),
+        # URL/expression injection (must be blocked)
+        "cat_url_injection": (
+            ["a", "b"],
+            ["url(https://evil.com/track)", "expression(alert(1))"],
+        ),
+        # Very long color strings (DoS protection)
+        "cat_long_colors": (["m", "n"], ["red" + "x" * 1000, "blue"]),
+    }
+    for col, (cats, colors) in bad_colors.items():
+        adata_evil.obs[col] = pd.Categorical(np.random.choice(cats, size=50))
+        adata_evil.uns[f"{col}_colors"] = colors
 
     # NESTED ANNDATA WITH ERRORS (should show yellow/red rows in nested content)
-    nested_with_errors = ad.AnnData(np.zeros((10, 10)))
+    nested_with_errors = AnnData(np.zeros((10, 10)))
     nested_with_errors.uns["bad_obj_in_nested"] = ExplodingRepr()
     nested_with_errors.uns["another_bad"] = LyingObject()
     adata_evil.uns["nested_adata_with_errors"] = nested_with_errors
 
-    # OBJECT WITH VERY LONG ERROR MESSAGE (in uns to test truncation)
     class VeryLongErrorObject:
         """Object that produces a very long error message."""
 
@@ -3052,26 +3587,20 @@ Size bomb below (50KB):
 
     adata_evil.uns["long_error_object_uns"] = VeryLongErrorObject()
 
-    # SVG XSS - SVG elements with scripts (must be escaped)
+    # SVG XSS, mutation XSS, encoding attacks
     adata_evil.uns["svg_script"] = "<svg><script>alert(1)</script></svg>"
     adata_evil.uns["svg_onload"] = '<svg onload="alert(1)">'
-
-    # MUTATION XSS (mXSS) - malformed HTML that could mutate during parsing
     adata_evil.uns["mxss_unclosed"] = "<img src=x onerror=alert(1)//"
     adata_evil.uns["mxss_nested"] = "<div<script>alert(1)</script>>"
-
-    # ENCODING ATTACKS
     adata_evil.uns["utf7_script"] = "+ADw-script+AD4-alert(1)+ADw-/script+AD4-"
     adata_evil.uns["bom_prefix"] = "\ufeffmalicious_content"
 
-    # Add long error object to varm (bypass validation via internal store)
-    adata_evil.varm["gene_scores"] = np.random.rand(
-        30, 5
-    )  # Need at least one valid entry
-    adata_evil.varm._data["long_error_object"] = VeryLongErrorObject()
+    # Long error object in varm (bypass validation via internal store)
+    adata_evil.varm["gene_scores"] = np.random.rand(30, 5)
+    adata_evil.varm._data["long_error_object"] = VeryLongErrorObject()  # type: ignore[union-attr]
 
     # XSS in DataFrame COLUMN NAMES (shown in obsm preview)
-    evil_df = pd.DataFrame(
+    adata_evil.obsm["X_evil_df_cols"] = pd.DataFrame(
         {
             '<script>alert("col")</script>': np.random.rand(50),
             "<img onerror=alert(1)>": np.random.rand(50),
@@ -3079,7 +3608,6 @@ Size bomb below (50KB):
         },
         index=adata_evil.obs_names,
     )
-    adata_evil.obsm["X_evil_df_cols"] = evil_df
 
     # Standard sections to show they still work
     adata_evil.obsm["X_pca"] = np.random.rand(50, 10)
@@ -3087,291 +3615,295 @@ Size bomb below (50KB):
     adata_evil.layers["raw_counts"] = np.random.randint(0, 100, (50, 30))
     adata_evil.obsp["connectivities"] = sp.random(50, 50, density=0.1, format="csr")
 
-    # Suppress warnings from crashing objects during repr generation
-    # (The warnings are expected - we're testing that repr handles them gracefully)
+    # The warnings from crashing objects are expected; don't list them in the page.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        evil_html = adata_evil._repr_html_()
+        return render(adata_evil)
 
-    sections.append((
-        "24. Evil AnnData - Adversarial Robustness",
-        evil_html,
-        (
-            "<b>Comprehensive adversarial testing:</b> XSS injection, HTML/CSS breakout, "
-            "Unicode bombs, crashing objects, circular references, size bombs, SVG XSS, "
-            "mutation XSS, and encoding attacks.<br><br>"
-            "<b>Crashing objects in uns (errors shown in red in preview column):</b><br>"
-            "<ul>"
-            "<li><code>exploding_repr</code> - __repr__ raises RuntimeError</li>"
-            "<li><code>exploding_len</code> - __len__ raises MemoryError</li>"
-            "<li><code>exploding_str</code> - __str__ raises ValueError</li>"
-            "<li><code>lying_object</code> - shape/dtype/len/str all raise AttributeError</li>"
-            "<li><code>infinite_len</code> - len() returns 10^18 (suspicious)</li>"
-            "<li><code>exploding_shape</code> - .shape property raises TypeError</li>"
-            "<li><code>exploding_dtype</code> - .dtype property raises TypeError</li>"
-            "<li><code>xss_via_exception</code> - exception with XSS in __name__ (must be escaped)</li>"
-            "<li><code>xss_via_type_name</code> - type with XSS in __name__ (must be escaped)</li>"
-            "<li><code>long_error_object_uns</code> - very long error message (should truncate)</li>"
-            "<li><code>unknown_anndata_type</code> - unknown type warning shown in orange</li>"
-            "</ul>"
-            "<b>Evil README (click icon to open modal):</b><br>"
-            "<ul>"
-            "<li>README is displayed as plain text via textContent, so no vectors can fire</li>"
-            "<li>Contains: script tags, event handlers, style injection, closing tags</li>"
-            "<li>Unicode: RTL override, null bytes, emoji</li>"
-            "<li>Template injection attempts, 50KB size bomb</li>"
-            "</ul>"
-            "<b>Crashing object in varm:</b><br>"
-            "<ul>"
-            "<li><code>long_error_object</code> - very long error message (should truncate)</li>"
-            "</ul>"
-            "<b>Circular references:</b><br>"
-            "<ul>"
-            "<li><code>circular_dict</code> - dict that contains itself</li>"
-            "<li><code>self_reference</code> - AnnData references itself</li>"
-            "<li><code>child_with_parent_ref</code> - nested AnnData with circular parent reference</li>"
-            "</ul>"
-            "<b>Extreme nesting:</b><br>"
-            "<ul><li><code>deeply_nested_15_levels</code> - 15 levels of nested dicts</li></ul>"
-            "<b>XSS injection in obs column names:</b><br>"
-            "<ul>"
-            "<li><code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></li>"
-            "<li><code>&lt;img onerror=alert(1)&gt;</code></li>"
-            "<li><code>onclick='evil()'</code></li>"
-            "<li><code>&lt;svg onload=alert(1)&gt;</code></li>"
-            "<li><code>javascript:alert(1)</code></li>"
-            "</ul>"
-            "<b>XSS in uns keys:</b><br>"
-            "<ul><li><code>&lt;script&gt;evil()&lt;/script&gt;</code></li></ul>"
-            "<b>XSS in category VALUES (not just column names):</b><br>"
-            "<ul>"
-            "<li><code>xss_category_values</code> - category names contain XSS payloads</li>"
-            "<li>Tests that category preview escapes: script, img onerror, svg onload, onclick</li>"
-            "</ul>"
-            "<b>XSS in DataFrame COLUMN NAMES (obsm preview):</b><br>"
-            "<ul>"
-            "<li><code>X_evil_df_cols</code> - DataFrame column names contain XSS payloads</li>"
-            "<li>Tests that obsm DataFrame column preview escapes malicious column names</li>"
-            "</ul>"
-            "<b>HTML/CSS breakout in var:</b><br>"
-            "<ul>"
-            "<li><code>&lt;/style&gt;&lt;script&gt;bad()&lt;/script&gt;</code></li>"
-            "<li><code>&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;breakout</code></li>"
-            "</ul>"
-            "<b>Unicode stress in obs:</b><br>"
-            "<ul>"
-            "<li><code>emoji_poop</code> - emoji character</li>"
-            "<li><code>chinese_中文</code> - CJK characters</li>"
-            "<li><code>rtl_LIVE_override</code> - RTL override</li>"
-            "<li><code>null\\x00byte\\x00col</code> - null bytes</li>"
-            "</ul>"
-            "<b>Size bombs:</b><br>"
-            "<ul>"
-            "<li><code>huge_categorical_10k</code> - 10,000 categories in obs</li>"
-            "<li><code>giant_string_50kb</code> - 50KB string in uns</li>"
-            "<li><code>many_items_500</code> - dict with 500 items in uns</li>"
-            "</ul>"
-            "<b>Many entries in varp (tests truncation):</b><br>"
-            "<ul>"
-            "<li><code>varp_000</code> to <code>varp_299</code> - 300 arrays (truncated to 200)</li>"
-            "</ul>"
-            "<b>Bad colors in obs (with _colors in uns):</b><br>"
-            "<ul>"
-            "<li><code>cat_too_many_colors</code> - 6 colors for 3 categories</li>"
-            "<li><code>cat_too_few_colors</code> - 1 color for 4 categories</li>"
-            "<li><code>cat_bad_colors</code> - invalid color strings</li>"
-            "<li><code>cat_strange_colors</code> - hex, rgb(), rgba() formats</li>"
-            "<li><code>cat_empty_colors</code> - empty colors array</li>"
-            "<li><code>cat_css_injection</code> - CSS injection via semicolons (blocked by whitelist)</li>"
-            "<li><code>cat_url_injection</code> - url()/expression() injection (blocked)</li>"
-            "<li><code>cat_long_colors</code> - very long strings (DoS protection, blocked)</li>"
-            "</ul>"
-            "<b>Nested AnnData with errors:</b><br>"
-            "<ul>"
-            "<li><code>nested_adata_with_errors</code> - contains <code>bad_obj_in_nested</code> and <code>another_bad</code></li>"
-            "<li>Should show yellow/red row backgrounds in nested content</li>"
-            "</ul>"
-            "<b>SVG XSS (must be escaped):</b><br>"
-            "<ul>"
-            "<li><code>svg_script</code> - SVG with embedded script tag</li>"
-            "<li><code>svg_onload</code> - SVG with onload handler</li>"
-            "</ul>"
-            "<b>Mutation XSS (malformed HTML):</b><br>"
-            "<ul>"
-            "<li><code>mxss_unclosed</code> - unclosed img tag with onerror</li>"
-            "<li><code>mxss_nested</code> - malformed nested tag</li>"
-            "</ul>"
-            "<b>Encoding attacks:</b><br>"
-            "<ul>"
-            "<li><code>utf7_script</code> - UTF-7 encoded script tag</li>"
-            "<li><code>bom_prefix</code> - BOM character prefix</li>"
-            "</ul>"
-            "<b>Expected behavior:</b><br>"
-            "<ul>"
-            "<li>Errors shown in <span style='color:red;'>red</span> in preview column</li>"
-            "<li>Warnings shown in <span style='color:orange;'>orange</span> in preview column</li>"
-            "<li>Warning/error rows have colored backgrounds (yellow/red)</li>"
-            "<li>All XSS attempts are escaped (no script execution)</li>"
-            "<li>Large data is truncated</li>"
-            "<li>No crashes</li>"
-            "</ul>"
-        ),
-    ))
 
-    # Test 25: Ecosystem Package Extensibility - Modifying Known Sections
-    # This demonstrates how external packages (bionty, lamindb, cellxgene, etc.)
-    # can customize how data in obs/var columns is rendered by:
-    # 1. Storing semantic metadata in uns
-    # 2. Registering a TypeFormatter with sections=("obs", "var") and higher priority
-    # 3. Using FormatterContext.adata_ref and key to look up metadata
-    #
-    # See also: LAMINDB_COMPARISON_REPORT.md for detailed analysis of this pattern
-    print("  25. Ecosystem Package Extensibility (Customizing obs/var columns)")
+# =============================================================================
+# 7. Extensibility / ecosystem
+# =============================================================================
 
-    # === STEP 1: Define a convention for storing semantic metadata in uns ===
-    # This is what a package like bionty or lamindb would store when annotating data
-    ONTOLOGY_METADATA_KEY = "__ontology_annotations__"
 
-    # === STEP 2: Create a TypeFormatter that reads this metadata ===
-    # This would be in the ecosystem package (e.g., bionty/_repr.py)
+class AnalysisHistoryFormatter(TypeFormatter):
+    """Example TypeFormatter for analysis history data with embedded type hint.
 
-    @register_formatter
-    class OntologyAnnotatedCategoricalFormatter(TypeFormatter):
+    A package would decorate this with ``@register_formatter``; the case below
+    registers it only while rendering.
+    """
+
+    priority = 100  # High priority to check before fallback
+
+    def can_format(self, obj, context):
+        hint, _ = extract_uns_type_hint(obj)
+        return hint == "example.history"
+
+    def format(self, obj, context):
+        import json
+
+        _hint, value = extract_uns_type_hint(obj)
+
+        # Parse JSON if string, otherwise use as-is
+        if isinstance(value, str):
+            try:
+                data = json.loads(value)
+            except json.JSONDecodeError:
+                data = {"raw": value}
+        else:
+            data = value if isinstance(value, dict) else {"data": value}
+
+        runs = data.get("runs", [])
+        params = data.get("params", {})
+
+        html_parts = ['<div style="font-size:11px;">']
+        if runs:
+            html_parts.append(f"<strong>{len(runs)} runs</strong>")
+        if params:
+            param_str = ", ".join(f"{k}={v}" for k, v in list(params.items())[:3])
+            if len(params) > 3:
+                param_str += "..."
+            html_parts.append(f" · params: {escape_html(param_str)}")
+        html_parts.append("</div>")
+
+        return FormattedOutput(
+            type_name="analysis history",
+            preview_html="".join(html_parts),  # Use preview_html for inline preview
+        )
+
+
+@case(
+    "ext",
+    "uns value previews and type hints",
+    slug="uns-type-hints",
+    tags=("uns", "type-formatter"),
+    expect=(
+        "Simple types (str, int, float, bool, None) show inline previews; <code>long_string</code> is truncated.",
+        "<code>small_list</code>/<code>small_dict</code> show content; <code>larger_dict</code> shows a key count.",
+        "<code>analysis_history</code>: custom TypeFormatter renders '3 runs · params: …'.",
+        "<code>unregistered_data</code> and <code>string_hint</code>: hint without formatter → 'import otherpackage to enable'.",
+    ),
+    notes="The <code>__anndata_repr__</code> type hint lets packages register renderers for their data stored in uns.",
+)
+def _uns_type_hints() -> CaseOutput:
+    adata = AnnData(np.zeros((10, 5)))
+    adata.uns["string_param"] = "A short string value"
+    adata.uns["long_string"] = (
+        "This is a very long string that should be truncated in the preview because "
+        "it exceeds the maximum length allowed for display in the meta column"
+    )
+    adata.uns["int_param"] = 42
+    adata.uns["float_param"] = 3.14159265359
+    adata.uns["bool_param"] = True
+    adata.uns["none_param"] = None
+    adata.uns["small_list"] = [1, 2, 3]
+    adata.uns["small_dict"] = {"a": 1, "b": 2}
+    adata.uns["larger_dict"] = {f"key{i}": f"val{i}" for i in range(1, 6)}
+    # Type hint WITH registered renderer (shows custom HTML)
+    adata.uns["analysis_history"] = {
+        "__anndata_repr__": "example.history",
+        "runs": [{"id": 1}, {"id": 2}, {"id": 3}],
+        "params": {"method": "umap", "n_neighbors": 15, "metric": "euclidean"},
+    }
+    # Type hint WITHOUT registered renderer (shows fallback with import hint)
+    adata.uns["unregistered_data"] = {
+        "__anndata_repr__": "otherpackage.custom_type",
+        "data": {"some": "data", "values": [1, 2, 3]},
+    }
+    adata.uns["string_hint"] = (
+        "__anndata_repr__:otherpackage.config::{'setting': 'value'}"
+    )
+    with temporarily_registered(AnalysisHistoryFormatter()):
+        return render(adata)
+
+
+@case(
+    "ext",
+    "Custom sections (TreeData)",
+    slug="treedata-sections",
+    tags=("custom", "section-formatter"),
+    expect=(
+        "<code>obst</code> (after obsm) and <code>vart</code> (after varm) are foldable sections with SVG tree previews; trees with &gt;30 leaves show a text message.",
+        "<code>tree</code> (right after X) is a compact non-foldable line rendered via <code>render_html()</code>.",
+        "If a yellow note says a stand-in is used, the real treedata package is incompatible with this anndata.",
+    ),
+    notes=(
+        "<a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> registers three "
+        "SectionFormatters (<a href='https://github.com/scverse/ecosystem-packages/pull/282' "
+        "target='_blank'>scverse ecosystem PR</a>)."
+    ),
+)
+def _treedata() -> CaseOutput:
+    tdata, note = create_test_treedata()
+    return render(tdata), note
+
+
+@case(
+    "ext",
+    "MuData (multimodal, SectionFormatter for .mod)",
+    slug="mudata",
+    requires=("mudata",),
+    tags=("custom", "section-formatter", "nested-anndata"),
+    expect=(
+        "A <code>mod</code> section right after X lists rna (100×50), atac (100×30) and prot (80×20), each expandable.",
+        "MuData's internal <code>obsmap</code>/<code>varmap</code>/<code>axis</code> are suppressed (not in 'other').",
+    ),
+    notes="MuData reuses anndata's repr by registering a SectionFormatter and calling <code>generate_repr_html()</code> on itself.",
+)
+def _mudata() -> CaseOutput:
+    if not HAS_MUDATA:
+        raise SkipCase("mudata failed to import")
+    return generate_repr_html(create_test_mudata())
+
+
+@case(
+    "ext",
+    "SpatialData (custom _repr_html_ from building blocks)",
+    slug="spatialdata",
+    tags=("custom", "building-blocks", "nested-anndata"),
+    expect=(
+        "Custom header 'SpatialData' with Zarr badge and path; coordinate systems list with tooltips.",
+        "images/labels/points/shapes sections with <code>[c, y, x]</code>-style previews; tables embed expandable AnnData.",
+        "A <code>transforms</code> section contributed via a separate <code>FormatterRegistry</code>.",
+    ),
+    notes=(
+        "Uses <code>get_css()</code>, <code>get_javascript()</code>, <code>render_section()</code>, "
+        "<code>render_formatted_entry()</code>, <code>render_badge()</code>, <code>render_search_box()</code>, "
+        "<code>generate_repr_html()</code> and <code>FormatterRegistry</code>."
+    ),
+)
+def _spatialdata() -> CaseOutput:
+    if not HAS_SPATIALDATA_EXAMPLE:
+        raise SkipCase("building blocks failed to import")
+    return render(create_test_spatialdata())
+
+
+ONTOLOGY_METADATA_KEY = "__ontology_annotations__"
+
+
+class OntologyAnnotatedCategoricalFormatter(TypeFormatter):
+    """
+    Example TypeFormatter for columns annotated with ontology metadata.
+
+    This demonstrates how ecosystem packages (bionty, lamindb, cellxgene, ...)
+    can enhance the HTML repr for categorical columns in obs/var by:
+    1. Checking if the column has ontology metadata in uns
+    2. Rendering enhanced type info (registry name, validation status)
+    3. Adding tooltips with ontology IDs
+
+    To use this pattern in your package:
+    1. Define a metadata convention (e.g., uns["__mypackage_annotations__"])
+    2. Create a TypeFormatter with sections=("obs", "var")
+    3. Use context.adata_ref and context.key to look up metadata
+    4. Decorate it with ``@register_formatter``
+
+    See: src/anndata/_repr/registry.py for TypeFormatter API
+    """
+
+    priority = 115  # Higher than CategoricalFormatter (110)
+    sections = ("obs", "var")  # Only apply to obs/var columns
+
+    def can_format(self, obj, context):
+        """Check if this column has ontology metadata.
+
+        The context parameter provides access to:
+        - context.adata_ref: reference to root AnnData for uns lookups
+        - context.key: current entry key being formatted
+        - context.section: current section ("obs", "var", etc.)
         """
-        Example TypeFormatter for columns annotated with ontology metadata.
+        if not (isinstance(obj, pd.Series) and hasattr(obj, "cat")):
+            return False
+        if context.adata_ref is None or context.key is None:
+            return False
+        annotations = context.adata_ref.uns.get(ONTOLOGY_METADATA_KEY, {})
+        section_annotations = annotations.get(context.section, {})
+        return context.key in section_annotations
 
-        This demonstrates how ecosystem packages can enhance the HTML repr for
-        categorical columns in obs/var by:
-        1. Checking if the column has ontology metadata in uns
-        2. Rendering enhanced type info (registry name, validation status)
-        3. Adding tooltips with ontology IDs
+    def format(self, obj, context):
+        """Render the categorical with ontology information."""
+        annotations = context.adata_ref.uns[ONTOLOGY_METADATA_KEY]
+        col_info = annotations[context.section][context.key]
 
-        To use this pattern in your package:
-        1. Define a metadata convention (e.g., uns["__mypackage_annotations__"])
-        2. Create a TypeFormatter with sections=("obs", "var")
-        3. Use context.adata_ref and context.key to look up metadata
+        registry = col_info.get("registry", "unknown")
+        ontology_id = col_info.get("ontology_id", "")
+        validated = col_info.get("validated", True)
+        unmapped_count = col_info.get("unmapped_count", 0)
 
-        See: src/anndata/_repr/registry.py for TypeFormatter API
-        """
+        n_cats = len(obj.cat.categories)
+        type_name = f"category[{registry}] ({n_cats})"
 
-        priority = 115  # Higher than CategoricalFormatter (110)
-        sections = ("obs", "var")  # Only apply to obs/var columns
-
-        def can_format(self, obj, context):
-            """
-            Check if this column has ontology metadata.
-
-            The context parameter provides access to:
-            - context.adata_ref: reference to root AnnData for uns lookups
-            - context.key: current entry key being formatted
-            - context.section: current section ("obs", "var", etc.)
-            """
-            # Basic type check - is this a categorical?
-            if not (isinstance(obj, pd.Series) and hasattr(obj, "cat")):
-                return False
-
-            # Context check - do we have the info needed to look up metadata?
-            if context.adata_ref is None or context.key is None:
-                return False
-
-            # Check if this column has ontology annotation
-            annotations = context.adata_ref.uns.get(ONTOLOGY_METADATA_KEY, {})
-            section_annotations = annotations.get(context.section, {})
-            return context.key in section_annotations
-
-        def format(self, obj, context):
-            """
-            Render the categorical with ontology information.
-
-            This produces a FormattedOutput with:
-            - type_name: "category[registry] (n)" instead of just "category (n)"
-            - preview_html: Category values with validation indicators
-            - tooltip: Shows ontology ID and validation status
-            - warnings: If unmapped values exist
-            """
-            # Get ontology metadata for this column
-            annotations = context.adata_ref.uns[ONTOLOGY_METADATA_KEY]
-            col_info = annotations[context.section][context.key]
-
-            registry = col_info.get("registry", "unknown")
-            ontology_id = col_info.get("ontology_id", "")
-            validated = col_info.get("validated", True)
-            unmapped_count = col_info.get("unmapped_count", 0)
-
-            # Build enhanced type name with registry
-            n_cats = len(obj.cat.categories)
-            type_name = f"category[{registry}] ({n_cats})"
-
-            # Build preview with validation status
-            categories = list(obj.cat.categories[:5])
-            if validated:
-                # All values mapped - show green checkmark
-                cat_html = ", ".join(
-                    f'<span style="color: var(--anndata-category-color, #666);">{escape_html(str(c))}</span>'
-                    for c in categories
-                )
-                if n_cats > 5:
-                    cat_html += f' <span style="color: #888;">...+{n_cats - 5}</span>'
-                cat_html += ' <span style="color: #28a745;" title="All values validated">✓</span>'
-            else:
-                # Some unmapped values - show warning
-                cat_html = ", ".join(
-                    f'<span style="color: var(--anndata-category-color, #666);">{escape_html(str(c))}</span>'
-                    for c in categories
-                )
-                if n_cats > 5:
-                    cat_html += f' <span style="color: #888;">...+{n_cats - 5}</span>'
-                cat_html += f' <span style="color: #fd7e14;" title="{unmapped_count} unmapped values">⚠ {unmapped_count} unmapped</span>'
-
-            # Build tooltip with full metadata
-            tooltip_parts = [f"Registry: {registry}"]
-            if ontology_id:
-                tooltip_parts.append(f"Ontology: {ontology_id}")
-            tooltip_parts.append(f"Validated: {'Yes' if validated else 'No'}")
-            if not validated:
-                tooltip_parts.append(f"Unmapped: {unmapped_count} values")
-
-            return FormattedOutput(
-                type_name=type_name,
-                css_class="anndata-dtype--category",
-                tooltip="\n".join(tooltip_parts),
-                preview_html=cat_html,
-                warnings=[]
-                if validated
-                else [f"{unmapped_count} values not mapped to ontology"],
+        categories = list(obj.cat.categories[:5])
+        cat_html = ", ".join(
+            f'<span style="color: var(--anndata-category-color, #666);">{escape_html(str(c))}</span>'
+            for c in categories
+        )
+        if n_cats > 5:
+            cat_html += f' <span style="color: #888;">...+{n_cats - 5}</span>'
+        if validated:
+            cat_html += (
+                ' <span style="color: #28a745;" title="All values validated">✓</span>'
             )
+        else:
+            cat_html += f' <span style="color: #fd7e14;" title="{unmapped_count} unmapped values">⚠ {unmapped_count} unmapped</span>'
 
-    # === STEP 3: Create test AnnData with ontology-annotated columns ===
-    adata_ontology = AnnData(
+        tooltip_parts = [f"Registry: {registry}"]
+        if ontology_id:
+            tooltip_parts.append(f"Ontology: {ontology_id}")
+        tooltip_parts.append(f"Validated: {'Yes' if validated else 'No'}")
+        if not validated:
+            tooltip_parts.append(f"Unmapped: {unmapped_count} values")
+
+        return FormattedOutput(
+            type_name=type_name,
+            css_class="anndata-dtype--category",
+            tooltip="\n".join(tooltip_parts),
+            preview_html=cat_html,
+            warnings=[]
+            if validated
+            else [f"{unmapped_count} values not mapped to ontology"],
+        )
+
+
+@case(
+    "ext",
+    "Ecosystem TypeFormatter for obs/var columns",
+    slug="ecosystem-type-formatter",
+    tags=("obs", "var", "type-formatter", "categorical"),
+    expect=(
+        "<code>cell_type</code> → <code>category[bionty.CellType] (4)</code> ✓; <code>tissue</code> → ⚠ 2 unmapped (warning row); <code>assay</code> ✓; var <code>gene_symbol</code> ✓.",
+        "<code>batch</code>, <code>n_counts</code>, <code>mean_expression</code> keep default rendering.",
+        "Hovering annotated columns shows registry/ontology/validation tooltip.",
+    ),
+    notes=(
+        "Pattern used by packages like <a href='https://lamin.ai/docs/bionty' target='_blank'>bionty</a> / "
+        "<a href='https://docs.lamin.ai/' target='_blank'>lamindb</a>: store metadata in uns, register a "
+        "TypeFormatter with <code>sections=('obs', 'var')</code> and <code>priority=115</code> (above the "
+        "built-in CategoricalFormatter at 110), and look up metadata via <code>context.adata_ref</code> / "
+        "<code>context.key</code> / <code>context.section</code>. See also [[uns-type-hints]] and [[treedata-sections]]."
+    ),
+)
+def _ecosystem_formatter() -> CaseOutput:
+    adata = AnnData(
         np.random.randn(100, 50).astype(np.float32),
         obs=pd.DataFrame({
-            # Fully validated cell types
             "cell_type": pd.Categorical(
                 np.random.choice(["T cell", "B cell", "NK cell", "Monocyte"], 100)
             ),
-            # Partially validated tissue types (some unmapped)
             "tissue": pd.Categorical(
                 np.random.choice(["blood", "spleen", "lymph_node", "bone_marrow"], 100)
             ),
-            # Assay with ontology
             "assay": pd.Categorical(np.random.choice(["10x 3' v3", "Smart-seq2"], 100)),
-            # Regular categorical (no ontology annotation)
             "batch": pd.Categorical(
                 np.random.choice(["batch_1", "batch_2", "batch_3"], 100)
             ),
-            # Non-categorical column
             "n_counts": np.random.randint(1000, 10000, 100),
         }),
         var=pd.DataFrame({
-            # Gene annotations with Ensembl
             "gene_symbol": pd.Categorical([f"GENE{i}" for i in range(50)]),
-            # Regular numeric column
             "mean_expression": np.random.randn(50).astype(np.float32),
         }),
     )
-
-    # Add ontology metadata to uns (this is what bionty/lamindb would do)
-    adata_ontology.uns[ONTOLOGY_METADATA_KEY] = {
+    adata.uns[ONTOLOGY_METADATA_KEY] = {
         "obs": {
             "cell_type": {
                 "registry": "bionty.CellType",
@@ -3382,7 +3914,7 @@ Size bomb below (50KB):
             "tissue": {
                 "registry": "bionty.Tissue",
                 "ontology_id": "uberon",
-                "validated": False,  # Some values not in ontology
+                "validated": False,
                 "unmapped_count": 2,
             },
             "assay": {
@@ -3391,7 +3923,6 @@ Size bomb below (50KB):
                 "validated": True,
                 "unmapped_count": 0,
             },
-            # Note: "batch" is NOT in this dict, so it uses default formatting
         },
         "var": {
             "gene_symbol": {
@@ -3402,169 +3933,470 @@ Size bomb below (50KB):
             },
         },
     }
+    adata.obsm["X_pca"] = np.random.randn(100, 10).astype(np.float32)
+    adata.obsm["X_umap"] = np.random.randn(100, 2).astype(np.float32)
+    adata.uns["cell_type_colors"] = palette(4)
+    with temporarily_registered(OntologyAnnotatedCategoricalFormatter()):
+        return render(adata)
 
-    # Add some standard sections to show they still work
-    adata_ontology.obsm["X_pca"] = np.random.randn(100, 10).astype(np.float32)
-    adata_ontology.obsm["X_umap"] = np.random.randn(100, 2).astype(np.float32)
-    adata_ontology.uns["cell_type_colors"] = [
-        "#e41a1c",
-        "#377eb8",
-        "#4daf4a",
-        "#984ea3",
-    ]
 
-    sections.append((
-        "25. Ecosystem Package Extensibility (obs/var customization)",
-        adata_ontology._repr_html_(),
-        """<p style='margin: 5px 0;'><b>Demonstrates how external packages can customize
-        rendering of data in known sections (obs, var)</b></p>
+class SpatialExperiment(AnnData):
+    """A plain AnnData subclass, as downstream packages often define."""
 
-        <p style='margin: 5px 0;'>This example shows the pattern used by ecosystem packages
-        like <a href='https://lamin.ai/docs/bionty' target='_blank'>bionty</a> or
-        <a href='https://docs.lamin.ai/' target='_blank'>lamindb</a> to add semantic
-        annotations to AnnData columns.</p>
 
-        <p style='margin: 5px 0;'><b>How it works:</b></p>
-        <ol style='margin: 5px 0; padding-left: 20px;'>
-        <li><b>Store metadata in uns:</b> <code>uns["__ontology_annotations__"]</code>
-            contains registry info per column</li>
-        <li><b>Register TypeFormatter:</b> with <code>sections=("obs", "var")</code>
-            and <code>priority=115</code> (higher than default CategoricalFormatter at 110)</li>
-        <li><b>Use can_format(obj, context):</b> to check if the entry has metadata
-            via <code>context.adata_ref</code> and <code>context.key</code></li>
-        <li><b>Render enhanced output:</b> type shows registry, preview shows validation status</li>
-        </ol>
+@case(
+    "ext",
+    "Plain AnnData subclass",
+    slug="anndata-subclass",
+    tags=("subclass", "nested-anndata", "view"),
+    expect=(
+        "Header shows the subclass name <code>SpatialExperiment</code> (not 'AnnData'), once.",
+        "All standard sections render as for AnnData; no spurious 'other' section.",
+        "A view of the subclass and a subclass instance nested in uns render the same way.",
+    ),
+)
+def _subclass() -> CaseOutput:
+    adata = SpatialExperiment(
+        np.random.randn(20, 8).astype(np.float32),
+        obs=pd.DataFrame({"region": pd.Categorical(["cortex", "hippocampus"] * 10)}),
+    )
+    adata.obsm["spatial"] = np.random.rand(20, 2)
+    adata.uns["region_colors"] = ["#1b9e77", "#d95f02"]
+    adata.uns["sub_sample"] = SpatialExperiment(np.zeros((4, 2)))
+    return render(adata) + "<hr>" + render(adata[:5])
 
-        <p style='margin: 5px 0;'><b>Columns with ontology annotations:</b></p>
-        <ul style='margin: 5px 0; padding-left: 20px;'>
-        <li><code>cell_type</code>: <code>category[bionty.CellType]</code> - fully validated ✓</li>
-        <li><code>tissue</code>: <code>category[bionty.Tissue]</code> - 2 unmapped values ⚠</li>
-        <li><code>assay</code>: <code>category[bionty.ExperimentalFactor]</code> - validated ✓</li>
-        <li><code>gene_symbol</code> (var): <code>category[bionty.Gene]</code> - validated ✓</li>
-        </ul>
 
-        <p style='margin: 5px 0;'><b>Columns without annotations (default rendering):</b></p>
-        <ul style='margin: 5px 0; padding-left: 20px;'>
-        <li><code>batch</code>: regular <code>category (3)</code> - no metadata in uns</li>
-        <li><code>n_counts</code>: regular <code>int64</code> - not categorical</li>
-        <li><code>mean_expression</code> (var): regular <code>float32</code></li>
-        </ul>
+class SparseCodes:
+    """A custom duck array (e.g. from a downstream package) stored in obsm/layers."""
 
-        <p style='margin: 5px 0;'><b>Key API points:</b></p>
-        <ul style='margin: 5px 0; padding-left: 20px;'>
-        <li><code>TypeFormatter.sections</code>: restrict to specific sections</li>
-        <li><code>TypeFormatter.priority</code>: higher priority overrides default formatters</li>
-        <li><code>can_format(obj, context)</code>: receives full context for metadata lookups</li>
-        <li><code>context.adata_ref</code>: reference to root AnnData for uns lookups</li>
-        <li><code>context.key</code>: current entry key being formatted</li>
-        <li><code>context.section</code>: current section ("obs", "var", etc.)</li>
-        </ul>
+    def __init__(self, shape: tuple[int, int], n_codes: int) -> None:
+        self.shape = shape
+        self.dtype = np.dtype("uint8")
+        self.ndim = 2
+        self.n_codes = n_codes
 
-        <p style='margin: 5px 0;'><b>See also:</b></p>
-        <ul style='margin: 5px 0; padding-left: 20px;'>
-        <li><code>src/anndata/_repr/registry.py</code>: TypeFormatter API and FormatterContext</li>
-        <li>Test 12: Uns type hints (similar pattern for uns entries)</li>
-        <li>Test 14: TreeData custom sections (SectionFormatter pattern)</li>
-        </ul>
+    def __getitem__(self, idx: object) -> SparseCodes:
+        return self
 
-        <p style='margin: 5px 0;'><i>Hover over annotated columns to see the tooltip with full metadata.</i></p>
-        """,
-    ))
 
-    # Test 26: Array-API arrays with device info
-    # Uses mock objects — no GPU or JAX installation required
-    print("  26. Array-API arrays with device info")
+class SparseCodesFormatter(TypeFormatter):
+    """TypeFormatter teaching the repr about :class:`SparseCodes`."""
 
-    def _make_visual_array_api_mock(module, *, shape, dtype, device="cpu"):
-        """Create a mock array satisfying the SupportsArrayApi protocol."""
-        ns_module = type("Namespace", (), {"__name__": module.split(".")[0]})()
-        cls = type(
-            "MockArrayAPI",
-            (),
-            {
-                "shape": shape,
-                "dtype": dtype,
-                "ndim": len(shape),
-                "size": int(np.prod(shape)),
-                "device": device,
-                "__array_namespace__": lambda self, **kw: ns_module,
-                "to_device": lambda self, dev, /, **kw: self,
-                "__dlpack__": lambda self, **kw: None,
-                "__dlpack_device__": lambda self: (1, 0),
-            },
+    def can_format(self, obj, context):
+        return isinstance(obj, SparseCodes)
+
+    def format(self, obj, context) -> FormattedOutput:
+        n, m = obj.shape
+        return FormattedOutput(
+            type_name=f"SparseCodes ({n} × {m}) · {obj.n_codes} codes",
+            css_class="anndata-dtype--extension",
+            tooltip="Custom array type from a downstream package",
+            preview=f"codebook of {obj.n_codes}",
         )
-        cls.__module__ = module
-        return cls()
 
-    n_obs_api, n_vars_api = 100, 50
-    adata_arrayapi = AnnData(
-        np.random.randn(n_obs_api, n_vars_api).astype(np.float32),
-        obs=pd.DataFrame(
-            {"cell_type": pd.Categorical(["T cell", "B cell"] * (n_obs_api // 2))},
-            index=[f"cell_{i}" for i in range(n_obs_api)],
-        ),
-        var=pd.DataFrame(
-            {"gene_name": [f"gene_{i}" for i in range(n_vars_api)]},
-            index=[f"gene_{i}" for i in range(n_vars_api)],
-        ),
-    )
-    # JAX array on GPU in obsm
-    adata_arrayapi.obsm["X_jax_gpu"] = _make_visual_array_api_mock(
-        "jax.numpy", shape=(n_obs_api, 30), dtype=np.dtype("float32"), device="cuda:0"
-    )
-    # JAX array on TPU in obsm
-    adata_arrayapi.obsm["X_jax_tpu"] = _make_visual_array_api_mock(
-        "jax.numpy", shape=(n_obs_api, 10), dtype=np.dtype("float16"), device="tpu:0"
-    )
-    # JAX array on CPU in obsm (device should still show)
-    adata_arrayapi.obsm["X_jax_cpu"] = _make_visual_array_api_mock(
-        "jax.numpy", shape=(n_obs_api, 50), dtype=np.dtype("float64"), device="cpu"
-    )
 
-    # CuPy-like array on GPU (handled by ArrayAPIFormatter with GPU-green styling)
-    class _MockGPUDevice:
-        id = 0
+@case(
+    "ext",
+    "Custom array type with TypeFormatter",
+    slug="custom-array-type",
+    tags=("obsm", "type-formatter"),
+    expect=(
+        "<code>obsm['codes']</code> shows 'SparseCodes (40 × 16) · 256 codes' with the extension color and a preview.",
+        "Without the formatter (second repr) it falls back to a generic type entry, flagged as unknown/non-serializable rather than crashing.",
+    ),
+)
+def _custom_array_type() -> CaseOutput:
+    adata = AnnData(np.zeros((40, 6)))
+    adata.obsm._data["codes"] = SparseCodes((40, 16), n_codes=256)  # type: ignore[union-attr]
+    with temporarily_registered(SparseCodesFormatter()):
+        with_formatter = render(adata)
+    return with_formatter + "<hr><p><b>Without formatter:</b></p>" + render(adata)
 
-    cupy_mock = _make_visual_array_api_mock(
-        "cupy._core.core",
-        shape=(n_obs_api, 20),
-        dtype=np.dtype("float32"),
-        device=_MockGPUDevice(),
-    )
-    adata_arrayapi.obsm["X_cupy_gpu"] = cupy_mock
-    # Array-API array in uns
-    adata_arrayapi.uns["gpu_embedding"] = _make_visual_array_api_mock(
-        "jax.numpy", shape=(20, 5), dtype=np.dtype("float32"), device="cuda:1"
-    )
 
-    sections.append((
-        "26. Array-API Arrays with Device Info",
-        adata_arrayapi._repr_html_(),
+# =============================================================================
+# Page rendering
+# =============================================================================
+
+_PAGE_CSS = """
+:root { --vt-bg:#f5f5f5; --vt-card:#fff; --vt-text:#222; --vt-muted:#666; --vt-border:#e3e3e3;
+        --vt-accent:#0d6efd; --vt-desc:#f8f9fa; --vt-ok:#1a7f37; --vt-skip:#9a6700; --vt-fail:#cf222e; }
+body.dark-mode { --vt-bg:#1a1a1a; --vt-card:#2a2a2a; --vt-text:#e0e0e0; --vt-muted:#aaa;
+        --vt-border:#3a3a3a; --vt-accent:#6ea8fe; --vt-desc:#333; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; margin:0 20px 0 300px;
+       padding:20px; background:var(--vt-bg); color:var(--vt-text); }
+h1 { border-bottom:2px solid var(--vt-accent); padding-bottom:10px; margin-top:0; }
+h2.vt-cat { margin:48px 0 4px; }
+.vt-cat-blurb { color:var(--vt-muted); margin:0 0 12px; }
+a { color:var(--vt-accent); }
+.vt-toc { position:fixed; top:0; left:0; bottom:0; width:270px; overflow-y:auto; background:var(--vt-card);
+          border-right:1px solid var(--vt-border); padding:14px; box-sizing:border-box; font-size:12px; }
+.vt-toc h4 { margin:12px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+.vt-toc a { display:block; padding:2px 0; color:var(--vt-text); text-decoration:none; }
+.vt-toc a:hover { color:var(--vt-accent); }
+.vt-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+.vt-dot.ok { background:var(--vt-ok); } .vt-dot.skipped { background:var(--vt-skip); }
+.vt-dot.failed { background:var(--vt-fail); }
+.vt-toolbar { position:fixed; top:12px; right:20px; z-index:10; }
+.vt-toolbar button { padding:8px 14px; border:0; border-radius:4px; background:#333; color:#fff; cursor:pointer; }
+.vt-summary { background:var(--vt-card); border-radius:8px; padding:12px 16px; font-size:13px; }
+.vt-case { background:var(--vt-card); border-radius:8px; padding:18px 20px; margin:16px 0;
+           box-shadow:0 1px 3px rgba(0,0,0,.12); scroll-margin-top:10px; }
+.vt-case h3 { margin:0 0 6px; }
+.vt-case h3 .vt-num { color:var(--vt-accent); margin-right:6px; }
+.vt-case h3 a.vt-anchor { color:var(--vt-muted); text-decoration:none; font-weight:normal; font-size:12px; margin-left:6px; }
+.vt-meta { font-size:11px; color:var(--vt-muted); margin-bottom:8px; }
+.vt-tag { display:inline-block; padding:0 6px; margin:0 3px 3px 0; border:1px solid var(--vt-border); border-radius:9px; }
+.vt-expect { background:var(--vt-desc); border-left:3px solid var(--vt-accent); border-radius:4px;
+             padding:8px 12px; margin-bottom:10px; font-size:13px; }
+.vt-expect ul { margin:4px 0 0; padding-left:20px; }
+.vt-notes, .vt-warnings { font-size:12px; color:var(--vt-muted); margin-bottom:10px; }
+.vt-note { background:#fff3cd; color:#664d03; border-radius:4px; padding:6px 10px; font-size:12px; margin-bottom:10px; }
+.vt-status { border-radius:4px; padding:8px 12px; font-size:13px; }
+.vt-status.skipped { background:#fff8c5; color:#4d2d00; }
+.vt-status.failed { background:#ffebe9; color:#82071e; }
+.vt-status pre { white-space:pre-wrap; font-size:11px; margin:6px 0 0; }
+.vt-panes { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:12px; }
+.vt-pane { margin:0; }
+.vt-pane figcaption { font-size:12px; color:var(--vt-muted); margin-bottom:4px; }
+iframe.vt-frame { width:100%; min-height:120px; border:1px solid var(--vt-border); border-radius:4px; display:block; }
+.vt-coverage { columns:3 260px; font-size:12px; }
+.vt-coverage div { break-inside:avoid; margin-bottom:2px; }
+@media (max-width: 900px) { body { margin-left:0; } .vt-toc { position:static; width:auto; border:0; } }
+"""
+
+_PAGE_JS = """
+function vtFit(f) {
+  try {
+    const d = f.contentDocument;
+    if (!d || !d.body) return;
+    const fit = () => { f.style.height = (d.documentElement.scrollHeight + 2) + "px"; };
+    fit();
+    new ResizeObserver(fit).observe(d.body);
+  } catch (e) { /* cross-origin: keep min-height */ }
+}
+document.querySelectorAll("iframe.vt-frame").forEach((f) => {
+  f.addEventListener("load", () => vtFit(f));
+  if (f.contentDocument && f.contentDocument.readyState === "complete") vtFit(f);
+});
+// Collect the theme panes' self-checks into the summary (read by --browser-check)
+window.addEventListener("load", () => setTimeout(() => {
+  const el = document.getElementById("vt-probe-summary");
+  const rows = [...document.querySelectorAll(".vt-pane")].map((fg) => {
+    let probe = "unavailable";
+    try { probe = fg.querySelector("iframe").contentDocument.getElementById("vt-probe").textContent; } catch (e) {}
+    return { slug: fg.closest(".vt-case").id, pane: fg.querySelector("figcaption").textContent, probe };
+  });
+  if (!el || !rows.length) return;
+  const fails = rows.filter((r) => !r.probe.endsWith(" PASS"));
+  el.dataset.results = JSON.stringify(rows);
+  el.textContent = `Theme probes: ${rows.length - fails.length}/${rows.length} PASS`;
+  const ul = document.createElement("ul");
+  for (const r of fails) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = "#" + r.slug;
+    a.textContent = r.pane;
+    li.append(a, ": " + r.probe);
+    ul.append(li);
+  }
+  if (fails.length) el.append(ul);
+}, 1000));
+"""
+
+
+def _link_refs(text: str, by_slug: dict[str, Case]) -> str:
+    """Replace ``[[slug]]`` with a link to that case."""
+
+    def repl(m: re.Match[str]) -> str:
+        c = by_slug.get(m.group(1))
+        if c is None:
+            return f"<code>[[{m.group(1)}]] (unknown case)</code>"
+        return f'<a href="#{c.slug}">{c.number} {escape_html(c.title)}</a>'
+
+    return re.sub(r"\[\[([a-z0-9-]+)\]\]", repl, text)
+
+
+def _render_case(r: CaseResult, by_slug: dict[str, Case]) -> str:
+    c = r.case
+    expect = "".join(f"<li>{_link_refs(e, by_slug)}</li>" for e in c.expect)
+    tags = "".join(f'<span class="vt-tag">{escape_html(t)}</span>' for t in c.tags)
+    timing = f" · {r.seconds:.2f}s" if r.status != "skipped" else ""
+    size = f" · {len(r.html) / 1024:.0f} KB HTML" if r.html else ""
+    parts = [
+        f'<section id="{c.slug}" class="vt-case">',
         (
-            "<p style='margin: 5px 0;'><b>Demonstrates Array-API formatted arrays with device "
-            "info visible inline</b> (no hover needed).</p>"
-            "<p style='margin: 5px 0;'>Uses mock objects that satisfy the "
-            "<code>SupportsArrayApi</code> protocol — no GPU or JAX installation required.</p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><code>X_jax_gpu</code>: <code>MockArrayAPI</code> on <code>cuda:0</code></li>"
-            "<li><code>X_jax_tpu</code>: <code>MockArrayAPI</code> on <code>tpu:0</code></li>"
-            "<li><code>X_jax_cpu</code>: <code>MockArrayAPI</code> on <code>cpu</code></li>"
-            "<li><code>X_cupy_gpu</code>: CuPy-like on <code>GPU:0</code></li>"
-            "<li><code>uns['gpu_embedding']</code>: <code>MockArrayAPI</code> on <code>cuda:1</code></li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'>Device appears as <code>dtype · device</code> in the type "
-            "column, visible without hovering.</p>"
+            f'<h3><span class="vt-num">{c.number}</span>{escape_html(c.title)}'
+            f'<a class="vt-anchor" href="#{c.slug}">#{c.slug}</a></h3>'
         ),
-    ))
+        f'<div class="vt-meta">{tags}{timing}{size}</div>',
+        f'<div class="vt-expect"><b>What to check</b><ul>{expect}</ul></div>',
+    ]
+    if c.notes:
+        parts.append(
+            f'<details class="vt-notes"><summary>Background</summary>'
+            f"{_link_refs(c.notes, by_slug)}</details>"
+        )
+    if r.note:
+        parts.append(f'<div class="vt-note">{r.note}</div>')
+    if r.warnings:
+        items = "".join(f"<li>{escape_html(w)}</li>" for w in r.warnings)
+        parts.append(
+            f'<details class="vt-warnings"><summary>{len(r.warnings)} Python warning(s) '
+            f"emitted while building/rendering</summary><ul>{items}</ul></details>"
+        )
+    if r.status == "ok":
+        parts.append(f'<div class="vt-output">{r.html}</div>')
+    elif r.status == "skipped":
+        parts.append(f'<div class="vt-status skipped">{escape_html(r.reason)}</div>')
+    else:
+        parts.append(
+            '<div class="vt-status failed"><b>Case raised an exception</b>'
+            f"<pre>{escape_html(r.reason)}</pre></div>"
+        )
+    parts.append("</section>")
+    return "\n".join(parts)
 
-    # Generate HTML file
-    output_path = Path(__file__).parent / "repr_html_visual_test.html"
-    html_content = create_html_page(sections)
-    output_path.write_text(html_content)
 
-    print(f"\nVisual test file generated: {output_path}")
-    print("Open this file in a browser to inspect the HTML representation.")
+def render_page(results: Sequence[CaseResult]) -> str:
+    """Assemble the full HTML page: TOC, summary, coverage index, cases."""
+    by_slug = {r.case.slug: r.case for r in results}
+    status_of = {r.case.slug: r.status for r in results}
+
+    toc = []
+    body = []
+    for cat in CATEGORIES:
+        cat_results = [r for r in results if r.case.category == cat.key]
+        if not cat_results:
+            continue
+        n = _CATEGORY_INDEX[cat.key]
+        toc.append(
+            f'<h4><a href="#cat-{cat.key}">{n}. {escape_html(cat.title)}</a></h4>'
+        )
+        toc.extend(
+            f'<a href="#{r.case.slug}"><span class="vt-dot {r.status}"></span>'
+            f"{r.case.number} {escape_html(r.case.title)}</a>"
+            for r in cat_results
+        )
+        body.append(
+            f'<h2 id="cat-{cat.key}" class="vt-cat">{n}. {escape_html(cat.title)}</h2>'
+            f'<p class="vt-cat-blurb">{escape_html(cat.blurb)}</p>'
+        )
+        body.extend(_render_case(r, by_slug) for r in cat_results)
+
+    counts = {
+        s: sum(r.status == s for r in results) for s in ("ok", "skipped", "failed")
+    }
+    problems = [r for r in results if r.status != "ok"]
+    problem_links = ", ".join(
+        f'<a href="#{r.case.slug}">{r.case.number} {escape_html(r.case.title)}</a> ({r.status})'
+        for r in problems
+    )
+
+    tag_index: dict[str, list[Case]] = {}
+    for r in results:
+        for t in r.case.tags:
+            tag_index.setdefault(t, []).append(r.case)
+    coverage = "".join(
+        f"<div><b>{escape_html(t)}</b>: "
+        + ", ".join(
+            f'<a href="#{c.slug}" title="{escape_html(c.title)}">'
+            f'<span class="vt-dot {status_of[c.slug]}"></span>{c.number}</a>'
+            for c in cases
+        )
+        + "</div>"
+        for t, cases in sorted(tag_index.items())
+    )
+
+    generated = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: https:; style-src 'self' 'unsafe-inline';">
+<title>AnnData repr visual test</title>
+<style>{_PAGE_CSS}</style>
+</head>
+<body>
+<nav class="vt-toc"><b>AnnData _repr_html_</b>{"".join(toc)}</nav>
+<div class="vt-toolbar"><button onclick="document.body.classList.toggle('dark-mode')">Toggle dark mode</button></div>
+<h1>AnnData <code>_repr_html_</code> visual test</h1>
+<div class="vt-summary">
+<p style="margin-top:0">anndata {escape_html(version("anndata"))} · Python {platform.python_version()} ·
+pandas {pd.__version__} · numpy {np.__version__} · generated {generated}</p>
+<p><span class="vt-dot ok"></span>{counts["ok"]} rendered ·
+<span class="vt-dot skipped"></span>{counts["skipped"]} skipped ·
+<span class="vt-dot failed"></span>{counts["failed"]} failed
+{f"<br>Not rendered: {problem_links}" if problems else ""}</p>
+<p>Each case lists <b>what to check</b>. The dark-mode button adds <code>body.dark-mode</code>
+(which the repr honors); embedded host themes are simulated in category
+<a href="#cat-env">5</a>. Regenerate with
+<code>python tests/visual_inspect_repr_html.py</code> (<code>--help</code> for filters).</p>
+<p id="vt-probe-summary"></p>
+<details><summary>Coverage index (tag → cases)</summary><div class="vt-coverage">{coverage}</div></details>
+</div>
+{"".join(body)}
+<script>{_PAGE_JS}</script>
+</body>
+</html>
+"""
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+
+def find_chrome() -> str | None:
+    """Locate a Chrome/Chromium binary (``$CHROME`` overrides)."""
+    import os
+
+    candidates = [
+        os.environ.get("CHROME"),
+        *(
+            shutil.which(n)
+            for n in (
+                "google-chrome",
+                "google-chrome-stable",
+                "chromium",
+                "chromium-browser",
+                "chrome",
+            )
+        ),
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ]
+    return next((c for c in candidates if c and Path(c).exists()), None)
+
+
+def browser_check(page: Path) -> int | None:
+    """Load ``page`` in headless Chrome and report the theme panes' self-checks.
+
+    Returns the number of failing panes, or ``None`` if the check could not run.
+    """
+    import json
+    import subprocess
+
+    chrome = find_chrome()
+    if chrome is None:
+        print(
+            "--browser-check: no Chrome/Chromium found (set $CHROME).", file=sys.stderr
+        )
+        return None
+    proc = subprocess.run(
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--virtual-time-budget=10000",
+            "--dump-dom",
+            page.resolve().as_uri(),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=300,
+    )
+    m = re.search(r'id="vt-probe-summary"[^>]*data-results="([^"]*)"', proc.stdout)
+    if m is None:
+        print(
+            "--browser-check: no probe results in the rendered page.", file=sys.stderr
+        )
+        return None
+    rows = json.loads(html_mod.unescape(m.group(1)))
+    n_fail = 0
+    for row in rows:
+        ok = row["probe"].endswith(" PASS")
+        n_fail += not ok
+        print(
+            f"  {'PASS' if ok else 'FAIL'}  #{row['slug']}  {row['pane']}: {row['probe']}"
+        )
+    print(f"Theme probes: {len(rows) - n_fail}/{len(rows)} PASS")
+    return n_fail
+
+
+def _matches(c: Case, patterns: Sequence[str]) -> bool:
+    haystack = f"{c.number} {c.slug} {c.title} {c.category}".lower()
+    return any(
+        c.number == p or c.number.startswith(p if p.endswith(".") else f"{p}.")
+        if re.fullmatch(r"\d+(\.\d*)?", p)
+        else p.lower() in haystack
+        for p in patterns
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Generate the visual test HTML file."""
+    parser = argparse.ArgumentParser(
+        description="Render AnnData _repr_html_ scenarios into one HTML page.",
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Only run matching cases (repeatable). A number like '3' or '3.2' selects "
+            "by category/case number; anything else is a case-insensitive substring "
+            "of number, slug, title or category key."
+        ),
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="List cases and exit without rendering."
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path(__file__).parent / "repr_html_visual_test.html",
+        help="Output HTML path (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with status 1 if any case raised an exception (or a theme probe failed).",
+    )
+    parser.add_argument(
+        "--browser-check",
+        action="store_true",
+        help="Afterwards, load the page in headless Chrome and print the theme probes.",
+    )
+    args = parser.parse_args(argv)
+
+    cases = numbered_cases()
+    if args.only:
+        cases = [c for c in cases if _matches(c, args.only)]
+        if not cases:
+            print(f"No cases match {args.only}", file=sys.stderr)
+            return 2
+
+    if args.list:
+        for c in cases:
+            req = f"  [requires {', '.join(c.requires)}]" if c.requires else ""
+            print(f"{c.number:>5}  {c.slug:<32} {c.title}{req}")
+        return 0
+
+    print(f"Rendering {len(cases)} visual test cases...")
+    results = []
+    for c in cases:
+        r = run_case(c)
+        detail = (
+            f"{r.seconds:.2f}s"
+            if r.status == "ok"
+            else r.reason.strip().splitlines()[-1]
+        )
+        print(f"  {c.number:>5} {c.title} ... {r.status} ({detail})")
+        results.append(r)
+
+    args.output.write_text(render_page(results), encoding="utf-8")
+    n_failed = sum(r.status == "failed" for r in results)
+    print(f"\nVisual test file generated: {args.output}")
+    if n_failed:
+        print(f"{n_failed} case(s) failed; see the red boxes in the page.")
+    if args.browser_check:
+        n_failed += browser_check(args.output) or 0
+    return 1 if args.strict and n_failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
