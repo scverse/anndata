@@ -615,7 +615,8 @@
     }
 
     /* Reserve space for the expand indicator */
-    details.anndata-entry > summary.anndata-entry__summary
+    details.anndata-entry
+        > summary.anndata-entry__summary
         > .anndata-entry__preview {
         padding-right: 24px;
     }

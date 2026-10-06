@@ -27,12 +27,8 @@ All tests use the HTMLValidator to ensure proper HTML output and error reporting
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from typing import Any
 import pandas as pd
 import pytest
 import scipy.sparse as sp
@@ -91,7 +87,7 @@ class PropertyBomb:
 class LyingHasattr:
     """Object where hasattr returns True but getattr fails."""
 
-    def __getattribute__(self, name: str) -> Any:
+    def __getattribute__(self, name: str) -> object:
         if name in ("X", "obs", "var", "uns"):
             msg = f"Gotcha! {name} doesn't really exist"
             raise AttributeError(msg)
@@ -123,7 +119,7 @@ class BrokenCategories:
     """Object with broken categorical accessor."""
 
     @property
-    def cat(self) -> Any:
+    def cat(self) -> object:
         class FakeCat:
             @property
             def categories(self) -> None:
@@ -619,14 +615,14 @@ class TestBrokenObjects:
         class NoX:
             pass
 
-        result = render_x_entry(NoX(), context)
+        result = render_x_entry(NoX(), context)  # type: ignore[arg-type]
         v = validate_html(result)
 
         v.assert_error_shown("AttributeError")
 
     def test_render_x_entry_x_raises(self, context, validate_html) -> None:
         """render_x_entry should show error when X property raises."""
-        result = render_x_entry(PropertyBomb(), context)
+        result = render_x_entry(PropertyBomb(), context)  # type: ignore[arg-type]
         v = validate_html(result)
 
         v.assert_error_shown("RuntimeError")
@@ -964,7 +960,7 @@ class TestArbitraryObjects:
             type("Empty", (), {})(),
         ],
     )
-    def test_is_view_arbitrary(self, obj: Any) -> None:
+    def test_is_view_arbitrary(self, obj: object) -> None:
         """is_view should handle arbitrary objects without crash."""
         result = is_view(obj)
         assert result is False
@@ -973,7 +969,7 @@ class TestArbitraryObjects:
         "obj",
         [None, 42, "string", [], {}, type("Empty", (), {})()],
     )
-    def test_is_backed_arbitrary(self, obj: Any) -> None:
+    def test_is_backed_arbitrary(self, obj: object) -> None:
         """is_backed should handle arbitrary objects without crash."""
         result = is_backed(obj)
         assert result is False
@@ -982,7 +978,7 @@ class TestArbitraryObjects:
         "obj",
         [None, 42, "string", [], {}, type("Empty", (), {})()],
     )
-    def test_is_lazy_adata_arbitrary(self, obj: Any) -> None:
+    def test_is_lazy_adata_arbitrary(self, obj: object) -> None:
         """is_lazy_adata should handle arbitrary objects without crash."""
         result = is_lazy_adata(obj)
         assert result is False
@@ -991,7 +987,7 @@ class TestArbitraryObjects:
         "obj",
         [None, 42, "string", [], {}, type("Empty", (), {})()],
     )
-    def test_get_categories_arbitrary(self, obj: Any) -> None:
+    def test_get_categories_arbitrary(self, obj: object) -> None:
         """_get_categories_from_column should return [] for arbitrary objects."""
         result = _get_categories_from_column(obj)
         assert result == []
@@ -1008,7 +1004,9 @@ class TestArbitraryObjects:
             pd.DataFrame({"a": [1, 2, 3]}),
         ],
     )
-    def test_format_value_arbitrary(self, obj: Any, context: FormatterContext) -> None:
+    def test_format_value_arbitrary(
+        self, obj: object, context: FormatterContext
+    ) -> None:
         """format_value should handle arbitrary objects without crash."""
         output = formatter_registry.format_value(obj, context)
         assert output.type_name is not None
@@ -1039,6 +1037,7 @@ class TestRealAnnDataWithErrors:
         adata.uns["self"] = adata  # AnnData containing itself
 
         html = adata._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1210,6 +1209,7 @@ class TestErrorVisibility:
 
         with pytest.warns(UserWarning, match="LONG_ERROR_MSG"):
             html = adata._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1257,9 +1257,10 @@ class TestSectionTruncation:
         adata.varp["varp_000"] = tiny_sparse
         # Add more entries directly to bypass validation
         for i in range(1, 250):
-            adata.varp._data[f"varp_{i:03d}"] = tiny_sparse
+            adata.varp._data[f"varp_{i:03d}"] = tiny_sparse  # type: ignore[union-attr]
 
         html = adata._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1276,6 +1277,7 @@ class TestSectionTruncation:
         adata.uns.update({f"key_{i:04d}": i for i in range(300)})
 
         html = adata._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1309,6 +1311,7 @@ class TestNestedObjectVisibility:
         }
 
         html = adata._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()
@@ -1462,6 +1465,7 @@ class TestNestedAnnDataWithErrors:
         parent.uns["nested"] = child
 
         html = parent._repr_html_()
+        assert html is not None
         v = validate_html(html)
 
         v.assert_html_well_formed()

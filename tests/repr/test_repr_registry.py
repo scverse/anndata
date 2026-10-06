@@ -7,15 +7,10 @@ custom formatter registration, and uns type hints.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 import pytest
 
 from anndata import AnnData
-
-if TYPE_CHECKING:
-    from typing import Any
 
 
 class TestFormatterRegistry:
@@ -42,10 +37,10 @@ class TestFormatterRegistry:
         class CustomTypeFormatter(TypeFormatter):
             priority = 500
 
-            def can_format(self, obj: Any, context) -> bool:
+            def can_format(self, obj, context):
                 return isinstance(obj, CustomType)
 
-            def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+            def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
                 return FormattedOutput(
                     type_name="CustomType",
                     css_class="anndata-dtype--custom",
@@ -103,10 +98,10 @@ class TestFormatterRegistry:
             priority = 600
             sections = ("uns",)
 
-            def can_format(self, obj: Any, context) -> bool:
+            def can_format(self, obj, context):
                 return isinstance(obj, SectionSpecificType)
 
-            def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+            def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
                 return FormattedOutput(
                     type_name="UnsSpecificType",
                     css_class="anndata-dtype--uns-specific",
@@ -145,10 +140,10 @@ class TestFormatterRegistry:
             priority = 600
             sections = None
 
-            def can_format(self, obj: Any, context) -> bool:
+            def can_format(self, obj, context):
                 return isinstance(obj, UniversalType)
 
-            def format(self, obj: Any, context: FormatterContext) -> FormattedOutput:
+            def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
                 return FormattedOutput(type_name="UniversalType")
 
         formatter = UniversalFormatter()

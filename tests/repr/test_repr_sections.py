@@ -285,6 +285,23 @@ class TestMappingSectionEdgeCases:
         v.assert_section_contains_entry("obsm", "X_pca")
         v.assert_section_contains_entry("obsm", "X_umap")
 
+    @pytest.mark.parametrize("n_layers", [0, 2])
+    def test_layers_hide_x(self, validate_html, n_layers):
+        """`.X` is stored as `layers[None]` but must only show up as the X row."""
+        adata = AnnData(np.zeros((10, 5)))
+        for i in range(n_layers):
+            adata.layers[f"layer_{i}"] = np.zeros((10, 5))
+        assert None in adata.layers
+
+        html = adata._repr_html_()
+        assert html is not None
+        v = validate_html(html)
+        assert 'data-key="None"' not in html
+        if n_layers:
+            assert f"({n_layers} items)" in html
+        for i in range(n_layers):
+            v.assert_section_contains_entry("layers", f"layer_{i}")
+
     def test_layers_truncation(self, validate_html):
         """Test layers section truncates appropriately."""
         from anndata import settings

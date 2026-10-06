@@ -102,7 +102,7 @@ def validate_html5():
 
 # Check for esprima (pure Python JS parser) availability
 try:
-    import esprima  # noqa: F401
+    import esprima  # type: ignore[import-not-found]  # noqa: F401
 
     HAS_ESPRIMA = True
 except ImportError:

@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 if TYPE_CHECKING:
     from typing import TypeGuard
@@ -1013,8 +1013,14 @@ def extract_uns_type_hint(value: object) -> tuple[str | None, object]:
     return None, value
 
 
+@overload
+def register_formatter[F: TypeFormatter | SectionFormatter](
+    formatter: type[F],
+) -> F: ...
+@overload
+def register_formatter[F: TypeFormatter | SectionFormatter](formatter: F) -> F: ...
 def register_formatter(
-    formatter: TypeFormatter | SectionFormatter,
+    formatter: TypeFormatter | SectionFormatter | type,
 ) -> TypeFormatter | SectionFormatter:
     """
     Register a formatter with the global registry.

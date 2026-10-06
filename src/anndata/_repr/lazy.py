@@ -25,10 +25,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from anndata.experimental.backed._lazy_arrays import (
+        CategoricalArray,
+        MaskedArray,
+    )
+
     from .registry import FormatterContext
 
 
-def _get_categorical_array(col: object) -> object | None:
+def _get_categorical_array(col: object) -> CategoricalArray | None:
     """
     Get the underlying CategoricalArray from a lazy xarray DataArray.
 
@@ -90,7 +95,9 @@ def is_lazy_adata(obj: object) -> bool:
         return False
 
 
-def _extract_path_from_lazy_array(arr: object) -> dict[str, str] | None:
+def _extract_path_from_lazy_array(
+    arr: CategoricalArray | MaskedArray,
+) -> dict[str, str] | None:
     """Extract file path and format from a lazy array (CategoricalArray/MaskedArray)."""
     from pathlib import Path
 
@@ -269,10 +276,10 @@ def get_lazy_categorical_info(obj: object) -> tuple[int | None, bool]:
                     # Get count from storage metadata without loading
                     cats = arr._categories
                     if hasattr(cats, "keys"):  # It's a group (zarr)
-                        values = cats["values"]  # type: ignore[index]
-                        return values.shape[0], arr._ordered  # type: ignore[union-attr]
+                        values = cats["values"]
+                        return values.shape[0], arr._ordered
                     elif hasattr(cats, "shape"):  # It's an array directly
-                        return cats.shape[0], arr._ordered  # type: ignore[union-attr]
+                        return cats.shape[0], arr._ordered
     except (ImportError, Exception):  # noqa: BLE001
         pass
     return None, False

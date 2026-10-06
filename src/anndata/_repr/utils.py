@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import html
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -45,7 +45,7 @@ def _check_serializable_single(obj: object) -> tuple[bool, str]:
     try:
         from .._io.specs.registry import _REGISTRY
 
-        _REGISTRY.get_spec(obj)
+        _REGISTRY.get_spec(obj)  # type: ignore[arg-type]
         return True, ""
     except (KeyError, TypeError):
         pass
@@ -147,8 +147,10 @@ def should_warn_string_column(
     if n_unique < n_total:
         return (
             True,
-            f"String column ({n_unique} unique). "
-            f"Will be converted to categorical on save.",
+            (
+                f"String column ({n_unique} unique). "
+                f"Will be converted to categorical on save."
+            ),
         )
 
     return False, ""
@@ -355,7 +357,7 @@ def get_matching_column_colors(
     List of color strings if colors exist, None otherwise
     """
     colors = _get_colors_from_uns(adata, column_name, limit=limit)
-    return list(colors) if colors is not None else None
+    return [str(c) for c in colors] if colors is not None else None
 
 
 def check_color_category_mismatch(
@@ -472,7 +474,7 @@ def _get_colors_from_uns(
     adata: AnnData,
     column_name: str,
     limit: int | None = None,
-) -> object | None:
+) -> Sequence[object] | None:
     """Get colors from uns for a column, handling lazy loading.
 
     Parameters
@@ -500,10 +502,10 @@ def _get_colors_from_uns(
 
     # For lazy AnnData with dask arrays, slice before computing
     if limit is not None and hasattr(colors, "compute"):
-        return colors[:limit].compute()
+        return cast("Sequence[object]", colors[:limit].compute())
 
     # Compute if dask array (for lazy AnnData)
-    return _compute_if_dask(colors)
+    return cast("Sequence[object]", _compute_if_dask(colors))
 
 
 def format_index_preview(index: pd.Index, preview_n: int = 5) -> str:
@@ -589,14 +591,15 @@ def format_memory_size(size_bytes: float) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-def format_number(n: float | str) -> str:
+def format_number(n: object) -> str:
     """Format a number with thousand separators.
 
-    Accepts int, float, or str (for fallback values like "?").
+    Accepts int, float, or anything else (e.g. fallback values like "?"),
+    which is returned as its string form.
     """
-    if isinstance(n, str):
-        return n
-    if isinstance(n, float):
+    if not isinstance(n, int | float | np.integer | np.floating):
+        return str(n)
+    if isinstance(n, float | np.floating):
         if n == int(n):
             n = int(n)
         else:
@@ -787,7 +790,7 @@ def generate_value_preview(value: object, max_len: int = 100) -> str:
     return ""
 
 
-def get_setting(name: str, *, default: object) -> object:
+def get_setting[T](name: str, *, default: T) -> T:
     """Get a setting value from anndata.settings, falling back to default.
 
     Parameters

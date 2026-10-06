@@ -31,6 +31,8 @@ from .registry import formatter_registry
 from .utils import escape_html, format_number
 
 if TYPE_CHECKING:
+    from anndata import AnnData, Raw
+
     from .registry import FormattedEntry, FormatterContext
 
 
@@ -196,7 +198,7 @@ def get_section_tooltip(section: str) -> str:
     return tooltips.get(section, "")
 
 
-def render_x_entry(obj: object, context: FormatterContext) -> str:
+def render_x_entry(obj: AnnData | Raw, context: FormatterContext) -> str:
     """Render X as a single compact entry row.
 
     Works with AnnData, Raw, and any object with an X attribute.
@@ -393,7 +395,7 @@ def render_formatted_entry(
 
     # Expandable entries use <details>/<summary>; render_nested_content
     # closes the <summary> and adds the nested content div.
-    if has_expandable_content:
+    if output.expanded_html is not None:
         parts.append(render_nested_content(output.expanded_html))
         parts.append("</details>")
     else:

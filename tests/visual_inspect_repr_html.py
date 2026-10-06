@@ -72,8 +72,8 @@ except ImportError:
     HAS_XARRAY = False
 
 try:
-    import networkx as nx
-    from treedata import TreeData
+    import networkx as nx  # type: ignore[import-untyped]
+    from treedata import TreeData  # type: ignore[import-not-found]
 
     from anndata._repr import (
         FormattedEntry,
@@ -154,8 +154,10 @@ try:
 
         # Generate SVG
         svg_parts = [
-            f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
-            f'style="background:#fafafa;border-radius:4px;border:1px solid #e0e0e0;">'
+            (
+                f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
+                f'style="background:#fafafa;border-radius:4px;border:1px solid #e0e0e0;">'
+            )
         ]
 
         # Draw branches (parent -> child)
@@ -817,7 +819,7 @@ try:
 
         priority = 100
 
-        def can_format(self, obj, context) -> bool:
+        def can_format(self, obj, context):
             return isinstance(obj, dict) and "shape" in obj and "dtype" in obj
 
         def format(self, obj, context: FormatterContext) -> FormattedOutput:
@@ -1432,12 +1434,14 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "1. Full AnnData (all features)",
         adata_full._repr_html_(),
-        "A comprehensive AnnData with all standard attributes populated: X (sparse matrix), "
-        "obs/var with multiple columns including categoricals with colors, "
-        "obsm/varm with embeddings, uns with nested data, layers, and obsp/varp. "
-        "Use this as the baseline reference for a typical annotated dataset. "
-        "Each section header has a <b>?</b> icon that links to the relevant anndata documentation, "
-        "and hovering over the section name shows a tooltip describing that attribute.",
+        (
+            "A comprehensive AnnData with all standard attributes populated: X (sparse matrix), "
+            "obs/var with multiple columns including categoricals with colors, "
+            "obsm/varm with embeddings, uns with nested data, layers, and obsp/varp. "
+            "Use this as the baseline reference for a typical annotated dataset. "
+            "Each section header has a <b>?</b> icon that links to the relevant anndata documentation, "
+            "and hovering over the section name shows a tooltip describing that attribute."
+        ),
     ))
 
     # Test 2: Empty AnnData
@@ -1446,8 +1450,10 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "2. Empty AnnData",
         adata_empty._repr_html_(),
-        "An AnnData with no data (0 × 0). Tests graceful handling of the edge case "
-        "where all sections are empty. Should show the header with shape and no sections.",
+        (
+            "An AnnData with no data (0 × 0). Tests graceful handling of the edge case "
+            "where all sections are empty. Should show the header with shape and no sections."
+        ),
     ))
 
     # Test 3: Minimal AnnData
@@ -1456,8 +1462,10 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "3. Minimal AnnData (just X matrix)",
         adata_minimal._repr_html_(),
-        "Only an X matrix with no annotations. Tests the minimal case where only X section "
-        "is shown. obs/var exist with default integer indices but have no columns.",
+        (
+            "Only an X matrix with no annotations. Tests the minimal case where only X section "
+            "is shown. obs/var exist with default integer indices but have no columns."
+        ),
     ))
 
     # Test 4: View
@@ -1466,8 +1474,10 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "4. AnnData View (subset)",
         view._repr_html_(),
-        "A view (subset) of Test 1. Should display a 'View' badge in the header indicating "
-        "this is a reference to underlying data, not a copy. The shape shows the subset dimensions.",
+        (
+            "A view (subset) of Test 1. Should display a 'View' badge in the header indicating "
+            "this is a reference to underlying data, not a copy. The shape shows the subset dimensions."
+        ),
     ))
 
     # Test 5: Dense matrix
@@ -1484,8 +1494,10 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "5. Dense Matrix with Categories",
         adata_dense._repr_html_(),
-        "Dense numpy array X (not sparse). The X section shows 'ndarray' instead of CSR/CSC. "
-        "Also demonstrates categorical column with associated colors from uns (color dots appear).",
+        (
+            "Dense numpy array X (not sparse). The X section shows 'ndarray' instead of CSR/CSC. "
+            "Also demonstrates categorical column with associated colors from uns (color dots appear)."
+        ),
     ))
 
     # Test 6: Many columns (collapsed sections)
@@ -1498,9 +1510,11 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "6. Many Columns (tests auto-folding)",
         adata_many._repr_html_(),
-        "Sections with many entries (15 obs columns, 12 obsm embeddings) to test auto-folding. "
-        "Sections with >8 items collapse by default and show a fold indicator. "
-        "Click the section header or fold icon to expand/collapse.",
+        (
+            "Sections with many entries (15 obs columns, 12 obsm embeddings) to test auto-folding. "
+            "Sections with >8 items collapse by default and show a fold indicator. "
+            "Click the section header or fold icon to expand/collapse."
+        ),
     ))
 
     # Test 7: Special characters
@@ -1513,9 +1527,11 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "7. Special Characters (XSS/Unicode test)",
         adata_special._repr_html_(),
-        "Tests proper HTML escaping and Unicode handling. Column names with &lt;html&gt; tags, "
-        "ampersands, quotes, and Japanese characters should render correctly without breaking "
-        "the layout or causing XSS vulnerabilities.",
+        (
+            "Tests proper HTML escaping and Unicode handling. Column names with &lt;html&gt; tags, "
+            "ampersands, quotes, and Japanese characters should render correctly without breaking "
+            "the layout or causing XSS vulnerabilities."
+        ),
     ))
 
     # Test 8a: Dask array (if available) - demonstrates lazy loading safety
@@ -1535,17 +1551,19 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "8a. Dask Arrays (Lazy Loading Safety)",
             adata_dask._repr_html_(),
-            "<strong>Regular AnnData with Dask arrays — no <code>.compute()</code> triggered!</strong><br>"
-            "<p style='margin: 5px 0;'>This is a normal (in-memory) AnnData where X, layers, obsm, and varm "
-            "are Dask arrays. The repr reads only metadata attributes:</p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><code>X</code>: shape, dtype, chunks from Dask's lazy metadata</li>"
-            "<li><code>layers['counts']</code>: Same — no computation</li>"
-            "<li><code>obsm['X_pca']</code>, <code>varm['loadings']</code>: shape from <code>.shape</code></li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'><b>Key distinction from 8b/8c:</b> This object is not backed by "
-            "a file. The obs/var DataFrames are regular pandas objects in memory. "
-            "The 'lazy' aspect here refers only to Dask not computing array values.</p>",
+            (
+                "<strong>Regular AnnData with Dask arrays — no <code>.compute()</code> triggered!</strong><br>"
+                "<p style='margin: 5px 0;'>This is a normal (in-memory) AnnData where X, layers, obsm, and varm "
+                "are Dask arrays. The repr reads only metadata attributes:</p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li><code>X</code>: shape, dtype, chunks from Dask's lazy metadata</li>"
+                "<li><code>layers['counts']</code>: Same — no computation</li>"
+                "<li><code>obsm['X_pca']</code>, <code>varm['loadings']</code>: shape from <code>.shape</code></li>"
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>Key distinction from 8b/8c:</b> This object is not backed by "
+                "a file. The obs/var DataFrames are regular pandas objects in memory. "
+                "The 'lazy' aspect here refers only to Dask not computing array values.</p>"
+            ),
         ))
 
     # Test 8b: Lazy AnnData (experimental) - fully lazy obs/var
@@ -1631,26 +1649,28 @@ def main():  # noqa: PLR0915, PLR0912
             sections.append((
                 "8b. Lazy AnnData (Experimental)",
                 custom_lazy_html,
-                "<code>anndata.experimental.read_lazy()</code><br>"
-                "<p style='margin: 5px 0;'><b>File-backed lazy AnnData — category labels loaded from disk!</b></p>"
-                "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                "The header shows a <b>Lazy (H5AD)</b> badge and the <b>file path</b> (similar to backed mode). "
-                "Unlike 8a (in-memory) and 8c (metadata-only), this repr <b>actually reads data from the HDF5 file</b>:</p>"
-                "<p style='margin: 5px 0;'><b>What IS loaded from disk:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                "<li><b>cell_type</b>: 4 category labels + 4 colors from <code>uns</code></li>"
-                "<li><b>cluster</b>: 5 category labels (no colors)</li>"
-                "<li><b>sample_id</b>: first 30 of 50 category labels (truncated by <code>max_lazy_categories=30</code>)</li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>What is NOT loaded:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                "<li>Numeric data (dask arrays not computed)</li>"
-                "<li>Category codes (only labels, not which cell has which category)</li>"
-                "<li>Categories beyond the <code>max_lazy_categories</code> limit</li>"
-                "<li>Non-categorical column values (show as '(lazy)')</li>"
-                "</ul>"
-                "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                "<b>Compare with 8c</b> to see the same object with zero disk I/O.</p>",
+                (
+                    "<code>anndata.experimental.read_lazy()</code><br>"
+                    "<p style='margin: 5px 0;'><b>File-backed lazy AnnData — category labels loaded from disk!</b></p>"
+                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                    "The header shows a <b>Lazy (H5AD)</b> badge and the <b>file path</b> (similar to backed mode). "
+                    "Unlike 8a (in-memory) and 8c (metadata-only), this repr <b>actually reads data from the HDF5 file</b>:</p>"
+                    "<p style='margin: 5px 0;'><b>What IS loaded from disk:</b></p>"
+                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
+                    "<li><b>cell_type</b>: 4 category labels + 4 colors from <code>uns</code></li>"
+                    "<li><b>cluster</b>: 5 category labels (no colors)</li>"
+                    "<li><b>sample_id</b>: first 30 of 50 category labels (truncated by <code>max_lazy_categories=30</code>)</li>"
+                    "</ul>"
+                    "<p style='margin: 5px 0;'><b>What is NOT loaded:</b></p>"
+                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
+                    "<li>Numeric data (dask arrays not computed)</li>"
+                    "<li>Category codes (only labels, not which cell has which category)</li>"
+                    "<li>Categories beyond the <code>max_lazy_categories</code> limit</li>"
+                    "<li>Non-categorical column values (show as '(lazy)')</li>"
+                    "</ul>"
+                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                    "<b>Compare with 8c</b> to see the same object with zero disk I/O.</p>"
+                ),
             ))
 
             # Test 8c: Lazy AnnData with max_lazy_categories=0 (metadata-only mode)
@@ -1665,25 +1685,27 @@ def main():  # noqa: PLR0915, PLR0912
             sections.append((
                 "8c. Lazy AnnData (Metadata-Only Mode)",
                 metadata_only_html,
-                "<code>ad.settings.repr_html_max_lazy_categories = 0</code><br>"
-                "<p style='margin: 5px 0;'><b>Same object as 8b, but with zero disk I/O!</b></p>"
-                "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                "Compare this output to 8b — this is the exact same lazy AnnData object, "
-                "but with <code>max_lazy_categories=0</code> to prevent any data loading. "
-                "The header still shows the <b>Lazy (H5AD)</b> badge and <b>file path</b>.</p>"
-                "<p style='margin: 5px 0;'><b>What's NOT loaded (unlike 8b):</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li>Category labels — only shows <code>(N categories)</code> count from dtype metadata</li>"
-                "<li>Colors from <code>uns</code> — no color dots displayed</li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>What IS shown (from already-loaded metadata):</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px;'>"
-                "<li>Category count (e.g., '4 categories') from the dtype (already in memory)</li>"
-                "<li>Column names and types</li>"
-                "<li>Array shapes and dtypes</li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>Use case:</b> Fastest possible repr when you want to avoid "
-                "all disk access (e.g., network-mounted storage, very large files).</p>",
+                (
+                    "<code>ad.settings.repr_html_max_lazy_categories = 0</code><br>"
+                    "<p style='margin: 5px 0;'><b>Same object as 8b, but with zero disk I/O!</b></p>"
+                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                    "Compare this output to 8b — this is the exact same lazy AnnData object, "
+                    "but with <code>max_lazy_categories=0</code> to prevent any data loading. "
+                    "The header still shows the <b>Lazy (H5AD)</b> badge and <b>file path</b>.</p>"
+                    "<p style='margin: 5px 0;'><b>What's NOT loaded (unlike 8b):</b></p>"
+                    "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                    "<li>Category labels — only shows <code>(N categories)</code> count from dtype metadata</li>"
+                    "<li>Colors from <code>uns</code> — no color dots displayed</li>"
+                    "</ul>"
+                    "<p style='margin: 5px 0;'><b>What IS shown (from already-loaded metadata):</b></p>"
+                    "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                    "<li>Category count (e.g., '4 categories') from the dtype (already in memory)</li>"
+                    "<li>Column names and types</li>"
+                    "<li>Array shapes and dtypes</li>"
+                    "</ul>"
+                    "<p style='margin: 5px 0;'><b>Use case:</b> Fastest possible repr when you want to avoid "
+                    "all disk access (e.g., network-mounted storage, very large files).</p>"
+                ),
             ))
 
         except (OSError, ImportError, TypeError) as e:
@@ -1732,19 +1754,21 @@ def main():  # noqa: PLR0915, PLR0912
             sections.append((
                 "8d. Lazy AnnData (Zarr Format)",
                 adata_lazy_zarr._repr_html_(),
-                "<code>anndata.experimental.read_lazy(zarr_store)</code><br>"
-                "<p style='margin: 5px 0;'><b>Lazy AnnData backed by Zarr storage</b></p>"
-                "<p style='margin: 5px 0; font-size: 0.9em;'>"
-                "The header shows a <b>Lazy (Zarr)</b> badge and the <b>zarr directory path</b>. "
-                "Zarr is particularly useful for cloud storage (S3, GCS) and parallel access.</p>"
-                "<p style='margin: 5px 0;'><b>Same lazy behavior as 8b/8c:</b></p>"
-                "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
-                "<li>Category labels loaded on demand (respects <code>max_lazy_categories</code>)</li>"
-                "<li>Numeric columns show '(lazy)'</li>"
-                "<li>Arrays show shape/dtype without loading data</li>"
-                "</ul>"
-                "<p style='margin: 5px 0;'><b>Zarr advantages:</b> chunked storage, cloud-native, "
-                "supports concurrent reads, consolidatable metadata.</p>",
+                (
+                    "<code>anndata.experimental.read_lazy(zarr_store)</code><br>"
+                    "<p style='margin: 5px 0;'><b>Lazy AnnData backed by Zarr storage</b></p>"
+                    "<p style='margin: 5px 0; font-size: 0.9em;'>"
+                    "The header shows a <b>Lazy (Zarr)</b> badge and the <b>zarr directory path</b>. "
+                    "Zarr is particularly useful for cloud storage (S3, GCS) and parallel access.</p>"
+                    "<p style='margin: 5px 0;'><b>Same lazy behavior as 8b/8c:</b></p>"
+                    "<ul style='margin: 5px 0; padding-left: 20px; font-size: 0.9em;'>"
+                    "<li>Category labels loaded on demand (respects <code>max_lazy_categories</code>)</li>"
+                    "<li>Numeric columns show '(lazy)'</li>"
+                    "<li>Arrays show shape/dtype without loading data</li>"
+                    "</ul>"
+                    "<p style='margin: 5px 0;'><b>Zarr advantages:</b> chunked storage, cloud-native, "
+                    "supports concurrent reads, consolidatable metadata.</p>"
+                ),
             ))
 
         except (OSError, ImportError, TypeError) as e:
@@ -1775,20 +1799,22 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "9. Backed AnnData (H5AD File)",
             adata_backed._repr_html_(),
-            "<strong>File-backed mode via <code>read_h5ad(backed='r')</code></strong><br>"
-            f"<code>{tmp_path}</code><br><br>"
-            "<p style='margin: 5px 0;'><b>Key difference from 8b (lazy):</b> Backed mode loads obs/var "
-            "DataFrames fully into memory, while lazy mode keeps them as dask-backed xarray.</p>"
-            "<p style='margin: 5px 0;'><b>What the repr reads:</b></p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li><code>X.shape</code>, <code>X.dtype</code>, <code>X.nnz</code> — from HDF5 attributes</li>"
-            "<li><code>obs</code>/<code>var</code> DataFrames — fully loaded in memory</li>"
-            "<li><code>obsm</code>/<code>varm</code> shapes — from HDF5 dataset attributes</li>"
-            "</ul>"
-            "<p style='margin: 5px 0;'><b>What stays on disk:</b></p>"
-            "<ul style='margin: 5px 0; padding-left: 20px;'>"
-            "<li>The actual X matrix data (memory-mapped, not loaded)</li>"
-            "</ul>",
+            (
+                "<strong>File-backed mode via <code>read_h5ad(backed='r')</code></strong><br>"
+                f"<code>{tmp_path}</code><br><br>"
+                "<p style='margin: 5px 0;'><b>Key difference from 8b (lazy):</b> Backed mode loads obs/var "
+                "DataFrames fully into memory, while lazy mode keeps them as dask-backed xarray.</p>"
+                "<p style='margin: 5px 0;'><b>What the repr reads:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li><code>X.shape</code>, <code>X.dtype</code>, <code>X.nnz</code> — from HDF5 attributes</li>"
+                "<li><code>obs</code>/<code>var</code> DataFrames — fully loaded in memory</li>"
+                "<li><code>obsm</code>/<code>varm</code> shapes — from HDF5 dataset attributes</li>"
+                "</ul>"
+                "<p style='margin: 5px 0;'><b>What stays on disk:</b></p>"
+                "<ul style='margin: 5px 0; padding-left: 20px;'>"
+                "<li>The actual X matrix data (memory-mapped, not loaded)</li>"
+                "</ul>"
+            ),
         ))
     finally:
         if adata_backed is not None:
@@ -1807,10 +1833,12 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "10. Deeply Nested AnnData (tests max depth)",
         outer._repr_html_(),
-        "AnnData with 3 levels of nesting in uns (outer → level1 → level2 → level3). "
-        "Tests the max_depth limit for nested repr. By default, nesting stops at depth 3, "
-        "so level3 should show as a collapsed entry without further expansion. "
-        "Click expand arrows to drill into the nested structure.",
+        (
+            "AnnData with 3 levels of nesting in uns (outer → level1 → level2 → level3). "
+            "Tests the max_depth limit for nested repr. By default, nesting stops at depth 3, "
+            "so level3 should show as a collapsed entry without further expansion. "
+            "Click expand arrows to drill into the nested structure."
+        ),
     ))
 
     # Test 11: Many categories (tests truncation and wrap button)
@@ -1885,14 +1913,16 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "11. Many Categories (tests truncation)",
         adata_many_cats._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Category truncation with <code>max_categories=20</code></b> (default: 100)</p>"
-        "<ul style='margin: 5px 0; padding-left: 20px;'>"
-        "<li><b>cell_type</b> (30 cats): shows first 20 with colors, then '...+10' indicator</li>"
-        "<li><b>batch</b> (20 cats): shows all 20 (exactly at limit)</li>"
-        "</ul>"
-        "<p style='margin: 5px 0;'>Click the <b>▼</b> arrow button to expand and see all categories. "
-        "The expand button appears only when categories are truncated. "
-        "Colors are shown for all displayed categories from <code>uns['{col}_colors']</code>.</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Category truncation with <code>max_categories=20</code></b> (default: 100)</p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li><b>cell_type</b> (30 cats): shows first 20 with colors, then '...+10' indicator</li>"
+            "<li><b>batch</b> (20 cats): shows all 20 (exactly at limit)</li>"
+            "</ul>"
+            "<p style='margin: 5px 0;'>Click the <b>▼</b> arrow button to expand and see all categories. "
+            "The expand button appears only when categories are truncated. "
+            "Colors are shown for all displayed categories from <code>uns['{col}_colors']</code>.</p>"
+        ),
     ))
     ad.settings.repr_html_max_categories = original_max_cats
 
@@ -1983,16 +2013,18 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "12. Uns Value Previews and Type Hints",
         adata_uns._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Uns entries with value previews and type hint system</b></p>"
-        "<ul style='margin: 5px 0; padding-left: 20px;'>"
-        "<li><b>Simple types:</b> strings, ints, floats, bools, None show inline previews</li>"
-        "<li><b>long_string:</b> truncated with ellipsis when exceeding max length</li>"
-        "<li><b>small_list/dict:</b> shows content preview; larger_dict shows key count</li>"
-        "<li><b>analysis_history:</b> custom <code>TypeFormatter</code> renders '3 runs · params: ...'</li>"
-        "<li><b>unregistered_data:</b> has <code>__anndata_repr__</code> hint but no formatter → shows 'import X to enable'</li>"
-        "</ul>"
-        "<p style='margin: 5px 0;'>The <code>__anndata_repr__</code> type hint system allows packages to register "
-        "custom renderers for their data types stored in uns.</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Uns entries with value previews and type hint system</b></p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li><b>Simple types:</b> strings, ints, floats, bools, None show inline previews</li>"
+            "<li><b>long_string:</b> truncated with ellipsis when exceeding max length</li>"
+            "<li><b>small_list/dict:</b> shows content preview; larger_dict shows key count</li>"
+            "<li><b>analysis_history:</b> custom <code>TypeFormatter</code> renders '3 runs · params: ...'</li>"
+            "<li><b>unregistered_data:</b> has <code>__anndata_repr__</code> hint but no formatter → shows 'import X to enable'</li>"
+            "</ul>"
+            "<p style='margin: 5px 0;'>The <code>__anndata_repr__</code> type hint system allows packages to register "
+            "custom renderers for their data types stored in uns.</p>"
+        ),
     ))
 
     # Test 13: No JavaScript (graceful degradation)
@@ -2042,13 +2074,15 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "13. No JavaScript (graceful degradation)",
         nojs_html,
-        "This example has script tags removed to simulate environments where JS is disabled. "
-        "All content should be visible, sections should be expanded, category lists and "
-        "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
-        "(fold icons, copy buttons, search, wrap toggle) should be hidden. "
-        "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
-        "Includes a nested AnnData in uns and a raw section — both use native &lt;details&gt; "
-        "for expand/collapse which works without JS.",
+        (
+            "This example has script tags removed to simulate environments where JS is disabled. "
+            "All content should be visible, sections should be expanded, category lists and "
+            "DataFrame column lists should wrap naturally to multiple lines, and interactive buttons "
+            "(fold icons, copy buttons, search, wrap toggle) should be hidden. "
+            "The obsm 'cell_measurements' DataFrame has 20 columns to test column list wrapping. "
+            "Includes a nested AnnData in uns and a raw section — both use native &lt;details&gt; "
+            "for expand/collapse which works without JS."
+        ),
     ))
 
     # Test 13b: No CSS (GitHub / untrusted notebook fallback)
@@ -2069,11 +2103,13 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "13b. No CSS (GitHub / untrusted notebook fallback)",
         iframe_html,
-        "Simulates GitHub's notebook renderer which strips &lt;style&gt; and &lt;script&gt; tags. "
-        "Rendered in an iframe for CSS isolation. "
-        "The rich HTML degrades gracefully: inline &lt;span&gt; cells keep entries on one line, "
-        "monospace font, CSS variable column widths, and comma-separated categories. "
-        "Sections fold/unfold via native &lt;details&gt;/&lt;summary&gt;.",
+        (
+            "Simulates GitHub's notebook renderer which strips &lt;style&gt; and &lt;script&gt; tags. "
+            "Rendered in an iframe for CSS isolation. "
+            "The rich HTML degrades gracefully: inline &lt;span&gt; cells keep entries on one line, "
+            "monospace font, CSS variable column widths, and comma-separated categories. "
+            "Sections fold/unfold via native &lt;details&gt;/&lt;summary&gt;."
+        ),
     ))
 
     # Test 14: Custom sections example using TreeData (if available)
@@ -2083,22 +2119,24 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "14. Custom Sections (TreeData example)",
             tdata._repr_html_(),
-            "Demonstrates how to add custom sections using SectionFormatter. "
-            "This example uses <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
-            "to show three custom sections:<br><br>"
-            "<b>Standard sections</b> (via <code>get_entries()</code>):<br>"
-            "<ul>"
-            "<li><b>obst</b> (after obsm) and <b>vart</b> (after varm) — foldable sections with SVG tree previews. "
-            "Click the <b>▼</b> arrow to expand. Trees with &gt;30 leaves show a text message instead.</li>"
-            "</ul>"
-            "<b>Fully custom section</b> (via <code>render_html()</code>):<br>"
-            "<ul>"
-            "<li><b>tree</b> (after X) — a compact non-foldable line showing TreeData's metadata "
-            "(<code>label</code>, <code>alignment</code>, <code>allow_overlap</code>). "
-            "Uses <code>render_html()</code> to bypass the standard entry grid and produce "
-            "raw HTML directly, similar to how the X row is rendered.</li>"
-            "</ul>"
-            "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>)",
+            (
+                "Demonstrates how to add custom sections using SectionFormatter. "
+                "This example uses <a href='https://treedata.readthedocs.io/en/latest/' target='_blank'>TreeData</a> "
+                "to show three custom sections:<br><br>"
+                "<b>Standard sections</b> (via <code>get_entries()</code>):<br>"
+                "<ul>"
+                "<li><b>obst</b> (after obsm) and <b>vart</b> (after varm) — foldable sections with SVG tree previews. "
+                "Click the <b>▼</b> arrow to expand. Trees with &gt;30 leaves show a text message instead.</li>"
+                "</ul>"
+                "<b>Fully custom section</b> (via <code>render_html()</code>):<br>"
+                "<ul>"
+                "<li><b>tree</b> (after X) — a compact non-foldable line showing TreeData's metadata "
+                "(<code>label</code>, <code>alignment</code>, <code>allow_overlap</code>). "
+                "Uses <code>render_html()</code> to bypass the standard entry grid and produce "
+                "raw HTML directly, similar to how the X row is rendered.</li>"
+                "</ul>"
+                "(<a href='https://github.com/scverse/ecosystem-packages/pull/282' target='_blank'>scverse ecosystem PR</a>)"
+            ),
         ))
 
     # Test 15: Expandable DataFrame in obsm
@@ -2131,11 +2169,13 @@ def main():  # noqa: PLR0915, PLR0912
         sections.append((
             "15. Expandable DataFrame in obsm",
             adata_df._repr_html_(),
-            "When <code>anndata.settings.repr_html_dataframe_expand = True</code>, "
-            "DataFrames in obsm/varm show an 'Expand' button. Click to see pandas <code>_repr_html_()</code> output "
-            "(styled table with zebra striping and hover). Configure pandas display options: "
-            "<code>pd.set_option('display.max_rows', 10)</code>. "
-            "Column names are shown in the rightmost column (meta column).",
+            (
+                "When <code>anndata.settings.repr_html_dataframe_expand = True</code>, "
+                "DataFrames in obsm/varm show an 'Expand' button. Click to see pandas <code>_repr_html_()</code> output "
+                "(styled table with zebra striping and hover). Configure pandas display options: "
+                "<code>pd.set_option('display.max_rows', 10)</code>. "
+                "Column names are shown in the rightmost column (meta column)."
+            ),
         ))
     finally:
         ad.settings.repr_html_dataframe_expand = original_expand
@@ -2165,12 +2205,14 @@ def main():  # noqa: PLR0915, PLR0912
     sections.append((
         "16. Very Long Field Names",
         adata_long._repr_html_(),
-        "Tests the dynamic field name column width calculation. The longest field name is "
-        "'this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting' (77 chars). "
-        "The name column width should expand to fit longer names but be capped by "
-        "<code>repr_html_max_field_width</code> (default: 400px). Names exceeding the max width "
-        "show an ellipsis (...) via CSS text-overflow; hover over truncated names to see the "
-        "full name in a tooltip. The copy button still copies the full field name even when truncated.",
+        (
+            "Tests the dynamic field name column width calculation. The longest field name is "
+            "'this_is_an_extremely_long_column_name_that_should_test_the_max_width_setting' (77 chars). "
+            "The name column width should expand to fit longer names but be capped by "
+            "<code>repr_html_max_field_width</code> (default: 400px). Names exceeding the max width "
+            "show an ellipsis (...) via CSS text-overflow; hover over truncated names to see the "
+            "full name in a tooltip. The copy button still copies the full field name even when truncated."
+        ),
     ))
 
     # Test 17: README icon
@@ -2244,9 +2286,11 @@ For questions about this dataset: `genome-lab@example-hospital.org`
     sections.append((
         "17. README Icon",
         adata_readme._repr_html_(),
-        "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
-        "Click the icon to open a modal with the README content displayed as plain text "
-        "(raw markdown source, not rendered). Press Escape or click outside to close.",
+        (
+            "When <code>uns['README']</code> contains a string, a small ⓘ icon appears in the header. "
+            "Click the icon to open a modal with the README content displayed as plain text "
+            "(raw markdown source, not rendered). Press Escape or click outside to close."
+        ),
     ))
 
     # Test 18: README icon in No-JS mode
@@ -2267,9 +2311,11 @@ For more details, see the full documentation.
     sections.append((
         "18. README Icon in No-JS Mode",
         nojs_readme_html,
-        "In no-JS mode, the README icon still appears but clicking it won't open a modal. "
-        "Instead, **hover over the icon** to see the README content as a tooltip (browser's "
-        "native title attribute). The tooltip shows the first 500 characters of the README.",
+        (
+            "In no-JS mode, the README icon still appears but clicking it won't open a modal. "
+            "Instead, **hover over the icon** to see the README content as a tooltip (browser's "
+            "native title attribute). The tooltip shows the first 500 characters of the README."
+        ),
     ))
 
     # Test 18b: README truncation (large README)
@@ -2285,11 +2331,13 @@ For more details, see the full documentation.
     sections.append((
         "18b. README Truncation (Large README)",
         large_readme_html,
-        f"Tests README truncation. The original README is ~{len(large_readme):,} characters. "
-        "The default limit is 100,000 characters (configurable via "
-        "<code>anndata.settings.repr_html_max_readme_size</code>). "
-        "Click the ⓘ icon to see the modal - it should show the truncated content with a note "
-        "at the bottom indicating how much was truncated.",
+        (
+            f"Tests README truncation. The original README is ~{len(large_readme):,} characters. "
+            "The default limit is 100,000 characters (configurable via "
+            "<code>anndata.settings.repr_html_max_readme_size</code>). "
+            "Click the ⓘ icon to see the modal - it should show the truncated content with a note "
+            "at the bottom indicating how much was truncated."
+        ),
     ))
 
     # Test 19: MuData (multimodal data)
@@ -2305,12 +2353,14 @@ For more details, see the full documentation.
             sections.append((
                 "19. MuData (Multimodal Data)",
                 generate_repr_html(mdata),
-                "Demonstrates how MuData can reuse anndata's HTML repr machinery by simply "
-                "registering a <code>SectionFormatter</code> for the <code>.mod</code> attribute. "
-                "The <code>mod</code> section shows each modality as an expandable nested AnnData "
-                "(click the arrow to expand). All standard sections (obs, var, obsm, varm, uns, etc.) "
-                "work automatically. This example has 3 modalities: RNA (100×50), ATAC (100×30), "
-                "and Protein (80×20).",
+                (
+                    "Demonstrates how MuData can reuse anndata's HTML repr machinery by simply "
+                    "registering a <code>SectionFormatter</code> for the <code>.mod</code> attribute. "
+                    "The <code>mod</code> section shows each modality as an expandable nested AnnData "
+                    "(click the arrow to expand). All standard sections (obs, var, obsm, varm, uns, etc.) "
+                    "work automatically. This example has 3 modalities: RNA (100×50), ATAC (100×30), "
+                    "and Protein (80×20)."
+                ),
             ))
     else:
         print("  19. MuData (skipped - mudata not installed)")
@@ -2324,19 +2374,21 @@ For more details, see the full documentation.
         sections.append((
             "20. SpatialData (Custom _repr_html_)",
             sdata._repr_html_(),
-            "Demonstrates how packages like <a href='https://spatialdata.scverse.org/' "
-            "target='_blank'>SpatialData</a> can build custom <code>_repr_html_</code> "
-            "using anndata's building blocks: "
-            "<ul>"
-            "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
-            "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
-            "<li><code>render_formatted_entry()</code> with <code>preview_html</code> - table rows with preview column</li>"
-            "<li><code>generate_repr_html()</code> - embed nested AnnData (see 'tables' section)</li>"
-            "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
-            "</ul>"
-            "Note the preview column shows dimension info like <code>[c, y, x]</code>. "
-            "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand). "
-            "Hover over coordinate system names to see associated elements.",
+            (
+                "Demonstrates how packages like <a href='https://spatialdata.scverse.org/' "
+                "target='_blank'>SpatialData</a> can build custom <code>_repr_html_</code> "
+                "using anndata's building blocks: "
+                "<ul>"
+                "<li><code>get_css()</code> / <code>get_javascript()</code> - reuse styling and interactivity</li>"
+                "<li><code>render_section()</code> - create collapsible sections (images, labels, points, shapes, tables)</li>"
+                "<li><code>render_formatted_entry()</code> with <code>preview_html</code> - table rows with preview column</li>"
+                "<li><code>generate_repr_html()</code> - embed nested AnnData (see 'tables' section)</li>"
+                "<li><code>FormatterRegistry</code> - custom 'transforms' section added via SectionFormatter</li>"
+                "</ul>"
+                "Note the preview column shows dimension info like <code>[c, y, x]</code>. "
+                "The nested AnnData objects in <code>tables</code> are fully interactive (click Expand). "
+                "Hover over coordinate system names to see associated elements."
+            ),
         ))
     else:
         print("  20. SpatialData (skipped - example failed to load)")
@@ -2378,13 +2430,15 @@ For more details, see the full documentation.
     sections.append((
         "21a. Raw Section - Dense Matrix with var and varm",
         adata_raw._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Typical workflow: filtered AnnData with .raw preserving all genes</b></p>"
-        "<ul style='margin: 5px 0; padding-left: 20px;'>"
-        "<li><b>Current:</b> 100 × 500 (filtered to highly variable genes)</li>"
-        "<li><b>Raw:</b> 100 × 2,000 (original unfiltered data)</li>"
-        "</ul>"
-        "<p style='margin: 5px 0;'>Click the <b>raw</b> row to expand and see the nested repr with "
-        "X (dense), var (2 columns), and varm (PCs). The raw section header shows the shape difference.</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Typical workflow: filtered AnnData with .raw preserving all genes</b></p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li><b>Current:</b> 100 × 500 (filtered to highly variable genes)</li>"
+            "<li><b>Raw:</b> 100 × 2,000 (original unfiltered data)</li>"
+            "</ul>"
+            "<p style='margin: 5px 0;'>Click the <b>raw</b> row to expand and see the nested repr with "
+            "X (dense), var (2 columns), and varm (PCs). The raw section header shows the shape difference.</p>"
+        ),
     ))
 
     # Test 21b: Raw with sparse matrix
@@ -2400,10 +2454,12 @@ For more details, see the full documentation.
     sections.append((
         "21b. Raw Section - Sparse Matrix",
         adata_sparse_raw._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Raw with sparse CSR matrix</b></p>"
-        "<p style='margin: 5px 0;'>Both current X (10% density) and raw X (5% density) are sparse. "
-        "The expanded raw section should show CSR matrix type and sparsity percentage. "
-        "Compare with 21a which uses dense matrices.</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Raw with sparse CSR matrix</b></p>"
+            "<p style='margin: 5px 0;'>Both current X (10% density) and raw X (5% density) are sparse. "
+            "The expanded raw section should show CSR matrix type and sparsity percentage. "
+            "Compare with 21a which uses dense matrices.</p>"
+        ),
     ))
 
     # Test 21c: Raw with no varm (minimal raw)
@@ -2423,10 +2479,12 @@ For more details, see the full documentation.
     sections.append((
         "21c. Raw Section - Minimal (no varm)",
         adata_minimal_raw._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Minimal raw: only X and var (no varm)</b></p>"
-        "<p style='margin: 5px 0;'>Tests that raw section renders correctly when varm is empty. "
-        "The expanded raw should show only X and var sections, with no varm section visible. "
-        "Compare with 21a which includes varm['PCs'].</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Minimal raw: only X and var (no varm)</b></p>"
+            "<p style='margin: 5px 0;'>Tests that raw section renders correctly when varm is empty. "
+            "The expanded raw should show only X and var sections, with no varm section visible. "
+            "Compare with 21a which includes varm['PCs'].</p>"
+        ),
     ))
 
     # Test 21d: Raw with empty var columns
@@ -2443,10 +2501,12 @@ For more details, see the full documentation.
     sections.append((
         "21d. Raw Section - Empty var columns",
         adata_empty_var_raw._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Edge case: raw.var has no columns (only index)</b></p>"
-        "<p style='margin: 5px 0;'>Tests graceful handling when raw.var is just an index with no annotation columns. "
-        "The raw meta info should show the shape but not display 'var: 0 cols' or an empty var section. "
-        "This is the minimal valid raw structure (just X data with gene names in the index).</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Edge case: raw.var has no columns (only index)</b></p>"
+            "<p style='margin: 5px 0;'>Tests graceful handling when raw.var is just an index with no annotation columns. "
+            "The raw meta info should show the shape but not display 'var: 0 cols' or an empty var section. "
+            "This is the minimal valid raw structure (just X data with gene names in the index).</p>"
+        ),
     ))
 
     # Test 22: Unknown sections and error handling
@@ -2482,15 +2542,17 @@ For more details, see the full documentation.
     sections.append((
         "22a. Unknown Sections",
         adata_extended._repr_html_(),
-        "Demonstrates two important features for scientific accuracy:<br>"
-        "<ol>"
-        "<li><strong>Unknown sections:</strong> The <code>custom_data</code> mapping attribute "
-        "appears in an 'other' section at the bottom, ensuring no data is silently hidden.</li>"
-        "<li><strong>Error handling:</strong> The <code>failing_data</code> property raises an "
-        "error when accessed. Instead of silently hiding it, the repr shows it as 'inaccessible' "
-        "in the 'other' section.</li>"
-        "</ol>"
-        "This ensures researchers always know what data exists, even if it can't be rendered.",
+        (
+            "Demonstrates two important features for scientific accuracy:<br>"
+            "<ol>"
+            "<li><strong>Unknown sections:</strong> The <code>custom_data</code> mapping attribute "
+            "appears in an 'other' section at the bottom, ensuring no data is silently hidden.</li>"
+            "<li><strong>Error handling:</strong> The <code>failing_data</code> property raises an "
+            "error when accessed. Instead of silently hiding it, the repr shows it as 'inaccessible' "
+            "in the 'other' section.</li>"
+            "</ol>"
+            "This ensures researchers always know what data exists, even if it can't be rendered."
+        ),
     ))
 
     # Test 22b: Failing section rendering (using real rendering mechanism)
@@ -2562,16 +2624,18 @@ For more details, see the full documentation.
     sections.append((
         "22b. Failing Section Rendering (Real Errors)",
         failing_html,
-        "Demonstrates the <strong>actual error handling mechanism</strong> in the repr. "
-        "This test uses <code>unittest.mock.patch</code> to make <code>varm</code> and "
-        "<code>layers</code> properties raise real exceptions when accessed.<br>"
-        "<ul>"
-        "<li><strong>Normal sections:</strong> X, obs, var, uns, obsm, obsp, varp render correctly</li>"
-        "<li><strong>varm (error):</strong> Real RuntimeError from corrupted data simulation</li>"
-        "<li><strong>layers (error):</strong> Real IOError from I/O failure simulation</li>"
-        "</ul>"
-        "This tests the actual <code>_render_section</code> try/except error handling "
-        "using the real <code>generate_repr_html</code> pipeline.",
+        (
+            "Demonstrates the <strong>actual error handling mechanism</strong> in the repr. "
+            "This test uses <code>unittest.mock.patch</code> to make <code>varm</code> and "
+            "<code>layers</code> properties raise real exceptions when accessed.<br>"
+            "<ul>"
+            "<li><strong>Normal sections:</strong> X, obs, var, uns, obsm, obsp, varp render correctly</li>"
+            "<li><strong>varm (error):</strong> Real RuntimeError from corrupted data simulation</li>"
+            "<li><strong>layers (error):</strong> Real IOError from I/O failure simulation</li>"
+            "</ul>"
+            "This tests the actual <code>_render_section</code> try/except error handling "
+            "using the real <code>generate_repr_html</code> pipeline."
+        ),
     ))
 
     # Test 23: Serialization warnings and edge cases
@@ -2623,31 +2687,33 @@ For more details, see the full documentation.
     sections.append((
         "23. Serialization Warnings",
         adata_serial._repr_html_(),
-        "<strong>Fails NOW (red):</strong>"
-        "<ul>"
-        "<li><code>obs.list_values</code> - Contains list</li>"
-        "<li><code>obs.dict_values</code> - Contains dict</li>"
-        "<li><code>obs.custom_obj</code> - Contains CustomObject</li>"
-        "<li><code>obs.('tuple', 'name')</code> - Non-string column name</li>"
-        "<li><code>var.datetime_col</code> - datetime64 not serializable</li>"
-        "<li><code>var.timedelta_col</code> - timedelta64 not serializable</li>"
-        "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
-        "<li><code>uns.custom_obj</code> - CustomObject not serializable</li>"
-        "<li><code>uns.lambda_func</code> - Function not serializable</li>"
-        "<li><code>uns.nested_bad</code> - Contains non-serializable nested value</li>"
-        "</ul>"
-        "<strong>Will fail in future (yellow):</strong>"
-        "<ul>"
-        "<li><code>obs.path/slash</code> - Slash in name</li>"
-        "<li><code>obsm.path/embed</code> - Slash in key</li>"
-        "</ul>"
-        "<strong>Serializes fine (no warning):</strong>"
-        "<ul>"
-        "<li><code>var.gène_名前</code> - Non-ASCII is valid UTF-8</li>"
-        "<li><code>var.normal_col</code> - Normal float values</li>"
-        "<li><code>var.string_col</code> - String values</li>"
-        "<li><code>uns.valid_dict</code> - Dict with serializable values</li>"
-        "</ul>",
+        (
+            "<strong>Fails NOW (red):</strong>"
+            "<ul>"
+            "<li><code>obs.list_values</code> - Contains list</li>"
+            "<li><code>obs.dict_values</code> - Contains dict</li>"
+            "<li><code>obs.custom_obj</code> - Contains CustomObject</li>"
+            "<li><code>obs.('tuple', 'name')</code> - Non-string column name</li>"
+            "<li><code>var.datetime_col</code> - datetime64 not serializable</li>"
+            "<li><code>var.timedelta_col</code> - timedelta64 not serializable</li>"
+            "<li><code>layers.('tuple', 'key')</code> - Non-string key</li>"
+            "<li><code>uns.custom_obj</code> - CustomObject not serializable</li>"
+            "<li><code>uns.lambda_func</code> - Function not serializable</li>"
+            "<li><code>uns.nested_bad</code> - Contains non-serializable nested value</li>"
+            "</ul>"
+            "<strong>Will fail in future (yellow):</strong>"
+            "<ul>"
+            "<li><code>obs.path/slash</code> - Slash in name</li>"
+            "<li><code>obsm.path/embed</code> - Slash in key</li>"
+            "</ul>"
+            "<strong>Serializes fine (no warning):</strong>"
+            "<ul>"
+            "<li><code>var.gène_名前</code> - Non-ASCII is valid UTF-8</li>"
+            "<li><code>var.normal_col</code> - Normal float values</li>"
+            "<li><code>var.string_col</code> - String values</li>"
+            "<li><code>uns.valid_dict</code> - Dict with serializable values</li>"
+            "</ul>"
+        ),
     ))
 
     # Test 24: ULTIMATE EVIL - The WORST possible adversarial robustness test
@@ -3030,124 +3096,126 @@ Size bomb below (50KB):
     sections.append((
         "24. Evil AnnData - Adversarial Robustness",
         evil_html,
-        "<b>Comprehensive adversarial testing:</b> XSS injection, HTML/CSS breakout, "
-        "Unicode bombs, crashing objects, circular references, size bombs, SVG XSS, "
-        "mutation XSS, and encoding attacks.<br><br>"
-        "<b>Crashing objects in uns (errors shown in red in preview column):</b><br>"
-        "<ul>"
-        "<li><code>exploding_repr</code> - __repr__ raises RuntimeError</li>"
-        "<li><code>exploding_len</code> - __len__ raises MemoryError</li>"
-        "<li><code>exploding_str</code> - __str__ raises ValueError</li>"
-        "<li><code>lying_object</code> - shape/dtype/len/str all raise AttributeError</li>"
-        "<li><code>infinite_len</code> - len() returns 10^18 (suspicious)</li>"
-        "<li><code>exploding_shape</code> - .shape property raises TypeError</li>"
-        "<li><code>exploding_dtype</code> - .dtype property raises TypeError</li>"
-        "<li><code>xss_via_exception</code> - exception with XSS in __name__ (must be escaped)</li>"
-        "<li><code>xss_via_type_name</code> - type with XSS in __name__ (must be escaped)</li>"
-        "<li><code>long_error_object_uns</code> - very long error message (should truncate)</li>"
-        "<li><code>unknown_anndata_type</code> - unknown type warning shown in orange</li>"
-        "</ul>"
-        "<b>Evil README (click icon to open modal):</b><br>"
-        "<ul>"
-        "<li>README is displayed as plain text via textContent, so no vectors can fire</li>"
-        "<li>Contains: script tags, event handlers, style injection, closing tags</li>"
-        "<li>Unicode: RTL override, null bytes, emoji</li>"
-        "<li>Template injection attempts, 50KB size bomb</li>"
-        "</ul>"
-        "<b>Crashing object in varm:</b><br>"
-        "<ul>"
-        "<li><code>long_error_object</code> - very long error message (should truncate)</li>"
-        "</ul>"
-        "<b>Circular references:</b><br>"
-        "<ul>"
-        "<li><code>circular_dict</code> - dict that contains itself</li>"
-        "<li><code>self_reference</code> - AnnData references itself</li>"
-        "<li><code>child_with_parent_ref</code> - nested AnnData with circular parent reference</li>"
-        "</ul>"
-        "<b>Extreme nesting:</b><br>"
-        "<ul><li><code>deeply_nested_15_levels</code> - 15 levels of nested dicts</li></ul>"
-        "<b>XSS injection in obs column names:</b><br>"
-        "<ul>"
-        "<li><code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></li>"
-        "<li><code>&lt;img onerror=alert(1)&gt;</code></li>"
-        "<li><code>onclick='evil()'</code></li>"
-        "<li><code>&lt;svg onload=alert(1)&gt;</code></li>"
-        "<li><code>javascript:alert(1)</code></li>"
-        "</ul>"
-        "<b>XSS in uns keys:</b><br>"
-        "<ul><li><code>&lt;script&gt;evil()&lt;/script&gt;</code></li></ul>"
-        "<b>XSS in category VALUES (not just column names):</b><br>"
-        "<ul>"
-        "<li><code>xss_category_values</code> - category names contain XSS payloads</li>"
-        "<li>Tests that category preview escapes: script, img onerror, svg onload, onclick</li>"
-        "</ul>"
-        "<b>XSS in DataFrame COLUMN NAMES (obsm preview):</b><br>"
-        "<ul>"
-        "<li><code>X_evil_df_cols</code> - DataFrame column names contain XSS payloads</li>"
-        "<li>Tests that obsm DataFrame column preview escapes malicious column names</li>"
-        "</ul>"
-        "<b>HTML/CSS breakout in var:</b><br>"
-        "<ul>"
-        "<li><code>&lt;/style&gt;&lt;script&gt;bad()&lt;/script&gt;</code></li>"
-        "<li><code>&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;breakout</code></li>"
-        "</ul>"
-        "<b>Unicode stress in obs:</b><br>"
-        "<ul>"
-        "<li><code>emoji_poop</code> - emoji character</li>"
-        "<li><code>chinese_中文</code> - CJK characters</li>"
-        "<li><code>rtl_LIVE_override</code> - RTL override</li>"
-        "<li><code>null\\x00byte\\x00col</code> - null bytes</li>"
-        "</ul>"
-        "<b>Size bombs:</b><br>"
-        "<ul>"
-        "<li><code>huge_categorical_10k</code> - 10,000 categories in obs</li>"
-        "<li><code>giant_string_50kb</code> - 50KB string in uns</li>"
-        "<li><code>many_items_500</code> - dict with 500 items in uns</li>"
-        "</ul>"
-        "<b>Many entries in varp (tests truncation):</b><br>"
-        "<ul>"
-        "<li><code>varp_000</code> to <code>varp_299</code> - 300 arrays (truncated to 200)</li>"
-        "</ul>"
-        "<b>Bad colors in obs (with _colors in uns):</b><br>"
-        "<ul>"
-        "<li><code>cat_too_many_colors</code> - 6 colors for 3 categories</li>"
-        "<li><code>cat_too_few_colors</code> - 1 color for 4 categories</li>"
-        "<li><code>cat_bad_colors</code> - invalid color strings</li>"
-        "<li><code>cat_strange_colors</code> - hex, rgb(), rgba() formats</li>"
-        "<li><code>cat_empty_colors</code> - empty colors array</li>"
-        "<li><code>cat_css_injection</code> - CSS injection via semicolons (blocked by whitelist)</li>"
-        "<li><code>cat_url_injection</code> - url()/expression() injection (blocked)</li>"
-        "<li><code>cat_long_colors</code> - very long strings (DoS protection, blocked)</li>"
-        "</ul>"
-        "<b>Nested AnnData with errors:</b><br>"
-        "<ul>"
-        "<li><code>nested_adata_with_errors</code> - contains <code>bad_obj_in_nested</code> and <code>another_bad</code></li>"
-        "<li>Should show yellow/red row backgrounds in nested content</li>"
-        "</ul>"
-        "<b>SVG XSS (must be escaped):</b><br>"
-        "<ul>"
-        "<li><code>svg_script</code> - SVG with embedded script tag</li>"
-        "<li><code>svg_onload</code> - SVG with onload handler</li>"
-        "</ul>"
-        "<b>Mutation XSS (malformed HTML):</b><br>"
-        "<ul>"
-        "<li><code>mxss_unclosed</code> - unclosed img tag with onerror</li>"
-        "<li><code>mxss_nested</code> - malformed nested tag</li>"
-        "</ul>"
-        "<b>Encoding attacks:</b><br>"
-        "<ul>"
-        "<li><code>utf7_script</code> - UTF-7 encoded script tag</li>"
-        "<li><code>bom_prefix</code> - BOM character prefix</li>"
-        "</ul>"
-        "<b>Expected behavior:</b><br>"
-        "<ul>"
-        "<li>Errors shown in <span style='color:red;'>red</span> in preview column</li>"
-        "<li>Warnings shown in <span style='color:orange;'>orange</span> in preview column</li>"
-        "<li>Warning/error rows have colored backgrounds (yellow/red)</li>"
-        "<li>All XSS attempts are escaped (no script execution)</li>"
-        "<li>Large data is truncated</li>"
-        "<li>No crashes</li>"
-        "</ul>",
+        (
+            "<b>Comprehensive adversarial testing:</b> XSS injection, HTML/CSS breakout, "
+            "Unicode bombs, crashing objects, circular references, size bombs, SVG XSS, "
+            "mutation XSS, and encoding attacks.<br><br>"
+            "<b>Crashing objects in uns (errors shown in red in preview column):</b><br>"
+            "<ul>"
+            "<li><code>exploding_repr</code> - __repr__ raises RuntimeError</li>"
+            "<li><code>exploding_len</code> - __len__ raises MemoryError</li>"
+            "<li><code>exploding_str</code> - __str__ raises ValueError</li>"
+            "<li><code>lying_object</code> - shape/dtype/len/str all raise AttributeError</li>"
+            "<li><code>infinite_len</code> - len() returns 10^18 (suspicious)</li>"
+            "<li><code>exploding_shape</code> - .shape property raises TypeError</li>"
+            "<li><code>exploding_dtype</code> - .dtype property raises TypeError</li>"
+            "<li><code>xss_via_exception</code> - exception with XSS in __name__ (must be escaped)</li>"
+            "<li><code>xss_via_type_name</code> - type with XSS in __name__ (must be escaped)</li>"
+            "<li><code>long_error_object_uns</code> - very long error message (should truncate)</li>"
+            "<li><code>unknown_anndata_type</code> - unknown type warning shown in orange</li>"
+            "</ul>"
+            "<b>Evil README (click icon to open modal):</b><br>"
+            "<ul>"
+            "<li>README is displayed as plain text via textContent, so no vectors can fire</li>"
+            "<li>Contains: script tags, event handlers, style injection, closing tags</li>"
+            "<li>Unicode: RTL override, null bytes, emoji</li>"
+            "<li>Template injection attempts, 50KB size bomb</li>"
+            "</ul>"
+            "<b>Crashing object in varm:</b><br>"
+            "<ul>"
+            "<li><code>long_error_object</code> - very long error message (should truncate)</li>"
+            "</ul>"
+            "<b>Circular references:</b><br>"
+            "<ul>"
+            "<li><code>circular_dict</code> - dict that contains itself</li>"
+            "<li><code>self_reference</code> - AnnData references itself</li>"
+            "<li><code>child_with_parent_ref</code> - nested AnnData with circular parent reference</li>"
+            "</ul>"
+            "<b>Extreme nesting:</b><br>"
+            "<ul><li><code>deeply_nested_15_levels</code> - 15 levels of nested dicts</li></ul>"
+            "<b>XSS injection in obs column names:</b><br>"
+            "<ul>"
+            "<li><code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></li>"
+            "<li><code>&lt;img onerror=alert(1)&gt;</code></li>"
+            "<li><code>onclick='evil()'</code></li>"
+            "<li><code>&lt;svg onload=alert(1)&gt;</code></li>"
+            "<li><code>javascript:alert(1)</code></li>"
+            "</ul>"
+            "<b>XSS in uns keys:</b><br>"
+            "<ul><li><code>&lt;script&gt;evil()&lt;/script&gt;</code></li></ul>"
+            "<b>XSS in category VALUES (not just column names):</b><br>"
+            "<ul>"
+            "<li><code>xss_category_values</code> - category names contain XSS payloads</li>"
+            "<li>Tests that category preview escapes: script, img onerror, svg onload, onclick</li>"
+            "</ul>"
+            "<b>XSS in DataFrame COLUMN NAMES (obsm preview):</b><br>"
+            "<ul>"
+            "<li><code>X_evil_df_cols</code> - DataFrame column names contain XSS payloads</li>"
+            "<li>Tests that obsm DataFrame column preview escapes malicious column names</li>"
+            "</ul>"
+            "<b>HTML/CSS breakout in var:</b><br>"
+            "<ul>"
+            "<li><code>&lt;/style&gt;&lt;script&gt;bad()&lt;/script&gt;</code></li>"
+            "<li><code>&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;breakout</code></li>"
+            "</ul>"
+            "<b>Unicode stress in obs:</b><br>"
+            "<ul>"
+            "<li><code>emoji_poop</code> - emoji character</li>"
+            "<li><code>chinese_中文</code> - CJK characters</li>"
+            "<li><code>rtl_LIVE_override</code> - RTL override</li>"
+            "<li><code>null\\x00byte\\x00col</code> - null bytes</li>"
+            "</ul>"
+            "<b>Size bombs:</b><br>"
+            "<ul>"
+            "<li><code>huge_categorical_10k</code> - 10,000 categories in obs</li>"
+            "<li><code>giant_string_50kb</code> - 50KB string in uns</li>"
+            "<li><code>many_items_500</code> - dict with 500 items in uns</li>"
+            "</ul>"
+            "<b>Many entries in varp (tests truncation):</b><br>"
+            "<ul>"
+            "<li><code>varp_000</code> to <code>varp_299</code> - 300 arrays (truncated to 200)</li>"
+            "</ul>"
+            "<b>Bad colors in obs (with _colors in uns):</b><br>"
+            "<ul>"
+            "<li><code>cat_too_many_colors</code> - 6 colors for 3 categories</li>"
+            "<li><code>cat_too_few_colors</code> - 1 color for 4 categories</li>"
+            "<li><code>cat_bad_colors</code> - invalid color strings</li>"
+            "<li><code>cat_strange_colors</code> - hex, rgb(), rgba() formats</li>"
+            "<li><code>cat_empty_colors</code> - empty colors array</li>"
+            "<li><code>cat_css_injection</code> - CSS injection via semicolons (blocked by whitelist)</li>"
+            "<li><code>cat_url_injection</code> - url()/expression() injection (blocked)</li>"
+            "<li><code>cat_long_colors</code> - very long strings (DoS protection, blocked)</li>"
+            "</ul>"
+            "<b>Nested AnnData with errors:</b><br>"
+            "<ul>"
+            "<li><code>nested_adata_with_errors</code> - contains <code>bad_obj_in_nested</code> and <code>another_bad</code></li>"
+            "<li>Should show yellow/red row backgrounds in nested content</li>"
+            "</ul>"
+            "<b>SVG XSS (must be escaped):</b><br>"
+            "<ul>"
+            "<li><code>svg_script</code> - SVG with embedded script tag</li>"
+            "<li><code>svg_onload</code> - SVG with onload handler</li>"
+            "</ul>"
+            "<b>Mutation XSS (malformed HTML):</b><br>"
+            "<ul>"
+            "<li><code>mxss_unclosed</code> - unclosed img tag with onerror</li>"
+            "<li><code>mxss_nested</code> - malformed nested tag</li>"
+            "</ul>"
+            "<b>Encoding attacks:</b><br>"
+            "<ul>"
+            "<li><code>utf7_script</code> - UTF-7 encoded script tag</li>"
+            "<li><code>bom_prefix</code> - BOM character prefix</li>"
+            "</ul>"
+            "<b>Expected behavior:</b><br>"
+            "<ul>"
+            "<li>Errors shown in <span style='color:red;'>red</span> in preview column</li>"
+            "<li>Warnings shown in <span style='color:orange;'>orange</span> in preview column</li>"
+            "<li>Warning/error rows have colored backgrounds (yellow/red)</li>"
+            "<li>All XSS attempts are escaped (no script execution)</li>"
+            "<li>Large data is truncated</li>"
+            "<li>No crashes</li>"
+            "</ul>"
+        ),
     ))
 
     # Test 25: Ecosystem Package Extensibility - Modifying Known Sections
@@ -3189,7 +3257,7 @@ Size bomb below (50KB):
         priority = 115  # Higher than CategoricalFormatter (110)
         sections = ("obs", "var")  # Only apply to obs/var columns
 
-        def can_format(self, obj, context) -> bool:
+        def can_format(self, obj, context):
             """
             Check if this column has ontology metadata.
 
@@ -3472,19 +3540,21 @@ Size bomb below (50KB):
     sections.append((
         "26. Array-API Arrays with Device Info",
         adata_arrayapi._repr_html_(),
-        "<p style='margin: 5px 0;'><b>Demonstrates Array-API formatted arrays with device "
-        "info visible inline</b> (no hover needed).</p>"
-        "<p style='margin: 5px 0;'>Uses mock objects that satisfy the "
-        "<code>SupportsArrayApi</code> protocol — no GPU or JAX installation required.</p>"
-        "<ul style='margin: 5px 0; padding-left: 20px;'>"
-        "<li><code>X_jax_gpu</code>: <code>MockArrayAPI</code> on <code>cuda:0</code></li>"
-        "<li><code>X_jax_tpu</code>: <code>MockArrayAPI</code> on <code>tpu:0</code></li>"
-        "<li><code>X_jax_cpu</code>: <code>MockArrayAPI</code> on <code>cpu</code></li>"
-        "<li><code>X_cupy_gpu</code>: CuPy-like on <code>GPU:0</code></li>"
-        "<li><code>uns['gpu_embedding']</code>: <code>MockArrayAPI</code> on <code>cuda:1</code></li>"
-        "</ul>"
-        "<p style='margin: 5px 0;'>Device appears as <code>dtype · device</code> in the type "
-        "column, visible without hovering.</p>",
+        (
+            "<p style='margin: 5px 0;'><b>Demonstrates Array-API formatted arrays with device "
+            "info visible inline</b> (no hover needed).</p>"
+            "<p style='margin: 5px 0;'>Uses mock objects that satisfy the "
+            "<code>SupportsArrayApi</code> protocol — no GPU or JAX installation required.</p>"
+            "<ul style='margin: 5px 0; padding-left: 20px;'>"
+            "<li><code>X_jax_gpu</code>: <code>MockArrayAPI</code> on <code>cuda:0</code></li>"
+            "<li><code>X_jax_tpu</code>: <code>MockArrayAPI</code> on <code>tpu:0</code></li>"
+            "<li><code>X_jax_cpu</code>: <code>MockArrayAPI</code> on <code>cpu</code></li>"
+            "<li><code>X_cupy_gpu</code>: CuPy-like on <code>GPU:0</code></li>"
+            "<li><code>uns['gpu_embedding']</code>: <code>MockArrayAPI</code> on <code>cuda:1</code></li>"
+            "</ul>"
+            "<p style='margin: 5px 0;'>Device appears as <code>dtype · device</code> in the type "
+            "column, visible without hovering.</p>"
+        ),
     ))
 
     # Generate HTML file

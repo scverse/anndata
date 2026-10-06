@@ -65,6 +65,8 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import pandas as pd
 
     from anndata import AnnData
@@ -159,15 +161,18 @@ def _render_dataframe_section(
 
 def _render_mapping_section(
     section: str,
-    mapping: object,
+    mapping: Mapping[str | None, object],
     context: FormatterContext,
 ) -> str:
     """Render obsm, varm, layers, obsp, varp sections."""
     if mapping is None:
         return ""
 
+    # `.X` is stored as `layers[None]`; it gets its own row, so hide it here
+    hide_x = section == "layers" and None in mapping
+
     # Get count without creating full list (O(1) for most mappings)
-    n_items = len(mapping)
+    n_items = len(mapping) - hide_x
 
     # Doc URL and tooltip for this section
     doc_url = get_section_doc_url(section)
@@ -181,7 +186,8 @@ def _render_mapping_section(
 
     # Render entries (with truncation) - iterate lazily, stop at max_items
     rows = []
-    for i, key in enumerate(mapping.keys()):
+    keys = (k for k in mapping if k is not None)
+    for i, key in enumerate(keys):
         if i >= context.max_items:
             rows.append(render_truncation_indicator(n_items - context.max_items))
             break
@@ -206,7 +212,7 @@ def _render_mapping_section(
 
 
 def _render_uns_section(
-    uns: object,
+    uns: Mapping[str, object],
     context: FormatterContext,
 ) -> str:
     """Render the uns section with special handling."""

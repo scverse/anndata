@@ -87,7 +87,7 @@ def _check_array_has_writer(array: object) -> bool:
     try:
         from .._io.specs.registry import _REGISTRY
 
-        _REGISTRY.get_spec(array)
+        _REGISTRY.get_spec(array)  # type: ignore[arg-type]
         return True
     except (KeyError, TypeError):
         return False
@@ -410,7 +410,7 @@ class DataFrameFormatter(TypeFormatter[pd.DataFrame]):
             # Intentional broad catch: _repr_html_() can fail in many ways
             # (memory, recursion, custom dtypes, etc.) - gracefully degrade
             with contextlib.suppress(Exception):
-                expanded_html = df._repr_html_()
+                expanded_html = df._repr_html_()  # type: ignore[operator]
 
         return FormattedOutput(
             type_name=f"DataFrame ({format_number(n_rows)} × {format_number(n_cols)})",
@@ -702,7 +702,7 @@ class DaskArrayFormatter(TypeFormatter[object]):
         dtype_str = str(obj.dtype)  # type: ignore[attr-defined]
 
         # Get chunk info
-        chunks_str = str(obj.chunksize) if hasattr(obj, "chunksize") else "unknown"  # type: ignore[attr-defined]
+        chunks_str = str(obj.chunksize) if hasattr(obj, "chunksize") else "unknown"
 
         # In obsm/varm/obsp/varp sections, don't show shape in type (redundant)
         # - obsp/varp: always n_obs × n_obs or n_var × n_var
@@ -1099,7 +1099,7 @@ class ListFormatter(TypeFormatter[list | tuple]):
         )
 
 
-def _get_dtype_css_class(dtype: np.dtype | pd.api.types.CategoricalDtype) -> str:  # noqa: PLR0911
+def _get_dtype_css_class(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> str:  # noqa: PLR0911
     """Get CSS class for a numpy or pandas dtype."""
     # Check for pandas CategoricalDtype first (has kind="O" but is special)
     dtype_name = str(dtype)

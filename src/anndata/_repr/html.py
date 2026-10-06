@@ -97,8 +97,9 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
     (uns, obsm, varm, layers, obsp, varp) plus any registered custom sections.
     """
     all_names: list[str] = []
-    standard_sections = set(get_literal_members(AnnDataElem))
+    standard_sections: set[str] = set(get_literal_members(AnnDataElem))
 
+    section: AnnDataElem
     for section in get_literal_members(AnnDataElem):
         if section in {"X", "raw"}:
             continue
@@ -110,7 +111,8 @@ def _collect_all_field_names(adata: AnnData) -> list[str]:
                 if hasattr(attr, "columns"):
                     all_names.extend(attr.columns.tolist())
             elif hasattr(attr, "keys"):
-                all_names.extend(attr.keys())
+                # skip `layers[None]`, which is `.X`
+                all_names.extend(k for k in attr if k is not None)
         except Exception:  # noqa: BLE001
             # Broken section — skip for width calculation, error placeholder is
             # rendered separately by _render_section.
@@ -353,6 +355,7 @@ def _render_all_sections(
     parts: list[str] = []
     custom_sections_after = _get_custom_sections_by_position(adata)
 
+    section: AnnDataElem
     for section in get_literal_members(AnnDataElem):
         parts.append(_render_section(adata, section, context))
 
@@ -420,7 +423,7 @@ def _get_custom_sections_by_position(
     from collections import defaultdict
 
     result = defaultdict(list)
-    standard_section_names = set(get_literal_members(AnnDataElem))
+    standard_section_names: set[str] = set(get_literal_members(AnnDataElem))
 
     for section_name in formatter_registry.get_registered_sections():
         formatter = formatter_registry.get_section_formatter(section_name)
@@ -530,8 +533,8 @@ def _render_header(
 
     if is_backed(adata):
         backing = get_backing_info(adata)
-        filename = backing.get("filename", "")
-        format_str = backing.get("format", "")
+        filename = str(backing.get("filename") or "")
+        format_str = str(backing.get("format") or "")
         status = "Open" if backing.get("is_open") else "Closed"
         parts.append(render_badge(f"{format_str} ({status})", CSS_BADGE_BACKED))
         # Inline file path (full path, no truncation)
