@@ -53,6 +53,7 @@ from .._settings import settings
 from ..abc import CSCDataset, CSRDataset
 from ..compat import AwkArray, CupySparseMatrix, DaskArray, has_xp_base
 from .components import render_category_list
+from .core import pluralize
 from .lazy import _get_categorical_array, get_lazy_categorical_info, is_lazy_column
 from .registry import (
     FormattedOutput,
@@ -216,7 +217,7 @@ class NumpyArrayFormatter(TypeFormatter[np.ndarray]):
         preview = None
         if context.section in ("obsm", "varm") and arr.ndim == 2:
             n_cols = arr.shape[1]
-            preview = f"({format_number(n_cols)} columns)"
+            preview = f"({pluralize(n_cols, 'column')})"
 
         return FormattedOutput(
             type_name=type_name,
@@ -248,7 +249,7 @@ class NumpyMaskedArrayFormatter(TypeFormatter[np.ma.MaskedArray]):
         preview = None
         if context.section in ("obsm", "varm") and arr.ndim == 2:
             n_cols = arr.shape[1]
-            preview = f"({format_number(n_cols)} columns)"
+            preview = f"({pluralize(n_cols, 'column')})"
 
         return FormattedOutput(
             type_name=f"MaskedArray ({shape_str}) {dtype_str}",
@@ -655,7 +656,7 @@ class DaskArrayFormatter(TypeFormatter[object]):
         # For obsm/varm sections, show number of columns in preview
         preview = None
         if context.section in ("obsm", "varm") and len(obj.shape) == 2:  # type: ignore[attr-defined]
-            preview = f"({format_number(obj.shape[1])} columns)"  # type: ignore[attr-defined]
+            preview = f"({pluralize(obj.shape[1], 'column')})"  # type: ignore[attr-defined]
 
         return FormattedOutput(
             type_name=(
@@ -804,7 +805,7 @@ class ArrayAPIFormatter(TypeFormatter[object]):
         preview = None
         if context.section in ("obsm", "varm") and obj.ndim == 2:  # type: ignore[attr-defined]
             n_cols = obj.shape[1]  # type: ignore[attr-defined]
-            preview = f"({format_number(n_cols)} columns)"
+            preview = f"({pluralize(n_cols, 'column')})"
 
         return FormattedOutput(
             type_name=type_display,

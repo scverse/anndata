@@ -1148,3 +1148,20 @@ class TestScalarAndObjectEdgeCases:
         assert html is not None
         assert "AnnData subclass" in html
         assert html.count(">MySubclass<") == 1
+
+    def test_no_subclass_badge_for_duck_typed_containers(self):
+        """AnnData-like containers (e.g. MuData) aren't labeled as subclasses."""
+        from anndata._repr import generate_repr_html
+
+        class Container:
+            n_obs, n_vars = 2, 2
+            obs_names = var_names = pd.Index(["a", "b"])
+            X = None
+
+            @property
+            def uns(self):
+                return {}
+
+        html = generate_repr_html(Container())
+        assert "AnnData subclass" not in html
+        assert ">Container<" in html

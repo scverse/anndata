@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from .._core.anndata import AnnData
 from .._repr_constants import (
     CSS_BADGE_EXTENSION,
     TOOLTIP_TRUNCATE_LENGTH,
@@ -60,8 +61,6 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from anndata import AnnData
-
     from .registry import SectionFormatter
 
 # Import formatters to register them (side-effect import)
@@ -507,8 +506,9 @@ def _render_header(
         )
     )
 
-    # Mark subclasses (the type name itself is already shown above)
-    if type_name != "AnnData":
+    # Mark AnnData subclasses (the type name itself is already shown above).
+    # AnnData-like containers (e.g. MuData) only duck-type, so they get no badge.
+    if type_name != "AnnData" and isinstance(adata, AnnData):
         cls = type(adata)
         parts.append(
             render_badge(

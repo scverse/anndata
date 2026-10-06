@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import inspect
 import uuid
+import warnings
 from collections.abc import Mapping
 from dataclasses import replace
 from functools import cached_property
@@ -332,7 +333,11 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
             continue
 
         try:
-            val = getattr(adata, attr)
+            # Probing must not surface warnings to the user, e.g. from
+            # deprecated properties (MuData's `mod_names`, AnnData's `isview`)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                val = getattr(adata, attr)
             # Check if it's a data container (mapping-like or has keys())
             if isinstance(val, Mapping) or (
                 hasattr(val, "keys")

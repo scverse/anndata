@@ -1482,3 +1482,31 @@ class TestSectionOrderAndDetection:
         assert html is not None
         assert "MyAnnData (4 × 2)" in html
         assert '<div class="anndata-entry__nested-anndata">' in html
+
+    def test_unknown_section_probe_hides_deprecation_warnings(self):
+        """Probing attributes never surfaces warnings from deprecated properties."""
+        import warnings
+
+        from anndata._repr.sections import _detect_unknown_sections
+
+        class Sub(AnnData):
+            @property
+            def old_names(self):
+                warnings.warn(  # noqa: TID251
+                    "old_names is deprecated", FutureWarning, stacklevel=2
+                )
+                return ["a"]
+
+        adata = Sub(np.zeros((3, 2)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            found = dict(_detect_unknown_sections(adata))
+        assert "old_names" not in found  # a list, not a data section
+
+    def test_single_column_label(self):
+        adata = AnnData(np.zeros((3, 2)))
+        adata.obsm["one"] = np.zeros((3, 1))
+        html = adata._repr_html_()
+        assert html is not None
+        assert "(1 column)" in html
+        assert "(1 columns)" not in html
