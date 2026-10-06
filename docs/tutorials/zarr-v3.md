@@ -1,6 +1,6 @@
 # zarr-v3 Guide/Roadmap
 
-`anndata` now uses the much improved {mod}`zarr` v3 package and also allows writing of datasets in the v3 format via {attr}`anndata.settings.zarr_write_format` via {func}`anndata.io.write_zarr` or {meth}`anndata.AnnData.write_zarr`, with the exception of structured arrays.
+`anndata` now uses the much improved {mod}`zarr` v3 package and format.
 Users should notice a significant performance improvement, especially for cloud data, but also likely for local data as well.
 Here is a quick guide on some of our learnings so far:
 
@@ -38,6 +38,9 @@ And even if it is fully readable, it will almost certainly be much slower to rea
 There are two ways of opening remote `zarr` stores from the `zarr-python` package, {class}`zarr.storage.FsspecStore` and {class}`zarr.storage.ObjectStore`, and both can be used with `read_lazy`.
 [`obstore` claims] to be more performant out-of-the-box, but notes that this claim has not been benchmarked with the `uvloop` event loop, which itself claims to be 2× more performant than the default event loop for `python`.
 
+{mod}`zarr` ships a `FusedCodecPipeline` that is likely *much* (~2-4x) faster for some use-cases, like small chunks, and is no worse than the current default.
+We strongly encourage users to switch to it via `zarr.config.set({"codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"})` for remote data. If {mod}`zarr` is new enough, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
+
 ## Local data
 
 Local data generally poses a different set of challenges.
@@ -54,7 +57,10 @@ import anndata as ad
 from collections.abc import Mapping
 from typing import Any
 
-g = zarr.open_group(orig_path, mode="a", use_consolidated=False, zarr_format=3) # zarr_format 3 is default but note that sharding only works with v3!
+g = zarr.open_group(
+    orig_path, mode="a", use_consolidated=False, zarr_format=3
+)  # zarr_format 3 is default but note that sharding only works with v3!
+
 
 def write_sharded(group: zarr.Group, adata: ad.AnnData):
     def callback(
@@ -88,11 +94,13 @@ uv pip install zarrs
 ```python
 import zarr
 import zarrs
+
 zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 ```
 
 However, this pipeline is not compatible with all types of zarr store, especially remote stores and there are limitations on where rust can give a performance boost for indexing.
-We therefore recommend this pipeline for writing full datasets and reading contiguous regions of said written data.
+We therefore recommend this pipeline for writing full datasets and reading contiguous regions of said written data locally.
+If installed, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
 
 ## Codecs
 

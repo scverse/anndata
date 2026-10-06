@@ -8,6 +8,8 @@ __pycache__/
 /node_modules/
 /data/
 /venv/
+.venv/
+/uv.lock
 
 # Distribution / packaging
 /dist/

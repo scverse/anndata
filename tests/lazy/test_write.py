@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from anndata import AnnData
+from anndata._core.xarray import Dataset2D
 from anndata.experimental.backed._io import read_lazy
 
 if TYPE_CHECKING:
@@ -33,8 +34,10 @@ def test_write_error(
     adata.write_h5ad(path)
     adata_lazy = read_lazy(path)
     if key.endswith("m"):
+        assert isinstance(adata_lazy.obs, Dataset2D)
+        assert isinstance(adata_lazy.var, Dataset2D)
         adata_lazy.obs = adata_lazy.obs.to_memory()
-        adata_lazy.obs = adata_lazy.var.to_memory()
+        adata_lazy.var = adata_lazy.var.to_memory()
     noop_path = tmp_path / f"adata_noop.{fmt}"
     with pytest.raises(
         NotImplementedError,

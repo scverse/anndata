@@ -7,8 +7,9 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import h5py
+import zarr
 
-from ..compat import AwkArray, DaskArray, ZarrArray, ZarrGroup
+from ..compat import AwkArray, DaskArray
 from .sparse_dataset import BaseCompressedSparseDataset
 from .xarray import Dataset2D
 
@@ -35,6 +36,7 @@ class AnnDataFileManager:
             msg = "Cannot provide both a h5py.File and the name and/or mode arguments to constructor"
             raise ValueError(msg)
         self._adata_ref = weakref.ref(adata)
+        self._file: h5py.File | None
         if file_obj is not None:
             self.filename = filename(file_obj)
             self._filemode = file_obj.mode
@@ -65,29 +67,36 @@ class AnnDataFileManager:
         else:
             return f"Backing file manager of file {self.filename}."
 
+    @property
+    def _open_file(self) -> h5py.File:
+        if self._file is None:
+            msg = "Backing file is not open."
+            raise RuntimeError(msg)
+        return self._file
+
     def __contains__(self, x) -> bool:
-        return x in self._file
+        return x in self._open_file
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self._file)
+        return iter(self._open_file)
 
     def __getitem__(
         self, key: str
     ) -> h5py.Group | h5py.Dataset | BaseCompressedSparseDataset:
-        return self._file[key]
+        return self._open_file[key]
 
     def __setitem__(
         self,
         key: str,
         value: h5py.Group | h5py.Dataset | BaseCompressedSparseDataset,
     ):
-        self._file[key] = value
+        self._open_file[key] = value
 
     def __delitem__(self, key: str):
-        del self._file[key]
+        del self._open_file[key]
 
     @property
-    def filename(self) -> Path:
+    def filename(self) -> Path | None:
         return self._filename
 
     @filename.setter
@@ -141,7 +150,7 @@ def to_memory(x, *, copy: bool = False):
         return x
 
 
-@to_memory.register(ZarrArray)
+@to_memory.register(zarr.Array)
 @to_memory.register(h5py.Dataset)
 def _(x: _ArrayStorageType, *, copy: bool = False):
     return x[...]
@@ -178,21 +187,8 @@ def _(x: Dataset2D, *, copy: bool = False):
 
 
 @singledispatch
-def filename(x):
-    msg = f"Not implemented for {type(x)}"
-    raise NotImplementedError(msg)
-
-
-@filename.register(h5py.Group)
-@filename.register(h5py.Dataset)
-def _(x):
+def filename(x: h5py.Group | h5py.Dataset) -> str:
     return x.file.filename
-
-
-@filename.register(ZarrArray)
-@filename.register(ZarrGroup)
-def _(x):
-    return x.store.path
 
 
 @singledispatch
@@ -206,6 +202,6 @@ def _(x):
     return x.name
 
 
-@get_elem_name.register(ZarrGroup)
+@get_elem_name.register(zarr.Group)
 def _(x):
     return PurePosixPath(x.path).name

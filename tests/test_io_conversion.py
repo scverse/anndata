@@ -17,7 +17,6 @@ from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_ad
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Literal
 
 
 @pytest.fixture(
@@ -70,7 +69,7 @@ def test_sparse_to_dense_disk(tmp_path, mtx_format, to_convert):
         assert_equal(disk, from_disk)
 
 
-def test_sparse_to_dense_inplace(tmp_path: Path, spmtx_format: Literal["csc", "csr"]):
+def test_sparse_to_dense_inplace(tmp_path: Path, spmtx_format: type[CSMatrix]):
     pth = tmp_path / "adata.h5ad"
     orig = gen_adata((50, 50), spmtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.raw = orig.copy()
@@ -82,6 +81,9 @@ def test_sparse_to_dense_inplace(tmp_path: Path, spmtx_format: Literal["csc", "c
     assert_equal(orig, new)
     assert_equal(backed, new)
 
+    assert orig.raw is not None
+    assert backed.raw is not None
+    assert new.raw is not None
     assert isinstance(new.X, np.ndarray)
     assert isinstance(new.raw.X, np.ndarray)
     assert isinstance(orig.X, spmtx_format)

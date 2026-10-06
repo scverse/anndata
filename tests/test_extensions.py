@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pytest
@@ -9,17 +9,22 @@ import anndata as ad
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from typing import Any
+
+    class AnnDataWithDummy(ad.AnnData):
+        dummy: Any
 
 
 @pytest.fixture(autouse=True)
 def _cleanup_dummy() -> Generator[None, None, None]:
     """Automatically cleanup dummy namespace after each test."""
-    original = getattr(ad.AnnData, "dummy", None)
+    cls: Any = ad.AnnData
+    original = getattr(cls, "dummy", None)
     yield
     if original is not None:
-        ad.AnnData.dummy = original
-    elif hasattr(ad.AnnData, "dummy"):
-        delattr(ad.AnnData, "dummy")
+        cls.dummy = original
+    elif hasattr(cls, "dummy"):
+        delattr(cls, "dummy")
 
 
 @pytest.fixture
@@ -45,7 +50,9 @@ def adata() -> ad.AnnData:
     return ad.AnnData(X=rng.poisson(1, size=(10, 10)))
 
 
-def test_descriptor_instance_caching(dummy_namespace: type, adata: ad.AnnData) -> None:
+def test_descriptor_instance_caching(
+    dummy_namespace: type, adata: AnnDataWithDummy
+) -> None:
     """Test that namespace instances are cached on individual AnnData objects."""
     # First access creates the instance
     ns_instance = adata.dummy
@@ -53,7 +60,9 @@ def test_descriptor_instance_caching(dummy_namespace: type, adata: ad.AnnData) -
     assert adata.dummy is ns_instance
 
 
-def test_register_namespace_basic(dummy_namespace: type, adata: ad.AnnData) -> None:
+def test_register_namespace_basic(
+    dummy_namespace: type, adata: AnnDataWithDummy
+) -> None:
     """Test basic namespace registration and access."""
     assert adata.dummy.greet() == "hello"
 
@@ -74,7 +83,7 @@ def test_register_namespace_override(dummy_namespace: type) -> None:
                 return "world"
 
     # Verify the override worked
-    adata = ad.AnnData(X=np.random.poisson(1, size=(10, 10)))
+    adata = cast("AnnDataWithDummy", ad.AnnData(X=np.random.poisson(1, size=(10, 10))))
     assert adata.dummy.greet() == "world"
 
 

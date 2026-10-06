@@ -15,11 +15,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any, Literal
 
+    import h5py
+    import zarr
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from .._types import StorageType, _WriteInternal
-    from ..compat import H5Group, ZarrGroup
-    from ..typing import RWAble
+    from .._types import StorageType, _ArrayStorageType, _WriteInternal
     from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
@@ -136,8 +136,10 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
     except ImportError:
         pass
     else:
-        return BaseMaskedDtype.from_numpy_dtype(dtype)
+        if hasattr(BaseMaskedDtype, "from_numpy_dtype"):
+            return BaseMaskedDtype.from_numpy_dtype(dtype)
 
+    array_type: type[pd.arrays.BooleanArray | pd.arrays.IntegerArray]
     match dtype.kind:
         case "b":
             array_type = pd.arrays.BooleanArray
@@ -182,9 +184,8 @@ class AnnDataReadError(OSError):
 
 def _get_display_path(store: Storage) -> str:
     """Return an absolute path of an element (always starts with “/”)."""
-    if isinstance(store, BaseCompressedSparseDataset):
-        store = store.group
-    path = store.name or "??"  # can be None
+    group = store.group if isinstance(store, BaseCompressedSparseDataset) else store
+    path = group.name or "??"  # can be None
     return f"/{path.removeprefix('/')}"
 
 
@@ -295,7 +296,7 @@ def _check_has_no_slash_key(attr: str, elem: object) -> None:
 
 
 def _read_legacy_raw(
-    f: ZarrGroup | H5Group,
+    f: zarr.Group | h5py.Group,
     modern_raw,  # TODO: type
     read_df: Callable,
     read_attr: Callable,
@@ -323,7 +324,7 @@ def _read_legacy_raw(
     return raw
 
 
-def zero_dim_array_as_scalar[S: StorageType, T: RWAble](
+def zero_dim_array_as_scalar[S: StorageType, T: np.ndarray | _ArrayStorageType](
     func: _WriteInternal[S, T],
 ) -> _WriteInternal[S, T]:
     """\
@@ -332,13 +333,13 @@ def zero_dim_array_as_scalar[S: StorageType, T: RWAble](
 
     @wraps(func, assigned=(*WRAPPER_ASSIGNMENTS, "__defaults__", "__kwdefaults__"))
     def func_wrapper(
-        f: StorageType,
+        f: S,
         k: str,
-        elem: RWAble,
+        elem: T,
         *,
         _writer: Writer,
         dataset_kwargs: Mapping[str, Any],
-    ):
+    ) -> None:
         if elem.shape == ():
             _writer.write_elem(f, k, elem[()], dataset_kwargs=dataset_kwargs)
         else:

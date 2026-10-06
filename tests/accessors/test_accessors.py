@@ -9,21 +9,34 @@ from typing import TYPE_CHECKING
 import jsonschema
 import pandas as pd
 import pytest
+from referencing import Registry, Resource
 
 from anndata import AnnData
 from anndata.acc import A
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection
-    from typing import Literal
+    from typing import Any, Literal
 
-    from anndata.acc import AdRef, MapAcc, MultiMapAcc
+    from anndata.acc import AdRef, GraphAcc, LayerAcc, MapAcc, MultiAcc, MultiMapAcc
+
+    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc
 
 
 type AdRefSer = Sequence[str | int | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
+
+REGISTRY = Resource.from_contents(SCHEMA) @ Registry()
+"""Resolves the schema’s `$id` to its contents, so JSON pointers into it work offline."""
+
+
+def validate(data: AdRefSer, pointer: str = "") -> None:
+    """Validate against the schema or a JSON pointer into it, e.g. `/$defs/ref`."""
+    schema = {"$ref": f"{SCHEMA['$id']}#{pointer}"}
+    jsonschema.validate(data, schema, registry=REGISTRY)
+
 
 PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.X[:, :], ["layers", None, None, None]),
@@ -81,7 +94,58 @@ def test_serialization(
 
 
 def test_serialization_schema(ad_serialized: AdRefSer) -> None:
-    jsonschema.validate(ad_serialized, SCHEMA)
+    validate(ad_serialized)
+    validate(ad_serialized, "/$defs/ref")
+    with pytest.raises(jsonschema.ValidationError):
+        validate(ad_serialized, "/$defs/acc")
+
+
+MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
+    (A.X, ["layers", None]),
+    (A.layers["a"], ["layers", "a"]),
+    (A.obsm["umap"], ["obsm", "umap"]),
+    (A.varm["PCs"], ["varm", "PCs"]),
+    (A.obsp["conn"], ["obsp", "conn"]),
+    (A.varp["cons"], ["varp", "cons"]),
+]
+
+
+@pytest.mark.parametrize(
+    ("acc", "serialized"), MATRICES, ids=[str(m[0]) for m in MATRICES]
+)
+@pytest.mark.parametrize("vec", [None, False], ids=["vec=None", "vec=False"])
+def test_serialization_matrix(
+    acc: MatrixAcc, serialized: AdRefSer, *, vec: Literal[False] | None
+) -> None:
+    validate(serialized)
+    validate(serialized, "/$defs/acc")
+    with pytest.raises(jsonschema.ValidationError):
+        validate(serialized, "/$defs/ref")
+    assert A.to_json(acc) == serialized
+    assert A.from_json(serialized, vec=vec) == acc
+
+
+@pytest.mark.parametrize(
+    ("serialized", "vec"),
+    [
+        pytest.param(["layers", None], True, id="x-matrix-as-vec"),
+        pytest.param(["layers", None, None, None], False, id="x-vec-as-matrix"),
+        pytest.param(["obs", "type"], False, id="obs-as-matrix"),
+        pytest.param(["obsm", "umap"], True, id="obsm-matrix-as-vec"),
+        pytest.param(["obsm", "umap", 0], False, id="obsm-vec-as-matrix"),
+        pytest.param(["varp", "cons"], True, id="varp-matrix-as-vec"),
+    ],
+)
+def test_from_json_vec_mismatch(
+    serialized: AdRefSer, *, vec: Literal[True, False]
+) -> None:
+    with pytest.raises(ValueError, match="vec"):
+        A.from_json(serialized, vec=vec)
+
+
+def test_to_json_unsupported() -> None:
+    with pytest.raises(TypeError, match=r"Unsupported accessor A\.obs"):
+        A.to_json(A.obs)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -101,14 +165,18 @@ def test_dims(ad_ref: AdRef, dims: Collection[Literal["obs", "var"]]) -> None:
     assert ad_ref.dims == dims
 
 
+OBS_MAPS: Sequence[MapAcc] = [A.obsm, A.obsp]
+VAR_MAPS: Sequence[MapAcc] = [A.varm, A.varp]
+
+
 @pytest.mark.parametrize(
     ("obj", "expected"),
     [
         pytest.param(A.layers["a"], "a", id="A.layers[]"),
-        *[pytest.param(o, "obs", id=str(o)) for o in [A.obs, A.obsm, A.obsp]],
-        *[pytest.param(v, "var", id=str(v)) for v in [A.var, A.varm, A.varp]],
-        *[pytest.param(o["b"], ("obs", "b"), id=f"{o}[]") for o in [A.obsm, A.obsp]],
-        *[pytest.param(v["c"], ("var", "c"), id=f"{v}[]") for v in [A.varm, A.varp]],
+        *[pytest.param(o, "obs", id=str(o)) for o in [A.obs, *OBS_MAPS]],
+        *[pytest.param(v, "var", id=str(v)) for v in [A.var, *VAR_MAPS]],
+        *[pytest.param(o["b"], ("obs", "b"), id=f"{o}[]") for o in OBS_MAPS],
+        *[pytest.param(v["c"], ("var", "c"), id=f"{v}[]") for v in VAR_MAPS],
         pytest.param(A.obs["d"], (A.obs, "d"), id="path"),
     ],
 )
@@ -134,27 +202,29 @@ def test_match(*, obj: object, expected: object) -> None:
 @pytest.mark.parametrize(
     "mk_path",
     [
-        pytest.param(lambda: A.X["c1"], id="x-notuple"),
-        pytest.param(lambda: A.X[:3, :], id="x-partslice"),
-        pytest.param(lambda: A.X[:, b""], id="x-nostr"),
-        pytest.param(lambda: A.X[["a"], ["b"]], id="x-twolists"),
-        pytest.param(lambda: A.layers[1], id="layers-nostr"),
-        pytest.param(lambda: A.layers["a"][:3, :], id="layer-partslice"),
-        pytest.param(lambda: A.layers["a"][:, b""], id="layer-nostr"),
-        pytest.param(lambda: A.layers["a"][["a"], ["b"]], id="layer-twolists"),
-        pytest.param(lambda: A.obs[1], id="obs-nostr"),
-        pytest.param(lambda: A.obsm[0], id="obsms-nostr"),
-        pytest.param(lambda: A.obsm["a"][:3, 0], id="obsm-partslice"),
-        pytest.param(lambda: A.obsm["a"]["b"], id="obsm-noint"),
-        pytest.param(lambda: A.varp[0], id="varps-nostr"),
-        pytest.param(lambda: A.varp["x"][0, :], id="varp-nostr-inner"),
-        pytest.param(lambda: A.varp["x"]["a", "b"], id="varp-twostr"),
-        pytest.param(lambda: A.varp["x"][["a"], ["b"]], id="varp-twolists"),
+        pytest.param(lambda a: a.X["c1"], id="x-notuple"),
+        pytest.param(lambda a: a.X[:3, :], id="x-partslice"),
+        pytest.param(lambda a: a.X[:, b""], id="x-nostr"),
+        pytest.param(lambda a: a.X[["a"], ["b"]], id="x-twolists"),
+        pytest.param(lambda a: a.layers[1], id="layers-nostr"),
+        pytest.param(lambda a: a.layers["a"][:3, :], id="layer-partslice"),
+        pytest.param(lambda a: a.layers["a"][:, b""], id="layer-nostr"),
+        pytest.param(lambda a: a.layers["a"][["a"], ["b"]], id="layer-twolists"),
+        pytest.param(lambda a: a.obs[1], id="obs-nostr"),
+        pytest.param(lambda a: a.obsm[0], id="obsms-nostr"),
+        pytest.param(lambda a: a.obsm["a"][:3, 0], id="obsm-partslice"),
+        pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
+        pytest.param(lambda a: a.obsm["a"][True], id="obsm-bool"),
+        pytest.param(lambda a: a.obsm["a"][[True, False]], id="obsm-bool-list"),
+        pytest.param(lambda a: a.varp[0], id="varps-nostr"),
+        pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
+        pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),
+        pytest.param(lambda a: a.varp["x"][["a"], ["b"]], id="varp-twolists"),
     ],
 )
-def test_invalid(mk_path: Callable[[], AdRef]) -> None:
+def test_invalid(mk_path: Callable[[Any], AdRef]) -> None:
     with pytest.raises((ValueError, TypeError)):
-        mk_path()
+        mk_path(A)
 
 
 @pytest.mark.parametrize(
@@ -226,6 +296,8 @@ def test_special[C](
         A.layers["a"],
         A.obsm,
         A.obsm["umap"],
+        A.obsm["umap"][-1],  # negative indices count from the end, as in numpy
+        A.obsm["umap"][-2],
         A.varp,
         A.varp["cons"],
     ],
@@ -242,6 +314,7 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.layers["a"][:, "cell-3"],  # not a var name
         A.layers["b"],
         A.obsm["umap"][:, 3],
+        A.obsm["umap"][:, -3],
         A.obsm["b"],
         A.varm,
         A.obsp,
@@ -282,3 +355,83 @@ def test_get_full_array(
 def test_get_full_array_map_unsupported(adata: AnnData, acc: MultiMapAcc) -> None:
     with pytest.raises(IndexError, match=rf"Cannot index with {acc}"):
         adata[acc]
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        pytest.param("X[:,:]", A.X[:, :], id="x"),
+        pytest.param("layers.y[c,:]", A.layers["y"]["c", :], id="layer"),
+        pytest.param("layers.y[:,g]", A.layers["y"][:, "g"], id="layer-var"),
+        pytest.param("obs.a", A.obs["a"], id="obs"),
+        pytest.param("var.b", A.var["b"], id="var"),
+        pytest.param("obsm.c.0", A.obsm["c"][0], id="obsm"),
+        pytest.param("varm.d.1", A.varm["d"][1], id="varm"),
+        pytest.param("obsp.g[c1,:]", A.obsp["g"]["c1", :], id="obsp"),
+        pytest.param("obsp.g[:,c2]", A.obsp["g"][:, "c2"], id="obsp-var"),
+    ],
+)
+@pytest.mark.parametrize("vec", [None, True], ids=["vec=None", "vec=True"])
+def test_resolve_vec(spec: str, expected: AdRef, *, vec: Literal[True] | None) -> None:
+    assert A.resolve(spec, vec=vec) == expected
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        pytest.param("X", A.X, id="x"),
+        pytest.param("layers.y", A.layers["y"], id="layer"),
+        pytest.param("obsm.c", A.obsm["c"], id="obsm"),
+        pytest.param("varm.d", A.varm["d"], id="varm"),
+        pytest.param("obsp.g", A.obsp["g"], id="obsp"),
+        pytest.param("varp.h", A.varp["h"], id="varp"),
+    ],
+)
+@pytest.mark.parametrize("vec", [None, False], ids=["vec=None", "vec=False"])
+def test_resolve_matrix(
+    spec: str, expected: object, *, vec: Literal[False] | None
+) -> None:
+    assert A.resolve(spec, vec=vec) == expected
+
+
+@pytest.mark.parametrize(
+    ("spec", "vec"),
+    [
+        pytest.param("X", True, id="x-matrix-as-vec"),
+        pytest.param("X[:,:]", False, id="x-vec-as-matrix"),
+        pytest.param("layers.y", True, id="layer-matrix-as-vec"),
+        pytest.param("layers.y[c,:]", False, id="layer-vec-as-matrix"),
+        pytest.param("obs.a", False, id="obs-as-matrix"),
+        pytest.param("var.a", False, id="var-as-matrix"),
+        pytest.param("obsm.c", True, id="obsm-matrix-as-vec"),
+        pytest.param("obsm.c.0", False, id="obsm-vec-as-matrix"),
+        pytest.param("obsp.g", True, id="obsp-matrix-as-vec"),
+        pytest.param("obsp.g[c1,:]", False, id="obsp-vec-as-matrix"),
+    ],
+)
+def test_resolve_vec_mismatch(spec: str, *, vec: Literal[True, False]) -> None:
+    with pytest.raises(ValueError, match="vec"):
+        A.resolve(spec, vec=vec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "pat"),
+    [
+        pytest.param("Xenon", r"Unknown accessor name", id="x-like"),
+        pytest.param("Xenon[:,:]", r"Unknown accessor name", id="x-vec-like"),
+    ],
+)
+def test_resolve_errors(spec: str, *, pat: str) -> None:
+    with pytest.raises(ValueError, match=pat):
+        A.resolve(spec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "vec"),
+    [("X", True), ("X[:,:]", False)],
+    ids=["as-vec", "as-matrix"],
+)
+def test_resolve_vec_mismatch_not_strict(
+    spec: str, *, vec: Literal[True, False]
+) -> None:
+    assert A.resolve(spec, strict=False, vec=vec) is None

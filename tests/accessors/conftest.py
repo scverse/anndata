@@ -17,14 +17,14 @@ def adata() -> AnnData:
     layers = dict(a=sp.random(100, 50, format="csr"))
     obs = pd.DataFrame(
         dict(type=gen.integers(0, 3, size=100)),
-        index="cell-" + pd.array(range(100)).astype(str),
+        index="cell-" + np.arange(100).astype(str),
     )
     var_grp = pd.Categorical.from_codes(
-        gen.integers(0, 6, size=50), categories=list(ascii_lowercase[:6])
+        gen.integers(0, 6, size=50), categories=pd.Index(list(ascii_lowercase[:6]))
     )
     var = pd.DataFrame(
         dict(grp=var_grp),
-        index="gene-" + pd.array(range(50)).astype(str),
+        index="gene-" + np.arange(50).astype(str),
     )
     obsm = dict(umap=gen.random((100, 2)))
     varp = dict(cons=sp.csr_array(sp.random(50, 50)))
