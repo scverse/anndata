@@ -678,6 +678,16 @@
         font-size: inherit; /* Prevent mobile browsers from auto-sizing truncated text */
     }
 
+    /* Without a preview, the type may use the preview column's space too,
+       so long types (e.g. sparse matrices) only ellipsize when truly cramped */
+    .anndata-entry__type:has(+ .anndata-entry__preview:empty) {
+        grid-column: span 2;
+    }
+
+    .anndata-entry__preview:empty {
+        display: none !important;
+    }
+
     .anndata-entry__type {
         font-family: var(
             --anndata-font-mono,
