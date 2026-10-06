@@ -12,7 +12,7 @@ When modifying imports, maintain this order:
     │   Constants only. Imported by _settings.py at anndata import time.
     │   Must not import anything from anndata.
     │
-    └─► utils.py (depends only on external: numpy, pandas)
+    └─► utils.py (depends on: _settings, numpy, pandas)
         │   HTML escaping, formatting, serialization checks.
         │
         └─► components.py (depends on: utils)
@@ -27,7 +27,6 @@ When modifying imports, maintain this order:
                     │
                     ├─► sections.py (depends on: core, components, registry, utils)
                     │   │   Section-specific renderers (obs, var, uns, etc.).
-                    │   │   Uses late import of html.render_formatted_entry.
                     │   │
                     │   └─► html.py (depends on: core, sections, components, registry, utils)
                     │           Main orchestrator: generate_repr_html().
@@ -221,7 +220,6 @@ their own ``_repr_html_``, you can reuse anndata's CSS, JavaScript, and helpers.
         - ``anndata-entry__preview``: Entry preview cell
 
     **Modifiers** (variants, use ``--``):
-        - ``anndata-section--collapsed``: Collapsed section state
         - ``anndata-badge--view``: View badge variant
         - ``anndata-dtype--category``: Categorical dtype styling
 

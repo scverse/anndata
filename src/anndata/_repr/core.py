@@ -18,6 +18,8 @@ from .._repr_constants import (
     CSS_DTYPE_DATAFRAME,
     CSS_TEXT_ERROR,
     CSS_TEXT_MUTED,
+    DEFAULT_PREVIEW_ITEMS,
+    ERROR_TRUNCATE_LENGTH,
 )
 from .components import (
     TypeCellConfig,
@@ -28,7 +30,7 @@ from .components import (
     render_nested_content,
 )
 from .registry import formatter_registry
-from .utils import escape_html, format_number
+from .utils import escape_html, format_index_preview, format_number
 
 if TYPE_CHECKING:
     from anndata import AnnData, Raw
@@ -70,7 +72,7 @@ def render_section(  # noqa: PLR0913
     section_id
         ID for the section in data-section attribute (defaults to name)
     count_str
-        Custom count string for header (defaults to "(N items)")
+        Custom count string for header (defaults to "(N items)"). Escaped.
 
     Returns
     -------
@@ -106,75 +108,128 @@ def render_section(  # noqa: PLR0913
             tooltip="Image data",
         )
     """
-    if section_id is None:
-        section_id = name
-
     if n_items == 0:
-        return render_empty_section(name, doc_url, tooltip)
+        return render_empty_section(name, doc_url, tooltip, section_id=section_id)
 
-    if count_str is None:
-        count_str = f"({n_items} items)"
-
-    open_attr = " open" if not should_collapse else ""
-    parts = [
-        f'<details class="anndata-section" data-section="{escape_html(section_id)}"{open_attr}>'
-    ]
-
-    # Header
-    parts.append(_render_section_header(name, count_str, doc_url, tooltip))
-
-    # Content
-    parts.append('<div class="anndata-section__content">')
-    parts.append('<div class="anndata-section__entries">')
-    parts.append(entries_html)
-    parts.append("</div></div></details>")
-
-    return "\n".join(parts)
-
-
-def _render_section_header(
-    name: str,
-    count_str: str,
-    doc_url: str | None,
-    tooltip: str,
-) -> str:
-    """Render a section header as <summary> - native disclosure triangle replaces fold icon."""
-    parts = ["<summary>"]
-    parts.append(f'<span class="anndata-section__name">{escape_html(name)}</span>')
-    parts.append(
-        f'<span class="anndata-section__count">{escape_html(count_str)}</span>'
+    return render_details_section(
+        section_id or name,
+        name,
+        escape_html(count_str or f"({pluralize(n_items, 'item')})"),
+        f'<div class="anndata-section__entries">{entries_html}</div>',
+        is_open=not should_collapse,
+        doc_url=doc_url,
+        tooltip=tooltip,
     )
-    if doc_url:
-        parts.append(
-            f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
-        )
-    parts.append("</summary>")
-    return "\n".join(parts)
+
+
+def render_details_section(  # noqa: PLR0913
+    section_id: str,
+    name: str,
+    count_html: str,
+    content_html: str,
+    *,
+    is_open: bool,
+    doc_url: str | None = None,
+    tooltip: str = "",
+    extra_classes: str = "",
+) -> str:
+    """Render a foldable section: a ``<details>`` with a summary header.
+
+    This is the single place that produces section markup; ``render_section``,
+    ``render_empty_section`` and the error/unknown-attribute sections use it.
+
+    Parameters
+    ----------
+    section_id
+        Value for the ``data-section`` attribute (escaped)
+    name
+        Display name in the header (escaped)
+    count_html
+        Count label HTML next to the name, e.g. ``"(3 items)"`` (caller escapes)
+    content_html
+        Section body HTML (caller escapes)
+    is_open
+        Whether the section starts expanded
+    doc_url
+        URL for the help link (? icon)
+    tooltip
+        Tooltip text for the help link
+    extra_classes
+        Additional CSS classes for the ``<details>`` element
+    """
+    classes = f"anndata-section {extra_classes}".strip()
+    open_attr = " open" if is_open else ""
+    help_link = (
+        f'<a class="anndata-section__help" href="{escape_html(doc_url)}" '
+        f'target="_blank" title="{escape_html(tooltip)}">?</a>'
+        if doc_url
+        else ""
+    )
+    return (
+        f'<details class="{classes}" data-section="{escape_html(section_id)}"{open_attr}>'
+        f"<summary>"
+        f'<span class="anndata-section__name">{escape_html(name)}</span>'
+        f'<span class="anndata-section__count">{count_html}</span>'
+        f"{help_link}"
+        f"</summary>"
+        f'<div class="anndata-section__content">{content_html}</div>'
+        f"</details>"
+    )
+
+
+def pluralize(n: int, noun: str) -> str:
+    """Format a count with a correctly pluralized noun, e.g. ``"1 item"``, ``"2 items"``."""
+    return f"{format_number(n)} {noun}{'' if n == 1 else 's'}"
 
 
 def render_empty_section(
     name: str,
     doc_url: str | None = None,
     tooltip: str = "",
+    *,
+    section_id: str | None = None,
 ) -> str:
-    """Render an empty section indicator."""
-    # Build help link if doc_url provided
-    help_link = ""
-    if doc_url:
-        help_link = f'<a class="anndata-section__help"  href="{escape_html(doc_url)}" target="_blank" title="{escape_html(tooltip)}">?</a>'
+    """Render an empty (collapsed) section indicator."""
+    return render_details_section(
+        section_id or name,
+        name,
+        "(empty)",
+        '<div class="anndata-section__empty">No entries</div>',
+        is_open=False,
+        doc_url=doc_url,
+        tooltip=tooltip,
+    )
 
-    return f"""
-<details class="anndata-section" data-section="{escape_html(name)}">
-    <summary>
-        <span class="anndata-section__name">{escape_html(name)}</span>
-        <span class="anndata-section__count">(empty)</span>
-        {help_link}
-    </summary>
-    <div class="anndata-section__content">
-        <div class="anndata-section__empty">No entries</div>
-    </div>
-</details>
-"""
+
+def render_error_section(section: str, error: str) -> str:
+    """Render an (expanded) error indicator for a section that failed to render."""
+    if len(error) > ERROR_TRUNCATE_LENGTH:
+        error = error[:ERROR_TRUNCATE_LENGTH] + "..."
+    return render_details_section(
+        section,
+        section,
+        '<span class="anndata-badge--error">(error)</span>',
+        f'<div class="anndata-entry--error">Failed to render: {escape_html(error)}</div>',
+        is_open=True,
+        extra_classes="anndata-sec-error",
+    )
+
+
+def render_index_preview(obj: object) -> str:
+    """Render a preview of ``obj.obs_names`` and ``obj.var_names``.
+
+    Works for AnnData, Raw and other objects; missing or broken indices are
+    shown as "not available".
+    """
+    parts = ['<div class="anndata-header__index">']
+    for attr in ("obs_names", "var_names"):
+        try:
+            preview = format_index_preview(getattr(obj, attr), DEFAULT_PREVIEW_ITEMS)
+        except Exception:  # noqa: BLE001
+            preview = "<em>not available</em>"
+        parts.append(f"<div><strong>{attr}:</strong> {preview}</div>")
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def render_truncation_indicator(remaining: int) -> str:
@@ -371,13 +426,11 @@ def render_formatted_entry(
     )
     parts.append(render_entry_type_cell(type_cell_config))
 
-    # Preview cell
-    # Error takes precedence over preview/preview_html
+    # Preview cell: error takes precedence over preview_html, which takes
+    # precedence over preview
     preview_html = output.preview_html
     preview_text = output.preview
-
-    if output.error and not preview_html:
-        # Generate error preview if error is set but no preview_html provided
+    if output.error:
         error_text = escape_html(output.error)
         preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
 

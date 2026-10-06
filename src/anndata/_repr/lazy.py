@@ -10,59 +10,45 @@ Key concepts:
 - Lazy series: Individual columns from Dataset2D, implemented as xarray DataArrays
 - CategoricalArray: anndata's lazy categorical implementation for zarr/h5 storage
 
-Usage:
-    from .lazy import (
-        is_lazy_adata,
-        is_lazy_column,
-        get_lazy_category_count,
-        get_lazy_categories,
-        get_lazy_categorical_info,
-    )
+``CategoricalArray.categories``/``.dtype`` are cached properties that load *all*
+categories, so this module reads the category count and the first few labels
+from storage directly instead.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from anndata.experimental.backed._lazy_arrays import (
-        CategoricalArray,
-        MaskedArray,
-    )
+from .._core.xarray import Dataset2D
+from ..experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
+if TYPE_CHECKING:
     from .registry import FormatterContext
 
 
-def _get_categorical_array(col: object) -> CategoricalArray | None:
-    """
-    Get the underlying CategoricalArray from a lazy xarray DataArray.
+def _get_backing_array(col: object) -> object | None:
+    """Get the storage-backed array behind a lazy column without loading it.
 
-    Navigates through the xarray structure:
-    DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
-
-    Parameters
-    ----------
-    col
-        The column (potentially an xarray DataArray) to extract from
-
-    Returns
-    -------
-    CategoricalArray if found, None otherwise
+    Navigates DataArray -> Variable -> LazilyIndexedArray -> backing array.
     """
     try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+        return col.variable._data.array  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001
+        # Not a lazy column (AttributeError), or a broken object
+        return None
 
-        # Navigate through xarray structure to find CategoricalArray
-        # DataArray -> Variable -> LazilyIndexedArray -> CategoricalArray
-        if hasattr(col, "variable") and hasattr(col.variable, "_data"):
-            lazy_indexed = col.variable._data
-            if hasattr(lazy_indexed, "array"):
-                arr = lazy_indexed.array
-                if isinstance(arr, CategoricalArray):
-                    return arr
-    except ImportError:
-        pass
-    return None
+
+def _get_categorical_array(col: object) -> CategoricalArray | None:
+    """Get the underlying CategoricalArray of a lazy column, if it is one."""
+    arr = _get_backing_array(col)
+    return arr if isinstance(arr, CategoricalArray) else None
+
+
+def _category_values(cat_arr: CategoricalArray) -> object:
+    """Get the on-disk array of category labels (zarr groups nest it under "values")."""
+    cats = cat_arr._categories
+    return cats["values"] if hasattr(cats, "keys") else cats
 
 
 def is_lazy_adata(obj: object) -> bool:
@@ -85,11 +71,7 @@ def is_lazy_adata(obj: object) -> bool:
     objects. If .obs raises an exception, returns False.
     """
     try:
-        obs = getattr(obj, "obs", None)
-        if obs is None:
-            return False
-        # Dataset2D has a different class name than DataFrame
-        return obs.__class__.__name__ == "Dataset2D"
+        return isinstance(getattr(obj, "obs", None), Dataset2D)
     except Exception:  # noqa: BLE001
         # Intentional broad catch: .obs access may raise anything
         return False
@@ -99,8 +81,6 @@ def _extract_path_from_lazy_array(
     arr: CategoricalArray | MaskedArray,
 ) -> dict[str, str] | None:
     """Extract file path and format from a lazy array (CategoricalArray/MaskedArray)."""
-    from pathlib import Path
-
     base_path = arr.base_path_or_zarr_group
     file_format = getattr(arr, "file_format", "")
 
@@ -158,27 +138,12 @@ def get_lazy_backing_info(obj: object) -> dict[str, str]:
         return empty_result
 
     # Search through columns for a backing array with path info
-    try:
-        from anndata.experimental.backed._lazy_arrays import (
-            CategoricalArray,
-            MaskedArray,
-        )
-
-        for col_name in ds.data_vars:
-            col = ds[col_name]
-            # Navigate: DataArray -> Variable -> LazilyIndexedArray -> BackingArray
-            if not (hasattr(col, "variable") and hasattr(col.variable, "_data")):
-                continue
-            lazy_indexed = col.variable._data
-            if not hasattr(lazy_indexed, "array"):
-                continue
-            arr = lazy_indexed.array
-            if isinstance(arr, (CategoricalArray, MaskedArray)):
-                result = _extract_path_from_lazy_array(arr)
-                if result is not None:
-                    return result
-    except ImportError:
-        pass
+    for col_name in ds.data_vars:
+        arr = _get_backing_array(ds[col_name])
+        if isinstance(arr, CategoricalArray | MaskedArray):
+            result = _extract_path_from_lazy_array(arr)
+            if result is not None:
+                return result
 
     return empty_result
 
@@ -210,48 +175,9 @@ def is_lazy_column(series: object) -> bool:
     return hasattr(series, "_variable")
 
 
-def get_lazy_category_count(col: object) -> int | None:
-    """
-    Get the number of categories for a lazy categorical without loading them.
-
-    For lazy categoricals, we access the underlying CategoricalArray directly
-    and read the category count from the zarr/h5 storage metadata, avoiding
-    any data loading.
-
-    Parameters
-    ----------
-    col
-        The lazy categorical column (xarray DataArray)
-
-    Returns
-    -------
-    Number of categories, or None if cannot be determined
-    """
-    # Try to get category count from CategoricalArray without loading
-    cat_arr = _get_categorical_array(col)
-    if cat_arr is not None:
-        try:
-            # Access the raw _categories group/array shape
-            # For zarr: _categories is a Group with 'values' array
-            # For h5: similar structure
-            cats = cat_arr._categories
-            if hasattr(cats, "keys"):  # It's a group
-                values = cats["values"]
-                return values.shape[0]
-            elif hasattr(cats, "shape"):  # It's an array directly
-                return cats.shape[0]
-        except Exception:  # noqa: BLE001
-            pass
-    return None
-
-
 def get_lazy_categorical_info(obj: object) -> tuple[int | None, bool]:
     """
     Get category count and ordered flag from a lazy categorical without loading data.
-
-    For lazy categoricals (xarray DataArray backed by CategoricalArray),
-    this accesses the underlying storage metadata directly to get the count
-    without loading the actual category values.
 
     Parameters
     ----------
@@ -264,25 +190,18 @@ def get_lazy_categorical_info(obj: object) -> tuple[int | None, bool]:
         n_categories: Number of categories, or None if cannot be determined
         ordered: Whether the categorical is ordered
     """
+    cat_arr = _get_categorical_array(obj)
+    if cat_arr is None:
+        return None, False
     try:
-        from anndata.experimental.backed._lazy_arrays import CategoricalArray
+        return _category_values(cat_arr).shape[0], cat_arr._ordered  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001
+        return None, False
 
-        # Navigate through xarray structure to find CategoricalArray
-        if hasattr(obj, "variable") and hasattr(obj.variable, "_data"):
-            lazy_indexed = obj.variable._data
-            if hasattr(lazy_indexed, "array"):
-                arr = lazy_indexed.array
-                if isinstance(arr, CategoricalArray):
-                    # Get count from storage metadata without loading
-                    cats = arr._categories
-                    if hasattr(cats, "keys"):  # It's a group (zarr)
-                        values = cats["values"]
-                        return values.shape[0], arr._ordered
-                    elif hasattr(cats, "shape"):  # It's an array directly
-                        return cats.shape[0], arr._ordered
-    except (ImportError, Exception):  # noqa: BLE001
-        pass
-    return None, False
+
+def get_lazy_category_count(col: object) -> int | None:
+    """Get the number of categories of a lazy categorical without loading them."""
+    return get_lazy_categorical_info(col)[0]
 
 
 def get_lazy_categories(
@@ -333,9 +252,7 @@ def get_lazy_categories(
         try:
             from anndata._io.specs.registry import read_elem, read_elem_partial
 
-            cats = cat_arr._categories
-            # Get values array: zarr uses group with "values" key, h5 uses array directly
-            values = cats["values"] if hasattr(cats, "keys") else cats
+            values = _category_values(cat_arr)
             if n_to_read is not None and n_to_read < (n_cats or float("inf")):
                 categories = list(
                     read_elem_partial(values, indices=slice(0, n_to_read))

@@ -23,14 +23,19 @@ This ensures a partially-rendered repr is always better than a crashed cell.
 
 from __future__ import annotations
 
+import inspect
+import uuid
+from collections.abc import Mapping
 from dataclasses import replace
+from functools import cached_property
+from types import BuiltinFunctionType, FunctionType, MethodType
 from typing import TYPE_CHECKING
 
 from .._repr_constants import (
     CSS_DTYPE_ANNDATA,
     CSS_DTYPE_UNKNOWN,
-    ERROR_TRUNCATE_LENGTH,
     INTERNAL_ANNDATA_ATTRS,
+    UNIQUE_COUNT_BUDGET,
 )
 from .._types import AnnDataElem
 from ..utils import get_literal_members
@@ -47,8 +52,12 @@ from .components import (
 )
 from .core import (
     get_section_tooltip,
+    pluralize,
+    render_details_section,
     render_empty_section,
+    render_error_section,
     render_formatted_entry,
+    render_index_preview,
     render_section,
     render_truncation_indicator,
     render_x_entry,
@@ -60,13 +69,10 @@ from .registry import (
 )
 from .utils import (
     escape_html,
-    format_index_preview,
     format_number,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     import pandas as pd
 
     from anndata import AnnData
@@ -124,13 +130,18 @@ def _render_dataframe_section(
 
     # Doc URL and tooltip for this section
     doc_url = get_section_doc_url(section)
-    tooltip = "Observation annotations" if section == "obs" else "Variable annotations"
+    tooltip = get_section_tooltip(section)
 
     if n_cols == 0:
         return render_empty_section(section, doc_url, tooltip)
 
     # Set section for section-specific formatters (e.g., LazyColumnFormatter)
     section_context = replace(context, section=section)
+
+    # Unique counts cost ~10ms per column per million rows: only count the
+    # first columns until the total scanned values reach the budget.
+    n_rows = len(df)
+    n_unique_cols = UNIQUE_COUNT_BUDGET // n_rows if n_rows else n_cols
 
     # Render entries (with truncation)
     rows = []
@@ -140,6 +151,8 @@ def _render_dataframe_section(
             break
         col = df[col_name]
         col_context = replace(section_context, key=col_name)
+        if i >= n_unique_cols:
+            col_context = replace(col_context, unique_limit=0)
         output = formatter_registry.format_value(col, col_context)
         rows.append(_render_entry_row(col_name, output))
 
@@ -150,7 +163,7 @@ def _render_dataframe_section(
         doc_url=doc_url,
         tooltip=tooltip,
         should_collapse=n_cols > context.fold_threshold,
-        count_str=f"({n_cols} columns)",
+        count_str=f"({pluralize(n_cols, 'column')})",
     )
 
 
@@ -221,7 +234,7 @@ def _render_uns_section(
 
     # Doc URL and tooltip
     doc_url = get_section_doc_url("uns")
-    tooltip = "Unstructured annotation"
+    tooltip = get_section_tooltip("uns")
 
     if n_items == 0:
         return render_empty_section("uns", doc_url, tooltip)
@@ -291,10 +304,13 @@ def _render_uns_entry(
 def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
     """Detect mapping-like attributes not surfaced by the standard section list.
 
+    Methods are recognized statically and skipped, and a ``cached_property``
+    that has not been computed yet is skipped too, so detection does not
+    trigger expensive computations. Plain properties are evaluated (they are
+    expected to be cheap, like any attribute access).
+
     Returns list of (attr_name, type_description) tuples for unknown sections.
     """
-    from collections.abc import Mapping
-
     # See INTERNAL_ANNDATA_ATTRS docstring for why the internal list is explicit.
     known = set(get_literal_members(AnnDataElem)) | INTERNAL_ANNDATA_ATTRS
 
@@ -304,8 +320,14 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
 
     unknown = []
     for attr in dir(adata):
-        # Skip private, known, and callable attributes
         if attr.startswith("_") or attr in known:
+            continue
+
+        try:
+            static = inspect.getattr_static(adata, attr)
+        except AttributeError:
+            continue  # only reachable via a dynamic __getattr__: not a data slot
+        if isinstance(static, _NON_DATA_TYPES):
             continue
 
         try:
@@ -319,8 +341,7 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
                 # Get type description
                 type_name = type(val).__name__
                 try:
-                    n_items = len(val)
-                    type_desc = f"{type_name} ({n_items} items)"
+                    type_desc = f"{type_name} ({pluralize(len(val), 'item')})"
                 except Exception:  # noqa: BLE001
                     type_desc = type_name
                 unknown.append((attr, type_desc))
@@ -331,59 +352,41 @@ def _detect_unknown_sections(adata: AnnData) -> list[tuple[str, str]]:
     return unknown
 
 
+# Attributes that are statically known not to be data sections: methods, and
+# not-yet-computed cached properties (computing them could be expensive).
+# A computed ``cached_property`` lives in the instance ``__dict__``, so
+# ``inspect.getattr_static`` returns its value rather than the descriptor.
+_NON_DATA_TYPES = (
+    FunctionType,
+    BuiltinFunctionType,
+    MethodType,
+    staticmethod,
+    classmethod,
+    cached_property,
+)
+
+
 def _render_unknown_sections(unknown_sections: list[tuple[str, str]]) -> str:
     """Render a section showing unknown/unrecognized attributes."""
-    parts = [
-        '<details class="anndata-section anndata-sec-unknown" data-section="unknown">'
-    ]
-    parts.append("<summary>")
-    parts.append('<span class="anndata-section__name">other</span>')
-    parts.append(
-        f'<span class="anndata-section__count">({len(unknown_sections)})</span>'
-    )
-    parts.append("</summary>")
-
-    parts.append('<div class="anndata-section__content">')
-    parts.append('<div class="anndata-section__entries">')
-
+    rows = []
     for attr_name, type_desc in unknown_sections:
-        parts.append(render_entry_row_open(attr_name, type_desc))
-        parts.append(render_name_cell(attr_name))
-        parts.append('<span class="anndata-entry__type">')
-        parts.append(
+        rows.append(render_entry_row_open(attr_name, type_desc))
+        rows.append(render_name_cell(attr_name))
+        rows.append(
+            f'<span class="anndata-entry__type">'
             f'<span class="{CSS_DTYPE_UNKNOWN}" title="Unrecognized attribute">'
-            f"{escape_html(type_desc)}</span>"
+            f"{escape_html(type_desc)}</span></span>"
+            '<span class="anndata-entry__preview"></span>'
+            "</div>"
         )
-        parts.append("</span>")
-        parts.append('<span class="anndata-entry__preview"></span>')
-        parts.append("</div>")
-
-    parts.append("</div>")
-    parts.append("</div>")
-    parts.append("</details>")
-
-    return "\n".join(parts)
-
-
-def _render_error_entry(section: str, error: str) -> str:
-    """Render an error indicator for a section that failed to render."""
-    error_str = str(error)
-    if len(error_str) > ERROR_TRUNCATE_LENGTH:
-        error_str = error_str[:ERROR_TRUNCATE_LENGTH] + "..."
-    error_escaped = escape_html(error_str)
-    return f"""
-<details class="anndata-section anndata-sec-error" data-section="{escape_html(section)}" open>
-    <summary>
-        <span class="anndata-section__name">{escape_html(section)}</span>
-        <span class="anndata-section__count anndata-badge--error">(error)</span>
-    </summary>
-    <div class="anndata-section__content">
-        <div class="anndata-entry--error">
-            Failed to render: {error_escaped}
-        </div>
-    </div>
-</details>
-"""
+    return render_details_section(
+        "unknown",
+        "other",
+        f"({len(unknown_sections)})",
+        f'<div class="anndata-section__entries">{"".join(rows)}</div>',
+        is_open=False,
+        extra_classes="anndata-sec-unknown",
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -476,7 +479,7 @@ def _render_raw_section(
     parts.append('<div class="anndata-section__entries">')
 
     # Single row with raw info
-    type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
+    type_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} vars"
     parts.append(render_entry_row_open("raw", "Raw", has_expandable_content=can_expand))
     parts.append(render_name_cell("raw"))
     type_cell_config = TypeCellConfig(
@@ -525,50 +528,24 @@ def _generate_raw_repr_html(
     parts = []
 
     # Container with header showing Raw shape
-    container_id = f"raw-repr-{id(raw)}"
+    container_id = f"anndata-raw-{uuid.uuid4().hex[:8]}"
     parts.append(f'<div class="anndata-repr" id="{container_id}">')
 
     # Header for Raw - same structure as AnnData header
     parts.append('<div class="anndata-header">')
     parts.append('<span class="anndata-header__type">Raw</span>')
-    shape_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} var"
+    shape_str = f"{format_number(n_obs)} obs × {format_number(n_vars)} vars"
     parts.append(f'<span class="anndata-header__shape">{shape_str}</span>')
     parts.append("</div>")
 
-    # Index preview (obs_names and var_names)
-    parts.append('<div class="anndata-header__index">')
-    try:
-        obs_names = getattr(raw, "obs_names", None)
-        if obs_names is not None:
-            parts.append(
-                f"<div><strong>obs_names:</strong> {format_index_preview(obs_names)}</div>"
-            )
-        else:
-            parts.append(
-                "<div><strong>obs_names:</strong> <em>not available</em></div>"
-            )
-    except Exception:  # noqa: BLE001
-        parts.append("<div><strong>obs_names:</strong> <em>not available</em></div>")
-    try:
-        var_names = getattr(raw, "var_names", None)
-        if var_names is not None:
-            parts.append(
-                f"<div><strong>var_names:</strong> {format_index_preview(var_names)}</div>"
-            )
-        else:
-            parts.append(
-                "<div><strong>var_names:</strong> <em>not available</em></div>"
-            )
-    except Exception:  # noqa: BLE001
-        parts.append("<div><strong>var_names:</strong> <em>not available</em></div>")
-    parts.append("</div>")
+    parts.append(render_index_preview(raw))
 
     # X section - show matrix info (with error handling)
     try:
         if hasattr(raw, "X") and raw.X is not None:
             parts.append(render_x_entry(raw, context))
     except Exception as e:  # noqa: BLE001
-        parts.append(_render_error_entry("X", str(e)))
+        parts.append(render_error_section("X", str(e)))
 
     # var section (like AnnData's var)
     try:
@@ -577,7 +554,7 @@ def _generate_raw_repr_html(
             var_context = replace(context, adata_ref=None, section="var")
             parts.append(_render_dataframe_section("var", raw.var, var_context))
     except Exception as e:  # noqa: BLE001
-        parts.append(_render_error_entry("var", str(e)))
+        parts.append(render_error_section("var", str(e)))
 
     # varm section (like AnnData's varm)
     try:
@@ -585,7 +562,7 @@ def _generate_raw_repr_html(
             varm_context = replace(context, adata_ref=None, section="varm")
             parts.append(_render_mapping_section("varm", raw.varm, varm_context))
     except Exception as e:  # noqa: BLE001
-        parts.append(_render_error_entry("varm", str(e)))
+        parts.append(render_error_section("varm", str(e)))
 
     parts.append("</div>")
 

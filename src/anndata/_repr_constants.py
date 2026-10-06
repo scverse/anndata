@@ -17,7 +17,6 @@ DEFAULT_MAX_ITEMS = 200  # Maximum items to show per section
 DEFAULT_MAX_STRING_LENGTH = 100  # Truncate strings longer than this
 DEFAULT_PREVIEW_ITEMS = 5  # Number of items to show in previews (first/last)
 # Max category values to display inline (used by render_category_list in components.py)
-# Note: DataFrame columns in obsm/varm have no limit - see DF_COLS_PREVIEW_LIMIT comment
 DEFAULT_MAX_CATEGORIES = 100
 DEFAULT_MAX_LAZY_CATEGORIES = (
     100  # Max categories to load for lazy categoricals (0 to skip)
@@ -56,26 +55,19 @@ DICT_PREVIEW_KEYS_LARGE = 2  # Keys to show in dict preview (large dicts)
 LIST_PREVIEW_ITEMS = 3  # Items to show in list preview
 STRING_INLINE_LIMIT = 20  # Max string length before truncating inline
 
-# DataFrame column preview limits (for DataFrames in uns only)
-# These control the compact inline preview shown in the type cell, e.g. "[col1, col2, ...]"
-# Used by DataFrameFormatter in formatters.py for uns entries.
-#
-# Note: DataFrames in obsm/varm render ALL columns with CSS truncation + wrap button
-# (render_entry_preview_cell() in components.py). No constant limits this - all columns
-# are in the HTML, CSS truncates the display, and the wrap button expands to show all.
-# This differs from categories which are limited by DEFAULT_MAX_CATEGORIES below.
-DF_COLS_PREVIEW_LIMIT = 5  # Max columns to show in compact preview
-DF_COLS_PREVIEW_MAX_LEN = 40  # Max total chars for column list string
+# Max column names listed for a DataFrame in obsm/varm (the rest is summarized
+# as "…+N"). The list is CSS-truncated to one line, with a wrap button to expand.
+DF_COLUMNS_PREVIEW_LIMIT = 100
+
+# Unique counts in obs/var stop once a table's displayed columns add up to this
+# many values (~0.2s at 1M rows), bounding the cost for very long *and* wide tables.
+UNIQUE_COUNT_BUDGET = 20_000_000
 
 # CSS class names for entry rows (BEM: anndata-entry block)
 CSS_ENTRY = "anndata-entry"
-CSS_ENTRY_NAME = "anndata-entry__name"
-CSS_ENTRY_TYPE = "anndata-entry__type"
-CSS_ENTRY_PREVIEW = "anndata-entry__preview"
 CSS_TEXT_MUTED = "anndata-text--muted"
 CSS_TEXT_ERROR = "anndata-text--error"
 CSS_TEXT_WARNING = "anndata-text--warning"
-CSS_NESTED_CONTENT = "anndata-entry__nested-content"
 CSS_NESTED_ANNDATA = "anndata-entry__nested-anndata"
 
 # CSS class names for dtype spans (BEM: anndata-dtype block with modifiers)
@@ -114,18 +106,6 @@ CSS_BADGE_EXTENSION = "anndata-badge--extension"
 CSS_COLORS = "anndata-colors"
 CSS_COLORS_SWATCH = "anndata-colors__swatch"
 CSS_COLORS_SWATCH_INVALID = "anndata-colors__swatch--invalid"
-
-# Section name constants (canonical strings used for data-section attributes and dispatch)
-SECTION_X = "X"
-SECTION_OBS = "obs"
-SECTION_VAR = "var"
-SECTION_UNS = "uns"
-SECTION_OBSM = "obsm"
-SECTION_VARM = "varm"
-SECTION_LAYERS = "layers"
-SECTION_OBSP = "obsp"
-SECTION_VARP = "varp"
-SECTION_RAW = "raw"
 
 # Internal AnnData attributes to skip when detecting unknown sections.
 #

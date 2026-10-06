@@ -1,6 +1,6 @@
 // AnnData HTML Representation JavaScript
-// This file provides interactivity for the HTML repr.
-// The {container_id} placeholder is replaced at runtime.
+// This file provides interactivity for the HTML repr. It is the body of
+// `function (container) { ... }` (see javascript.py), run once per repr output.
 
 // Mark container as JS-enabled (shows interactive elements)
 container.classList.add("anndata-repr--js")

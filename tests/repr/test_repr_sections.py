@@ -527,9 +527,36 @@ class TestCoverageEdgeCases:
         level0 = AnnData(np.zeros((10, 5)))
         level0.uns["nested"] = level1
 
-        with settings.override(repr_html_max_depth=0):
+        with settings.override(repr_html_max_depth=1):
             html = level0._repr_html_()
-            assert "max depth" in html.lower() or "depth" in html.lower()
+        assert html is not None
+        # The nested AnnData is listed, but not expanded beyond the depth limit
+        nested = '<div class="anndata-entry__nested-anndata">'
+        assert "AnnData (7 × 4)" in html
+        assert nested not in html
+
+        with settings.override(repr_html_max_depth=2):
+            html = level0._repr_html_()
+        assert html is not None
+        assert "AnnData (5 × 3)" in html
+        assert html.count(nested) == 1
+
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            ("repr_html_max_depth", 0),
+            ("repr_html_max_items", -1),
+            ("repr_html_type_width", 0),
+        ],
+    )
+    def test_invalid_settings_rejected(self, name, value):
+        """Settings that would break the repr are rejected up front."""
+        from pydantic import ValidationError
+
+        from anndata import settings
+
+        with pytest.raises(ValidationError), settings.override(**{name: value}):
+            pass
 
     def test_dataframe_entry_nunique_exception(self):
         """Test nunique() exception handling for dataframe columns."""
@@ -835,11 +862,11 @@ class TestUnknownSectionsAndErrorHandling:
         parts = _get_raw_meta_parts(BadRaw())
         assert parts == []
 
-    def test_render_error_entry(self):
-        """Test _render_error_entry produces valid HTML."""
-        from anndata._repr.sections import _render_error_entry
+    def testrender_error_section(self):
+        """Test render_error_section produces valid HTML."""
+        from anndata._repr.core import render_error_section
 
-        html = _render_error_entry("test_section", "Test error message")
+        html = render_error_section("test_section", "Test error message")
         assert "test_section" in html
         assert "error" in html.lower()
         # Should be valid HTML structure
@@ -1334,3 +1361,124 @@ class TestNestedStructuresDisplay:
             v.assert_element_exists(".anndata-repr")
             # Should show max depth indicator for innermost
             # (behavior depends on implementation)
+
+
+class TestSectionOrderAndDetection:
+    """Section order and discovery of non-standard attributes."""
+
+    def test_x_rendered_first(self):
+        """X is the first section, before obs (and layers)."""
+        adata = AnnData(np.zeros((3, 2)), obs=pd.DataFrame({"a": [1, 2, 3]}))
+        adata.layers["counts"] = np.zeros((3, 2))
+        html = adata._repr_html_()
+        assert html is not None
+        body = html.split("</style>", 1)[1]
+        x_pos = body.index('<div class="anndata-x__entry">')
+        assert x_pos < body.index('data-section="obs"')
+        assert x_pos < body.index('data-section="layers"')
+
+    def test_unknown_sections_do_not_compute_cached_properties(self):
+        """Uncomputed cached properties are skipped, computed ones are shown."""
+        from functools import cached_property
+
+        from anndata._repr.sections import _detect_unknown_sections
+
+        calls = []
+
+        class Sub(AnnData):
+            @cached_property
+            def expensive(self):
+                calls.append("expensive")
+                return {"a": 1}
+
+            @property
+            def cheap(self):
+                return {"b": 2}
+
+            def method(self):
+                calls.append("method")
+                return {}
+
+        adata = Sub(np.zeros((3, 2)))
+        found = dict(_detect_unknown_sections(adata))
+        assert calls == []
+        assert "expensive" not in found
+        assert "method" not in found
+        assert found["cheap"] == "dict (1 item)"
+
+        _ = adata.expensive  # once computed, it is just data
+        found = dict(_detect_unknown_sections(adata))
+        assert found["expensive"] == "dict (1 item)"
+        assert calls == ["expensive"]
+
+    def test_count_labels_are_pluralized(self):
+        """Count labels read "1 item" / "1 column", not "1 items"."""
+        adata = AnnData(np.zeros((3, 2)), obs=pd.DataFrame({"a": [1, 2, 3]}))
+        adata.layers["counts"] = np.zeros((3, 2))
+        html = adata._repr_html_()
+        assert html is not None
+        assert "(1 column)" in html
+        assert "(1 item)" in html
+        assert "(1 items)" not in html
+
+    def test_unique_counts_bounded_by_budget(self, monkeypatch):
+        """Unique counts stop once a table's columns exceed the value budget."""
+        from anndata._repr import sections
+
+        adata = AnnData(
+            np.zeros((10, 2)),
+            obs=pd.DataFrame({f"c{i}": np.arange(10) % (i + 2) for i in range(4)}),
+        )
+        monkeypatch.setattr(sections, "UNIQUE_COUNT_BUDGET", 25)  # 2 columns
+        html = adata._repr_html_()
+        assert html is not None
+        assert "(2 unique)" in html
+        assert "(3 unique)" in html
+        assert "(4 unique)" not in html
+        assert "(5 unique)" not in html
+
+    def test_obsm_dataframe_column_list_capped(self):
+        """Very wide DataFrames in obsm list a bounded number of column names."""
+        from anndata._repr_constants import DF_COLUMNS_PREVIEW_LIMIT
+
+        n_cols = DF_COLUMNS_PREVIEW_LIMIT + 50
+        adata = AnnData(np.zeros((3, 2)))
+        adata.obsm["wide"] = pd.DataFrame(
+            np.zeros((3, n_cols)),
+            index=adata.obs_names,
+            columns=[f"col{i}" for i in range(n_cols)],
+        )
+        html = adata._repr_html_()
+        assert html is not None
+        assert f"col{DF_COLUMNS_PREVIEW_LIMIT - 1}" in html
+        assert f"col{DF_COLUMNS_PREVIEW_LIMIT}," not in html
+        assert "…+50" in html
+
+    def test_nested_anndata_inherits_overrides(self):
+        """Explicit limits passed to generate_repr_html apply to nested AnnData."""
+        from anndata._repr import generate_repr_html
+
+        inner = AnnData(
+            np.zeros((3, 2)),
+            obs=pd.DataFrame({f"col{i}": np.arange(3) for i in range(5)}),
+        )
+        outer = AnnData(np.zeros((3, 2)))
+        outer.uns["inner"] = inner
+        html = generate_repr_html(outer, max_items=2)
+        nested = html.split('<div class="anndata-entry__nested-anndata">', 1)[1]
+        assert "col1" in nested
+        assert "col2" not in nested
+        assert "... and 3 more" in nested
+
+    def test_nested_anndata_subclass_detected(self):
+        """AnnData subclasses in uns are rendered as nested AnnData."""
+
+        class MyAnnData(AnnData):
+            pass
+
+        outer = AnnData(np.zeros((3, 2)))
+        outer.uns["sub"] = MyAnnData(np.zeros((4, 2)))
+        html = outer._repr_html_()
+        assert html is not None
+        assert "MyAnnData (4 × 2)" in html
+        assert '<div class="anndata-entry__nested-anndata">' in html

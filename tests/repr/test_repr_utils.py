@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from anndata import AnnData
 
@@ -156,26 +157,40 @@ class TestColorDetection:
 
         assert not is_color_list("cluster_colors", [None, "#FF0000"])
 
-    def test_get_matching_column_colors_var(self):
-        """Test get_matching_column_colors finds colors for var columns."""
-        from anndata._repr.utils import get_matching_column_colors
+    def test_get_column_colors_var(self):
+        """get_column_colors finds colors for var columns."""
+        from anndata._repr.utils import get_column_colors
 
         adata = AnnData(np.zeros((10, 5)))
         adata.var["gene_type"] = pd.Categorical(["A", "B"] * 2 + ["A"])
-        adata.uns["gene_type_colors"] = ["#FF0000", "#00FF00"]
+        adata.uns["gene_type_colors"] = np.array(["#FF0000", "#00FF00"])
 
-        colors = get_matching_column_colors(adata, "gene_type")
-        assert colors == ["#FF0000", "#00FF00"]
+        colors = get_column_colors(adata, "gene_type", limit=10)
+        assert colors is not None
+        assert colors.n_total == 2
+        assert colors.head == ["#FF0000", "#00FF00"]
 
-    def test_get_matching_column_colors_no_uns_key(self):
-        """Test get_matching_column_colors returns None when no colors in uns."""
-        from anndata._repr.utils import get_matching_column_colors
+    def test_get_column_colors_limit(self):
+        """Only the first `limit` colors are loaded, but all are counted."""
+        from anndata._repr.utils import get_column_colors
 
         adata = AnnData(np.zeros((10, 5)))
-        adata.obs["cell_type"] = pd.Categorical(["A", "B"] * 5)
+        adata.uns["cell_type_colors"] = [f"#{i:06x}" for i in range(50)]
 
-        colors = get_matching_column_colors(adata, "cell_type")
-        assert colors is None
+        colors = get_column_colors(adata, "cell_type", limit=3)
+        assert colors is not None
+        assert colors.n_total == 50
+        assert colors.head == ["#000000", "#000001", "#000002"]
+
+    @pytest.mark.parametrize("value", [None, "red", 3, {"a": "red"}])
+    def test_get_column_colors_absent_or_invalid(self, value):
+        """No colors, or a value that is not a sequence of colors, gives None."""
+        from anndata._repr.utils import get_column_colors
+
+        adata = AnnData(np.zeros((10, 5)))
+        if value is not None:
+            adata.uns["cell_type_colors"] = value
+        assert get_column_colors(adata, "cell_type", limit=10) is None
 
 
 class TestFormatting:
@@ -232,38 +247,6 @@ class TestFormatting:
 
         result = format_number(1234.567)
         assert "1,234.57" in result
-
-    def test_truncate_string_short(self):
-        """Test truncate_string doesn't modify short strings."""
-        from anndata._repr.utils import truncate_string
-
-        result = truncate_string("short", max_length=100)
-        assert result == "short"
-
-    def test_truncate_string_long(self):
-        """Test truncate_string truncates long strings."""
-        from anndata._repr.utils import truncate_string
-
-        result = truncate_string("a" * 200, max_length=100)
-        assert len(result) == 100
-        assert result.endswith("...")
-
-    def test_sanitize_for_id_starts_with_number(self):
-        """Test sanitize_for_id handles strings starting with numbers."""
-        from anndata._repr.utils import sanitize_for_id
-
-        result = sanitize_for_id("123abc")
-        assert result.startswith("id_")
-        assert result[3:].startswith("123")
-
-    def test_sanitize_for_id_special_chars(self):
-        """Test sanitize_for_id replaces special characters."""
-        from anndata._repr.utils import sanitize_for_id
-
-        result = sanitize_for_id("hello world!@#$%")
-        assert " " not in result
-        assert "!" not in result
-        assert "_" in result
 
 
 class TestBackingInfo:
@@ -448,43 +431,6 @@ class TestValuePreviewFunctions:
 
         assert "None" in preview_item(None)
 
-    def test_generate_value_preview_none(self):
-        """Test generate_value_preview for None."""
-        from anndata._repr.utils import generate_value_preview
-
-        result = generate_value_preview(None)
-        assert "None" in result
-
-    def test_generate_value_preview_string(self):
-        """Test generate_value_preview for strings."""
-        from anndata._repr.utils import generate_value_preview
-
-        result = generate_value_preview("test")
-        assert "test" in result
-
-    def test_generate_value_preview_dict(self):
-        """Test generate_value_preview for dicts."""
-        from anndata._repr.utils import generate_value_preview
-
-        result = generate_value_preview({"a": 1})
-        assert "a" in result or "1" in result
-
-    def test_generate_value_preview_list(self):
-        """Test generate_value_preview for lists."""
-        from anndata._repr.utils import generate_value_preview
-
-        result = generate_value_preview([1, 2, 3])
-        assert "1" in result
-
-    def test_generate_value_preview_complex(self):
-        """Test value preview for complex types returns empty."""
-        from anndata._repr.utils import generate_value_preview
-
-        class CustomClass:
-            pass
-
-        assert generate_value_preview(CustomClass()) == ""
-
     def test_preview_sequence_large(self):
         """Test sequence preview for large sequence."""
         from anndata._repr.utils import preview_sequence
@@ -515,3 +461,35 @@ class TestValuePreviewFunctions:
         result = preview_sequence((1, 2, 3))
         assert "(" in result
         assert ")" in result
+
+
+class TestSerializableFastPath:
+    """Long lists are checked vectorized, with unchanged verdicts."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param([0.5] * 5000, id="floats"),
+            pytest.param(list(range(5000)), id="ints"),
+            pytest.param(["a", "b"] * 2500, id="strings"),
+            pytest.param([True, False] * 2500, id="bools"),
+        ],
+    )
+    def test_plain_lists_serializable(self, value):
+        from anndata._repr.utils import is_serializable
+
+        assert is_serializable(value) == (True, "")
+
+    def test_object_at_end_of_long_list_detected(self):
+        """A non-serializable element is still found, wherever it is."""
+        from anndata._repr.utils import is_serializable
+
+        ok, reason = is_serializable([1.0] * 4999 + [object()])
+        assert not ok
+        assert reason.startswith("Index 4999:")
+
+    def test_ragged_long_list_walked(self):
+        """Ragged nested lists fall back to the element-wise walk."""
+        from anndata._repr.utils import is_serializable
+
+        assert is_serializable([[1, 2], [3]] * 1000) == (True, "")

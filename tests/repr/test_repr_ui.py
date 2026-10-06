@@ -483,3 +483,36 @@ def adata_full():
     adata.obsp["distances"] = sp.random(n_obs, n_obs, density=0.01, format="csr")
     adata.varp["gene_corr"] = sp.random(n_vars, n_vars, density=0.1, format="csr")
     return adata
+
+
+class TestStaticAssets:
+    """Inlined CSS/JS: theming, versioning and size."""
+
+    def test_css_follows_page_color_scheme(self):
+        """The repr does not opt into OS dark mode by itself."""
+        from anndata._repr.css import get_css
+
+        css = get_css()
+        assert "color-scheme: light dark" not in css
+        assert "color-scheme:light dark" not in css
+        assert "color-scheme: dark" in css  # explicit dark themes still apply
+
+    def test_assets_are_minified(self):
+        """Comments and indentation are stripped from the inlined assets."""
+        from anndata._repr.css import get_css
+        from anndata._repr.javascript import get_javascript
+
+        css, js = get_css(), get_javascript("c")
+        assert "/*" not in css
+        assert not any(line.lstrip().startswith("//") for line in js.splitlines())
+        assert not any(line.startswith(" ") for line in css.splitlines())
+
+    def test_js_installed_per_version(self):
+        """The init function is keyed by anndata version."""
+        from anndata._repr.javascript import get_javascript
+        from anndata._repr.utils import get_anndata_version
+
+        js = get_javascript('id-with-"quote')
+        assert f'const version = "{get_anndata_version()}"' in js
+        assert "registry[version](container)" in js
+        assert 'getElementById("id-with-\\"quote")' in js

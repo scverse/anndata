@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+import anndata as ad
 from anndata import AnnData
 
 from .conftest import StrictHTMLParser
@@ -1290,3 +1291,49 @@ class TestIndexPreview:
         v = validate_html(html)
         v.assert_element_exists(".anndata-repr")
         v.assert_text_visible("0")
+
+
+class TestHeaderBadges:
+    """render_header_badges is the single implementation used by the header."""
+
+    def test_backed_open_closed(self):
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(
+            is_backed=True, backing_format="H5AD", backing_path="/x.h5ad", is_open=True
+        )
+        assert "H5AD (Open)" in html
+        assert '<span class="anndata-header__filepath">/x.h5ad</span>' in html
+        assert "H5AD (Closed)" in render_header_badges(
+            is_backed=True, backing_format="H5AD", is_open=False
+        )
+
+    def test_lazy_with_format_and_path(self):
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(
+            is_lazy=True, backing_format="Zarr", backing_path="/d.zarr"
+        )
+        assert "Lazy (Zarr)" in html
+        assert "/d.zarr" in html
+
+    def test_path_escaped(self):
+        from anndata._repr import render_header_badges
+
+        html = render_header_badges(is_backed=True, backing_path="<b>.h5ad")
+        assert "<b>" not in html
+        assert "&lt;b&gt;.h5ad" in html
+
+    def test_backed_header_uses_badges(self, tmp_path):
+        """A backed AnnData's header shows format, state, path and memory caveat."""
+        path = tmp_path / "b.h5ad"
+        AnnData(np.zeros((3, 2))).write_h5ad(path)
+        backed = ad.read_h5ad(path, backed="r")
+        try:
+            html = backed._repr_html_()
+        finally:
+            backed.file.close()
+        assert html is not None
+        assert "H5AD (Open)" in html
+        assert str(path) in html
+        assert "data on disk not included" in html

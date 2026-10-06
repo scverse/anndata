@@ -13,6 +13,7 @@ from ._repr_constants import (
     DEFAULT_MAX_ITEMS,
     DEFAULT_MAX_LAZY_CATEGORIES,
     DEFAULT_MAX_README_SIZE,
+    DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_TYPE_WIDTH,
     DEFAULT_UNIQUE_LIMIT,
 )
@@ -55,34 +56,39 @@ class Settings(scverse_misc.Settings):
     repr_html_enabled: bool = True
     """Whether to use rich HTML representation in Jupyter notebooks. Set to False to use plain text repr."""
 
-    repr_html_fold_threshold: int = DEFAULT_FOLD_THRESHOLD
+    repr_html_fold_threshold: Annotated[int, Field(ge=0)] = DEFAULT_FOLD_THRESHOLD
     """Auto-fold sections in HTML repr when they have more than this many entries."""
 
-    repr_html_max_depth: int = DEFAULT_MAX_DEPTH
-    """Maximum recursion depth for nested AnnData objects in HTML repr."""
+    repr_html_max_depth: Annotated[int, Field(gt=0)] = DEFAULT_MAX_DEPTH
+    """Maximum recursion depth for nested AnnData objects in HTML repr (at least 1, the top level)."""
 
-    repr_html_max_items: int = DEFAULT_MAX_ITEMS
+    repr_html_max_items: Annotated[int, Field(ge=0)] = DEFAULT_MAX_ITEMS
     """Maximum number of items to show per section in HTML repr."""
 
-    repr_html_max_categories: int = DEFAULT_MAX_CATEGORIES
+    repr_html_max_categories: Annotated[int, Field(ge=0)] = DEFAULT_MAX_CATEGORIES
     """Maximum number of category values to display inline in HTML repr."""
 
-    repr_html_max_lazy_categories: int = DEFAULT_MAX_LAZY_CATEGORIES
+    repr_html_max_string_length: Annotated[int, Field(ge=0)] = DEFAULT_MAX_STRING_LENGTH
+    """Truncate string values longer than this many characters in HTML repr previews."""
+
+    repr_html_max_lazy_categories: Annotated[int, Field(ge=0)] = (
+        DEFAULT_MAX_LAZY_CATEGORIES
+    )
     """Maximum categories to load for lazy categoricals in HTML repr. For lazy AnnData (from :func:`~anndata.experimental.read_lazy`), loading categories requires reading from disk. This limit prevents loading too many categories. Set to 0 to disable loading categories entirely (metadata-only mode)."""
 
-    repr_html_unique_limit: int = DEFAULT_UNIQUE_LIMIT
-    """Maximum number of rows to compute unique counts for in HTML repr. Set to 0 to disable."""
+    repr_html_unique_limit: Annotated[int, Field(ge=0)] = DEFAULT_UNIQUE_LIMIT
+    """Maximum number of rows of an `obs`/`var` column to compute unique counts for in HTML repr. Set to 0 to disable. Counting also stops once a table's displayed columns add up to 20 million values, which bounds the cost for very wide and long tables."""
 
     repr_html_dataframe_expand: bool = False
     """Whether to show expandable pandas DataFrame previews in HTML repr. When enabled, DataFrames in `obsm`/`varm` can be expanded to show their content using pandas `_repr_html_()` (rich Jupyter-style output). Configure pandas display options to control output: `pd.set_option('display.max_rows', 10)`"""
 
-    repr_html_max_field_width: int = DEFAULT_MAX_FIELD_WIDTH
+    repr_html_max_field_width: Annotated[int, Field(gt=0)] = DEFAULT_MAX_FIELD_WIDTH
     """Maximum width in pixels for the field name column in HTML repr."""
 
-    repr_html_type_width: int = DEFAULT_TYPE_WIDTH
+    repr_html_type_width: Annotated[int, Field(gt=0)] = DEFAULT_TYPE_WIDTH
     """Width in pixels for the type column in HTML repr."""
 
-    repr_html_max_readme_size: int = DEFAULT_MAX_README_SIZE
+    repr_html_max_readme_size: Annotated[int, Field(ge=0)] = DEFAULT_MAX_README_SIZE
     """Maximum size in characters for README content in HTML repr. READMEs larger than this will be truncated with a note. Set to 0 to disable truncation (not recommended for very large READMEs)."""
 
 

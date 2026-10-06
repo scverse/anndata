@@ -5,6 +5,7 @@ Shared fixtures for repr tests.
 from __future__ import annotations
 
 import re
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -24,17 +25,35 @@ from .html_validator import (
 __all__ = ["HTMLValidator", "StrictHTMLParser", "validate_html5_strict"]
 
 
-def pytest_configure(config):
-    """Suppress ImplicitModificationWarning for all repr tests.
+@pytest.fixture(autouse=True)
+def _ignore_implicit_modification_warnings():
+    """Suppress ImplicitModificationWarning in the repr tests only.
 
-    This warning is expected when AnnData transforms indices internally
-    during singledispatch in functools.
+    Many tests build AnnData objects from plain arrays, which transforms the
+    index to strings. That warning is irrelevant here, and a
+    ``pytest_configure`` filter would silence it for the whole test suite.
     """
-    import warnings
-
     from anndata._warnings import ImplicitModificationWarning
 
-    warnings.filterwarnings("ignore", category=ImplicitModificationWarning)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ImplicitModificationWarning)
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _isolated_formatter_registry():
+    """Restore the global formatter registry after each test.
+
+    Tests register custom formatters; this guarantees they never leak into
+    other tests, even when a test fails before its own cleanup.
+    """
+    from anndata._repr.registry import formatter_registry
+
+    type_formatters = formatter_registry._type_formatters
+    section_formatters = dict(formatter_registry._section_formatters)
+    yield
+    formatter_registry._type_formatters = type_formatters
+    formatter_registry._section_formatters = section_formatters
 
 
 # =============================================================================

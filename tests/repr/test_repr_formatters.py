@@ -211,28 +211,32 @@ class TestSparseFormatters:
             "sparse" not in result.type_name.lower() or "stored" not in result.type_name
         )
 
-    def test_sparse_formatter_duck_typing_fallback(self):
-        """Test sparse formatter uses duck typing when scipy checks fail."""
+    @pytest.mark.parametrize(
+        ("make", "expected"),
+        [
+            pytest.param(sp.csr_matrix, "csr_matrix", id="csr_matrix"),
+            pytest.param(sp.csc_array, "csc_array", id="csc_array"),
+            pytest.param(sp.coo_matrix, "coo_matrix", id="coo_matrix"),
+        ],
+    )
+    def test_sparse_formatter_format_name(self, make, expected):
+        """The label reflects storage format and matrix/array kind."""
         from anndata._repr.formatters import SparseMatrixFormatter
         from anndata._repr.registry import FormatterContext
 
-        class MockSparseArray:
-            def __init__(self):
-                self.nnz = 10
-                self.shape = (5, 5)
-                self.dtype = np.float64
+        result = SparseMatrixFormatter().format(
+            make(np.eye(4, dtype=np.float32)), FormatterContext()
+        )
+        assert result.type_name.startswith(f"{expected} (4 × 4) float32")
+        assert "75.0% sparse" in result.type_name
 
-            def tocsr(self):
-                pass
-
-        MockSparseArray.__module__ = "scipy.sparse._csr"
-
-        formatter = SparseMatrixFormatter()
-        mock_sparse = MockSparseArray()
-
-        assert formatter.can_format(mock_sparse, FormatterContext())
-        result = formatter.format(mock_sparse, FormatterContext())
-        assert "MockSparseArray" in result.type_name
+    def test_sparse_view_named_by_format(self):
+        """Views of sparse X are labeled by format, not by their view class."""
+        adata = AnnData(sp.random(20, 10, density=0.2, format="csr"))
+        html = adata[:5]._repr_html_()
+        assert html is not None
+        assert "csr_matrix (5 × 10)" in html
+        assert "SparseCSRMatrixView" not in html
 
 
 class TestPandasFormatters:
@@ -470,15 +474,18 @@ class TestSpecialArrayFormatters:
         """Test Awkward array formatter with a mock object."""
         from anndata._repr.formatters import AwkwardArrayFormatter
         from anndata._repr.registry import FormatterContext
+        from anndata.compat import AwkArray
 
-        class MockAwkwardArray:
-            def __init__(self):
-                self.type = "var * int64"
+        class MockAwkwardArray(AwkArray):
+            def __init__(self):  # skip awkward's constructor
+                pass
+
+            @property
+            def type(self):
+                return "var * int64"
 
             def __len__(self):
                 return 100
-
-        MockAwkwardArray.__module__ = "awkward.highlevel"
 
         formatter = AwkwardArrayFormatter()
         mock_arr = MockAwkwardArray()
@@ -495,8 +502,12 @@ class TestSpecialArrayFormatters:
         """Test Awkward array formatter handles exceptions."""
         from anndata._repr.formatters import AwkwardArrayFormatter
         from anndata._repr.registry import FormatterContext
+        from anndata.compat import AwkArray
 
-        class BrokenAwkwardArray:
+        class BrokenAwkwardArray(AwkArray):
+            def __init__(self):  # skip awkward's constructor
+                pass
+
             @property
             def type(self):
                 msg = "Cannot get type"
@@ -505,8 +516,6 @@ class TestSpecialArrayFormatters:
             def __len__(self):
                 msg = "Cannot get length"
                 raise RuntimeError(msg)
-
-        BrokenAwkwardArray.__module__ = "awkward.highlevel"
 
         formatter = AwkwardArrayFormatter()
         mock_arr = BrokenAwkwardArray()

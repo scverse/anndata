@@ -824,3 +824,48 @@ class TestLazyBackingInfo:
         v.assert_text_visible(str(path))
         # Also verify it's in the file path element
         v.assert_element_exists(".anndata-header__filepath")
+
+
+@pytest.mark.skipif(not HAS_XARRAY, reason="xarray not installed")
+class TestLazyRenderingCost:
+    """The repr of a lazy AnnData reads as little as possible."""
+
+    @pytest.fixture
+    def lazy_with_colors(self, tmp_path):
+        adata = AnnData(
+            np.zeros((6, 2)),
+            obs=pd.DataFrame({
+                "c": pd.Categorical(list("abcabc")),
+                "d": pd.Categorical(list("xyxyxy")),
+            }),
+        )
+        adata.uns["c_colors"] = ["#ff0000", "#00ff00", "#0000ff"]
+        adata.uns["d_colors"] = ["red", "blue"]
+        adata.write_zarr(tmp_path / "colors.zarr")
+        return ad.experimental.read_lazy(tmp_path / "colors.zarr")
+
+    def test_colors_computed_once_per_column(self, lazy_with_colors, monkeypatch):
+        """Colors are read once per categorical column (display, count and checks)."""
+        import dask.array as da
+
+        n_computes = 0
+        compute = da.Array.compute
+
+        def counting_compute(self, *args, **kwargs):
+            nonlocal n_computes
+            n_computes += 1
+            return compute(self, *args, **kwargs)
+
+        monkeypatch.setattr(da.Array, "compute", counting_compute)
+        html = lazy_with_colors._repr_html_()
+        assert html is not None
+        assert "#ff0000" in html
+        assert n_computes == 2
+
+    def test_footer_omits_memory_for_lazy(self, lazy_with_colors):
+        """__sizeof__ of a lazy AnnData is meaningless, so it is not shown."""
+        html = lazy_with_colors._repr_html_()
+        assert html is not None
+        footer = html.split('<div class="anndata-footer">')[1].split("</div>")[0]
+        assert "~" not in footer
+        assert "anndata v" in footer

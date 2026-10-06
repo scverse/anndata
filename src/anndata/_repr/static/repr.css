@@ -21,8 +21,10 @@
         color: var(--anndata-text-muted);
     }
 
-    /* Opt into light-dark(): responds to used color scheme, defaulting to light */
-    color-scheme: light dark;
+    /* light-dark() follows the used color scheme, which is inherited from the
+       page: light unless the page declares `color-scheme` (e.g. `light dark` to
+       follow the OS). Deliberately not declared here, so the repr never turns
+       dark on a light page just because the OS is in dark mode. */
 
     /* --- Theme overrides ---
        When an app explicitly sets a theme, override the color scheme so

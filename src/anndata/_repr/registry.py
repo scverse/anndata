@@ -46,17 +46,18 @@ Usage for extending to new types:
 
 from __future__ import annotations
 
+import reprlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, overload
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import TypeGuard
 
 from .._repr_constants import (
     CSS_DTYPE_EXTENSION,
     CSS_DTYPE_UNKNOWN,
-    CSS_TEXT_ERROR,
     CSS_TEXT_WARNING,
     DEFAULT_FOLD_THRESHOLD,
     DEFAULT_MAX_CATEGORIES,
@@ -66,7 +67,7 @@ from .._repr_constants import (
     DEFAULT_MAX_STRING_LENGTH,
     DEFAULT_UNIQUE_LIMIT,
 )
-from .utils import escape_html, validate_key
+from .utils import escape_html, is_serializable, validate_key
 
 
 @dataclass
@@ -96,10 +97,10 @@ class FormattedOutput:
         - If ``type_html`` is provided, it replaces the visual display
         - ``type_name`` is still used for the data-dtype attribute regardless
 
-    **Preview column** (``preview`` vs ``preview_html``):
-        - If ``preview_html`` is provided, it is used (raw HTML)
+    **Preview column** (``error`` vs ``preview_html`` vs ``preview``):
+        - If ``error`` is set, it is shown (auto-escaped) and previews are ignored
+        - Otherwise, if ``preview_html`` is provided, it is used (raw HTML)
         - Otherwise, ``preview`` is used as plain text (auto-escaped)
-        - A warning is logged if both are provided
 
     Field naming convention
     -----------------------
@@ -144,11 +145,11 @@ class FormattedOutput:
 
     preview: str | None = None
     """Optional. Plain text for preview column (rightmost). Auto-escaped.
-    Mutually exclusive with preview_html."""
+    Ignored if preview_html is provided."""
 
     preview_html: str | None = None
     """Optional. Raw HTML for preview column (e.g., category pills with colors).
-    Takes precedence over preview if both provided (with warning)."""
+    Takes precedence over preview if both are provided."""
 
     expanded_html: str | None = None
     """Optional. Raw HTML for expandable content shown in collapsible row below.
@@ -457,13 +458,42 @@ class SectionFormatter(ABC):
         return True
 
 
+_CORE_MODULES = ("anndata", "numpy", "pandas", "scipy")
+
+
+def _safe[T](fn: Callable[[], T], *, default: T) -> T:
+    """Call ``fn``, returning ``default`` if it raises anything."""
+    try:
+        return fn()
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def _probe(
+    obj: object, label: str, fn: Callable[[object], object], errors: list[str]
+) -> object | None:
+    """Evaluate ``fn(obj)``; on failure record ``"<label> raised <Exc>"`` in ``errors``.
+
+    An :class:`AttributeError` means "not present" (like :func:`hasattr`) and is not
+    recorded; any other exception is.
+    """
+    try:
+        return fn(obj)
+    except AttributeError:
+        return None
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"{label} raised {type(e).__name__}")
+        return None
+
+
 class FallbackFormatter(TypeFormatter[object]):
     """
     Fallback formatter for unknown types.
 
     This is the last line of defense - it must NEVER raise an exception.
-    Every single attribute access is wrapped defensively because objects may have
-    malicious __getattr__, broken properties, or custom metaclasses that fail.
+    Every attribute access goes through :func:`_safe`/:func:`_probe` because
+    objects may have malicious ``__getattr__``, broken properties, or custom
+    metaclasses that fail.
     """
 
     priority: int = -1000  # Lowest priority, always checked last
@@ -471,7 +501,7 @@ class FallbackFormatter(TypeFormatter[object]):
     def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
         return True  # Can format anything
 
-    def format(  # noqa: PLR0912, PLR0915
+    def format(
         self,
         obj: object,
         context: FormatterContext,
@@ -489,172 +519,58 @@ class FallbackFormatter(TypeFormatter[object]):
         outer_error
             Error message from a failed formatter (passed by registry)
         """
-        # === Type name (with fallback) ===
-        type_name = "unknown"
-        try:  # noqa: SIM105
-            type_name = type(obj).__name__
-        except Exception:  # noqa: BLE001
-            pass
+        type_name = _safe(lambda: str(type(obj).__name__), default="unknown")
+        module = _safe(lambda: str(type(obj).__module__), default="")
+        full_name = (
+            f"{module}.{type_name}" if module and module != "builtins" else type_name
+        )
+        is_extension = bool(module) and not module.startswith(_CORE_MODULES)
 
-        # === Module (with fallback) ===
-        module = None
-        try:  # noqa: SIM105
-            module = type(obj).__module__
-        except Exception:  # noqa: BLE001
-            pass
+        tooltip_parts = [f"Type: {full_name}"]
+        errors: list[str] = [outer_error] if outer_error else []
 
-        # === Build full name safely ===
-        full_name = type_name
-        try:
-            if module and module != "builtins":
-                full_name = f"{module}.{type_name}"
-        except Exception:  # noqa: BLE001
-            pass
-
-        # === Gather info defensively ===
-        tooltip_parts: list[str] = []
-        access_errors: list[str] = []
-
-        # Type info for tooltip
-        try:  # noqa: SIM105
-            tooltip_parts.append(f"Type: {full_name}")
-        except Exception:  # noqa: BLE001
-            pass
-
-        # Shape
-        try:
-            if hasattr(obj, "shape"):
-                shape = obj.shape
-                tooltip_parts.append(f"Shape: {shape}")
-        except Exception as e:  # noqa: BLE001
-            try:
-                access_errors.append(f".shape raised {type(e).__name__}")
-            except Exception:  # noqa: BLE001
-                access_errors.append(".shape failed")
-
-        # dtype
-        try:
-            if hasattr(obj, "dtype"):
-                dtype = obj.dtype
-                tooltip_parts.append(f"Dtype: {dtype}")
-        except Exception as e:  # noqa: BLE001
-            try:
-                access_errors.append(f".dtype raised {type(e).__name__}")
-            except Exception:  # noqa: BLE001
-                access_errors.append(".dtype failed")
-
-        # len
-        try:
-            if hasattr(obj, "__len__"):
-                length = len(obj)
+        shape = _probe(obj, ".shape", lambda o: o.shape, errors)  # type: ignore[attr-defined]
+        if shape is not None:
+            tooltip_parts.append(f"Shape: {_safe(lambda: str(shape), default='?')}")
+        dtype = _probe(obj, ".dtype", lambda o: o.dtype, errors)  # type: ignore[attr-defined]
+        if dtype is not None:
+            tooltip_parts.append(f"Dtype: {_safe(lambda: str(dtype), default='?')}")
+        if _safe(lambda: hasattr(type(obj), "__len__"), default=False):
+            length = _probe(obj, "len()", len, errors)  # type: ignore[arg-type]
+            if isinstance(length, int):
                 tooltip_parts.append(f"Length: {length}")
                 if length > 1_000_000_000:
-                    access_errors.append(f"len() = {length:,} (suspicious)")
-        except Exception as e:  # noqa: BLE001
-            try:
-                access_errors.append(f"len() raised {type(e).__name__}")
-            except Exception:  # noqa: BLE001
-                access_errors.append("len() failed")
+                    errors.append(f"len() = {length:,} (suspicious)")
+        # reprlib bounds the cost for large builtin containers, but it also hides
+        # exceptions, so use plain repr() for everything else
+        repr_str = _probe(
+            obj,
+            "repr()",
+            lambda o: reprlib.repr(o) if module == "builtins" else repr(o),
+            errors,
+        )
+        if isinstance(repr_str, str) and repr_str and not repr_str.startswith("<"):
+            tooltip_parts.append(f"Repr: {repr_str[:100]}")
 
-        # repr (for tooltip only)
-        repr_str = None
-        try:
-            repr_str = repr(obj)
-            if repr_str and not repr_str.startswith("<"):
-                tooltip_parts.append(f"Repr: {repr_str[:100]}")
-        except Exception as e:  # noqa: BLE001
-            try:
-                access_errors.append(f"repr() raised {type(e).__name__}")
-            except Exception:  # noqa: BLE001
-                access_errors.append("repr() failed")
+        is_serial, serial_reason = _safe(
+            lambda: is_serializable(obj), default=(True, "")
+        )
+        warnings = [serial_reason] if not is_serial and serial_reason else []
 
-        # str
-        try:
-            str_val = str(obj)
-            # Just checking it doesn't fail, not using the result
-            _ = str_val
-        except Exception as e:  # noqa: BLE001
-            try:
-                access_errors.append(f"str() raised {type(e).__name__}")
-            except Exception:  # noqa: BLE001
-                access_errors.append("str() failed")
-
-        # === Combine all errors ===
-        all_errors: list[str] = []
-        if outer_error:
-            all_errors.append(outer_error)
-        all_errors.extend(access_errors)
-
-        error = "; ".join(all_errors) if all_errors else None
-
-        # === Check serializability ===
-        is_serial = True
-        serial_reason = ""
-        try:
-            from .utils import is_serializable
-
-            is_serial, serial_reason = is_serializable(obj)
-        except Exception:  # noqa: BLE001
-            pass
-
-        # === Build preview_html for errors ===
-        # SECURITY: All text must be HTML-escaped to prevent XSS
+        # The renderer displays `error` itself (it takes precedence over previews)
+        error = "; ".join(errors) if errors else None
         preview_html = None
-        warnings: list[str] = []
-
-        # Add serialization reason to warnings if not serializable
-        if not is_serial and serial_reason:
-            warnings.append(serial_reason)
-
-        if all_errors:
-            try:
-                error_text = escape_html(", ".join(all_errors))
-                preview_html = f'<span class="{CSS_TEXT_ERROR}">{error_text}</span>'
-            except Exception:  # noqa: BLE001
-                preview_html = f'<span class="{CSS_TEXT_ERROR}">Error</span>'
-        else:
-            # No errors - check if unknown type warning needed
-            try:
-                is_extension = module and not module.startswith((
-                    "anndata",
-                    "numpy",
-                    "pandas",
-                    "scipy",
-                ))
-                if not is_extension:
-                    warnings.append(f"Unknown type: {full_name}")
-                    warning_text = escape_html(f"Unknown type: {full_name}")
-                    preview_html = (
-                        f'<span class="{CSS_TEXT_WARNING}">{warning_text}</span>'
-                    )
-            except Exception:  # noqa: BLE001
-                pass
-
-        # === Build tooltip safely ===
-        tooltip = ""
-        try:  # noqa: SIM105
-            tooltip = "\n".join(tooltip_parts)
-        except Exception:  # noqa: BLE001
-            pass
-
-        # === Determine CSS class ===
-        css_class = CSS_DTYPE_UNKNOWN
-        try:
-            is_extension = module and not module.startswith((
-                "anndata",
-                "numpy",
-                "pandas",
-                "scipy",
-            ))
-            if is_extension:
-                css_class = CSS_DTYPE_EXTENSION
-        except Exception:  # noqa: BLE001
-            pass
+        if error is None and not is_extension:
+            warnings.append(f"Unknown type: {full_name}")
+            preview_html = (
+                f'<span class="{CSS_TEXT_WARNING}">'
+                f"{escape_html(f'Unknown type: {full_name}')}</span>"
+            )
 
         return FormattedOutput(
             type_name=type_name,
-            css_class=css_class,
-            tooltip=tooltip,
+            css_class=CSS_DTYPE_EXTENSION if is_extension else CSS_DTYPE_UNKNOWN,
+            tooltip="\n".join(tooltip_parts),
             warnings=warnings,
             preview_html=preview_html,
             is_serializable=is_serial,
@@ -704,7 +620,12 @@ class FormatterRegistry:
     - Registering new formatters at runtime
     - Priority-based formatter selection
     - Graceful fallback for unknown types
-    - Thread-safe operation
+
+    Registering a formatter whose class has the same module and qualified name
+    as an already registered one replaces it, so re-running a notebook cell
+    that defines a formatter does not stack duplicates.
+    Mutations replace the formatter list instead of modifying it in place, so a
+    repr being rendered concurrently keeps iterating over a consistent snapshot.
     """
 
     def __init__(self) -> None:
@@ -717,23 +638,33 @@ class FormatterRegistry:
         Register a type formatter.
 
         Formatters are checked in priority order (highest first).
+        A previously registered formatter of the same class is replaced.
         """
-        self._type_formatters.append(formatter)
-        # Keep sorted by priority (highest first)
-        self._type_formatters.sort(key=lambda f: -f.priority)
+        key = _class_key(type(formatter))
+        others = [f for f in self._type_formatters if _class_key(type(f)) != key]
+        self._type_formatters = sorted([*others, formatter], key=lambda f: -f.priority)
 
     def register_section_formatter(self, formatter: SectionFormatter) -> None:
         """Register a section formatter for all its section_names."""
         for name in formatter.section_names:
             self._section_formatters[name] = formatter
 
-    def unregister_type_formatter(self, formatter: TypeFormatter) -> bool:
-        """Unregister a type formatter. Returns True if found and removed."""
-        try:
-            self._type_formatters.remove(formatter)
-            return True
-        except ValueError:
-            return False
+    def unregister_type_formatter(
+        self, formatter: TypeFormatter | type[TypeFormatter]
+    ) -> bool:
+        """Unregister a type formatter (instance or class). Returns True if removed."""
+        if isinstance(formatter, type):
+            key = _class_key(formatter)
+            remaining = [f for f in self._type_formatters if _class_key(type(f)) != key]
+        else:
+            remaining = [f for f in self._type_formatters if f is not formatter]
+        removed = len(remaining) != len(self._type_formatters)
+        self._type_formatters = remaining
+        return removed
+
+    def unregister_section_formatter(self, section_name: str) -> bool:
+        """Unregister the section formatter for ``section_name``. Returns True if removed."""
+        return self._section_formatters.pop(section_name, None) is not None
 
     def format_value(self, obj: object, context: FormatterContext) -> FormattedOutput:
         """
@@ -914,6 +845,11 @@ class FormatterRegistry:
         ]
 
 
+def _class_key(cls: type) -> tuple[str, str]:
+    """Identify a formatter class across re-definitions (e.g. re-run notebook cells)."""
+    return cls.__module__, cls.__qualname__
+
+
 # Global registry instance
 formatter_registry = FormatterRegistry()
 
@@ -1014,37 +950,36 @@ def extract_uns_type_hint(value: object) -> tuple[str | None, object]:
 
 
 @overload
-def register_formatter[F: TypeFormatter | SectionFormatter](
-    formatter: type[F],
+def register_formatter[F: type[TypeFormatter | SectionFormatter]](
+    formatter: F,
 ) -> F: ...
 @overload
 def register_formatter[F: TypeFormatter | SectionFormatter](formatter: F) -> F: ...
 def register_formatter(
     formatter: TypeFormatter | SectionFormatter | type,
-) -> TypeFormatter | SectionFormatter:
+) -> TypeFormatter | SectionFormatter | type:
     """
     Register a formatter with the global registry.
 
-    Can be used as a decorator:
+    Can be used as a class decorator (the class is instantiated without
+    arguments and the class itself is returned):
 
         @register_formatter
         class MyFormatter(TypeFormatter):
             ...
 
-    Or called directly:
+    Or called with an instance (the instance is returned):
 
         register_formatter(MyFormatter())
     """
-    if isinstance(formatter, type):
-        # Called with class, instantiate it
-        formatter = formatter()
+    instance = formatter() if isinstance(formatter, type) else formatter
 
-    if isinstance(formatter, TypeFormatter):
-        formatter_registry.register_type_formatter(formatter)
-    elif isinstance(formatter, SectionFormatter):
-        formatter_registry.register_section_formatter(formatter)
+    if isinstance(instance, TypeFormatter):
+        formatter_registry.register_type_formatter(instance)
+    elif isinstance(instance, SectionFormatter):
+        formatter_registry.register_section_formatter(instance)
     else:
-        msg = f"Expected TypeFormatter or SectionFormatter, got {type(formatter)}"
+        msg = f"Expected TypeFormatter or SectionFormatter, got {type(instance)}"
         raise TypeError(msg)
 
     return formatter

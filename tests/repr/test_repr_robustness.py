@@ -1225,12 +1225,12 @@ class TestErrorVisibility:
 
     def test_section_error_truncation_shows_ellipsis(self, validate_html) -> None:
         """Section rendering errors with long messages should show '...' truncation."""
-        from anndata._repr.sections import _render_error_entry
+        from anndata._repr.core import render_error_section
 
         # Create a very long error message (>200 chars)
         long_error = "X" * 300
 
-        html = _render_error_entry("test_section", long_error)
+        html = render_error_section("test_section", long_error)
 
         # Should be truncated with "..."
         assert "..." in html, "Truncated error should show '...' indicator"

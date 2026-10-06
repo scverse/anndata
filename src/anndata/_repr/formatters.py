@@ -21,7 +21,9 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 
+from .._core.anndata import AnnData
 from .._repr_constants import (
     COLOR_PREVIEW_LIMIT,
     CSS_COLORS,
@@ -44,24 +46,25 @@ from .._repr_constants import (
     CSS_DTYPE_UNKNOWN,
     CSS_NESTED_ANNDATA,
     CSS_TEXT_MUTED,
+    DF_COLUMNS_PREVIEW_LIMIT,
 )
-from ..compat import has_xp
+from .._settings import settings
+from ..abc import CSCDataset, CSRDataset
+from ..compat import AwkArray, CupySparseMatrix, DaskArray, has_xp_base
 from .components import render_category_list
-from .lazy import get_lazy_categorical_info, is_lazy_column
+from .lazy import _get_categorical_array, get_lazy_categorical_info, is_lazy_column
 from .registry import (
     FormattedOutput,
     TypeFormatter,
     formatter_registry,
 )
 from .utils import (
-    check_color_category_mismatch,
-    check_invalid_colors,
+    count_invalid_colors,
     escape_html,
     format_invalid_colors_warning,
     format_number,
     get_categories_for_display,
-    get_matching_column_colors,
-    get_setting,
+    get_column_colors,
     is_color_list,
     is_serializable,
     preview_dict,
@@ -242,92 +245,28 @@ class NumpyMaskedArrayFormatter(TypeFormatter[np.ma.MaskedArray]):
 
 
 class SparseMatrixFormatter(TypeFormatter[object]):
-    """
-    Formatter for scipy.sparse matrices and arrays.
-
-    Future-proofing notes:
-    - PR #1927 (https://github.com/scverse/anndata/pull/1927) removes scipy sparse inheritance
-    - Uses duck typing as fallback to detect sparse-like objects without relying on isinstance()
-    - Handles both scipy.sparse (CPU) and cupyx.scipy.sparse (GPU) sparse arrays
-    """
+    """Formatter for scipy.sparse (CPU) and cupyx.scipy.sparse (GPU) matrices and arrays."""
 
     priority = 100
 
     def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        # First try scipy.sparse.issparse() if available (backward compatibility)
-        try:
-            import scipy.sparse as sp
+        return sp.issparse(obj) or isinstance(obj, CupySparseMatrix)
 
-            if sp.issparse(obj):
-                return True
-        except ImportError:
-            pass
-
-        # Fallback: Duck typing for sparse-like objects
-        # Future-proof against PR #1927 removing scipy sparse inheritance
-        # A sparse object should have: nnz (non-zero count), shape, dtype, and sparse conversion methods
-        module = type(obj).__module__
-        is_sparse_module = module.startswith(("scipy.sparse", "cupyx.scipy.sparse"))
-        has_sparse_attrs = (
-            hasattr(obj, "nnz")
-            and hasattr(obj, "shape")
-            and hasattr(obj, "dtype")
-            and (hasattr(obj, "tocsr") or hasattr(obj, "tocsc"))
-        )
-
-        return is_sparse_module and has_sparse_attrs
-
-    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:  # noqa: PLR0912
-        # Duck-typed: can_format() guarantees shape/dtype/nnz attrs
+    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
+        # can_format() guarantees a (scipy or cupyx) sparse matrix/array
         shape_str = " × ".join(format_number(s) for s in obj.shape)  # type: ignore[attr-defined]
         dtype_str = str(obj.dtype)  # type: ignore[attr-defined]
+        nnz_formatted = format_number(obj.nnz)  # type: ignore[attr-defined]
+        # Use the storage format rather than the class name, so subclasses
+        # (e.g. anndata's sparse views) read as e.g. "csr_matrix"
+        kind = "array" if isinstance(obj, sp.sparray) else "matrix"
+        format_name = f"{obj.format}_{kind}"  # type: ignore[attr-defined]
 
-        # Calculate sparsity
-        n_elements = obj.shape[0] * obj.shape[1] if len(obj.shape) == 2 else 1  # type: ignore[attr-defined]
+        type_name = f"{format_name} ({shape_str}) {dtype_str}"
+        n_elements = obj.shape[0] * obj.shape[1] if len(obj.shape) == 2 else 0  # type: ignore[attr-defined]
         if n_elements > 0:
             sparsity = 1 - (obj.nnz / n_elements)  # type: ignore[attr-defined]
-            sparsity_str = f"{sparsity:.1%} sparse"
-        else:
-            sparsity_str = ""
-
-        # Determine format name
-        # Try scipy-specific checks first (backward compatibility)
-        format_name = None
-        try:
-            import scipy.sparse as sp
-
-            if sp.isspmatrix_csr(obj):
-                format_name = "csr_matrix"
-            elif sp.isspmatrix_csc(obj):
-                format_name = "csc_matrix"
-            elif sp.isspmatrix_coo(obj):
-                format_name = "coo_matrix"
-            elif sp.isspmatrix_lil(obj):
-                format_name = "lil_matrix"
-            elif sp.isspmatrix_dok(obj):
-                format_name = "dok_matrix"
-            elif sp.isspmatrix_dia(obj):
-                format_name = "dia_matrix"
-            elif sp.isspmatrix_bsr(obj):
-                format_name = "bsr_matrix"
-        except (ImportError, TypeError):
-            # ImportError: scipy not available
-            # TypeError: isspmatrix_* functions may fail on new sparse array types (PR #1927)
-            pass
-
-        # Fallback: Use type name (works for new sparse array classes like csr_array, csc_array)
-        if format_name is None:
-            format_name = type(obj).__name__
-
-        # Build type_name with sparsity info inline
-        nnz_formatted = format_number(obj.nnz)  # type: ignore[attr-defined]
-        if sparsity_str:
-            type_name = (
-                f"{format_name} ({shape_str}) {dtype_str} · "
-                f"{sparsity_str} ({nnz_formatted} stored)"
-            )
-        else:
-            type_name = f"{format_name} ({shape_str}) {dtype_str}"
+            type_name += f" · {sparsity:.1%} sparse ({nnz_formatted} stored)"
 
         return FormattedOutput(
             type_name=type_name,
@@ -337,8 +276,8 @@ class SparseMatrixFormatter(TypeFormatter[object]):
         )
 
 
-class BackedSparseDatasetFormatter(TypeFormatter[object]):
-    """Formatter for anndata's backed sparse datasets (_CSRDataset, _CSCDataset).
+class BackedSparseDatasetFormatter(TypeFormatter[CSRDataset | CSCDataset]):
+    """Formatter for anndata's backed sparse datasets (CSRDataset, CSCDataset).
 
     These are HDF5/Zarr-backed sparse matrices that stay on disk.
     Only metadata (shape, dtype, format) is read — no data is loaded.
@@ -346,21 +285,17 @@ class BackedSparseDatasetFormatter(TypeFormatter[object]):
 
     priority = 110  # Higher than SparseMatrixFormatter to check first
 
-    def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        # Check for anndata's backed sparse dataset classes
-        module = type(obj).__module__
-        return module.startswith("anndata._core.sparse_dataset") and hasattr(
-            obj, "format"
-        )
+    def can_format(
+        self, obj: object, context: FormatterContext
+    ) -> TypeGuard[CSRDataset | CSCDataset]:
+        return isinstance(obj, CSRDataset | CSCDataset)
 
-    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
-        # Duck-typed: can_format() guarantees shape/dtype attrs
-        shape_str = " × ".join(format_number(s) for s in obj.shape)  # type: ignore[attr-defined]
-        dtype_str = str(obj.dtype)  # type: ignore[attr-defined]
-        format_name = getattr(obj, "format", "sparse")
-
+    def format(
+        self, obj: CSRDataset | CSCDataset, context: FormatterContext
+    ) -> FormattedOutput:
+        shape_str = " × ".join(format_number(s) for s in obj.shape)
         return FormattedOutput(
-            type_name=f"{format_name}_matrix ({shape_str}) {dtype_str} · on disk",
+            type_name=f"{obj.format}_matrix ({shape_str}) {obj.dtype} · on disk",
             css_class=CSS_DTYPE_SPARSE,
             tooltip="Backed sparse matrix (data stays on disk)",
             is_serializable=True,
@@ -391,17 +326,20 @@ class DataFrameFormatter(TypeFormatter[pd.DataFrame]):
     def format(self, obj: pd.DataFrame, context: FormatterContext) -> FormattedOutput:
         df = obj
         n_rows, n_cols = len(df), len(df.columns)
-        cols = list(df.columns)
+        cols = df.columns
 
         # Build preview_html with column list for obsm/varm sections
         # Uses anndata-columns class for CSS truncation and JS wrap button
         preview_html = None
         if n_cols > 0 and context.section in ("obsm", "varm"):
-            col_str = ", ".join(escape_html(str(c)) for c in cols)
+            shown = cols[:DF_COLUMNS_PREVIEW_LIMIT]
+            col_str = ", ".join(escape_html(str(c)) for c in shown)
+            if n_cols > len(shown):
+                col_str += f", …+{format_number(n_cols - len(shown))}"
             preview_html = f'<span class="anndata-columns">[{col_str}]</span>'
 
         # Check if expandable _repr_html_ is enabled
-        expand_dataframes = get_setting("repr_html_dataframe_expand", default=False)
+        expand_dataframes = settings.repr_html_dataframe_expand
 
         expanded_html = None
         if expand_dataframes and n_rows > 0 and n_cols > 0:
@@ -494,19 +432,10 @@ class CategoricalFormatter(TypeFormatter[pd.Categorical | pd.Series]):
         # pandas Series with categorical dtype
         if isinstance(obj, pd.Series) and hasattr(obj, "cat"):
             return True
-        # Check for lazy categorical (CategoricalArray) without accessing dtype
-        # which would trigger loading
-        try:
-            from anndata.experimental.backed._lazy_arrays import CategoricalArray
-
-            if hasattr(obj, "variable") and hasattr(obj.variable, "_data"):
-                lazy_indexed = obj.variable._data
-                if hasattr(lazy_indexed, "array") and isinstance(
-                    lazy_indexed.array, CategoricalArray
-                ):
-                    return True
-        except ImportError:
-            pass
+        # Lazy categorical (CategoricalArray): checked without accessing dtype,
+        # which would load all categories
+        if _get_categorical_array(obj) is not None:
+            return True
         # Fallback: xarray DataArray with categorical dtype (will load data)
         return (
             hasattr(obj, "dtype")
@@ -542,6 +471,15 @@ class CategoricalFormatter(TypeFormatter[pd.Categorical | pd.Series]):
             else f"category ({n_categories})"
         )
 
+        # Colors from uns["{key}_colors"]: read once, only the displayed head
+        colors = None
+        if context.adata_ref is not None and context.key is not None:
+            colors = get_column_colors(
+                context.adata_ref,  # type: ignore[arg-type]
+                context.key,
+                limit=context.max_categories,
+            )
+
         # Build preview_html with category list and colors
         preview_html = None
         error = None
@@ -561,29 +499,16 @@ class CategoricalFormatter(TypeFormatter[pd.Categorical | pd.Series]):
                             f'<span class="{CSS_TEXT_MUTED}">(categories)</span>'
                         )
                 else:
-                    # Get colors for categories
-                    colors = None
-                    if context.adata_ref is not None:
-                        max_cats = context.max_categories
-                        n_cats_to_show = min(len(categories), max_cats)
-                        # For lazy with truncation, only load colors we need
-                        color_limit = (
-                            n_cats_to_show if (is_lazy and was_truncated) else None
-                        )
-                        colors = get_matching_column_colors(
-                            context.adata_ref,  # type: ignore[arg-type]
-                            context.key,
-                            limit=color_limit,
-                        )
-
-                    # Render category list with colors
                     n_hidden = (
                         (n_total - len(categories))
                         if (n_total and was_truncated)
                         else 0
                     )
                     preview_html = render_category_list(
-                        categories, colors, context.max_categories, n_hidden=n_hidden
+                        categories,
+                        colors.head if colors is not None else None,
+                        context.max_categories,
+                        n_hidden=n_hidden,
                     )
             except Exception as e:  # noqa: BLE001
                 # Never let preview generation crash the repr
@@ -592,25 +517,19 @@ class CategoricalFormatter(TypeFormatter[pd.Categorical | pd.Series]):
 
         # Check for color warnings
         warnings = []
-        if context.adata_ref is not None and context.key is not None:
-            # Check for color count mismatch
-            if n_categories > 0:
-                color_warning = check_color_category_mismatch(
-                    context.adata_ref,  # type: ignore[arg-type]
-                    context.key,
-                    n_categories,
+        if colors is not None:
+            if n_categories > 0 and colors.n_total != n_categories:
+                warnings.append(
+                    f"Color mismatch: {colors.n_total} colors "
+                    f"for {n_categories} categories"
                 )
-                if color_warning:
-                    warnings.append(color_warning)
-            # Check for invalid/unsafe colors (limited to previewed categories)
-            invalid_warning = check_invalid_colors(
-                context.adata_ref,  # type: ignore[arg-type]
-                context.key,
-                limit=context.max_categories,
-                n_total=n_categories,
-            )
-            if invalid_warning:
-                warnings.append(invalid_warning)
+            # Invalid/unsafe colors (only the loaded, i.e. previewed, ones are checked)
+            if invalid_count := count_invalid_colors(colors.head):
+                warnings.append(
+                    format_invalid_colors_warning(
+                        invalid_count, has_more=colors.n_total > len(colors.head)
+                    )
+                )
 
         return FormattedOutput(
             type_name=type_name,
@@ -690,12 +609,8 @@ class DaskArrayFormatter(TypeFormatter[object]):
     priority = 120
 
     def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        try:
-            import dask.array as da
-
-            return isinstance(obj, da.Array)
-        except ImportError:
-            return False
+        # compat.DaskArray is a placeholder class when dask is not installed
+        return isinstance(obj, DaskArray)
 
     def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         # Duck-typed: can_format() verifies isinstance(obj, dask.array.Array)
@@ -734,7 +649,8 @@ class AwkwardArrayFormatter(TypeFormatter[object]):
     priority = 120
 
     def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        return type(obj).__module__.startswith("awkward")
+        # compat.AwkArray is a placeholder class when awkward is not installed
+        return isinstance(obj, AwkArray)
 
     def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
         # Duck-typed: can_format() verifies module starts with "awkward"
@@ -762,8 +678,9 @@ class ArrayAPIFormatter(TypeFormatter[object]):
 
     Detection strategy (two tiers):
 
-    1. :func:`~anndata.compat.has_xp` — canonical check for arrays implementing the
-       `Array API standard <https://data-apis.org/array-api/latest/>`_ (e.g. JAX, CuPy).
+    1. :func:`~anndata.compat.has_xp_base` — the check anndata itself uses to accept
+       arrays implementing the `Array API standard <https://data-apis.org/array-api/latest/>`_
+       (e.g. JAX, CuPy), including ones that cannot export via DLPack.
     2. Duck-typing fallback — catches arrays with ``shape``/``dtype``/``ndim`` that do
        not (yet) implement the full protocol (e.g. PyTorch tensors, TensorFlow tensors).
 
@@ -808,8 +725,8 @@ class ArrayAPIFormatter(TypeFormatter[object]):
         return CSS_DTYPE_ARRAY_API
 
     def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        # Tier 1: full Array API protocol (JAX, CuPy ≥12, numpy ≥2.0, …)
-        if has_xp(obj):
+        # Tier 1: Array API protocol (JAX, CuPy ≥12, numpy ≥2.0, …)
+        if has_xp_base(obj):
             # numpy has its own formatter
             return not isinstance(obj, np.ndarray)
 
@@ -873,18 +790,16 @@ class ArrayAPIFormatter(TypeFormatter[object]):
         )
 
 
-class AnnDataFormatter(TypeFormatter[object]):
-    """Formatter for nested AnnData objects."""
+class AnnDataFormatter(TypeFormatter[AnnData]):
+    """Formatter for nested AnnData objects (including subclasses)."""
 
     priority = 150
 
-    def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[object]:
-        # Check by class name to avoid circular imports
-        return type(obj).__name__ == "AnnData" and hasattr(obj, "n_obs")
+    def can_format(self, obj: object, context: FormatterContext) -> TypeGuard[AnnData]:
+        return isinstance(obj, AnnData)
 
-    def format(self, obj: object, context: FormatterContext) -> FormattedOutput:
-        # Duck-typed: can_format() checks class name + n_obs attr (avoids circular import)
-        shape_str = f"{format_number(obj.n_obs)} × {format_number(obj.n_vars)}"  # type: ignore[attr-defined]
+    def format(self, obj: AnnData, context: FormatterContext) -> FormattedOutput:
+        shape_str = f"{format_number(obj.n_obs)} × {format_number(obj.n_vars)}"
 
         # Generate expanded HTML if within depth limit
         expanded_html = None
@@ -892,17 +807,21 @@ class AnnDataFormatter(TypeFormatter[object]):
             # Lazy import to avoid circular dependency
             from .html import generate_repr_html
 
+            # Nested reprs inherit the caller's limits (incl. explicit overrides)
             nested_html = generate_repr_html(
-                obj,  # type: ignore[arg-type]
+                obj,
                 depth=context.depth + 1,
                 max_depth=context.max_depth,
+                fold_threshold=context.fold_threshold,
+                max_items=context.max_items,
+                max_lazy_categories=context.max_lazy_categories,
                 show_header=True,
                 show_search=False,
             )
             expanded_html = f'<div class="{CSS_NESTED_ANNDATA}">{nested_html}</div>'
 
         return FormattedOutput(
-            type_name=f"AnnData ({shape_str})",
+            type_name=f"{type(obj).__name__} ({shape_str})",
             css_class=CSS_DTYPE_ANNDATA,
             tooltip="Nested AnnData object",
             expanded_html=expanded_html,

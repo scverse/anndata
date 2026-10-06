@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import html
 import re
-from typing import TYPE_CHECKING, cast
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -26,8 +24,11 @@ from .._repr_constants import (
     LIST_PREVIEW_ITEMS,
     STRING_INLINE_LIMIT,
 )
+from .._settings import settings
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     import pandas as pd
 
     from anndata import AnnData
@@ -62,6 +63,18 @@ def _check_serializable_single(obj: object) -> tuple[bool, str]:
         False,
         f"Type '{type(obj).__module__}.{type(obj).__name__}' has no registered writer",
     )
+
+
+_SERIALIZABLE_FAST_PATH_MIN_LEN = 1000
+
+
+def _is_plain_array(seq: list | tuple) -> bool:
+    """Whether ``seq`` converts to a numeric/bool/string numpy array (no objects)."""
+    try:
+        return np.asarray(seq).dtype.kind in "biufcUS"
+    except Exception:  # noqa: BLE001
+        # e.g. ragged nested lists
+        return False
 
 
 def is_serializable(
@@ -101,10 +114,15 @@ def is_serializable(
         return True, ""
 
     if isinstance(obj, (list, tuple)):
-        for i, v in enumerate(obj):
-            ok, reason = is_serializable(v, _depth=_depth + 1, _max_depth=_max_depth)
-            if not ok:
-                return False, f"Index {i}: {reason}"
+        # Fast path: long lists of scalars become a plain numpy array on write,
+        # so one vectorized dtype check replaces walking millions of elements.
+        if len(obj) <= _SERIALIZABLE_FAST_PATH_MIN_LEN or not _is_plain_array(obj):
+            for i, v in enumerate(obj):
+                ok, reason = is_serializable(
+                    v, _depth=_depth + 1, _max_depth=_max_depth
+                )
+                if not ok:
+                    return False, f"Index {i}: {reason}"
         return True, ""
 
     return _check_serializable_single(obj)
@@ -317,91 +335,65 @@ def get_categories_for_display(
     return categories, False, len(categories) if categories else None
 
 
-def _compute_if_dask(obj: object) -> object:
+@dataclass(frozen=True)
+class ColumnColors:
+    """Colors stored for a categorical column in ``uns["{column}_colors"]``."""
+
+    n_total: int
+    """Number of colors stored."""
+
+    head: list[str]
+    """The first (up to ``limit``) colors, as strings."""
+
+
+def get_column_colors(
+    adata: AnnData, column_name: str, *, limit: int
+) -> ColumnColors | None:
     """
-    Compute a dask array/object if it is one, otherwise return as-is.
+    Read the colors for a categorical column from ``uns``, if there are any.
 
-    For lazy AnnData, uns values may be dask arrays that need to be
-    computed to get the actual values.
-    """
-    if hasattr(obj, "compute"):
-        return obj.compute()
-    return obj
-
-
-def get_matching_column_colors(
-    adata: AnnData,
-    column_name: str,
-    *,
-    limit: int | None = None,
-) -> list[str] | None:
-    """
-    Get colors for a column from uns if they exist.
-
-    This function is called by CategoricalFormatter which already verified
-    the column is categorical. It just looks up and returns the colors.
-    Color count validation is done separately by check_color_category_mismatch.
+    Only the first ``limit`` colors are materialized: for lazy AnnData the
+    color array is a dask array, so this reads just the displayed part.
 
     Parameters
     ----------
     adata
-        AnnData object
+        AnnData object (or object with ``.uns``; objects without return None)
     column_name
-        Name of the column to get colors for
+        Name of the column (colors key will be ``"{column_name}_colors"``)
     limit
-        If provided, only load the first `limit` colors. This avoids loading
-        all colors from disk when only displaying partial categories.
+        Maximum number of colors to load
 
     Returns
     -------
-    List of color strings if colors exist, None otherwise
+    The color count and the first ``limit`` colors, or None if there are no
+    colors or they are not a sequence.
     """
-    colors = _get_colors_from_uns(adata, column_name, limit=limit)
-    return [str(c) for c in colors] if colors is not None else None
-
-
-def check_color_category_mismatch(
-    adata: AnnData,
-    column_name: str,
-    n_categories: int,
-) -> str | None:
-    """
-    Check if colors exist but don't match category count.
-
-    Called by _render_dataframe_entry for categorical columns. The caller
-    already knows this is categorical and has the category count.
-
-    Parameters
-    ----------
-    adata
-        AnnData object (or object with .uns attribute)
-    column_name
-        Name of the column to check
-    n_categories
-        Number of categories in the column
-
-    Returns
-    -------
-    Warning message if mismatch, None otherwise
-    """
-    colors = _get_colors_from_uns(adata, column_name)
-    if colors is None:
+    try:
+        uns = adata.uns
+        color_key = f"{column_name}_colors"
+        if color_key not in uns:
+            return None
+        colors = uns[color_key]
+        if isinstance(colors, str | bytes) or not hasattr(colors, "__len__"):
+            return None
+        head = colors[:limit]
+        if hasattr(head, "compute"):  # dask (lazy AnnData)
+            head = head.compute()
+        return ColumnColors(n_total=len(colors), head=[str(c) for c in head])
+    except Exception:  # noqa: BLE001
+        # Missing/broken uns or an unsliceable value: treat as "no colors"
         return None
 
-    if len(colors) != n_categories:
-        return f"Color mismatch: {len(colors)} colors for {n_categories} categories"
 
-    return None
-
-
-def count_invalid_colors(colors: Sequence) -> int:
+def count_invalid_colors(colors: Iterable[object]) -> int:
     """
     Count colors that fail sanitization.
 
     Parameters
     ----------
     colors
-        Sequence of color values to check
+        Color values to check
 
     Returns
     -------
@@ -428,84 +420,6 @@ def format_invalid_colors_warning(invalid_count: int, *, has_more: bool = False)
     suffix = "+" if has_more else ""
     s = "s" if invalid_count > 1 else ""
     return f"{invalid_count}{suffix} invalid color{s}"
-
-
-def check_invalid_colors(
-    adata: AnnData,
-    column_name: str,
-    limit: int | None = None,
-    n_total: int | None = None,
-) -> str | None:
-    """
-    Check if any colors in the color list are invalid or unsafe.
-
-    Called by CategoricalFormatter for categorical columns that have associated
-    colors in .uns.
-
-    Parameters
-    ----------
-    adata
-        AnnData object (or object with .uns attribute)
-    column_name
-        Name of the column to check
-    limit
-        If provided, only check the first `limit` colors (for lazy loading).
-    n_total
-        Total number of colors expected (e.g., n_categories). Used to determine
-        if there are unchecked colors beyond the limit.
-
-    Returns
-    -------
-    Warning message if invalid colors found, None otherwise
-    """
-    colors = _get_colors_from_uns(adata, column_name, limit=limit)
-    if colors is None:
-        return None
-
-    invalid_count = count_invalid_colors(colors)
-    if invalid_count == 0:
-        return None
-
-    has_more = n_total is not None and limit is not None and n_total > limit
-    return format_invalid_colors_warning(invalid_count, has_more=has_more)
-
-
-def _get_colors_from_uns(
-    adata: AnnData,
-    column_name: str,
-    limit: int | None = None,
-) -> Sequence[object] | None:
-    """Get colors from uns for a column, handling lazy loading.
-
-    Parameters
-    ----------
-    adata
-        AnnData object (or object with .uns attribute)
-    column_name
-        Name of the column (colors key will be "{column_name}_colors")
-    limit
-        If provided, only load the first `limit` colors (for dask arrays)
-
-    Returns
-    -------
-    Colors array/list if found, None otherwise
-    """
-    # Handle objects without .uns (e.g., Raw)
-    if not hasattr(adata, "uns"):
-        return None
-
-    color_key = f"{column_name}_colors"
-    if color_key not in adata.uns:
-        return None
-
-    colors = adata.uns[color_key]
-
-    # For lazy AnnData with dask arrays, slice before computing
-    if limit is not None and hasattr(colors, "compute"):
-        return cast("Sequence[object]", colors[:limit].compute())
-
-    # Compute if dask array (for lazy AnnData)
-    return cast("Sequence[object]", _compute_if_dask(colors))
 
 
 def format_index_preview(index: pd.Index, preview_n: int = 5) -> str:
@@ -556,24 +470,6 @@ def escape_html(text: str) -> str:
     with the Unicode replacement character U+FFFD.
     """
     return html.escape(str(text).replace("\x00", "\ufffd"))
-
-
-def sanitize_for_id(text: str) -> str:
-    """Sanitize a string for use as an HTML id attribute."""
-    # Replace non-alphanumeric chars with underscore
-    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", str(text))
-    # Ensure it starts with a letter
-    if sanitized and not sanitized[0].isalpha():
-        sanitized = "id_" + sanitized
-    return sanitized
-
-
-def truncate_string(text: str, max_length: int = 100) -> str:
-    """Truncate a string and add ellipsis if needed."""
-    text = str(text)
-    if len(text) <= max_length:
-        return text
-    return text[: max_length - 3] + "..."
 
 
 def format_memory_size(size_bytes: float) -> str:
@@ -771,47 +667,6 @@ def preview_item(value: object) -> str:
     return ""  # Empty string means skip
 
 
-def generate_value_preview(value: object, max_len: int = 100) -> str:
-    """Generate a human-readable preview of a value.
-
-    Returns empty string if no meaningful preview can be generated.
-    """
-    if value is None:
-        return "None"
-    if isinstance(value, str):
-        return preview_string(value, max_len)
-    if isinstance(value, (bool, int, float, np.integer, np.floating)):
-        return preview_number(value)
-    if isinstance(value, dict):
-        return preview_dict(value)
-    if isinstance(value, (list, tuple)):
-        return preview_sequence(value)
-    # No preview for complex types
-    return ""
-
-
-def get_setting[T](name: str, *, default: T) -> T:
-    """Get a setting value from anndata.settings, falling back to default.
-
-    Parameters
-    ----------
-    name
-        The setting name (e.g., "repr_html_max_items")
-    default
-        Default value if setting is not available
-
-    Returns
-    -------
-    The setting value or default
-    """
-    try:
-        from anndata import settings
-
-        return getattr(settings, name, default)
-    except (ImportError, AttributeError):
-        return default
-
-
 def validate_key(key: str) -> tuple[bool, str, bool]:
     """Check if a key name is valid for HDF5/Zarr serialization.
 
@@ -835,7 +690,7 @@ def validate_key(key: str) -> tuple[bool, str, bool]:
     if "/" in key:
         # Whether a slash aborts an h5ad write is user-configurable; mirror the
         # setting so the repr's severity matches what a write would actually do.
-        disallowed = bool(get_setting("disallow_forward_slash_in_h5ad", default=True))
+        disallowed = settings.disallow_forward_slash_in_h5ad
         reason = "Contains '/'" if disallowed else "Contains '/' (deprecated)"
         return False, reason, disallowed
     return True, "", False
