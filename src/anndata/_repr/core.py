@@ -419,7 +419,7 @@ def render_formatted_entry(
     type_cell_config = TypeCellConfig(
         type_name=output.type_name,
         css_class=output.css_class,
-        type_html=output.type_html if append_type_html else None,
+        type_html=output.type_html,
         tooltip=output.tooltip,
         warnings=all_warnings,
         is_not_serializable=not output.is_serializable,

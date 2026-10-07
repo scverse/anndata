@@ -1337,3 +1337,37 @@ class TestHeaderBadges:
         assert "H5AD (Open)" in html
         assert str(path) in html
         assert "data on disk not included" in html
+
+
+class TestTypeHtml:
+    """``FormattedOutput.type_html`` replaces or is appended to the type label."""
+
+    def test_type_html_replaces_type_name(self):
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            render_formatted_entry,
+        )
+
+        output = FormattedOutput(
+            type_name="plain-label", type_html='<b class="custom-type">rich</b>'
+        )
+        html = render_formatted_entry(FormattedEntry(key="k", output=output))
+        assert '<b class="custom-type">rich</b>' in html
+        assert "plain-label</span>" not in html
+
+    def test_type_html_appended_below_type_name(self):
+        from anndata._repr import (
+            FormattedEntry,
+            FormattedOutput,
+            render_formatted_entry,
+        )
+
+        output = FormattedOutput(
+            type_name="plain-label", type_html='<b class="custom-type">rich</b>'
+        )
+        html = render_formatted_entry(
+            FormattedEntry(key="k", output=output), append_type_html=True
+        )
+        assert '<b class="custom-type">rich</b>' in html
+        assert "plain-label" in html
