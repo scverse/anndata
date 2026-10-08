@@ -77,7 +77,7 @@ def read_excel(
     from pandas import read_excel
 
     df = read_excel(fspath(filename), sheet)
-    X = df.values[:, 1:]
+    X = df.to_numpy()[:, 1:]
     row = dict(
         row_names=pandas_as_str(df.iloc[:, 0])
         if settings.restrict_index_types
