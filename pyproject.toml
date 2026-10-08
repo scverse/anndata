@@ -213,6 +213,7 @@ lint.pylint.max-positional-args = 5
 "subprocess.check_call".msg = "Use `subprocess.run([…], check=True)` instead"
 "subprocess.check_output".msg = "Use `subprocess.run([…], check=True, capture_output=True)` instead"
 "warnings.warn".msg = "Use anndata.utils.warn instead"
+"dask.array.from_zarr".msg = "Use `from_array` instead to ensure chunks match shards"
 
 [tool.codespell]
 ignore-words-list = "theis,coo,homogenous,GroupT,scarches"

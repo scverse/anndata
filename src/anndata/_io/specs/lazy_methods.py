@@ -248,7 +248,7 @@ def read_zarr_array(
 ) -> DaskArray:
     import dask.array as da
 
-    return da.from_zarr(elem, chunks=chunks)
+    return da.from_array(elem, chunks=chunks)
 
 
 def _gen_xarray_dict_iterator_from_elems(

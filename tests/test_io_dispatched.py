@@ -66,7 +66,7 @@ def test_read_dispatched_dask():
             # Preventing recursing inside of these types
             return ad.io.read_elem(elem)
         elif iospec.encoding_type == "array":
-            return da.from_zarr(elem)
+            return da.from_array(elem)
         else:
             return func(elem)
 
