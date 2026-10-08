@@ -628,13 +628,17 @@ def write_basic_dask_dask_dense(
             and da.core._check_regular_chunks(elem.chunks)
         ):
             shards = tuple(max(int(c), 1) for c in elem.chunksize)
-            if not is_greater_than_one_hundred_mb(shards, elem.dtype):
-                warn(
-                    "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
-                    "This may result in a large number of files. Consider rechunking.",
-                    UserWarning,
-                )
-            chunks = try_create_one_mb_subchunks(shards, elem.dtype)
+            # without sharding, zarr chunks must still align with dask chunks
+            # so that no two dask tasks write to the same zarr chunk - chunks being None triggers that.
+            chunks = None
+            if ad.settings.auto_shard_zarr_v3:
+                if not is_greater_than_one_hundred_mb(shards, elem.dtype):
+                    warn(
+                        "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
+                        "This may result in a large number of files. Consider rechunking.",
+                        UserWarning,
+                    )
+                chunks = try_create_one_mb_subchunks(shards, elem.dtype)
             dataset_kwargs = {
                 **dataset_kwargs,
                 **(

@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from numpy.typing import NDArray
-    from zarr.storage import MemoryStore
 
 
 pytest.importorskip("dask.array")
@@ -418,6 +417,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
         "expected_chunks",
         "expected_shards",
         "expected_warnings",
+        "auto_shard",
     ),
     [
         pytest.param(
@@ -428,6 +428,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
             (500, 500),
             (9000, 3000),
             [],
+            True,
             id="zarr-subchunked",
         ),
         pytest.param(
@@ -437,6 +438,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
             (50, 100),
             (50, 100),
             [SMALL_SHARD_WARNING],
+            True,
             id="zarr-shard-under-1mb",
         ),
         pytest.param(
@@ -447,10 +449,21 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
             (997, 1009),
             None,
             [SMALL_SHARD_WARNING, NO_SUBCHUNK_WARNING],
+            True,
             id="zarr-no-good-divisor",
         ),
         pytest.param(
-            (2000, 2000), (1000, 2000), "h5ad", (1000, 2000), None, [], id="h5ad"
+            (2000, 2000),
+            (1000, 2000),
+            "zarr",
+            (1000, 2000),
+            None,
+            [],
+            False,
+            id="zarr-auto-shard-disabled",
+        ),
+        pytest.param(
+            (2000, 2000), (1000, 2000), "h5ad", (1000, 2000), None, [], True, id="h5ad"
         ),
     ],
 )
@@ -462,6 +475,7 @@ def test_dask_write_chunks_and_shards(
     expected_chunks: tuple[int, int],
     expected_shards: tuple[int, int] | None,
     expected_warnings: list[str],
+    auto_shard: bool,  # noqa: FBT001
 ) -> None:
     import dask.array as da
 
@@ -470,7 +484,8 @@ def test_dask_write_chunks_and_shards(
     with as_group(store, mode="w") as g:
         with warnings.catch_warnings(record=True) as record:
             warnings.simplefilter("always")
-            ad.io.write_elem(g, "X", X)
+            with ad.settings.override(auto_shard_zarr_v3=auto_shard):
+                ad.io.write_elem(g, "X", X)
         messages = [str(w.message) for w in record]
         assert len(messages) == len(expected_warnings), messages
         for pattern, message in zip(expected_warnings, messages, strict=True):
