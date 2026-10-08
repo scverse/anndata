@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import warnings
 from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager, nullcontext
@@ -138,6 +139,40 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         else nullcontext()
     ):
         yield dataset_kwargs
+
+
+def is_greater_than_one_hundred_mb(shape: tuple[int, ...], dtype: np.dtype) -> bool:
+    return math.prod(shape) * np.dtype(dtype).itemsize > 100_000_000
+
+
+def try_create_one_mb_subchunks(
+    shape: tuple[int, ...], dtype: np.dtype, target_bytes: int = 1_000_000
+) -> tuple[int, ...] | None:
+    """Inner chunk shape of at most ~`target_bytes` that evenly divides `shape` (the shard shape).
+
+    Repeatedly shrinks the currently longest axis to its next smaller divisor,
+    so inner chunks end up roughly balanced across axes.
+    Returns `None` (with a warning) if no divisor of `shape` gets reasonably close to `target_bytes`.
+    """
+    itemsize = np.dtype(dtype).itemsize
+    # shard shape must be a multiple of the inner chunk shape
+    divisors = [
+        {d for i in range(1, math.isqrt(n) + 1) if n % i == 0 for d in (i, n // i)}
+        for n in shape
+    ]
+    chunks = list(shape)
+    while math.prod(chunks) * itemsize > target_bytes and max(chunks) > 1:
+        i = chunks.index(max(chunks))
+        chunks[i] = max(d for d in divisors[i] if d < chunks[i])
+    if chunks != list(shape) and math.prod(chunks) * itemsize < target_bytes // 4:
+        warn(
+            f"Could not find inner chunks of ~{target_bytes} bytes evenly dividing "
+            f"the dask chunk shape {shape}. Writing each dask chunk as a single "
+            "unsharded zarr chunk instead. Consider rechunking.",
+            UserWarning,
+        )
+        return None
+    return tuple(chunks)
 
 
 def _to_cpu_mem_wrapper(write_func):
@@ -579,25 +614,36 @@ def write_basic_dask_dask_dense(
 
     dataset_kwargs = dict(dataset_kwargs)
 
-    if (
-        "shards" not in dataset_kwargs
-        and "chunks" not in dataset_kwargs
-        and da.core._check_regular_chunks(elem.chunks)
-    ):
-        # zarr requires min chunk size 1
-        min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
-        dataset_kwargs["chunks"] = tuple(
-            max(c[0], min_chunk_value) for c in elem.chunks
-        )
-
     if isinstance(f, h5py.Group):
+        if "chunks" not in dataset_kwargs and da.core._check_regular_chunks(
+            elem.chunks
+        ):
+            dataset_kwargs["chunks"] = tuple(c[0] for c in elem.chunks)
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        with zarr_v3_sharding(
-            dataset_kwargs, format=f.metadata.zarr_format
-        ) as dataset_kwargs:
-            g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        if (
+            "shards" not in dataset_kwargs
+            and "chunks" not in dataset_kwargs
+            and da.core._check_regular_chunks(elem.chunks)
+        ):
+            shards = tuple(max(int(c), 1) for c in elem.chunksize)
+            if not is_greater_than_one_hundred_mb(shards, elem.dtype):
+                warn(
+                    "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
+                    "This may result in a large number of files. Consider rechunking.",
+                    UserWarning,
+                )
+            chunks = try_create_one_mb_subchunks(shards, elem.dtype)
+            dataset_kwargs = {
+                **dataset_kwargs,
+                **(
+                    {"chunks": shards}
+                    if chunks is None
+                    else {"chunks": chunks, "shards": shards}
+                ),
+            }
+        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     # use threaded scheduler with dask<=2025.3.0 avoid "Could not serialize object of type HighLevelGraph" error
     if isinstance(f, h5py.Group) or Version(version("dask")) <= Version("2025.3.0"):
         da.store(elem, g, scheduler="threads")
