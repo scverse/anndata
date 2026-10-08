@@ -662,7 +662,8 @@ def test_write_categorical(
     assert isinstance(orig.obs, pd.DataFrame)
     assert isinstance(curr.obs, pd.DataFrame)
     assert np.all(orig.obs.notna() == curr.obs.notna())
-    assert np.all(orig.obs.stack().dropna() == curr.obs.stack().dropna())
+    for col in orig.obs:
+        assert orig.obs[col].dropna().tolist() == curr.obs[col].dropna().tolist()
     assert curr.obs["str"].dtype == ("category" if s2c else "string")
     assert curr.obs["cat"].dtype == "category"
 
