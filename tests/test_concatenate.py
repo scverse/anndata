@@ -298,7 +298,7 @@ def test_concatenate_dense():
     assert_equal(adata.layers["Xs"], X_combined)
     assert adata.obs.columns.tolist() == ["batch"]
     assert adata.var.columns.tolist() == ["annoA", "annoB"]
-    assert adata.var.values.tolist() == [[1, 2], [2, 1]]
+    assert adata.var.to_numpy().tolist() == [[1, 2], [2, 1]]
     assert adata.obsm.keys() == {"X_1", "X_2"}
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
@@ -320,7 +320,7 @@ def test_concatenate_dense():
         [np.nan, 6.0, 5.0, 4.0],
     ])
     np.testing.assert_equal(adata.X, X_ref)
-    var_ma = ma.masked_invalid(adata.var.values.tolist())
+    var_ma = ma.masked_invalid(adata.var.to_numpy().tolist())
     var_ma_ref = ma.masked_invalid(
         np.array([
             [0.0, np.nan],
@@ -1401,7 +1401,7 @@ def test_bool_promotion():
     result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
 
     assert pd.api.types.is_bool_dtype(result.obs["bool"])
-    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+    assert pd.isna(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
 
     # Check that promotion doesn't occur if it doesn't need to:
     np_bool_2 = AnnData(
@@ -1432,7 +1432,7 @@ def test_bool_promotion_alt_axis(tmp_path):
     result = concat([a, b], join="outer", merge="first")
 
     assert pd.api.types.is_bool_dtype(result.var["bool"])
-    assert pd.isnull(result.var.loc["g3", "bool"])
+    assert pd.isna(result.var.loc["g3", "bool"])
     result.write_h5ad(tmp_path / "result.h5ad")
 
 

@@ -379,7 +379,7 @@ def ensure_df_homogeneous(
         arr = pandas_sparse(df).to_coo().tocsr()
     else:
         arr = df.to_numpy()
-    if df.dtypes.nunique() != 1:
+    if df.dtypes.nunique() != 1:  # noqa: PD101
         msg = f"{name} converted to numpy array with dtype {arr.dtype}"
         warn(msg, UserWarning)
     return arr

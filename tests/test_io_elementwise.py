@@ -462,6 +462,49 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.fixture(params=["indices-data", "shape"])
+def bad_sparray(request: pytest.FixtureRequest):
+    m = sparse.random_array((100, 100), format="csr", density=0.1)
+    match request.param:
+        case "indices-data":
+            m.indices = np.zeros(len(m.indices) * 2, dtype=m.indices.dtype)
+        case "shape":
+            m._shape = (10**11, m.shape[1])  # type: ignore[attr-defined]
+        case _:
+            pytest.fail(f"Unknown matrix type: {request.param}")
+    return m
+
+
+def test_write_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.write_elem(f, "mtx", bad_sparray)
+
+
+def test_read_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+    x = f.create_group("mtx")
+    x.attrs["encoding-type"] = "csr_matrix"
+    x.attrs["encoding-version"] = "0.1.0"
+    x.attrs["shape"] = bad_sparray.shape
+    c = x.create_dataset if isinstance(x, h5py.Group) else x.create_array
+    c("data", data=bad_sparray.data)
+    c("indices", data=bad_sparray.indices)
+    c("indptr", data=bad_sparray.indptr)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.read_elem(f["mtx"])
+
+
 @pytest.mark.parametrize(
     ("num_minor_axis", "expected_dtype"),
     [
@@ -635,6 +678,9 @@ def test_write_io_error(store, obj):
 
 
 PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
+ALWAYS_INFER_STRING = pytest.mark.skipif(
+    PANDAS_3, reason="Can’t disable `future.infer_string` in pandas 3+."
+)
 
 
 @pytest.mark.parametrize(
@@ -649,6 +695,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
                 (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
                 "string-array",
                 id=f"off-explicit-{int(pd_ignored)}",
+                marks=() if pd_ignored else ALWAYS_INFER_STRING,
             )
             for pd_ignored in [False, True]
         ),
@@ -659,10 +706,17 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
             (RuntimeError, PAT_IMPLICIT),
             (RuntimeError, PAT_IMPLICIT),
             id="off-implicit",
+            marks=ALWAYS_INFER_STRING,
         ),
         # when enabled, we expect arrays to be written in the nullable format
         pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
-        pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
+        pytest.param(
+            True,
+            False,
+            *(["nullable-string-array"] * 2),
+            id="on-explicit-0",
+            marks=ALWAYS_INFER_STRING,
+        ),
         pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
     ],
 )
@@ -679,7 +733,11 @@ def test_write_nullable_string(
     expected = expected_missing if missing else expected_no_missing
     with (
         ad.settings.override(allow_write_nullable_strings=ad_setting),
-        pd.option_context("future.infer_string", pd_setting),
+        (  # `future.infer_string` defaults to True in pandas 3, and setting it is deprecated in pandas 3.1
+            nullcontext()
+            if PANDAS_3
+            else pd.option_context("future.infer_string", pd_setting)
+        ),
         (
             nullcontext()
             if isinstance(expected, str)

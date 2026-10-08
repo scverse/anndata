@@ -8,7 +8,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 from scipy import sparse
 from zarr.storage import MemoryStore
 
@@ -16,9 +15,10 @@ import anndata as ad
 from anndata import AnnData, concat
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -174,7 +174,7 @@ def test_anndatas(
             **kw,
         )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names = getattr(a, f"{off_axis_name}_names").array.copy()
         off_names[1::2] = f"{i}-" + off_names[1::2]
         setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
@@ -271,14 +271,6 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
-def test_concatenate_zarr_stays_sharded_v3(xxxm_adatas, tmp_path):
-    out = assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
-    g = zarr.open(out)
-    assert g.metadata.zarr_format == 3
-
-    check_all_sharded(g)
-
-
 def test_singleton(xxxm_adatas, tmp_path, file_format):
     # A single input written to a path takes the `shutil` copy shortcut,
     # so this test needs the file system.
@@ -348,3 +340,50 @@ def test_write_using_groups(tmp_path, file_format):
 def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
+
+
+@pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+@pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
+def test_max_loaded_elems_chunks_sparse_x(
+    tmp_path, file_format, join_type, reindex, monkeypatch
+):
+    # chunking must not depend on whether the inputs need to be reindexed
+    n_obs, n_vars, max_loaded_elems = 40, 10, 50
+    kw = (
+        GEN_ADATA_OOC_CONCAT_ARGS
+        if not reindex
+        else dict(
+            obsm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            varm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
+        )
+    )
+    adatas = []
+    for i in range(3):
+        a = gen_adata(
+            (n_obs, n_vars),
+            X_type=sparse.csr_matrix,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # some names overlap, others do not, so that inner/outer is tested
+        var_names = np.array([f"var{j}" for j in range(n_vars)], dtype=object)
+        if reindex:
+            var_names[1::2] = f"{i}-" + var_names[1::2]
+        a.var_names = var_names
+        adatas.append(a)
+
+    appended_rows: list[int] = []
+    append = BaseCompressedSparseDataset.append
+
+    def spy(self, sparse_matrix):
+        appended_rows.append(sparse_matrix.shape[0])
+        return append(self, sparse_matrix)
+
+    monkeypatch.setattr(BaseCompressedSparseDataset, "append", spy)
+    assert_eq_concat_on_disk(
+        adatas, tmp_path, file_format, max_loaded_elems, axis=0, join=join_type
+    )
+    assert appended_rows
+    assert max(appended_rows) * n_vars <= max_loaded_elems

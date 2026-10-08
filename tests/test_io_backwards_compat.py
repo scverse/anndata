@@ -38,8 +38,8 @@ def read_archive(
         return ad.read_h5ad(path), path
     if format == "zarr":
         path = archive_dir / "adata.zarr.zip"
-        store = zarr.storage.ZipStore(path)
-        return ad.read_zarr(store), path
+        with zarr.storage.ZipStore(path, mode="r") as store:
+            return ad.read_zarr(store), path
     pytest.fail(f"Unknown format: {format}")
 
 
