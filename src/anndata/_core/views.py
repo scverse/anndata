@@ -149,7 +149,7 @@ class ArrayView(_SetItemMixin, np.ndarray):
         *inputs,
         out: tuple[np.ndarray, ...] | None = None,
         **kwargs,
-    ) -> np.ndarray | tuple[np.ndarray, ...]:
+    ) -> np.ndarray | np.generic | tuple[np.ndarray | np.generic, ...] | None:
         """Makes numpy ufuncs convert all instances of views to plain arrays.
 
         See https://numpy.org/devdocs/user/basics.subclassing.html#array-ufunc-for-ufuncs
@@ -167,17 +167,21 @@ class ArrayView(_SetItemMixin, np.ndarray):
         else:
             out = tuple(convert_all(out))
             outputs = out
+            kwargs["out"] = out
 
-        results = super().__array_ufunc__(
-            ufunc, method, *convert_all(inputs), out=out, **kwargs
-        )
-        if results is NotImplemented:
-            return NotImplemented
+        results = super().__array_ufunc__(ufunc, method, *convert_all(inputs), **kwargs)
+        if results is NotImplemented or results is None:
+            return results
 
         if ufunc.nout == 1:
             results = (results,)
+        # Strip array subclasses without turning NumPy scalars into 0-D arrays.
         results = tuple(
-            (np.asarray(result) if output is None else output)
+            np.asarray(result) if isinstance(result, np.ndarray) else result
+            for result in results
+        )
+        results = tuple(
+            (result if output is None else output)
             for result, output in zip(results, outputs, strict=True)
         )
         return results[0] if len(results) == 1 else results

@@ -746,6 +746,54 @@ def test_negative_scalar_index(*, adata, index: int, obs: bool):
     )
 
 
+@pytest.mark.parametrize(
+    "func", [np.nanmin, np.nanmax, np.sum, np.prod, np.any, np.all]
+)
+@pytest.mark.parametrize("axis", [None, 0])
+@pytest.mark.parametrize("keepdims", [False, True])
+def test_array_view_reduction_result(func, axis, *, keepdims: bool):
+    adata = ad.AnnData(np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
+    view = adata[:2]
+    expected = func(np.asarray(view.X), axis=axis, keepdims=keepdims)
+    actual = func(view.X, axis=axis, keepdims=keepdims)
+
+    assert type(actual) is type(expected)
+    np.testing.assert_array_equal(actual, expected)
+    assert view.is_view
+    np.testing.assert_array_equal(adata.X, [[1, 2], [3, 4], [5, 6]])
+
+
+def test_array_view_ufunc_at_return():
+    array = ArrayView(np.array([1.0, 2.0]))
+    result = np.add.at(array, [0, 0], 2)
+
+    assert result is None
+    np.testing.assert_array_equal(array, [5, 2])
+
+
+@pytest.mark.parametrize("shape", [(), (1,)])
+def test_array_view_ufunc_multiple_outputs(shape):
+    array = np.array([1.5]).reshape(shape)
+    expected = np.modf(array)
+    actual = np.modf(ArrayView(array))
+
+    for actual_part, expected_part in zip(actual, expected, strict=True):
+        assert type(actual_part) is type(expected_part)
+        np.testing.assert_array_equal(actual_part, expected_part)
+
+
+def test_array_view_ufunc_out():
+    array = ArrayView(np.array([1.5, 2.5]))
+    out = np.empty(())
+    assert np.add.reduce(array, out=out) is out
+    assert out == 4
+    integer = np.empty(2)
+    fractional, actual_integer = np.modf(array, out=(None, integer))
+    assert actual_integer is integer
+    np.testing.assert_array_equal(fractional, [0.5, 0.5])
+    np.testing.assert_array_equal(integer, [1, 2])
+
+
 def test_viewness_propagation_nan():
     """Regression test for https://github.com/scverse/anndata/issues/239"""
     adata = ad.AnnData(np.random.random((10, 10)))
