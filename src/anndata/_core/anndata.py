@@ -37,7 +37,6 @@ from ..compat import (
     has_xp,
     old_positionals,
     pandas_as_str,
-    pandas_no_chained_assignment_warning,
 )
 from ..logging import anndata_logger as logger
 from ..utils import (
@@ -71,7 +70,7 @@ from .index import (
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
-from .views import DictView, _resolve_idxs, as_view
+from .views import DictView, _resolve_idxs, as_view, remove_unused_categories
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -1124,8 +1123,7 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            with pandas_no_chained_assignment_warning():
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            remove_unused_categories(df_sub, k)
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
@@ -1605,15 +1603,9 @@ class AnnData:  # noqa: PLW1641
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self) -> None:
-        if (
-            settings.restrict_index_types
-            and self.obs.index[self.obs.index.notna()].has_duplicates
-        ):
+        if settings.restrict_index_types and _has_duplicates(self.obs.index):
             utils.warn_names_duplicates("obs")
-        if (
-            settings.restrict_index_types
-            and self.var.index[self.var.index.notna()].has_duplicates
-        ):
+        if settings.restrict_index_types and _has_duplicates(self.var.index):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
@@ -2032,3 +2024,11 @@ def _infer_shape(
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
     return a[subset_idx]
+
+
+def _has_duplicates(index: pd.Index) -> bool:
+    # `has_duplicates` is cached on the index (and passed on to slices of it),
+    # so only build a new index if there are missing values to exclude
+    if index.hasnans:
+        index = index[index.notna()]
+    return index.has_duplicates
