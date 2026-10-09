@@ -93,7 +93,7 @@ def write_h5ad(
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
-            _check_has_no_slash_key(k, elem)
+            _check_has_no_slash_key(k, elem, compat=compat)
 
             if k == "raw":
                 if adata.raw is not None:
