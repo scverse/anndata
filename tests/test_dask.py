@@ -4,12 +4,17 @@ For tests using dask
 
 from __future__ import annotations
 
+import re
+import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._core.anndata import AnnData
@@ -35,7 +40,6 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from numpy.typing import NDArray
-    from zarr.storage import MemoryStore
 
 
 pytest.importorskip("dask.array")
@@ -407,3 +411,102 @@ def test_to_memory_copy_raw():
     assert isinstance(with_raw.raw.varm["da"], DaskArray)
     assert isinstance(curr.raw.X, np.ndarray)
     assert isinstance(curr.raw.varm["da"], np.ndarray)
+
+
+SMALL_SHARD_WARNING = r"dask chunk size is less than 100MB"
+NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
+
+
+@pytest.mark.parametrize(
+    (
+        "shape",
+        "dask_chunks",
+        "diskfmt",
+        "expected_chunks",
+        "expected_shards",
+        "expected_warnings",
+        "auto_shard",
+    ),
+    [
+        pytest.param(
+            # two >100MB shards, the last one partial
+            (12000, 3000),
+            (9000, 3000),
+            "zarr",
+            (500, 500),
+            (9000, 3000),
+            [],
+            True,
+            id="zarr-subchunked",
+        ),
+        pytest.param(
+            (100, 100),
+            (50, 100),
+            "zarr",
+            (50, 100),
+            (50, 100),
+            [SMALL_SHARD_WARNING],
+            True,
+            id="zarr-shard-under-1mb",
+        ),
+        pytest.param(
+            # both axes prime, so the only divisors are 1 and the axis itself
+            (1994, 1009),
+            (997, 1009),
+            "zarr",
+            (997, 1009),
+            None,
+            [SMALL_SHARD_WARNING, NO_SUBCHUNK_WARNING],
+            True,
+            id="zarr-no-good-divisor",
+        ),
+        pytest.param(
+            (2000, 2000),
+            (1000, 2000),
+            "zarr",
+            (1000, 2000),
+            None,
+            [],
+            False,
+            id="zarr-auto-shard-disabled",
+        ),
+        pytest.param(
+            (2000, 2000), (1000, 2000), "h5ad", (1000, 2000), None, [], True, id="h5ad"
+        ),
+    ],
+)
+def test_dask_chunks_and_shards_roundtrip(
+    tmp_path: Path,
+    shape: tuple[int, int],
+    dask_chunks: tuple[int, int],
+    diskfmt: Literal["h5ad", "zarr"],
+    expected_chunks: tuple[int, int],
+    expected_shards: tuple[int, int] | None,
+    expected_warnings: list[str],
+    auto_shard: bool,  # noqa: FBT001
+) -> None:
+    import dask.array as da
+
+    X = da.zeros(shape, chunks=dask_chunks, dtype=np.float32)
+    store = tmp_path / "test.h5ad" if diskfmt == "h5ad" else MemoryStore()
+    with as_group(store, mode="w") as g:
+        with warnings.catch_warnings(record=True) as record:
+            warnings.simplefilter("always")
+            with ad.settings.override(auto_shard_zarr_v3=auto_shard):
+                ad.io.write_elem(g, "X", X)
+        messages = [str(w.message) for w in record]
+        assert len(messages) == len(expected_warnings), messages
+        for pattern, message in zip(expected_warnings, messages, strict=True):
+            assert re.search(pattern, message), message
+        arr = g["X"]
+        assert isinstance(arr, zarr.Array | h5py.Dataset)
+        assert arr.chunks == expected_chunks
+        assert getattr(arr, "shards", None) == expected_shards
+    with as_group(store, mode="r") as g:
+        dask_array = cast("da.Array", ad.experimental.read_elem_lazy(g["X"]))
+        expected_dask_chunks = (
+            expected_chunks if expected_shards is None else expected_shards
+        )
+        assert dask_array.chunksize == expected_dask_chunks, (
+            f"{dask_array.chunksize} != {expected_dask_chunks} for {type(arr)}"
+        )

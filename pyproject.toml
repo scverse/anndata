@@ -162,7 +162,10 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
-    "ignore:.*first_column_names:FutureWarning:scanpy",                           # scanpy 1.10.x
+    # Test cases regularly use small dask arrays but these are usually not formed in practice.
+    "ignore:Auto-sharding is enabled, but the dask chunk size is less than 100MB: UserWarning",
+    # scanpy 1.10.x
+    "ignore:.*first_column_names:FutureWarning:scanpy",
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
     "ignore:`__version__` is deprecated:FutureWarning:scanpy",
     # https://github.com/matplotlib/matplotlib/pull/30589
