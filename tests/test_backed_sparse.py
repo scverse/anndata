@@ -743,7 +743,9 @@ def test_append_overflow_check(group_fn, sparse_class, tmp_path):
 @pytest.mark.parametrize("fmt", ["csr", "csc"])
 @pytest.mark.parametrize("idx_dtype", [np.uint16, np.uint32, np.int16])
 def test_compact_index_dtype(tmp_path, fmt: Literal["csr", "csc"], idx_dtype):
-    mtx = sparse.random(50, 300, density=0.2, format=fmt, dtype=np.float32, random_state=0)
+    mtx = sparse.random(
+        50, 300, density=0.2, format=fmt, dtype=np.float32, random_state=0
+    )
     g = zarr.open_group(tmp_path / "test.zarr", mode="w")
     ad.io.write_elem(g, "X", mtx)
     x_group = g["X"]
@@ -771,7 +773,9 @@ def test_compact_index_dtype(tmp_path, fmt: Literal["csr", "csc"], idx_dtype):
 
 @pytest.mark.parametrize("fmt", ["csr", "csc"])
 def test_read_elem_lazy_sparse_meta(tmp_path, fmt: Literal["csr", "csc"]):
-    mtx = sparse.random(50, 30, density=0.2, format=fmt, dtype=np.float32, random_state=0)
+    mtx = sparse.random(
+        50, 30, density=0.2, format=fmt, dtype=np.float32, random_state=0
+    )
     g = zarr.open_group(tmp_path / "test.zarr", mode="w")
     ad.io.write_elem(g, "X", mtx)
     array_cls = getattr(sparse, f"{fmt}_array")
@@ -795,7 +799,9 @@ def test_read_elem_lazy_sparse_meta(tmp_path, fmt: Literal["csr", "csc"]):
 def test_read_elem_lazy_sparse_meta_gpu(tmp_path):
     import cupyx.scipy.sparse as cpx
 
-    mtx = sparse.random(50, 30, density=0.2, format="csr", dtype=np.float32, random_state=0)
+    mtx = sparse.random(
+        50, 30, density=0.2, format="csr", dtype=np.float32, random_state=0
+    )
     g = zarr.open_group(tmp_path / "test.zarr", mode="w")
     ad.io.write_elem(g, "X", mtx)
     with zarr.config.enable_gpu():
