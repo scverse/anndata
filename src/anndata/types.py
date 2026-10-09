@@ -91,5 +91,5 @@ def __getattr__(key: str):
             raise AttributeError(msg)
 
 
-type WriteCompatStr = Literal["0.13"]
+type WriteCompatStr = Literal["0.13", "0.14"]
 """The values of :class:`~anndata.WriteCompat`, which write functions also accept."""
