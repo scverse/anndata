@@ -248,6 +248,12 @@ def read_zarr_array(
 ) -> DaskArray:
     import dask.array as da
 
+    if chunks is None:
+        if hasattr(elem, "shards") and (elem.shards is not None):
+            chunks = elem.shards
+        else:
+            chunks = elem.chunks
+
     return da.from_zarr(elem, chunks=chunks)
 
 

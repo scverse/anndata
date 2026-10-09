@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import h5py
 import numpy as np
@@ -467,7 +467,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
         ),
     ],
 )
-def test_dask_write_chunks_and_shards(
+def test_dask_chunks_and_shards_roundtrip(
     tmp_path: Path,
     shape: tuple[int, int],
     dask_chunks: tuple[int, int],
@@ -494,3 +494,11 @@ def test_dask_write_chunks_and_shards(
         assert isinstance(arr, zarr.Array | h5py.Dataset)
         assert arr.chunks == expected_chunks
         assert getattr(arr, "shards", None) == expected_shards
+    with as_group(store, mode="r") as g:
+        dask_array = cast("da.Array", ad.experimental.read_elem_lazy(g["X"]))
+        expected_dask_chunks = (
+            expected_chunks if expected_shards is None else expected_shards
+        )
+        assert dask_array.chunksize == expected_dask_chunks, (
+            f"{dask_array.chunksize} != {expected_dask_chunks} for {type(arr)}"
+        )
