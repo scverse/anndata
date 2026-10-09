@@ -13,6 +13,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
+from anndata._core.sparse_dataset import is_gpu
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ..._types import StorageType
-    from ...compat import CSArray, CSMatrix
+    from ...compat import CSArray, CSMatrix, CupyCSMatrix
     from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
@@ -134,6 +135,7 @@ def read_sparse_as_dask(
     _reader: LazyReader,
     # the reader registry fixes this signature; only `tuple[int, int]` is accepted
     chunks: tuple[int | None, ...] | None = None,
+    meta: CSMatrix | CSArray | CupyCSMatrix | None = None,
 ) -> DaskArray:
     import dask.array as da
 
@@ -143,6 +145,10 @@ def read_sparse_as_dask(
         dtype = elem["data"].dtype
     else:
         path_or_sparse_dataset = ad.io.sparse_dataset(elem, should_cache_indptr=False)
+        # Open the arrays once here so they are shipped to the tasks with their (fast) codec pipeline
+        # instead of being reopened in every task (where the pipeline choice would race across threads).
+        for attr in ("_data", "_indices", "_indptr"):
+            getattr(path_or_sparse_dataset, attr)
         dtype = path_or_sparse_dataset.dtype
     elem_name = get_elem_name(elem)
     attrs: Mapping[str, Any] = elem.attrs
@@ -170,15 +176,36 @@ def read_sparse_as_dask(
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
-    memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
     da_mtx = da.map_blocks(
         make_chunk,
         dtype=dtype,
         chunks=chunk_layout,
-        meta=memory_format((0, 0), dtype=dtype),
+        meta=_sparse_meta(meta, is_csc=is_csc, dtype=dtype),
     )
     return da_mtx
+
+
+def _sparse_meta(
+    meta: CSMatrix | CSArray | CupyCSMatrix | None, *, is_csc: bool, dtype: np.dtype
+) -> CSMatrix | CSArray | CupyCSMatrix:
+    """An empty matrix of the type the blocks will have.
+
+    Defaults to a :mod:`cupyx` matrix if :mod:`zarr` reads into GPU memory (:func:`zarr.config.enable_gpu`),
+    and to a :mod:`scipy` matrix otherwise.
+    """
+    fmt = "csc" if is_csc else "csr"
+    if meta is None:
+        if is_gpu():
+            import cupyx.scipy.sparse as cpx
+
+            return getattr(cpx, f"{fmt}_matrix")((0, 0), dtype=dtype)
+        return getattr(sparse, f"{fmt}_matrix")((0, 0), dtype=dtype)
+    if getattr(meta, "format", None) != fmt:
+        msg = f"`meta` must be a {fmt.upper()} matrix like the stored one, got {type(meta).__name__}."
+        raise ValueError(msg)
+    # only the type matters: the dtype is the stored one
+    return type(meta)((0, 0), dtype=dtype)
 
 
 def resolve_chunks(

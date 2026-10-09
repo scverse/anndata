@@ -738,3 +738,76 @@ def test_append_overflow_check(group_fn, sparse_class, tmp_path):
 
     # Check for any modification
     assert_equal(backed, orig_mtx)
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc"])
+@pytest.mark.parametrize("idx_dtype", [np.uint16, np.uint32, np.int16])
+def test_compact_index_dtype(tmp_path, fmt: Literal["csr", "csc"], idx_dtype):
+    mtx = sparse.random(
+        50, 300, density=0.2, format=fmt, dtype=np.float32, random_state=0
+    )
+    g = zarr.open_group(tmp_path / "test.zarr", mode="w")
+    ad.io.write_elem(g, "X", mtx)
+    x_group = g["X"]
+    assert isinstance(x_group, zarr.Group)
+    indices = x_group["indices"]
+    assert isinstance(indices, zarr.Array)
+    compact = np.asarray(indices[...]).astype(idx_dtype)
+    del x_group["indices"]
+    x_group.create_array("indices", data=compact)
+    X = sparse_dataset(x_group)
+
+    # scipy (and cuSPARSE) only work with signed 32/64 bit indices
+    in_memory = X.to_memory()
+    assert in_memory.indices.dtype in {np.dtype(np.int32), np.dtype(np.int64)}
+    assert_equal(in_memory, mtx)
+    assert_equal(
+        X[3:40] if fmt == "csr" else X[:, 3:40],
+        mtx[3:40] if fmt == "csr" else mtx[:, 3:40],
+    )
+    idx = np.array([1, 7, 30])
+    assert_equal(
+        X[idx] if fmt == "csr" else X[:, idx], mtx[idx] if fmt == "csr" else mtx[:, idx]
+    )
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc"])
+def test_read_elem_lazy_sparse_meta(tmp_path, fmt: Literal["csr", "csc"]):
+    mtx = sparse.random(
+        50, 30, density=0.2, format=fmt, dtype=np.float32, random_state=0
+    )
+    g = zarr.open_group(tmp_path / "test.zarr", mode="w")
+    ad.io.write_elem(g, "X", mtx)
+    array_cls = getattr(sparse, f"{fmt}_array")
+
+    default = read_elem_lazy(g["X"])
+    assert isinstance(default, DaskArray)
+    assert type(default._meta) is type(mtx)
+    # only the type of `meta` is used, the dtype is the stored one
+    lazy = read_elem_lazy(g["X"], meta=array_cls((0, 0), dtype=np.int8))
+    assert isinstance(lazy, DaskArray)
+    assert type(lazy._meta) is array_cls
+    assert lazy._meta.dtype == np.float32
+    assert_equal(lazy.compute(), mtx)
+
+    other = "csc" if fmt == "csr" else "csr"
+    with pytest.raises(ValueError, match=rf"must be a {fmt.upper()} matrix"):
+        read_elem_lazy(g["X"], meta=getattr(sparse, f"{other}_matrix")((0, 0)))
+
+
+@pytest.mark.gpu
+def test_read_elem_lazy_sparse_meta_gpu(tmp_path):
+    import cupyx.scipy.sparse as cpx
+
+    mtx = sparse.random(
+        50, 30, density=0.2, format="csr", dtype=np.float32, random_state=0
+    )
+    g = zarr.open_group(tmp_path / "test.zarr", mode="w")
+    ad.io.write_elem(g, "X", mtx)
+    with zarr.config.enable_gpu():
+        lazy = read_elem_lazy(g["X"], chunks=(20, -1))
+        # zarr reads into GPU memory here, so the chunks are and are declared as cupyx matrices
+        assert isinstance(lazy._meta, cpx.csr_matrix)
+        blocks = lazy.to_delayed().ravel()
+        assert all(isinstance(b.compute(), cpx.csr_matrix) for b in blocks)
+        assert_equal(lazy.compute().get(), mtx)

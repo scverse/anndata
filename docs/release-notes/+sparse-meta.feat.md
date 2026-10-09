@@ -1,0 +1,1 @@
+Added a `meta` argument to {func}`~anndata.experimental.read_elem_lazy` for sparse matrices to declare the type of the chunks, e.g. {class}`cupyx.scipy.sparse.csr_matrix` when Dask workers read into GPU memory, which is also the default when {mod}`zarr` reads into GPU memory (`zarr.config.enable_gpu()`) {user}`Intron7`
