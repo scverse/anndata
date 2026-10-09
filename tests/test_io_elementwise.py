@@ -38,7 +38,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Literal
 
@@ -462,6 +462,49 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.fixture(params=["indices-data", "shape"])
+def bad_sparray(request: pytest.FixtureRequest):
+    m = sparse.random_array((100, 100), format="csr", density=0.1)
+    match request.param:
+        case "indices-data":
+            m.indices = np.zeros(len(m.indices) * 2, dtype=m.indices.dtype)
+        case "shape":
+            m._shape = (10**11, m.shape[1])  # type: ignore[attr-defined]
+        case _:
+            pytest.fail(f"Unknown matrix type: {request.param}")
+    return m
+
+
+def test_write_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.write_elem(f, "mtx", bad_sparray)
+
+
+def test_read_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+    x = f.create_group("mtx")
+    x.attrs["encoding-type"] = "csr_matrix"
+    x.attrs["encoding-version"] = "0.1.0"
+    x.attrs["shape"] = bad_sparray.shape
+    c = x.create_dataset if isinstance(x, h5py.Group) else x.create_array
+    c("data", data=bad_sparray.data)
+    c("indices", data=bad_sparray.indices)
+    c("indptr", data=bad_sparray.indptr)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.read_elem(f["mtx"])
+
+
 @pytest.mark.parametrize(
     ("num_minor_axis", "expected_dtype"),
     [
@@ -882,8 +925,16 @@ def test_read_sparse_array(
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
-    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
-    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+    [
+        ((1,), lambda s: (1,)),
+        ((-1,), lambda s: (120,)),
+        (None, lambda s: s.chunks if isinstance(s, h5py.Dataset) else s.shards),
+    ],
+    ids=[
+        "small",
+        "minus_one_uses_full",
+        "none_uses_ondisk_sharding_if_zarr_else_chunks",
+    ],
 )
 @pytest.mark.parametrize(
     "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
@@ -892,33 +943,35 @@ def test_chunking_1d_array(
     store: h5py.Group | zarr.Group,
     arr: np.ndarray,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int]],
 ):
     write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
     lazy_arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert isinstance(lazy_arr, DaskArray)
-    assert lazy_arr.chunksize == expected_chunks
+    assert lazy_arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
     [
-        ((1, 50), (1, 50)),
-        ((10, -1), (10, 50)),
-        ((10, None), (10, 50)),
-        (None, (25, 25)),
+        ((1, 50), lambda s: (1, 50)),
+        ((10, -1), lambda s: (10, 50)),
+        ((10, None), lambda s: (10, 50)),
+        (None, lambda s: s.chunks if isinstance(s, h5py.Dataset) else s.shards),
     ],
     ids=[
         "small",
         "minus_one_uses_full",
         "none_on_axis_uses_full",
-        "none_uses_ondisk_chunking",
+        "none_uses_ondisk_sharding_if_zarr_else_chunks",
     ],
 )
 def test_chunking_2d_array(
     store: h5py.Group | zarr.Group,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int, int]],
 ):
     write_elem(
         store,
@@ -928,7 +981,9 @@ def test_chunking_2d_array(
     )
     arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert isinstance(arr, DaskArray)
-    assert arr.chunksize == expected_chunks
+    assert arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(

@@ -614,11 +614,15 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
             indptr=self._indptr,
             shape=self.shape,
         )
-        mtx = backed_class.memory_format(self.shape, dtype=self.dtype)
-        mtx.data = _read_dense(self._data, ...)
-        mtx.indices = _read_dense(self._indices, ...)
-        mtx.indptr = _read_dense(self._indptr, ...)
-        return mtx
+        return backed_class.memory_format(
+            (
+                _read_dense(self._data, ...),
+                _read_dense(self._indices, ...),
+                _read_dense(self._indptr, ...),
+            ),
+            shape=self.shape,
+            dtype=self.dtype,
+        )
 
 
 class _CSRDataset(BaseCompressedSparseDataset, abc.CSRDataset):

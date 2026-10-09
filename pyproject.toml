@@ -162,6 +162,7 @@ lint.select = [
     "I",    # isort
     "ICN",  # Follow import conventions
     "ISC",  # Implicit string concatenation
+    "PD",   # pandas
     "PERF", # Performance
     "PIE",  # Syntax simplifications
     "PL",   # Pylint
@@ -275,6 +276,8 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
+    # Test cases regularly use small dask arrays but these are usually not formed in practice.
+    "ignore:Auto-sharding is enabled, but the dask chunk size is less than 100MB: UserWarning",
     # scanpy 1.10.x
     "ignore:.*first_column_names:FutureWarning:scanpy",
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",

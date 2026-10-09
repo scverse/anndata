@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import warnings
 from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager, nullcontext
@@ -138,6 +139,40 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         else nullcontext()
     ):
         yield dataset_kwargs
+
+
+def is_greater_than_one_hundred_mb(shape: tuple[int, ...], dtype: np.dtype) -> bool:
+    return math.prod(shape) * np.dtype(dtype).itemsize > 100_000_000
+
+
+def try_create_one_mb_subchunks(
+    shape: tuple[int, ...], dtype: np.dtype, target_bytes: int = 1_000_000
+) -> tuple[int, ...] | None:
+    """Inner chunk shape of at most ~`target_bytes` that evenly divides `shape` (the shard shape).
+
+    Repeatedly shrinks the currently longest axis to its next smaller divisor,
+    so inner chunks end up roughly balanced across axes.
+    Returns `None` (with a warning) if no divisor of `shape` gets reasonably close to `target_bytes`.
+    """
+    itemsize = np.dtype(dtype).itemsize
+    # shard shape must be a multiple of the inner chunk shape
+    divisors = [
+        {d for i in range(1, math.isqrt(n) + 1) if n % i == 0 for d in (i, n // i)}
+        for n in shape
+    ]
+    chunks = list(shape)
+    while math.prod(chunks) * itemsize > target_bytes and max(chunks) > 1:
+        i = chunks.index(max(chunks))
+        chunks[i] = max(d for d in divisors[i] if d < chunks[i])
+    if chunks != list(shape) and math.prod(chunks) * itemsize < target_bytes // 4:
+        warn(
+            f"Could not find inner chunks of ~{target_bytes} bytes evenly dividing "
+            f"the dask chunk shape {shape}. Writing each dask chunk as a single "
+            "unsharded zarr chunk instead. Consider rechunking.",
+            UserWarning,
+        )
+        return None
+    return tuple(chunks)
 
 
 def _to_cpu_mem_wrapper(write_func):
@@ -579,21 +614,39 @@ def write_basic_dask_dask_dense(
 
     dataset_kwargs = dict(dataset_kwargs)
 
-    if (
-        "shards" not in dataset_kwargs
-        and "chunks" not in dataset_kwargs
-        and da.core._check_regular_chunks(elem.chunks)
-    ):
-        # zarr requires min chunk size 1
-        min_chunk_value = 0 if isinstance(f, h5py.Group) else 1
-        dataset_kwargs["chunks"] = tuple(
-            max(c[0], min_chunk_value) for c in elem.chunks
-        )
-
     if isinstance(f, h5py.Group):
+        if "chunks" not in dataset_kwargs and da.core._check_regular_chunks(
+            elem.chunks
+        ):
+            dataset_kwargs["chunks"] = tuple(c[0] for c in elem.chunks)
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        if (
+            "shards" not in dataset_kwargs
+            and "chunks" not in dataset_kwargs
+            and da.core._check_regular_chunks(elem.chunks)
+        ):
+            dask_chunks = tuple(max(int(c), 1) for c in elem.chunksize)
+            # without sharding, zarr chunks must still align with dask chunks
+            # so that no two dask tasks write to the same zarr chunk - chunks being None triggers that.
+            zarr_chunks = None
+            if ad.settings.auto_shard_zarr_v3:
+                if not is_greater_than_one_hundred_mb(dask_chunks, elem.dtype):
+                    warn(
+                        "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
+                        "This may result in a large number of files. Consider rechunking.",
+                        UserWarning,
+                    )
+                zarr_chunks = try_create_one_mb_subchunks(dask_chunks, elem.dtype)
+            dataset_kwargs = {
+                **dataset_kwargs,
+                **(
+                    {"chunks": dask_chunks}
+                    if zarr_chunks is None
+                    else {"chunks": zarr_chunks, "shards": dask_chunks}
+                ),
+            }
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     # use threaded scheduler with dask<=2025.3.0 avoid "Could not serialize object of type HighLevelGraph" error
     if isinstance(f, h5py.Group) or Version(version("dask")) <= Version("2025.3.0"):
@@ -775,15 +828,23 @@ def write_recarray_zarr(
 #################
 
 
-def write_sparse_compressed(
+@suppress_autoshard_warning
+def write_cs(
     f: _GroupStorageType,
     key: str,
     value: CSMatrix | CSArray | BackedSparseMatrix,
     *,
     _writer: Writer,
-    fmt: Literal["csr", "csc"],
     dataset_kwargs=MappingProxyType({}),
-):
+) -> None:
+    if value.indptr.shape[0] != value.shape[0 if value.format == "csr" else 1] + 1:
+        maj = "row" if value.format == "csr" else "column"
+        msg = f"Corrupt sparse array: the number of {maj}s does not match the index pointer size."
+        raise ValueError(msg)
+    if value.indices.shape != value.data.shape:
+        msg = "Corrupt sparse array: indices and data should have the same size."
+        raise ValueError(msg)
+
     g: _GroupStorageType = f.require_group(key)
     g.attrs["shape"] = value.shape
     dataset_kwargs = dict(dataset_kwargs)
@@ -830,34 +891,31 @@ def write_sparse_compressed(
             arr[...] = attr[...]
 
 
-write_csr = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csr"))
-write_csc = suppress_autoshard_warning(partial(write_sparse_compressed, fmt="csc"))
-
 for store_type, (cls, spec, func) in product(
     _STORE_TYPES,
     [
         # spmatrix
-        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_cs),
+        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_cs),
         # sparray
-        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_cs),
+        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_cs),
         # cupy spmatrix
-        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_cs)),
         (
             views.CupySparseCSRView,
             IOSpec("csr_matrix", "0.1.0"),
-            _to_cpu_mem_wrapper(write_csr),
+            _to_cpu_mem_wrapper(write_cs),
         ),
-        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csc)),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_cs)),
         (
             views.CupySparseCSCView,
             IOSpec("csc_matrix", "0.1.0"),
-            _to_cpu_mem_wrapper(write_csc),
+            _to_cpu_mem_wrapper(write_cs),
         ),
     ],
 ):
@@ -868,7 +926,6 @@ for store_type, (cls, spec, func) in product(
 @_REGISTRY.register_write(h5py.Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_write(zarr.Group, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_write(zarr.Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
-@suppress_autoshard_warning
 def write_sparse_dataset(
     f: _GroupStorageType,
     k: str,
@@ -877,14 +934,7 @@ def write_sparse_dataset(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    write_sparse_compressed(
-        f,
-        k,
-        elem._to_backed(),
-        _writer=_writer,
-        fmt=elem.format,
-        dataset_kwargs=dataset_kwargs,
-    )
+    write_cs(f, k, elem._to_backed(), _writer=_writer, dataset_kwargs=dataset_kwargs)
 
 
 def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
@@ -1438,13 +1488,15 @@ def write_hdf5_scalar(
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-for numeric_scalar_type in [
+_NUMERIC_SCALAR_TYPES: list[type] = [
     *(bool, np.bool_),
     *(np.uint8, np.uint16, np.uint32, np.uint64),
     *(int, np.int8, np.int16, np.int32, np.int64),
-    *(float, *np.floating.__subclasses__()),
+    float,
+    *np.floating.__subclasses__(),
     *np.complexfloating.__subclasses__(),
-]:
+]
+for numeric_scalar_type in _NUMERIC_SCALAR_TYPES:
     _REGISTRY.register_write(
         h5py.Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
     )(write_hdf5_scalar)
