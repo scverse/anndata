@@ -442,17 +442,19 @@ def test_subset_unchunked_axis_blockwise(fmt, index):
     np.testing.assert_array_equal(result.toarray() if fmt else result, expected)
 
 
-@pytest.mark.parametrize("index", ["bool", "int", "empty"])
+@pytest.mark.parametrize("index", ["bool", "int", "empty", "negative"])
 def test_subset_chunked_axis(index):
     import dask.array as da
 
     x = np.arange(40 * 3, dtype=np.float32).reshape(40, 3)
     adata = AnnData(da.from_array(x, chunks=(10, -1)))
     mask = np.isin(np.arange(40), [] if index == "empty" else [3, 5, 25, 26])
-    sub = adata[np.flatnonzero(mask) if index == "int" else mask].X
-    # every chunk keeps its own selected items, chunks without any are dropped
-    assert sub.chunks[0] == ((0,) if index == "empty" else (2, 2))
-    np.testing.assert_array_equal(sub.compute(), x[mask])
+    idx = {"bool": mask, "negative": np.array([-1, 0])}.get(index, np.flatnonzero(mask))
+    sub = adata[idx].X
+    np.testing.assert_array_equal(sub.compute(), x[idx])
+    if index != "negative":
+        # every chunk keeps its own selected items, chunks without any are dropped
+        assert sub.chunks[0] == ((0,) if index == "empty" else (2, 2))
 
 
 SMALL_SHARD_WARNING = r"dask chunk size is less than 100MB"
