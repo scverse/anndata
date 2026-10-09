@@ -494,7 +494,7 @@ def _subset_chunked_axis(
     sel = (slice(None),) * axis + (idx,)
     if idx.dtype == bool:
         mask = idx
-    elif np.all(idx[1:] > idx[:-1]):
+    elif (idx[:1] >= 0).all() and np.all(idx[1:] > idx[:-1]):  # increasing positions
         mask = np.zeros(a.shape[axis], dtype=bool)
         mask[idx] = True
     else:
