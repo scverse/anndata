@@ -481,7 +481,7 @@ def _subset_dask_axis(
 
 
 def _subset_chunked_axis(
-    a: DaskArray, idx: NumpyIdx1D, *, axis: Literal[0, 1]
+    a: DaskArray, idx: NDArray[np.bool_] | NDArray[np.integer], *, axis: Literal[0, 1]
 ) -> DaskArray:
     """Subset an axis split into several chunks, keeping every chunk’s own selected items.
 
@@ -491,21 +491,26 @@ def _subset_chunked_axis(
     """
     import dask.array as da
 
+    sel = (slice(None),) * axis + (idx,)
     if idx.dtype == bool:
         mask = idx
     elif np.all(idx[1:] > idx[:-1]):
         mask = np.zeros(a.shape[axis], dtype=bool)
         mask[idx] = True
     else:
-        return a[(slice(None),) * axis + (idx,)]
+        return a[sel]
     bounds = np.cumsum((0, *a.chunks[axis]))
-    counts = np.diff(np.concatenate(([0], np.cumsum(mask)))[bounds])
+    selected = np.zeros(len(mask) + 1, dtype=np.intp)
+    np.cumsum(mask, out=selected[1:])
+    counts = np.diff(selected[bounds])
     blocks = np.flatnonzero(counts)
+    if not len(blocks):  # nothing selected: an axis needs at least one (empty) chunk
+        return a[sel]
     if len(blocks) < len(counts):
         # chunks without selected items are not read at all (only then: the extra layer
         # keeps dask from fusing each chunk’s read and subset into one task)
         a = a.blocks[(slice(None),) * axis + (blocks,)]
-        mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks] or [mask[:0]])
+        mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks])
     ind = "ij"[: a.ndim]
     return da.blockwise(
         partial(_getitem_chunk_mask, axis=axis),
