@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     import sys
-    from typing import Any, Literal, Self
+    from typing import Any, Self
 
     from array_api.latest import ArrayNamespace
 
@@ -12,6 +12,9 @@ if TYPE_CHECKING:
         from types import CapsuleType
     else:
         from typing_extensions import CapsuleType
+
+
+__all__ = ["SupportsArrayApi", "SupportsArrayApiBase", "WriteCompatStr"]
 
 
 @runtime_checkable
@@ -86,3 +89,7 @@ def __getattr__(key: str):
         case _:
             msg = f"types has no attribute {key!r}"
             raise AttributeError(msg)
+
+
+type WriteCompatStr = Literal["0.13"]
+"""The values of :class:`~anndata.WriteCompat`, which write functions also accept."""
