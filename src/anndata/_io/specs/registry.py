@@ -464,8 +464,8 @@ def read_elem_lazy(
        Sparse matrices only: an (empty) matrix of the type the chunks will have,
        e.g. a :class:`cupyx.scipy.sparse.csr_matrix` when :mod:`zarr` reads into GPU memory on the Dask workers.
        Only its type is used.
-       Defaults to :mod:`cupyx` if :mod:`zarr` reads into GPU memory in this process
-       (see :func:`zarr.config.enable_gpu`), and to :mod:`scipy` otherwise.
+       Defaults to :mod:`cupyx.scipy.sparse` if :mod:`zarr` reads into GPU memory in this process
+       (see ``zarr.config.enable_gpu()``), and to :mod:`scipy` otherwise.
 
     Returns
     -------
