@@ -10,6 +10,7 @@ See {doc}`/release-notes/index`.
 :maxdepth: 1
 
 tutorials/index
+guides/index
 api
 fileformat-prose
 interoperability
