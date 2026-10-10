@@ -25,7 +25,7 @@ from ..compat import (
     _from_fixed_length_strings,
 )
 from ..experimental import read_dispatched
-from ..utils import iter_outer, warn
+from ..utils import iter_outer, warn, warn_convert_strings_to_categoricals
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
 from .utils import (
@@ -72,6 +72,7 @@ def write_h5ad(
         raise ValueError(msg)
 
     if convert_strings_to_categoricals:
+        warn_convert_strings_to_categoricals()
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)

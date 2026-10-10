@@ -276,6 +276,8 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
+    # deprecation cycle for convert_strings_to_categoricals (#2685)
+    "ignore:`convert_strings_to_categoricals=True` will change to `False`:FutureWarning",
     # Test cases regularly use small dask arrays but these are usually not formed in practice.
     "ignore:Auto-sharding is enabled, but the dask chunk size is less than 100MB: UserWarning",
     # scanpy 1.10.x

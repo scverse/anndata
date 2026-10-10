@@ -444,6 +444,19 @@ def deprecation_msg(
     return msg
 
 
+_convert_strings_to_categoricals_msg = (
+    "`convert_strings_to_categoricals=True` will change to `False` in the future. "
+    "Pass `convert_strings_to_categoricals=False` to opt in to the future behavior "
+    "and silence this warning, or call `.strings_to_categoricals()` explicitly."
+)
+
+
+def warn_convert_strings_to_categoricals() -> None:
+    """Warn that the write-time conversion of string columns to categorical
+    will stop being the default."""
+    warn_once(_convert_strings_to_categoricals_msg, FutureWarning)
+
+
 def set_module[C: FunctionType | type](name: str, /) -> Callable[[C], C]:
     def decorator(f: C) -> C:
         # record the real module before overwriting it, so tooling (e.g. Sphinx)
