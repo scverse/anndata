@@ -676,7 +676,7 @@ def test_convert_strings_to_categoricals_deprecation(diskfmt, diskfmt_store):
         getattr(orig, f"write_{diskfmt}")(diskfmt_store)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("error")
+        warnings.simplefilter("error", FutureWarning)
         getattr(orig, f"write_{diskfmt}")(
             diskfmt_store, convert_strings_to_categoricals=False
         )

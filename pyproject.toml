@@ -276,6 +276,8 @@ addopts = [
 filterwarnings = [
     "ignore::anndata._warnings.OldFormatWarning",
     "ignore::anndata._warnings.ExperimentalFeatureWarning",
+    # deprecation cycle for convert_strings_to_categoricals (#2685)
+    "ignore:`convert_strings_to_categoricals=True` will change to `False`:FutureWarning",
     # scanpy 1.10.x
     "ignore:.*first_column_names:FutureWarning:scanpy",
     "ignore:Importing read_.* from `anndata` is deprecated:FutureWarning:scanpy",
