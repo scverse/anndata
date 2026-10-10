@@ -1,5 +1,5 @@
 {
-    "[python][json][jsonc]": {
+    "[python][javascript][json][jsonc]": {
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit",
@@ -9,7 +9,7 @@
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
     },
-    "[json][jsonc]": {
+    "[javascript][json][jsonc]": {
         "editor.defaultFormatter": "biomejs.biome",
     },
     "python.analysis.typeCheckingMode": "basic",
