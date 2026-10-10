@@ -876,6 +876,8 @@ def write_cs(
                 dtype = np.dtype("uint32")
             elif minor_axis_size <= np.iinfo(np.uint64).max:
                 dtype = np.dtype("uint64")
+        elif attr_name == "indices":
+            dtype = np.promote_types(dtype, indptr_dtype)
         if isinstance(g, h5py.Group):
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
