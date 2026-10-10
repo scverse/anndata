@@ -33,7 +33,7 @@ from anndata._io.utils import (
     zero_dim_array_as_scalar,
 )
 from anndata._types import StorageType
-from anndata._warnings import OldFormatWarning
+from anndata._warnings import OldFormatWarning, WriteWarning
 from anndata.compat import (
     AwkArray,
     CupyArray,
@@ -53,7 +53,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Generator, Iterator, Sequence
     from os import PathLike
     from typing import Any, Literal
 
@@ -1087,6 +1087,31 @@ def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
 ##############
 
 
+def _warn_on_case_insensitive_names(col_names: Sequence[str], key: str) -> None:
+    """Warn about column names that a case-insensitive filesystem cannot keep apart.
+
+    Zarr stores each column as a member named after the column. On macOS’ default
+    APFS, on Windows, and on exFAT volumes, ``Study`` and ``study`` address the same
+    member, so one silently overwrites the other and :func:`~anndata.read_zarr` then
+    fails while looking the missing name up in the consolidated metadata. The store is
+    written fine on case-sensitive filesystems, so this is a warning rather than an
+    error: only the destination decides whether the names collide.
+    """
+    by_case: dict[str, list[str]] = {}
+    for name in col_names:
+        by_case.setdefault(name.casefold(), []).append(name)
+    collisions = [names for names in by_case.values() if len(names) > 1]
+    if not collisions:
+        return
+    msg = (
+        f"Found column names in {key!r} that differ only by case: {collisions}. "
+        f"Writing to a case-insensitive filesystem will make one overwrite the other, "
+        f"and the resulting store cannot be read back. Rename the columns, or write "
+        f"to a case-sensitive filesystem."
+    )
+    warn(msg, WriteWarning)
+
+
 @_REGISTRY.register_write(h5py.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(h5py.Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_write(zarr.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
@@ -1111,6 +1136,8 @@ def write_dataframe(
         msg = f"Found repeated column names: {duplicates}. Column names must be unique."
         raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
+    if isinstance(f, zarr.Group):
+        _warn_on_case_insensitive_names(col_names, key)
     group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
