@@ -38,7 +38,7 @@ from anndata.tests.helpers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Literal
 
@@ -912,8 +912,23 @@ def test_read_sparse_array(
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
-    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
-    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+    [
+        ((1,), lambda s: (1,)),
+        ((-1,), lambda s: (120,)),
+        (
+            None,
+            lambda s: (
+                s.chunks
+                if isinstance(s, h5py.Dataset) or s.shards is None
+                else s.shards
+            ),
+        ),
+    ],
+    ids=[
+        "small",
+        "minus_one_uses_full",
+        "none_uses_ondisk_sharding_if_zarr_3_else_chunks",
+    ],
 )
 @pytest.mark.parametrize(
     "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
@@ -922,32 +937,41 @@ def test_chunking_1d_array(
     store: h5py.Group | zarr.Group,
     arr: np.ndarray,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int]],
 ):
     write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
-    arr = read_elem_lazy(store["foo"], chunks=chunks)
-    assert arr.chunksize == expected_chunks
+    lazy_arr = read_elem_lazy(store["foo"], chunks=chunks)
+    assert lazy_arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
     [
-        ((1, 50), (1, 50)),
-        ((10, -1), (10, 50)),
-        ((10, None), (10, 50)),
-        (None, (25, 25)),
+        ((1, 50), lambda s: (1, 50)),
+        ((10, -1), lambda s: (10, 50)),
+        ((10, None), lambda s: (10, 50)),
+        (
+            None,
+            lambda s: (
+                s.chunks
+                if isinstance(s, h5py.Dataset) or s.shards is None
+                else s.shards
+            ),
+        ),
     ],
     ids=[
         "small",
         "minus_one_uses_full",
         "none_on_axis_uses_full",
-        "none_uses_ondisk_chunking",
+        "none_uses_ondisk_sharding_if_zarr_3_else_chunks",
     ],
 )
 def test_chunking_2d_array(
     store: h5py.Group | zarr.Group,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int, int]],
 ):
     write_elem(
         store,
@@ -956,7 +980,9 @@ def test_chunking_2d_array(
         dataset_kwargs={"chunks": (25, 25)},
     )
     arr = read_elem_lazy(store["foo"], chunks=chunks)
-    assert arr.chunksize == expected_chunks
+    assert arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(
