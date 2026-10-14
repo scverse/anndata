@@ -3,6 +3,8 @@ default_stages:
   - pre-commit
   - pre-push
 minimum_pre_commit_version: 2.16.0
+default_language_version:
+  python: "3.14"
 repos:
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.5.15
