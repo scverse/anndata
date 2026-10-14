@@ -14,9 +14,9 @@ from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from typing import Literal, TypeAlias
+    from typing import Literal
 
-IntoAlignedDf: TypeAlias = (  # noqa: UP040
+type IntoAlignedDf = (
     Mapping[str, Iterable[Any]]
     | pd.DataFrame
     | pd.Series

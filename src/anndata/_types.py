@@ -14,7 +14,7 @@ from .utils import set_module
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from typing import Any, TypeAlias
+    from typing import Any
 
     from anndata._core.xarray import Dataset2D
     from anndata.typing import Storable
@@ -49,10 +49,8 @@ __all__ = [
     "_WriteInternal",
 ]
 
-# These two are not public, so we don’t make them `type`s
-_ArrayStorageType: TypeAlias = zarr.Array | h5py.Dataset  # noqa: UP040
-_GroupStorageType: TypeAlias = zarr.Group | h5py.Group  # noqa: UP040
-
+type _ArrayStorageType = zarr.Array | h5py.Dataset
+type _GroupStorageType = zarr.Group | h5py.Group
 type StorageType = _ArrayStorageType | _GroupStorageType
 
 

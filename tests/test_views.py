@@ -933,7 +933,7 @@ def test_index_types(mk_idx: Callable[[], Index], expected: ad.AnnData) -> None:
 
 
 def test_ellipsis_index(
-    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    ellipsis_index: Index,
     equivalent_ellipsis_index: tuple[slice, slice],
     matrix_type,
 ):
@@ -953,7 +953,7 @@ def test_ellipsis_index(
 )
 def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
     with pytest.raises(IndexError, match=expected_error):
-        gen_adata((10, 10))[index]
+        gen_adata((10, 10))[index]  # type: ignore[index]  # deliberately invalid
 
 
 @pytest.mark.parametrize(
@@ -980,7 +980,7 @@ def test_index_float_sequence_raises_error(
 ) -> None:
     adata = gen_adata((10, 10))
     with pytest.raises(IndexError, match=r"has floating point values"):
-        adata[index]
+        adata[index]  # type: ignore[index]  # deliberately invalid
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
@@ -1038,7 +1038,7 @@ def test_jax_indexer(dtype: np.dtype) -> None:
 )
 @pytest.mark.array_api
 def test_index_into_jax(
-    index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, ...],
+    index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, np.ndarray],
 ) -> None:
     assert jnp is not None
     X = np.random.default_rng().random((10, 10))

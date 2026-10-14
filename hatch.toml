@@ -3,7 +3,7 @@ installer = "uv"
 dependency-groups = [ "dev" ]
 
 [envs.docs]
-python = "3.14"
+python = "3.15"
 dependency-groups = [ "doc" ]
 scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
@@ -25,12 +25,13 @@ scripts.format-check = "echo 'try `hatch check fmt --fix`'; false"
 scripts.format-fix = "prek run -a --group=format"
 
 [envs.hatch-check-types]
+python = "3.15"
 dependencies = [ "mypy" ]
 dependency-groups = [ "test", "typing", "dev-doc" ]
 scripts.check = "mypy {args:.}"
 
 [envs.hatch-test]
-python = "3.14"
+python = "3.15"
 default-args = [  ]
 dependency-groups = [ "dev", "test-min" ]
 extra-dependencies = [ "ipykernel" ]
@@ -51,7 +52,7 @@ overrides.matrix.deps.pre-install-commands = [
     ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git\nzarr @ git+https://github.com/zarr-developers/zarr-python.git' > ci/pre-deps.txt" },
 ]
 overrides.matrix.deps.python = [
-    { if = [ "min" ], value = "3.12" },
+    { if = [ "min" ], value = "3.13" },
 ]
 overrides.matrix.deps.dependency-groups = [
     { if = [ "stable", "pre" ], value = "test" },

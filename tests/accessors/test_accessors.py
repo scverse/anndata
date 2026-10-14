@@ -18,7 +18,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection
     from typing import Any, Literal
 
-    from anndata.acc import AdRef, GraphAcc, LayerAcc, MapAcc, MultiAcc, MultiMapAcc
+    from anndata.acc import (
+        AdRef,
+        GraphAcc,
+        LayerAcc,
+        MapAcc,
+        MetaAcc,
+        MultiAcc,
+        MultiMapAcc,
+    )
 
     type MatrixAcc = LayerAcc | MultiAcc | GraphAcc
 
@@ -346,7 +354,9 @@ def test_not_in_empty(ad_ref: AdRef) -> None:
     ],
 )
 def test_get_full_array(
-    adata: AnnData, acc: object, expected: Callable[[AnnData], object]
+    adata: AnnData,
+    acc: LayerAcc | MetaAcc | MultiAcc | GraphAcc,
+    expected: Callable[[AnnData], object],
 ) -> None:
     assert expected(adata) is adata[acc]
 
@@ -354,7 +364,7 @@ def test_get_full_array(
 @pytest.mark.parametrize("acc", [A.obsm, A.varm], ids=str)
 def test_get_full_array_map_unsupported(adata: AnnData, acc: MultiMapAcc) -> None:
     with pytest.raises(IndexError, match=rf"Cannot index with {acc}"):
-        adata[acc]
+        adata[acc]  # type: ignore[call-overload]  # deliberately invalid
 
 
 @pytest.mark.parametrize(

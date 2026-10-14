@@ -22,14 +22,8 @@ from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    import sys
     from contextlib import AbstractContextManager
-    from typing import Any, Self, TypeAlias, TypeGuard
-
-    if sys.version_info >= (3, 13):
-        from typing import TypeIs
-    else:
-        from typing_extensions import TypeIs
+    from typing import Any, Self, TypeAlias, TypeGuard, TypeIs
 
     import zarr
 
@@ -60,6 +54,7 @@ if TYPE_CHECKING:
 #############################
 
 
+# runtime unions: used with `isinstance` and `singledispatch`, so no `type` statement
 CSMatrix: TypeAlias = sps.csr_matrix | sps.csc_matrix  # noqa: UP040
 CSArray: TypeAlias = sps.csr_array | sps.csc_array  # noqa: UP040
 
@@ -234,7 +229,7 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
-CupyCSMatrix: TypeAlias = CupyCSCMatrix | CupyCSRMatrix  # noqa: UP040
+type CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
 
 old_positionals = partial(legacy_api, category=FutureWarning)
 

@@ -22,7 +22,7 @@ from ...utils import set_module, warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence, Sized
-    from typing import Literal, TypeAlias
+    from typing import Literal
 
     from ..._types import Join_T
     from ...typing import Index, _Index1DNorm
@@ -589,7 +589,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
 
 
 # a `type` alias would hand the docs build a `TypeAliasType`, which would loop infinitely
-ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
+type ConvertType = Callable | Mapping[str, ConvertType]
 
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
