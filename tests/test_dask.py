@@ -456,7 +456,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
             "zarr",
             (997, 1009),
             None,
-            [SMALL_SHARD_WARNING, NO_SUBCHUNK_WARNING],
+            [NO_SUBCHUNK_WARNING],
             True,
             id="zarr-no-good-divisor",
         ),
@@ -484,9 +484,15 @@ def test_dask_chunks_and_shards_roundtrip(
     expected_shards: tuple[int, int] | None,
     expected_warnings: list[str],
     auto_shard: bool,  # noqa: FBT001
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import dask.array as da
 
+    from anndata._io.specs import methods
+
+    if SMALL_SHARD_WARNING in expected_warnings:
+        # writing a real >10GB array in tests is too slow
+        monkeypatch.setattr(methods, "SMALL_SHARD_WARNING_MIN_ARRAY_MB", 0)
     X = da.zeros(shape, chunks=dask_chunks, dtype=np.float32)
     store = tmp_path / "test.h5ad" if diskfmt == "h5ad" else MemoryStore()
     with as_group(store, mode="w") as g:
