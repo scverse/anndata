@@ -190,7 +190,7 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata.compat.ZappyArray"),
     #### these happen when a `type` or `class` is generic
     ("py:obj", "typing.R"),
-    ("py:class", "_M"),
+    ("py:class", "M"),
     ("py:class", "anndata.utils.Default"),
 ]
 

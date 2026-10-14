@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from types import EllipsisType
-from typing import Never
+from typing import TYPE_CHECKING, Never, TypeVar
 
 import h5py
 import numpy as np
@@ -31,8 +31,13 @@ from .compat import (
 __all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 
 
-type _Index1DNorm[M: IndexManager = Never] = (
-    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | M
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
+# private aliases are no `type`s, so Sphinx expands them in the public ones
+_M = TypeVar("_M", bound=IndexManager, default=Never)
+_Index1DNorm: TypeAlias = (
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | _M
 )
 # TODO: pd.Index[???]
 type Index1D[M: IndexManager = Never] = (
@@ -96,7 +101,7 @@ type AlignedArray = (
 )
 """Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
 
-type _StorableArrayOrScalar = AlignedArray | pd.DataFrame | np.number | str
+_StorableArrayOrScalar: TypeAlias = AlignedArray | pd.DataFrame | np.number | str  # noqa: UP040
 type Storable = _StorableArrayOrScalar | dict[str, "Storable"] | list["Storable"]
 """A serializable object, excluding :class:`anndata.AnnData` objects i.e., something that can be stored in `uns` or `obsm`."""
 
