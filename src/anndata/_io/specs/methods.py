@@ -141,6 +141,10 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         yield dataset_kwargs
 
 
+# Only warn about small shards for arrays big enough that the file count matters.
+SMALL_SHARD_WARNING_MIN_ARRAY_MB = 10_000
+
+
 def is_greater_than_n_mb(shape: tuple[int, ...], dtype: np.dtype, n: int) -> bool:
     return math.prod(shape) * np.dtype(dtype).itemsize > n * 1_000_000
 
@@ -634,7 +638,9 @@ def write_basic_dask_dask_dense(
             if ad.settings.auto_shard_zarr_v3:
                 if not is_greater_than_n_mb(
                     dask_chunks, elem.dtype, 100
-                ) and is_greater_than_n_mb(elem.shape, elem.dtype, 10_000):
+                ) and is_greater_than_n_mb(
+                    elem.shape, elem.dtype, SMALL_SHARD_WARNING_MIN_ARRAY_MB
+                ):
                     warn(
                         "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
                         "This may result in a large number of files. Consider rechunking.",
