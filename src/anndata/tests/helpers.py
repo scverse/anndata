@@ -924,7 +924,7 @@ def assert_adata_equal(
             idx[1] = a.var_names
             change_flag = True
         if change_flag:
-            b = b[tuple(idx)].copy()
+            b = b[idx[0], idx[1]].copy()
     for attr in [
         "X",
         "obs",

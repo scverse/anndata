@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Never, TypeVar
@@ -29,28 +28,25 @@ from .compat import (
     ZappyArray,
 )
 
+__all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
+
+
 if TYPE_CHECKING:
     from typing import TypeAlias
 
-
-__all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
-
-if TYPE_CHECKING or sys.version_info >= (3, 13):
-    _M = TypeVar("_M", bound=IndexManager, default=Never)
-else:
-    _M = TypeVar("_M")
-
-_Index1DNorm: TypeAlias = (  # noqa: UP040
+# private aliases are no `type`s, so Sphinx expands them in the public ones
+_M = TypeVar("_M", bound=IndexManager, default=Never)
+_Index1DNorm: TypeAlias = (
     slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | _M
 )
 # TODO: pd.Index[???]
-type Index1D[_M: IndexManager] = (
+type Index1D[M: IndexManager = Never] = (
     # 0D index
     int
     | str
     | np.int64
     # normalized 1D idex
-    | _Index1DNorm[_M]
+    | _Index1DNorm[M]
     # different containers for mask, obs/varnames, or numerical index,
     | Sequence[int]
     | Sequence[str]
@@ -62,20 +58,21 @@ type Index1D[_M: IndexManager] = (
     | np.matrix  # bool
     | CSMatrix  # bool
     | CSArray  # bool
-    | _M
+    | M
 )
 """Index each :class:`~anndata.AnnData` object’s axis can be sliced with."""
 
-type Index[_M: IndexManager] = (
-    Index1D[_M]
+type Index[M: IndexManager = Never] = (
+    Index1D[M]
     | EllipsisType
-    | tuple[Index1D[_M] | EllipsisType, Index1D[_M] | EllipsisType]
-    | tuple[Index1D, Index1D[_M], EllipsisType]
-    | tuple[EllipsisType, Index1D[_M], Index1D[_M]]
-    | tuple[Index1D[_M], EllipsisType, Index1D[_M]]
+    | tuple[Index1D[M] | EllipsisType]
+    | tuple[Index1D[M] | EllipsisType, Index1D[M] | EllipsisType]
+    | tuple[Index1D[M], Index1D[M], EllipsisType]
+    | tuple[EllipsisType, Index1D[M], Index1D[M]]
+    | tuple[Index1D[M], EllipsisType, Index1D[M]]
     | CSMatrix
     | CSArray
-    | _M
+    | M
 )
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
 

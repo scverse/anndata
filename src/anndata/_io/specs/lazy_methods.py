@@ -110,7 +110,8 @@ def _compute_chunk(
     idx = tuple(
         slice(start, stop) for start, stop in block_info[None]["array-location"]
     )
-    rv = mtx[idx]
+    # dense datasets can be 1D, sparse ones are always 2D
+    rv = mtx[idx] if isinstance(mtx, h5py.Dataset) else mtx[idx[0], idx[1]]
     if TYPE_CHECKING:  # annotation bug: indexing with slices never returns a scalar
         assert not isinstance(rv, int | float)
     return rv
@@ -261,7 +262,7 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: Mapping[str, LazyDataStructures | pd.Index],
     dim_name: str,
     index: pd.Index,
-) -> Generator[tuple[str, XVariable], None, None]:
+) -> Generator[tuple[str, XVariable]]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ...compat import xarray as xr

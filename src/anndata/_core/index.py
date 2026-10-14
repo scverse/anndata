@@ -27,14 +27,8 @@ from ..types import SupportsArrayApiBase
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    import sys
     from collections.abc import Callable
-    from typing import TypeAlias
-
-    if sys.version_info >= (3, 13):
-        from typing import TypeIs
-    else:
-        from typing_extensions import TypeIs
+    from typing import TypeIs
 
     from ..acc import Array
     from ..typing import AlignedArray, Index, Index1D, _Index1DNorm
@@ -300,7 +294,7 @@ def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[
     raise IndexError(msg)
 
 
-Idx1D: TypeAlias = (  # noqa: UP040
+type Idx1D = (
     slice
     | NDArray[np.bool_]
     | NDArray[np.integer]
@@ -309,11 +303,11 @@ Idx1D: TypeAlias = (  # noqa: UP040
 )
 """`_Index1DNorm[IndexManager]`, spelled out so it resolves at runtime."""
 
-SubsetIdx: TypeAlias = tuple[Idx1D] | tuple[Idx1D, Idx1D]  # noqa: UP040
+type SubsetIdx = tuple[Idx1D] | tuple[Idx1D, Idx1D]
 """A one- or two-dimensional index as stored on a view."""
 
-NumpyIdx1D: TypeAlias = slice | NDArray[np.bool_] | NDArray[np.integer]  # noqa: UP040
-NumpySubsetIdx: TypeAlias = tuple[NumpyIdx1D] | tuple[NumpyIdx1D, NumpyIdx1D]  # noqa: UP040
+type NumpyIdx1D = slice | NDArray[np.bool_] | NDArray[np.integer]
+type NumpySubsetIdx = tuple[NumpyIdx1D] | tuple[NumpyIdx1D, NumpyIdx1D]
 """A :data:`SubsetIdx` whose array parts are numpy arrays."""
 
 

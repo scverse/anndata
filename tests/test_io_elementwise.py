@@ -49,7 +49,7 @@ PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
 
 
 @pytest.fixture
-def exit_stack() -> Generator[ExitStack, None, None]:
+def exit_stack() -> Generator[ExitStack]:
     with ExitStack() as stack:
         yield stack
 
@@ -57,7 +57,7 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 @pytest.fixture
 def store(
     diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
-) -> Generator[h5py.Group | zarr.Group, None, None]:
+) -> Generator[h5py.Group | zarr.Group]:
     store: h5py.Group | zarr.Group
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")

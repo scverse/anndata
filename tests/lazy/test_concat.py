@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def get_key_trackers_for_columns_on_axis(
     adata: AnnData, axis: Literal["obs", "var"]
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     """Generate keys for tracking, using `codes` from categorical columns instead of the column name
 
     Parameters
