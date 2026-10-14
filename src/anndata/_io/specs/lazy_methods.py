@@ -107,8 +107,11 @@ def _compute_chunk(
         if isinstance(f, h5py.Group)
         else f
     )
-    (r0, r1), (c0, c1) = block_info[None]["array-location"]
-    rv = mtx[slice(r0, r1), slice(c0, c1)]
+    idx = tuple(
+        slice(start, stop) for start, stop in block_info[None]["array-location"]
+    )
+    # dense datasets can be 1D, sparse ones are always 2D
+    rv = mtx[idx] if isinstance(mtx, h5py.Dataset) else mtx[idx[0], idx[1]]
     if TYPE_CHECKING:  # annotation bug: indexing with slices never returns a scalar
         assert not isinstance(rv, int | float)
     return rv

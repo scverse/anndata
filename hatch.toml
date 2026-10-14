@@ -3,7 +3,7 @@ installer = "uv"
 dependency-groups = [ "dev" ]
 
 [envs.docs]
-python = "3.15"
+python = "3.14"
 dependency-groups = [ "doc" ]
 scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
@@ -25,13 +25,13 @@ scripts.format-check = "echo 'try `hatch check fmt --fix`'; false"
 scripts.format-fix = "prek run -a --group=format"
 
 [envs.hatch-check-types]
-python = "3.15"
+python = "3.14"
 dependencies = [ "mypy" ]
 dependency-groups = [ "test", "typing", "dev-doc" ]
 scripts.check = "mypy {args:.}"
 
 [envs.hatch-test]
-python = "3.15"
+python = "3.14"
 default-args = [  ]
 dependency-groups = [ "dev", "test-min" ]
 extra-dependencies = [ "ipykernel" ]
@@ -50,9 +50,14 @@ overrides.matrix.deps.pre-install-commands = [
     { if = [
         "pre",
     ], value = "echo 'xarray @ git+https://github.com/pydata/xarray.git\nzarr @ git+https://github.com/zarr-developers/zarr-python.git' > ci/pre-deps.txt" },
+    # TODO: remove this once these have cp315 wheels on PyPI (and switch the default to `python = "3.15"` above)
+    { if = [
+        "pre",
+    ], value = "uv pip install --no-deps --index=https://pypi.anaconda.org/scientific-python-nightly-wheels/simple h5py" },
 ]
 overrides.matrix.deps.python = [
     { if = [ "min" ], value = "3.13" },
+    { if = [ "pre" ], value = "3.15" },
 ]
 overrides.matrix.deps.dependency-groups = [
     { if = [ "stable", "pre" ], value = "test" },
