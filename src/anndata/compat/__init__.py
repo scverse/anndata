@@ -229,7 +229,8 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
-type CupyCSMatrix = CupyCSCMatrix | CupyCSRMatrix
+# no `type` keyword so `isinstance` checking works
+CupyCSMatrix: TypeAlias = CupyCSCMatrix | CupyCSRMatrix  # noqa: UP040
 
 old_positionals = partial(legacy_api, category=FutureWarning)
 
