@@ -145,8 +145,8 @@ def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[d
         yield dataset_kwargs
 
 
-def is_greater_than_one_hundred_mb(shape: tuple[int, ...], dtype: np.dtype) -> bool:
-    return math.prod(shape) * np.dtype(dtype).itemsize > 100_000_000
+def is_greater_than_n_mb(shape: tuple[int, ...], dtype: np.dtype, n: int) -> bool:
+    return math.prod(shape) * np.dtype(dtype).itemsize > n * 1_000_000
 
 
 def try_create_one_mb_subchunks(
@@ -638,9 +638,11 @@ def write_basic_dask_dask_dense(
             # so that no two dask tasks write to the same zarr chunk - chunks being None triggers that.
             zarr_chunks = None
             if ad.settings.auto_shard_zarr_v3 and f.metadata.zarr_format == 3:
-                if not is_greater_than_one_hundred_mb(dask_chunks, elem.dtype):
+                if not is_greater_than_n_mb(
+                    dask_chunks, elem.dtype, 100
+                ) and is_greater_than_n_mb(elem.shape, elem.dtype, 10_000):
                     warn(
-                        "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
+                        "Auto-sharding is enabled, but the dask chunk size is less than 100MB and the array is large. "
                         "This may result in a large number of files. Consider rechunking.",
                         UserWarning,
                     )
@@ -653,7 +655,15 @@ def write_basic_dask_dask_dense(
                     else {"chunks": zarr_chunks, "shards": dask_chunks}
                 ),
             }
-        g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+            g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+        else:
+            # irregular dask chunks (e.g., from concatenation) or user-provided chunks
+            with zarr_v3_sharding(
+                dataset_kwargs, format=f.metadata.zarr_format
+            ) as dataset_kwargs:
+                g = f.require_array(
+                    k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs
+                )
     # use threaded scheduler with dask<=2025.3.0 avoid "Could not serialize object of type HighLevelGraph" error
     if isinstance(f, h5py.Group) or Version(version("dask")) <= Version("2025.3.0"):
         da.store(elem, g, scheduler="threads")
