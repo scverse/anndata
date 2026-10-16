@@ -35,6 +35,7 @@ from .utils import (
     no_write_dataset_2d,
     report_read_key_on_error,
     report_write_key_on_error,
+    write_use,
 )
 
 if TYPE_CHECKING:
@@ -44,17 +45,19 @@ if TYPE_CHECKING:
 
     from .._core.raw import Raw
     from .._types import StorageType
+    from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
 
 
 @no_write_dataset_2d
-def write_h5ad(
+def write_h5ad(  # noqa: PLR0912
     filepath: PathLike[str] | str,
     adata: AnnData,
     *,
     as_dense: Sequence[str] = (),
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
@@ -77,6 +80,10 @@ def write_h5ad(
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
+    if use is not None:
+        with h5py.File(filepath, "r+") as f:
+            write_use(f, adata, use, dataset_kwargs=dataset_kwargs)
+        return
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()
