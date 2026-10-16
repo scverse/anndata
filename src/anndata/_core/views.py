@@ -162,9 +162,17 @@ class ArrayView(_SetItemMixin, np.ndarray):
             )
 
         outputs: tuple[np.ndarray | None, ...]
+        view_outputs = () if out is None else out
         if out is None:
             outputs = (None,) * ufunc.nout
         else:
+            # Stage view writes so the ufunc cannot change the parent's storage.
+            out = tuple(
+                arr.copy()
+                if isinstance(arr, ArrayView) and arr._view_args is not None
+                else arr
+                for arr in out
+            )
             out = tuple(convert_all(out))
             outputs = out
 
@@ -174,6 +182,11 @@ class ArrayView(_SetItemMixin, np.ndarray):
         if results is NotImplemented:
             return NotImplemented
 
+        if out is not None:
+            for original, output in zip(view_outputs, outputs, strict=True):
+                if isinstance(original, ArrayView) and original._view_args is not None:
+                    original[...] = output
+
         if ufunc.nout == 1:
             results = (results,)
         results = tuple(
@@ -181,6 +194,13 @@ class ArrayView(_SetItemMixin, np.ndarray):
             for result, output in zip(results, outputs, strict=True)
         )
         return results[0] if len(results) == 1 else results
+
+    def fill(self, value) -> None:
+        if self._view_args is None:
+            return super().fill(value)
+        filled = self.copy()
+        filled.fill(value)
+        self[...] = filled
 
     def keys(self) -> tuple[str, ...]:
         # it’s a structured array
