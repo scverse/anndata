@@ -35,7 +35,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
-    from .._core.aligned_mapping import AxisArrays
+    from .._core.aligned_mapping import (
+        AxisArrays,
+        AxisArraysView,
+        Layers,
+        LayersView,
+        PairwiseArrays,
+        PairwiseArraysView,
+    )
     from ..compat import XVariable
     from ..typing import AlignedArray, InMemoryArray
 
@@ -318,6 +325,9 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     def __repr__(self) -> str:
         return "A.layers"
 
+    def get(self, adata: AnnData) -> Layers | LayersView:
+        return adata.layers
+
 
 @dataclass(frozen=True)
 class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
@@ -504,6 +514,9 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     def __repr__(self) -> str:
         return f"A.{self.dim}m"
 
+    def get(self, adata: AnnData) -> AxisArrays | AxisArraysView:
+        return getattr(adata, f"{self.dim}m")
+
 
 @dataclass(frozen=True)
 class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnData]):
@@ -607,6 +620,9 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
 
     def __repr__(self) -> str:
         return f"A.{self.dim}p"
+
+    def get(self, adata: AnnData) -> PairwiseArrays | PairwiseArraysView:
+        return getattr(adata, f"{self.dim}p")
 
 
 # `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
