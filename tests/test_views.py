@@ -746,6 +746,84 @@ def test_negative_scalar_index(*, adata, index: int, obs: bool):
     )
 
 
+@pytest.mark.parametrize("index", [slice(0, 2), [0, 1]])
+@pytest.mark.parametrize("operation", ["multiply", "add", "divide", "out", "fill"])
+def test_layer_view_mutators_copy_on_modify(index, operation):
+    original = np.array([[1.0], [2.0], [3.0]])
+    adata = ad.AnnData(np.zeros((3, 1)), layers={"counts": original.copy()})
+    view = adata[index]
+    expected = {
+        "multiply": [[10.0], [20.0]],
+        "add": [[11.0], [12.0]],
+        "divide": [[0.5], [1.0]],
+        "out": [[10.0], [20.0]],
+        "fill": [[10.0], [10.0]],
+    }[operation]
+
+    with pytest.warns(ImplicitModificationWarning):  # noqa: PT031
+        if operation == "multiply":
+            view.layers["counts"] *= 10
+        elif operation == "add":
+            view.layers["counts"] += 10
+        elif operation == "divide":
+            view.layers["counts"] /= 2
+        elif operation == "out":
+            np.multiply(view.layers["counts"], 10, out=view.layers["counts"])
+        else:
+            assert view.layers["counts"].fill(10) is None
+
+    np.testing.assert_array_equal(adata.layers["counts"], original)
+    np.testing.assert_array_equal(view.layers["counts"], expected)
+    assert not view.is_view
+
+
+def test_layer_view_ufunc_multiple_output_buffers():
+    original = np.array([[1.5], [2.5], [3.5]])
+    adata = ad.AnnData(
+        np.zeros((3, 1)),
+        layers={"fractional": original.copy(), "integral": original.copy()},
+    )
+    view = adata[:2]
+
+    with pytest.warns(ImplicitModificationWarning):
+        fractional, integral = np.modf(
+            view.layers["fractional"],
+            out=(view.layers["fractional"], view.layers["integral"]),
+        )
+
+    for key in ["fractional", "integral"]:
+        np.testing.assert_array_equal(adata.layers[key], original)
+    np.testing.assert_array_equal(view.layers["fractional"], [[0.5], [0.5]])
+    np.testing.assert_array_equal(view.layers["integral"], [[1.0], [2.0]])
+    np.testing.assert_array_equal(fractional, view.layers["fractional"])
+    np.testing.assert_array_equal(integral, view.layers["integral"])
+
+
+def test_layer_view_fill_object_value():
+    original = np.array([["a"], ["b"], ["c"]], dtype=object)
+    adata = ad.AnnData(np.zeros((3, 1)), layers={"counts": original.copy()})
+    view = adata[:2]
+
+    with pytest.warns(ImplicitModificationWarning):
+        view.layers["counts"].fill([10, 20])
+
+    np.testing.assert_array_equal(adata.layers["counts"], original)
+    assert view.layers["counts"].tolist() == [[[10, 20]], [[10, 20]]]
+    assert not view.is_view
+
+
+def test_layer_view_ufunc_error_preserves_parent():
+    original = np.array([[1], [2], [3]])
+    adata = ad.AnnData(np.zeros((3, 1)), layers={"counts": original.copy()})
+    view = adata[:2]
+
+    with pytest.raises(TypeError, match="Cannot cast ufunc"):
+        view.layers["counts"] *= 1.5
+
+    np.testing.assert_array_equal(adata.layers["counts"], original)
+    assert view.is_view
+
+
 def test_viewness_propagation_nan():
     """Regression test for https://github.com/scverse/anndata/issues/239"""
     adata = ad.AnnData(np.random.random((10, 10)))
