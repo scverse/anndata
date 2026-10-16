@@ -1095,3 +1095,18 @@ def test_write_auto_sharded_does_not_override():
     x_manually_set = z["X_manually_set"]
     assert isinstance(x_manually_set, zarr.Group)
     visititems_zarr(x_manually_set, visitor)
+
+
+@pytest.mark.parametrize("col", ["new", "a"], ids=["append", "overwrite"])
+def test_write_dataframe_column_updates_order(
+    store: _GroupStorageType, col: str
+) -> None:
+    df = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]}, index=["c0", "c1"])
+    write_elem(store, "df", df)
+    group = cast("_GroupStorageType", store["df"])
+    write_elem(group, col, np.array([3, 4]))
+    expected = df.assign(**{col: [3, 4]})
+    assert list(cast("list[str]", group.attrs["column-order"])) == list(
+        expected.columns
+    )
+    pd.testing.assert_frame_equal(cast("pd.DataFrame", read_elem(group)), expected)
