@@ -215,7 +215,7 @@ lint.pylint.max-positional-args = 5
 "warnings.warn".msg = "Use anndata.utils.warn instead"
 
 [tool.codespell]
-ignore-words-list = "theis,coo,homogenous,GroupT,scarches"
+ignore-words-list = "theis,coo,homogenous,vart,GroupT,scarches"
 # base64 blobs (e.g. images in notebook outputs)
 ignore-regex = "[A-Za-z0-9+/]{100,}={0,2}"
 skip = ".git,*.pdf,*.svg"
