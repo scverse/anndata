@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from codecs import decode
 from collections.abc import Mapping
+from contextlib import nullcontext
 from enum import Enum, auto
 from functools import partial, singledispatch
 from importlib import import_module
+from importlib.metadata import version
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Protocol, cast, overload
 
@@ -13,19 +15,15 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sps
 from legacy_api_wrap import legacy_api  # noqa: TID251
+from packaging.version import Version
 
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 
 from .._warnings import warn
 
 if TYPE_CHECKING:
-    import sys
-    from typing import Any, Self, TypeAlias, TypeGuard
-
-    if sys.version_info >= (3, 13):
-        from typing import TypeIs
-    else:
-        from typing_extensions import TypeIs
+    from contextlib import AbstractContextManager
+    from typing import Any, Self, TypeAlias, TypeGuard, TypeIs
 
     import zarr
 
@@ -56,6 +54,7 @@ if TYPE_CHECKING:
 #############################
 
 
+# runtime unions: used with `isinstance` and `singledispatch`, so no `type` statement
 CSMatrix: TypeAlias = sps.csr_matrix | sps.csc_matrix  # noqa: UP040
 CSArray: TypeAlias = sps.csr_array | sps.csc_array  # noqa: UP040
 
@@ -230,6 +229,7 @@ else:
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
+# no `type` keyword so `isinstance` checking works
 CupyCSMatrix: TypeAlias = CupyCSCMatrix | CupyCSRMatrix  # noqa: UP040
 
 old_positionals = partial(legacy_api, category=FutureWarning)
@@ -275,6 +275,9 @@ def pandas_sparse(df: pd.DataFrame) -> SparseFrameAccessor:
     return cast("SparseFrameAccessor", df.sparse)
 
 
+PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
+
+
 @overload
 def pandas_as_str(a: pd.Index[Any]) -> pd.Index[str]: ...
 @overload
@@ -291,7 +294,17 @@ def pandas_as_str(a: pd.Index | pd.Series) -> pd.Index[str] | pd.Series[str]:
 
     dtype = pd.StringDtype(na_value=a.array.dtype.na_value)
     a = a.astype(dtype)
-    return a if pd.options.future.infer_string else a.astype(object)
+    return a if PANDAS_3 or pd.options.future.infer_string else a.astype(object)
+
+
+def pandas_no_chained_assignment_warning() -> AbstractContextManager[object]:
+    """Silence `SettingWithCopyWarning` in pandas < 3.
+
+    pandas 3 removed that warning, and pandas 3.1 deprecates the option.
+    """
+    if PANDAS_3:
+        return nullcontext()
+    return pd.option_context("mode.chained_assignment", None)
 
 
 @singledispatch
@@ -468,7 +481,7 @@ def _clean_uns(adata: AnnData) -> None:
         for ann in [adata.obs, adata.var]:
             if name not in ann:
                 continue
-            codes: np.ndarray = ann[name].values
+            codes = ann[name].to_numpy()
             # hack to maybe find the axis the categories were for
             if not np.all(codes < len(cats)):
                 continue

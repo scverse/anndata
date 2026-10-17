@@ -103,7 +103,7 @@ ND_TYPES = [
         id="cpx.csr_matrix",
     ),
     *[
-        pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)
+        pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)  # noqa: PD011
         for t in DASK_TYPES
     ],
 ]
@@ -174,7 +174,7 @@ def _expected2np(
 @pytest.fixture(
     params=[
         pytest.param(
-            (ad_ref, ad_expected, *typ.values, convert),
+            (ad_ref, ad_expected, *typ.values, convert),  # noqa: PD011
             marks=typ.marks,
             id=f"{ad_ref}-{typ.id}",
         )

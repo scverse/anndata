@@ -34,7 +34,7 @@ from .._io.specs import read_elem, write_elem
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Generator, Iterator, Sequence
+    from collections.abc import Callable, Collection, Generator, Sequence
     from typing import Literal
 
     from pandas.api.typing.aliases import Scalar
@@ -271,13 +271,9 @@ def write_concat_sparse(  # noqa: PLR0917
     fill_value
         The fill value to use for missing elements. Defaults to None.
     """
-    elems: Iterator[BaseCompressedSparseDataset | CSMatrix]
-    if all(ri.no_change for ri in reindexers):
-        elems = iter(datasets)
-    else:
-        elems = _gen_slice_to_append(
-            datasets, reindexers, max_loaded_elems, axis, fill_value
-        )
+    elems = _gen_slice_to_append(
+        datasets, reindexers, max_loaded_elems, axis, fill_value
+    )
     number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"

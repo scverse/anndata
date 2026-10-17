@@ -45,7 +45,7 @@ class BatchIndexSampler(Sampler):
         self.shuffle = shuffle
         self.drop_last = drop_last
 
-    def __iter__(self) -> Generator[list[int], None, None]:
+    def __iter__(self) -> Generator[list[int]]:
         indices: list[int]
         if self.shuffle:
             indices = np.random.permutation(self.n_obs).tolist()
