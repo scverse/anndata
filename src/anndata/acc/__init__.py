@@ -203,7 +203,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:
         """Get the indexed array from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -293,12 +293,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     def get(self, adata: AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
-    def get(
-        self,
-        adata: AnnData,
-        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
-    ) -> AlignedArray:
+    def get(self, adata: AnnData, idx: Idx2D | NO_IDX = NO_IDX, /) -> AlignedArray:
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
@@ -393,10 +388,7 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self,
-        data: MuData | AnnData,
-        k: str | NO_IDX | None = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
+        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full: DataFrameLike = getattr(data, self.dim)
         if k is NO_IDX:
@@ -477,12 +469,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
-    def get(
-        self,
-        data: MuData | AnnData,
-        i: int | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
-    ) -> AlignedArray:
+    def get(self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
@@ -581,10 +568,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self,
-        data: MuData | AnnData,
-        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
+        self, data: MuData | AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
     ) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:

@@ -300,6 +300,8 @@ def test_set_var(adata, subset_func):
     assert joblib.hash(adata) == init_hash
 
 
+# DataFrameView.drop passes inplace=True through to pandas, which deprecates it in 3.1
+@pytest.mark.filterwarnings("ignore:The inplace keyword:DeprecationWarning")
 def test_drop_obs_column():
     adata = ad.AnnData(np.array(X_list, dtype="int32"), obs=obs_dict)
 
@@ -309,7 +311,7 @@ def test_drop_obs_column():
     assert subset.obs.drop(columns=["oanno1"]).columns.tolist() == ["oanno2", "oanno3"]
     assert subset.is_view
     # would modify obs, so it should actualize subset and not modify adata
-    subset.obs.drop(columns=["oanno1"], inplace=True)
+    subset.obs.drop(columns=["oanno1"], inplace=True)  # noqa: PD002
     assert not subset.is_view
     assert subset.obs.columns.tolist() == ["oanno2", "oanno3"]
 
@@ -877,8 +879,8 @@ def test_dataframe_view_index_setting():
         a2.obs.index = a2.obs.index.map(lambda x: x[-1])
     assert not isinstance(a2.obs, ad._core.views.DataFrameView)
     assert isinstance(a2.obs, pd.DataFrame)
-    assert a1.obs.index.values.tolist() == ["aa", "bb"]
-    assert a2.obs.index.values.tolist() == ["a", "b"]
+    assert a1.obs.index.tolist() == ["aa", "bb"]
+    assert a2.obs.index.tolist() == ["a", "b"]
 
 
 def _n(t: Callable[..., Any]) -> str:
@@ -931,7 +933,7 @@ def test_index_types(mk_idx: Callable[[], Index], expected: ad.AnnData) -> None:
 
 
 def test_ellipsis_index(
-    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    ellipsis_index: Index,
     equivalent_ellipsis_index: tuple[slice, slice],
     matrix_type,
 ):
@@ -951,7 +953,7 @@ def test_ellipsis_index(
 )
 def test_index_3d_errors(index: tuple[int | EllipsisType, ...], expected_error: str):
     with pytest.raises(IndexError, match=expected_error):
-        gen_adata((10, 10))[index]
+        gen_adata((10, 10))[index]  # type: ignore[index]  # deliberately invalid
 
 
 @pytest.mark.parametrize(
@@ -978,7 +980,7 @@ def test_index_float_sequence_raises_error(
 ) -> None:
     adata = gen_adata((10, 10))
     with pytest.raises(IndexError, match=r"has floating point values"):
-        adata[index]
+        adata[index]  # type: ignore[index]  # deliberately invalid
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
@@ -1036,7 +1038,7 @@ def test_jax_indexer(dtype: np.dtype) -> None:
 )
 @pytest.mark.array_api
 def test_index_into_jax(
-    index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, ...],
+    index: np.ndarray | slice | EllipsisType | tuple[np.ndarray, np.ndarray],
 ) -> None:
     assert jnp is not None
     X = np.random.default_rng().random((10, 10))
@@ -1130,8 +1132,8 @@ def test_double_index_jax(*, to_bool: bool, mixed: bool) -> None:
         if mixed:
             bool_mask[subset2] = True
         else:
-            bool_mask = bool_mask.at[subset2].set(True)
-        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][bool_mask, :]
+            bool_mask = bool_mask.at[subset2].set(True)  # noqa: PD008
+        v2 = adata[jnp.zeros(10).astype("bool").at[subset1].set(True), :][bool_mask, :]  # noqa: PD008
     else:
         v2 = adata[subset1, :][subset2, :]
 

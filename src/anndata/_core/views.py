@@ -25,6 +25,7 @@ from ..compat import (
     ZappyArray,
     has_xp,
     has_xp_base,
+    pandas_no_chained_assignment_warning,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -306,10 +307,10 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
         if not inplace:
             return self.copy().drop(*args, **kw)
         if self._view_args is None:
-            super().drop(*args, inplace=True, **kw)
+            super().drop(*args, inplace=True, **kw)  # noqa: PD002
             return
         with view_update(*self._view_args) as df:
-            df.drop(*args, inplace=True, **kw)
+            df.drop(*args, inplace=True, **kw)  # noqa: PD002
 
     def __setattr__(self, key: str, value: object) -> None:
         if key == "index" and self._view_args is not None:
@@ -351,8 +352,7 @@ def as_view_df(df, view_args):
     if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
-                # TODO: this mode is going away
-                with pd.option_context("mode.chained_assignment", None):
+                with pandas_no_chained_assignment_warning():
                     df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
 

@@ -31,8 +31,11 @@ from anndata.tests.helpers import (
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Any, Literal
+
+    from anndata.typing import Index1D
 
 # some test objects that we use below
 adata_dense = AnnData(np.array([[1, 2], [3, 4]]))
@@ -183,7 +186,7 @@ def test_create_with_dfs():
 def test_create_from_df():
     df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
     ad = AnnData(df)
-    assert df.values.tolist() == ad.X.tolist()
+    assert df.to_numpy().tolist() == ad.X.tolist()
     assert df.columns.tolist() == ad.var_names.tolist()
     assert df.index.tolist() == ad.obs_names.tolist()
 
@@ -212,7 +215,7 @@ def test_create_from_df_with_obs_and_var():
     obs = pd.DataFrame(np.ones((3, 1)), index=df.index, columns=["C"])
     var = pd.DataFrame(np.ones((2, 1)), index=df.columns, columns=["D"])
     ad = AnnData(df, obs=obs, var=var)
-    assert df.values.tolist() == ad.X.tolist()
+    assert df.to_numpy().tolist() == ad.X.tolist()
     assert df.columns.tolist() == ad.var_names.tolist()
     assert df.index.tolist() == ad.obs_names.tolist()
     assert obs.equals(ad.obs)
@@ -234,7 +237,7 @@ def test_matching_int_index():
 def test_from_df_and_dict():
     df = pd.DataFrame(dict(a=[0.1, 0.2, 0.3], b=[1.1, 1.2, 1.3]))
     adata = AnnData(df, dict(species=pd.Categorical(["a", "b", "a"])))
-    assert adata.obs["species"].values.tolist() == ["a", "b", "a"]
+    assert adata.obs["species"].tolist() == ["a", "b", "a"]
 
 
 def test_df_warnings():
@@ -559,7 +562,12 @@ def test_slicing_strings():
         adata[["A", "B", "not_in_obs"], :]
 
 
-def test_slicing_series():
+@pytest.mark.parametrize(
+    "cls",
+    [lambda s: s, lambda s: s.array, lambda s: s.to_numpy()],
+    ids=["pd_ser", "pd_arr", "np_arr"],
+)
+def test_slicing_pd(cls: Callable[[pd.Series], Index1D]):
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6]]),
         dict(obs_names=["A", "B", "C"]),
@@ -567,11 +575,8 @@ def test_slicing_series():
     )
     df = pd.DataFrame(dict(a=["1", "2", "2"]))
     df1 = pd.DataFrame(dict(b=["1", "2"]))
-    assert adata[df["a"].values == "2"].X.tolist() == adata[df["a"] == "2"].X.tolist()
-    assert (
-        adata[:, df1["b"].values == "2"].X.tolist()
-        == adata[:, df1["b"] == "2"].X.tolist()
-    )
+    assert adata[cls(df["a"]) == "2"].X.tolist() == [[3, 4], [5, 6]]  # type: ignore[union-attr]
+    assert adata[:, cls(df1["b"]) == "2"].X.tolist() == [[2], [4], [6]]  # type: ignore[union-attr]
 
 
 def test_strings_to_categoricals():
@@ -608,7 +613,7 @@ def test_no_uniqueness_check_gives_repeat_indices():
                 np.array([[1, 2], [3, 4], [5, 6], [7, 8]]),
                 obs=pd.DataFrame(index=obs_names),
             )
-    assert adata.obs_names.values.tolist() == obs_names
+    assert adata.obs_names.tolist() == obs_names
 
 
 def test_get_subset_annotation():
@@ -812,7 +817,7 @@ def test_to_df_sparse():
     X = adata_sparse.X.toarray()
     df = adata_sparse.to_df()
     assert df[df.columns[0]].dtype == pd.SparseDtype(np.int64, 0)
-    assert df.values.tolist() == X.tolist()
+    assert df.to_numpy().tolist() == X.tolist()
 
 
 def test_to_df_no_X():

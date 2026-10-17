@@ -35,7 +35,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
-    from typing import ClassVar, Literal, Self, TypeAlias
+    from typing import ClassVar, Literal, Self
 
     from ..compat import ZappyArray
     from ..typing import AlignedArray, InMemoryArray
@@ -46,8 +46,8 @@ if TYPE_CHECKING:
     type _AlignedAny = AlignedArray | pd.DataFrame
 
 
-OneDIdx: TypeAlias = tuple[Idx1D]  # noqa: UP040
-TwoDIdx: TypeAlias = tuple[Idx1D, Idx1D]  # noqa: UP040
+type OneDIdx = tuple[Idx1D]
+type TwoDIdx = tuple[Idx1D, Idx1D]
 
 OnDiskArray = h5py.Dataset | zarr.Array | CSRDataset | CSCDataset
 """Element types that live on disk and so cannot be copied in memory."""

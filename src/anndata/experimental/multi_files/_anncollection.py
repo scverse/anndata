@@ -588,7 +588,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-# a `type` alias would hand the docs build a `TypeAliasType`, which would loop infinitely
+# no `type` alias: Sphinx would render its self-reference as a link to this undocumented alias
 ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
 
 

@@ -31,11 +31,12 @@ from anndata.utils import get_literal_members
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
     from pathlib import Path
-    from types import EllipsisType
 
     from _pytest.mark import ParameterSet
     from numpy.typing import NDArray
     from pytest_mock import MockerFixture
+
+    from anndata.typing import Index
 
     type Idx = slice | int | NDArray[np.integer] | NDArray[np.bool_]
 
@@ -165,7 +166,7 @@ def test_backed_indexing(
 
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
-    ellipsis_index: tuple[EllipsisType | slice, ...] | EllipsisType,
+    ellipsis_index: Index,
     equivalent_ellipsis_index: tuple[slice, slice],
 ):
     csr_mem, csr_disk, csc_disk, _ = ondisk_equivalent_adata
@@ -466,7 +467,7 @@ def idify(x: object) -> str:
 
 def width_idx_kinds(
     *idxs: tuple[Sequence[int], Idx, Sequence[str]], l: int
-) -> Generator[ParameterSet, None, None]:
+) -> Generator[ParameterSet]:
     """Convert major (first) index into various identical kinds of indexing."""
     kinds: tuple[Kind, ...] = get_literal_members(Kind)
     for (idx_maj_raw, idx_min, exp), maj_kind in product(idxs, kinds):
