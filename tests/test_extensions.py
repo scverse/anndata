@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_dummy() -> Generator[None, None, None]:
+def _cleanup_dummy() -> Generator[None]:
     """Automatically cleanup dummy namespace after each test."""
     cls: Any = ad.AnnData
     original = getattr(cls, "dummy", None)

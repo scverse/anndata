@@ -26,8 +26,9 @@ from anndata.tests.helpers import subset_func  # noqa: F401
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
-    from types import EllipsisType
     from typing import Literal
+
+    from anndata.typing import Index
 
 
 @pytest.fixture
@@ -120,24 +121,20 @@ def diskfmt2_store(
 )
 def ellipsis_index_with_equivalent(
     request,
-) -> tuple[tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]]:
+) -> tuple[Index, tuple[slice, slice]]:
     return request.param
 
 
 @pytest.fixture
 def ellipsis_index(
-    ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
-    ],
-) -> tuple[EllipsisType | slice, ...] | EllipsisType:
+    ellipsis_index_with_equivalent: tuple[Index, tuple[slice, slice]],
+) -> Index:
     return ellipsis_index_with_equivalent[0]
 
 
 @pytest.fixture
 def equivalent_ellipsis_index(
-    ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
-    ],
+    ellipsis_index_with_equivalent: tuple[Index, tuple[slice, slice]],
 ) -> tuple[slice, slice]:
     return ellipsis_index_with_equivalent[1]
 
@@ -145,7 +142,7 @@ def equivalent_ellipsis_index(
 @pytest.fixture(scope="session")
 def local_cluster_addr(
     tmp_path_factory: pytest.TempPathFactory, worker_id: str
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     # Adapted from https://pytest-xdist.readthedocs.io/en/latest/how-to.html#making-session-scoped-fixtures-execute-only-once
     import dask.distributed as dd
 
