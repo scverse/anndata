@@ -34,19 +34,21 @@ __all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 if TYPE_CHECKING:
     from typing import TypeAlias
 
-# private aliases are no `type`s, so Sphinx expands them in the public ones
+# private aliases are no `type`s, so subscripting substitutes into the union and Sphinx expands them in the public ones
 _M = TypeVar("_M", bound=IndexManager, default=Never)
-_Index1DNorm: TypeAlias = (
-    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | _M
+_I = TypeVar("_I")
+_Index1DNormBase: TypeAlias = (  # noqa: UP040
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase
 )
+_Index1DNorm: TypeAlias = _Index1DNormBase | _M  # noqa: PYI047
 # TODO: pd.Index[???]
-type Index1D[M: IndexManager = Never] = (
+type Index1D = (
     # 0D index
     int
     | str
     | np.int64
     # normalized 1D idex
-    | _Index1DNorm[M]
+    | _Index1DNormBase
     # different containers for mask, obs/varnames, or numerical index,
     | Sequence[int]
     | Sequence[str]
@@ -58,23 +60,26 @@ type Index1D[M: IndexManager = Never] = (
     | np.matrix  # bool
     | CSMatrix  # bool
     | CSArray  # bool
-    | M
 )
 """Index each :class:`~anndata.AnnData` object’s axis can be sliced with."""
 
-type Index[M: IndexManager = Never] = (
-    Index1D[M]
+_IndexOf: TypeAlias = (  # noqa: UP040
+    _I
     | EllipsisType
-    | tuple[Index1D[M] | EllipsisType]
-    | tuple[Index1D[M] | EllipsisType, Index1D[M] | EllipsisType]
-    | tuple[Index1D[M], Index1D[M], EllipsisType]
-    | tuple[EllipsisType, Index1D[M], Index1D[M]]
-    | tuple[Index1D[M], EllipsisType, Index1D[M]]
+    | tuple[_I | EllipsisType]
+    | tuple[_I | EllipsisType, _I | EllipsisType]
+    | tuple[_I, _I, EllipsisType]
+    | tuple[EllipsisType, _I, _I]
+    | tuple[_I, EllipsisType, _I]
     | CSMatrix
     | CSArray
-    | M
 )
+type Index = _IndexOf[Index1D]
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
+
+# internal variants that also accept the `IndexManager`s stored by views
+_Index1D: TypeAlias = Index1D | _M
+_Index: TypeAlias = _IndexOf[_Index1D[_M]]  # noqa: PYI047
 
 type InMemoryArray = (
     np.ndarray
