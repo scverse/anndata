@@ -33,7 +33,7 @@ templates_path = ["_templates"]
 html_static_path = ["_static"]
 html_extra_path = [str(acc_schema)]
 exclude_patterns = [
-    *scverse_doc.config.DEFAULTS["exclude_patterns"],
+    *scverse_doc.config.DEFAULTS.exclude_patterns,
     # exclude all 0.x.y.md files, but not index.md
     "release-notes/[!i]*.md",
     "news.md",  # is `include`d into index.md

@@ -26,8 +26,8 @@ scripts.format-fix = "prek run -a --group=format"
 
 [envs.hatch-check-types]
 python = "3.14"
-dependencies = [ "mypy", "scverse-doc" ]
-dependency-groups = [ "test", "typing", "dev-doc" ]
+dependencies = [ "mypy" ]
+dependency-groups = [ "test", "doc", "typing" ]
 scripts.check = "mypy {args:.}"
 
 [envs.hatch-test]
