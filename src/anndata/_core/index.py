@@ -11,7 +11,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy import sparse
 
 from .._settings import settings
 from ..compat import (
@@ -446,8 +445,10 @@ def _subset_dask(a: DaskArray, subset_idx: NumpySubsetIdx) -> DaskArray:
     if len(subset_idx) == 1:
         return _subset_dask_axis(a, subset_idx[0], axis=0)
     rows, cols = subset_idx
-    # subset the axis that is not chunked first (the minor axis of sparse chunks)
-    if isinstance(a._meta, sparse.csc_matrix | sparse.csc_array):
+    # Subset the axis split into more chunks first: that can drop whole chunks, and for
+    # sparse chunks (split along their major axis) it is a cheap slice of `indptr`,
+    # which leaves fewer stored values for the subset along the other axis.
+    if a.numblocks[1] > a.numblocks[0]:
         return _subset_dask_axis(_subset_dask_axis(a, cols, axis=1), rows, axis=0)
     return _subset_dask_axis(_subset_dask_axis(a, rows, axis=0), cols, axis=1)
 
@@ -505,15 +506,15 @@ def _subset_chunked_axis(
         # keeps dask from fusing each chunk’s read and subset into one task)
         a = a.blocks[(slice(None),) * axis + (blocks,)]
         mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks])
-    ind = "ij"[: a.ndim]
+    ind = tuple(range(a.ndim))  # any number of dimensions, e.g. 3-D `obsm` entries
     return da.blockwise(
         partial(_getitem_chunk_mask, axis=axis),
         ind,
         a,
         ind,
         da.from_array(mask, chunks=(a.chunks[axis],)),
-        ind[axis],
-        adjust_chunks={ind[axis]: tuple(counts[blocks].tolist())},
+        (axis,),
+        adjust_chunks={axis: tuple(counts[blocks].tolist())},
         dtype=a.dtype,
         meta=a._meta,
     )

@@ -457,6 +457,40 @@ def test_subset_chunked_axis(index):
         assert sub.chunks[0] == ((0,) if index == "empty" else (2, 2))
 
 
+@pytest.mark.parametrize("index", ["bool", "int"])
+def test_subset_chunked_axis_nd(index):
+    """Aligned arrays can have more than two dimensions, e.g. a 3-D `obsm` entry."""
+    import dask.array as da
+
+    x = np.arange(40 * 3 * 2, dtype=np.float32).reshape(40, 3, 2)
+    adata = AnnData(
+        np.zeros((40, 5)), obsm={"x": da.from_array(x, chunks=(10, -1, -1))}
+    )
+    mask = np.isin(np.arange(40), [3, 5, 25, 26])
+    sub = adata[mask if index == "bool" else np.flatnonzero(mask)].obsm["x"]
+    assert sub.chunks[0] == (2, 2)
+    np.testing.assert_array_equal(sub.compute(), x[mask])
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc", None], ids=["csr", "csc", "dense"])
+def test_subset_both_axes(fmt):
+    import dask.array as da
+    from scipy import sparse
+
+    rng = np.random.default_rng(0)
+    x = rng.random((40, 30)) * (rng.random((40, 30)) > 0.7)
+    chunks = {"csr": (10, -1), "csc": (-1, 10), None: (10, 7)}[fmt]
+    arr = da.from_array(x, chunks=chunks)
+    if fmt is not None:
+        cls = getattr(sparse, f"{fmt}_matrix")
+        arr = arr.map_blocks(cls, meta=cls((0, 0)))
+    rows, cols = rng.random(40) > 0.5, rng.random(30) > 0.5
+    result = AnnData(arr)[rows, cols].X.compute()
+    np.testing.assert_array_equal(
+        result.toarray() if fmt else result, x[np.ix_(rows, cols)]
+    )
+
+
 SMALL_SHARD_WARNING = r"dask chunk size is less than 100MB"
 NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
 
