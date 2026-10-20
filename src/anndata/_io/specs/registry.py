@@ -412,16 +412,23 @@ class Writer:
 
         write_func = self.find_write_func(type(store), elem, modifiers)
 
-        if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
-            write_func,
-            store,
-            k,
-            elem,
-            dataset_kwargs=dataset_kwargs,
-            iospec=self.registry.get_spec(elem),
-        )
+        if self.callback is not None:
+            write_func = partial(
+                self.callback, write_func, iospec=self.registry.get_spec(elem)
+            )
+        write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        _add_to_column_order(store, k)
+
+
+def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
+    """Register a column written into an existing dataframe group in its column order."""
+    if (
+        k != "/"  # writing the dataframe itself to the root
+        and store.attrs.get("encoding-type") == "dataframe"
+        and k != store.attrs["_index"]
+        and k not in (order := list(cast("Iterable[str]", store.attrs["column-order"])))
+    ):
+        store.attrs["column-order"] = [*order, k]
 
 
 def read_elem(elem: StorageType) -> RWAble:
