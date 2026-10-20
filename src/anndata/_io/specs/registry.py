@@ -19,14 +19,8 @@ from anndata.compat import DaskArray, _read_attr, has_xp
 from ...utils import warn
 
 if TYPE_CHECKING:
-    import sys
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
-
-    if sys.version_info >= (3, 13):
-        from typing import TypeIs
-    else:
-        from typing import TypeIs
+    from typing import Any, TypeIs
 
     from anndata._types import (
         ReadCallback,
