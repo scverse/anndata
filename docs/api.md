@@ -122,6 +122,23 @@ Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) o
    io.write_elem
 ```
 
+All of these take a `compat` argument, see {doc}`/write-compat` for what the compatibility profiles do.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+   :template: class-minimal
+
+   WriteCompat
+```
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   types.WriteCompatStr
+```
+
 Writing formats that cannot represent all aspects of {class}`AnnData` objects.
 
 ```{eval-rst}
