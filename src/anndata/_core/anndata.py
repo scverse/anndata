@@ -96,7 +96,7 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..typing import AlignedArray, Index, Index1D, Storable, _Index1DNorm
+    from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import SubsetIdx
@@ -1086,17 +1086,16 @@ class AnnData:  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: Index[IndexManager]
+        self, index: _Index[IndexManager]
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
-    # accessors only overlap `Index` via hypothetical subclasses of both, e.g. of `np.ndarray`
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...  # type: ignore[overload-overlap]
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
     @overload
-    def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...  # type: ignore[overload-overlap]
+    def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
-    def __getitem__(self, index: AdRef) -> Array: ...  # type: ignore[overload-overlap]
+    def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
     def __getitem__(
@@ -1115,7 +1114,7 @@ class AnnData:  # noqa: PLW1641
 
         return self._getitem(index)
 
-    def _getitem(self, index: Index[IndexManager]) -> AnnData:
+    def _getitem(self, index: _Index[IndexManager]) -> AnnData:
         """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)

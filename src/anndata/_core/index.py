@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from typing import TypeIs
 
     from ..acc import Array
-    from ..typing import AlignedArray, Index, Index1D, _Index1DNorm
+    from ..typing import AlignedArray, Index1D, _Index, _Index1D, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
 
@@ -53,7 +53,7 @@ DtypeKind = Literal["f", "i", "u", "b"]
 
 
 def _normalize_indices(
-    index: Index[IndexManager], names0: pd.Index, names1: pd.Index
+    index: _Index[IndexManager], names0: pd.Index, names1: pd.Index
 ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
     # deal with tuples of length 1
     if isinstance(index, tuple) and len(index) == 1:
@@ -228,7 +228,7 @@ def _from_array(
 
 
 def _normalize_index(
-    indexer: Index1D[IndexManager], index: pd.Index
+    indexer: _Index1D[IndexManager], index: pd.Index
 ) -> _Index1DNorm | int | np.integer:
 
     if isinstance(indexer, pd.Index | pd.Series) and (
@@ -265,7 +265,7 @@ def _fix_slice_bounds(
     return slice(start, stop, step)
 
 
-def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[M]]:
+def unpack_index[M: IndexManager](index: _Index[M]) -> tuple[_Index1D[M], _Index1D[M]]:
     if not isinstance(index, tuple):
         if index is Ellipsis:
             index = slice(None)

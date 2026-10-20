@@ -84,20 +84,15 @@ dev-doc = [
 doc = [
     "anndata[dask]",
     "awkward>=2.6.3",
-    "ipython",                            # For syntax highlighting in notebooks
+    "ipython",                          # For syntax highlighting in notebooks
     "mudata",
     "myst-nb>=1.4",
-    "myst-parser",
     "pandas>=3",
-    "scanpydoc[theme,typehints]>=0.17.1",
+    "scverse-doc[full]>=0.2.3",
     "scverse-misc[sphinx]",
     "sphinx>=9.1",
     "sphinx-autodoc-typehints>=3.13.6",
-    "sphinx-book-theme>=1.1",
-    "sphinx-copybutton",
-    "sphinx-design",
     "sphinx-issues>=5.0.1",
-    "sphinxext-opengraph",
     # for unreleased changes
     { include-group = "dev-doc" },
 ]

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef
     from ..compat import IndexManager
-    from ..typing import Index, InMemoryArray, _Index1DNorm
+    from ..typing import Index, InMemoryArray, _Index, _Index1DNorm
     from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
     from .xarray import Dataset2D
@@ -151,9 +151,8 @@ class Raw:
     def obs_names(self) -> pd.Index[str]:
         return self._adata.obs_names
 
-    # `AdRef` only overlaps `Index` via hypothetical subclasses of both, e.g. of `np.ndarray`
     @overload
-    def __getitem__(self, index: AdRef) -> InMemoryArray: ...  # type: ignore[overload-overlap]
+    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
     @overload
     def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw: ...
     def __getitem__(
@@ -172,7 +171,7 @@ class Raw:
                 return self._getitem(index)
 
     def _getitem(
-        self, index: Index[IndexManager], *, parent: AnnData | None = None
+        self, index: _Index[IndexManager], *, parent: AnnData | None = None
     ) -> Raw:
         """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
         oidx, vidx = self._normalize_indices(index)
@@ -230,7 +229,7 @@ class Raw:
         )
 
     def _normalize_indices(
-        self, packed_index: Index[IndexManager]
+        self, packed_index: _Index[IndexManager]
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
