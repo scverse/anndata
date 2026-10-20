@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Callable, Mapping
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
+from ntpath import isreserved as _is_reserved_win
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
@@ -304,20 +304,6 @@ def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteCompat) -> 
 # `%` is in there because it introduces an escape sequence.
 UNSAFE_KEY_CHARS = frozenset('%/\\:*?"<>|') | frozenset(map(chr, range(32)))
 _ESCAPE_RE = re.compile("%([0-9A-F]{2})")
-
-if sys.version_info >= (3, 13):
-    from ntpath import isreserved as _is_reserved_win
-else:  # pragma: no cover
-    _WIN_DEVICE_NAMES = frozenset(
-        {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
-        | {f"{dev}{n}" for dev in ("COM", "LPT") for n in "123456789¹²³"}
-    )
-
-    def _is_reserved_win(name: str) -> bool:
-        """Backport of `ntpath.isreserved`, minus its check for the characters we escape."""
-        if name[-1:] in (".", " "):  # trailing dots and spaces are reserved
-            return name not in (".", "..")
-        return name.partition(".")[0].rstrip(" ").upper() in _WIN_DEVICE_NAMES
 
 
 def _is_reserved_key(key: str) -> bool:
