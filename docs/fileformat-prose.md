@@ -77,6 +77,86 @@ Using this information, we're able to dispatch onto readers for the different el
 * An element MUST have a string-valued field `"encoding-type"` in its metadata
 * An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
 
+(escaped-keys)=
+### Escaped keys
+
+`/` separates groups in both `HDF5` and `zarr`,
+and a `zarr` store commonly maps each key to a real file,
+so a key like `a/b` or `a:b` cannot be used as a child name.
+From the `"0.14"` {doc}`write compatibility profile <write-compat>` on,
+elements that would need such a key store their keys escaped instead,
+so `a/b` is stored as `a%2Fb`.
+
+The escaped characters are the ones [Windows forbids in file names][win-naming],
+a superset of what `POSIX` and `macOS` forbid,
+so an escaped key is usable as a path segment anywhere.
+They are all ASCII and nothing else is ever escaped,
+which is what keeps an escape sequence exactly three characters long.
+
+Some keys are unusable even though every character in them is safe,
+`CON` and `zarr.json` for example.
+Those are wrapped rather than mangled, so they stay legible in a listing:
+`CON` is stored as `%CON%`.
+Wrapping covers every such key at once,
+since whatever it wraps is non-empty, contains a `%`, and begins and ends with one.
+Marking only one end would not do,
+because some keys are reserved by how they *begin* –
+`NUL.txt` would still name a device and `__x` would still start with `__`.
+
+Nothing else can leave a key ending in `%`:
+a `%` can only ever be the first of an escape sequence’s three characters,
+and a literal one is itself escaped, so `CON%` is stored as `CON%25`.
+That is what lets a reader recognize a wrapped key,
+and why a writer may wrap every key it writes
+if it prefers not to recognize reserved keys at all.
+
+Note that `zarr` additionally *recommends*
+restricting names to `a-z`, `A-Z`, `0-9`, `-`, `_` and `.`;
+anndata does not escape everything outside that set,
+since doing so would mangle e.g. non-ASCII gene names for no concrete gain.
+
+(escaped-key-spec)=
+### Escaped key specification
+
+Which elements escape their keys, and how they signal it,
+is part of each encoding’s own specification –
+see {ref}`mappings <mapping-escaped>` and {ref}`dataframes <dataframe-escaped>`.
+The escaping itself is the same everywhere.
+
+A key is *reserved* if it
+
+* is empty, consists only of periods (`.`, `..`, …), starts with `__`, or is `zarr.json` –
+  all [reserved by the `zarr` v3 spec][zarr-names], or
+* ends in a period or a space, or
+* names a Windows device, i.e. taking the part before its first period
+  and stripping trailing spaces from that yields, case-insensitively, one of
+  `CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`,
+  `COM1`–`COM9`, `COM¹`, `COM²`, `COM³`, `LPT1`–`LPT9`, `LPT¹`, `LPT²` or `LPT³`.
+  The part is taken before the *first* period because such a name keeps referring
+  to the device whatever extension follows it, so `NUL.tar.gz` is reserved as well
+  ([`ntpath.isreserved`][isreserved] implements this rule)
+
+A key is escaped by
+
+* replacing each of `/ \ : * ? " < > |`, the control characters `0x00`–`0x1F`,
+  and `%` itself with `%` and the two upper-case hexadecimal digits of its code point,
+  and then
+* wrapping that result in a `%` on either end if necessary
+
+while these rules apply:
+
+* A writer MUST wrap a key that is reserved,
+  and SHOULD NOT wrap a key that is not reserved
+
+Consequently, a reader of escaped keys MUST, in this order:
+
+1. remove the first *and* last character of key that ends in a `%`, then
+2. replace each `%XX` with the character of code point `0xXX`
+
+[win-naming]: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
+[zarr-names]: https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html#node-names
+[isreserved]: https://docs.python.org/3/library/os.path.html#os.path.isreserved
+
 (anndata)=
 ### AnnData specification (v0.1.0)
 
@@ -284,6 +364,22 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
 * Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
+(dataframe-escaped)=
+### Dataframe Specification (v0.3.0)
+
+Identical to v0.2.0, except that the column and index names are {ref}`escaped <escaped-keys>`.
+Keeping the escaped form in the attributes also lets them hold
+a name an `HDF5` attribute could not, such as one containing a NUL.
+
+* In a dataframe with `"encoding-version": "0.3.0"`,
+  the column names and the index name are escaped,
+  and a reader MUST unescape them to recover the names
+* `"column-order"` and `"_index"` MUST hold those escaped names,
+  i.e. they name the child keys verbatim
+* A dataframe with a column or index name that needs escaping MUST be written as `"0.3.0"`
+* A dataframe that needs no escaping SHOULD be written as `"0.2.0"`,
+  so files that don’t use the feature stay readable by older implementations
+
 (mappings)=
 ## Mappings
 
@@ -331,6 +427,17 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 
 * Each mapping MUST be its own group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+
+(mapping-escaped)=
+### Mapping specifications (v0.2.0)
+
+Identical to v0.1.0, except that the child keys are {ref}`escaped <escaped-keys>`.
+
+* In a mapping with `"encoding-version": "0.2.0"`, every child key is escaped,
+  and a reader MUST unescape each of them to recover the mapping’s keys
+* A mapping containing a key that needs escaping MUST be written as `"0.2.0"`
+* A mapping whose keys need no escaping SHOULD be written as `"0.1.0"`,
+  so files that don’t use the feature stay readable by older implementations
 
 (sequences)=
 ## Sequences
