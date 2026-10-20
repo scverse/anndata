@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 from types import EllipsisType
 from typing import TYPE_CHECKING, Never, TypeVar
@@ -29,28 +28,27 @@ from .compat import (
     ZappyArray,
 )
 
+__all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
+
+
 if TYPE_CHECKING:
     from typing import TypeAlias
 
-
-__all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
-
-if TYPE_CHECKING or sys.version_info >= (3, 13):
-    _M = TypeVar("_M", bound=IndexManager, default=Never)
-else:
-    _M = TypeVar("_M")
-
-_Index1DNorm: TypeAlias = (  # noqa: UP040
-    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase | _M
+# private aliases are no `type`s, so subscripting substitutes into the union and Sphinx expands them in the public ones
+_M = TypeVar("_M", bound=IndexManager, default=Never)
+_I = TypeVar("_I")
+_Index1DNormBase: TypeAlias = (  # noqa: UP040
+    slice | NDArray[np.bool_] | NDArray[np.integer] | SupportsArrayApiBase
 )
+_Index1DNorm: TypeAlias = _Index1DNormBase | _M  # noqa: PYI047
 # TODO: pd.Index[???]
-type Index1D[_M: IndexManager] = (
+type Index1D = (
     # 0D index
     int
     | str
     | np.int64
     # normalized 1D idex
-    | _Index1DNorm[_M]
+    | _Index1DNormBase
     # different containers for mask, obs/varnames, or numerical index,
     | Sequence[int]
     | Sequence[str]
@@ -62,22 +60,26 @@ type Index1D[_M: IndexManager] = (
     | np.matrix  # bool
     | CSMatrix  # bool
     | CSArray  # bool
-    | _M
 )
 """Index each :class:`~anndata.AnnData` object’s axis can be sliced with."""
 
-type Index[_M: IndexManager] = (
-    Index1D[_M]
+_IndexOf: TypeAlias = (  # noqa: UP040
+    _I
     | EllipsisType
-    | tuple[Index1D[_M] | EllipsisType, Index1D[_M] | EllipsisType]
-    | tuple[Index1D, Index1D[_M], EllipsisType]
-    | tuple[EllipsisType, Index1D[_M], Index1D[_M]]
-    | tuple[Index1D[_M], EllipsisType, Index1D[_M]]
+    | tuple[_I | EllipsisType]
+    | tuple[_I | EllipsisType, _I | EllipsisType]
+    | tuple[_I, _I, EllipsisType]
+    | tuple[EllipsisType, _I, _I]
+    | tuple[_I, EllipsisType, _I]
     | CSMatrix
     | CSArray
-    | _M
 )
+type Index = _IndexOf[Index1D]
 """Index an :class:`~anndata.AnnData` object can be sliced with."""
+
+# internal variants that also accept the `IndexManager`s stored by views
+_Index1D: TypeAlias = Index1D | _M
+_Index: TypeAlias = _IndexOf[_Index1D[_M]]  # noqa: PYI047
 
 type InMemoryArray = (
     np.ndarray
