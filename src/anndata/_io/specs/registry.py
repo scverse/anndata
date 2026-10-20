@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     if sys.version_info >= (3, 13):
         from typing import TypeIs
     else:
-        from typing_extensions import TypeIs
+        from typing import TypeIs
 
     from anndata._types import (
         ReadCallback,
@@ -298,9 +298,7 @@ def sequence_is_arrayable(elem: Sequence, *, compat: WriteCompat) -> bool:
     )
 
 
-def _iter_patterns(
-    elem: RWAble, *, compat: WriteCompat
-) -> Generator[WriteSrcType]:
+def _iter_patterns(elem: RWAble, *, compat: WriteCompat) -> Generator[WriteSrcType]:
     """Iterates over possible patterns for an element in order of precedence."""
     t = type(elem)
 
