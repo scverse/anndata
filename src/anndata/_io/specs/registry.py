@@ -412,16 +412,23 @@ class Writer:
 
         write_func = self.find_write_func(type(store), elem, modifiers)
 
-        if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
-            write_func,
-            store,
-            k,
-            elem,
-            dataset_kwargs=dataset_kwargs,
-            iospec=self.registry.get_spec(elem),
-        )
+        if self.callback is not None:
+            write_func = partial(
+                self.callback, write_func, iospec=self.registry.get_spec(elem)
+            )
+        write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        _add_to_column_order(store, k)
+
+
+def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
+    """Register a column written into an existing dataframe group in its column order."""
+    if (
+        k != "/"  # writing the dataframe itself to the root
+        and store.attrs.get("encoding-type") == "dataframe"
+        and k != store.attrs["_index"]
+        and k not in (order := list(cast("Iterable[str]", store.attrs["column-order"])))
+    ):
+        store.attrs["column-order"] = [*order, k]
 
 
 def read_elem(elem: StorageType) -> RWAble:
@@ -461,11 +468,13 @@ def read_elem_lazy(
        and the on-disk chunking otherwise for dense.
        Can use `-1` or `None` to indicate use of the size of the corresponding dimension.
     meta
-       Sparse matrices only: an (empty) matrix of the type the chunks will have,
-       e.g. a :class:`cupyx.scipy.sparse.csr_matrix` when :mod:`zarr` reads into GPU memory on the Dask workers.
+       Sparse matrices only: an (empty) matrix of the type the chunks will have.
        Only its type is used.
        Defaults to :mod:`cupyx.scipy.sparse` if :mod:`zarr` reads into GPU memory in this process
        (see ``zarr.config.enable_gpu()``), and to :mod:`scipy` otherwise.
+       Pass it when the chunks are read somewhere configured differently, e.g. on Dask workers
+       that read into GPU memory while this process reads into host memory:
+       then pass a :class:`cupyx.scipy.sparse.csr_matrix`.
 
     Returns
     -------

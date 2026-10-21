@@ -290,12 +290,14 @@ def test_sparse_dataset_fast_pipeline(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("prefer_zarrs", [True, False])
-def test_zarr_context_keeps_gpu_pipeline(monkeypatch, *, prefer_zarrs: bool):
+def test_zarr_context_gpu_without_zarrs(monkeypatch, *, prefer_zarrs: bool):
     fake_module = types.ModuleType("zarrs")
     fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
     monkeypatch.setitem(sys.modules, "zarrs", fake_module)
-    # GPU codecs rely on the batched pipeline that `enable_gpu` selects
+    # zarrs only reads into host memory, the fused pipeline also into GPU memory
     with zarr.config.enable_gpu():
         pipeline = zarr.config.get("codec_pipeline.path")
         with fast_zarr_context(prefer_zarrs=prefer_zarrs):
-            assert zarr.config.get("codec_pipeline.path") == pipeline
+            assert zarr.config.get("codec_pipeline.path") == (
+                "zarr.core.codec_pipeline.FusedCodecPipeline" if has_fused else pipeline
+            )
