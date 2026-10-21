@@ -1566,10 +1566,11 @@ def test_concat_size_0_axis(
             for k, result_elem in getattr(b_result, mapping_elem).items():
                 elem_name = f"{mapping_elem}/{k}"
                 # pd.concat can have unintuitive return types. is similar to numpy promotion
+                # index names of {obs,var}m dataframes are not kept in sync with {obs,var}_names
                 if isinstance(result_elem, pd.DataFrame):
                     assert_equal(
-                        getattr(b, mapping_elem)[k].astype(object),
-                        result_elem.astype(object),
+                        getattr(b, mapping_elem)[k].astype(object).rename_axis(None),
+                        result_elem.astype(object).rename_axis(None),
                         elem_name=elem_name,
                     )
                 else:

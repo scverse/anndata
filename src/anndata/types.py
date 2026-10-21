@@ -3,15 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    import sys
+    from types import CapsuleType
     from typing import Any, Literal, Self
 
     from array_api.latest import ArrayNamespace
-
-    if sys.version_info >= (3, 13):
-        from types import CapsuleType
-    else:
-        from typing_extensions import CapsuleType
 
 
 @runtime_checkable

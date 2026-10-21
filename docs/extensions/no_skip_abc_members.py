@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 import abc
-import sys
 from traceback import walk_stack
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_protocol_members, is_protocol
 
 from sphinx.util.typing import ExtensionMetadata
-
-if sys.version_info >= (3, 13):
-    from typing import get_protocol_members, is_protocol
-else:
-    from typing_extensions import get_protocol_members, is_protocol
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx

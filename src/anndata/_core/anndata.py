@@ -76,7 +76,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Any, ClassVar, Literal, TypeAlias
+    from typing import Any, ClassVar, Literal
 
     from numpy.typing import NDArray
     from zarr.storage import StoreLike
@@ -96,16 +96,14 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..typing import AlignedArray, Index, Index1D, Storable, _Index1DNorm
+    from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
     from .index import SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
-    IntoAlignedMapping: TypeAlias = (  # noqa: UP040
-        Mapping[str, AlignedArray] | NDArray[np.void] | None
-    )
-    IntoLayers: TypeAlias = (  # noqa: UP040
+    type IntoAlignedMapping = Mapping[str, AlignedArray] | NDArray[np.void] | None
+    type IntoLayers = (
         Mapping[str, AlignedArray] | Mapping[str | None, AlignedArray] | None
     )
 
@@ -376,7 +374,7 @@ class AnnData:  # noqa: PLW1641
         # set raw, easy, as it’s immutable anyways...
         if (ref_raw := adata_ref._raw) is not None:
             # slicing along variables axis is ignored
-            self._raw = ref_raw[self, oidx]
+            self._raw = ref_raw._getitem(oidx, parent=self)
         else:
             self._raw = None
 
@@ -1088,7 +1086,7 @@ class AnnData:  # noqa: PLW1641
         write_attribute(self.file._file, attr, value)
 
     def _normalize_indices(
-        self, index: Index
+        self, index: _Index[IndexManager]
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         return _normalize_indices(index, self.obs_names, self.var_names)
 
@@ -1100,7 +1098,9 @@ class AnnData:  # noqa: PLW1641
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
-    def __getitem__(self, index: Index | AdRef) -> AnnData | AlignedArray | Array:
+    def __getitem__(
+        self, index: Index | AdRef | RefAcc | MapAcc
+    ) -> AnnData | DataFrameLike | AlignedArray | Array:
         """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
         from ..acc import AdRef, MapAcc, RefAcc
 
@@ -1112,6 +1112,10 @@ class AnnData:  # noqa: PLW1641
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
 
+        return self._getitem(index)
+
+    def _getitem(self, index: _Index[IndexManager]) -> AnnData:
+        """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
         oidx, vidx = self._normalize_indices(index)
         return AnnData(self, oidx=oidx, vidx=vidx, asview=True)
 
@@ -2031,4 +2035,4 @@ def _infer_shape(
 @_subset_dispatch.register(AnnData)
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
-    return a[subset_idx]
+    return a._getitem(subset_idx)
