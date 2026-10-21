@@ -45,21 +45,19 @@ def fast_zarr_context(*, prefer_zarrs: bool = True):
     # it is the old BatchedCodecPipeline.
     # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
     old_pipeline = zarr.config.get("codec_pipeline.path")
-    # `zarr.config.enable_gpu()` also selects the (batched) pipeline, which GPU codecs rely on,
-    # and neither zarrs nor the fused pipeline can handle GPU buffers.
-    if "gpu" in zarr.config.get("ndbuffer", "cpu"):
-        yield
-        return
     use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
         "3.3"
     )
     # Switch to zarrs if the old pipeline is just the default.
     # With `prefer_zarrs=False`, zarrs is only a fallback for when the fused pipeline is unavailable
     # (zarrs is slower than the fused pipeline for large integer selections, as in sparse subsetting).
+    # zarrs only reads into host memory, so not when zarr reads into GPU memory
+    # (`zarr.config.enable_gpu()`), see https://github.com/zarrs/zarrs-python/issues/TODO
     use_zarrs = (
         find_spec("zarrs")
         and "Batched" in old_pipeline
         and (prefer_zarrs or not use_zarr_fused)
+        and "gpu" not in zarr.config.get("ndbuffer", "cpu")
     )
     zarr_context = (
         zarr.config.set({
