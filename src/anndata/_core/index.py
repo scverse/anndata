@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from anndata.typing import Index1D
 
     from ..acc import Array
-    from ..typing import Index, _Index1DNorm
+    from ..typing import _Index, _Index1D, _Index1DNorm
     from .anndata import AnnData
     from .raw import Raw
 
@@ -52,7 +52,7 @@ __all__ = [
 
 
 def _normalize_indices(
-    index: Index[IndexManager], names0: pd.Index, names1: pd.Index
+    index: _Index[IndexManager], names0: pd.Index, names1: pd.Index
 ) -> tuple[
     _Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer | pd.MultiIndex
 ]:
@@ -216,7 +216,7 @@ def _from_array(
 
 
 def _normalize_index(
-    indexer: Index1D[IndexManager], index: pd.Index
+    indexer: _Index1D[IndexManager], index: pd.Index
 ) -> _Index1DNorm | int | np.integer | SupportsArrayApiBase | pd.MultiIndex:
 
     if isinstance(indexer, pd.Index | pd.Series) and (
@@ -253,7 +253,7 @@ def _fix_slice_bounds[A: int, Z: int, S: int](
     return slice(start, stop, step)
 
 
-def unpack_index[M: IndexManager](index: Index[M]) -> tuple[Index1D[M], Index1D[M]]:
+def unpack_index[M: IndexManager](index: _Index[M]) -> tuple[_Index1D[M], _Index1D[M]]:
     if not isinstance(index, tuple):
         if index is Ellipsis:
             index = slice(None)
