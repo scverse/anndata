@@ -52,7 +52,7 @@ def fast_zarr_context(*, prefer_zarrs: bool = True):
     # With `prefer_zarrs=False`, zarrs is only a fallback for when the fused pipeline is unavailable
     # (zarrs is slower than the fused pipeline for large integer selections, as in sparse subsetting).
     # zarrs only reads into host memory, so not when zarr reads into GPU memory
-    # (`zarr.config.enable_gpu()`), see https://github.com/zarrs/zarrs-python/issues/TODO
+    # (`zarr.config.enable_gpu()`), see https://github.com/zarrs/zarrs-python/issues/201
     use_zarrs = (
         find_spec("zarrs")
         and "Batched" in old_pipeline
