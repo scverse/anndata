@@ -457,6 +457,40 @@ def test_subset_chunked_axis(index):
         assert sub.chunks[0] == ((0,) if index == "empty" else (2, 2))
 
 
+@pytest.mark.parametrize("index", ["bool", "int"])
+def test_subset_chunked_axis_nd(index):
+    """Aligned arrays can have more than two dimensions, e.g. a 3-D `obsm` entry."""
+    import dask.array as da
+
+    x = np.arange(40 * 3 * 2, dtype=np.float32).reshape(40, 3, 2)
+    adata = AnnData(
+        np.zeros((40, 5)), obsm={"x": da.from_array(x, chunks=(10, -1, -1))}
+    )
+    mask = np.isin(np.arange(40), [3, 5, 25, 26])
+    sub = adata[mask if index == "bool" else np.flatnonzero(mask)].obsm["x"]
+    assert sub.chunks[0] == (2, 2)
+    np.testing.assert_array_equal(sub.compute(), x[mask])
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc", None], ids=["csr", "csc", "dense"])
+def test_subset_both_axes(fmt):
+    import dask.array as da
+    from scipy import sparse
+
+    rng = np.random.default_rng(0)
+    x = rng.random((40, 30)) * (rng.random((40, 30)) > 0.7)
+    chunks = {"csr": (10, -1), "csc": (-1, 10), None: (10, 7)}[fmt]
+    arr = da.from_array(x, chunks=chunks)
+    if fmt is not None:
+        cls = getattr(sparse, f"{fmt}_matrix")
+        arr = arr.map_blocks(cls, meta=cls((0, 0)))
+    rows, cols = rng.random(40) > 0.5, rng.random(30) > 0.5
+    result = AnnData(arr)[rows, cols].X.compute()
+    np.testing.assert_array_equal(
+        result.toarray() if fmt else result, x[np.ix_(rows, cols)]
+    )
+
+
 SMALL_SHARD_WARNING = r"dask chunk size is less than 100MB"
 NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
 
@@ -500,7 +534,7 @@ NO_SUBCHUNK_WARNING = r"Could not find inner chunks"
             "zarr",
             (997, 1009),
             None,
-            [SMALL_SHARD_WARNING, NO_SUBCHUNK_WARNING],
+            [NO_SUBCHUNK_WARNING],
             True,
             id="zarr-no-good-divisor",
         ),
@@ -528,9 +562,15 @@ def test_dask_chunks_and_shards_roundtrip(
     expected_shards: tuple[int, int] | None,
     expected_warnings: list[str],
     auto_shard: bool,  # noqa: FBT001
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import dask.array as da
 
+    from anndata._io.specs import methods
+
+    if SMALL_SHARD_WARNING in expected_warnings:
+        # writing a real >10GB array in tests is too slow
+        monkeypatch.setattr(methods, "SMALL_SHARD_WARNING_MIN_ARRAY_MB", 0)
     X = da.zeros(shape, chunks=dask_chunks, dtype=np.float32)
     store = tmp_path / "test.h5ad" if diskfmt == "h5ad" else MemoryStore()
     with as_group(store, mode="w") as g:

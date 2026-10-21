@@ -54,7 +54,7 @@ def _anndata_test_env(request: pytest.FixtureRequest) -> None:
 @pytest.fixture
 def _doctest_env(
     request: pytest.FixtureRequest, cache: pytest.Cache, tmp_path: Path
-) -> Generator[None, None, None]:
+) -> Generator[None]:
     from contextlib import chdir
 
     from scanpy import settings

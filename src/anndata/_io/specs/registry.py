@@ -268,7 +268,7 @@ def get_spec(elem: StorageType) -> IOSpec:
     })
 
 
-def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType, None, None]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 

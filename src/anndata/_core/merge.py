@@ -1344,7 +1344,7 @@ def make_dask_col_from_extension_dtype(
 
 def make_xarray_extension_dtypes_dask(
     annotations: Iterable[Dataset2D], *, use_only_object_dtype: bool = False
-) -> Generator[Dataset2D, None, None]:
+) -> Generator[Dataset2D]:
     """
     Creates a generator of Dataset2D objects with dask arrays in place of :class:`pandas.api.extensions.ExtensionArray` dtype columns.
 

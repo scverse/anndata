@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy as np
 import pandas as pd
@@ -29,13 +29,15 @@ if TYPE_CHECKING:
 
     from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef
-    from ..typing import Index, InMemoryArray, _Index1DNorm
+    from ..compat import IndexManager
+    from ..typing import Index, InMemoryArray, _Index, _Index1DNorm
     from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
     from .xarray import Dataset2D
 
 
 # TODO: Implement views for Raw
+@final
 class Raw:
     # `Raw` parents its `varm` like a non-view `AnnData` does, and never is a view
     is_view: ClassVar = False
@@ -159,20 +161,21 @@ class Raw:
         from ..acc import AdRef
         from .anndata import AnnData
 
-        if isinstance(index, AdRef):
-            # `RefAcc.get` has no official `Raw` support, but works for the accessors it has
-            return index.acc.get(self, index.idx)
+        match index:
+            case AdRef():
+                # `RefAcc.get` has no official `Raw` support, but works for the accessors it has
+                return index.acc.get(self, index.idx)
+            case (AnnData() as parent, idx):
+                return self._getitem(idx, parent=parent)
+            case _:
+                return self._getitem(index)
 
-        if (
-            isinstance(index, tuple)
-            and len(index) == 2
-            and isinstance(parent := index[0], AnnData)
-        ):
-            adata = parent
-            oidx, vidx = self._normalize_indices(index[1])
-        else:
-            oidx, vidx = self._normalize_indices(index)
-            adata = self._adata[oidx]
+    def _getitem(
+        self, index: _Index[IndexManager], *, parent: AnnData | None = None
+    ) -> Raw:
+        """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
+        oidx, vidx = self._normalize_indices(index)
+        adata = self._adata._getitem(oidx) if parent is None else parent
 
         # To preserve two dimensional shape
         if isinstance(vidx, int | np.integer):
@@ -226,7 +229,7 @@ class Raw:
         )
 
     def _normalize_indices(
-        self, packed_index: Index
+        self, packed_index: _Index[IndexManager]
     ) -> tuple[_Index1DNorm | int | np.integer, _Index1DNorm | int | np.integer]:
         # deal with slicing with pd.Series
         if isinstance(packed_index, pd.Series):
