@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from types import EllipsisType
 from typing import Any, Literal, Self, overload
 
@@ -7,6 +7,11 @@ import numpy as np
 from cupy.cuda import MemoryPointer, Stream
 from numpy._core.multiarray import flagsobj
 from numpy.typing import DTypeLike, NDArray
+
+type _Index1D = (
+    int | slice | EllipsisType | NDArray[np.integer | np.bool] | ndarray | None
+)
+type _Index = _Index1D | tuple[_Index1D, ...]
 
 class ndarray:
     dtype: np.dtype[Any]
@@ -18,10 +23,10 @@ class ndarray:
 
     def __init__(
         self,
-        shape: tuple[int, ...],
+        shape: int | Sequence[int],
         dtype: DTypeLike | None = ...,
         memptr: MemoryPointer | None = None,
-        strides: tuple[int, ...] | None = None,
+        strides: Sequence[int] | None = None,
         order: Literal["C", "F"] = "C",
     ) -> None: ...
 
@@ -37,15 +42,8 @@ class ndarray:
     # operators
     def __array__(self) -> NDArray[Any]: ...
     def __len__(self) -> int: ...
-    def __getitem__(  # never returns scalars
-        self,
-        index: int
-        | slice
-        | EllipsisType
-        | NDArray[np.integer | np.bool]
-        | ndarray
-        | tuple[int | slice | EllipsisType | None, ...],
-    ) -> Self: ...
+    def __getitem__(self, index: _Index) -> Self: ...  # never returns scalars
+    def __setitem__(self, index: _Index, value: object) -> None: ...
     def __iter__(self) -> Iterator[Self]: ...
     def __add__(self, other: object) -> Self: ...
     def __sub__(self, other: object) -> Self: ...
@@ -55,9 +53,12 @@ class ndarray:
     # methods
     def copy(self, order: Literal["C", "F", "A", "K"] = "C") -> ndarray: ...
     def item(self) -> bool | int | float | complex: ...
-    def view(
-        self, dtype: DTypeLike | None = None, type: type[ndarray] | None = None
-    ) -> ndarray: ...
+    @overload
+    def view(self, dtype: DTypeLike | None = None, type: None = None) -> ndarray: ...
+    @overload
+    def view[T: ndarray](
+        self, dtype: DTypeLike | None = None, *, type: type[T]
+    ) -> T: ...
     def astype(
         self,
         dtype: DTypeLike | None,
@@ -67,12 +68,12 @@ class ndarray:
         copy: bool = True,
     ) -> Self: ...
     @property
-    def T(self) -> Self: ...
+    def T(self) -> Self: ...  # noqa: N802
     @overload
     def all(self, axis: None = None) -> np.bool: ...
     @overload
     def all(self, axis: int) -> ndarray: ...
-    def reshape(self, shape: tuple[int, ...] | int) -> ndarray: ...
+    def reshape(self, shape: int | Sequence[int]) -> ndarray: ...
     def squeeze(self, axis: int | None = None) -> Self: ...
     def ravel(self, order: Literal["C", "F", "A", "K"] = "C") -> Self: ...
     def flatten(self, order: Literal["C", "F", "A", "K"] = "C") -> Self: ...

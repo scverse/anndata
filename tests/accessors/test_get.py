@@ -14,8 +14,8 @@ from anndata.compat import (
     CSArray,
     CSMatrix,
     CupyArray,
+    CupyCSCMatrix,
     CupyCSRMatrix,
-    CupySparseMatrix,
     DaskArray,
     XDataArray,
     XDataset,
@@ -37,13 +37,13 @@ if TYPE_CHECKING:
 
     from anndata import AnnData
     from anndata.acc import AdRef, InMemoryArray
-    from anndata.compat import SparseArray, SparseMatrix
+    from anndata.typing import AlignedArray
 
 
 needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installed.")
 
 
-ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
+ND_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.X[:, :], lambda ad: ad.X),
     (A.X[:, "gene-3"], lambda ad: ad[:, "gene-3"].X),
     (A.X["cell-5", :], lambda ad: ad["cell-5"].X),
@@ -59,7 +59,7 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.varp["cons"][:, "gene-46"], lambda ad: asarray(ad.varp["cons"])[:, 46]),
 ]
 
-DF_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
+DF_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index),
     # TODO: copy entries from above that can also hold dataframes?
@@ -126,7 +126,8 @@ DF_TYPES = [
 def convert_ndarrays(
     adata: AnnData, array_conv: Callable[[InMemoryArray], InMemoryArray], /
 ) -> None:
-    def conv(v: InMemoryArray) -> InMemoryArray:
+    def conv(v: AlignedArray) -> InMemoryArray:
+        assert isinstance(v, np.ndarray | CSMatrix | CSArray)
         if isinstance(v, CSMatrix | CSArray):
             v = v.toarray()
         return array_conv(v)
@@ -152,9 +153,7 @@ def convert_dataframes(
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(
-    expected: InMemoryArray | SparseArray | SparseMatrix, ad_ref: AdRef, /
-) -> np.ndarray:
+def _expected2np(expected: object, ad_ref: AdRef, /) -> np.ndarray:
     ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
@@ -165,7 +164,7 @@ def _expected2np(
             return expected.to_numpy()
         case DaskArray():
             return _expected2np(expected.compute(), ad_ref)
-        case CupyArray() | CupySparseMatrix():
+        case CupyArray() | CupyCSRMatrix() | CupyCSCMatrix():
             return _expected2np(expected.get(), ad_ref)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")

@@ -659,7 +659,8 @@ class Reindexer:
             # Presumably faster since it won't allocate the full array
             shape = list(el.shape)
             shape[axis] = len(self.new_idx)
-            return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))
+            # cupy rejects non-numeric fill values at runtime
+            return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))  # type: ignore[arg-type]
 
         old_idx_tuple = make_slice(self.old_pos, axis, len(el.shape))
         new_idx_tuple = make_slice(self.new_pos, axis, len(el.shape))
@@ -667,7 +668,7 @@ class Reindexer:
         out_shape = list(el.shape)
         out_shape[axis] = len(self.new_idx)
 
-        out = cp.full(tuple(out_shape), fill_value)
+        out = cp.full(tuple(out_shape), fill_value)  # type: ignore[arg-type]  # see above
         out[new_idx_tuple] = el[old_idx_tuple]
 
         return out

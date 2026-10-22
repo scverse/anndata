@@ -192,6 +192,8 @@ lint.ignore = [
 lint.per-file-ignores."tests/**/*.py" = [ "PLR0913", "PLR0917" ]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 lint.per-file-ignores."tests/test_readwrite.py" = [ "E721" ]
+# stubs shared with fast-array-utils, whose stricter config needs their `noqa`s
+lint.per-file-ignores."typings/**/*.pyi" = [ "RUF100" ]
 lint.allowed-confusables = [ "×", "–", "’", "α" ]
 lint.flake8-bugbear.extend-immutable-calls = [ "slice" ]
 lint.flake8-type-checking.exempt-modules = []

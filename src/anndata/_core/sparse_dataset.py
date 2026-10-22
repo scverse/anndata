@@ -82,7 +82,7 @@ class CompressedVectors[DenseT: DenseType](NamedTuple):
         cls,
         data: DenseT,
         indices: DenseT,
-        indptr: DenseType,
+        indptr: DenseType | Sequence[int],
     ) -> CompressedVectors[DenseT]:
         return cls(data, indices, get_np_module().array(indptr))
 
@@ -258,7 +258,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         s = slice(*_read_dense(self.indptr, slice(idx, idx + 2)))
         data = _read_dense(self.data, s)
         indices = _read_dense(self.indices, s)
-        indptr: DenseType = [0, len(data)]
+        indptr = [0, len(data)]
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def __getitem__(self, key) -> SparseMatrixType:
