@@ -286,10 +286,10 @@ class CupyArrayView(_ViewMixin, CupyArray):
         arr._view_args = view_args
         return arr
 
-    def copy(self) -> CupyArray:
+    def copy(self, order: Literal["C", "F", "A", "K"] = "C") -> CupyArray:
         import cupy as cp
 
-        return cp.array(self).copy()
+        return cp.array(self).copy(order)
 
 
 class DictView(_ViewMixin, dict):
