@@ -724,6 +724,16 @@ def test_write_object_column_converted(
             r"inferred as 'mixed-integer-float'.*exactly as float64",
             id="int-float-lossy",
         ),
+        pytest.param(
+            [np.int64(2**53 + 1), 0.5, None],
+            r"exactly as float64",
+            id="npint-float-lossy",
+        ),
+        pytest.param(
+            [np.uint64(2**64 - 1), 0.5, None],
+            r"exactly as float64",
+            id="npuint-float-lossy",
+        ),
         pytest.param([1, "a", None, 2], r"inferred as 'mixed-integer'", id="mixed"),
         pytest.param([None, None], r"inferred as 'empty'", id="all-missing"),
         pytest.param(["a", None], r"inferred as 'string'", id="str-missing"),
@@ -755,8 +765,11 @@ def test_write_object_column_unconvertible(
     [
         pytest.param([2**63 - 1, -(2**63), None], id="int-bounds"),
         pytest.param([2**53, 0.5, None], id="int-float-exact"),
+        pytest.param([np.int64(2**53), np.float32(0.5), None], id="npint-float-exact"),
         pytest.param(["a", "b", "c"], id="str"),
         pytest.param([b"a", b"b", b"c"], id="bytes"),
+        pytest.param(["a", b"b", "c"], id="str-bytes-mixed"),
+        pytest.param([], id="empty"),
     ],
 )
 def test_write_object_column_roundtrip_values(
@@ -776,7 +789,34 @@ def test_write_object_column_roundtrip_values(
     read = curr.obs["col"]
     assert read.isna().tolist() == col.isna().tolist()
     expected = [v.decode() if isinstance(v, bytes) else v for v in col.dropna()]
-    assert read.dropna().tolist() == expected
+    assert [v.item() if isinstance(v, np.generic) else v for v in expected] == [
+        v.item() if isinstance(v, np.generic) else v for v in read.dropna()
+    ]
+
+
+def test_write_object_column_elem_and_empty_view(diskfmt, diskfmt_store) -> None:
+    """Object columns are converted for direct `write_elem` calls and zero-row views."""
+    col = pd.Series([1, None, 3], index=list("abc"), dtype=object)
+    df = pd.DataFrame({"col": col, "s": pd.Series(list("xyz"), index=list("abc"))})
+    if diskfmt == "h5ad":
+        with h5py.File(diskfmt_store, "w") as f:
+            ad.io.write_elem(f, "df", df)
+            read = ad.io.read_elem(f["df"])
+    else:
+        g = zarr.open_group(diskfmt_store, mode="w")
+        ad.io.write_elem(g, "df", df)
+        read = ad.io.read_elem(g["df"])
+    assert read["col"].dtype == "Int64"
+    assert read["col"].tolist()[::2] == [1, 3]
+    assert df["col"].dtype == object
+
+    adata = ad.AnnData(obs=df)
+    empty_view = adata[:0]
+    assert empty_view.obs["col"].dtype == object
+    getattr(empty_view, f"write_{diskfmt}")(diskfmt_store)
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert curr.n_obs == 0
+    assert "col" in curr.obs
 
 
 def test_write_categorical_index(diskfmt, diskfmt_store):

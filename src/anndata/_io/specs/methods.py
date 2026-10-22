@@ -1165,8 +1165,6 @@ _OBJECT_COLUMN_CONVERSIONS: Mapping[
     "floating": (pd.Float64Dtype(), None),
     "mixed-integer-float": (pd.Float64Dtype(), None),
 })
-# Object-dtype columns the string writers handle (if they contain no missing values)
-_OBJECT_COLUMN_STRING_KINDS = frozenset({"string", "bytes"})
 
 
 def _object_column_to_writable(
@@ -1179,7 +1177,7 @@ def _object_column_to_writable(
     if they contain missing values, and the plain numpy dtype otherwise.
     Columns inferred as floating become numpy float64 (missing values become NaN)
     if that loses no precision.
-    String columns without missing values are returned unchanged.
+    String/bytes columns without missing values and empty columns are returned unchanged.
     Everything else raises a :class:`TypeError` naming the column.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
@@ -1188,7 +1186,11 @@ def _object_column_to_writable(
         "e.g. with `pd.array(...)` or `.astype(...)`."
     )
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
-        if kind in _OBJECT_COLUMN_STRING_KINDS and not pd.isna(values).any():
+        # The string writers handle (mixtures of) str and bytes without missing values
+        if len(values) == 0 or (
+            kind in {"string", "bytes", "mixed"}
+            and all(isinstance(v, str | bytes) for v in values)
+        ):
             return values
         msg = (
             f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}). "
@@ -1208,11 +1210,12 @@ def _object_column_to_writable(
         return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
     not_missing = ~converted.isna()
-    # Python compares int and float exactly (numpy does not), so this catches e.g. ints above 2**53
-    if any(
-        x != f
-        for x, f in zip(values[not_missing], floats[not_missing].tolist(), strict=True)
-    ):
+    # Python compares int and float exactly, numpy scalars do not (they promote to float64),
+    # so compare Python scalars to catch e.g. ints above 2**53
+    original = (
+        x.item() if isinstance(x, np.generic) else x for x in values[not_missing]
+    )
+    if any(x != f for x, f in zip(original, floats[not_missing].tolist(), strict=True)):
         msg = (
             f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
             f"its values cannot be represented exactly as float64. {hint}"
