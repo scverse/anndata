@@ -2,11 +2,10 @@
 from typing import Literal, Self, overload
 
 import numpy as np
-import scipy.sparse as sps
 from cupy import ndarray
 from numpy.typing import DTypeLike, NDArray
 
-from ._base import spmatrix
+from ._base import _ToSparse, spmatrix
 
 # `list`, not `Sequence`: a `tuple` means one index per axis
 type _NonIntIndex = (
@@ -20,21 +19,12 @@ class _compressed_sparse_matrix(spmatrix):
     indices: ndarray
     indptr: ndarray
 
-    @overload
-    def __init__(
-        self, arg1: ndarray | spmatrix | sps.spmatrix | sps.sparray
-    ) -> None: ...
-    @overload
-    def __init__(
-        self, arg1: tuple[int, int], *, dtype: DTypeLike | None = None
-    ) -> None: ...
-    @overload
-    def __init__(self, arg1: tuple[ndarray, tuple[ndarray, ndarray]]) -> None: ...
-    @overload
     def __init__(
         self,
-        arg1: tuple[ndarray, ndarray, ndarray],
+        arg1: _ToSparse | tuple[ndarray, ndarray, ndarray],
         shape: tuple[int, int] | None = None,
+        dtype: DTypeLike | None = None,
+        copy: bool = False,
     ) -> None: ...
     @overload
     def __getitem__(self, key: tuple[int, int]) -> ndarray: ...  # 0-dimensional

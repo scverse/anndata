@@ -1089,7 +1089,10 @@ def _(a):
 try:
     import cupyx.scipy.sparse as cpsparse
 
-    format_to_memory_class = {"csr": cpsparse.csr_matrix, "csc": cpsparse.csc_matrix}
+    format_to_memory_class: dict[str, type[CupyCSMatrix]] = {
+        "csr": cpsparse.csr_matrix,
+        "csc": cpsparse.csc_matrix,
+    }
 except ImportError:
     format_to_memory_class = {}
 
