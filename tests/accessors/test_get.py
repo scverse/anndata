@@ -14,8 +14,8 @@ from anndata.compat import (
     CSArray,
     CSMatrix,
     CupyArray,
-    CupyCSCMatrix,
     CupyCSRMatrix,
+    CupySparseMatrix,
     DaskArray,
     XDataArray,
     XDataset,
@@ -164,7 +164,7 @@ def _expected2np(expected: object, ad_ref: AdRef, /) -> np.ndarray:
             return expected.to_numpy()
         case DaskArray():
             return _expected2np(expected.compute(), ad_ref)
-        case CupyArray() | CupyCSRMatrix() | CupyCSCMatrix():
+        case CupyArray() | CupySparseMatrix():
             return _expected2np(expected.get(), ad_ref)
         case _:
             pytest.fail(f"unhandled expected type {type(expected)}")
