@@ -668,6 +668,74 @@ def test_write_categorical(
     assert curr.obs["cat"].dtype == "category"
 
 
+@pytest.mark.parametrize(
+    ("values", "expected_dtype"),
+    [
+        pytest.param(np.array([1, 2, None, 3]), "Int64", id="int-none"),
+        pytest.param([1, 2, pd.NA, 3], "Int64", id="int-NA"),
+        pytest.param([np.int32(1), 2, None, np.int64(3)], "Int64", id="npint-none"),
+        pytest.param([True, False, None, False], "boolean", id="bool-none"),
+        pytest.param([True, False, pd.NA, False], "boolean", id="bool-NA"),
+        pytest.param([True, np.nan, False, np.True_], "boolean", id="bool-nan"),
+        pytest.param([1.5, 2.0, None, 3.0], "float64", id="float-none"),
+        pytest.param([1, 2.5, None, 3], "float64", id="int-float-none"),
+        pytest.param([1, 2, 3, 4], "int64", id="int-no-missing"),
+        pytest.param([True, False, True, False], "bool", id="bool-no-missing"),
+        pytest.param([1.5, 2.0, 2.5, 3.0], "float64", id="float-no-missing"),
+    ],
+)
+def test_write_object_column_converted(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    values: list[object] | np.ndarray,
+    expected_dtype: str,
+) -> None:
+    """Object columns of ints/bools/floats (with or without missing values) are writable.
+
+    See https://github.com/scverse/anndata/issues/1068
+    """
+    col = pd.Series(np.array(values, dtype=object), index=[f"c{i}" for i in range(4)])
+    assert col.dtype == object
+    orig = ad.AnnData(obs=pd.DataFrame({"col": col}), var=pd.DataFrame(index=col.index))
+    # `varm` dataframes go through the same code path
+    orig.varm["df"] = pd.DataFrame({"col": col.to_numpy()}, index=orig.var_names)
+
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    # The in-memory object is not modified by writing
+    assert orig.obs["col"].dtype == object
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+
+    for read_col in (curr.obs["col"], curr.varm["df"]["col"]):
+        assert read_col.dtype == expected_dtype
+        assert read_col.isna().tolist() == col.isna().tolist()
+        assert read_col.dropna().tolist() == col.dropna().tolist()
+
+
+def test_write_object_column_unconvertible(diskfmt, diskfmt_store) -> None:
+    """Errors for object columns that cannot be converted name the column."""
+    orig = ad.AnnData(
+        obs=pd.DataFrame(
+            {"big": np.array([2**70, 1, None, 3], dtype=object)},
+            index=[f"c{i}" for i in range(4)],
+        )
+    )
+    with pytest.raises(TypeError, match=r"column 'big'.*inferred as 'integer'"):
+        getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+
+
+def test_write_object_column_mixed_h5ad(tmp_path: Path) -> None:
+    """Mixed object columns still fail, but the error names the column."""
+    orig = ad.AnnData(
+        obs=pd.DataFrame(
+            {"mixed": np.array([1, "a", None, 2], dtype=object)},
+            index=[f"c{i}" for i in range(4)],
+        )
+    )
+    with pytest.raises(TypeError, match=r"column 'mixed'.*inferred as 'mixed-integer'"):
+        orig.write_h5ad(tmp_path / "mixed.h5ad")
+
+
 def test_write_categorical_index(diskfmt, diskfmt_store):
     orig = ad.AnnData(
         uns={"df": pd.DataFrame({}, index=pd.Categorical(list("aabcd")))},
