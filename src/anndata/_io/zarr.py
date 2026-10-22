@@ -24,6 +24,7 @@ from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_err
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from contextlib import AbstractContextManager
     from typing import Any
 
     from zarr.storage import StoreLike
@@ -37,7 +38,7 @@ from packaging.version import Version
 
 
 @contextmanager
-def fast_zarr_context():
+def fast_zarr_context(*, prefer_zarrs: bool = True):
     # We are going to be "guinea pigs" for this new pipeline because it should be much faster
     # and we're shortchanging our users otherwise.
     # So we change the pipeline if it has not been changed by the user i.e.,
@@ -47,8 +48,17 @@ def fast_zarr_context():
     use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
         "3.3"
     )
-    # Switch to zarrs if the old pipeline is just the default
-    use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
+    # Switch to zarrs if the old pipeline is just the default.
+    # With `prefer_zarrs=False`, zarrs is only a fallback for when the fused pipeline is unavailable
+    # (zarrs is slower than the fused pipeline for large integer selections, as in sparse subsetting).
+    # zarrs only reads into host memory, so not when zarr reads into GPU memory
+    # (`zarr.config.enable_gpu()`), see https://github.com/zarrs/zarrs-python/issues/201
+    use_zarrs = (
+        find_spec("zarrs")
+        and "Batched" in old_pipeline
+        and (prefer_zarrs or not use_zarr_fused)
+        and "gpu" not in zarr.config.get("ndbuffer", "cpu")
+    )
     zarr_context = (
         zarr.config.set({
             "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
@@ -57,6 +67,7 @@ def fast_zarr_context():
         if use_zarr_fused
         else nullcontext()
     )
+    context: AbstractContextManager[object]
     if use_zarrs:
 
         @contextmanager
