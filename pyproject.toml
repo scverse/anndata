@@ -126,6 +126,7 @@ test-min = [
     "scikit-learn",
 ]
 typing = [
+    "cupy-stubs",
     "docutils-stubs",
     "mudata",           # `anndata.acc`
     "pandas-stubs",
@@ -223,7 +224,7 @@ expand_tables = [
 ]
 
 [tool.mypy]
-mypy_path = [ "src" ]
+mypy_path = [ "$MYPY_CONFIG_FILE_DIR/src" ]
 explicit_package_bases = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -247,8 +248,6 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = [
     "array_api_compat.*",
-    "cupy.*",
-    "cupyx.*",
     "jax.*",
     "loompy.*",
     "memory_profiler",

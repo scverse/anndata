@@ -25,6 +25,7 @@ from ..compat import (
     DaskArray,
     SupportsArrayApiBase,
 )
+from ..typing import _is_in_memory
 
 if TYPE_CHECKING:
     from mudata import MuData
@@ -213,8 +214,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         """
 
     def _maybe_flatten(
-        self, idx: I, a: InMemoryArray | pd.api.extensions.ExtensionArray
+        self, idx: I, a: AlignedArray | pd.api.extensions.ExtensionArray
     ) -> Array:
+        if not (_is_in_memory(a) or isinstance(a, pd.api.extensions.ExtensionArray)):
+            msg = f"Cannot get {self.idx_repr(idx)} from {type(a).__name__}, load it into memory first."
+            raise TypeError(msg)
         if len(self.dims(idx)) != 1:
             return a
         if isinstance(a, DaskArray):

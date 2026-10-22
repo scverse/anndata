@@ -11,7 +11,7 @@ from collections.abc import Mapping, MutableSet
 from functools import partial, reduce, singledispatch
 from itertools import repeat
 from operator import and_, or_, sub
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from ..compat import (
     CSArray,
     CSMatrix,
     CupyArray,
+    CupyCSMatrix,
     CupyCSRMatrix,
     CupySparseMatrix,
     DaskArray,
@@ -39,7 +40,6 @@ from .xarray import Dataset2D
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Generator, Iterable, Sequence
     from pathlib import Path
-    from typing import Any
 
     import zarr
     from numpy.typing import NDArray
@@ -570,7 +570,13 @@ class Reindexer:
             return el
         if isinstance(el, pd.DataFrame | Dataset2D):
             return self._apply_to_df_like(el, axis=axis, fill_value=fill_value)
-        elif isinstance(el, CSMatrix | CSArray | CupySparseMatrix):
+        # one branch per backend, so `_apply_to_sparse` is type checked once per backend
+        # (a union can’t solve a constrained TypeVar: https://github.com/python/mypy/issues/14721)
+        elif isinstance(el, CSMatrix):  # noqa: SIM114
+            return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, CSArray):  # noqa: SIM114
+            return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
+        elif isinstance(el, CupyCSMatrix):
             return self._apply_to_sparse(el, axis=axis, fill_value=fill_value)
         elif isinstance(el, AwkArray):
             return self._apply_to_awkward(el, axis=axis, fill_value=fill_value)
@@ -622,7 +628,6 @@ class Reindexer:
                     self._apply_to_sparse,
                     axis=axis,
                     fill_value=fill_value,
-                    keep_format=True,
                 ),
                 el,
                 chunks=(el.chunks[0], len(self.new_idx))
@@ -659,7 +664,8 @@ class Reindexer:
             # Presumably faster since it won't allocate the full array
             shape = list(el.shape)
             shape[axis] = len(self.new_idx)
-            return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))
+            # cupy rejects non-numeric fill values at runtime
+            return cp.broadcast_to(cp.asarray(fill_value), tuple(shape))  # type: ignore[arg-type]
 
         old_idx_tuple = make_slice(self.old_pos, axis, len(el.shape))
         new_idx_tuple = make_slice(self.new_pos, axis, len(el.shape))
@@ -667,7 +673,7 @@ class Reindexer:
         out_shape = list(el.shape)
         out_shape[axis] = len(self.new_idx)
 
-        out = cp.full(tuple(out_shape), fill_value)
+        out = cp.full(tuple(out_shape), fill_value)  # type: ignore[arg-type]  # see above
         out[new_idx_tuple] = el[old_idx_tuple]
 
         return out
@@ -705,18 +711,23 @@ class Reindexer:
         fv = xp.asarray(fill_value)
         return xp.where(mask, fv, taken)
 
-    def _apply_to_sparse(  # noqa: PLR0912
+    def _apply_to_sparse[M: (CSMatrix, CSArray, CupyCSMatrix)](  # noqa: PLR0912
         self,
-        el: CSMatrix | CSArray,
+        el: M,
         *,
         axis: Literal[0, 1],
         fill_value: Scalar | None = None,
-        keep_format: bool = True,
-    ) -> CSMatrix | CSArray:
-        if isinstance(el, CupySparseMatrix):
-            from cupyx.scipy import sparse
+    ) -> CSMatrix | CSArray | CupyCSMatrix:
+        if isinstance(el, CupyCSMatrix):
+            import cupyx.scipy.sparse as cpsparse
+
+            csr_cls, coo_cls = cpsparse.csr_matrix, cpsparse.coo_matrix
+        elif isinstance(el, CSArray):
+            csr_cls, coo_cls = sparse.csr_array, sparse.coo_array
+        elif isinstance(el, CSMatrix):
+            csr_cls, coo_cls = sparse.csr_matrix, sparse.coo_matrix
         else:
-            from scipy import sparse
+            assert_never(el)
 
         import array_api_compat
 
@@ -731,62 +742,41 @@ class Reindexer:
 
         # Fixing outer indexing for missing values
         if el.shape[axis] == 0:
-            shape_list = list(el.shape)
-            shape_list[axis] = len(self.new_idx)
-            shape = tuple(shape_list)
+            shape = (
+                (len(self.new_idx), el.shape[1])
+                if axis == 0
+                else (el.shape[0], len(self.new_idx))
+            )
             if fill_value == 0:
-                if isinstance(el, CSArray):
-                    memory_class = sparse.csr_array
-                else:
-                    memory_class = sparse.csr_matrix
-                return memory_class(shape)
+                return csr_cls(shape)
             else:
                 return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
 
-        fill_idxer: tuple[Any, Any] | None = None
-
-        if len(to_fill) > 0 or isinstance(el, CupySparseMatrix):
+        if len(to_fill) > 0 or isinstance(el, CupyCSMatrix):
             idxmtx_dtype = xp.result_type(el.dtype, xp.asarray(fill_value).dtype)
         else:
             idxmtx_dtype = bool
-        if isinstance(el, CSArray):
-            memory_class = sparse.coo_array
-        else:
-            memory_class = sparse.coo_matrix
-        if axis == 1:
-            idxmtx = memory_class(
-                (
-                    xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
-                    (xp.asarray(self.old_pos), xp.asarray(self.new_pos)),
-                ),
-                shape=(len(self.old_idx), len(self.new_idx)),
-                dtype=idxmtx_dtype,
-            )
-            out = el @ idxmtx
+        # maps old to new positions along `axis`
+        old_new = (xp.asarray(self.old_pos), xp.asarray(self.new_pos))
+        shape_old_new = (len(self.old_idx), len(self.new_idx))
+        idxmtx = coo_cls(
+            (
+                xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
+                old_new if axis == 1 else old_new[::-1],
+            ),
+            shape=shape_old_new if axis == 1 else shape_old_new[::-1],
+            dtype=idxmtx_dtype,
+        )
+        product = el @ idxmtx if axis == 1 else idxmtx @ el
 
-            if len(to_fill) > 0:
-                out = out.tocsc()
-                fill_idxer = (slice(None), to_fill)
-        elif axis == 0:
-            idxmtx = memory_class(
-                (
-                    xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
-                    (xp.asarray(self.new_pos), xp.asarray(self.old_pos)),
-                ),
-                shape=(len(self.new_idx), len(self.old_idx)),
-                dtype=idxmtx_dtype,
-            )
-            out = idxmtx @ el
-
-            if len(to_fill) > 0:
-                out = out.tocsr()
-                fill_idxer = (to_fill, slice(None))
-
-        if fill_idxer is not None:
-            out[fill_idxer] = fill_value
-        if keep_format:
-            out = out.tocsr() if el.format == "csr" else out.tocsc()
-        return out
+        if len(to_fill) > 0:
+            # CSC/CSR can efficiently set whole columns/rows
+            filled = product.tocsc() if axis == 1 else product.tocsr()
+            fill_idx = (slice(None), to_fill) if axis == 1 else (to_fill, slice(None))
+            # sparse matrices reject non-numeric fill values at runtime
+            filled[fill_idx] = fill_value  # type: ignore[assignment]
+            return filled.tocsr() if el.format == "csr" else filled.tocsc()
+        return product.tocsr() if el.format == "csr" else product.tocsc()
 
     def _apply_to_awkward(
         self, el: AwkArray, *, axis: Literal[0, 1], fill_value: Scalar | None = None
@@ -920,8 +910,8 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
         ):
             msg = "Cannot concatenate a cupy array with other array types."
             raise NotImplementedError(msg)
-        sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
-        return sparse_stack(
+        cp_sparse_stack = (cpsparse.vstack, cpsparse.hstack)[axis]
+        return cp_sparse_stack(
             [
                 f(as_cp_sparse(a), axis=1 - axis, fill_value=fill_value)
                 for f, a in zip(reindexers, arrays, strict=True)
