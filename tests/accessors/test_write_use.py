@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast, overload
 
 import h5py
 import numpy as np
@@ -67,59 +67,66 @@ def test_write_obs_column(
     expected_cols = ["a", "b"] if col == "a" else ["a", "b", col]
     assert list(read.obs.columns) == expected_cols
     assert_equal(read.obs, adata.obs[expected_cols])
-    assert_equal(read.X, adata.X)
+    # unchanged otherwise
+    read.obs["unwritten"] = cast("pd.DataFrame", adata.obs)["unwritten"]
+    assert_equal(read, adata)
 
 
-def _set_x(dst: ad.AnnData, src: ad.AnnData) -> None:
-    dst.X = src.X
+@overload
+def _setter(
+    elem: Literal["X", "obs", "obsm", "obsp", "layers"], sub_elem: str
+) -> Callable[[ad.AnnData, ad.AnnData], None]: ...
+@overload
+def _setter(
+    elem: Literal["X", "obs", "obsm", "obsp"],
+    sub_elem: None = None,
+) -> Callable[[ad.AnnData, ad.AnnData], None]: ...
+def _setter(
+    elem: Literal["X", "obs", "obsm", "obsp", "layers"], sub_elem: str | None = None
+) -> Callable[[ad.AnnData, ad.AnnData], None]:
+    def _set(dst: ad.AnnData, src: ad.AnnData) -> None:
+        if sub_elem is not None:
+            getattr(dst, elem).update({sub_elem: getattr(src, elem)[sub_elem]})
+        else:
+            setattr(dst, elem, getattr(src, elem))
 
-
-def _set_obs(dst: ad.AnnData, src: ad.AnnData) -> None:
-    dst.obs = src.obs
+    return _set
 
 
 def _set_layers(dst: ad.AnnData, src: ad.AnnData) -> None:
     for k, v in src.layers.items():
-        if k is not None:  # `layers` contains `X` as `None`
+        if k is not None:
             dst.layers[k] = v
-
-
-def _set_obsm(dst: ad.AnnData, src: ad.AnnData) -> None:
-    dst.obsm = src.obsm
-
-
-def _set_obsp(dst: ad.AnnData, src: ad.AnnData) -> None:
-    dst.obsp = src.obsp
 
 
 @pytest.mark.parametrize(
     ("use", "apply"),
     [
-        pytest.param(A.X, _set_x, id="X"),
-        pytest.param(A.obs, _set_obs, id="obs"),
+        pytest.param(A.X, _setter("X"), id="X"),
+        pytest.param(A.obs, _setter("obs"), id="obs"),
         pytest.param(
             A.layers["l"],
-            lambda dst, src: dst.layers.__setitem__("l", src.layers["l"]),
+            _setter("layers", "l"),
             id="layer",
         ),
         pytest.param(
             A.layers["new"],
-            lambda dst, src: dst.layers.__setitem__("new", src.layers["new"]),
+            _setter("layers", "new"),
             id="new-layer",
         ),
         pytest.param(A.layers, _set_layers, id="layers"),
         pytest.param(
             A.obsm["o"],
-            lambda dst, src: dst.obsm.__setitem__("o", src.obsm["o"]),
+            _setter("obsm", "o"),
             id="obsm-key",
         ),
-        pytest.param(A.obsm, _set_obsm, id="obsm"),
+        pytest.param(A.obsm, _setter("obsm"), id="obsm"),
         pytest.param(
             A.obsp["p"],
-            lambda dst, src: dst.obsp.__setitem__("p", src.obsp["p"]),
+            _setter("obsp", "p"),
             id="obsp-key",
         ),
-        pytest.param(A.obsp, _set_obsp, id="obsp"),
+        pytest.param(A.obsp, _setter("obsp"), id="obsp"),
     ],
 )
 def test_write_elem(
