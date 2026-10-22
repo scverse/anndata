@@ -1677,6 +1677,7 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
+        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1741,6 +1742,11 @@ class AnnData:  # noqa: PLW1641
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
+        use
+            Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
+            e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         """
         from ..io import write_h5ad
 
@@ -1758,6 +1764,7 @@ class AnnData:  # noqa: PLW1641
             compression=compression,
             compression_opts=compression_opts,
             as_dense=as_dense,
+            use=use,
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
@@ -1819,6 +1826,7 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
+        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1833,6 +1841,11 @@ class AnnData:  # noqa: PLW1641
             Convert string columns to categorical.
         consolidate_metadata
             Whether to consolidate the metadata of the store after writing.
+        use
+            Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
+            e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         """
         from ..io import write_zarr
 
@@ -1849,6 +1862,7 @@ class AnnData:  # noqa: PLW1641
             chunks=chunks,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             consolidate_metadata=consolidate_metadata,
+            use=use,
         )
 
     def chunked_X(self, chunk_size: int | None = None):
