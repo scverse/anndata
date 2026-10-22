@@ -126,6 +126,7 @@ test-min = [
     "scikit-learn",
 ]
 typing = [
+    "cupy-stubs",
     "docutils-stubs",
     "mudata",           # `anndata.acc`
     "pandas-stubs",
