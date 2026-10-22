@@ -2,6 +2,18 @@
     "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
     "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
     "formatter": { "useEditorconfig": true },
+    "linter": {
+        "rules": {
+            "complexity": {
+                "noForEach": "on",
+            },
+        },
+    },
+    "javascript": {
+        "formatter": {
+            "semicolons": "asNeeded",
+        },
+    },
     "overrides": [
         {
             "includes": ["./.vscode/*.json", "**/*.jsonc", "**/asv.conf.json"],
