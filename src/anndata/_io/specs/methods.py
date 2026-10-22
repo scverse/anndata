@@ -1148,24 +1148,13 @@ def write_dataframe(
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
         values = series._values
-        is_object = isinstance(values, np.ndarray) and values.dtype == object
-        if is_object:
+        if isinstance(values, np.ndarray) and values.dtype == object:
             values = _object_column_to_writable(values, colname)
-        try:
-            _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
-        except TypeError as e:
-            if not is_object:
-                raise
-            kind = pd.api.types.infer_dtype(series._values, skipna=True)
-            msg = (
-                f"Could not write column {colname!r} (dtype object, inferred as {kind!r}). "
-                "Convert it to a supported dtype, e.g. with `pd.array(...)` or `.astype(...)`."
-            )
-            raise TypeError(msg) from e
+        _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
 
 
 # Object-dtype columns that pandas infers as integer, boolean, or floating
-# (e.g. `np.array([1, 2, None, 3])`) have an unambiguous, lossless on-disk representation.
+# (e.g. `np.array([1, 2, None, 3])`) have an unambiguous on-disk representation.
 _OBJECT_COLUMN_CONVERSIONS: Mapping[
     str, tuple[pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype, np.dtype | None]
 ] = MappingProxyType({
@@ -1176,6 +1165,8 @@ _OBJECT_COLUMN_CONVERSIONS: Mapping[
     "floating": (pd.Float64Dtype(), None),
     "mixed-integer-float": (pd.Float64Dtype(), None),
 })
+# Object-dtype columns the string writers handle (if they contain no missing values)
+_OBJECT_COLUMN_STRING_KINDS = frozenset({"string", "bytes"})
 
 
 def _object_column_to_writable(
@@ -1186,26 +1177,48 @@ def _object_column_to_writable(
 
     Columns inferred as integer or boolean become the matching nullable pandas array
     if they contain missing values, and the plain numpy dtype otherwise.
-    Columns inferred as floating become numpy float64 (missing values become NaN).
-    All other object columns are returned unchanged.
+    Columns inferred as floating become numpy float64 (missing values become NaN)
+    if that loses no precision.
+    String columns without missing values are returned unchanged.
+    Everything else raises a :class:`TypeError` naming the column.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
+    hint = (
+        "Convert it to a supported dtype first, "
+        "e.g. with `pd.array(...)` or `.astype(...)`."
+    )
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
-        return values
+        if kind in _OBJECT_COLUMN_STRING_KINDS and not pd.isna(values).any():
+            return values
+        msg = (
+            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}). "
+            f"{hint}"
+        )
+        raise TypeError(msg)
     nullable_dtype, numpy_dtype = conversion
     try:
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
         msg = (
-            f"Could not convert column {colname!r} (dtype object, inferred as {kind!r}) "
-            f"to a writable {nullable_dtype.name!r} array."
+            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
+            f"converting it to {nullable_dtype.name!r} failed. {hint}"
         )
         raise TypeError(msg) from e
-    if numpy_dtype is None:
-        return converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    if converted.isna().any():
-        return converted
-    return converted.to_numpy(dtype=numpy_dtype)
+    if numpy_dtype is not None:
+        return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
+    floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
+    not_missing = ~converted.isna()
+    # Python compares int and float exactly (numpy does not), so this catches e.g. ints above 2**53
+    if any(
+        x != f
+        for x, f in zip(values[not_missing], floats[not_missing].tolist(), strict=True)
+    ):
+        msg = (
+            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
+            f"its values cannot be represented exactly as float64. {hint}"
+        )
+        raise TypeError(msg)
+    return floats
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))

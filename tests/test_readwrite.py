@@ -712,28 +712,71 @@ def test_write_object_column_converted(
         assert read_col.dropna().tolist() == col.dropna().tolist()
 
 
-def test_write_object_column_unconvertible(diskfmt, diskfmt_store) -> None:
-    """Errors for object columns that cannot be converted name the column."""
-    orig = ad.AnnData(
-        obs=pd.DataFrame(
-            {"big": np.array([2**70, 1, None, 3], dtype=object)},
-            index=[f"c{i}" for i in range(4)],
+@pytest.mark.parametrize(
+    ("values", "match"),
+    [
+        pytest.param(
+            [2**63, 1, None], r"inferred as 'integer'.*'Int64' failed", id="int-too-big"
+        ),
+        pytest.param([-(2**63) - 1, None], r"'Int64' failed", id="int-too-small"),
+        pytest.param(
+            [2**53 + 1, 0.5, None],
+            r"inferred as 'mixed-integer-float'.*exactly as float64",
+            id="int-float-lossy",
+        ),
+        pytest.param([1, "a", None, 2], r"inferred as 'mixed-integer'", id="mixed"),
+        pytest.param([None, None], r"inferred as 'empty'", id="all-missing"),
+        pytest.param(["a", None], r"inferred as 'string'", id="str-missing"),
+        pytest.param([b"a", None], r"inferred as 'bytes'", id="bytes-missing"),
+    ],
+)
+def test_write_object_column_unconvertible(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    values: list[object],
+    match: str,
+) -> None:
+    """Object columns that cannot be written raise an error naming the column.
+
+    This also covers zarr, which used to silently write `str(value)` for such columns.
+    """
+    col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
+    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
+    assert orig.obs["col"].dtype == object
+    with pytest.raises(TypeError, match=rf"column 'col'.*{match}"):
+        getattr(orig, f"write_{diskfmt}")(
+            diskfmt_store, convert_strings_to_categoricals=False
         )
-    )
-    with pytest.raises(TypeError, match=r"column 'big'.*inferred as 'integer'"):
-        getattr(orig, f"write_{diskfmt}")(diskfmt_store)
 
 
-def test_write_object_column_mixed_h5ad(tmp_path: Path) -> None:
-    """Mixed object columns still fail, but the error names the column."""
-    orig = ad.AnnData(
-        obs=pd.DataFrame(
-            {"mixed": np.array([1, "a", None, 2], dtype=object)},
-            index=[f"c{i}" for i in range(4)],
-        )
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param([2**63 - 1, -(2**63), None], id="int-bounds"),
+        pytest.param([2**53, 0.5, None], id="int-float-exact"),
+        pytest.param(["a", "b", "c"], id="str"),
+        pytest.param([b"a", b"b", b"c"], id="bytes"),
+    ],
+)
+def test_write_object_column_roundtrip_values(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    values: list[object],
+) -> None:
+    """Values at the edge of what is convertible and object string columns round-trip."""
+    col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
+    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
+    assert orig.obs["col"].dtype == object
+    getattr(orig, f"write_{diskfmt}")(
+        diskfmt_store, convert_strings_to_categoricals=False
     )
-    with pytest.raises(TypeError, match=r"column 'mixed'.*inferred as 'mixed-integer'"):
-        orig.write_h5ad(tmp_path / "mixed.h5ad")
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    read = curr.obs["col"]
+    assert read.isna().tolist() == col.isna().tolist()
+    expected = [v.decode() if isinstance(v, bytes) else v for v in col.dropna()]
+    assert read.dropna().tolist() == expected
 
 
 def test_write_categorical_index(diskfmt, diskfmt_store):
