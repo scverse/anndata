@@ -1165,6 +1165,8 @@ _OBJECT_COLUMN_CONVERSIONS: Mapping[
     "floating": (pd.Float64Dtype(), None),
     "mixed-integer-float": (pd.Float64Dtype(), None),
 })
+# On x86 `np.longdouble` is 80-bit, so even small values may not fit float64 exactly
+_LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
 
 
 def _object_column_to_writable(
@@ -1198,7 +1200,11 @@ def _object_column_to_writable(
         )
         raise TypeError(msg)
     nullable_dtype, numpy_dtype = conversion
+    missing = pd.isna(values)
     try:
+        if numpy_dtype is not None and not missing.any():
+            # Nothing is missing, so skip the masked array and cast directly
+            return values.astype(numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
         msg = (
@@ -1207,20 +1213,28 @@ def _object_column_to_writable(
         )
         raise TypeError(msg) from e
     if numpy_dtype is not None:
-        return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
+        return converted
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    not_missing = ~converted.isna()
-    # Python compares int and float exactly, numpy scalars do not (they promote to float64),
-    # so compare Python scalars to catch e.g. ints above 2**53
-    original = (
-        x.item() if isinstance(x, np.generic) else x for x in values[not_missing]
-    )
-    if any(x != f for x, f in zip(original, floats[not_missing].tolist(), strict=True)):
-        msg = (
-            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
-            f"its values cannot be represented exactly as float64. {hint}"
+    # float64 holds integers below 2**53 and all float64/float32 values exactly,
+    # so only larger magnitudes need checking (NaN fails the cutoff, ±inf pass the
+    # comparison below). Extended-precision scalars can be rounded at any magnitude.
+    suspect = ~missing & (np.abs(floats) >= 2.0**53)
+    if _LONGDOUBLE_IS_WIDER and any(
+        issubclass(t, np.longdouble) for t in {type(v) for v in values}
+    ):
+        suspect = ~missing
+    if suspect.any():
+        # Python compares int and float exactly, numpy scalars do not (they promote to
+        # float64), so compare Python scalars
+        original = (
+            x.item() if isinstance(x, np.generic) else x for x in values[suspect]
         )
-        raise TypeError(msg)
+        if any(x != f for x, f in zip(original, floats[suspect].tolist(), strict=True)):
+            msg = (
+                f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
+                f"its values cannot be represented exactly as float64. {hint}"
+            )
+            raise TypeError(msg)
     return floats
 
 

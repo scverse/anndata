@@ -719,10 +719,20 @@ def test_write_object_column_converted(
             [2**63, 1, None], r"inferred as 'integer'.*'Int64' failed", id="int-too-big"
         ),
         pytest.param([-(2**63) - 1, None], r"'Int64' failed", id="int-too-small"),
+        # without missing values, the direct numpy cast must fail the same way
+        pytest.param(
+            [2**63, 1], r"inferred as 'integer'.*'Int64' failed", id="int-too-big-full"
+        ),
         pytest.param(
             [2**53 + 1, 0.5, None],
             r"inferred as 'mixed-integer-float'.*exactly as float64",
             id="int-float-lossy",
+        ),
+        pytest.param(
+            [2**53 + 1, 0.5], r"exactly as float64", id="int-float-lossy-full"
+        ),
+        pytest.param(
+            [-(2**60) - 1, 0.5, None], r"exactly as float64", id="negint-float-lossy"
         ),
         pytest.param(
             [np.int64(2**53 + 1), 0.5, None],
@@ -764,7 +774,12 @@ def test_write_object_column_unconvertible(
     "values",
     [
         pytest.param([2**63 - 1, -(2**63), None], id="int-bounds"),
+        pytest.param([2**63 - 1, -(2**63)], id="int-bounds-full"),
+        pytest.param([True, False], id="bool-full"),
         pytest.param([2**53, 0.5, None], id="int-float-exact"),
+        pytest.param([2**60, -(2**60), 0.5, None], id="bigint-float-exact"),
+        pytest.param([1e300, -(2.0**60), 0.5, None], id="bigfloat-exact"),
+        pytest.param([float("inf"), -float("inf"), 0.5, None], id="inf-float"),
         pytest.param([np.int64(2**53), np.float32(0.5), None], id="npint-float-exact"),
         pytest.param(["a", "b", "c"], id="str"),
         pytest.param([b"a", b"b", b"c"], id="bytes"),
@@ -817,6 +832,50 @@ def test_write_object_column_elem_and_empty_view(diskfmt, diskfmt_store) -> None
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert curr.n_obs == 0
     assert "col" in curr.obs
+
+
+@pytest.mark.skipif(
+    np.finfo(np.longdouble).nmant <= np.finfo(np.float64).nmant,
+    reason="np.longdouble is not wider than float64 on this platform",
+)
+@pytest.mark.parametrize("with_missing", [True, False], ids=["missing", "full"])
+@pytest.mark.parametrize("sign", [1, -1], ids=["pos", "neg"])
+@pytest.mark.parametrize("subclass", [False, True], ids=["longdouble", "subclass"])
+def test_write_object_column_longdouble_lossy(
+    *, with_missing: bool, sign: int, subclass: bool
+) -> None:
+    """Extended-precision scalars below 2**53 are still checked for exactness."""
+    from anndata._io.specs.methods import _object_column_to_writable
+
+    class LongDouble(np.longdouble):
+        pass
+
+    cls = LongDouble if subclass else np.longdouble
+    x = cls(sign * (np.longdouble(1) + np.finfo(np.longdouble).eps))
+    tail = [None] if with_missing else []
+    values = np.array([x, 0.5, *tail], dtype=object)
+    with pytest.raises(TypeError, match=r"exactly as float64"):
+        _object_column_to_writable(values, "col")
+    exact = np.array([cls(sign * 0.5), 2.0, *tail], dtype=object)
+    np.testing.assert_array_equal(
+        _object_column_to_writable(exact, "col"),
+        np.array([sign * 0.5, 2.0, *([np.nan] if with_missing else [])]),
+    )
+
+
+def test_write_object_column_nan_distinct_from_na() -> None:
+    """With pandas distinguishing NaN from NA, an object float NaN is written as NaN."""
+    from anndata._io.specs.methods import _object_column_to_writable
+
+    if "future.distinguish_nan_and_na" not in pd.describe_option(
+        "future", _print_desc=False
+    ):
+        pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
+    values = np.array([0.5, np.nan, None], dtype=object)
+    with pd.option_context("future.distinguish_nan_and_na", True):  # noqa: FBT003
+        np.testing.assert_array_equal(
+            _object_column_to_writable(values, "col"), np.array([0.5, np.nan, np.nan])
+        )
 
 
 def test_write_categorical_index(diskfmt, diskfmt_store):
