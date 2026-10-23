@@ -24,6 +24,13 @@ def test_make_index_unique() -> None:
     assert result[result.notna()].is_unique
 
 
+def test_make_index_unique_categorical() -> None:
+    index = pd.CategoricalIndex(["a", "b", "a", "c", "b"], name="genes")
+    result = make_index_unique(index)
+    assert result.tolist() == ["a", "b", "a-1", "c", "b-1"]
+    assert result.name == "genes"
+
+
 def assert_df_index_equal(df: object, expected: pd.Index) -> None:
     assert isinstance(df, pd.DataFrame)
     pd.testing.assert_index_equal(df.index, expected)
